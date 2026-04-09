@@ -50,29 +50,29 @@
 ## Phase 2: Network Interception
 <!-- execution: sequential -->
 
-- [ ] Task 1: XHR interceptor
+- [x] Task 1: XHR interceptor
   <!-- files: inject/xhrInterceptor.ts, tests/unit/xhrInterceptor.test.ts -->
-  - [ ] Create `inject/xhrInterceptor.ts`
-  - [ ] Monkey-patch `XMLHttpRequest.prototype.open` and `send`
-  - [ ] Match subtitle URLs against platform-specific patterns
-  - [ ] Hold response, send to bridge, return modified response
-  - [ ] Ensure non-subtitle requests pass through unmodified
-  - [ ] Write unit tests with mock XHR
+  - [x] Create `inject/xhrInterceptor.ts`
+  - [x] Monkey-patch `XMLHttpRequest.prototype.open` and `send`
+  - [x] Match subtitle URLs against platform-specific patterns
+  - [x] Hold response, send to bridge, return modified response
+  - [x] Ensure non-subtitle requests pass through unmodified
+  - [x] Write unit tests with mock XHR
 
-- [ ] Task 2: Fetch interceptor
+- [x] Task 2: Fetch interceptor
   <!-- files: inject/fetchInterceptor.ts, tests/unit/fetchInterceptor.test.ts -->
-  - [ ] Create `inject/fetchInterceptor.ts`
-  - [ ] Monkey-patch `window.fetch`
-  - [ ] Same URL pattern matching as XHR
-  - [ ] Clone responses for non-subtitle requests
-  - [ ] Write unit tests with mock fetch
+  - [x] Create `inject/fetchInterceptor.ts`
+  - [x] Monkey-patch `window.fetch`
+  - [x] Same URL pattern matching as XHR
+  - [x] Clone responses for non-subtitle requests
+  - [x] Write unit tests with mock fetch
 
-- [ ] Task 3: Interceptor integration with bridge
+- [x] Task 3: Interceptor integration with bridge
   <!-- files: entrypoints/inject.content/index.ts, inject/interceptorRegistry.ts -->
-  - [ ] Wire interceptors to postMessage bridge in inject entrypoint
-  - [ ] Add subtitle URL pattern registry (per-platform patterns)
-  - [ ] Add timeout handling (if translation takes too long, return original)
-  - [ ] Write integration tests
+  - [x] Wire interceptors to postMessage bridge in inject entrypoint
+  - [x] Add subtitle URL pattern registry (per-platform patterns)
+  - [x] Add timeout handling (if translation takes too long, return original)
+  - [x] Write integration tests
 
 - [ ] Task: Conductor - User Manual Verification 'Network Interception' (Protocol in workflow.md)
 

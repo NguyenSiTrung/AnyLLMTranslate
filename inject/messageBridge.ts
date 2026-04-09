@@ -12,6 +12,16 @@ import type { BridgeMessage, BridgeMessageType } from '@/types/subtitle';
 
 const CHANNEL = 'lingua-lens';
 
+/** Interface for the bridge send function used by interceptors */
+export interface MessageBridgeSender {
+  send(type: string, payload: unknown): string;
+}
+
+/** Create a sender object that wraps sendMessage */
+export function createBridgeSender(): MessageBridgeSender {
+  return { send: sendMessage };
+}
+
 /** Generate a unique request ID */
 function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
