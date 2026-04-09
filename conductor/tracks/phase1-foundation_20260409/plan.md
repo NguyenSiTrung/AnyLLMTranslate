@@ -139,14 +139,14 @@
 ## Phase 5: Popup UI & End-to-End Integration
 <!-- execution: sequential -->
 
-- [ ] Task 1: Create popup UI with React + Tailwind
-  - [ ] Set up popup entrypoint via WXT (src/entrypoints/popup/)
-  - [ ] Create App.tsx with translate toggle button
-  - [ ] Create LanguagePicker component (source + target)
-  - [ ] Create StatusIndicator component (idle/translating/done/error)
-  - [ ] Create ProviderIndicator showing active LLM provider name
-  - [ ] Style with Tailwind CSS — clean, compact popup design
-  - [ ] Wire popup to background via chrome.runtime.sendMessage
+- [x] Task 1: Create popup UI with React + Tailwind
+  - [x] Set up popup entrypoint via WXT (src/entrypoints/popup/)
+  - [x] Create App.tsx with translate toggle button
+  - [x] Create LanguagePicker component (source + target)
+  - [x] Create StatusIndicator component (idle/translating/done/error)
+  - [x] Create ProviderIndicator showing active LLM provider name
+  - [x] Style with Tailwind CSS — clean, compact popup design
+  - [x] Wire popup to background via chrome.runtime.sendMessage
 
 - [ ] Task 2: End-to-end integration & manual testing
   - [ ] Test full flow: open popup → click translate → see bilingual display on page
@@ -157,10 +157,10 @@
   - [ ] Test restore (toggle off → translations removed → toggle on → re-translate)
   - [ ] Fix any integration issues discovered
 
-- [ ] Task 3: Unit test coverage & lint cleanup
-  - [ ] Ensure ≥ 80% coverage for domWalker, translation service, cache manager
-  - [ ] Run full lint pass, fix all errors
-  - [ ] Run full test suite, ensure all passing
-  - [ ] Verify TypeScript strict mode — no `any` leaks
+- [x] Task 3: Unit test coverage & lint cleanup
+  - [x] Ensure ≥ 80% coverage for domWalker, translation service, cache manager
+  - [x] Run full lint pass, fix all errors
+  - [x] Run full test suite, ensure all passing
+  - [x] Verify TypeScript strict mode — no `any` leaks
 
 - [ ] Task: Conductor - User Manual Verification 'Popup UI & End-to-End Integration' (Protocol in workflow.md)

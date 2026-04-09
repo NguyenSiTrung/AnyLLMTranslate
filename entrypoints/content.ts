@@ -9,7 +9,7 @@ import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
-import './inject.css';
+import '@/styles/inject.css';
 
 let viewportObserver: ViewportObserver | null = null;
 let allPieces: TranslationPiece[] = [];
