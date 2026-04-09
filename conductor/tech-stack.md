@@ -50,19 +50,19 @@
 
 ## Testing
 
-| Technology | Usage |
-|-----------|-------|
-| **Vitest** | Unit tests for DOM walker, translation engine, parsers |
-| **Playwright** | E2E testing with Chrome extension loading |
-| **Testing Library** | React component tests |
+| Technology | Version | Usage |
+|-----------|---------|-------|
+| **Vitest** | 3.x | Unit tests for DOM walker, translation engine, parsers |
+| **Playwright** | - | E2E testing with Chrome extension loading |
+| **Testing Library** | latest | React component tests |
 
 ## Code Quality
 
-| Technology | Usage |
-|-----------|-------|
-| **ESLint** | Linting with TypeScript rules |
-| **Prettier** | Code formatting |
-| **Husky + lint-staged** | Pre-commit hooks |
+| Technology | Version | Usage |
+|-----------|---------|-------|
+| **ESLint** | 9.x | Linting with TypeScript rules |
+| **Prettier** | 3.x | Code formatting |
+| **Husky + lint-staged** | - | Pre-commit hooks |
 
 ## CI/CD
 

@@ -1,10 +1,18 @@
 {
-  "last_refresh": "2026-04-09T18:44:00+07:00",
+  "last_refresh": "2026-04-16T19:31:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/tech-stack.md",
-      "change": "React version 18.x → 19.x to match actual package.json (19.2.4)"
+      "change": "Added missing dev dependency versions: ESLint 9.x, Prettier 3.x, Vitest 3.x"
+    },
+    {
+      "file": "conductor/product.md",
+      "change": "Added Implementation Status section documenting completed Phase 1 and Phase 2"
+    },
+    {
+      "file": "conductor/patterns.md",
+      "change": "Added 11 new patterns from phase2-subtitles (MAIN world injection, postMessage bridge, XHR/fetch interception, subtitle parsing, overlay rendering)"
     },
     {
       "file": "conductor/patterns.md",
@@ -12,13 +20,13 @@
     }
   ],
   "drift_summary": {
-    "tech_stack": "1 drift (React version)",
-    "product": "no drift",
+    "tech_stack": "3 drift (missing dev dependency versions)",
+    "product": "1 drift (missing implementation status)",
     "workflow": "no drift",
     "tracks": "no drift",
-    "learnings": "all patterns already consolidated"
+    "learnings": "1 gap (phase2 learnings not consolidated)"
   },
-  "beads_check": "skipped — Dolt server not running",
-  "active_tracks": ["phase2-subtitles_20260409"],
-  "archived_tracks": ["phase1-foundation_20260409"]
+  "beads_check": "skipped — user confirmed proceed without Beads drift check",
+  "active_tracks": [],
+  "archived_tracks": ["phase1-foundation_20260409", "phase2-subtitles_20260409"]
 }

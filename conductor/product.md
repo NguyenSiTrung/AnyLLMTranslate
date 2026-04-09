@@ -65,6 +65,16 @@ LinguaLens is an open-source, privacy-first Chrome extension for immersive bilin
 - Support 50+ built-in site rules
 - 80%+ test coverage
 
+## Implementation Status
+
+### Completed
+- **Phase 1 — Foundation** (Archived 2026-04-09): Page translation pipeline, DOM walker, viewport observer, mutation watcher, translation display, background service worker, cache manager, batcher, OpenAI-compatible provider. 94 tests passing.
+- **Phase 2 — Subtitles** (Archived 2026-04-09): Video subtitle translation engine with XHR/fetch interception, MAIN world injection, postMessage bridge, WebVTT/SRT parsers, bilingual VTT builder, YouTube/Udemy/Coursera handlers, custom subtitle overlay with controls. 111 tests passing.
+
+### In Progress
+- Phase 3: Options page UI and settings management
+- Phase 4: Netflix subtitle handler
+
 ## Out of Scope (Initial Release)
 
 - Built-in translation API (users must BYOK)
