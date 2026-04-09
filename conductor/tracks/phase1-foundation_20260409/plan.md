@@ -8,13 +8,13 @@
 ## Phase 1: Project Setup & Scaffolding
 <!-- execution: sequential -->
 
-- [ ] Task 1: Initialize WXT project with TypeScript & React
-  - [ ] Run `npx -y wxt@latest init ./` with TypeScript template
-  - [ ] Add React 18, React DOM, Tailwind CSS 4, Zustand 5
-  - [ ] Add dev dependencies: Vitest, Testing Library, ESLint, Prettier
-  - [ ] Add idb-keyval for IndexedDB convenience
-  - [ ] Add lucide-react for icons
-  - [ ] Verify `pnpm dev` launches extension in Chrome
+- [x] Task 1: Initialize WXT project with TypeScript & React
+  - [x] Run `npx -y wxt@latest init ./` with TypeScript template
+  - [x] Add React 18, React DOM, Tailwind CSS 4, Zustand 5
+  - [x] Add dev dependencies: Vitest, Testing Library, ESLint, Prettier
+  - [x] Add idb-keyval for IndexedDB convenience
+  - [x] Add lucide-react for icons
+  - [x] Verify `pnpm dev` launches extension in Chrome
 
 - [ ] Task 2: Configure build tooling & code quality
   - [ ] Configure ESLint with TypeScript strict rules
