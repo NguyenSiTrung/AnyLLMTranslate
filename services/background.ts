@@ -8,11 +8,14 @@ import type {
   TranslationResultMessage,
   StatusResponse,
   TabTranslationStatus,
+  TranslateSubtitleMessage,
+  FetchSubtitleMessage,
 } from '@/types/messages';
-import type { ProviderConfig } from '@/types/config';
+import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
+import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
 
 /** Per-tab translation state */
 interface TabState {
@@ -154,6 +157,91 @@ async function handleTestConnection(): Promise<{ success: boolean; error?: strin
   }
 }
 
+/** Handle translateSubtitle message */
+async function handleTranslateSubtitle(
+  message: TranslateSubtitleMessage,
+): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+  try {
+    const service = await initService();
+    const { cues, sourceLanguage, targetLanguage } = message;
+
+    // Check cache for each cue
+    const translatedCues: SubtitleCue[] = [];
+    const uncachedTexts = new Map<string, SubtitleCue>();
+
+    for (const cue of cues) {
+      const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage);
+      if (cached) {
+        translatedCues.push({
+          ...cue,
+          text: cached,
+          originalText: cue.text,
+        });
+      } else {
+        uncachedTexts.set(cue.text, cue);
+      }
+    }
+
+    // Batch translate uncached texts
+    if (uncachedTexts.size > 0) {
+      const texts = new Map<string, string>();
+      for (const [, cue] of uncachedTexts.entries()) {
+        texts.set(cue.text, cue.text);
+      }
+
+      const result = await service.translate({
+        texts,
+        sourceLanguage,
+        targetLanguage,
+      });
+
+      if (result.success) {
+        for (const [originalText, translatedText] of result.translations.entries()) {
+          const cue = uncachedTexts.get(originalText);
+          if (cue) {
+            const translatedCue = {
+              ...cue,
+              text: translatedText,
+              originalText: cue.text,
+            };
+            translatedCues.push(translatedCue);
+
+            // Cache the translation
+            await cacheTranslation(originalText, translatedText, sourceLanguage, targetLanguage);
+          }
+        }
+      } else {
+        return { success: false, error: result.error ?? 'Subtitle translation failed' };
+      }
+    }
+
+    // Sort by start time to maintain order
+    translatedCues.sort((a, b) => a.startTime - b.startTime);
+
+    return { success: true, cues: translatedCues };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
+async function handleFetchSubtitle(
+  message: FetchSubtitleMessage,
+): Promise<{ success: boolean; content?: string; error?: string }> {
+  try {
+    const response = await fetch(message.url);
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+    }
+    const content = await response.text();
+    return { success: true, content };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
+    return { success: false, error: errorMsg };
+  }
+}
+
 /** Main message router */
 export function handleMessage(
   message: ExtensionMessage,
@@ -172,6 +260,10 @@ export function handleMessage(
       return handleTestConnection();
     case 'updateSettings':
       return initService().then(() => ({ success: true }));
+    case 'translateSubtitle':
+      return handleTranslateSubtitle(message);
+    case 'FETCH_SUBTITLE':
+      return handleFetchSubtitle(message);
     default:
       return undefined;
   }

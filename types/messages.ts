@@ -3,13 +3,17 @@
  * Background ↔ Content Script ↔ Popup
  */
 
+import type { SubtitleCue } from './subtitle';
+
 /** Actions the background service worker handles */
 export type MessageAction =
   | 'translate'
   | 'restore'
   | 'getStatus'
   | 'testConnection'
-  | 'updateSettings';
+  | 'updateSettings'
+  | 'translateSubtitle'
+  | 'FETCH_SUBTITLE';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -48,13 +52,29 @@ export interface UpdateSettingsMessage {
   action: 'updateSettings';
 }
 
+/** Subtitle translation request from content script → background */
+export interface TranslateSubtitleMessage {
+  action: 'translateSubtitle';
+  cues: SubtitleCue[];
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
+/** Subtitle fetch request (CORS bypass) from content script → background */
+export interface FetchSubtitleMessage {
+  action: 'FETCH_SUBTITLE';
+  url: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
   | RestoreMessage
   | GetStatusMessage
   | TestConnectionMessage
-  | UpdateSettingsMessage;
+  | UpdateSettingsMessage
+  | TranslateSubtitleMessage
+  | FetchSubtitleMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {
