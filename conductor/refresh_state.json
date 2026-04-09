@@ -1,0 +1,24 @@
+{
+  "last_refresh": "2026-04-09T18:44:00+07:00",
+  "refreshed_by": "conductor-refresh",
+  "changes": [
+    {
+      "file": "conductor/tech-stack.md",
+      "change": "React version 18.x → 19.x to match actual package.json (19.2.4)"
+    },
+    {
+      "file": "conductor/patterns.md",
+      "change": "Updated 'Last refreshed' timestamp"
+    }
+  ],
+  "drift_summary": {
+    "tech_stack": "1 drift (React version)",
+    "product": "no drift",
+    "workflow": "no drift",
+    "tracks": "no drift",
+    "learnings": "all patterns already consolidated"
+  },
+  "beads_check": "skipped — Dolt server not running",
+  "active_tracks": ["phase2-subtitles_20260409"],
+  "archived_tracks": ["phase1-foundation_20260409"]
+}

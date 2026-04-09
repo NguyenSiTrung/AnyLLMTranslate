@@ -24,4 +24,4 @@ Reusable patterns discovered during development. Read this before starting new w
 - pnpm not installed globally on this system — use `npx -y pnpm@latest exec` or `npx -y pnpm@latest install` for all pnpm commands. (from: phase1-foundation_20260409, archived 2026-04-09)
 
 ---
-Last refreshed: 2026-04-09T18:17:00+07:00
+Last refreshed: 2026-04-09T18:44:00+07:00

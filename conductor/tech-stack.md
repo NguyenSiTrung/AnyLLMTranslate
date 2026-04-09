@@ -18,7 +18,7 @@
 
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
-| **React** | 18.x | Component-based UI for popup, options page, side panel |
+| **React** | 19.x | Component-based UI for popup, options page, side panel |
 | **Tailwind CSS** | 4.x | Utility-first styling for extension UI components |
 | **Lucide React** | latest | Consistent, lightweight icon set |
 | **Zustand** | 5.x | Lightweight reactive state management, synced with chrome.storage |
