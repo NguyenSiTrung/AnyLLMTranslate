@@ -4,46 +4,46 @@
 <!-- execution: parallel -->
 <!-- depends: -->
 
-- [ ] Task 1: MAIN world script injection via WXT
+- [x] Task 1: MAIN world script injection via WXT
   <!-- files: entrypoints/inject.content/index.ts, wxt.config.ts -->
-  - [ ] Create `entrypoints/inject.content/index.ts` as MAIN world content script
-  - [ ] Configure WXT for MAIN world injection (`world: 'MAIN'`, `run_at: 'document_start'`)
-  - [ ] Verify script loads in page context (can access `window.XMLHttpRequest`)
-  - [ ] Write unit tests for injection setup
+  - [x] Create `entrypoints/inject.content/index.ts` as MAIN world content script
+  - [x] Configure WXT for MAIN world injection (`world: 'MAIN'`, `run_at: 'document_start'`)
+  - [x] Verify script loads in page context (can access `window.XMLHttpRequest`)
+  - [x] Write unit tests for injection setup
 
-- [ ] Task 2: postMessage bridge (inject ↔ content)
+- [x] Task 2: postMessage bridge (inject ↔ content)
   <!-- files: content/messageBridge.ts, inject/messageBridge.ts, types/subtitle.ts -->
   <!-- depends: task1 -->
-  - [ ] Create `content/messageBridge.ts` — content script side listener
-  - [ ] Create `inject/messageBridge.ts` — inject script side sender/receiver
-  - [ ] Define message protocol types in `types/subtitle.ts`
-  - [ ] Use channel identifier `lingua-lens` with origin validation
-  - [ ] Support request/response correlation via `requestId`
-  - [ ] Write unit tests for message serialization and protocol
+  - [x] Create `content/messageBridge.ts` — content script side listener
+  - [x] Create `inject/messageBridge.ts` — inject script side sender/receiver
+  - [x] Define message protocol types in `types/subtitle.ts`
+  - [x] Use channel identifier `lingua-lens` with origin validation
+  - [x] Support request/response correlation via `requestId`
+  - [x] Write unit tests for message serialization and protocol
 
-- [ ] Task 3: WebVTT parser
+- [x] Task 3: WebVTT parser
   <!-- files: lib/subtitleParser.ts, tests/unit/subtitleParser.test.ts -->
-  - [ ] Create `lib/subtitleParser.ts` with `parseWebVTT()` function
-  - [ ] Parse VTT header, cue timing, cue text
-  - [ ] Handle multi-line cues, HTML tags, BOM markers
-  - [ ] Normalize to `SubtitleCue[]` interface
-  - [ ] Write comprehensive unit tests (normal, edge cases, malformed)
+  - [x] Create `lib/subtitleParser.ts` with `parseWebVTT()` function
+  - [x] Parse VTT header, cue timing, cue text
+  - [x] Handle multi-line cues, HTML tags, BOM markers
+  - [x] Normalize to `SubtitleCue[]` interface
+  - [x] Write comprehensive unit tests (normal, edge cases, malformed)
 
-- [ ] Task 4: SRT parser
+- [x] Task 4: SRT parser
   <!-- files: lib/subtitleParser.ts, tests/unit/subtitleParser.test.ts -->
   <!-- depends: task3 -->
-  - [ ] Add `parseSRT()` to `lib/subtitleParser.ts`
-  - [ ] Parse SRT sequence numbers, timing (comma separator), text
-  - [ ] Auto-detect format (VTT vs SRT) via `parseSubtitles()` dispatcher
-  - [ ] Write unit tests for SRT-specific edge cases
+  - [x] Add `parseSRT()` to `lib/subtitleParser.ts`
+  - [x] Parse SRT sequence numbers, timing (comma separator), text
+  - [x] Auto-detect format (VTT vs SRT) via `parseSubtitles()` dispatcher
+  - [x] Write unit tests for SRT-specific edge cases
 
-- [ ] Task 5: Bilingual VTT builder
+- [x] Task 5: Bilingual VTT builder
   <!-- files: lib/subtitleBuilder.ts, tests/unit/subtitleBuilder.test.ts -->
-  - [ ] Create `lib/subtitleBuilder.ts` with `buildBilingualVTT()` function
-  - [ ] Support bilingual mode (original + translation per cue)
-  - [ ] Support translation-only mode
-  - [ ] Preserve timing and positioning metadata
-  - [ ] Write unit tests for builder output validity
+  - [x] Create `lib/subtitleBuilder.ts` with `buildBilingualVTT()` function
+  - [x] Support bilingual mode (original + translation per cue)
+  - [x] Support translation-only mode
+  - [x] Preserve timing and positioning metadata
+  - [x] Write unit tests for builder output validity
 
 - [ ] Task: Conductor - User Manual Verification 'Core Infrastructure & Parsers' (Protocol in workflow.md)
 
