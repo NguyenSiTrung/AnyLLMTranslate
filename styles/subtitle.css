@@ -1,0 +1,124 @@
+/**
+ * Subtitle Overlay CSS — Custom fallback subtitle display.
+ * Applied to host pages via content script CSS injection.
+ */
+
+/* ===== LinguaLens Subtitle Overlay ===== */
+
+.lingua-lens-subtitle-overlay {
+  position: absolute;
+  pointer-events: none; /* Let clicks pass through to video controls */
+  display: flex;
+  align-items: flex-end; /* Default to bottom alignment */
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: rgba(0, 0, 0, var(--lingua-subtitle-bg-opacity, 0.75));
+  transition: opacity 0.3s ease-out;
+  opacity: 0;
+}
+
+.lingua-lens-subtitle-overlay.lingua-lens-subtitle-visible {
+  opacity: 1;
+}
+
+/* Position variants */
+.lingua-lens-subtitle-overlay.lingua-lens-position-top {
+  align-items: flex-start;
+}
+
+.lingua-lens-subtitle-overlay.lingua-lens-position-bottom {
+  align-items: flex-end;
+}
+
+/* Subtitle text container */
+.lingua-lens-subtitle-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 80%;
+  gap: 4px;
+}
+
+/* Original text (smaller, dimmer) */
+.lingua-lens-subtitle-original {
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+/* Translated text (larger, brighter) */
+.lingua-lens-subtitle-translated {
+  font-size: 1em;
+  color: rgba(255, 255, 255, 1);
+  line-height: 1.5;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Fade-in animation */
+@keyframes linguaSubtitleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lingua-lens-subtitle-overlay.lingua-lens-subtitle-visible {
+  animation: linguaSubtitleFadeIn 0.3s ease-out;
+}
+
+/* Dark/light video background support */
+@media (prefers-color-scheme: dark) {
+  .lingua-lens-subtitle-overlay {
+    background-color: rgba(0, 0, 0, var(--lingua-subtitle-bg-opacity, 0.85));
+  }
+}
+
+/* Prevent host page style pollution */
+.lingua-lens-subtitle-overlay {
+  all: revert;
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: rgba(0, 0, 0, var(--lingua-subtitle-bg-opacity, 0.75));
+  transition: opacity 0.3s ease-out;
+  opacity: 0;
+}
+
+.lingua-lens-subtitle-text {
+  all: revert;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 80%;
+  gap: 4px;
+}
+
+.lingua-lens-subtitle-original {
+  all: revert;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.lingua-lens-subtitle-translated {
+  all: revert;
+  font-size: 1em;
+  color: rgba(255, 255, 255, 1);
+  line-height: 1.5;
+  font-weight: 500;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
