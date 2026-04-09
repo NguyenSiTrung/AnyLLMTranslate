@@ -1629,77 +1629,92 @@ Video player requests subtitle file
 
 ## 16. Phased Delivery Roadmap
 
-### Phase 1: Foundation (Weeks 1-3)
+> **Last Audit:** 2026-04-09 | **Overall Progress: ~28%** (10 done, 6 partial, 26 not started / 42 total tasks)
+
+### Phase 1: Foundation (Weeks 1-3) — ✅ 100% COMPLETE
 **Goal: Basic page translation with bilingual display**
+*Archived as Conductor track `phase1-foundation_20260409` on 2026-04-09.*
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Project setup (Vite + WXT + TypeScript) | P0 | 2 days |
-| Manifest V3 skeleton | P0 | 1 day |
-| DOM walker / paragraph detection | P0 | 3 days |
-| OpenAI-compatible service + presets | P0 | 2 days |
-| Basic bilingual display (1 theme) | P0 | 2 days |
-| Simple popup UI (translate button) | P0 | 2 days |
-| Viewport-based lazy loading | P0 | 1 day |
-| MutationObserver for SPAs | P1 | 1 day |
-| Translation cache (IndexedDB) | P1 | 2 days |
-| Restore/undo translation | P1 | 1 day |
-| **Subtotal** | | **~17 days** |
+| Task | Priority | Effort | Status | Implementation |
+|------|----------|--------|--------|----------------|
+| Project setup (Vite + WXT + TypeScript) | P0 | 2 days | ✅ Done | `wxt.config.ts`, `package.json`, `vitest.config.ts` |
+| Manifest V3 skeleton | P0 | 1 day | ✅ Done | WXT manifest w/ storage, activeTab, contextMenus, sidePanel |
+| DOM walker / paragraph detection | P0 | 3 days | ✅ Done | `content/domWalker.ts` — TreeWalker + sentence splitting |
+| OpenAI-compatible service + presets | P0 | 2 days | ✅ Done | `services/openaiCompatible.ts`, `services/base.ts`, 8 presets |
+| Basic bilingual display (1 theme) | P0 | 2 days | ✅ Done | `content/translationDisplay.ts` + `styles/inject.css` (Dividing Line) |
+| Simple popup UI (translate button) | P0 | 2 days | ✅ Done | `entrypoints/popup/App.tsx` — React w/ toggle, language pickers |
+| Viewport-based lazy loading | P0 | 1 day | ✅ Done | `content/viewportObserver.ts` — IntersectionObserver + 200px margin |
+| MutationObserver for SPAs | P1 | 1 day | ✅ Done | `content/mutationWatcher.ts` — debounced + dedup |
+| Translation cache (IndexedDB) | P1 | 2 days | ✅ Done | `services/cacheManager.ts` — idb-keyval, SHA-256, TTL, LRU |
+| Restore/undo translation | P1 | 1 day | ✅ Done | `removeAllTranslations()` + `stopTranslation()` |
+| **Subtotal** | | **~17 days** | **10/10** | |
 
-### Phase 2: Video Subtitles (Weeks 4-6)
+**Bonus deliverables:** Request batcher (`services/batcher.ts`), background message router (`services/background.ts`), 9 unit test files, 35+ languages, full type system (4 files in `types/`).
+
+### Phase 2: Video Subtitles (Weeks 4-6) — ❌ 0% NOT STARTED
 **Goal: Subtitle translation on Udemy, Coursera, YouTube**
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Page-context script injection (MAIN world) | P0 | 2 days |
-| XHR/fetch interceptor | P0 | 3 days |
-| postMessage bridge (inject ↔ content) | P0 | 1 day |
-| WebVTT parser | P0 | 1 day |
-| Bilingual VTT builder | P0 | 1 day |
-| YouTube subtitle handler | P0 | 2 days |
-| Udemy subtitle handler | P0 | 3 days |
-| Coursera subtitle handler | P0 | 3 days |
-| Custom subtitle overlay (fallback) | P1 | 2 days |
-| Subtitle styling (font size, position) | P1 | 1 day |
-| **Subtotal** | | **~19 days** |
+| Task | Priority | Effort | Status | Notes |
+|------|----------|--------|--------|-------|
+| Page-context script injection (MAIN world) | P0 | 2 days | ❌ | No MAIN world entrypoint |
+| XHR/fetch interceptor | P0 | 3 days | ❌ | No network interception code |
+| postMessage bridge (inject ↔ content) | P0 | 1 day | ❌ | No bridge code |
+| WebVTT parser | P0 | 1 day | ❌ | No VTT parsing |
+| Bilingual VTT builder | P0 | 1 day | ❌ | No VTT construction |
+| YouTube subtitle handler | P0 | 2 days | ❌ | No platform handlers |
+| Udemy subtitle handler | P0 | 3 days | ❌ | No platform handlers |
+| Coursera subtitle handler | P0 | 3 days | ❌ | No platform handlers |
+| Custom subtitle overlay (fallback) | P1 | 2 days | ❌ | No overlay component |
+| Subtitle styling (font size, position) | P1 | 1 day | ❌ | No subtitle CSS |
+| **Subtotal** | | **~19 days** | **0/10** | |
 
-### Phase 3: UX Polish & LLM Provider (Weeks 7-9)
+### Phase 3: UX Polish & LLM Provider (Weeks 7-9) — 🟡 ~15% PARTIAL
 **Goal: Premium display, OpenAI-compatible provider, settings**
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| All 15+ visual themes | P0 | 3 days |
-| Dark mode support | P0 | 1 day |
-| "Test Connection" button + provider validation | P0 | 0.5 day |
-| Custom system prompt editor | P1 | 0.5 day |
-| Full popup UI (React) | P0 | 3 days |
-| Options page (React) with provider config | P0 | 4 days |
-| Site rules editor | P1 | 2 days |
-| Custom dictionary/glossary | P1 | 2 days |
-| Loading/error state UX | P0 | 1 day |
-| **Subtotal** | | **~17 days** |
+| Task | Priority | Effort | Status | Notes |
+|------|----------|--------|--------|-------|
+| All 15+ visual themes | P0 | 3 days | ❌ | Only 1 theme (Dividing Line) |
+| Dark mode support | P0 | 1 day | 🟡 Partial | Basic `prefers-color-scheme` in inject.css, not full variants |
+| "Test Connection" button + provider validation | P0 | 0.5 day | 🟡 Partial | Backend: `testConnection()`, `validateProviderConfig()` exist. No UI |
+| Custom system prompt editor | P1 | 0.5 day | ❌ | System prompt hardcoded in `buildSystemPrompt()` |
+| Full popup UI (React) | P0 | 3 days | 🟡 Partial | Basic popup works; lacks theme/position/subtitle controls |
+| Options page (React) with provider config | P0 | 4 days | ❌ | No options page entrypoint |
+| Site rules editor | P1 | 2 days | ❌ | No site rules UI |
+| Custom dictionary/glossary | P1 | 2 days | ❌ | No glossary feature |
+| Loading/error state UX | P0 | 1 day | 🟡 Partial | Error in popup; loading animation CSS not implemented |
+| **Subtotal** | | **~17 days** | **0+4🟡/9** | |
 
-### Phase 4: Advanced Features (Weeks 10-12)
+### Phase 4: Advanced Features (Weeks 10-12) — 🟡 ~5% PARTIAL
 **Goal: Power user features, polish, launch**
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Text selection translate popup | P1 | 2 days |
-| Mouse hover translate | P1 | 2 days |
-| Side panel reading view | P2 | 3 days |
-| Keyboard shortcuts (all 10+) | P1 | 1 day |
-| Context menu integration | P1 | 1 day |
-| Netflix subtitle handler | P2 | 3 days |
-| Input box translation (Alt+I) | P2 | 2 days |
-| 50+ built-in site rules | P1 | 3 days |
-| Performance optimization | P0 | 2 days |
-| Unit tests (Vitest) | P0 | 3 days |
-| E2E tests (Playwright) | P1 | 3 days |
-| Chrome Web Store packaging | P0 | 1 day |
-| Documentation | P1 | 2 days |
-| **Subtotal** | | **~28 days** |
+| Task | Priority | Effort | Status | Notes |
+|------|----------|--------|--------|-------|
+| Text selection translate popup | P1 | 2 days | ❌ | |
+| Mouse hover translate | P1 | 2 days | ❌ | |
+| Side panel reading view | P2 | 3 days | ❌ | `sidePanel` permission declared only |
+| Keyboard shortcuts (all 10+) | P1 | 1 day | ❌ | |
+| Context menu integration | P1 | 1 day | ❌ | `contextMenus` permission declared only |
+| Netflix subtitle handler | P2 | 3 days | ❌ | |
+| Input box translation (Alt+I) | P2 | 2 days | ❌ | |
+| 50+ built-in site rules | P1 | 3 days | ❌ | |
+| Performance optimization | P0 | 2 days | ❌ | |
+| Unit tests (Vitest) | P0 | 3 days | 🟡 Partial | 9 test files for Phase 1 modules only |
+| E2E tests (Playwright) | P1 | 3 days | ❌ | No Playwright setup |
+| Chrome Web Store packaging | P0 | 1 day | 🟡 Partial | `npm run zip` script exists via WXT |
+| Documentation | P1 | 2 days | ❌ | |
+| **Subtotal** | | **~28 days** | **0+2🟡/13** | |
 
 ### Total Estimated Effort: ~81 working days (~16 weeks)
+
+### Progress Summary
+
+```
+Phase 1 ██████████████████████████████ 100%  ← COMPLETE
+Phase 2 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   0%  ← NEXT
+Phase 3 ████░░░░░░░░░░░░░░░░░░░░░░░░░░  15%  ← partial foundations
+Phase 4 █░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   5%  ← partial foundations
+Overall ████████░░░░░░░░░░░░░░░░░░░░░░  28%
+```
 
 ---
 
@@ -1883,5 +1898,5 @@ npm run package       # Creates lingua-lens.zip
 
 ---
 
-*Plan Version: 1.2 | Created: April 2026 | Updated: April 2026 | Status: Ready for Implementation*
-*Change: Single translation engine — OpenAI-compatible custom provider only (BYOK). No Google Translate.*
+*Plan Version: 1.3 | Created: April 2026 | Updated: April 9, 2026 | Status: Phase 1 Complete — Phase 2 Next*
+*Change: Added implementation status tracking to Section 16 Phased Delivery Roadmap based on codebase audit.*
