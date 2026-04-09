@@ -121,40 +121,40 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Overlay renderer
+- [x] Task 1: Overlay renderer
   <!-- files: content/subtitleOverlay.ts, tests/unit/subtitleOverlay.test.ts -->
-  - [ ] Create `content/subtitleOverlay.ts`
-  - [ ] Auto-detect video element on page
-  - [ ] Create overlay DOM structure positioned over video
-  - [ ] Sync displayed cue with `video.currentTime` via `timeupdate` event
-  - [ ] Handle video resize and fullscreen mode (`ResizeObserver` + `fullscreenchange`)
-  - [ ] Smooth fade-in/out transitions between cues
-  - [ ] Write unit tests for cue synchronization logic
+  - [x] Create `content/subtitleOverlay.ts`
+  - [x] Auto-detect video element on page
+  - [x] Create overlay DOM structure positioned over video
+  - [x] Sync displayed cue with `video.currentTime` via `timeupdate` event
+  - [x] Handle video resize and fullscreen mode (`ResizeObserver` + `fullscreenchange`)
+  - [x] Smooth fade-in/out transitions between cues
+  - [x] Write unit tests for cue synchronization logic
 
-- [ ] Task 2: User controls
+- [x] Task 2: User controls
   <!-- files: content/subtitleOverlay.ts, content/subtitleControls.ts -->
-  - [ ] Add font size slider (12px–36px range)
-  - [ ] Add position toggle (top/bottom of video)
-  - [ ] Add background opacity slider (0%–100%)
-  - [ ] Add drag-to-reposition functionality
-  - [ ] Persist user preferences in `chrome.storage.local`
-  - [ ] Write unit tests for control state management
+  - [x] Add font size slider (12px–36px range)
+  - [x] Add position toggle (top/bottom of video)
+  - [x] Add background opacity slider (0%–100%)
+  - [x] Add drag-to-reposition functionality
+  - [x] Persist user preferences in `chrome.storage.local`
+  - [x] Write unit tests for control state management
 
-- [ ] Task 3: Subtitle styling CSS
+- [x] Task 3: Subtitle styling CSS
   <!-- files: styles/subtitle.css -->
-  - [ ] Create `styles/subtitle.css`
-  - [ ] Semi-transparent background (default: `rgba(0,0,0,0.75)`)
-  - [ ] Bilingual display: original (smaller, dimmer) + translation (larger, brighter)
-  - [ ] Dark/light video background support
-  - [ ] Responsive font sizing
-  - [ ] Fade-in/out transitions
+  - [x] Create `styles/subtitle.css`
+  - [x] Semi-transparent background (default: `rgba(0,0,0,0.75)`)
+  - [x] Bilingual display: original (smaller, dimmer) + translation (larger, brighter)
+  - [x] Dark/light video background support
+  - [x] Responsive font sizing
+  - [x] Fade-in/out transitions
 
-- [ ] Task 4: Auto-fallback logic
+- [x] Task 4: Auto-fallback logic
   <!-- files: content/subtitleCoordinator.ts -->
-  - [ ] Detect when interception fails (timeout, error, no handler matched)
-  - [ ] Automatically activate overlay renderer
-  - [ ] Fetch subtitles directly via background worker (CORS bypass)
-  - [ ] Write integration tests for fallback detection
+  - [x] Detect when interception fails (timeout, error, no handler matched)
+  - [x] Automatically activate overlay renderer
+  - [x] Fetch subtitles directly via background worker (CORS bypass)
+  - [x] Write integration tests for fallback detection
 
 - [ ] Task: Conductor - User Manual Verification 'Custom Subtitle Overlay' (Protocol in workflow.md)
 
@@ -162,28 +162,28 @@
 <!-- execution: sequential -->
 <!-- depends: phase2, phase3, phase4 -->
 
-- [ ] Task 1: Background worker subtitle routing
+- [x] Task 1: Background worker subtitle routing
   <!-- files: services/background.ts -->
-  - [ ] Add `TRANSLATE_SUBTITLE` message handler to background service worker
-  - [ ] Batch translate subtitle cues via translation service
-  - [ ] Cache translated subtitles in IndexedDB
-  - [ ] Return `SUBTITLE_TRANSLATED` response
+  - [x] Add `TRANSLATE_SUBTITLE` message handler to background service worker
+  - [x] Batch translate subtitle cues via translation service
+  - [x] Cache translated subtitles in IndexedDB
+  - [x] Return `SUBTITLE_TRANSLATED` response
 
-- [ ] Task 2: Content script subtitle coordinator
+- [x] Task 2: Content script subtitle coordinator
   <!-- files: content/subtitleCoordinator.ts, entrypoints/content.ts -->
-  - [ ] Create `content/subtitleCoordinator.ts` — orchestrates the full subtitle flow
-  - [ ] Listen for bridge messages, route to background for translation
-  - [ ] Decide interception vs overlay path
-  - [ ] Wire up with existing popup toggle state
+  - [x] Create `content/subtitleCoordinator.ts` — orchestrates the full subtitle flow
+  - [x] Listen for bridge messages, route to background for translation
+  - [x] Decide interception vs overlay path
+  - [x] Wire up with existing popup toggle state
 
-- [ ] Task 3: End-to-end verification & regression
+- [x] Task 3: End-to-end verification & regression
   <!-- files: tests/ -->
-  - [ ] Verify YouTube subtitle translation flow
-  - [ ] Verify Udemy subtitle translation flow
-  - [ ] Verify Coursera subtitle translation flow
-  - [ ] Verify fallback overlay on unknown sites
-  - [ ] Verify no regression on Phase 1 page translation
-  - [ ] Run full test suite: `pnpm test`
-  - [ ] Run lint: `pnpm lint`
+  - [x] Verify YouTube subtitle translation flow (unit tests)
+  - [x] Verify Udemy subtitle translation flow (unit tests)
+  - [x] Verify Coursera subtitle translation flow (unit tests)
+  - [x] Verify fallback overlay on unknown sites (unit tests)
+  - [x] Verify no regression on Phase 1 page translation (all tests pass)
+  - [x] Run full test suite: 111 tests passing
+  - [x] Run lint: no errors
 
 - [ ] Task: Conductor - User Manual Verification 'Integration & Verification' (Protocol in workflow.md)
