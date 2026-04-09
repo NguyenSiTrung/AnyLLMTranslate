@@ -79,41 +79,41 @@
 ## Phase 3: Platform Subtitle Handlers
 <!-- execution: parallel -->
 
-- [ ] Task 1: Base subtitle handler + handler registry
+- [x] Task 1: Base subtitle handler + handler registry
   <!-- files: inject/subtitleHandlers/base.ts -->
-  - [ ] Create `inject/subtitleHandlers/base.ts` with abstract `SubtitleHandler` interface
-  - [ ] Define: `detect()`, `getPatterns()`, `transformResponse()`
-  - [ ] Create handler registry for auto-detection by hostname
-  - [ ] Write unit tests for registry
+  - [x] Create `inject/subtitleHandlers/base.ts` with abstract `SubtitleHandler` interface
+  - [x] Define: `detect()`, `getPatterns()`, `transformResponse()`
+  - [x] Create handler registry for auto-detection by hostname
+  - [x] Write unit tests for registry
 
-- [ ] Task 2: YouTube subtitle handler
+- [x] Task 2: YouTube subtitle handler
   <!-- files: inject/subtitleHandlers/youtube.ts, tests/unit/youtubeHandler.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Create `inject/subtitleHandlers/youtube.ts`
-  - [ ] Detect YouTube pages (hostname + video player presence)
-  - [ ] Match `/api/timedtext` URL pattern
-  - [ ] Parse YouTube srv3 (XML) → `SubtitleCue[]`
-  - [ ] Parse YouTube JSON3 → `SubtitleCue[]`
-  - [ ] Handle auto-generated vs manual captions
-  - [ ] Write unit tests with sample YouTube subtitle responses
+  - [x] Create `inject/subtitleHandlers/youtube.ts`
+  - [x] Detect YouTube pages (hostname + video player presence)
+  - [x] Match `/api/timedtext` URL pattern
+  - [x] Parse YouTube srv3 (XML) → `SubtitleCue[]`
+  - [x] Parse YouTube JSON3 → `SubtitleCue[]`
+  - [x] Handle auto-generated vs manual captions
+  - [x] Write unit tests with sample YouTube subtitle responses
 
-- [ ] Task 3: Udemy subtitle handler
+- [x] Task 3: Udemy subtitle handler
   <!-- files: inject/subtitleHandlers/udemy.ts, tests/unit/udemyHandler.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Create `inject/subtitleHandlers/udemy.ts`
-  - [ ] Detect Udemy course pages
-  - [ ] Match `*.udemycdn.com/*.vtt` URL pattern
-  - [ ] Handle SPA navigation between lectures
-  - [ ] Write unit tests with sample Udemy subtitle responses
+  - [x] Create `inject/subtitleHandlers/udemy.ts`
+  - [x] Detect Udemy course pages
+  - [x] Match `*.udemycdn.com/*.vtt` URL pattern
+  - [x] Handle SPA navigation between lectures
+  - [x] Write unit tests with sample Udemy subtitle responses
 
-- [ ] Task 4: Coursera subtitle handler
+- [x] Task 4: Coursera subtitle handler
   <!-- files: inject/subtitleHandlers/coursera.ts, tests/unit/courseraHandler.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Create `inject/subtitleHandlers/coursera.ts`
-  - [ ] Detect Coursera course pages
-  - [ ] Match `*.coursera.org/*subtitle*` URL pattern
-  - [ ] Handle lecture navigation and playlist progression
-  - [ ] Write unit tests with sample Coursera subtitle responses
+  - [x] Create `inject/subtitleHandlers/coursera.ts`
+  - [x] Detect Coursera course pages
+  - [x] Match `*.coursera.org/*subtitle*` URL pattern
+  - [x] Handle lecture navigation and playlist progression
+  - [x] Write unit tests with sample Coursera subtitle responses
 
 - [ ] Task: Conductor - User Manual Verification 'Platform Subtitle Handlers' (Protocol in workflow.md)
 
