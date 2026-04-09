@@ -108,31 +108,31 @@
 ## Phase 4: Dynamic Content, Cache & Restore
 <!-- execution: sequential -->
 
-- [ ] Task 1: Implement MutationObserver for SPA support
-  - [ ] Create src/content/mutationWatcher.ts
-  - [ ] Implement MutationObserver watching document.body (childList + subtree)
-  - [ ] Filter: only block elements, skip data-lingua-* nodes
-  - [ ] Implement 500ms debounced scheduleTranslation()
-  - [ ] Wire into content script orchestration
-  - [ ] Write unit tests with mock mutations
+- [x] Task 1: Implement MutationObserver for SPA support
+  - [x] Create src/content/mutationWatcher.ts
+  - [x] Implement MutationObserver watching document.body (childList + subtree)
+  - [x] Filter: only block elements, skip data-lingua-* nodes
+  - [x] Implement 500ms debounced scheduleTranslation()
+  - [x] Wire into content script orchestration
+  - [x] Write unit tests with mock mutations
 
-- [ ] Task 2: Implement IndexedDB translation cache
-  - [ ] Create src/background/cacheManager.ts
-  - [ ] Implement cache with idb-keyval or raw IndexedDB
-  - [ ] Implement SHA-256 cache key generation
-  - [ ] Implement write-through caching on successful translation
-  - [ ] Implement TTL-based expiry (30 days default)
-  - [ ] Implement LRU eviction when cache > 100MB
-  - [ ] Integrate cache into background translation pipeline (check → API → store)
-  - [ ] Write unit tests for cache operations (hit, miss, expire, evict)
+- [x] Task 2: Implement IndexedDB translation cache
+  - [x] Create src/background/cacheManager.ts
+  - [x] Implement cache with idb-keyval or raw IndexedDB
+  - [x] Implement SHA-256 cache key generation
+  - [x] Implement write-through caching on successful translation
+  - [x] Implement TTL-based expiry (30 days default)
+  - [x] Implement LRU eviction when cache > 100MB
+  - [x] Integrate cache into background translation pipeline (check → API → store)
+  - [x] Write unit tests for cache operations (hit, miss, expire, evict)
 
-- [ ] Task 3: Implement restore/undo translation
-  - [ ] Create src/content/restoreManager.ts
-  - [ ] Implement restorePage() — remove all [data-lingua-role="translation"] nodes
-  - [ ] Implement state toggle cycle: dual → off → dual
-  - [ ] Clean up data-lingua-state attribute on restore
-  - [ ] Wire restore into popup toggle and background messages
-  - [ ] Write unit tests for restore logic
+- [x] Task 3: Implement restore/undo translation
+  - [x] Create src/content/restoreManager.ts
+  - [x] Implement restorePage() — remove all [data-lingua-role="translation"] nodes
+  - [x] Implement state toggle cycle: dual → off → dual
+  - [x] Clean up data-lingua-state attribute on restore
+  - [x] Wire restore into popup toggle and background messages
+  - [x] Write unit tests for restore logic
 
 - [ ] Task: Conductor - User Manual Verification 'Dynamic Content, Cache & Restore' (Protocol in workflow.md)
 
