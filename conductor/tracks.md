@@ -4,7 +4,8 @@ This file tracks all major tracks for the project.
 
 ---
 
-<!-- No active tracks. Use /conductor-newtrack to create one. -->
+## [ ] Track: Video Subtitle Translation Engine (Phase 2)
+*Link: [./conductor/tracks/phase2-subtitles_20260409/](./conductor/tracks/phase2-subtitles_20260409/)*
 
 ---
 
