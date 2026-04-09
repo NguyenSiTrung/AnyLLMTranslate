@@ -16,20 +16,20 @@
   - [x] Add lucide-react for icons
   - [x] Verify `pnpm dev` launches extension in Chrome
 
-- [ ] Task 2: Configure build tooling & code quality
-  - [ ] Configure ESLint with TypeScript strict rules
-  - [ ] Configure Prettier
-  - [ ] Configure Vitest with jsdom environment
-  - [ ] Configure tsconfig.json with strict mode, path aliases
-  - [ ] Verify `pnpm lint` and `pnpm test` commands work
+- [x] Task 2: Configure build tooling & code quality
+  - [x] Configure ESLint with TypeScript strict rules
+  - [x] Configure Prettier
+  - [x] Configure Vitest with jsdom environment
+  - [x] Configure tsconfig.json with strict mode, path aliases
+  - [x] Verify `pnpm lint` and `pnpm test` commands work
 
-- [ ] Task 3: Establish project directory structure & shared types
-  - [ ] Create directory skeleton: src/{background,content,services,ui,lib,styles,types}
-  - [ ] Create type definitions: messages.ts, config.ts, translation.ts
-  - [ ] Create constants.ts (BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS sets)
-  - [ ] Create languages.ts (ISO 639-1 language codes + display names)
-  - [ ] Create config.ts in lib/ (chrome.storage settings store with defaults)
-  - [ ] Write unit tests for language utility functions
+- [x] Task 3: Establish project directory structure & shared types
+  - [x] Create directory skeleton: src/{background,content,services,ui,lib,styles,types}
+  - [x] Create type definitions: messages.ts, config.ts, translation.ts
+  - [x] Create constants.ts (BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS sets)
+  - [x] Create languages.ts (ISO 639-1 language codes + display names)
+  - [x] Create config.ts in lib/ (chrome.storage settings store with defaults)
+  - [x] Write unit tests for language utility functions
 
 - [ ] Task: Conductor - User Manual Verification 'Project Setup & Scaffolding' (Protocol in workflow.md)
 
