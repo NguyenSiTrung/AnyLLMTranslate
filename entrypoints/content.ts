@@ -9,10 +9,13 @@ import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
+import { startCoordinator } from '@/content/subtitleCoordinator';
 import '@/styles/inject.css';
+import '@/styles/subtitle.css';
 
 let viewportObserver: ViewportObserver | null = null;
 let allPieces: TranslationPiece[] = [];
+let coordinatorCleanup: (() => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -69,6 +72,12 @@ export function stopTranslation(): void {
   allPieces = [];
 
   chrome.runtime.sendMessage({ action: 'restore' });
+  
+  // Cleanup subtitle coordinator
+  if (coordinatorCleanup) {
+    coordinatorCleanup();
+    coordinatorCleanup = null;
+  }
 }
 
 /** Toggle translation on/off */
@@ -100,6 +109,7 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
   async main() {
     setupMessageListener();
+    coordinatorCleanup = startCoordinator();
     console.log('[LinguaLens] Content script loaded');
   },
 });
