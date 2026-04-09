@@ -1,0 +1,119 @@
+/**
+ * Base translation service interface and types.
+ * All translation providers implement this interface.
+ */
+
+import type { TranslationRequest, TranslationResult } from '@/types/translation';
+import type { ProviderConfig } from '@/types/config';
+
+/** Abstract base for all translation services */
+export interface TranslationService {
+  /** Translate a batch of texts */
+  translate(request: TranslationRequest): Promise<TranslationResult>;
+
+  /** Test the connection to the translation provider */
+  testConnection(): Promise<{ success: boolean; error?: string }>;
+}
+
+/** Factory to create a translation service from provider config */
+export function createTranslationService(config: ProviderConfig): TranslationService {
+  // All providers use OpenAI-compatible API, so we have a single implementation
+  // Lazy import to avoid circular deps
+  const { OpenAICompatibleService } = require('./openaiCompatible');
+  return new OpenAICompatibleService(config);
+}
+
+/** Build the system prompt for translation */
+export function buildSystemPrompt(targetLanguage: string): string {
+  return `You are a professional translator. Translate the given text to ${targetLanguage}.
+
+Rules:
+- Translate naturally and fluently, preserving the original meaning and tone.
+- Preserve ALL HTML tags, attributes, and structure exactly as they are.
+- Do NOT translate code, URLs, email addresses, or proper nouns unless appropriate.
+- If the text is already in the target language, return it unchanged.
+- Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "translated text 1", "id2": "translated text 2"}}
+- The keys in "translations" must exactly match the input keys.`;
+}
+
+/** Build the user prompt for a batch of texts */
+export function buildUserPrompt(
+  texts: Map<string, string>,
+  sourceLanguage: string,
+): string {
+  const entries: Record<string, string> = {};
+  for (const [id, text] of texts) {
+    entries[id] = text;
+  }
+
+  const langHint = sourceLanguage === 'auto'
+    ? ''
+    : ` The source language is ${sourceLanguage}.`;
+
+  return `Translate the following texts.${langHint}
+
+${JSON.stringify(entries, null, 2)}`;
+}
+
+/** Parse the JSON response from the LLM */
+export function parseTranslationResponse(
+  responseText: string,
+  expectedIds: string[],
+): Map<string, string> {
+  const translations = new Map<string, string>();
+
+  // Try to parse as JSON directly
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    // Try to extract JSON from markdown code blocks
+    const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (jsonMatch?.[1]) {
+      parsed = JSON.parse(jsonMatch[1]);
+    } else {
+      throw new Error('Failed to parse translation response as JSON');
+    }
+  }
+
+  // Handle { translations: { ... } } format
+  const translationsObj = (parsed as Record<string, unknown>).translations ??  parsed;
+
+  if (typeof translationsObj !== 'object' || translationsObj === null) {
+    throw new Error('Translation response is not an object');
+  }
+
+  for (const id of expectedIds) {
+    const value = (translationsObj as Record<string, unknown>)[id];
+    if (typeof value === 'string') {
+      translations.set(id, value);
+    }
+  }
+
+  return translations;
+}
+
+/** Validate a provider config has required fields */
+export function validateProviderConfig(
+  config: ProviderConfig,
+): { valid: boolean; error?: string } {
+  if (!config.baseUrl) {
+    return { valid: false, error: 'Base URL is required' };
+  }
+
+  try {
+    new URL(config.baseUrl);
+  } catch {
+    return { valid: false, error: 'Invalid Base URL format' };
+  }
+
+  if (config.requiresApiKey && !config.apiKey) {
+    return { valid: false, error: 'API key is required for this provider' };
+  }
+
+  if (!config.model) {
+    return { valid: false, error: 'Model name is required' };
+  }
+
+  return { valid: true };
+}

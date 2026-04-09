@@ -36,34 +36,34 @@
 ## Phase 2: Translation Service & Background Worker
 <!-- execution: sequential -->
 
-- [ ] Task 1: Implement TranslationService interface
-  - [ ] Define TranslationService interface in src/services/base.ts
-  - [ ] Define TranslationRequest, TranslationResult, OpenAICompatibleConfig types
-  - [ ] Define provider presets (OpenAI, DeepSeek, Groq, Ollama, LM Studio, etc.)
-  - [ ] Write unit tests for type validation helpers
+- [x] Task 1: Implement TranslationService interface
+  - [x] Define TranslationService interface in src/services/base.ts
+  - [x] Define TranslationRequest, TranslationResult, OpenAICompatibleConfig types
+  - [x] Define provider presets (OpenAI, DeepSeek, Groq, Ollama, LM Studio, etc.)
+  - [x] Write unit tests for type validation helpers
 
-- [ ] Task 2: Implement OpenAI-compatible translation service
-  - [ ] Implement OpenAICompatibleService class in src/services/openaiCompatible.ts
-  - [ ] Implement translate() with JSON-mode response parsing
-  - [ ] Implement testConnection() method
-  - [ ] Handle auth header logic (skip for local providers like Ollama)
-  - [ ] Handle error responses with descriptive error messages
-  - [ ] Write unit tests with mocked fetch responses (success, error, malformed JSON)
+- [x] Task 2: Implement OpenAI-compatible translation service
+  - [x] Implement OpenAICompatibleService class in src/services/openaiCompatible.ts
+  - [x] Implement translate() with JSON-mode response parsing
+  - [x] Implement testConnection() method
+  - [x] Handle auth header logic (skip for local providers like Ollama)
+  - [x] Handle error responses with descriptive error messages
+  - [x] Write unit tests with mocked fetch responses (success, error, malformed JSON)
 
-- [ ] Task 3: Implement request batching & deduplication
-  - [ ] Implement TranslationBatcher class in src/services/batcher.ts
-  - [ ] Implement deduplication via Set
-  - [ ] Implement in-flight request tracking via Map
-  - [ ] Implement batch splitting by maxBatchChars
-  - [ ] Write unit tests for batching logic (dedup, splitting, in-flight reuse)
+- [x] Task 3: Implement request batching & deduplication
+  - [x] Implement TranslationBatcher class in src/services/batcher.ts
+  - [x] Implement deduplication via Set
+  - [x] Implement in-flight request tracking via Map
+  - [x] Implement batch splitting by maxBatchChars
+  - [x] Write unit tests for batching logic (dedup, splitting, in-flight reuse)
 
-- [ ] Task 4: Implement background service worker
-  - [ ] Create src/background/index.ts as WXT background entrypoint
-  - [ ] Implement message router for translate/restore/getStatus actions
-  - [ ] Implement per-tab translation state management (idle/translating/done/error)
-  - [ ] Wire up OpenAICompatibleService with settings from chrome.storage
-  - [ ] Implement settings change listener (re-create service on config update)
-  - [ ] Write unit tests for message routing logic
+- [x] Task 4: Implement background service worker
+  - [x] Create src/background/index.ts as WXT background entrypoint
+  - [x] Implement message router for translate/restore/getStatus actions
+  - [x] Implement per-tab translation state management (idle/translating/done/error)
+  - [x] Wire up OpenAICompatibleService with settings from chrome.storage
+  - [x] Implement settings change listener (re-create service on config update)
+  - [x] Write unit tests for message routing logic
 
 - [ ] Task: Conductor - User Manual Verification 'Translation Service & Background Worker' (Protocol in workflow.md)
 
