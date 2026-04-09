@@ -70,37 +70,37 @@
 ## Phase 3: DOM Translation Engine
 <!-- execution: sequential -->
 
-- [ ] Task 1: Implement DOM walker / paragraph detection
-  - [ ] Create src/content/domWalker.ts
-  - [ ] Implement TreeWalker-based DOM traversal
-  - [ ] Implement piece collection: group text/inline nodes into TranslationPiece[]
-  - [ ] Implement block element splitting
-  - [ ] Implement pre-filters (translate="no", .notranslate, contentEditable)
-  - [ ] Implement size cap (1,000 chars) with sentence boundary splitting
-  - [ ] Write unit tests with mock DOM structures (jsdom)
+- [x] Task 1: Implement DOM walker / paragraph detection
+  - [x] Create src/content/domWalker.ts
+  - [x] Implement TreeWalker-based DOM traversal
+  - [x] Implement piece collection: group text/inline nodes into TranslationPiece[]
+  - [x] Implement block element splitting
+  - [x] Implement pre-filters (translate="no", .notranslate, contentEditable)
+  - [x] Implement size cap (1,000 chars) with sentence boundary splitting
+  - [x] Write unit tests with mock DOM structures (jsdom)
 
-- [ ] Task 2: Implement bilingual display engine (Dividing Line theme)
-  - [ ] Create src/content/translationDisplay.ts
-  - [ ] Implement applyBilingualTranslation() — DOM injection with data attributes
-  - [ ] Create src/styles/inject.css — Dividing Line theme CSS
-  - [ ] Implement state management via html[data-lingua-state] attribute
-  - [ ] Support display modes: bilingual-below (default), translation-only
-  - [ ] Implement dark mode support via @media (prefers-color-scheme: dark)
-  - [ ] Write unit tests for DOM injection and state toggling
+- [x] Task 2: Implement bilingual display engine (Dividing Line theme)
+  - [x] Create src/content/translationDisplay.ts
+  - [x] Implement applyBilingualTranslation() — DOM injection with data attributes
+  - [x] Create src/styles/inject.css — Dividing Line theme CSS
+  - [x] Implement state management via html[data-lingua-state] attribute
+  - [x] Support display modes: bilingual-below (default), translation-only
+  - [x] Implement dark mode support via @media (prefers-color-scheme: dark)
+  - [x] Write unit tests for DOM injection and state toggling
 
-- [ ] Task 3: Implement viewport-based lazy translation
-  - [ ] Create src/content/viewportObserver.ts
-  - [ ] Implement IntersectionObserver with rootMargin: '200px'
-  - [ ] Implement piece-to-observer binding (observe parentElement of each piece)
-  - [ ] Implement batch collection of visible pieces → send to translation
-  - [ ] Write unit tests with IntersectionObserver mock
+- [x] Task 3: Implement viewport-based lazy translation
+  - [x] Create src/content/viewportObserver.ts
+  - [x] Implement IntersectionObserver with rootMargin: '200px'
+  - [x] Implement piece-to-observer binding (observe parentElement of each piece)
+  - [x] Implement batch collection of visible pieces → send to translation
+  - [x] Write unit tests with IntersectionObserver mock
 
-- [ ] Task 4: Wire content script entry point
-  - [ ] Create src/content/index.ts as WXT content script entrypoint
-  - [ ] Wire: domWalker → viewportObserver → message to background → translationDisplay
-  - [ ] Implement translation orchestration flow (detect pieces → observe → translate → display)
-  - [ ] Handle translation state from background messages
-  - [ ] Register inject.css via WXT content script CSS config
+- [x] Task 4: Wire content script entry point
+  - [x] Create src/content/index.ts as WXT content script entrypoint
+  - [x] Wire: domWalker → viewportObserver → message to background → translationDisplay
+  - [x] Implement translation orchestration flow (detect pieces → observe → translate → display)
+  - [x] Handle translation state from background messages
+  - [x] Register inject.css via WXT content script CSS config
   - [ ] Manual integration test: translate a Wikipedia article end-to-end
 
 - [ ] Task: Conductor - User Manual Verification 'DOM Translation Engine' (Protocol in workflow.md)

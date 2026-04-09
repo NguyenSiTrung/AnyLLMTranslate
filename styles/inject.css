@@ -1,0 +1,81 @@
+/**
+ * Inject CSS — Dividing Line theme for bilingual display.
+ * Applied to host pages via content script CSS injection.
+ */
+
+/* ===== LinguaLens Translation Theme: Dividing Line ===== */
+
+/* Translation container — appears below original text */
+.lingua-lens-translation {
+  border-top: 1px solid var(--lingua-border-color, #e2e2e2);
+  margin-top: var(--lingua-margin-top, 4px);
+  padding-top: var(--lingua-padding-top, 4px);
+  color: var(--lingua-text-color, #444444);
+  font-size: var(--lingua-font-size, inherit);
+  line-height: var(--lingua-line-height, 1.6);
+  font-style: var(--lingua-font-style, normal);
+  opacity: 0;
+  animation: linguaFadeIn 0.3s ease-out forwards;
+}
+
+/* Subtle fade-in animation */
+@keyframes linguaFadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Page State Rules ===== */
+
+/* Dual mode: show both original and translation */
+html[data-lingua-state="dual"] [data-lingua-role="original"] {
+  /* Original text stays as-is */
+}
+
+html[data-lingua-state="dual"] [data-lingua-role="translation"] {
+  display: block;
+}
+
+/* Translation-only mode: hide original, show translation */
+html[data-lingua-state="translation-only"] [data-lingua-role="original"] {
+  display: none;
+}
+
+html[data-lingua-state="translation-only"] [data-lingua-role="translation"] {
+  display: block;
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+  color: inherit;
+}
+
+/* Off mode: hide all translations */
+html[data-lingua-state="off"] [data-lingua-role="translation"],
+html:not([data-lingua-state]) [data-lingua-role="translation"] {
+  display: none;
+}
+
+/* ===== Dark Mode Support ===== */
+
+@media (prefers-color-scheme: dark) {
+  .lingua-lens-translation {
+    --lingua-border-color: #444444;
+    --lingua-text-color: #b0b0b0;
+  }
+}
+
+/* ===== Prevent Host Page Style Pollution ===== */
+
+.lingua-lens-translation {
+  all: revert;
+  border-top: 1px solid var(--lingua-border-color, #e2e2e2);
+  margin-top: var(--lingua-margin-top, 4px);
+  padding-top: var(--lingua-padding-top, 4px);
+  color: var(--lingua-text-color, #444444);
+  font-size: var(--lingua-font-size, inherit);
+  line-height: var(--lingua-line-height, 1.6);
+  font-style: var(--lingua-font-style, normal);
+  display: block;
+  box-sizing: border-box;
+  opacity: 0;
+  animation: linguaFadeIn 0.3s ease-out forwards;
+}
