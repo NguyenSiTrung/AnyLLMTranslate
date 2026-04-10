@@ -1,16 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Languages, Zap, Loader2, CheckCircle2, AlertCircle, Settings, ArrowRightLeft } from 'lucide-react';
-import type { ExtensionSettings } from '@/types/config';
+import {
+  Languages, Zap, Loader2, CheckCircle2, AlertCircle, Settings,
+  ArrowRightLeft, Palette, ChevronDown, ExternalLink,
+} from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus } from '@/types/messages';
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS } from '@/types/config';
+import type { ThemeName, DisplayMode, ExtensionSettings } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
+import { STORAGE_KEYS } from '@/lib/constants';
 
-/** Status display config */
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string }> = {
   idle: { icon: Zap, label: 'Ready', color: 'text-zinc-400' },
   translating: { icon: Loader2, label: 'Translating...', color: 'text-blue-400' },
   done: { icon: CheckCircle2, label: 'Done', color: 'text-emerald-400' },
   error: { icon: AlertCircle, label: 'Error', color: 'text-red-400' },
+};
+
+const THEME_LABELS: Record<ThemeName, string> = {
+  'dividing-line': 'Dividing Line', blockquote: 'Blockquote', paper: 'Paper',
+  underline: 'Underline', 'dashed-underline': 'Dashed', highlight: 'Highlight',
+  'wavy-underline': 'Wavy', bubble: 'Bubble', 'side-by-side': 'Side by Side',
+  mask: 'Mask', 'fade-in': 'Fade In', italic: 'Italic',
+  'dotted-border': 'Dotted', 'shadow-card': 'Card', minimal: 'Minimal',
+  'gradient-accent': 'Gradient',
 };
 
 export default function App() {
@@ -21,22 +33,28 @@ export default function App() {
     totalCount: 0,
   });
   const [isTranslating, setIsTranslating] = useState(false);
+  const [showQuickSettings, setShowQuickSettings] = useState(false);
 
-  // Load settings and status on mount
   useEffect(() => {
     loadSettingsFromStorage();
     queryTabStatus();
+    // Listen for cross-context settings changes
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && changes[STORAGE_KEYS.SETTINGS]) {
+        setSettings({ ...DEFAULT_SETTINGS, ...changes[STORAGE_KEYS.SETTINGS].newValue });
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
 
   async function loadSettingsFromStorage() {
     try {
-      const result = await chrome.storage.local.get('lingua-lens-settings');
-      if (result['lingua-lens-settings']) {
-        setSettings({ ...DEFAULT_SETTINGS, ...result['lingua-lens-settings'] });
+      const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
+      if (result[STORAGE_KEYS.SETTINGS]) {
+        setSettings({ ...DEFAULT_SETTINGS, ...result[STORAGE_KEYS.SETTINGS] });
       }
-    } catch {
-      // Use defaults
-    }
+    } catch { /* defaults */ }
   }
 
   async function queryTabStatus() {
@@ -49,10 +67,14 @@ export default function App() {
           setIsTranslating(response.status === 'translating');
         }
       }
-    } catch {
-      // Tab may not be ready
-    }
+    } catch { /* tab not ready */ }
   }
+
+  const updateSetting = useCallback(async (partial: Partial<ExtensionSettings>) => {
+    const updated = { ...settings, ...partial };
+    setSettings(updated);
+    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
+  }, [settings]);
 
   const handleToggleTranslation = useCallback(async () => {
     try {
@@ -60,12 +82,10 @@ export default function App() {
       if (!tab?.id) return;
 
       if (isTranslating || status.status === 'done') {
-        // Stop / restore
         await chrome.tabs.sendMessage(tab.id, { action: 'stopTranslation' });
         setIsTranslating(false);
         setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
       } else {
-        // Start translation
         await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
         setIsTranslating(true);
         setStatus((prev) => ({ ...prev, status: 'translating' }));
@@ -75,24 +95,11 @@ export default function App() {
     }
   }, [isTranslating, status.status]);
 
-  const handleSourceLanguageChange = useCallback(async (code: string) => {
-    const updated = { ...settings, sourceLanguage: code };
-    setSettings(updated);
-    await chrome.storage.local.set({ 'lingua-lens-settings': updated });
-  }, [settings]);
-
-  const handleTargetLanguageChange = useCallback(async (code: string) => {
-    const updated = { ...settings, targetLanguage: code };
-    setSettings(updated);
-    await chrome.storage.local.set({ 'lingua-lens-settings': updated });
-  }, [settings]);
-
   const statusConfig = STATUS_CONFIG[status.status];
   const StatusIcon = statusConfig.icon;
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
   const sourceLanguages = LANGUAGES;
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
-
   const isActive = isTranslating || status.status === 'done';
 
   return (
@@ -103,13 +110,24 @@ export default function App() {
           <Languages className="w-5 h-5 text-blue-400" />
           <h1 className="text-sm font-semibold tracking-tight">LinguaLens</h1>
         </div>
-        <button
-          className="p-1.5 rounded-md hover:bg-zinc-800 transition-colors"
-          title="Settings"
-          onClick={() => chrome.runtime.openOptionsPage?.()}
-        >
-          <Settings className="w-4 h-4 text-zinc-400" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            id="quick-settings-btn"
+            className={`p-1.5 rounded-md transition-colors ${showQuickSettings ? 'bg-zinc-700 text-zinc-200' : 'hover:bg-zinc-800 text-zinc-400'}`}
+            title="Quick settings"
+            onClick={() => setShowQuickSettings(!showQuickSettings)}
+          >
+            <Palette className="w-4 h-4" />
+          </button>
+          <button
+            id="open-options-btn"
+            className="p-1.5 rounded-md hover:bg-zinc-800 transition-colors text-zinc-400"
+            title="Open full settings"
+            onClick={() => chrome.runtime.openOptionsPage?.()}
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Translation Toggle */}
@@ -158,13 +176,11 @@ export default function App() {
             <select
               id="source-language"
               value={settings.sourceLanguage}
-              onChange={(e) => handleSourceLanguageChange(e.target.value)}
+              onChange={(e) => updateSetting({ sourceLanguage: e.target.value })}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               {sourceLanguages.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.nativeName}
-                </option>
+                <option key={lang.code} value={lang.code}>{lang.nativeName}</option>
               ))}
             </select>
           </div>
@@ -176,18 +192,68 @@ export default function App() {
             <select
               id="target-language"
               value={settings.targetLanguage}
-              onChange={(e) => handleTargetLanguageChange(e.target.value)}
+              onChange={(e) => updateSetting({ targetLanguage: e.target.value })}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
             >
               {targetLanguages.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.nativeName}
-                </option>
+                <option key={lang.code} value={lang.code}>{lang.nativeName}</option>
               ))}
             </select>
           </div>
         </div>
       </div>
+
+      {/* Quick Settings Panel (collapsible) */}
+      {showQuickSettings && (
+        <div className="px-4 pb-3 space-y-2 border-t border-zinc-800 pt-3">
+          {/* Theme */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Theme</label>
+            <select
+              id="popup-theme"
+              value={settings.theme}
+              onChange={(e) => updateSetting({ theme: e.target.value as ThemeName })}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-md px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+            >
+              {(Object.entries(THEME_LABELS) as [ThemeName, string][]).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Display Mode */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Display</label>
+            <div className="flex gap-1.5">
+              {([
+                { value: 'bilingual-below' as DisplayMode, label: 'Bilingual' },
+                { value: 'translation-only' as DisplayMode, label: 'Trans. Only' },
+              ]).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => updateSetting({ displayMode: opt.value })}
+                  className={`flex-1 py-1 px-2 rounded text-[11px] font-medium transition-all ${
+                    settings.displayMode === opt.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Open Full Settings */}
+          <button
+            onClick={() => chrome.runtime.openOptionsPage?.()}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open Full Settings
+          </button>
+        </div>
+      )}
 
       {/* Provider Info */}
       <div className="px-4 py-2.5 border-t border-zinc-800 flex items-center justify-between">
