@@ -15,12 +15,8 @@ This file tracks all major tracks for the project.
 - ✅ **Fix Display Theme Not Applied Bug** (`display-theme-fix_20260410`) — Archived 2026-04-10. [View](./conductor/archive/display-theme-fix_20260410/)
 
 - ✅ **Paragraph Translation Progress Indicators** (`para-progress-indicator_20260410`) — Archived 2026-04-10. [View](./conductor/archive/para-progress-indicator_20260410/)
+- ✅ **Custom Dictionary (Glossary) — Wire & Validate** (`glossary-wire_20260410`) — Archived 2026-04-10. [View](./conductor/archive/glossary-wire_20260410/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: Custom Dictionary (Glossary) — Wire & Validate
-*Link: [./conductor/tracks/glossary-wire_20260410/](./conductor/tracks/glossary-wire_20260410/)*

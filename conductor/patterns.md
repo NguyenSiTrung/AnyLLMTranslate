@@ -139,6 +139,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - Wrap `chrome.runtime.sendMessage` in try/catch in content scripts — sendMessage can throw synchronously if the service worker is asleep on first call. (from: para-progress-indicator_20260410, archived 2026-04-10)
 - `styles/__tests__/themes.test.ts` checks inject.css as a raw string — when replacing CSS keyframe names or selectors, always update `themes.test.ts` alongside the CSS file. (from: para-progress-indicator_20260410, archived 2026-04-10)
 
+## Glossary & Prompt Wiring
+- `buildSystemPrompt()` already accepted optional params — always check existing function signatures before extending. (from: glossary-wire_20260410, archived 2026-04-10)
+- Pass `glossaryBlock || undefined` (not empty string) to preserve "no glossary" semantics; `formatGlossary()` returns `''` for empty arrays. (from: glossary-wire_20260410, archived 2026-04-10)
+- Inspect LLM request body in tests: `JSON.parse(fetchMock.mock.calls[0][1]?.body).messages[0].content`. (from: glossary-wire_20260410, archived 2026-04-10)
+- Module-level `mockStorage` in background.test.ts is shared — add cleanup in `beforeEach` to prevent pollution. (from: glossary-wire_20260410, archived 2026-04-10)
+- Lift mismatch state to parent and pass callback — keeps table and preview in sync without a shared store. (from: glossary-wire_20260410, archived 2026-04-10)
+- Clear badges on ANY mutation (add/delete/edit) by calling `clearMismatches()` in each handler's useCallback. (from: glossary-wire_20260410, archived 2026-04-10)
+
 ---
 Last refreshed: 2026-04-10T16:54:00+07:00
 Codebase health: 403 tests across 32 files, 504KB build (chrome-mv3)
