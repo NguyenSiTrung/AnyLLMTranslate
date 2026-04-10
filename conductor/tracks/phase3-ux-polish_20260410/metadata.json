@@ -1,0 +1,32 @@
+{
+  "track_id": "phase3-ux-polish_20260410",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": 136,
+  "created_at": "2026-04-10T02:16:23Z",
+  "updated_at": "2026-04-10T02:19:46Z",
+  "description": "Phase 3: UX Polish & LLM Provider — 15+ visual themes, Options page, provider settings, site rules editor, glossary, loading/error states",
+  "beads_epic": "AnyLLMTranslate-8vb",
+  "beads_tasks": {
+    "phase1": "AnyLLMTranslate-8vb.1",
+    "phase1_task1": "AnyLLMTranslate-8vb.1.1",
+    "phase1_task2": "AnyLLMTranslate-8vb.1.2",
+    "phase1_task3": "AnyLLMTranslate-8vb.1.3",
+    "phase1_task4": "AnyLLMTranslate-8vb.1.4",
+    "phase2": "AnyLLMTranslate-8vb.2",
+    "phase2_task1": "AnyLLMTranslate-8vb.2.1",
+    "phase2_task2": "AnyLLMTranslate-8vb.2.2",
+    "phase3": "AnyLLMTranslate-8vb.3",
+    "phase3_task1": "AnyLLMTranslate-8vb.3.1",
+    "phase3_task2": "AnyLLMTranslate-8vb.3.2",
+    "phase3_task3": "AnyLLMTranslate-8vb.3.3",
+    "phase3_task4": "AnyLLMTranslate-8vb.3.4",
+    "phase3_task5": "AnyLLMTranslate-8vb.3.5",
+    "phase4": "AnyLLMTranslate-8vb.4",
+    "phase4_task1": "AnyLLMTranslate-8vb.4.1",
+    "phase4_task2": "AnyLLMTranslate-8vb.4.2",
+    "phase4_task3": "AnyLLMTranslate-8vb.4.3"
+  }
+}
