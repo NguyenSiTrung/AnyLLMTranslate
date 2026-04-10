@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleMessage, tabStates, getTabState, updateTabState } from '../background';
+import { describe, it, expect, vi } from 'vitest';
+import { handleMessage } from '../background';
 
 // Mock chrome APIs
 const mockStorage: Record<string, unknown> = {};
@@ -43,77 +43,8 @@ function mockFetch(content: string) {
 }
 
 describe('services/background', () => {
-  beforeEach(() => {
-    tabStates.clear();
-  });
-
-  describe('getTabState', () => {
-    it('returns default state for unknown tab', () => {
-      const state = getTabState(1);
-      expect(state.status).toBe('idle');
-      expect(state.translatedCount).toBe(0);
-      expect(state.totalCount).toBe(0);
-    });
-
-    it('returns existing state for known tab', () => {
-      updateTabState(1, { status: 'translating', totalCount: 5 });
-      const state = getTabState(1);
-      expect(state.status).toBe('translating');
-      expect(state.totalCount).toBe(5);
-    });
-  });
-
-  describe('handleMessage — getStatus', () => {
-    it('returns idle status for new tab', async () => {
-      const result = await handleMessage(
-        { action: 'getStatus', tabId: 1 },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toEqual({
-        status: 'idle',
-        translatedCount: 0,
-        totalCount: 0,
-        error: undefined,
-      });
-    });
-
-    it('returns current status for active tab', async () => {
-      updateTabState(2, { status: 'done', translatedCount: 10, totalCount: 10 });
-
-      const result = await handleMessage(
-        { action: 'getStatus', tabId: 2 },
-        { tab: { id: 2 } } as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toEqual({
-        status: 'done',
-        translatedCount: 10,
-        totalCount: 10,
-        error: undefined,
-      });
-    });
-  });
-
-  describe('handleMessage — restore', () => {
-    it('resets tab state to idle', async () => {
-      updateTabState(1, { status: 'done', translatedCount: 5, totalCount: 5 });
-
-      const result = await handleMessage(
-        { action: 'restore', tabId: 1 },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toEqual({ success: true });
-
-      const state = getTabState(1);
-      expect(state.status).toBe('idle');
-      expect(state.translatedCount).toBe(0);
-    });
-  });
-
   describe('handleMessage — translate', () => {
-    it('translates pieces and updates state', async () => {
+    it('translates pieces and returns results', async () => {
       mockFetch(JSON.stringify({ translations: { p1: 'Xin chào' } }));
 
       const result = await handleMessage(

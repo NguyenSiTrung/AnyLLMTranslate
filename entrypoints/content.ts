@@ -24,6 +24,7 @@ let coordinatorCleanup: (() => void) | null = null;
 let textSelectionCleanup: (() => void) | null = null;
 let hoverTranslateCleanup: (() => void) | null = null;
 let keyboardShortcutsCleanup: (() => void) | null = null;
+let activeRequests = 0;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -37,6 +38,10 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   const settings = await loadSettings();
 
   try {
+    activeRequests++;
+    // Broadcast translating status immediately
+    sendStatusUpdate();
+
     const response: TranslationResultMessage = await chrome.runtime.sendMessage({
       action: 'translate',
       pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
@@ -64,7 +69,30 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     for (const piece of pieces) {
       setErrorState(piece.parentElement, piece.id, message);
     }
+  } finally {
+    activeRequests = Math.max(0, activeRequests - 1);
+    sendStatusUpdate();
   }
+}
+
+/** Broadcast current status to popup */
+function sendStatusUpdate(): void {
+  const pageState = getPageState();
+  let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
+  
+  if (pageState !== 'off') {
+    status = activeRequests > 0 ? 'translating' : 'done';
+  }
+
+  chrome.runtime.sendMessage({
+    action: 'statusUpdate',
+    tabId: 0, // Tab ID is handled implicitly by the popup not filtering, or fallback
+    status: {
+      status,
+      translatedCount: allPieces.filter((p) => p.isTranslated).length,
+      totalCount: allPieces.length,
+    },
+  }).catch(() => { /* Popup likely closed */ });
 }
 
 /** Start translation on the current page */
@@ -110,7 +138,8 @@ export function stopTranslation(): void {
   allPieces = [];
 
   chrome.runtime.sendMessage({ action: 'restore' });
-  
+  sendStatusUpdate(); // Broadcast idle state
+
   // Cleanup subtitle coordinator
   if (coordinatorCleanup) {
     coordinatorCleanup();
@@ -175,13 +204,25 @@ async function initInteractionFeatures(): Promise<void> {
 
 /** Listen for messages from popup/background */
 function setupMessageListener(): void {
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'startTranslation') {
       startTranslation();
     } else if (message.action === 'stopTranslation') {
       stopTranslation();
     } else if (message.action === 'toggleTranslation') {
       toggleTranslation();
+    } else if (message.action === 'getStatus') {
+      const pageState = getPageState();
+      let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
+      if (pageState !== 'off') {
+        status = activeRequests > 0 ? 'translating' : 'done';
+      }
+      sendResponse({
+        status,
+        translatedCount: allPieces.filter((p) => p.isTranslated).length,
+        totalCount: allPieces.length,
+      });
+      return false; // synchronous
     }
   });
 }

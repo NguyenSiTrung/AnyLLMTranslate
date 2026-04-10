@@ -186,13 +186,20 @@ export default function App() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        const response = await chrome.runtime.sendMessage({ action: 'getStatus', tabId: tab.id });
-        if (response) {
-          setStatus(response as StatusResponse);
-          setIsTranslating(response.status === 'translating');
+        try {
+          // Query the specific content script directly (the true source of state)
+          const response = await chrome.tabs.sendMessage(tab.id, { action: 'getStatus' });
+          if (response) {
+            setStatus(response as StatusResponse);
+            setIsTranslating(response.status === 'translating');
+          }
+        } catch {
+          // Content script not loaded or inaccessible tab (e.g. chrome://) -> defaults to idle
+          setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+          setIsTranslating(false);
         }
       }
-    } catch { /* tab not ready */ }
+    } catch { /* tab query failed */ }
   }
 
   const updateSetting = useCallback(async (partial: Partial<ExtensionSettings>) => {

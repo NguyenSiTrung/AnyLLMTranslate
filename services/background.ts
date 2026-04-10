@@ -6,8 +6,6 @@
 import type {
   ExtensionMessage,
   TranslationResultMessage,
-  StatusResponse,
-  TabTranslationStatus,
   TranslateSubtitleMessage,
   TranslateSelectionMessage,
   FetchSubtitleMessage,
@@ -18,50 +16,10 @@ import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
 
-/** Per-tab translation state */
-interface TabState {
-  status: TabTranslationStatus;
-  translatedCount: number;
-  totalCount: number;
-  error?: string;
-}
-
-/** Tab states map */
-const tabStates = new Map<number, TabState>();
+ 
 
 /** Active translation service instance */
 let translationService: OpenAICompatibleService | null = null;
-
-/** Get or create the default tab state */
-function getTabState(tabId: number): TabState {
-  let state = tabStates.get(tabId);
-  if (!state) {
-    state = { status: 'idle', translatedCount: 0, totalCount: 0 };
-    tabStates.set(tabId, state);
-  }
-  return state;
-}
-
-/** Update tab state */
-function updateTabState(tabId: number, updates: Partial<TabState>): void {
-  const state = getTabState(tabId);
-  Object.assign(state, updates);
-  tabStates.set(tabId, state);
-
-  // Notify popup of status change
-  chrome.runtime.sendMessage({
-    action: 'statusUpdate',
-    tabId,
-    status: {
-      status: state.status,
-      translatedCount: state.translatedCount,
-      totalCount: state.totalCount,
-      error: state.error,
-    },
-  }).catch(() => {
-    // Popup may not be open, ignore error
-  });
-}
 
 /** Initialize or re-create translation service from settings */
 async function initService(): Promise<OpenAICompatibleService> {
@@ -79,17 +37,10 @@ async function initService(): Promise<OpenAICompatibleService> {
 
 /** Handle translate message */
 async function handleTranslate(
-  message: ExtensionMessage & { action: 'translate' },
-  tabId: number,
+  message: ExtensionMessage & { action: 'translate' }
 ): Promise<TranslationResultMessage> {
   try {
     const service = await initService();
-    const state = getTabState(tabId);
-
-    updateTabState(tabId, {
-      status: 'translating',
-      totalCount: state.totalCount + message.pieces.length,
-    });
 
     const texts = new Map<string, string>();
     for (const piece of message.pieces) {
@@ -103,11 +54,6 @@ async function handleTranslate(
     });
 
     if (result.success) {
-      updateTabState(tabId, {
-        status: 'done',
-        translatedCount: state.translatedCount + result.translations.size,
-      });
-
       return {
         success: true,
         results: Array.from(result.translations.entries()).map(([id, translatedText]) => ({
@@ -116,11 +62,6 @@ async function handleTranslate(
         })),
       };
     } else {
-      updateTabState(tabId, {
-        status: 'error',
-        error: result.error,
-      });
-
       return {
         success: false,
         error: result.error ?? 'Translation failed',
@@ -128,32 +69,12 @@ async function handleTranslate(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    updateTabState(tabId, { status: 'error', error: errorMsg });
     return { success: false, error: errorMsg };
   }
 }
 
 /** Handle restore message */
-function handleRestore(tabId: number): { success: boolean } {
-  updateTabState(tabId, {
-    status: 'idle',
-    translatedCount: 0,
-    totalCount: 0,
-    error: undefined,
-  });
-  return { success: true };
-}
-
-/** Handle getStatus message */
-function handleGetStatus(tabId: number): StatusResponse {
-  const state = getTabState(tabId);
-  return {
-    status: state.status,
-    translatedCount: state.translatedCount,
-    totalCount: state.totalCount,
-    error: state.error,
-  };
-}
+ 
 
 /** Handle testConnection message */
 async function handleTestConnection(): Promise<{ success: boolean; error?: string }> {
@@ -293,21 +214,13 @@ async function handleTranslateSelection(
   }
 }
 
-/** Main message router */
 export function handleMessage(
   message: ExtensionMessage,
-  sender: chrome.runtime.MessageSender,
+  _sender: chrome.runtime.MessageSender,
 ): Promise<unknown> | undefined {
-  const tabId = sender.tab?.id ?? 0;
-
   switch (message.action) {
     case 'translate':
-      return handleTranslate(message, tabId);
-    case 'restore':
-      return Promise.resolve(handleRestore(tabId));
-    case 'getStatus':
-      // Use message.tabId if provided (from popup), otherwise fall back to sender.tab?.id
-      return Promise.resolve(handleGetStatus('tabId' in message ? (message as { tabId: number }).tabId : tabId));
+      return handleTranslate(message);
     case 'testConnection':
       return handleTestConnection();
     case 'updateSettings':
@@ -331,4 +244,4 @@ export function initSettingsListener(): () => void {
 }
 
 /** Export for testing */
-export { tabStates, getTabState, updateTabState, initService };
+export { initService };

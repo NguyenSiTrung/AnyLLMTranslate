@@ -27,8 +27,9 @@ global.chrome = {
     sendMessage: vi.fn((message: unknown, callback?: (response: unknown) => void) => {
       if (callback) {
         callback({ content: 'WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest' });
+        return true;
       }
-      return true;
+      return Promise.resolve({ content: 'WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest' });
     }),
     lastError: null,
   },

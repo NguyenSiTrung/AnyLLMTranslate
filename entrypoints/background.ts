@@ -55,13 +55,7 @@ export default defineBackground(() => {
   // Re-create service when settings change
   initSettingsListener();
 
-  // Clean up tab state when tab is closed
-  chrome.tabs.onRemoved.addListener((tabId) => {
-    // Dynamic import to avoid circular dependency
-    import('@/services/background').then(({ tabStates }) => {
-      tabStates.delete(tabId);
-    });
-  });
+
 
   // Set up context menus on install
   chrome.runtime.onInstalled.addListener(() => {
