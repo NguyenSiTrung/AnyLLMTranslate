@@ -41,7 +41,15 @@ function shouldSkipElement(element: Element): boolean {
 
 /** Check if an element is a block element that splits pieces */
 function isBlockElement(element: Element): boolean {
-  return BLOCK_ELEMENTS.has(element.tagName);
+  if (BLOCK_ELEMENTS.has(element.tagName)) return true;
+
+  // Account for framework-specific block semantics (e.g., Mintlify, styled-components)
+  const dataAs = element.getAttribute('data-as');
+  if (dataAs && BLOCK_ELEMENTS.has(dataAs.toUpperCase())) {
+    return true;
+  }
+
+  return false;
 }
 
 /** Split text at sentence boundaries near the limit */
