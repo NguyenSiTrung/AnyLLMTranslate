@@ -20,4 +20,7 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(No active tracks)*
+---
+
+## [ ] Track: Custom Dictionary (Glossary) — Wire & Validate
+*Link: [./conductor/tracks/glossary-wire_20260410/](./conductor/tracks/glossary-wire_20260410/)*

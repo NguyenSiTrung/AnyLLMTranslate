@@ -1,0 +1,27 @@
+{
+  "track_id": "glossary-wire_20260410",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-04-10T10:56:00Z",
+  "updated_at": "2026-04-10T10:58:00Z",
+  "description": "Wire existing glossary/custom-prompt settings into the translation pipeline so term-specific translations are injected into every LLM system prompt. Includes test coverage and a live Translate Preview panel in the Options Glossary tab with mismatch detection.",
+  "beads_epic": "AnyLLMTranslate-8gf",
+  "beads_tasks": {
+    "phase1": "AnyLLMTranslate-8gf.1",
+    "phase1_task1": "AnyLLMTranslate-8gf.1.1",
+    "phase1_task2": "AnyLLMTranslate-8gf.1.2",
+    "phase1_task3": "AnyLLMTranslate-8gf.1.3",
+    "phase2": "AnyLLMTranslate-8gf.2",
+    "phase2_task1": "AnyLLMTranslate-8gf.2.1",
+    "phase2_task2": "AnyLLMTranslate-8gf.2.2",
+    "phase2_task3": "AnyLLMTranslate-8gf.2.3",
+    "phase3": "AnyLLMTranslate-8gf.3",
+    "phase3_task1": "AnyLLMTranslate-8gf.3.1",
+    "phase3_task2": "AnyLLMTranslate-8gf.3.2",
+    "phase3_task3": "AnyLLMTranslate-8gf.3.3",
+    "phase3_task4": "AnyLLMTranslate-8gf.3.4"
+  }
+}
