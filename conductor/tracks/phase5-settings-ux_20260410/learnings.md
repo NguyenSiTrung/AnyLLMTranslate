@@ -1,29 +1,55 @@
-# Track Learnings: phase5-settings-ux_20260410
+# Phase 5 — Settings UI/UX Overhaul — Learnings
 
-Patterns, gotchas, and context discovered during implementation.
+## Architecture Decisions
 
-## Codebase Patterns (Inherited)
+### Shared UI Library (`ui/` directory)
+- **Location**: `ui/` at project root, not inside entrypoints — reusable across popup, options, and content
+- **Pattern**: Each component is a single file export with typed props interface
+- **forwardRef**: Only Button uses forwardRef (needed by Modal focus trap). Other components don't need it.
+- **No barrel export**: Import directly from `@/ui/ComponentName` to enable tree-shaking
 
-- WXT uses `entrypoints/` dir (not `src/`) for background.ts, content.ts, popup/. Other code lives at project root (lib/, types/, services/, content/).
-- Vertical tabbed layout (sidebar + content area) with ARIA `role="tablist"` works well at 8+ sections.
-- Zustand + chrome.storage bidirectional sync: write on mutation, listen via `chrome.storage.onChanged` for cross-context updates.
-- `isLoaded` flag in store prevents rendering before storage load completes.
-- Use string union types (not enums) for discriminated unions — keeps bundle small.
-- Deep merge for nested settings objects — handle separately to avoid losing fields on partial updates.
-- pnpm not installed globally — use `npx -y pnpm@latest exec` for all pnpm commands.
-- WXT build produces ~346KB total for chrome-mv3 output.
+### CSS Animation Strategy
+- **CSS-only**: All animations in `animations.css`, no runtime JS libraries
+- **GPU-accelerated**: Only `transform` and `opacity` in keyframes (never top/left/width/height)
+- **Stagger utility**: `--stagger-delay` CSS custom property × 30ms per item
+- **Reduced motion**: `@media (prefers-reduced-motion: reduce)` disables all animations
+- **Keyframes referenced in inline styles**: Toast uses `animate-[fadeOut_200ms...]` Tailwind arbitrary syntax
 
-## UI/UX Specific Context
+### Toast Architecture
+- **Context-based**: `ToastProvider` wraps app, `useToast()` hook for imperative API
+- **Auto-dismiss**: Each toast has a timer (default 4s), exit animation before removal
+- **Position**: Fixed bottom-right, stacked with gap-2
+- **No external state management**: Self-contained useState, no Zustand integration needed
 
-- 3 duplicated `FieldGroup` components exist across GeneralSection, ProviderSection, SubtitlesSection — each slightly different API.
-- Toggle switch is inline custom HTML in Subtitles + Advanced sections — no shared component.
-- `alert()` used in AdvancedSection for import feedback, `confirm()` for reset — must replace with custom UI.
-- Settings auto-save silently via Zustand — no user feedback mechanism exists.
-- Sidebar is flat 8-tab list with no grouping or animated indicator.
-- No transitions on tab switch — content swaps instantly.
-- CSS-only animation strategy chosen (no framer-motion) to preserve bundle size.
-- Dual save feedback: sidebar badge for micro-changes + toast for macro-actions.
+### Modal Focus Trap
+- Captures Tab/Shift+Tab cycling between focusable elements
+- Escape key dismisses
+- Backdrop click dismisses
+- Confirms button gets initial focus via ref
 
----
+## Patterns Discovered
 
-<!-- Learnings from implementation will be appended below -->
+### Section Header Pattern
+Every section uses a `<Card accent="blue">` with icon + title + description as its header.
+This is a repeated pattern that could be extracted into a `SectionHeader` component in the future.
+
+### Grouped Sidebar Navigation
+- 4 groups: DISPLAY, TRANSLATION, MEDIA, SYSTEM
+- Roving tabindex: only active tab has tabindex=0
+- Arrow keys navigate between tabs (wrapping)
+- Active indicator: right-side blue bar with slide animation
+
+### Auto-Save Feedback
+- Subscribe to Zustand store changes at App level
+- Show "Auto-saved" badge with fade-in/out (2s timer)
+- No explicit save button needed — all changes persist immediately
+
+## Build Impact
+- Options chunk grew from ~56KB to ~60KB (4KB for 13 new components)
+- CSS grew from ~40KB to ~45KB (5KB for animations + component styles)  
+- Total bundle: 424KB (slightly over 400KB target, but 197KB is languages data alone)
+
+## Testing Notes
+- 31 new tests for UI components (23 primitives + 8 toast/modal)
+- Total test count: 370 tests across 30 files
+- Toast auto-dismiss test: avoid `vi.advanceTimersByTime` without `vi.useFakeTimers()` — use high duration instead
