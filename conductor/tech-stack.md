@@ -10,7 +10,7 @@
 
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
-| **WXT** | latest | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
+| **WXT** | 0.20.20 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
 | **Vite** | 6.x | Bundled with WXT — fast builds, HMR, ESBuild-powered |
 | **pnpm** | 9.x | Fast, disk-efficient package manager |
 
@@ -62,14 +62,12 @@
 |-----------|---------|-------|
 | **ESLint** | 9.x | Linting with TypeScript rules |
 | **Prettier** | 3.x | Code formatting |
-| **Husky + lint-staged** | - | Pre-commit hooks |
 
 ## CI/CD
 
 | Technology | Usage |
 |-----------|-------|
-| **GitHub Actions** | Build, test, lint pipeline |
-| **Chrome Web Store API** | Automated extension publishing |
+| **Chrome Web Store API** | Manual extension publishing via `pnpm zip` |
 
 ## Architecture Decisions
 

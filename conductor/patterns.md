@@ -62,6 +62,38 @@ Reusable patterns discovered during development. Read this before starting new w
 - UI components using array.map() automatically reflect array changes - no UI code updates needed for data-driven components. (from: provider-simplify_20260410, archived 2026-04-10)
 - Pre-existing lint errors in codebase are not introduced by this refactor - refactoring should be lint-neutral. (from: provider-simplify_20260410, archived 2026-04-10)
 
+## Text Selection Translate
+- `event.target` can be `document` (not an Element) when `mouseup` is dispatched on document directly — guard `target.closest` with `typeof target.closest !== 'function'` check. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Async event handlers (`async function onMouseUp`) fire-and-forget — `dispatchEvent` is synchronous but the handler's promise is not awaited by the DOM. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Module-level state (`let isEnabled = true`) persists across test cases — must reset in `beforeEach`. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Tooltip positioning requires `window.scrollY` offset to handle scrolled pages correctly. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
+## Hover Translate
+- `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Element skip logic must check both `DATA_ATTRS.TRANSLATED` and `DATA_ATTRS.ROLE` to avoid re-translating hover'd elements. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `hoverCache` (Map<Element, string>) prevents redundant API calls when re-hovering same element. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Hover delay clamped to 200-500ms range for UX balance. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
+## Keyboard Shortcuts
+- Hybrid approach: global shortcuts via `chrome.commands` (4 max suggested_key entries), page-specific via `document.addEventListener('keydown')`. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Capture phase (`true` as third arg) ensures shortcuts intercept before page handlers. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `chrome.commands` shortcuts are customizable by users at `chrome://extensions/shortcuts`. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
+## Context Menus
+- `chrome.contextMenus.create` must be called inside `runtime.onInstalled` (not at top level) to avoid duplicate entries. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `documentUrlPatterns` array on menu items enables platform-specific entries (e.g., subtitle translate only on YouTube/Udemy/Coursera). (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Context menu `onClicked` handler receives `info.selectionText` for text selection context. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
+## Performance
+- `requestIdleCallback` with `{ timeout: 2000 }` prevents starvation while deferring non-critical mutation processing. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `requestAnimationFrame`-based DOM write batching via `scheduleDomWrite()` coalesces multiple writes into single frame. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- ViewportObserver already implements 100ms batch delay — adequate for translation triggers. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
+## Build & Packaging
+- `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Manifest `commands` limited to 4 entries with `suggested_key` — additional shortcuts must use content script keydown listener. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `contextMenus` permission required in manifest for `chrome.contextMenus` API access. (from: phase4-launch-ready_20260410, active 2026-04-10)
+
 ---
-Last refreshed: 2026-04-10T12:40:00+07:00
+Last refreshed: 2026-04-10T13:24:00+07:00
 Codebase health: 370 tests across 30 files, 423KB build (chrome-mv3)

@@ -44,6 +44,7 @@ At the end of each phase:
 - [ ] No hardcoded strings (i18n-ready)
 - [ ] Chrome API usage follows MV3 best practices
 - [ ] No host page style pollution from extension CSS
+- [ ] Run `pnpm lint` before commit
 
 ## Definition of Done
 

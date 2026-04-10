@@ -1,48 +1,46 @@
 {
-  "last_refresh": "2026-04-10T10:10:00+07:00",
+  "last_refresh": "2026-04-10T13:24:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/patterns.md",
-      "change": "Updated build size from ~270KB to ~346KB (Phase 3 options page added ~76KB)"
+      "file": "conductor/tech-stack.md",
+      "change": "Specified WXT version 0.20.20 (was 'latest')"
     },
     {
-      "file": "conductor/patterns.md",
-      "change": "Added codebase health footer: 283 tests / 24 files"
+      "file": "conductor/tech-stack.md",
+      "change": "Removed Husky + lint-staged from Code Quality (not installed)"
+    },
+    {
+      "file": "conductor/tech-stack.md",
+      "change": "Updated CI/CD to manual publishing via pnpm zip (removed GitHub Actions)"
     },
     {
       "file": "conductor/product.md",
-      "change": "Moved Phase 3 from In Progress to Completed; updated test count 205→283; updated In Progress to Phase 4 only"
+      "change": "Moved Phase 4 from In Progress to Completed with 370 tests / 30 files"
     },
     {
-      "file": "PLAN-immersive-translate-clone.md",
-      "change": "Phase 3 roadmap: 🟡 30% → ✅ 100% COMPLETE with implementation details for all 9 tasks"
+      "file": "conductor/workflow.md",
+      "change": "Added 'Run pnpm lint before commit' to Code Review Checklist"
     },
     {
-      "file": "PLAN-immersive-translate-clone.md",
-      "change": "Overall progress: 55% → 70% (29 done, 2 partial, 11 not started)"
-    },
-    {
-      "file": "PLAN-immersive-translate-clone.md",
-      "change": "Unit test count: 19 files → 24 files (283 tests); version footer: v1.4 → v1.5"
+      "file": "conductor/patterns.md",
+      "change": "Elevated Phase 4 learnings: Text Selection, Hover Translate, Keyboard Shortcuts, Context Menus, Performance, Build & Packaging"
     }
   ],
   "drift_summary": {
-    "tech_stack": "no drift",
-    "product": "2 drifts fixed (Phase 3 status, test count)",
-    "workflow": "no drift",
-    "tracks": "no drift",
-    "patterns": "1 drift fixed (build size 270→346KB)",
-    "plan": "3 drifts fixed (Phase 3 status, test count, footer)",
-    "learnings": "all elevated — no new patterns"
+    "tech_stack": "3 drifts fixed (WXT version, Husky/lint-staged, CI/CD)",
+    "product": "1 drift fixed (Phase 4 status)",
+    "workflow": "1 drift fixed (added lint check)",
+    "patterns": "6 new patterns elevated from Phase 4 learnings",
+    "beads": "No Beads drift detected (Phase 4 not tracked in Beads)"
   },
-  "beads_check": "Phase 3 tasks marked done via bd done",
-  "active_tracks": [],
+  "beads_check": "Beads CLI available, no phase-specific issues found",
+  "active_tracks": ["phase5-settings-ux_20260410"],
   "archived_tracks": ["phase1-foundation_20260409", "phase2-subtitles_20260409", "phase3-ux-polish_20260410"],
   "codebase_health": {
-    "tests": "283 passed (24 files)",
-    "build": "346.35 KB (chrome-mv3)",
+    "tests": "370 passed (30 files)",
+    "build": "423.02 KB (chrome-mv3)",
     "git_status": "clean",
-    "source_files": "23 (15 entrypoints + 8 lib)"
+    "zip": "119 KB compressed"
   }
 }
