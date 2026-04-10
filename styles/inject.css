@@ -24,10 +24,6 @@
 
 /* ===== Page State Rules ===== */
 
-html[data-lingua-state="dual"] [data-lingua-role="original"] {
-  /* Original text stays as-is */
-}
-
 html[data-lingua-state="dual"] [data-lingua-role="translation"] {
   display: block;
 }
@@ -87,7 +83,10 @@ html:not([data-lingua-theme]) .lingua-lens-translation {
   border-top: 1px solid #e2e2e2;
   margin-top: 4px;
   padding-top: 4px;
+  padding: 8px 12px;
   color: #555;
+  background: #fefce8;
+  border-radius: 4px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -95,6 +94,7 @@ html:not([data-lingua-theme]) .lingua-lens-translation {
   html:not([data-lingua-theme]) .lingua-lens-translation {
     border-top-color: #444;
     color: #aaa;
+    background: #422006;
   }
 }
 
@@ -102,6 +102,7 @@ html.lingua-dark [data-lingua-theme="dividing-line"] .lingua-lens-translation,
 html.lingua-dark:not([data-lingua-theme]) .lingua-lens-translation {
   border-top-color: #444;
   color: #aaa;
+  background: #422006;
 }
 
 /* ============================================
