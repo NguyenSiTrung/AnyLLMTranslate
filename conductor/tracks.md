@@ -13,3 +13,8 @@ This file tracks all major tracks for the project.
 
 ## [x] Track: Phase 4 — Launch-Ready Advanced Features
 *Link: [./conductor/tracks/phase4-launch-ready_20260410/](./conductor/tracks/phase4-launch-ready_20260410/)*
+
+---
+
+## [ ] Track: Phase 5 — Settings UI/UX Overhaul
+*Link: [./conductor/tracks/phase5-settings-ux_20260410/](./conductor/tracks/phase5-settings-ux_20260410/)*
