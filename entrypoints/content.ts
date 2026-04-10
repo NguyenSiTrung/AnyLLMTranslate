@@ -172,7 +172,7 @@ function setupMessageListener(): void {
 // Content script definition for WXT
 export default defineContentScript({
   matches: ['<all_urls>'],
-  cssInjectionMode: 'ui',
+  cssInjectionMode: 'manifest',
   async main() {
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
