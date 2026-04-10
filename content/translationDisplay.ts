@@ -27,42 +27,64 @@ export function applyDarkMode(mode: DarkMode): void {
   // 'auto' mode relies on CSS @media (prefers-color-scheme: dark) — no class needed
 }
 
-/** Apply a single translation relative to its original paragraph */
-export function applyTranslation(
-  parentElement: Element,
-  pieceId: string,
-  translatedText: string,
-): void {
-  // Don't inject if already translated
+/** Show a loading spinner placeholder below parentElement, in the same slot as the eventual translation.
+ * Idempotent: calling twice for the same pieceId does nothing. */
+export function showLoadingPlaceholder(parentElement: Element, pieceId: string): void {
+  // Already exists — do nothing
   if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) {
     return;
   }
 
   // Mark original element
   parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+
+  // Create placeholder (spinner)
+  const placeholder = document.createElement('span');
+  placeholder.setAttribute(DATA_ATTRS.ROLE, 'translation');
+  placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
+  placeholder.className = 'lingua-lens-translation lingua-lens-loading';
+
+  parentElement.after(placeholder);
+}
+
+/** Apply a single translation relative to its original paragraph.
+ * If a loading placeholder already exists for this pieceId, updates it in-place
+ * (swaps class, sets text) to avoid layout shift and duplicate elements. */
+export function applyTranslation(
+  parentElement: Element,
+  pieceId: string,
+  translatedText: string,
+): void {
+  // Mark original element
+  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
   parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
 
-  // Create translation element
+  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  if (existing) {
+    // Update placeholder in-place: remove spinner class, set translated text
+    existing.classList.remove('lingua-lens-loading');
+    existing.textContent = translatedText;
+    // Re-trigger fade-in animation by forcing reflow
+    (existing as HTMLElement).style.animation = 'none';
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (existing as HTMLElement).offsetHeight;
+    (existing as HTMLElement).style.animation = '';
+    return;
+  }
+
+  // No placeholder yet — create translation element (fallback)
   const translationEl = document.createElement('span');
   translationEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   translationEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   translationEl.className = 'lingua-lens-translation';
   translationEl.textContent = translatedText;
 
-  // Insert after the parent element
   parentElement.after(translationEl);
 }
 
-/** Set loading state on an element (shows shimmer) */
-export function setLoadingState(parentElement: Element, isLoading: boolean): void {
-  if (isLoading) {
-    parentElement.setAttribute('data-lingua-loading', '');
-  } else {
-    parentElement.removeAttribute('data-lingua-loading');
-  }
-}
 
-/** Set error state on an element (shows error indicator) */
+
+/** Set error state — updates the placeholder element in-place if it exists. */
 export function setErrorState(
   parentElement: Element,
   pieceId: string,
@@ -71,18 +93,29 @@ export function setErrorState(
 ): void {
   parentElement.setAttribute('data-lingua-error', '');
 
-  // Check if error translation element already exists
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
+    // Update placeholder in-place: swap loading class for error state
+    existing.classList.remove('lingua-lens-loading');
+    existing.setAttribute('data-lingua-error', '');
     existing.textContent = `⚠ Translation failed: ${errorMessage}`;
+    existing.setAttribute('title', 'Click to retry');
+
+    if (onRetry) {
+      existing.addEventListener('click', () => {
+        clearErrorState(parentElement, pieceId);
+        onRetry();
+      }, { once: true });
+    }
     return;
   }
 
-  // Create error element
+  // No placeholder yet — create error element (fallback)
   const errorEl = document.createElement('span');
   errorEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   errorEl.className = 'lingua-lens-translation';
+  errorEl.setAttribute('data-lingua-error', '');
   errorEl.textContent = `⚠ Translation failed: ${errorMessage}`;
   errorEl.title = 'Click to retry';
 
@@ -135,7 +168,7 @@ export function removeAllTranslations(): void {
     original.removeAttribute(DATA_ATTRS.TRANSLATED);
   }
 
-  // Clean up loading/error states
+  // Clean up loading/error states on original elements (legacy data-lingua-loading)
   const loadingEls = document.querySelectorAll('[data-lingua-loading]');
   for (const el of loadingEls) {
     el.removeAttribute('data-lingua-loading');

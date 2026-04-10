@@ -8,7 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
-import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode } from '@/content/translationDisplay';
+import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
@@ -29,23 +29,40 @@ let keyboardShortcutsCleanup: (() => void) | null = null;
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   if (pieces.length === 0) return;
 
+  // Show spinner placeholder for each piece immediately (before async call)
+  for (const piece of pieces) {
+    showLoadingPlaceholder(piece.parentElement, piece.id);
+  }
+
   const settings = await loadSettings();
 
-  const response: TranslationResultMessage = await chrome.runtime.sendMessage({
-    action: 'translate',
-    pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
-    sourceLanguage: settings.sourceLanguage,
-    targetLanguage: settings.targetLanguage,
-  });
+  try {
+    const response: TranslationResultMessage = await chrome.runtime.sendMessage({
+      action: 'translate',
+      pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    });
 
-  if (response.success && response.results) {
-    for (const result of response.results) {
-      const piece = pieces.find((p) => p.id === result.id);
-      if (piece) {
-        piece.isTranslated = true;
-        piece.translatedText = result.translatedText;
-        applyTranslation(piece.parentElement, piece.id, result.translatedText);
+    if (response.success && response.results) {
+      for (const result of response.results) {
+        const piece = pieces.find((p) => p.id === result.id);
+        if (piece) {
+          piece.isTranslated = true;
+          piece.translatedText = result.translatedText;
+          applyTranslation(piece.parentElement, piece.id, result.translatedText);
+        }
       }
+    } else if (!response.success && response.error) {
+      // Batch-level failure: mark all pieces as error
+      for (const piece of pieces) {
+        setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    for (const piece of pieces) {
+      setErrorState(piece.parentElement, piece.id, message);
     }
   }
 }

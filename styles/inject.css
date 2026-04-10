@@ -49,29 +49,54 @@ html:not([data-lingua-state]) [data-lingua-role="translation"] {
 
 /* ===== Loading & Error States ===== */
 
-[data-lingua-loading] .lingua-lens-translation {
-  animation: linguaShimmer 1.5s ease-in-out infinite;
-  background: linear-gradient(90deg, transparent 0%, rgba(128,128,128,0.08) 50%, transparent 100%);
-  background-size: 200% 100%;
-  min-height: 1.2em;
-  border-radius: 4px;
+/* Per-paragraph spinner — pure CSS border-trick, no SVG, no JS loops */
+.lingua-lens-loading {
+  display: inline-block;
+  min-height: 1.4em;
+  vertical-align: middle;
+  /* Override fade-in animation — spinner should appear immediately */
+  animation: none !important;
+  opacity: 1 !important;
 }
 
-@keyframes linguaShimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+.lingua-lens-loading::before {
+  content: '';
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border: 2px solid transparent;
+  border-top-color: var(--lingua-accent, #3b82f6);
+  border-right-color: var(--lingua-accent, #3b82f6);
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: linguaSpinnerRotate 0.7s linear infinite;
+  margin-right: 0.4em;
 }
 
-[data-lingua-error] .lingua-lens-translation {
+@keyframes linguaSpinnerRotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: show static dot instead of spinner */
+@media (prefers-reduced-motion: reduce) {
+  .lingua-lens-loading::before {
+    animation: none;
+    border-color: var(--lingua-accent, #3b82f6);
+    opacity: 0.5;
+  }
+}
+
+.lingua-lens-translation[data-lingua-error] {
   border-left: 3px solid #ef4444;
   padding-left: 8px;
   color: #ef4444;
   font-size: 0.85em;
   cursor: pointer;
   opacity: 0.8;
+  animation: linguaFadeIn 0.3s ease-out forwards !important;
 }
 
-[data-lingua-error] .lingua-lens-translation:hover {
+.lingua-lens-translation[data-lingua-error]:hover {
   opacity: 1;
 }
 

@@ -39,8 +39,8 @@ describe('CSS themes', () => {
   });
 
   it('has loading state styles', () => {
-    expect(cssContent).toContain('data-lingua-loading');
-    expect(cssContent).toContain('linguaShimmer');
+    expect(cssContent).toContain('lingua-lens-loading');
+    expect(cssContent).toContain('linguaSpinnerRotate');
   });
 
   it('has error state styles', () => {

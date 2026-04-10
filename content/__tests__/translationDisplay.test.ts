@@ -7,8 +7,8 @@ import {
   applyTheme,
   applyPosition,
   applyDarkMode,
+  showLoadingPlaceholder,
   applyTranslation,
-  setLoadingState,
   setErrorState,
   clearErrorState,
   removeTranslation,
@@ -77,7 +77,7 @@ describe('translationDisplay', () => {
       const translation = document.querySelector('[data-lingua-piece-id="piece-1"]');
       expect(translation).not.toBeNull();
       expect(translation?.textContent).toBe('Xin chào thế giới');
-      expect(translation?.className).toBe('lingua-lens-translation');
+      expect(translation?.className).toContain('lingua-lens-translation');
     });
 
     it('does not duplicate translations', () => {
@@ -89,7 +89,21 @@ describe('translationDisplay', () => {
 
       const translations = document.querySelectorAll('[data-lingua-piece-id="piece-1"]');
       expect(translations).toHaveLength(1);
-      expect(translations[0].textContent).toBe('First');
+      // In-place update: second call overwrites content
+      expect(translations[0].textContent).toBe('Second');
+    });
+
+    it('updates placeholder in-place (no duplicate element)', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+      applyTranslation(parent, 'piece-1', 'Translated text');
+
+      const translations = document.querySelectorAll('[data-lingua-piece-id="piece-1"]');
+      expect(translations).toHaveLength(1);
+      expect(translations[0].textContent).toBe('Translated text');
+      expect(translations[0].classList.contains('lingua-lens-loading')).toBe(false);
     });
 
     it('marks parent as original', () => {
@@ -103,23 +117,43 @@ describe('translationDisplay', () => {
     });
   });
 
-  describe('setLoadingState', () => {
-    it('adds data-lingua-loading attribute', () => {
-      const el = document.createElement('p');
-      setLoadingState(el, true);
-      expect(el.hasAttribute('data-lingua-loading')).toBe(true);
+  describe('showLoadingPlaceholder', () => {
+    it('inserts placeholder element after parent with spinner classes', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+
+      const placeholder = document.querySelector('[data-lingua-piece-id="piece-1"]');
+      expect(placeholder).not.toBeNull();
+      expect(placeholder?.classList.contains('lingua-lens-loading')).toBe(true);
+      expect(placeholder?.classList.contains('lingua-lens-translation')).toBe(true);
+      expect(placeholder?.getAttribute('data-lingua-role')).toBe('translation');
     });
 
-    it('removes data-lingua-loading attribute', () => {
-      const el = document.createElement('p');
-      el.setAttribute('data-lingua-loading', '');
-      setLoadingState(el, false);
-      expect(el.hasAttribute('data-lingua-loading')).toBe(false);
+    it('marks parent element as original', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+
+      expect(parent.getAttribute('data-lingua-role')).toBe('original');
+    });
+
+    it('is idempotent — second call for same pieceId does nothing', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+      showLoadingPlaceholder(parent, 'piece-1');
+
+      const placeholders = document.querySelectorAll('[data-lingua-piece-id="piece-1"]');
+      expect(placeholders).toHaveLength(1);
     });
   });
 
   describe('setErrorState', () => {
-    it('adds data-lingua-error attribute and error element', () => {
+    it('adds data-lingua-error attribute on parent and creates error element', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -131,7 +165,21 @@ describe('translationDisplay', () => {
       expect(errorEl?.textContent).toContain('Network error');
     });
 
-    it('updates existing error element instead of duplicating', () => {
+    it('updates placeholder in-place for error state', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+      setErrorState(parent, 'piece-1', 'API error');
+
+      const errors = document.querySelectorAll('[data-lingua-piece-id="piece-1"]');
+      expect(errors).toHaveLength(1);
+      expect(errors[0].classList.contains('lingua-lens-loading')).toBe(false);
+      expect(errors[0].getAttribute('data-lingua-error')).toBe('');
+      expect(errors[0].textContent).toContain('API error');
+    });
+
+    it('deduplicates error element when called twice without placeholder', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
