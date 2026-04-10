@@ -147,6 +147,13 @@ Reusable patterns discovered during development. Read this before starting new w
 - Lift mismatch state to parent and pass callback — keeps table and preview in sync without a shared store. (from: glossary-wire_20260410, archived 2026-04-10)
 - Clear badges on ANY mutation (add/delete/edit) by calling `clearMismatches()` in each handler's useCallback. (from: glossary-wire_20260410, archived 2026-04-10)
 
+## XHR/Fetch Interception Hardening
+- XHR `addEventListener` patch must capture handlers in a Map per XHR instance, suppressing real registration and replaying manually after translation. (from: subtitle-hardening_20260410, archived 2026-04-10)
+- `eslint-disable-next-line @typescript-eslint/no-this-alias` needed for `this` capture in patched prototype methods. (from: subtitle-hardening_20260410, archived 2026-04-10)
+- jsdom's XMLHttpRequest fires real readystatechange events when properties change — test mocks must capture handlers via spy on `addEventListener` and NOT call the real impl. (from: subtitle-hardening_20260410, archived 2026-04-10)
+- FetchInterceptor captures `window.fetch` at module load time — tests must mock `window.fetch` BEFORE dynamic import of the module. (from: subtitle-hardening_20260410, archived 2026-04-10)
+- YouTube JSON3 `join('')` collapses segment boundaries — `join(' ')` with `filter` + `replace(/\s+/g, ' ')` preserves word spacing. (from: subtitle-hardening_20260410, archived 2026-04-10)
+
 ---
-Last refreshed: 2026-04-10T18:20:00+07:00
-Codebase health: 408 tests across 32 files, 524KB build (chrome-mv3)
+Last refreshed: 2026-04-10T19:10:00+07:00
+Codebase health: 430 tests across 34 files, 524KB build (chrome-mv3)
