@@ -168,4 +168,24 @@ describe('ThemePreview', () => {
     previewContainer = container.querySelector('[data-lingua-theme]');
     expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
   });
+
+  it('updates preview in under 100ms (performance test)', () => {
+    const themes: Array<ThemeName> = ['dividing-line', 'blockquote', 'paper', 'underline'];
+
+    themes.forEach((theme) => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ theme });
+
+      const startTime = performance.now();
+      const { container, unmount } = render(<ThemePreview />);
+      const endTime = performance.now();
+
+      const renderTime = endTime - startTime;
+      expect(renderTime).toBeLessThan(100);
+
+      const previewContainer = container.querySelector('[data-lingua-theme]');
+      expect(previewContainer).toHaveAttribute('data-lingua-theme', theme);
+
+      unmount();
+    });
+  });
 });

@@ -25,10 +25,10 @@
   - [x] Sub-task: Write test for theme change event handling
   - [x] Sub-task: Subscribe to settings store theme changes
   - [x] Sub-task: Update preview CSS on theme selection change
-- [~] Task: Ensure instant preview updates (< 100ms)
-  - [ ] Sub-task: Write performance test for theme switching
-  - [ ] Sub-task: Optimize CSS variable updates if needed
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Ensure instant preview updates (< 100ms)
+  - [x] Sub-task: Write performance test for theme switching
+  - [x] Sub-task: Optimize CSS variable updates if needed
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
 
 ## Phase 4: Light/Dark Mode Toggle
 
