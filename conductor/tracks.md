@@ -20,3 +20,6 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+## [ ] Track: Video Subtitle Interception — Hardening & Bug Fixes
+*Link: [./conductor/tracks/subtitle-hardening_20260410/](./conductor/tracks/subtitle-hardening_20260410/)*
