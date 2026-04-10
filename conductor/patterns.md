@@ -90,10 +90,36 @@ Reusable patterns discovered during development. Read this before starting new w
 - ViewportObserver already implements 100ms batch delay — adequate for translation triggers. (from: phase4-launch-ready_20260410, active 2026-04-10)
 
 ## Build & Packaging
-- `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Manifest `commands` limited to 4 entries with `suggested_key` — additional shortcuts must use content script keydown listener. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- `contextMenus` permission required in manifest for `chrome.contextMenus` API access. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Manifest `commands` limited to 4 entries with `suggested_key` — additional shortcuts must use content script keydown listener. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `contextMenus` permission required in manifest for `chrome.contextMenus` API access. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+
+## Theme Preview
+- Theme preview requires importing actual theme CSS (styles/inject.css) into options page for accurate preview. (from: theme-preview_20260410, archived 2026-04-10)
+- Component uses useSettingsStore() for automatic reactivity to theme changes. (from: theme-preview_20260410, archived 2026-04-10)
+- Light/dark mode toggle applies lingua-dark class to preview container for CSS scoping. (from: theme-preview_20260410, archived 2026-04-10)
+- Component must handle undefined/empty theme values - default to 'dividing-line' to prevent rendering issues. (from: theme-preview_20260410, archived 2026-04-10)
+- Theme CSS uses [data-lingua-theme] attribute on container for scoping. (from: theme-preview_20260410, archived 2026-04-10)
+- Dark mode supported via html.lingua-dark class and @media (prefers-color-scheme: dark). (from: theme-preview_20260410, archived 2026-04-10)
+
+## UI Components
+- Shared UI library: ui/ at project root, not inside entrypoints — reusable across popup, options, and content. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- No barrel export: Import directly from @/ui/ComponentName to enable tree-shaking. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- forwardRef: Only Button uses forwardRef (needed by Modal focus trap). Other components don't need it. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+
+## CSS Animations
+- CSS-only: All animations in animations.css, no runtime JS libraries. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- GPU-accelerated: Only transform and opacity in keyframes (never top/left/width/height). (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Stagger utility: --stagger-delay CSS custom property × 30ms per item. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Reduced motion: @media (prefers-reduced-motion: reduce) disables all animations. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Keyframes referenced in inline styles: Toast uses animate-[fadeOut_200ms...] Tailwind arbitrary syntax. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+
+## Toast System
+- Context-based: ToastProvider wraps app, useToast() hook for imperative API. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Auto-dismiss: Each toast has a timer (default 4s), exit animation before removal. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Position: Fixed bottom-right, stacked with gap-2. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- No external state management: Self-contained useState, no Zustand integration needed. (from: phase5-settings-ux_20260410, archived 2026-04-10)
 
 ---
-Last refreshed: 2026-04-10T13:24:00+07:00
-Codebase health: 370 tests across 30 files, 423KB build (chrome-mv3)
+Last refreshed: 2026-04-10T14:05:00+07:00
+Codebase health: 389 tests across 31 files, 433KB build (chrome-mv3)
