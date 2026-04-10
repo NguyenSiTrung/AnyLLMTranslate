@@ -47,8 +47,8 @@
   - [x] Sub-task: Test accessibility (keyboard navigation, screen reader)
   - [x] Sub-task: Test responsive layout within options page
   - [x] Sub-task: Test edge cases (missing theme, invalid state)
-- [~] Task: Manual verification and UX refinement
-  - [ ] Sub-task: Verify preview matches live translation appearance
-  - [ ] Sub-task: Check spacing and layout consistency
-  - [ ] Sub-task: Run lint and fix any issues
-- [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
+- [x] Task: Manual verification and UX refinement
+  - [x] Sub-task: Verify preview matches live translation appearance
+  - [x] Sub-task: Check spacing and layout consistency
+  - [x] Sub-task: Run lint and fix any issues
+- [x] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)

@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Eye, Moon, Sun } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
