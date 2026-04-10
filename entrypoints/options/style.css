@@ -41,9 +41,12 @@ select, input, textarea { font-family: inherit; }
 /* ── Sidebar ── */
 
 .settings-sidebar {
+  position: sticky;
+  top: 0;
   width: 220px;
   min-width: 220px;
   max-width: 220px;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   border-right: 1px solid #27272a;
@@ -198,19 +201,39 @@ select, input, textarea { font-family: inherit; }
 .settings-content {
   flex: 1;
   overflow-y: auto;
-  min-width: 0;   /* prevent flex-child overflow */
+  min-width: 0;        /* prevent flex-child overflow */
+  min-height: 100vh;   /* ensure full-height scrolling */
 }
 
 .settings-content-inner {
-  max-width: 720px;
+  width: 100%;
+  max-width: 860px;
   margin: 0 auto;
-  padding: 32px 32px;
+  padding: 32px 40px;
+  box-sizing: border-box;
+}
+
+/* Ensure all section root elements fill the content width uniformly */
+.settings-content-inner > .tab-content-enter {
+  width: 100%;
+}
+.settings-content-inner > .tab-content-enter > * {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 
 /* ============================================
-   Responsive — small extension popup windows
+   Responsive — adapt to available space
    ============================================ */
+
+/* Medium screens — tighten padding, keep full sidebar */
+@media (max-width: 960px) {
+  .settings-content-inner {
+    max-width: 100%;
+    padding: 28px 24px;
+  }
+}
 
 @media (max-width: 600px) {
   .settings-sidebar {
@@ -236,6 +259,7 @@ select, input, textarea { font-family: inherit; }
   }
 
   .settings-content-inner {
+    max-width: 100%;
     padding: 24px 20px;
   }
 }
