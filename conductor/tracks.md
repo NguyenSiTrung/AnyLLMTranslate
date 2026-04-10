@@ -18,5 +18,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [~] Track: Paragraph Translation Progress Indicators
+## [x] Track: Paragraph Translation Progress Indicators
 *Link: [./conductor/tracks/para-progress-indicator_20260410/](./conductor/tracks/para-progress-indicator_20260410/)*
