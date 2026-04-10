@@ -1629,7 +1629,7 @@ Video player requests subtitle file
 
 ## 16. Phased Delivery Roadmap
 
-> **Last Audit:** 2026-04-09 | **Overall Progress: ~55%** (20 done, 6 partial, 16 not started / 42 total tasks)
+> **Last Audit:** 2026-04-10 | **Overall Progress: ~70%** (29 done, 2 partial, 11 not started / 42 total tasks)
 
 ### Phase 1: Foundation (Weeks 1-3) — ✅ 100% COMPLETE
 **Goal: Basic page translation with bilingual display**
@@ -1671,21 +1671,24 @@ Video player requests subtitle file
 
 **Bonus deliverables:** Handler registry (`inject/subtitleHandlers/registry.ts`), subtitle coordinator (`content/subtitleCoordinator.ts`), 10 unit test files for subtitle modules.
 
-### Phase 3: UX Polish & LLM Provider (Weeks 7-9) — 🟡 ~30% PARTIAL
+### Phase 3: UX Polish & LLM Provider (Weeks 7-9) — ✅ 100% COMPLETE
 **Goal: Premium display, OpenAI-compatible provider, settings**
+*Archived as Conductor track `phase3-ux-polish_20260410` on 2026-04-10.*
 
-| Task | Priority | Effort | Status | Notes |
-|------|----------|--------|--------|-------|
-| All 15+ visual themes | P0 | 3 days | ❌ | Only 1 theme (Dividing Line) in `styles/inject.css` |
-| Dark mode support | P0 | 1 day | 🟡 Partial | Basic `prefers-color-scheme` media query in inject.css |
-| "Test Connection" button + provider validation | P0 | 0.5 day | 🟡 Partial | Backend validation in `services/openaiCompatible.ts`; no UI button |
-| Custom system prompt editor | P1 | 0.5 day | ❌ | System prompt hardcoded in `buildSystemPrompt()` in `services/base.ts` |
-| Full popup UI (React) | P0 | 3 days | 🟡 Partial | Basic popup works with toggle, language pickers, status display; lacks theme/position/subtitle controls |
-| Options page (React) with provider config | P0 | 4 days | ❌ | No options page entrypoint exists |
-| Site rules editor | P1 | 2 days | ❌ | No site rules UI |
-| Custom dictionary/glossary | P1 | 2 days | ❌ | No glossary feature |
-| Loading/error state UX | P0 | 1 day | 🟡 Partial | Error display in popup; loading spinner exists; no loading animation CSS |
-| **Subtotal** | | **~17 days** | **0+4🟡/9** | |
+| Task | Priority | Effort | Status | Implementation |
+|------|----------|--------|--------|----------------|
+| All 15+ visual themes | P0 | 3 days | ✅ Done | `styles/inject.css` — 16 themes (dividing-line, highlight, underline, wavy, dotted, dashed, mask, thinMask, opacity, blur, paper, blockquote, neon, gradientBorder, fadein, sideBySide) |
+| Dark mode support | P0 | 1 day | ✅ Done | `@media (prefers-color-scheme: dark)` + `.lingua-dark` class + `data-lingua-state` attribute |
+| "Test Connection" button + provider validation | P0 | 0.5 day | ✅ Done | `services/providerTester.ts` — 3-step validation (ping → models → translation) with progress callback |
+| Custom system prompt editor | P1 | 0.5 day | ✅ Done | Template variable injection (`{{targetLanguage}}`, `{{glossary}}`) via regex replace in `services/base.ts` |
+| Full popup UI (React) | P0 | 3 days | ✅ Done | `entrypoints/popup/App.tsx` — enhanced with quick settings, theme/provider/position selectors, integration status |
+| Options page (React) with provider config | P0 | 4 days | ✅ Done | `entrypoints/options/` — 8-tab vertical layout (General, Provider, Themes, Site Rules, Dictionary, Subtitles, Shortcuts, Advanced) |
+| Site rules editor | P1 | 2 days | ✅ Done | Site rules section in Options page |
+| Custom dictionary/glossary | P1 | 2 days | ✅ Done | Dictionary section in Options page |
+| Loading/error state UX | P0 | 1 day | ✅ Done | CSS shimmer animation + error indicators via `data-lingua-loading` / `data-lingua-error` attributes |
+| **Subtotal** | | **~17 days** | **9/9** | |
+
+**Bonus deliverables:** Zustand settings store (`stores/settingsStore.ts`) with chrome.storage bidirectional sync, provider presets array, type system extensions (`types/config.ts`), 5 new test files.
 
 ### Phase 4: Advanced Features (Weeks 10-12) — 🟡 ~8% PARTIAL
 **Goal: Power user features, polish, launch**
@@ -1701,7 +1704,7 @@ Video player requests subtitle file
 | Input box translation (Alt+I) | P2 | 2 days | ❌ | |
 | 50+ built-in site rules | P1 | 3 days | ❌ | |
 | Performance optimization | P0 | 2 days | ❌ | |
-| Unit tests (Vitest) | P0 | 3 days | 🟡 Partial | 19 test files for Phase 1 & 2 modules only (no Phase 3-4 tests) |
+| Unit tests (Vitest) | P0 | 3 days | 🟡 Partial | 24 test files covering Phase 1, 2, 3 modules (283 tests) |
 | E2E tests (Playwright) | P1 | 3 days | ❌ | No Playwright setup |
 | Chrome Web Store packaging | P0 | 1 day | 🟡 Partial | `npm run zip` script exists via WXT framework |
 | Documentation | P1 | 2 days | ❌ | |
@@ -1714,9 +1717,9 @@ Video player requests subtitle file
 ```
 Phase 1 ██████████████████████████████ 100%  ← COMPLETE
 Phase 2 ██████████████████████████████ 100%  ← COMPLETE
-Phase 3 ████████░░░░░░░░░░░░░░░░░░░░░  30%  ← partial foundations
+Phase 3 ██████████████████████████████ 100%  ← COMPLETE
 Phase 4 ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░   8%  ← partial foundations
-Overall ███████████████████░░░░░░░░░░░  55%
+Overall █████████████████████░░░░░░░░░  70%
 ```
 
 ---
@@ -1901,5 +1904,5 @@ npm run package       # Creates lingua-lens.zip
 
 ---
 
-*Plan Version: 1.4 | Created: April 2026 | Updated: April 10, 2026 | Status: Phase 2 Complete — Phase 3 Next*
-*Change: Conductor refresh — updated test count (205), build size (270KB), phase status.*
+*Plan Version: 1.5 | Created: April 2026 | Updated: April 10, 2026 | Status: Phase 3 Complete — Phase 4 Next*
+*Change: Conductor refresh — Phase 3 archived (16 themes, options page, provider tester), 283 tests, 346KB build.*

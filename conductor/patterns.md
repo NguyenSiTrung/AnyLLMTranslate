@@ -10,7 +10,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - WXT uses `entrypoints/` dir (not `src/`) for background.ts, content.ts, popup/. Other code lives at project root (lib/, types/, services/, content/). (from: phase1-foundation_20260409, archived 2026-04-09)
 - CSS import in content script must use `@/styles/inject.css` (not relative), since entrypoint is in `entrypoints/` but CSS is in `styles/`. (from: phase1-foundation_20260409, archived 2026-04-09)
 - Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB. (from: phase1-foundation_20260409, archived 2026-04-09)
-- WXT build produces ~270KB total for chrome-mv3 output. (from: phase1-foundation_20260409, updated 2026-04-10)
+- WXT build produces ~346KB total for chrome-mv3 output (grew from ~270KB after Phase 3 options page). (from: phase1-foundation_20260409, updated 2026-04-10)
 
 ## Gotchas
 - WXT `init` refuses to run in non-empty directories — init in temp dir, then copy. (from: phase1-foundation_20260409, archived 2026-04-09)
@@ -57,4 +57,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - pnpm not installed globally on this system — use `npx -y pnpm@latest exec` or `npx -y pnpm@latest install` for all pnpm commands. (from: phase1-foundation_20260409, archived 2026-04-09)
 
 ---
-Last refreshed: 2026-04-10T09:50:00+07:00
+Last refreshed: 2026-04-10T10:10:00+07:00
+Codebase health: 283 tests across 24 files, 346KB build (chrome-mv3)
