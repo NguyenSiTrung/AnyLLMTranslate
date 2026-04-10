@@ -1,0 +1,32 @@
+{
+  "track_id": "phase4-launch-ready_20260410",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": 112,
+  "created_at": "2026-04-10T10:23:07+07:00",
+  "updated_at": "2026-04-10T10:26:16+07:00",
+  "description": "Phase 4: Launch-Ready Advanced Features — text selection translate, mouse hover translate, keyboard shortcuts, context menus, performance optimization, test coverage expansion, Chrome Web Store packaging, and project documentation",
+  "beads_epic": "AnyLLMTranslate-p6a",
+  "beads_tasks": {
+    "phase1": "AnyLLMTranslate-p6a.1",
+    "phase1_task1": "AnyLLMTranslate-p6a.1.1",
+    "phase1_task2": "AnyLLMTranslate-p6a.1.2",
+    "phase1_task3": "AnyLLMTranslate-p6a.1.3",
+    "phase1_task4": "AnyLLMTranslate-p6a.1.4",
+    "phase2": "AnyLLMTranslate-p6a.2",
+    "phase2_task1": "AnyLLMTranslate-p6a.2.1",
+    "phase2_task2": "AnyLLMTranslate-p6a.2.2",
+    "phase2_task3": "AnyLLMTranslate-p6a.2.3",
+    "phase2_task4": "AnyLLMTranslate-p6a.2.4",
+    "phase3": "AnyLLMTranslate-p6a.3",
+    "phase3_task1": "AnyLLMTranslate-p6a.3.1",
+    "phase3_task2": "AnyLLMTranslate-p6a.3.2",
+    "phase3_task3": "AnyLLMTranslate-p6a.3.3",
+    "phase4": "AnyLLMTranslate-p6a.4",
+    "phase4_task1": "AnyLLMTranslate-p6a.4.1",
+    "phase4_task2": "AnyLLMTranslate-p6a.4.2",
+    "phase4_task3": "AnyLLMTranslate-p6a.4.3"
+  }
+}
