@@ -237,9 +237,9 @@ function cleanupResizeObserver(): void {
 /**
  * Initialize the subtitle overlay with subtitle cues.
  */
-export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayConfig>): void {
-  // Find video element
-  const video = findVideoElement();
+export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayConfig>, videoNode?: HTMLVideoElement): void {
+  // Use provided video element or find one
+  const video = videoNode || findVideoElement();
   if (!video) {
     console.warn('LinguaLens: No video element found for subtitle overlay');
     return;

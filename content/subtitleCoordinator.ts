@@ -10,6 +10,7 @@
  */
 
 import { onSubtitleIntercepted } from '@/content/messageBridge';
+import { onMessage } from '@/inject/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay } from '@/content/subtitleOverlay';
 import { initializeControls } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
@@ -18,7 +19,7 @@ import type { SubtitleCue, SubtitleInterceptedPayload } from '@/types/subtitle';
 /** Coordinator state */
 interface CoordinatorState {
   isOverlayMode: boolean;
-  pendingRequests: Map<string, NodeJS.Timeout>;
+  pendingRequests: Map<string, ReturnType<typeof setTimeout>>;
   interceptTimeout: number;
 }
 
@@ -140,6 +141,18 @@ export function updateTranslatedCues(cues: SubtitleCue[]): void {
 }
 
 /**
+ * Clear a pending request timeout to prevent spurious overlay activation.
+ * Called when translation completes successfully.
+ */
+export function clearPendingRequest(requestId: string): void {
+  const timeoutId = state.pendingRequests.get(requestId);
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+    state.pendingRequests.delete(requestId);
+  }
+}
+
+/**
  * Start the subtitle coordinator.
  * Returns a cleanup function.
  */
@@ -149,10 +162,16 @@ export function startCoordinator(): () => void {
   // Listen for intercepted subtitles
   const cleanupBridge = onSubtitleIntercepted(handleIntercepted);
 
+  // Listen for successful subtitle translations to cancel overlay fallback
+  const cleanupTranslated = onMessage('SUBTITLE_TRANSLATED', (_payload, requestId) => {
+    clearPendingRequest(requestId);
+  });
+
   // Return cleanup function
   return () => {
     console.log('LinguaLens: Stopping subtitle coordinator');
     cleanupBridge();
+    cleanupTranslated();
 
     // Clear all pending timeouts
     for (const timeoutId of state.pendingRequests.values()) {

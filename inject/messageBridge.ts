@@ -53,6 +53,7 @@ export function onMessage(
   options?: { once?: boolean },
 ): () => void {
   const listener = (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return;
     if (event.data?.channel !== CHANNEL) return;
     if (event.data?.type !== type) return;
 

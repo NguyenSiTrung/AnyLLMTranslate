@@ -91,8 +91,9 @@ export class YouTubeHandler implements SubtitleHandler {
 
       const text = event.segs
         .map((seg) => seg.utf8 || '')
-        .join('')
-        .replace(/\n/g, ' ')
+        .filter((s) => s.length > 0)
+        .join(' ')
+        .replace(/\s+/g, ' ')
         .trim();
 
       if (!text || text === '\n') continue;

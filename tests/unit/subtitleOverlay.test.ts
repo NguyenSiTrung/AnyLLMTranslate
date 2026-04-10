@@ -297,6 +297,47 @@ describe('content/subtitleOverlay', () => {
     });
   });
 
+  describe('video targeting', () => {
+    it('uses provided videoNode instead of querying DOM', () => {
+      // Add two videos to DOM
+      const video1 = document.createElement('video');
+      video1.src = 'video1.mp4';
+      video1.id = 'first';
+      document.body.appendChild(video1);
+
+      const video2 = document.createElement('video');
+      video2.src = 'video2.mp4';
+      video2.id = 'second';
+      document.body.appendChild(video2);
+
+      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
+
+      // Pass video2 explicitly — overlay should attach to it, not video1
+      initializeOverlay(cues, undefined, video2);
+
+      expect(isOverlayActive()).toBe(true);
+
+      // Verify by triggering timeupdate on video2 (not video1)
+      Object.defineProperty(video2, 'currentTime', { value: 1, writable: true });
+      video2.dispatchEvent(new Event('timeupdate'));
+
+      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
+      const translatedText = overlay?.querySelector('.lingua-lens-subtitle-translated');
+      expect(translatedText?.textContent).toBe('Hello');
+    });
+
+    it('falls back to first video when no videoNode provided', () => {
+      const video = document.createElement('video');
+      video.src = 'test.mp4';
+      document.body.appendChild(video);
+
+      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
+      initializeOverlay(cues);
+
+      expect(isOverlayActive()).toBe(true);
+    });
+  });
+
   describe('ResizeObserver integration', () => {
     it('sets up ResizeObserver on video element', () => {
       const video = document.createElement('video');

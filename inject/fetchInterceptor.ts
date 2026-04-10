@@ -36,6 +36,7 @@ export class FetchInterceptor {
 
       // This is a subtitle request
       const response = await originalFetch(input, init);
+      if (!response.ok) return response;
       const responseClone = response.clone();
       const responseText = await responseClone.text();
 

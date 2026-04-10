@@ -29,12 +29,13 @@ describe('messageBridge', () => {
     vi.restoreAllMocks();
   });
 
-  function fireMessageEvent(data: unknown) {
+  function fireMessageEvent(data: unknown, origin?: string) {
+    const eventOrigin = origin ?? window.location.origin;
     for (const { handler } of registeredListeners) {
       if (typeof handler === 'function') {
-        handler({ data } as MessageEvent);
+        handler({ data, origin: eventOrigin } as MessageEvent);
       } else if (typeof handler === 'object' && 'handleEvent' in handler) {
-        handler.handleEvent({ data } as MessageEvent);
+        handler.handleEvent({ data, origin: eventOrigin } as MessageEvent);
       }
     }
   }
@@ -115,6 +116,40 @@ describe('messageBridge', () => {
       });
 
       expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('rejects messages from foreign origins', () => {
+      const handler = vi.fn();
+      onMessage('SUBTITLE_TRANSLATED', handler);
+
+      fireMessageEvent(
+        {
+          channel: 'lingua-lens',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'test-123',
+          payload: { vttContent: 'test' },
+        },
+        'https://evil.example.com',
+      );
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('processes messages from same origin', () => {
+      const handler = vi.fn();
+      onMessage('SUBTITLE_TRANSLATED', handler);
+
+      fireMessageEvent(
+        {
+          channel: 'lingua-lens',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'test-456',
+          payload: { vttContent: 'test' },
+        },
+        window.location.origin,
+      );
+
+      expect(handler).toHaveBeenCalledWith({ vttContent: 'test' }, 'test-456');
     });
 
     it('removes listener after once callback', () => {

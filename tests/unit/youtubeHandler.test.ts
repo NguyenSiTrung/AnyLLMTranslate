@@ -62,6 +62,54 @@ describe('YouTubeHandler', () => {
       expect(cues[0].text).toBe('Valid text');
     });
 
+    it('joins multi-segment cues with spaces', () => {
+      const json = JSON.stringify({
+        events: [
+          { tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: 'Hello' }, { utf8: 'world' }] },
+        ],
+      });
+
+      const cues = handler.transformResponse(json, 'application/json', 'https://www.youtube.com/api/timedtext?fmt=json3');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Hello world');
+    });
+
+    it('handles newline segments as word boundaries', () => {
+      const json = JSON.stringify({
+        events: [
+          { tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: 'First' }, { utf8: '\n' }, { utf8: 'Second' }] },
+        ],
+      });
+
+      const cues = handler.transformResponse(json, 'application/json', 'https://www.youtube.com/api/timedtext?fmt=json3');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('First Second');
+    });
+
+    it('handles empty segments without dropping words', () => {
+      const json = JSON.stringify({
+        events: [
+          { tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: 'Word1' }, { utf8: '' }, { utf8: 'Word2' }] },
+        ],
+      });
+
+      const cues = handler.transformResponse(json, 'application/json', 'https://www.youtube.com/api/timedtext?fmt=json3');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Word1 Word2');
+    });
+
+    it('collapses multiple consecutive spaces', () => {
+      const json = JSON.stringify({
+        events: [
+          { tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: 'Hello  ' }, { utf8: '  world' }] },
+        ],
+      });
+
+      const cues = handler.transformResponse(json, 'application/json', 'https://www.youtube.com/api/timedtext?fmt=json3');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Hello world');
+    });
+
     it('returns empty array for unparseable content', () => {
       const cues = handler.transformResponse('not valid content', 'text/plain', 'https://example.com');
       expect(cues).toEqual([]);

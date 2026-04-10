@@ -5,6 +5,7 @@ import {
   forceOverlayMode,
   isInOverlayMode,
   resetCoordinatorState,
+  clearPendingRequest,
 } from '@/content/subtitleCoordinator';
 import { resetOverlayState } from '@/content/subtitleOverlay';
 import type { SubtitleCue } from '@/types/subtitle';
@@ -15,6 +16,10 @@ import * as subtitleParser from '@/lib/subtitleParser';
 // Mock dependencies
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: vi.fn(() => vi.fn()),
+}));
+
+vi.mock('@/inject/messageBridge', () => ({
+  onMessage: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@/content/subtitleOverlay', () => ({
@@ -174,6 +179,39 @@ describe('content/subtitleCoordinator', () => {
       vi.advanceTimersByTime(6000);
 
       expect(isInOverlayMode()).toBe(true);
+    });
+
+    it('does NOT activate overlay when translation succeeds before timeout', async () => {
+      vi.mocked(subtitleParser.parseSubtitles).mockReturnValue([{ startTime: 0, endTime: 4, text: 'Test' }]);
+
+      startCoordinator();
+
+      const handler = vi.mocked(messageBridge.onSubtitleIntercepted).mock.calls[0]?.[0];
+      if (!handler) throw new Error('Handler not found');
+
+      await handler(
+        {
+          url: 'http://example.com/subs.vtt',
+          contentType: 'text/vtt',
+          body: 'WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest',
+          platform: 'test',
+          originalLanguage: 'en',
+        },
+        'test-request-id',
+      );
+
+      // Clear the pending request (simulates successful translation)
+      clearPendingRequest('test-request-id');
+
+      // Fast-forward past timeout
+      vi.advanceTimersByTime(6000);
+
+      // Overlay should NOT activate because we cleared the timeout
+      expect(isInOverlayMode()).toBe(false);
+    });
+
+    it('clearPendingRequest does not throw for unknown requestId', () => {
+      expect(() => clearPendingRequest('nonexistent-id')).not.toThrow();
     });
   });
 });
