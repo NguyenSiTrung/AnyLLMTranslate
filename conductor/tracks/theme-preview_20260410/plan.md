@@ -14,10 +14,10 @@
   - [x] Sub-task: Write test for theme CSS application
   - [x] Sub-task: Import theme styles from styles/inject.css
   - [x] Sub-task: Apply theme-specific CSS variables to preview container
-- [ ] Task: Verify all 16 themes render correctly in preview
-  - [ ] Sub-task: Write test to iterate through all theme names
-  - [ ] Sub-task: Manual verification of each theme's visual appearance
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Verify all 16 themes render correctly in preview
+  - [x] Sub-task: Write test to iterate through all theme names
+  - [x] Sub-task: Manual verification of each theme's visual appearance
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ## Phase 3: Auto-Update Behavior
 

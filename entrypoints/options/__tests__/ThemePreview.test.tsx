@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ThemePreview } from '../ThemePreview';
 import { useSettingsStore } from '@/stores/settingsStore';
+import type { ThemeName } from '@/types/config';
 
 // Mock the settings store
 vi.mock('@/stores/settingsStore');
@@ -112,5 +113,37 @@ describe('ThemePreview', () => {
 
     const previewContainer = container.querySelector('[data-lingua-theme]');
     expect(previewContainer).toHaveAttribute('data-lingua-theme', 'minimal');
+  });
+
+  it('renders all 16 theme names correctly', () => {
+    const themes: Array<ThemeName> = [
+      'dividing-line',
+      'blockquote',
+      'paper',
+      'underline',
+      'dashed-underline',
+      'highlight',
+      'wavy-underline',
+      'bubble',
+      'side-by-side',
+      'mask',
+      'fade-in',
+      'italic',
+      'dotted-border',
+      'shadow-card',
+      'minimal',
+      'gradient-accent',
+    ];
+
+    themes.forEach((theme) => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ theme });
+
+      const { container, unmount } = render(<ThemePreview />);
+
+      const previewContainer = container.querySelector('[data-lingua-theme]');
+      expect(previewContainer).toHaveAttribute('data-lingua-theme', theme);
+
+      unmount();
+    });
   });
 });
