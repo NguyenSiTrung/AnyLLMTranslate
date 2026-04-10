@@ -12,11 +12,10 @@ This file tracks all major tracks for the project.
 - ✅ **Phase 4 — Launch-Ready Advanced Features** (`phase4-launch-ready_20260410`) — Archived 2026-04-10. [View](./conductor/archive/phase4-launch-ready_20260410/)
 - ✅ **Phase 5 — Settings UI/UX Overhaul** (`phase5-settings-ux_20260410`) — Archived 2026-04-10. [View](./conductor/archive/phase5-settings-ux_20260410/)
 - ✅ **Translation Theme Visual Style Preview** (`theme-preview_20260410`) — Archived 2026-04-10. [View](./conductor/archive/theme-preview_20260410/)
+- ✅ **Fix Display Theme Not Applied Bug** (`display-theme-fix_20260410`) — Archived 2026-04-10. [View](./conductor/archive/display-theme-fix_20260410/)
 
 ---
 
 ## Active Tracks
 
-- [x] Track: Fix Display Theme Not Applied Bug (`display-theme-fix_20260410`)
-  *Link: [./conductor/tracks/display-theme-fix_20260410/](./conductor/tracks/display-theme-fix_20260410/)*
-  *Priority: High*
+*No active tracks.*
