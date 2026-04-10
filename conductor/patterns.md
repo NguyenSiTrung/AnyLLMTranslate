@@ -130,6 +130,15 @@ Reusable patterns discovered during development. Read this before starting new w
 - Test files moved to `__tests__/` subdirectories must update relative imports (e.g. `./content` → `../content`). (from: test-fix, 2026-04-10)
 - `chrome.runtime.sendMessage` mock must return a Promise (`.mockResolvedValue(undefined)`) — source code calls `.catch()` on the result. (from: test-fix, 2026-04-10)
 
+## Progress Indicators & Loading States
+- CSS spinner: Use `::before` pseudo-element with border-trick — keeps the DOM clean, no extra child elements needed. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- `animation: none !important; opacity: 1 !important` on a spinner parent overrides the base `.lingua-lens-translation` fade-in, so the spinner appears immediately without delay. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- Always provide CSS custom property fallbacks in inject.css: `var(--lingua-accent, #3b82f6)` — the host page may not define the extension's custom properties. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- In-place DOM update pattern: find by pieceId → swap class + set textContent → force reflow via `el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''` to re-trigger the CSS fade-in animation. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- For batch translation, show spinners for ALL pieces **before** the single `await` — gives immediate visual feedback for all pending paragraphs simultaneously. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- Wrap `chrome.runtime.sendMessage` in try/catch in content scripts — sendMessage can throw synchronously if the service worker is asleep on first call. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- `styles/__tests__/themes.test.ts` checks inject.css as a raw string — when replacing CSS keyframe names or selectors, always update `themes.test.ts` alongside the CSS file. (from: para-progress-indicator_20260410, archived 2026-04-10)
+
 ---
-Last refreshed: 2026-04-10T15:30:00+07:00
-Codebase health: 400 tests across 32 files, 504KB build (chrome-mv3)
+Last refreshed: 2026-04-10T16:54:00+07:00
+Codebase health: 403 tests across 32 files, 504KB build (chrome-mv3)
