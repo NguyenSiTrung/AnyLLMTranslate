@@ -18,6 +18,9 @@ export function ThemePreview() {
   const settings = useSettingsStore();
   const [isDarkMode, setIsDarkMode] = useState(false);
 
+  // Default to dividing-line if theme is undefined or empty
+  const theme = settings.theme || 'dividing-line';
+
   return (
     <Card title="Theme Preview" icon={<Eye className="w-4 h-4" />} variant="bordered" className="mt-4">
       {/* Light/Dark mode toggle */}
@@ -32,7 +35,7 @@ export function ThemePreview() {
 
       <div
         className={`theme-preview-container ${isDarkMode ? 'lingua-dark' : ''}`}
-        data-lingua-theme={settings.theme}
+        data-lingua-theme={theme}
         data-lingua-state="dual"
       >
         <div className="space-y-2">

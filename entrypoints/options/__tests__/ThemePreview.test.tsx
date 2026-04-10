@@ -232,4 +232,55 @@ describe('ThemePreview', () => {
     expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
     expect(previewContainer).toHaveAttribute('data-lingua-state', 'dual');
   });
+
+  it('toggle is keyboard navigable', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'dividing-line',
+    });
+
+    render(<ThemePreview />);
+
+    const toggle = screen.getByRole('switch');
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('type', 'button');
+    expect(toggle).toHaveAttribute('role', 'switch');
+  });
+
+  it('toggle has proper ARIA attributes', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'dividing-line',
+    });
+
+    render(<ThemePreview />);
+
+    const toggle = screen.getByRole('switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).toHaveAttribute('aria-label', 'Dark Mode');
+  });
+
+  it('handles edge case with undefined theme', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: undefined as unknown as ThemeName,
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toBeInTheDocument();
+    // Component should default to dividing-line when theme is undefined
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+  });
+
+  it('handles edge case with empty string theme', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: '' as ThemeName,
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toBeInTheDocument();
+    // Component should default to dividing-line when theme is empty string
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+  });
 });

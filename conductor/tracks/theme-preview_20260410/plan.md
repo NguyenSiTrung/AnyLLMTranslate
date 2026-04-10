@@ -43,11 +43,11 @@
 
 ## Phase 5: Testing and Polish
 
-- [ ] Task: Write comprehensive component tests
-  - [ ] Sub-task: Test accessibility (keyboard navigation, screen reader)
-  - [ ] Sub-task: Test responsive layout within options page
-  - [ ] Sub-task: Test edge cases (missing theme, invalid state)
-- [ ] Task: Manual verification and UX refinement
+- [x] Task: Write comprehensive component tests
+  - [x] Sub-task: Test accessibility (keyboard navigation, screen reader)
+  - [x] Sub-task: Test responsive layout within options page
+  - [x] Sub-task: Test edge cases (missing theme, invalid state)
+- [~] Task: Manual verification and UX refinement
   - [ ] Sub-task: Verify preview matches live translation appearance
   - [ ] Sub-task: Check spacing and layout consistency
   - [ ] Sub-task: Run lint and fix any issues
