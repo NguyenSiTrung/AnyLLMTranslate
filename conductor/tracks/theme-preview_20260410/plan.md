@@ -32,11 +32,11 @@
 
 ## Phase 4: Light/Dark Mode Toggle
 
-- [ ] Task: Add light/dark mode toggle to preview component
-  - [ ] Sub-task: Write test for toggle interaction
-  - [ ] Sub-task: Implement toggle switch UI
-  - [ ] Sub-task: Connect toggle to preview container's theme attribute
-- [ ] Task: Ensure theme CSS respects light/dark mode
+- [x] Task: Add light/dark mode toggle to preview component
+  - [x] Sub-task: Write test for toggle interaction
+  - [x] Sub-task: Implement toggle switch UI
+  - [x] Sub-task: Connect toggle to preview container's theme attribute
+- [~] Task: Ensure theme CSS respects light/dark mode
   - [ ] Sub-task: Verify CSS variables update correctly on mode change
   - [ ] Sub-task: Test all themes in both light and dark modes
 - [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)

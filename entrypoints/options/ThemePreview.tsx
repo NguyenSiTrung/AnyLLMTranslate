@@ -3,9 +3,11 @@
  * Displays bilingual sample text with the selected theme applied.
  */
 
-import { Eye } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, Moon, Sun } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Card } from '@/ui/Card';
+import { Toggle } from '@/ui/Toggle';
 
 const SAMPLE_TEXT = {
   original: 'The quick brown fox jumps over the lazy dog.',
@@ -14,11 +16,22 @@ const SAMPLE_TEXT = {
 
 export function ThemePreview() {
   const settings = useSettingsStore();
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   return (
     <Card title="Theme Preview" icon={<Eye className="w-4 h-4" />} variant="bordered" className="mt-4">
+      {/* Light/Dark mode toggle */}
+      <div className="mb-4">
+        <Toggle
+          checked={isDarkMode}
+          onChange={setIsDarkMode}
+          label="Dark Mode"
+          description="Preview theme in dark mode"
+        />
+      </div>
+
       <div
-        className="theme-preview-container"
+        className={`theme-preview-container ${isDarkMode ? 'lingua-dark' : ''}`}
         data-lingua-theme={settings.theme}
         data-lingua-state="dual"
       >
