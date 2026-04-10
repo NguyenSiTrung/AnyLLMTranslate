@@ -10,6 +10,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Select } from '@/ui/Select';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
+import { ThemePreview } from '../ThemePreview';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
 
 const THEME_OPTIONS = [
@@ -109,6 +110,8 @@ export function GeneralSection() {
                 options={THEME_OPTIONS}
               />
             </FieldGroup>
+
+            <ThemePreview />
           </div>
         </Card>
 

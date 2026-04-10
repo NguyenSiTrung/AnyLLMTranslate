@@ -2,10 +2,10 @@
 
 ## Phase 1: Preview Component Structure
 
-- [ ] Task: Create ThemePreview React component in entrypoints/options/
-  - [ ] Sub-task: Write component test (rendering, basic structure)
-  - [ ] Sub-task: Implement component with bilingual sample text layout
-  - [ ] Sub-task: Add component to General tab below theme selector
+- [x] Task: Create ThemePreview React component in entrypoints/options/
+  - [x] Sub-task: Write component test (rendering, basic structure)
+  - [x] Sub-task: Implement component with bilingual sample text layout
+  - [x] Sub-task: Add component to General tab below theme selector
 - [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Theme CSS Integration
