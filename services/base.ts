@@ -23,9 +23,8 @@ export function createTranslationService(config: ProviderConfig): TranslationSer
   return new OpenAICompatibleService(config);
 }
 
-/** Build the system prompt for translation */
-export function buildSystemPrompt(targetLanguage: string): string {
-  return `You are a professional translator. Translate the given text to ${targetLanguage}.
+/** Default system prompt template with injectable variables */
+export const DEFAULT_SYSTEM_PROMPT_TEMPLATE = `You are a professional translator. Translate the given text to {{targetLanguage}}.
 
 Rules:
 - Translate naturally and fluently, preserving the original meaning and tone.
@@ -33,7 +32,53 @@ Rules:
 - Do NOT translate code, URLs, email addresses, or proper nouns unless appropriate.
 - If the text is already in the target language, return it unchanged.
 - Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "translated text 1", "id2": "translated text 2"}}
-- The keys in "translations" must exactly match the input keys.`;
+- The keys in "translations" must exactly match the input keys.
+{{glossary}}`;
+
+/** Build the system prompt for translation with optional custom template */
+export function buildSystemPrompt(
+  targetLanguage: string,
+  customTemplate?: string | null,
+  glossaryBlock?: string,
+): string {
+  const template = customTemplate || DEFAULT_SYSTEM_PROMPT_TEMPLATE;
+
+  let prompt = template.replace(/\{\{targetLanguage\}\}/g, targetLanguage);
+
+  const glossaryContent = glossaryBlock
+    ? `\n${glossaryBlock}`
+    : '';
+  prompt = prompt.replace(/\{\{glossary\}\}/g, glossaryContent);
+
+  return prompt.trim();
+}
+
+/** Prompt template validation result */
+export interface PromptValidation {
+  valid: boolean;
+  warnings: string[];
+}
+
+/** Validate a custom prompt template for critical rules */
+export function validatePromptTemplate(template: string): PromptValidation {
+  const warnings: string[] = [];
+
+  if (!template.includes('{{targetLanguage}}')) {
+    warnings.push('Missing {{targetLanguage}} variable — target language will not be injected.');
+  }
+
+  if (!template.toLowerCase().includes('json')) {
+    warnings.push('Missing JSON format instruction — LLM may not return parseable JSON.');
+  }
+
+  if (!template.toLowerCase().includes('translations')) {
+    warnings.push('Missing "translations" key instruction — response format may be incorrect.');
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
 }
 
 /** Build the user prompt for a batch of texts */

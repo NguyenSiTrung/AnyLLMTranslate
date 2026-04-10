@@ -1,12 +1,33 @@
 /**
  * Translation Display — injects bilingual translations into the DOM.
- * Implements the "Dividing Line" theme as default.
+ * Supports 16+ visual themes and translation positioning.
  */
 
 import { DATA_ATTRS } from '@/lib/constants';
 import type { PageState } from '@/lib/constants';
+import type { ThemeName, TranslationPosition, DarkMode } from '@/types/config';
 
-/** Apply a single translation below its original paragraph */
+/** Apply theme attribute to document root */
+export function applyTheme(theme: ThemeName): void {
+  document.documentElement.setAttribute('data-lingua-theme', theme);
+}
+
+/** Apply translation position attribute to document root */
+export function applyPosition(position: TranslationPosition): void {
+  document.documentElement.setAttribute('data-lingua-position', position);
+}
+
+/** Apply dark mode class to document root */
+export function applyDarkMode(mode: DarkMode): void {
+  if (mode === 'dark') {
+    document.documentElement.classList.add('lingua-dark');
+  } else {
+    document.documentElement.classList.remove('lingua-dark');
+  }
+  // 'auto' mode relies on CSS @media (prefers-color-scheme: dark) — no class needed
+}
+
+/** Apply a single translation relative to its original paragraph */
 export function applyTranslation(
   parentElement: Element,
   pieceId: string,
@@ -30,6 +51,58 @@ export function applyTranslation(
 
   // Insert after the parent element
   parentElement.after(translationEl);
+}
+
+/** Set loading state on an element (shows shimmer) */
+export function setLoadingState(parentElement: Element, isLoading: boolean): void {
+  if (isLoading) {
+    parentElement.setAttribute('data-lingua-loading', '');
+  } else {
+    parentElement.removeAttribute('data-lingua-loading');
+  }
+}
+
+/** Set error state on an element (shows error indicator) */
+export function setErrorState(
+  parentElement: Element,
+  pieceId: string,
+  errorMessage: string,
+  onRetry?: () => void,
+): void {
+  parentElement.setAttribute('data-lingua-error', '');
+
+  // Check if error translation element already exists
+  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  if (existing) {
+    existing.textContent = `⚠ Translation failed: ${errorMessage}`;
+    return;
+  }
+
+  // Create error element
+  const errorEl = document.createElement('div');
+  errorEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
+  errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
+  errorEl.className = 'lingua-lens-translation';
+  errorEl.textContent = `⚠ Translation failed: ${errorMessage}`;
+  errorEl.title = 'Click to retry';
+
+  if (onRetry) {
+    errorEl.addEventListener('click', () => {
+      clearErrorState(parentElement, pieceId);
+      onRetry();
+    }, { once: true });
+  }
+
+  parentElement.after(errorEl);
+}
+
+/** Clear error state from an element */
+export function clearErrorState(parentElement: Element, pieceId: string): void {
+  parentElement.removeAttribute('data-lingua-error');
+  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  if (existing) {
+    existing.remove();
+  }
 }
 
 /** Remove a single translation by piece ID */
@@ -60,6 +133,16 @@ export function removeAllTranslations(): void {
   for (const original of originals) {
     original.removeAttribute(DATA_ATTRS.ROLE);
     original.removeAttribute(DATA_ATTRS.TRANSLATED);
+  }
+
+  // Clean up loading/error states
+  const loadingEls = document.querySelectorAll('[data-lingua-loading]');
+  for (const el of loadingEls) {
+    el.removeAttribute('data-lingua-loading');
+  }
+  const errorEls = document.querySelectorAll('[data-lingua-error]');
+  for (const el of errorEls) {
+    el.removeAttribute('data-lingua-error');
   }
 
   // Reset page state

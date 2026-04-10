@@ -32,6 +32,71 @@ export interface ProviderConfig {
 /** Translation display mode */
 export type DisplayMode = 'bilingual-below' | 'translation-only';
 
+/** All available visual theme identifiers */
+export type ThemeName =
+  | 'dividing-line'
+  | 'blockquote'
+  | 'paper'
+  | 'underline'
+  | 'dashed-underline'
+  | 'highlight'
+  | 'wavy-underline'
+  | 'bubble'
+  | 'side-by-side'
+  | 'mask'
+  | 'fade-in'
+  | 'italic'
+  | 'dotted-border'
+  | 'shadow-card'
+  | 'minimal'
+  | 'gradient-accent';
+
+/** Translation position relative to original text */
+export type TranslationPosition = 'below' | 'above' | 'side';
+
+/** Dark mode preference */
+export type DarkMode = 'auto' | 'light' | 'dark';
+
+/** Per-site translation rule */
+export interface SiteRule {
+  /** Unique rule identifier */
+  id: string;
+  /** Hostname pattern (supports wildcards, e.g. '*.example.com') */
+  hostname: string;
+  /** CSS selectors to include for translation */
+  includeSelectors: string[];
+  /** CSS selectors to exclude from translation */
+  excludeSelectors: string[];
+  /** Whether to always translate this site */
+  alwaysTranslate: boolean;
+  /** Whether to never translate this site */
+  neverTranslate: boolean;
+  /** Whether this is a built-in (read-only) rule */
+  builtIn: boolean;
+}
+
+/** Glossary entry for term-protected translation */
+export interface GlossaryEntry {
+  /** Unique entry identifier */
+  id: string;
+  /** Source term in original language */
+  source: string;
+  /** Target translation */
+  target: string;
+}
+
+/** Subtitle display settings */
+export interface SubtitleSettings {
+  /** Subtitle position on video */
+  position: 'bottom' | 'top';
+  /** Font size in pixels */
+  fontSize: number;
+  /** Background opacity (0–1) */
+  backgroundOpacity: number;
+  /** Whether subtitles are enabled */
+  enabled: boolean;
+}
+
 /** Extension settings stored in chrome.storage.local */
 export interface ExtensionSettings {
   /** Active provider configuration */
@@ -48,6 +113,22 @@ export interface ExtensionSettings {
   cacheTTLDays: number;
   /** Maximum cache size in MB */
   maxCacheSizeMB: number;
+  /** Active visual theme */
+  theme: ThemeName;
+  /** Translation position relative to original */
+  translationPosition: TranslationPosition;
+  /** Dark mode preference */
+  darkMode: DarkMode;
+  /** Custom site translation rules */
+  siteRules: SiteRule[];
+  /** Custom glossary/dictionary entries */
+  glossary: GlossaryEntry[];
+  /** Subtitle display settings */
+  subtitleSettings: SubtitleSettings;
+  /** Custom system prompt template (null = use default) */
+  customSystemPrompt: string | null;
+  /** Debug mode toggle */
+  debugMode: boolean;
 }
 
 /** Provider preset definitions */
@@ -59,6 +140,14 @@ export interface ProviderPresetDefinition {
   requiresApiKey: boolean;
   placeholder?: string;
 }
+
+/** Default subtitle settings */
+export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
+  position: 'bottom',
+  fontSize: 16,
+  backgroundOpacity: 0.7,
+  enabled: true,
+};
 
 /** Default settings */
 export const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -78,6 +167,14 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   maxBatchChars: 2000,
   cacheTTLDays: 30,
   maxCacheSizeMB: 100,
+  theme: 'dividing-line',
+  translationPosition: 'below',
+  darkMode: 'auto',
+  siteRules: [],
+  glossary: [],
+  subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
+  customSystemPrompt: null,
+  debugMode: false,
 };
 
 /** All available provider presets */
