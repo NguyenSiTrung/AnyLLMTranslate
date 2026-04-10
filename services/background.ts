@@ -214,6 +214,32 @@ async function handleTranslateSelection(
   }
 }
 
+/** Update extension badge based on status */
+function handleStatusUpdate(
+  message: { status: { status: string } },
+  tabId?: number
+): void {
+  if (!tabId) return;
+  const state = message.status.status;
+  
+  try {
+    if (state === 'done') {
+      chrome.action.setBadgeText({ text: '✓', tabId });
+      chrome.action.setBadgeBackgroundColor({ color: '#10B981', tabId });
+    } else if (state === 'translating') {
+      chrome.action.setBadgeText({ text: '...', tabId });
+      chrome.action.setBadgeBackgroundColor({ color: '#3B82F6', tabId });
+    } else if (state === 'error') {
+      chrome.action.setBadgeText({ text: '!', tabId });
+      chrome.action.setBadgeBackgroundColor({ color: '#EF4444', tabId });
+    } else {
+      chrome.action.setBadgeText({ text: '', tabId });
+    }
+  } catch (_error) {
+    // Ignore badge setting errors (e.g., if tab is no longer available)
+  }
+}
+
 export function handleMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender,
@@ -231,6 +257,9 @@ export function handleMessage(
       return handleFetchSubtitle(message);
     case 'translateSelection':
       return handleTranslateSelection(message);
+    case 'statusUpdate':
+      handleStatusUpdate(message, _sender.tab?.id);
+      return undefined;
     default:
       return undefined;
   }
