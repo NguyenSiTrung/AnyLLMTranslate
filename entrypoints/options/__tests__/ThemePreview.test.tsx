@@ -146,4 +146,26 @@ describe('ThemePreview', () => {
       unmount();
     });
   });
+
+  it('updates preview when theme changes in settings store', () => {
+    // Initial theme
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'dividing-line',
+    });
+
+    const { container, rerender } = render(<ThemePreview />);
+
+    let previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+
+    // Change theme
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'blockquote',
+    });
+
+    rerender(<ThemePreview />);
+
+    previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
+  });
 });
