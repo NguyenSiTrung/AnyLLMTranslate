@@ -19,7 +19,7 @@ vi.stubGlobal('chrome', {
     },
   },
   runtime: {
-    sendMessage: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
   },
   tabs: {
     onRemoved: {

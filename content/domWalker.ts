@@ -32,7 +32,8 @@ function shouldSkipElement(element: Element): boolean {
   if (element.getAttribute('translate') === 'no') return true;
   if (element.classList.contains('notranslate')) return true;
 
-  // Skip contentEditable regions
+  // Skip contentEditable regions (attribute check as fallback for jsdom)
+  if (element.getAttribute('contenteditable') === 'true') return true;
   if ('isContentEditable' in element && (element as HTMLElement).isContentEditable) return true;
 
   return false;

@@ -63,31 +63,31 @@ Reusable patterns discovered during development. Read this before starting new w
 - Pre-existing lint errors in codebase are not introduced by this refactor - refactoring should be lint-neutral. (from: provider-simplify_20260410, archived 2026-04-10)
 
 ## Text Selection Translate
-- `event.target` can be `document` (not an Element) when `mouseup` is dispatched on document directly — guard `target.closest` with `typeof target.closest !== 'function'` check. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Async event handlers (`async function onMouseUp`) fire-and-forget — `dispatchEvent` is synchronous but the handler's promise is not awaited by the DOM. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Module-level state (`let isEnabled = true`) persists across test cases — must reset in `beforeEach`. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Tooltip positioning requires `window.scrollY` offset to handle scrolled pages correctly. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `event.target` can be `document` (not an Element) when `mouseup` is dispatched on document directly — guard `target.closest` with `typeof target.closest !== 'function'` check. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Async event handlers (`async function onMouseUp`) fire-and-forget — `dispatchEvent` is synchronous but the handler's promise is not awaited by the DOM. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Module-level state (`let isEnabled = true`) persists across test cases — must reset in `beforeEach`. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Tooltip positioning requires `window.scrollY` offset to handle scrolled pages correctly. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Hover Translate
-- `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Element skip logic must check both `DATA_ATTRS.TRANSLATED` and `DATA_ATTRS.ROLE` to avoid re-translating hover'd elements. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- `hoverCache` (Map<Element, string>) prevents redundant API calls when re-hovering same element. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Hover delay clamped to 200-500ms range for UX balance. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Element skip logic must check both `DATA_ATTRS.TRANSLATED` and `DATA_ATTRS.ROLE` to avoid re-translating hover'd elements. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `hoverCache` (Map<Element, string>) prevents redundant API calls when re-hovering same element. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Hover delay clamped to 200-500ms range for UX balance. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Keyboard Shortcuts
-- Hybrid approach: global shortcuts via `chrome.commands` (4 max suggested_key entries), page-specific via `document.addEventListener('keydown')`. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Capture phase (`true` as third arg) ensures shortcuts intercept before page handlers. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- `chrome.commands` shortcuts are customizable by users at `chrome://extensions/shortcuts`. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- Hybrid approach: global shortcuts via `chrome.commands` (4 max suggested_key entries), page-specific via `document.addEventListener('keydown')`. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Capture phase (`true` as third arg) ensures shortcuts intercept before page handlers. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `chrome.commands` shortcuts are customizable by users at `chrome://extensions/shortcuts`. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Context Menus
-- `chrome.contextMenus.create` must be called inside `runtime.onInstalled` (not at top level) to avoid duplicate entries. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- `documentUrlPatterns` array on menu items enables platform-specific entries (e.g., subtitle translate only on YouTube/Udemy/Coursera). (from: phase4-launch-ready_20260410, active 2026-04-10)
-- Context menu `onClicked` handler receives `info.selectionText` for text selection context. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `chrome.contextMenus.create` must be called inside `runtime.onInstalled` (not at top level) to avoid duplicate entries. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `documentUrlPatterns` array on menu items enables platform-specific entries (e.g., subtitle translate only on YouTube/Udemy/Coursera). (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- Context menu `onClicked` handler receives `info.selectionText` for text selection context. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Performance
-- `requestIdleCallback` with `{ timeout: 2000 }` prevents starvation while deferring non-critical mutation processing. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- `requestAnimationFrame`-based DOM write batching via `scheduleDomWrite()` coalesces multiple writes into single frame. (from: phase4-launch-ready_20260410, active 2026-04-10)
-- ViewportObserver already implements 100ms batch delay — adequate for translation triggers. (from: phase4-launch-ready_20260410, active 2026-04-10)
+- `requestIdleCallback` with `{ timeout: 2000 }` prevents starvation while deferring non-critical mutation processing. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `requestAnimationFrame`-based DOM write batching via `scheduleDomWrite()` coalesces multiple writes into single frame. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- ViewportObserver already implements 100ms batch delay — adequate for translation triggers. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Build & Packaging
 - `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, archived 2026-04-10)
@@ -120,6 +120,16 @@ Reusable patterns discovered during development. Read this before starting new w
 - Position: Fixed bottom-right, stacked with gap-2. (from: phase5-settings-ux_20260410, archived 2026-04-10)
 - No external state management: Self-contained useState, no Zustand integration needed. (from: phase5-settings-ux_20260410, archived 2026-04-10)
 
+## Popup UI
+- Dropdown redesign: permanently exposed quick settings panel eliminates collapsible disclosure pattern. (from: popup-redesign, 2026-04-10)
+
+## Content Script
+- cssInjectionMode must be 'manifest' (not 'ui') for inject.css themes to apply on host pages. (from: display-theme-fix_20260410, archived 2026-04-10)
+- Inline layout elements (e.g. `<a>`, `<span>` with display:inline) need special translation placement — inject after the element, not as a sibling block. (from: display-theme-fix_20260410, archived 2026-04-10)
+- `contenteditable` check needs both attribute (`getAttribute('contenteditable') === 'true'`) and property (`isContentEditable`) — jsdom doesn't reflect the property from the attribute. (from: test-fix, 2026-04-10)
+- Test files moved to `__tests__/` subdirectories must update relative imports (e.g. `./content` → `../content`). (from: test-fix, 2026-04-10)
+- `chrome.runtime.sendMessage` mock must return a Promise (`.mockResolvedValue(undefined)`) — source code calls `.catch()` on the result. (from: test-fix, 2026-04-10)
+
 ---
-Last refreshed: 2026-04-10T14:05:00+07:00
-Codebase health: 389 tests across 31 files, 433KB build (chrome-mv3)
+Last refreshed: 2026-04-10T15:30:00+07:00
+Codebase health: 400 tests across 32 files, 504KB build (chrome-mv3)

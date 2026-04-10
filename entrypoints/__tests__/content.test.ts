@@ -13,7 +13,7 @@ vi.mock('@/content/textSelection');
 vi.mock('@/content/hoverTranslate');
 vi.mock('@/content/keyboardShortcuts');
 
-import { startTranslation } from './content';
+import { startTranslation } from '../content';
 import { applyTheme, applyPosition, applyDarkMode } from '@/content/translationDisplay';
 
 describe('content.ts', () => {
@@ -262,7 +262,7 @@ describe('content.ts', () => {
 
   describe('stopTranslation cleanup', () => {
     it('removes data-lingua-theme attribute when translation stops', async () => {
-      const { stopTranslation } = await import('./content');
+      const { stopTranslation } = await import('../content');
 
       // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');
@@ -275,7 +275,7 @@ describe('content.ts', () => {
     });
 
     it('removes data-lingua-position attribute when translation stops', async () => {
-      const { stopTranslation } = await import('./content');
+      const { stopTranslation } = await import('../content');
 
       // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');
@@ -288,7 +288,7 @@ describe('content.ts', () => {
     });
 
     it('removes lingua-dark class when translation stops', async () => {
-      const { stopTranslation } = await import('./content');
+      const { stopTranslation } = await import('../content');
 
       // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');

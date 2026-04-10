@@ -42,8 +42,9 @@ LinguaLens is an open-source, privacy-first Chrome extension for immersive bilin
 - Custom subtitle overlay (fallback renderer)
 
 ### UI & Settings
-- Popup UI (quick translate controls)
+- Popup UI (redesigned dropdown with permanent quick settings)
 - Options page (provider config, theme selection, site rules)
+- Shared component library (12 reusable components: Button, Card, Input, Modal, Select, Slider, Toggle, Toast, Badge, EmptyState, FieldGroup, ToastProvider)
 - Side panel (reading view)
 - Text selection translate popup
 - Mouse hover translation
@@ -71,10 +72,14 @@ LinguaLens is an open-source, privacy-first Chrome extension for immersive bilin
 - **Phase 1 — Foundation** (Archived 2026-04-09): Page translation pipeline, DOM walker, viewport observer, mutation watcher, translation display, background service worker, cache manager, batcher, OpenAI-compatible provider. 94 tests passing.
 - **Phase 2 — Subtitles** (Archived 2026-04-09): Video subtitle translation engine with XHR/fetch interception, MAIN world injection, postMessage bridge, WebVTT/SRT parsers, bilingual VTT builder, YouTube/Udemy/Coursera handlers, custom subtitle overlay with controls.
 - **Phase 3 — UX Polish & LLM Provider** (Archived 2026-04-10): 16 CSS themes system, Zustand settings store with chrome.storage sync, provider connection tester, template-based system prompt, full Options page with 8-tab vertical layout, enhanced popup with quick settings. 283 tests passing across 24 files.
-- **Phase 4 — Launch-Ready Advanced Features** (Active 2026-04-10): Text selection translate popup, mouse hover translate, keyboard shortcuts (hybrid global + page-specific), context menu integration, performance optimizations (requestIdleCallback, DOM batching), Chrome Web Store packaging (119KB zip), project documentation (README, CONTRIBUTING, PRIVACY). 370 tests passing across 30 files.
+- **Phase 4 — Launch-Ready Advanced Features** (Archived 2026-04-10): Text selection translate popup, mouse hover translate, keyboard shortcuts (hybrid global + page-specific), context menu integration, performance optimizations (requestIdleCallback, DOM batching), Chrome Web Store packaging (119KB zip), project documentation (README, CONTRIBUTING, PRIVACY). 370 tests passing across 30 files.
+- **Phase 5 — Settings UI/UX Overhaul** (Archived 2026-04-10): 12-component shared UI library (Button, Card, Input, Modal, Select, Slider, Toggle, Toast, Badge, EmptyState, FieldGroup, ToastProvider), sidebar navigation redesign, CSS-only animations, accessibility compliance.
+- **Provider Simplification** (Archived 2026-04-10): Consolidated multi-provider system into single OpenAI-compatible endpoint.
+- **Theme Preview** (Archived 2026-04-10): Live theme preview component with light/dark mode toggle, integrated into Options page.
+- **Display Theme Fix** (Archived 2026-04-10): Fixed cssInjectionMode to 'manifest', corrected inline layout element translation placement.
 
-### In Progress
-- Phase 5: Settings UI/UX overhaul (shared component library, sidebar redesign, section refactoring)
+### Current State
+- All tracks completed and archived. 400 tests passing across 32 files. 504KB build.
 
 ## Out of Scope (Initial Release)
 

@@ -1,46 +1,71 @@
 {
-  "last_refresh": "2026-04-10T13:24:00+07:00",
+  "last_refresh": "2026-04-10T15:30:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/tech-stack.md",
-      "change": "Specified WXT version 0.20.20 (was 'latest')"
-    },
-    {
-      "file": "conductor/tech-stack.md",
-      "change": "Removed Husky + lint-staged from Code Quality (not installed)"
-    },
-    {
-      "file": "conductor/tech-stack.md",
-      "change": "Updated CI/CD to manual publishing via pnpm zip (removed GitHub Actions)"
+      "file": "conductor/product.md",
+      "change": "Moved Phase 4 from Active to Archived, Phase 5 from In Progress to Archived"
     },
     {
       "file": "conductor/product.md",
-      "change": "Moved Phase 4 from In Progress to Completed with 370 tests / 30 files"
+      "change": "Added 3 missing completed tracks: provider-simplify, theme-preview, display-theme-fix"
     },
     {
-      "file": "conductor/workflow.md",
-      "change": "Added 'Run pnpm lint before commit' to Code Review Checklist"
+      "file": "conductor/product.md",
+      "change": "Updated UI & Settings section with popup redesign, 12-component shared library"
+    },
+    {
+      "file": "conductor/product.md",
+      "change": "Updated test count from 370/30 to 400/32, build from 423KB to 504KB"
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Elevated Phase 4 learnings: Text Selection, Hover Translate, Keyboard Shortcuts, Context Menus, Performance, Build & Packaging"
+      "change": "Updated 17 Phase 4 patterns from 'active' to 'archived' status"
+    },
+    {
+      "file": "conductor/patterns.md",
+      "change": "Added 5 new patterns: Popup UI, Content Script (cssInjectionMode, inline layout, contenteditable, imports, sendMessage mock)"
+    },
+    {
+      "file": "conductor/patterns.md",
+      "change": "Updated footer stats: 400 tests / 32 files / 504KB"
+    },
+    {
+      "file": "content/domWalker.ts",
+      "change": "Fixed contentEditable skip: added getAttribute('contenteditable') fallback for jsdom"
+    },
+    {
+      "file": "services/__tests__/background.test.ts",
+      "change": "Fixed chrome.runtime.sendMessage mock to return Promise (was undefined)"
+    },
+    {
+      "file": "entrypoints/__tests__/content.test.ts",
+      "change": "Fixed 4 broken relative imports: ./content → ../content"
     }
   ],
   "drift_summary": {
-    "tech_stack": "3 drifts fixed (WXT version, Husky/lint-staged, CI/CD)",
-    "product": "1 drift fixed (Phase 4 status)",
-    "workflow": "1 drift fixed (added lint check)",
-    "patterns": "6 new patterns elevated from Phase 4 learnings",
-    "beads": "No Beads drift detected (Phase 4 not tracked in Beads)"
+    "tech_stack": "No drift detected",
+    "product": "4 drifts fixed (Phase 4/5 status, missing tracks, test counts, UI section)",
+    "workflow": "No drift detected",
+    "patterns": "3 drifts fixed (17 active→archived, 5 new patterns, footer stats)",
+    "tests": "6 failing tests fixed (1 domWalker, 5 background, 1 content import suite)"
   },
-  "beads_check": "Beads CLI available, no phase-specific issues found",
-  "active_tracks": ["phase5-settings-ux_20260410"],
-  "archived_tracks": ["phase1-foundation_20260409", "phase2-subtitles_20260409", "phase3-ux-polish_20260410"],
+  "beads_check": "Beads CLI available, no Beads drift detected (no active tracks in Beads)",
+  "active_tracks": [],
+  "archived_tracks": [
+    "phase1-foundation_20260409",
+    "phase2-subtitles_20260409",
+    "phase3-ux-polish_20260410",
+    "provider-simplify_20260410",
+    "phase4-launch-ready_20260410",
+    "phase5-settings-ux_20260410",
+    "theme-preview_20260410",
+    "display-theme-fix_20260410"
+  ],
   "codebase_health": {
-    "tests": "370 passed (30 files)",
-    "build": "423.02 KB (chrome-mv3)",
-    "git_status": "clean",
-    "zip": "119 KB compressed"
+    "tests": "400 passed (32 files)",
+    "build": "504.21 KB (chrome-mv3)",
+    "git_status": "clean (1 untracked: langchain_page.html)",
+    "source_files": "72 source files, 39 test files"
   }
 }
