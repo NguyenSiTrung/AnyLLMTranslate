@@ -13,6 +13,7 @@ import { loadSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
+import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -22,6 +23,7 @@ let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
 let textSelectionCleanup: (() => void) | null = null;
 let hoverTranslateCleanup: (() => void) | null = null;
+let keyboardShortcutsCleanup: (() => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -108,6 +110,9 @@ async function initInteractionFeatures(): Promise<void> {
   hoverTranslateCleanup = initHoverTranslate();
   setHoverTranslateEnabled(settings.hoverTranslateEnabled);
   setHoverDelay(settings.hoverDelay);
+
+  // Keyboard shortcuts (page-specific)
+  keyboardShortcutsCleanup = initKeyboardShortcuts();
 
   // Listen for settings changes to toggle features dynamically
   chrome.storage.onChanged.addListener((changes, areaName) => {

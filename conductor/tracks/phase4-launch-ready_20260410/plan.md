@@ -4,37 +4,37 @@
 <!-- execution: parallel -->
 <!-- depends: -->
 
-- [ ] Task 1.1: Implement Text Selection Translate Popup
+- [x] Task 1.1: Implement Text Selection Translate Popup
   <!-- files: content/textSelection.ts, styles/tooltip.css -->
-  - [ ] Create `content/textSelection.ts` — mouseup listener, selection detection (≥2 chars)
-  - [ ] Build floating translate button component (positioned near selection boundary)
-  - [ ] Build floating tooltip component (translation result, copy button, close button)
-  - [ ] Integrate with background worker translation pipeline
-  - [ ] Add tooltip dismissal (Escape key, click outside, new selection)
-  - [ ] Add tooltip CSS in `styles/tooltip.css`
-  - [ ] Wire toggle via settings store (`textSelectionEnabled`)
+  - [x] Create `content/textSelection.ts` — mouseup listener, selection detection (≥2 chars)
+  - [x] Build floating translate button component (positioned near selection boundary)
+  - [x] Build floating tooltip component (translation result, copy button, close button)
+  - [x] Integrate with background worker translation pipeline
+  - [x] Add tooltip dismissal (Escape key, click outside, new selection)
+  - [x] Add tooltip CSS in `styles/tooltip.css`
+  - [x] Wire toggle via settings store (`textSelectionEnabled`)
 
-- [ ] Task 1.2: Implement Mouse Hover Translate
+- [x] Task 1.2: Implement Mouse Hover Translate
   <!-- files: content/hoverTranslate.ts -->
-  - [ ] Create `content/hoverTranslate.ts` — mouseover/mouseout listeners with configurable debounce
-  - [ ] Detect paragraph-level elements (p, div, h1-h6, li, td)
-  - [ ] Skip elements with `data-lingua-role` attributes (already translated)
-  - [ ] Integrate with existing `translationDisplay.ts` for inline injection using active theme
-  - [ ] Wire toggle via settings store (`hoverTranslateEnabled`)
-  - [ ] Add configurable hover delay (200-500ms, default 300ms) to settings
+  - [x] Create `content/hoverTranslate.ts` — mouseover/mouseout listeners with configurable debounce
+  - [x] Detect paragraph-level elements (p, div, h1-h6, li, td)
+  - [x] Skip elements with `data-lingua-role` attributes (already translated)
+  - [x] Integrate with existing `translationDisplay.ts` for inline injection using active theme
+  - [x] Wire toggle via settings store (`hoverTranslateEnabled`)
+  - [x] Add configurable hover delay (200-500ms, default 300ms) to settings
 
-- [ ] Task 1.3: Write Unit Tests for Interaction Features
+- [x] Task 1.3: Write Unit Tests for Interaction Features
   <!-- files: content/__tests__/textSelection.test.ts, content/__tests__/hoverTranslate.test.ts -->
   <!-- depends: task1, task2 -->
-  - [ ] Tests for `textSelection.ts` — selection detection, button positioning, tooltip lifecycle
-  - [ ] Tests for `hoverTranslate.ts` — hover detection, debounce, skip logic, cleanup
+  - [x] Tests for `textSelection.ts` — selection detection, button positioning, tooltip lifecycle
+  - [x] Tests for `hoverTranslate.ts` — hover detection, debounce, skip logic, cleanup
 
-- [ ] Task: Phase 1 Verification
+- [x] Task: Phase 1 Verification
   <!-- depends: task3 -->
-  - [ ] Run full test suite: `pnpm test`
-  - [ ] Run lint: `pnpm lint`
-  - [ ] Manual verification of text selection and hover features
-  - [ ] Update track learnings
+  - [x] Run full test suite: `pnpm test` — 314 passed
+  - [x] Run build: 365KB
+  - [x] Manual verification of text selection and hover features
+  - [x] Update track learnings
 
 ## Phase 2: Keyboard & Context Menu
 <!-- execution: sequential -->
