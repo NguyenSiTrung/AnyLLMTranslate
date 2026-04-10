@@ -13,6 +13,7 @@ export type MessageAction =
   | 'testConnection'
   | 'updateSettings'
   | 'translateSubtitle'
+  | 'translateSelection'
   | 'FETCH_SUBTITLE';
 
 /** Translation request from content script → background */
@@ -66,6 +67,14 @@ export interface FetchSubtitleMessage {
   url: string;
 }
 
+/** Translate selection request from content script → background */
+export interface TranslateSelectionMessage {
+  action: 'translateSelection';
+  text: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -74,6 +83,7 @@ export type ExtensionMessage =
   | TestConnectionMessage
   | UpdateSettingsMessage
   | TranslateSubtitleMessage
+  | TranslateSelectionMessage
   | FetchSubtitleMessage;
 
 /** Translation result from background → content script */

@@ -9,6 +9,7 @@ import type {
   StatusResponse,
   TabTranslationStatus,
   TranslateSubtitleMessage,
+  TranslateSelectionMessage,
   FetchSubtitleMessage,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
@@ -242,6 +243,42 @@ async function handleFetchSubtitle(
   }
 }
 
+/** Handle translateSelection message — translate a single text string */
+async function handleTranslateSelection(
+  message: TranslateSelectionMessage,
+): Promise<{ success: boolean; translatedText?: string; error?: string }> {
+  try {
+    const service = await initService();
+    const texts = new Map<string, string>();
+    texts.set('selection', message.text);
+
+    const result = await service.translate({
+      texts,
+      sourceLanguage: message.sourceLanguage,
+      targetLanguage: message.targetLanguage,
+    });
+
+    if (result.success) {
+      const translated = result.translations.get('selection') ?? '';
+
+      // Cache the translation
+      await cacheTranslation(
+        message.text,
+        translated,
+        message.sourceLanguage,
+        message.targetLanguage,
+      );
+
+      return { success: true, translatedText: translated };
+    } else {
+      return { success: false, error: result.error ?? 'Translation failed' };
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Selection translation failed';
+    return { success: false, error: errorMsg };
+  }
+}
+
 /** Main message router */
 export function handleMessage(
   message: ExtensionMessage,
@@ -264,6 +301,8 @@ export function handleMessage(
       return handleTranslateSubtitle(message);
     case 'FETCH_SUBTITLE':
       return handleFetchSubtitle(message);
+    case 'translateSelection':
+      return handleTranslateSelection(message);
     default:
       return undefined;
   }

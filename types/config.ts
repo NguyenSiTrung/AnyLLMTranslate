@@ -129,6 +129,12 @@ export interface ExtensionSettings {
   customSystemPrompt: string | null;
   /** Debug mode toggle */
   debugMode: boolean;
+  /** Text selection translate enabled */
+  textSelectionEnabled: boolean;
+  /** Mouse hover translate enabled */
+  hoverTranslateEnabled: boolean;
+  /** Hover translate delay in ms (200-500, default 300) */
+  hoverDelay: number;
 }
 
 /** Provider preset definitions */
@@ -175,6 +181,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
   customSystemPrompt: null,
   debugMode: false,
+  textSelectionEnabled: true,
+  hoverTranslateEnabled: false,
+  hoverDelay: 300,
 };
 
 /** All available provider presets */

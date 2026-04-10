@@ -1,6 +1,7 @@
 /**
  * WXT Content Script entrypoint.
  * Orchestrates: domWalker → viewportObserver → background message → translationDisplay
+ * Plus: text selection translate, hover translate
  */
 
 import type { TranslationPiece } from '@/types/translation';
@@ -10,12 +11,17 @@ import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
+import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
+import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
+import '@/styles/tooltip.css';
 
 let viewportObserver: ViewportObserver | null = null;
 let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
+let textSelectionCleanup: (() => void) | null = null;
+let hoverTranslateCleanup: (() => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -90,6 +96,38 @@ export async function toggleTranslation(): Promise<void> {
   }
 }
 
+/** Initialize interaction features based on settings */
+async function initInteractionFeatures(): Promise<void> {
+  const settings = await loadSettings();
+
+  // Text selection translate
+  textSelectionCleanup = initTextSelection();
+  setTextSelectionEnabled(settings.textSelectionEnabled);
+
+  // Hover translate
+  hoverTranslateCleanup = initHoverTranslate();
+  setHoverTranslateEnabled(settings.hoverTranslateEnabled);
+  setHoverDelay(settings.hoverDelay);
+
+  // Listen for settings changes to toggle features dynamically
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    const settingsKey = 'lingua-lens-settings';
+    if (changes[settingsKey]?.newValue) {
+      const newSettings = changes[settingsKey].newValue;
+      if (typeof newSettings.textSelectionEnabled === 'boolean') {
+        setTextSelectionEnabled(newSettings.textSelectionEnabled);
+      }
+      if (typeof newSettings.hoverTranslateEnabled === 'boolean') {
+        setHoverTranslateEnabled(newSettings.hoverTranslateEnabled);
+      }
+      if (typeof newSettings.hoverDelay === 'number') {
+        setHoverDelay(newSettings.hoverDelay);
+      }
+    }
+  });
+}
+
 /** Listen for messages from popup/background */
 function setupMessageListener(): void {
   chrome.runtime.onMessage.addListener((message) => {
@@ -110,6 +148,7 @@ export default defineContentScript({
   async main() {
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
+    await initInteractionFeatures();
     console.log('[LinguaLens] Content script loaded');
   },
 });

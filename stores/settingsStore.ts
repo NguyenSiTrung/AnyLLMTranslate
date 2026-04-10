@@ -155,5 +155,8 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     subtitleSettings: state.subtitleSettings,
     customSystemPrompt: state.customSystemPrompt,
     debugMode: state.debugMode,
+    textSelectionEnabled: state.textSelectionEnabled,
+    hoverTranslateEnabled: state.hoverTranslateEnabled,
+    hoverDelay: state.hoverDelay,
   };
 }
