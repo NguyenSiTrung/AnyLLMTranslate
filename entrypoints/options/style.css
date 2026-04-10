@@ -7,16 +7,22 @@
 
 /* === Page-level resets === */
 
+html {
+  min-width: 1000px;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #09090b;
   color: #fafafa;
   min-height: 100vh;
+  min-width: 1000px;
 }
 
 #root {
   min-height: 100vh;
+  min-width: 1000px;
 }
 
 /* Custom scrollbar */
@@ -43,9 +49,9 @@ select, input, textarea { font-family: inherit; }
 .settings-sidebar {
   position: sticky;
   top: 0;
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -58,15 +64,15 @@ select, input, textarea { font-family: inherit; }
 .sidebar-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 16px;
+  gap: 10px;
+  padding: 16px 20px;
   border-bottom: 1px solid #27272a;
   background: linear-gradient(180deg, #18181b, #09090b);
 }
 
 .sidebar-brand-icon {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   color: #60a5fa;
   flex-shrink: 0;
 }
@@ -99,8 +105,8 @@ select, input, textarea { font-family: inherit; }
 }
 
 .sidebar-group-label {
-  padding: 10px 16px 4px;
-  font-size: 9px;
+  padding: 10px 20px 4px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: #52525b;
@@ -113,13 +119,13 @@ select, input, textarea { font-family: inherit; }
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  height: 36px;       /* ← Fixed height = all tabs identical */
-  padding: 0 16px;
+  height: 40px;       /* ← Fixed height = all tabs identical */
+  padding: 0 20px;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 14px;
   color: #a1a1aa;
   cursor: pointer;
   transition: all 150ms ease;
@@ -157,8 +163,8 @@ select, input, textarea { font-family: inherit; }
 
 /* Tab icon — fixed size */
 .sidebar-tab-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
@@ -171,7 +177,7 @@ select, input, textarea { font-family: inherit; }
 
 /* Footer */
 .sidebar-footer {
-  padding: 10px 16px;
+  padding: 12px 20px;
   border-top: 1px solid #27272a;
 }
 
@@ -207,7 +213,7 @@ select, input, textarea { font-family: inherit; }
 
 .settings-content-inner {
   width: 100%;
-  max-width: 860px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 32px 40px;
   box-sizing: border-box;
@@ -237,25 +243,25 @@ select, input, textarea { font-family: inherit; }
 
 @media (max-width: 600px) {
   .settings-sidebar {
-    width: 180px;
-    min-width: 180px;
-    max-width: 180px;
+    width: 240px;
+    min-width: 240px;
+    max-width: 240px;
   }
 
   .sidebar-tab {
-    height: 34px;
-    font-size: 12px;
-    padding: 0 12px;
-    gap: 8px;
+    height: 38px;
+    font-size: 13px;
+    padding: 0 16px;
+    gap: 10px;
   }
 
   .sidebar-group-label {
-    padding: 8px 12px 3px;
-    font-size: 8px;
+    padding: 8px 16px 3px;
+    font-size: 9px;
   }
 
   .sidebar-header {
-    padding: 12px;
+    padding: 12px 16px;
   }
 
   .settings-content-inner {

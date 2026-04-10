@@ -123,7 +123,15 @@ export default function App() {
             id="open-options-btn"
             className="p-1.5 rounded-md hover:bg-zinc-800 transition-colors text-zinc-400"
             title="Open full settings"
-            onClick={() => chrome.runtime.openOptionsPage?.()}
+            onClick={() => {
+              chrome.windows.create({
+                url: chrome.runtime.getURL('options.html'),
+                type: 'popup',
+                width: 1200,
+                height: 800,
+                focused: true,
+              });
+            }}
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -246,7 +254,15 @@ export default function App() {
 
           {/* Open Full Settings */}
           <button
-            onClick={() => chrome.runtime.openOptionsPage?.()}
+            onClick={() => {
+              chrome.windows.create({
+                url: chrome.runtime.getURL('options.html'),
+                type: 'popup',
+                width: 1200,
+                height: 800,
+                focused: true,
+              });
+            }}
             className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
             <ExternalLink className="w-3 h-3" />
