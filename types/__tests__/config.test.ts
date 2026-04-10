@@ -55,12 +55,9 @@ describe('config types', () => {
   });
 
   describe('ProviderPreset', () => {
-    it('supports 9 preset options', () => {
-      const presets: ProviderPreset[] = [
-        'openai', 'deepseek', 'groq', 'ollama',
-        'lmstudio', 'together', 'mistral', 'openrouter', 'custom',
-      ];
-      expect(presets).toHaveLength(9);
+    it('supports 2 preset options', () => {
+      const presets: ProviderPreset[] = ['ollama', 'custom'];
+      expect(presets).toHaveLength(2);
     });
   });
 
@@ -163,8 +160,8 @@ describe('config types', () => {
   });
 
   describe('PROVIDER_PRESETS', () => {
-    it('has 9 preset definitions', () => {
-      expect(PROVIDER_PRESETS).toHaveLength(9);
+    it('has 2 preset definitions', () => {
+      expect(PROVIDER_PRESETS).toHaveLength(2);
     });
 
     it('includes ollama as first preset', () => {

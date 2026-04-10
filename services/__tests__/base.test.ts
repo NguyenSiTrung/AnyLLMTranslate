@@ -159,8 +159,8 @@ describe('validateProviderConfig', () => {
 
   it('rejects missing API key when required', () => {
     const result = validateProviderConfig({
-      preset: 'openai', baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-4',
-      temperature: 0.3, maxTokens: 100, displayName: 'OpenAI', requiresApiKey: true,
+      preset: 'custom', baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'gpt-4',
+      temperature: 0.3, maxTokens: 100, displayName: 'Custom', requiresApiKey: true,
     });
     expect(result.valid).toBe(false);
   });

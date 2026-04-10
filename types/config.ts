@@ -4,16 +4,7 @@
  */
 
 /** Provider preset identifiers */
-export type ProviderPreset =
-  | 'openai'
-  | 'deepseek'
-  | 'groq'
-  | 'ollama'
-  | 'lmstudio'
-  | 'together'
-  | 'mistral'
-  | 'openrouter'
-  | 'custom';
+export type ProviderPreset = 'ollama' | 'custom';
 
 /** Provider configuration for OpenAI-compatible APIs */
 export interface ProviderConfig {
@@ -194,58 +185,6 @@ export const PROVIDER_PRESETS: ProviderPresetDefinition[] = [
     baseUrl: 'http://localhost:11434/v1',
     defaultModel: 'gemma3:4b',
     requiresApiKey: false,
-  },
-  {
-    preset: 'lmstudio',
-    displayName: 'LM Studio',
-    baseUrl: 'http://localhost:1234/v1',
-    defaultModel: 'default',
-    requiresApiKey: false,
-  },
-  {
-    preset: 'openai',
-    displayName: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-4o-mini',
-    requiresApiKey: true,
-    placeholder: 'sk-...',
-  },
-  {
-    preset: 'deepseek',
-    displayName: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    defaultModel: 'deepseek-chat',
-    requiresApiKey: true,
-  },
-  {
-    preset: 'groq',
-    displayName: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    defaultModel: 'llama-3.3-70b-versatile',
-    requiresApiKey: true,
-    placeholder: 'gsk_...',
-  },
-  {
-    preset: 'together',
-    displayName: 'Together AI',
-    baseUrl: 'https://api.together.xyz/v1',
-    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-    requiresApiKey: true,
-  },
-  {
-    preset: 'mistral',
-    displayName: 'Mistral',
-    baseUrl: 'https://api.mistral.ai/v1',
-    defaultModel: 'mistral-small-latest',
-    requiresApiKey: true,
-  },
-  {
-    preset: 'openrouter',
-    displayName: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'meta-llama/llama-3.3-70b-instruct',
-    requiresApiKey: true,
-    placeholder: 'sk-or-...',
   },
   {
     preset: 'custom',

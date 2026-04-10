@@ -15,11 +15,11 @@ const mockConfig: ProviderConfig = {
 
 const mockConfigWithKey: ProviderConfig = {
   ...mockConfig,
-  preset: 'openai',
-  baseUrl: 'https://api.openai.com/v1',
+  preset: 'custom',
+  baseUrl: 'https://api.example.com/v1',
   apiKey: 'sk-test-key',
   model: 'gpt-4o-mini',
-  displayName: 'OpenAI',
+  displayName: 'Custom',
   requiresApiKey: true,
 };
 
@@ -205,7 +205,7 @@ describe('OpenAICompatibleService', () => {
 
       const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       const url = fetchCall[0] as string;
-      expect(url).toContain('api.openai.com');
+      expect(url).toContain('api.example.com');
     });
   });
 });
