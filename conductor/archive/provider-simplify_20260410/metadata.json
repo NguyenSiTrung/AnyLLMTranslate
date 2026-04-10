@@ -1,12 +1,12 @@
 {
   "track_id": "provider-simplify_20260410",
   "type": "refactor",
-  "status": "new",
+  "status": "completed",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": null,
   "created_at": "2026-04-10T12:35:00+07:00",
-  "updated_at": "2026-04-10T12:35:00+07:00",
+  "updated_at": "2026-04-10T12:38:00+07:00",
   "description": "Handle Provider - only support Ollama and Custom with OpenAI-compatible, remove other providers",
   "beads_epic": "AnyLLMTranslate-1mh",
   "beads_tasks": {

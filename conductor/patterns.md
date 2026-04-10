@@ -56,6 +56,12 @@ Reusable patterns discovered during development. Read this before starting new w
 ## Build
 - pnpm not installed globally on this system — use `npx -y pnpm@latest exec` or `npx -y pnpm@latest install` for all pnpm commands. (from: phase1-foundation_20260409, archived 2026-04-09)
 
+## Refactoring
+- ProviderPreset type change requires immediate PROVIDER_PRESETS array update to avoid TypeScript errors (interdependent changes). (from: provider-simplify_20260410, archived 2026-04-10)
+- Test files using removed type values must be updated before TypeScript compilation will pass. (from: provider-simplify_20260410, archived 2026-04-10)
+- UI components using array.map() automatically reflect array changes - no UI code updates needed for data-driven components. (from: provider-simplify_20260410, archived 2026-04-10)
+- Pre-existing lint errors in codebase are not introduced by this refactor - refactoring should be lint-neutral. (from: provider-simplify_20260410, archived 2026-04-10)
+
 ---
-Last refreshed: 2026-04-10T10:10:00+07:00
-Codebase health: 283 tests across 24 files, 346KB build (chrome-mv3)
+Last refreshed: 2026-04-10T12:40:00+07:00
+Codebase health: 370 tests across 30 files, 423KB build (chrome-mv3)
