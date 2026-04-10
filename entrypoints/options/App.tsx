@@ -32,14 +32,14 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'DISPLAY',
     tabs: [
       { id: 'general', label: 'General', icon: Settings },
-      { id: 'themes', label: 'Display Themes', icon: Palette },
+      { id: 'themes', label: 'Themes', icon: Palette },
     ],
   },
   {
     label: 'TRANSLATION',
     tabs: [
-      { id: 'provider', label: 'Translation Provider', icon: Zap },
-      { id: 'dictionary', label: 'Custom Dictionary', icon: BookOpen },
+      { id: 'provider', label: 'Provider', icon: Zap },
+      { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
       { id: 'site-rules', label: 'Site Rules', icon: Globe },
     ],
   },
@@ -52,7 +52,7 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'SYSTEM',
     tabs: [
-      { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
+      { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
       { id: 'advanced', label: 'Advanced', icon: Wrench },
     ],
   },
@@ -136,34 +136,30 @@ export default function App() {
       >
         Skip to content
       </a>
-      <div className="flex min-h-screen bg-zinc-950">
+      <div className="settings-layout">
         {/* ── Sidebar ── */}
         <nav
-          className="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col shrink-0"
+          className="settings-sidebar"
           aria-label="Settings navigation"
         >
           {/* Brand header */}
-          <div className="flex items-center gap-2.5 px-5 py-5 border-b border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950">
-            <Languages className="w-6 h-6 text-blue-400" />
-            <span className="text-base font-semibold tracking-tight text-zinc-100">LinguaLens</span>
-            <span className="text-[10px] text-zinc-500 ml-auto font-mono">v0.1.0</span>
+          <div className="sidebar-header">
+            <Languages className="sidebar-brand-icon" />
+            <span className="sidebar-brand-name">LinguaLens</span>
+            <span className="sidebar-version">v0.1.0</span>
           </div>
 
           {/* Grouped tab list */}
           <div
-            className="flex-1 py-2 overflow-y-auto"
+            className="sidebar-tabs"
             role="tablist"
             aria-orientation="vertical"
             onKeyDown={handleSidebarKeyDown}
           >
             {TAB_GROUPS.map((group) => (
-              <div key={group.label} className="mb-1">
+              <div key={group.label} className="sidebar-group">
                 {/* Group label */}
-                <div className="px-5 pt-3 pb-1">
-                  <span className="text-[10px] font-semibold tracking-widest text-zinc-600 uppercase">
-                    {group.label}
-                  </span>
-                </div>
+                <div className="sidebar-group-label">{group.label}</div>
                 {/* Group tabs */}
                 {group.tabs.map((tab) => {
                   const Icon = tab.icon;
@@ -177,18 +173,13 @@ export default function App() {
                       aria-selected={isActive}
                       aria-controls={`panel-${tab.id}`}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-3 px-5 py-2 text-sm transition-all duration-150 cursor-pointer relative ${
-                        isActive
-                          ? 'text-blue-400 bg-blue-500/10'
-                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 hover:translate-x-0.5'
-                      }`}
+                      className={`sidebar-tab ${isActive ? 'sidebar-tab--active' : ''}`}
                     >
-                      {/* Animated active indicator */}
                       {isActive && (
-                        <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-blue-400 rounded-full sidebar-indicator" />
+                        <div className="sidebar-tab-indicator" />
                       )}
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span>{tab.label}</span>
+                      <Icon className="sidebar-tab-icon" />
+                      <span className="sidebar-tab-label">{tab.label}</span>
                     </button>
                   );
                 })}
@@ -197,26 +188,22 @@ export default function App() {
           </div>
 
           {/* Auto-save badge in footer */}
-          <div className="px-5 py-3 border-t border-zinc-800">
-            <div
-              className={`flex items-center gap-1.5 text-xs transition-opacity duration-300 ${
-                showSaved ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-zinc-400">Auto-saved</span>
+          <div className="sidebar-footer">
+            <div className={`sidebar-save-badge ${showSaved ? 'sidebar-save-badge--visible' : ''}`}>
+              <Check className="sidebar-save-icon" />
+              <span>Auto-saved</span>
             </div>
           </div>
         </nav>
 
         {/* ── Content Area ── */}
         <main
-          className="flex-1 overflow-y-auto"
+          className="settings-content"
           id={`panel-${activeTab}`}
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
         >
-          <div id="settings-content" className="max-w-3xl mx-auto px-8 py-8">
+          <div id="settings-content" className="settings-content-inner">
             <div key={activeTab} className="tab-content-enter">
               {renderSection()}
             </div>
