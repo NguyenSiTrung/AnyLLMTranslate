@@ -121,131 +121,115 @@ Build a Chrome extension that replicates the core value proposition of Immersive
 
 ## 3. Tech Stack
 
-| Layer | Technology | Rationale |
-|-------|-----------|-----------|
-| **Language** | TypeScript 5.x | Type safety across all contexts |
-| **Build** | Vite + CRXJS or WXT | Hot reload, MV3-native, multi-entry builds |
-| **UI Framework** | React 18 + Tailwind CSS | Popup, options, side panel UIs |
-| **State** | Zustand + chrome.storage.local | Reactive, synced across contexts |
-| **CSS Injection** | CSS Custom Properties + inject.css | Theming without shadow DOM conflicts |
-| **Cache** | IndexedDB (via idb-keyval) | Translation result caching |
-| **Testing** | Vitest + Playwright | Unit tests + E2E extension testing |
-| **Linting** | ESLint + Prettier | Code quality |
-| **Packaging** | GitHub Actions → Chrome Web Store API | CI/CD |
+| Layer | Technology | Status |
+|-------|-----------|--------|
+| **Language** | TypeScript 5.9 | ✅ Implemented |
+| **Build/Framework** | **WXT 0.20** (Manifest V3 native) | ✅ Implemented |
+| **UI Framework** | **React 19** | ✅ Implemented |
+| **Styling (UI)** | **Tailwind CSS v4** (Vite plugin) | ✅ Implemented |
+| **Styling (Injected)** | Vanilla CSS (inject.css, subtitle.css, tooltip.css) | ✅ Implemented |
+| **State** | **Zustand v5** + `chrome.storage.local` | ✅ Implemented |
+| **Icons** | **Lucide React** | ✅ Implemented |
+| **Cache** | IndexedDB via `idb-keyval` (SHA-256 keys, TTL+LRU) | ✅ Implemented |
+| **Testing** | **Vitest 3.1** + `@testing-library/react` + `jsdom` | ✅ 400 tests, 32 files |
+| **Linting** | ESLint 9 + `typescript-eslint` + Prettier | ✅ Implemented |
+| **Packaging** | `wxt zip` → Chrome Web Store | ✅ Ready |
 
 ---
 
 ## 4. Project Structure
 
+> **✅ ACTUAL IMPLEMENTED STRUCTURE** (as of v1.0.0)
+
 ```
-lingua-lens/
-├── manifest.json                    # MV3 manifest
-├── vite.config.ts                   # Multi-entry build config
-├── package.json
-├── tsconfig.json
+AnyLLMTranslate/
+├── wxt.config.ts                        # WXT config: permissions, commands, Tailwind plugin
+├── package.json                         # name: lingua-lens, version: 1.0.0
+├── vitest.config.ts
+├── vitest.setup.ts
 │
-├── src/
-│   ├── background/
-│   │   ├── index.ts                 # Service worker entry
-│   │   ├── translationRouter.ts     # Routes to correct engine
-│   │   ├── languageDetector.ts      # Language detection logic
-│   │   ├── cacheManager.ts          # IndexedDB cache
-│   │   ├── contextMenus.ts          # Right-click translate
-│   │   └── commandHandler.ts        # Keyboard shortcut handler
-│   │
-│   ├── content/
-│   │   ├── index.ts                 # Content script entry
-│   │   ├── domWalker.ts             # Paragraph detection algorithm
-│   │   ├── translationDisplay.ts    # Bilingual DOM rendering
-│   │   ├── viewportObserver.ts      # Lazy/progressive translation
-│   │   ├── mutationWatcher.ts       # SPA/dynamic content
-│   │   ├── selectionTranslate.ts    # Text selection popup
-│   │   ├── hoverTranslate.ts        # Mouse hover translation
-│   │   └── restoreManager.ts        # Undo/restore original
-│   │
-│   ├── inject/
-│   │   ├── index.ts                 # Page-context script (MAIN world)
-│   │   ├── xhrInterceptor.ts        # XHR monkey-patch
-│   │   ├── fetchInterceptor.ts      # fetch() monkey-patch
-│   │   ├── messageBridge.ts         # postMessage protocol
-│   │   └── subtitleHandlers/
-│   │       ├── base.ts              # Abstract subtitle handler
-│   │       ├── udemy.ts             # Udemy subtitle interception
-│   │       ├── coursera.ts          # Coursera subtitle interception
-│   │       ├── youtube.ts           # YouTube subtitle interception
-│   │       ├── netflix.ts           # Netflix subtitle interception
-│   │       └── generic.ts           # Generic WebVTT handler
-│   │
-│   ├── services/
-│   │   ├── base.ts                  # Translation service interface
-│   │   └── openaiCompatible.ts      # OpenAI-compatible provider (single engine)
-│   │                                # Works with: OpenAI, DeepSeek, Groq,
-│   │                                # Ollama, LM Studio, vLLM, etc.
-│   │
-│   ├── ui/
-│   │   ├── popup/
-│   │   │   ├── App.tsx              # Popup React app
-│   │   │   ├── components/
-│   │   │   │   ├── QuickControls.tsx
-│   │   │   │   ├── ServicePicker.tsx
-│   │   │   │   ├── LanguagePicker.tsx
-│   │   │   │   └── TranslationToggle.tsx
-│   │   │   └── popup.html
-│   │   │
-│   │   ├── options/
-│   │   │   ├── App.tsx              # Options page
-│   │   │   ├── components/
-│   │   │   │   ├── GeneralSettings.tsx
-│   │   │   │   ├── TranslationRules.tsx
-│   │   │   │   ├── ThemePreview.tsx
-│   │   │   │   ├── APIKeyManager.tsx
-│   │   │   │   └── SiteRulesEditor.tsx
-│   │   │   └── options.html
-│   │   │
-│   │   └── sidePanel/
-│   │       ├── App.tsx              # Side panel
-│   │       └── sidePanel.html
-│   │
-│   ├── styles/
-│   │   ├── inject.css               # Bilingual display themes
-│   │   ├── subtitle.css             # Video subtitle overlay styles
-│   │   ├── selection.css            # Text selection popup styles
-│   │   └── themes/
-│   │       ├── underline.css
-│   │       ├── highlight.css
-│   │       ├── blockquote.css
-│   │       ├── paper.css
-│   │       ├── mask.css
-│   │       └── ...                  # 15+ theme files
-│   │
-│   ├── lib/
-│   │   ├── config.ts                # Settings store (chrome.storage)
-│   │   ├── siteRules.ts             # Per-site rule definitions
-│   │   ├── languages.ts             # Language codes + names
-│   │   ├── subtitleParser.ts        # WebVTT / SRT parser
-│   │   ├── textSplitter.ts          # Text batching (≤800 chars)
-│   │   └── constants.ts             # Shared constants
-│   │
-│   └── types/
-│       ├── messages.ts              # Message type definitions
-│       ├── config.ts                # Config type definitions
-│       ├── translation.ts           # Translation result types
-│       └── subtitle.ts              # Subtitle data types
+├── entrypoints/                         # WXT entry points (auto-registered)
+│   ├── background.ts                    # Service worker: message routing, context menus, chrome.commands
+│   ├── content.ts                       # Content script orchestrator: DOM translation pipeline
+│   ├── inject.content/index.ts          # In-page injected script: XHR/Fetch interception
+│   ├── popup/
+│   │   ├── App.tsx                      # Popup UI: lang selector, translate btn, theme/mode toggles
+│   │   └── main.tsx
+│   └── options/
+│       ├── App.tsx                      # Options page: sidebar nav + 8 tab sections
+│       ├── ThemePreview.tsx             # Live theme preview component
+│       ├── main.tsx
+│       └── sections/
+│           ├── GeneralSection.tsx       # Language, display mode, position, dark mode
+│           ├── ProviderSection.tsx      # API endpoint, key, model, connection test
+│           ├── ThemesSection.tsx        # 16 themes + ThemePreview
+│           ├── DictionarySection.tsx    # Glossary CRUD + CSV/JSON import/export
+│           ├── SiteRulesSection.tsx     # Per-site include/exclude selectors
+│           ├── SubtitlesSection.tsx     # Position, font size, opacity, toggle
+│           ├── ShortcutsSection.tsx     # Keyboard shortcut reference
+│           └── AdvancedSection.tsx      # Custom system prompt, cache management, debug
 │
-├── public/
-│   └── icons/
-│       ├── icon-16.png
-│       ├── icon-48.png
-│       └── icon-128.png
+├── content/                             # Content script modules
+│   ├── domWalker.ts                     # TreeWalker: text piece extraction + sentence splitting
+│   ├── viewportObserver.ts              # IntersectionObserver: lazy translation (200px margin, 100ms batch)
+│   ├── translationDisplay.ts            # DOM injection + applyTheme/Position/DarkMode
+│   ├── mutationWatcher.ts               # SPA/dynamic content detection (500ms debounce)
+│   ├── textSelection.ts                 # Floating translate button + tooltip w/ copy action
+│   ├── hoverTranslate.ts                # Hover translate (200–500ms delay, element cache)
+│   ├── keyboardShortcuts.ts             # Page-level shortcuts: Alt+H, Alt+D, Escape
+│   ├── messageBridge.ts                 # Thin messaging abstraction
+│   ├── subtitleCoordinator.ts           # Orchestrates subtitle modules
+│   ├── subtitleControls.ts              # Subtitle control overlay UI
+│   └── subtitleOverlay.ts               # Custom subtitle renderer
 │
-└── tests/
-    ├── unit/
-    │   ├── domWalker.test.ts
-    │   ├── subtitleParser.test.ts
-    │   └── translationService.test.ts
-    └── e2e/
-        ├── pageTranslation.test.ts
-        └── subtitleTranslation.test.ts
+├── inject/                              # In-page injected script modules (MAIN world)
+│   ├── fetchInterceptor.ts              # fetch() interception
+│   ├── xhrInterceptor.ts                # XHR interception
+│   ├── interceptorRegistry.ts           # Handler registry
+│   ├── messageBridge.ts                 # inject ↔ content messaging
+│   └── subtitleHandlers/
+│       ├── youtube.ts                   # YouTube subtitle interception
+│       ├── udemy.ts                     # Udemy subtitle interception
+│       ├── coursera.ts                  # Coursera subtitle interception
+│       └── registry.ts                  # Handler lookup table
+│
+├── services/                            # Background services
+│   ├── background.ts                    # Tab state machine + message handler
+│   ├── base.ts                          # Abstract TranslationService + prompt builder
+│   ├── openaiCompatible.ts              # OpenAI-compatible API client (any /v1/chat/completions)
+│   ├── batcher.ts                       # Request batching, deduplication, char-limit splitting
+│   ├── cacheManager.ts                  # IndexedDB cache (SHA-256, 30d TTL, 100MB LRU)
+│   └── providerTester.ts                # Connection testing with latency
+│
+├── stores/
+│   └── settingsStore.ts                 # Zustand store + chrome.storage.local sync
+│
+├── ui/                                  # Reusable component library (options page)
+│   ├── Button.tsx, Input.tsx, Select.tsx, Toggle.tsx
+│   ├── Slider.tsx, Badge.tsx, Card.tsx
+│   ├── Modal.tsx, Toast.tsx, ToastProvider.tsx
+│   ├── FieldGroup.tsx, EmptyState.tsx
+│
+├── styles/
+│   ├── inject.css                       # 16 themes + page/position states + dark mode
+│   ├── subtitle.css                     # Subtitle overlay styles
+│   └── tooltip.css                      # Selection translate tooltip styles
+│
+├── types/
+│   ├── config.ts                        # ExtensionSettings, ProviderConfig, ThemeName, SiteRule…
+│   ├── translation.ts                   # TranslationPiece, TranslationRequest, CacheEntry
+│   ├── messages.ts                      # Chrome message protocol types
+│   ├── subtitle.ts                      # Subtitle data types
+│   └── index.ts
+│
+└── lib/
+    ├── constants.ts                     # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
+    ├── config.ts                        # loadSettings() helper
+    ├── languages.ts                     # 30+ languages with ISO codes + native names
+    ├── glossary.ts                      # Glossary formatting + CSV/JSON import/export
+    ├── subtitleParser.ts                # WebVTT parser
+    ├── subtitleBuilder.ts               # Bilingual VTT builder
+    └── performance.ts                   # Performance measurement utilities
 ```
 
 ---
@@ -1727,49 +1711,72 @@ Overall ████████████████████████
 
 ## 17. Testing Strategy
 
-### 17.1 Unit Tests
+> **✅ ACTUAL STATUS: 400 tests / 32 test files — all passing (Vitest 3.1)**
 
-| Module | Test Focus |
-|--------|-----------|
-| `domWalker` | Paragraph detection on various HTML structures |
-| `subtitleParser` | WebVTT/SRT parsing edge cases |
-| `textSplitter` | Batching at character limits, sentence boundaries |
-| `translationService` | API response parsing, error handling |
-| `glossaryProtector` | Placeholder insertion/restoration |
-| `cacheManager` | Cache hit/miss, TTL, eviction |
-| `siteRules` | Rule matching by hostname/URL pattern |
+### 17.1 Unit Test Coverage (Implemented)
 
-### 17.2 E2E Tests (Playwright + Chrome Extension)
+| Test File(s) | Module Covered | Tests |
+|---|---|---|
+| `content/__tests__/domWalker.test.ts` | DOM walker piece extraction, sentence splitting | ✅ |
+| `content/__tests__/viewportObserver` _(via content.test.ts)_ | Lazy translation batching | ✅ |
+| `content/__tests__/translationDisplay.test.ts` | DOM injection, theme/position/darkmode | ✅ |
+| `content/__tests__/textSelection.test.ts` | Floating button, tooltip, copy/close | ✅ |
+| `content/__tests__/hoverTranslate.test.ts` | Debounced hover, element cache | ✅ |
+| `content/__tests__/keyboardShortcuts.test.ts` | Alt+H, Alt+D, Escape handlers | ✅ |
+| `content/__tests__/mutationWatcher.test.ts` | SPA mutation detection | ✅ |
+| `services/__tests__/background.test.ts` | Tab state machine, message handler | ✅ |
+| `services/__tests__/openaiCompatible.test.ts` | API client, error handling, JSON parsing | ✅ |
+| `services/__tests__/batcher.test.ts` | Deduplication, char-limit batch splitting | ✅ |
+| `services/__tests__/cacheManager.test.ts` | SHA-256 keys, TTL, LRU eviction | ✅ |
+| `services/__tests__/base.test.ts` | Prompt builder, response parser | ✅ |
+| `services/__tests__/providerTester.test.ts` | Connection test, latency | ✅ |
+| `stores/__tests__/settingsStore.test.ts` | Zustand store, chrome.storage sync | ✅ |
+| `types/__tests__/config.test.ts` | DEFAULT_SETTINGS, type guards | ✅ |
+| `styles/__tests__/themes.test.ts` | All 16 theme selectors, dark mode, states | ✅ |
+| `lib/__tests__/languages.test.ts` | 30+ languages, getLanguageName, validation | ✅ |
+| `lib/__tests__/glossary.test.ts` | CSV/JSON import/export | ✅ |
+| `lib/__tests__/performance.test.ts` | Performance utilities | ✅ |
+| `tests/unit/subtitleParser.test.ts` | WebVTT parsing, edge cases | ✅ |
+| `tests/unit/subtitleBuilder.test.ts` | Bilingual VTT builder | ✅ |
+| `tests/unit/youtubeHandler.test.ts` | YouTube URL patterns, transform | ✅ |
+| `tests/unit/udemyHandler.test.ts` | Udemy CDN patterns, parse | ✅ |
+| `tests/unit/courseraHandler.test.ts` | Coursera patterns, parse | ✅ |
+| `tests/unit/subtitleCoordinator.test.ts` | Coordinator orchestration | ✅ |
+| `tests/unit/subtitleControls.test.ts` | Controls UI, keyboard | ✅ |
+| `tests/unit/subtitleOverlay.test.ts` | Custom overlay rendering | ✅ |
+| `tests/unit/interceptorRegistry.test.ts` | Handler lookup | ✅ |
+| `tests/unit/messageBridge.test.ts` | inject ↔ content messaging | ✅ |
+| `entrypoints/__tests__/content.test.ts` | Content script entrypoint integration | ✅ |
+| `entrypoints/options/__tests__/ThemePreview.test.tsx` | ThemePreview component, a11y | ✅ |
+| `tests/ui-primitives.test.tsx` + `ui-toast-modal.test.tsx` | UI component library | ✅ |
+
+**Run tests:**
+```bash
+npm test                     # Run all 400 tests
+npm run test:watch           # Watch mode
+npm run test:coverage        # Coverage report
+```
+
+### 17.2 E2E Tests (Playwright — Planned)
+
+E2E tests using Playwright + Chrome extension loading are planned but not yet implemented. Key scenarios to cover:
 
 ```typescript
-// Example E2E test
-test('translates Wikipedia article bilingually', async ({ page }) => {
-  await page.goto('https://en.wikipedia.org/wiki/Machine_learning');
-  
-  // Trigger translation
-  await page.keyboard.press('Alt+A');
-  
-  // Wait for translations to appear
-  await page.waitForSelector('[data-lingua-role="translation"]');
-  
-  // Verify bilingual display
-  const original = await page.$('[data-lingua-role="original"]');
-  const translated = await page.$('[data-lingua-role="translation"]');
-  
-  expect(original).toBeTruthy();
-  expect(translated).toBeTruthy();
-  expect(await translated!.isVisible()).toBe(true);
-});
+// Planned E2E scenarios
+test('translates paragraph on page trigger', ...);
+test('subtitle interception on YouTube', ...);
+test('text selection tooltip with copy', ...);
+test('hover translate with delay', ...);
 ```
 
 ### 17.3 Manual Testing Matrix
 
-| Browser | Page Trans. | Subtitles | Popup | Options |
-|---------|------------|-----------|-------|---------|
-| Chrome Stable | ✓ | ✓ | ✓ | ✓ |
-| Chrome Beta | ✓ | ✓ | ✓ | ✓ |
-| Edge | ✓ | ✓ | ✓ | ✓ |
-| Brave | ✓ | ✓ | ✓ | ✓ |
+| Browser | Page Trans. | Subtitles | Popup UI | Options UI |
+|---------|------------|-----------|----------|-----------|
+| Chrome Stable | ✅ | ✅ | ✅ | ✅ |
+| Chrome Beta | ✅ | ✅ | ✅ | ✅ |
+| Edge | ✅ | ✅ | ✅ | ✅ |
+| Brave | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -1881,29 +1888,38 @@ Supporting 100+ language pairs. Priority languages:
 ```bash
 # Setup
 git clone <repo>
-cd lingua-lens
+cd AnyLLMTranslate
 npm install
 
-# Development (with hot reload)
-npm run dev           # Builds + watches
-# Load dist/ as unpacked extension in chrome://extensions
+# Development (Chrome, with hot reload)
+npm run dev
+# Load .output/chrome-mv3 as unpacked extension in chrome://extensions
+
+# Development (Firefox)
+npm run dev:firefox
 
 # Build for production
-npm run build         # Output in dist/
+npm run build         # Output in .output/chrome-mv3
+npm run build:firefox # Output in .output/firefox-mv2
 
 # Run tests
-npm run test          # Vitest unit tests
-npm run test:e2e      # Playwright E2E tests
+npm test              # Vitest — 400 unit tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
 
-# Lint
+# Lint & format
 npm run lint
 npm run lint:fix
+npm run format        # Prettier
+
+# Type check only
+npm run compile       # tsc --noEmit
 
 # Package for Chrome Web Store
-npm run package       # Creates lingua-lens.zip
+npm run zip           # Creates .output/lingua-lens-<version>-chrome.zip
 ```
 
 ---
 
-*Plan Version: 1.6 | Created: April 2026 | Updated: April 10, 2026 | Status: Phase 4 Complete — v1.0.0 Ready*
-*Change: Conductor refresh — Phase 4 completed (Text selection, hover, shortcuts, menus, docs, perf), 339 tests, 368KB build, merged to master.*
+*Plan Version: 1.7 | Created: April 2026 | Updated: April 10, 2026 | Status: All Phases Complete — v1.0.0 READY*
+*Change: Deep codebase sync — updated tech stack (React 19, WXT 0.20, Tailwind v4, Vitest 3.1), replaced placeholder project structure with actual file tree, corrected test count to 400 tests / 32 files, updated Appendix C npm commands.*
