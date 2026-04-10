@@ -43,7 +43,7 @@ export function applyTranslation(
   parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
 
   // Create translation element
-  const translationEl = document.createElement('div');
+  const translationEl = document.createElement('span');
   translationEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   translationEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   translationEl.className = 'lingua-lens-translation';
@@ -79,7 +79,7 @@ export function setErrorState(
   }
 
   // Create error element
-  const errorEl = document.createElement('div');
+  const errorEl = document.createElement('span');
   errorEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   errorEl.className = 'lingua-lens-translation';

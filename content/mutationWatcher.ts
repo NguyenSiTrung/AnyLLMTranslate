@@ -19,33 +19,44 @@ export class MutationWatcher {
     this.debounceMs = debounceMs;
   }
 
+  private processElement(el: Element): void {
+    // Skip our own injected nodes
+    if (el.hasAttribute(DATA_ATTRS.TRANSLATED)) return;
+    if (el.getAttribute(DATA_ATTRS.ROLE) === 'translation') return;
+    if (el.classList.contains('lingua-lens-translation')) return;
+
+    // Skip non-translatable elements
+    if (SKIP_ELEMENTS.has(el.tagName)) return;
+
+    // Only care about block-level elements (contain translatable text)
+    if (BLOCK_ELEMENTS.has(el.tagName) || el.tagName === 'BODY') {
+      this.pendingElements.push(el);
+    } else {
+      // For non-block elements, check if they contain text
+      if (el.textContent?.trim() && el.textContent.trim().length > 2) {
+        this.pendingElements.push(el);
+      }
+    }
+  }
+
   /** Start observing DOM mutations */
   start(root: Node = document.body): void {
     if (this.observer) return;
 
     this.observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        if (mutation.type !== 'childList') continue;
+        if (mutation.type === 'characterData') {
+          const el = mutation.target.parentElement;
+          if (el) this.processElement(el);
+          continue;
+        }
 
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          const el = node as Element;
-
-          // Skip our own injected nodes
-          if (el.hasAttribute(DATA_ATTRS.TRANSLATED)) continue;
-          if (el.getAttribute(DATA_ATTRS.ROLE) === 'translation') continue;
-          if (el.classList.contains('lingua-lens-translation')) continue;
-
-          // Skip non-translatable elements
-          if (SKIP_ELEMENTS.has(el.tagName)) continue;
-
-          // Only care about block-level elements (contain translatable text)
-          if (BLOCK_ELEMENTS.has(el.tagName) || el.tagName === 'BODY') {
-            this.pendingElements.push(el);
-          } else {
-            // For non-block elements, check if they contain text
-            if (el.textContent?.trim() && el.textContent.trim().length > 2) {
-              this.pendingElements.push(el);
+        if (mutation.type === 'childList') {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
+              this.processElement(node.parentElement);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              this.processElement(node as Element);
             }
           }
         }
@@ -59,6 +70,7 @@ export class MutationWatcher {
     this.observer.observe(root, {
       childList: true,
       subtree: true,
+      characterData: true,
     });
   }
 

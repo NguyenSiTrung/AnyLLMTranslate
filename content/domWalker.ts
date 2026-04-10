@@ -33,7 +33,7 @@ function shouldSkipElement(element: Element): boolean {
   if (element.classList.contains('notranslate')) return true;
 
   // Skip contentEditable regions
-  if (element.getAttribute('contenteditable') === 'true') return true;
+  if ('isContentEditable' in element && (element as HTMLElement).isContentEditable) return true;
 
   return false;
 }
@@ -91,6 +91,22 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
   let currentTextNodes: Text[] = [];
   let currentParent: Element | null = null;
 
+  /** Find the deepest common ancestor element of a list of text nodes */
+  function getCommonAncestor(nodes: Node[]): Element | null {
+    if (nodes.length === 0) return null;
+    let ancestor = nodes[0].parentElement;
+    if (!ancestor) return null;
+
+    for (let i = 1; i < nodes.length; i++) {
+      const node = nodes[i];
+      while (ancestor && !ancestor.contains(node)) {
+        ancestor = ancestor.parentElement;
+      }
+      if (!ancestor) return null;
+    }
+    return ancestor;
+  }
+
   function flushPiece(): void {
     if (currentTextNodes.length === 0 || !currentParent) return;
 
@@ -103,15 +119,21 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
       return;
     }
 
+    // Determine tightest boundary for injection rather than loose block layout container
+    let anchorElement = getCommonAncestor(currentTextNodes);
+    if (!anchorElement || anchorElement.tagName === 'BODY' || anchorElement.tagName === 'HTML') {
+      anchorElement = currentParent;
+    }
+
     // Split long texts at sentence boundaries
     if (trimmed.length > MAX_PIECE_CHARS) {
       const parts = splitAtSentenceBoundary(trimmed, MAX_PIECE_CHARS);
       for (const part of parts) {
         pieces.push({
           id: generatePieceId(),
-          parentElement: currentParent,
+          parentElement: anchorElement,
           textNodes: [...currentTextNodes],
-          originalHTML: currentParent.innerHTML,
+          originalHTML: anchorElement.innerHTML,
           text: part,
           isTranslated: false,
         });
@@ -119,9 +141,9 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
     } else {
       pieces.push({
         id: generatePieceId(),
-        parentElement: currentParent,
+        parentElement: anchorElement,
         textNodes: [...currentTextNodes],
-        originalHTML: currentParent.innerHTML,
+        originalHTML: anchorElement.innerHTML,
         text: trimmed,
         isTranslated: false,
       });
@@ -146,8 +168,7 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
 
         // Text node — accept if non-empty
         if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent?.trim();
-          if (!text) return NodeFilter.FILTER_REJECT;
+          if (!node.textContent) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
 
@@ -168,7 +189,7 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
     } else if (node.nodeType === Node.TEXT_NODE) {
       const textNode = node as Text;
       // Find the closest block parent
-      let blockParent = textNode.parentElement;
+      let blockParent: Element | null = textNode.parentElement;
       while (blockParent && !isBlockElement(blockParent) && blockParent !== root) {
         blockParent = blockParent.parentElement;
       }

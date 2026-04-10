@@ -18,16 +18,15 @@ export const SKIP_ELEMENTS = new Set([
   'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
   'APPLET', 'AUDIO', 'VIDEO', 'CANVAS', 'MAP', 'SVG', 'MATH',
   'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'OPTION', 'OPTGROUP',
-  'CODE', 'PRE', 'KBD', 'SAMP', 'VAR',
 ]);
 
 /** Inline elements that stay within a translation piece */
 export const INLINE_ELEMENTS = new Set([
   'A', 'ABBR', 'ACRONYM', 'B', 'BDI', 'BDO', 'BIG', 'BR',
-  'CITE', 'DATA', 'DEL', 'DFN', 'EM', 'FONT', 'I', 'IMG',
-  'INS', 'LABEL', 'MARK', 'METER', 'OUTPUT', 'PROGRESS', 'Q',
-  'RP', 'RT', 'RUBY', 'S', 'SMALL', 'SPAN', 'STRIKE', 'STRONG',
-  'SUB', 'SUP', 'TIME', 'TT', 'U', 'WBR',
+  'CITE', 'CODE', 'DATA', 'DEL', 'DFN', 'EM', 'FONT', 'I', 'IMG',
+  'INS', 'KBD', 'LABEL', 'MARK', 'METER', 'OUTPUT', 'PROGRESS', 'Q',
+  'RP', 'RT', 'RUBY', 'S', 'SAMP', 'SMALL', 'SPAN', 'STRIKE', 'STRONG',
+  'SUB', 'SUP', 'TIME', 'TT', 'U', 'VAR', 'WBR',
 ]);
 
 /** Maximum characters per translation piece before splitting */
