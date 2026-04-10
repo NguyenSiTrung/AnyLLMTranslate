@@ -1,8 +1,15 @@
 /**
  * Subtitles Settings Section — position, font size, opacity controls.
+ * Refactored with shared components.
  */
 
+import { Subtitles as SubtitlesIcon } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { FieldGroup } from '@/ui/FieldGroup';
+import { Toggle } from '@/ui/Toggle';
+import { Slider } from '@/ui/Slider';
+import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
 
 export function SubtitlesSection() {
   const subtitleSettings = useSettingsStore((s) => s.subtitleSettings);
@@ -15,116 +22,93 @@ export function SubtitlesSection() {
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">Subtitle Settings</h2>
-      <p className="text-sm text-zinc-500 mb-8">Configure how translated subtitles appear on video players.</p>
-
-      <div className="space-y-6">
-        {/* Enabled */}
-        <div className="flex items-center justify-between">
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <SubtitlesIcon className="w-5 h-5 text-blue-400" />
           <div>
-            <p className="text-sm font-medium text-zinc-200">Enable Subtitles</p>
-            <p className="text-xs text-zinc-500">Show translated subtitles on video players.</p>
+            <h2 className="text-lg font-semibold text-zinc-100">Subtitle Settings</h2>
+            <p className="text-xs text-zinc-500">Configure how translated subtitles appear on video players.</p>
           </div>
-          <button
+        </div>
+      </Card>
+
+      <Card variant="bordered">
+        <div className="space-y-6">
+          {/* Enabled Toggle */}
+          <Toggle
             id="subtitle-enabled-toggle"
-            onClick={() => handleUpdate({ enabled: !subtitleSettings.enabled })}
-            className={`relative w-11 h-6 rounded-full transition-colors ${
-              subtitleSettings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
-            }`}
-            aria-label="Toggle subtitles"
-          >
-            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-              subtitleSettings.enabled ? 'translate-x-5' : ''
-            }`} />
-          </button>
-        </div>
-
-        {/* Position */}
-        <FieldGroup label="Subtitle Position">
-          <div className="flex gap-3">
-            {(['bottom', 'top'] as const).map((pos) => (
-              <button
-                key={pos}
-                onClick={() => handleUpdate({ position: pos })}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all capitalize ${
-                  subtitleSettings.position === pos
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {pos}
-              </button>
-            ))}
-          </div>
-        </FieldGroup>
-
-        {/* Font Size */}
-        <FieldGroup label={`Font Size: ${subtitleSettings.fontSize}px`}>
-          <input
-            id="subtitle-font-size"
-            type="range"
-            min="10"
-            max="32"
-            step="1"
-            value={subtitleSettings.fontSize}
-            onChange={(e) => handleUpdate({ fontSize: parseInt(e.target.value) })}
-            className="w-full accent-blue-500"
+            checked={subtitleSettings.enabled}
+            onChange={(checked) => handleUpdate({ enabled: checked })}
+            label="Enable Subtitles"
+            description="Show translated subtitles on video players."
           />
-          <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
-            <span>10px</span>
-            <span>32px</span>
-          </div>
-        </FieldGroup>
 
-        {/* Background Opacity */}
-        <FieldGroup label={`Background Opacity: ${Math.round(subtitleSettings.backgroundOpacity * 100)}%`}>
-          <input
-            id="subtitle-opacity"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={subtitleSettings.backgroundOpacity}
-            onChange={(e) => handleUpdate({ backgroundOpacity: parseFloat(e.target.value) })}
-            className="w-full accent-blue-500"
-          />
-          <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
-            <span>0%</span>
-            <span>100%</span>
-          </div>
-        </FieldGroup>
-
-        {/* Preview */}
-        <div className="border border-zinc-800 rounded-lg p-4">
-          <p className="text-xs text-zinc-500 mb-3">Preview</p>
-          <div
-            className="relative bg-zinc-950 rounded-lg h-24 flex items-end justify-center overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-zinc-800 to-zinc-900" />
-            <div
-              className={`relative z-10 px-4 py-2 rounded text-center mb-2 ${
-                subtitleSettings.position === 'top' ? 'self-start mt-2 mb-auto' : ''
-              }`}
-              style={{
-                backgroundColor: `rgba(0, 0, 0, ${subtitleSettings.backgroundOpacity})`,
-                fontSize: `${Math.min(subtitleSettings.fontSize, 18)}px`,
-              }}
-            >
-              <span className="text-white">Xin chào thế giới</span>
+          {/* Position */}
+          <FieldGroup label="Subtitle Position">
+            <div className="flex gap-3">
+              {(['bottom', 'top'] as const).map((pos) => (
+                <Button
+                  key={pos}
+                  variant={subtitleSettings.position === pos ? 'primary' : 'secondary'}
+                  className="flex-1 capitalize"
+                  onClick={() => handleUpdate({ position: pos })}
+                >
+                  {pos}
+                </Button>
+              ))}
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          </FieldGroup>
 
-function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-zinc-200 mb-2">{label}</label>
-      {children}
+          {/* Font Size */}
+          <Slider
+            id="subtitle-font-size"
+            label="Font Size"
+            value={subtitleSettings.fontSize}
+            min={10}
+            max={32}
+            step={1}
+            onChange={(v) => handleUpdate({ fontSize: v })}
+            formatValue={(v) => `${v}px`}
+            minLabel="10px"
+            maxLabel="32px"
+          />
+
+          {/* Background Opacity */}
+          <Slider
+            id="subtitle-opacity"
+            label="Background Opacity"
+            value={subtitleSettings.backgroundOpacity}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => handleUpdate({ backgroundOpacity: v })}
+            formatValue={(v) => `${Math.round(v * 100)}%`}
+            minLabel="0%"
+            maxLabel="100%"
+          />
+
+          {/* Preview */}
+          <Card variant="bordered">
+            <p className="text-xs text-zinc-500 mb-3">Preview</p>
+            <div className="relative bg-zinc-950 rounded-lg h-24 flex items-end justify-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-zinc-800 to-zinc-900" />
+              <div
+                className={`relative z-10 px-4 py-2 rounded text-center mb-2 ${
+                  subtitleSettings.position === 'top' ? 'self-start mt-2 mb-auto' : ''
+                }`}
+                style={{
+                  backgroundColor: `rgba(0, 0, 0, ${subtitleSettings.backgroundOpacity})`,
+                  fontSize: `${Math.min(subtitleSettings.fontSize, 18)}px`,
+                }}
+              >
+                <span className="text-white">Xin chào thế giới</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </Card>
     </div>
   );
 }

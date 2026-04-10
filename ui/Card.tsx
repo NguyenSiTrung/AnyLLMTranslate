@@ -12,6 +12,7 @@ interface CardProps {
   icon?: ReactNode;
   accent?: 'blue' | 'emerald' | 'amber' | 'red';
   className?: string;
+  style?: React.CSSProperties;
   children: ReactNode;
 }
 
@@ -28,9 +29,9 @@ const accentBorders: Record<string, string> = {
   red: 'border-l-red-500',
 };
 
-export function Card({ variant = 'default', title, icon, accent, className = '', children }: CardProps) {
+export function Card({ variant = 'default', title, icon, accent, className = '', style, children }: CardProps) {
   return (
-    <div className={`${variantStyles[variant]} ${accent ? `border-l-3 ${accentBorders[accent]}` : ''} p-4 ${className}`}>
+    <div className={`${variantStyles[variant]} ${accent ? `border-l-3 ${accentBorders[accent]}` : ''} p-4 ${className}`} style={style}>
       {(title || icon) && (
         <div className="flex items-center gap-2 mb-3">
           {icon && <span className="text-zinc-400 shrink-0">{icon}</span>}

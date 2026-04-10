@@ -1,12 +1,18 @@
 /**
  * General Settings Section — target language, display mode, theme, position, dark mode.
+ * Refactored to use shared UI components and Card-based content grouping.
  */
 
+import { Settings as SettingsIcon } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
+import { FieldGroup } from '@/ui/FieldGroup';
+import { Select } from '@/ui/Select';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
 
-const THEME_OPTIONS: { value: ThemeName; label: string }[] = [
+const THEME_OPTIONS = [
   { value: 'dividing-line', label: 'Dividing Line' },
   { value: 'blockquote', label: 'Blockquote' },
   { value: 'paper', label: 'Paper Note' },
@@ -32,135 +38,123 @@ export function GeneralSection() {
   const sourceLanguages = LANGUAGES;
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">General Settings</h2>
-      <p className="text-sm text-zinc-500 mb-8">Configure language, display, and appearance preferences.</p>
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <SettingsIcon className="w-5 h-5 text-blue-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">General Settings</h2>
+            <p className="text-xs text-zinc-500">Configure language, display, and appearance preferences.</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="space-y-6">
-        {/* Source Language */}
-        <FieldGroup label="Source Language" description="The language of pages you want to translate from.">
-          <select
-            id="general-source-language"
-            value={settings.sourceLanguage}
-            onChange={(e) => updateSettings({ sourceLanguage: e.target.value })}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
-          >
-            {sourceLanguages.map((lang) => (
-              <option key={lang.code} value={lang.code}>{lang.nativeName} ({lang.name})</option>
-            ))}
-          </select>
-        </FieldGroup>
+        {/* Language group */}
+        <Card title="Language" variant="bordered">
+          <div className="space-y-4">
+            <FieldGroup label="Source Language" description="The language of pages you want to translate from." htmlFor="general-source-language">
+              <Select
+                id="general-source-language"
+                value={settings.sourceLanguage}
+                onChange={(e) => updateSettings({ sourceLanguage: e.target.value })}
+                options={sourceLanguages.map((lang) => ({
+                  value: lang.code,
+                  label: `${lang.nativeName} (${lang.name})`,
+                }))}
+              />
+            </FieldGroup>
 
-        {/* Target Language */}
-        <FieldGroup label="Target Language" description="The language to translate into.">
-          <select
-            id="general-target-language"
-            value={settings.targetLanguage}
-            onChange={(e) => updateSettings({ targetLanguage: e.target.value })}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
-          >
-            {targetLanguages.map((lang) => (
-              <option key={lang.code} value={lang.code}>{lang.nativeName} ({lang.name})</option>
-            ))}
-          </select>
-        </FieldGroup>
-
-        {/* Display Mode */}
-        <FieldGroup label="Display Mode" description="How translations appear on the page.">
-          <div className="flex gap-3">
-            {([
-              { value: 'bilingual-below' as DisplayMode, label: 'Bilingual' },
-              { value: 'translation-only' as DisplayMode, label: 'Translation Only' },
-            ]).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => updateSettings({ displayMode: opt.value })}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                  settings.displayMode === opt.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <FieldGroup label="Target Language" description="The language to translate into." htmlFor="general-target-language">
+              <Select
+                id="general-target-language"
+                value={settings.targetLanguage}
+                onChange={(e) => updateSettings({ targetLanguage: e.target.value })}
+                options={targetLanguages.map((lang) => ({
+                  value: lang.code,
+                  label: `${lang.nativeName} (${lang.name})`,
+                }))}
+              />
+            </FieldGroup>
           </div>
-        </FieldGroup>
+        </Card>
 
-        {/* Theme */}
-        <FieldGroup label="Translation Theme" description="Visual style for translated text.">
-          <select
-            id="general-theme"
-            value={settings.theme}
-            onChange={(e) => updateSettings({ theme: e.target.value as ThemeName })}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
-          >
-            {THEME_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </FieldGroup>
+        {/* Display group */}
+        <Card title="Display" variant="bordered">
+          <div className="space-y-4">
+            <FieldGroup label="Display Mode" description="How translations appear on the page.">
+              <div className="flex gap-3">
+                {([
+                  { value: 'bilingual-below' as DisplayMode, label: 'Bilingual' },
+                  { value: 'translation-only' as DisplayMode, label: 'Translation Only' },
+                ] as const).map((opt) => (
+                  <Button
+                    key={opt.value}
+                    variant={settings.displayMode === opt.value ? 'primary' : 'secondary'}
+                    className="flex-1"
+                    onClick={() => updateSettings({ displayMode: opt.value })}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </FieldGroup>
 
-        {/* Translation Position */}
-        <FieldGroup label="Translation Position" description="Where the translation appears relative to the original.">
-          <div className="flex gap-3">
-            {([
-              { value: 'below' as TranslationPosition, label: 'Below' },
-              { value: 'above' as TranslationPosition, label: 'Above' },
-              { value: 'side' as TranslationPosition, label: 'Side' },
-            ]).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => updateSettings({ translationPosition: opt.value })}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                  settings.translationPosition === opt.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <FieldGroup label="Translation Theme" description="Visual style for translated text." htmlFor="general-theme">
+              <Select
+                id="general-theme"
+                value={settings.theme}
+                onChange={(e) => updateSettings({ theme: e.target.value as ThemeName })}
+                options={THEME_OPTIONS}
+              />
+            </FieldGroup>
           </div>
-        </FieldGroup>
+        </Card>
 
-        {/* Dark Mode */}
-        <FieldGroup label="Dark Mode" description="Control the appearance of translated text on host pages.">
-          <div className="flex gap-3">
-            {([
-              { value: 'auto' as DarkMode, label: 'Auto' },
-              { value: 'light' as DarkMode, label: 'Light' },
-              { value: 'dark' as DarkMode, label: 'Dark' },
-            ]).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => updateSettings({ darkMode: opt.value })}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                  settings.darkMode === opt.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        {/* Appearance group */}
+        <Card title="Appearance" variant="bordered">
+          <div className="space-y-4">
+            <FieldGroup label="Translation Position" description="Where the translation appears relative to the original.">
+              <div className="flex gap-3">
+                {([
+                  { value: 'below' as TranslationPosition, label: 'Below' },
+                  { value: 'above' as TranslationPosition, label: 'Above' },
+                  { value: 'side' as TranslationPosition, label: 'Side' },
+                ] as const).map((opt) => (
+                  <Button
+                    key={opt.value}
+                    variant={settings.translationPosition === opt.value ? 'primary' : 'secondary'}
+                    className="flex-1"
+                    onClick={() => updateSettings({ translationPosition: opt.value })}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </FieldGroup>
+
+            <FieldGroup label="Dark Mode" description="Control the appearance of translated text on host pages.">
+              <div className="flex gap-3">
+                {([
+                  { value: 'auto' as DarkMode, label: 'Auto' },
+                  { value: 'light' as DarkMode, label: 'Light' },
+                  { value: 'dark' as DarkMode, label: 'Dark' },
+                ] as const).map((opt) => (
+                  <Button
+                    key={opt.value}
+                    variant={settings.darkMode === opt.value ? 'primary' : 'secondary'}
+                    className="flex-1"
+                    onClick={() => updateSettings({ darkMode: opt.value })}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </FieldGroup>
           </div>
-        </FieldGroup>
+        </Card>
       </div>
-    </div>
-  );
-}
-
-function FieldGroup({ label, description, children }: {
-  label: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-zinc-200 mb-1">{label}</label>
-      {description && <p className="text-xs text-zinc-500 mb-2">{description}</p>}
-      {children}
     </div>
   );
 }

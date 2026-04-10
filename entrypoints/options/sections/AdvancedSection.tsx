@@ -1,18 +1,26 @@
 /**
  * Advanced Settings Section — cache, export/import, debug mode.
+ * Refactored with shared components, Modal, and Toast.
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Download, Upload, Trash2, Bug, HardDrive } from 'lucide-react';
+import { Download, Upload, Trash2, Bug, HardDrive, Wrench } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SETTINGS } from '@/types/config';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Toggle } from '@/ui/Toggle';
+import { Modal } from '@/ui/Modal';
+import { useToast } from '@/ui/ToastProvider';
 
 export function AdvancedSection() {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
   const [clearStatus, setClearStatus] = useState<'idle' | 'clearing' | 'done'>('idle');
+  const [showResetModal, setShowResetModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { success: showSuccess, error: showError } = useToast();
 
   const handleExportSettings = useCallback(() => {
     const exportData = {
@@ -40,7 +48,8 @@ export function AdvancedSection() {
     a.download = `lingua-lens-settings-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [settings]);
+    showSuccess('Settings exported successfully');
+  }, [settings, showSuccess]);
 
   const handleImportSettings = useCallback(async (file: File) => {
     try {
@@ -48,16 +57,15 @@ export function AdvancedSection() {
       const imported = JSON.parse(text);
       const merged = { ...DEFAULT_SETTINGS, ...imported };
       await updateSettings(merged);
-      alert('Settings imported successfully!');
+      showSuccess('Settings imported successfully!');
     } catch {
-      alert('Failed to import settings. Invalid JSON file.');
+      showError('Failed to import settings. Invalid JSON file.');
     }
-  }, [updateSettings]);
+  }, [updateSettings, showSuccess, showError]);
 
   const handleClearCache = useCallback(async () => {
     setClearStatus('clearing');
     try {
-      // Clear IndexedDB cache
       const dbs = await indexedDB.databases();
       for (const db of dbs) {
         if (db.name?.includes('lingua-lens')) {
@@ -65,24 +73,42 @@ export function AdvancedSection() {
         }
       }
       setClearStatus('done');
+      showSuccess('Translation cache cleared');
       setTimeout(() => setClearStatus('idle'), 2000);
     } catch {
       setClearStatus('idle');
+      showError('Failed to clear cache');
     }
-  }, []);
+  }, [showSuccess, showError]);
+
+  const handleReset = useCallback(() => {
+    resetToDefaults();
+    setShowResetModal(false);
+    showSuccess('All settings reset to defaults');
+  }, [resetToDefaults, showSuccess]);
+
+  // Calculate simple cache usage visualization
+  const cacheUsagePct = Math.min(
+    ((settings.cacheTTLDays / 30) * 100),
+    100,
+  );
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">Advanced</h2>
-      <p className="text-sm text-zinc-500 mb-8">Cache management, data portability, and debugging tools.</p>
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <Wrench className="w-5 h-5 text-blue-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Advanced</h2>
+            <p className="text-xs text-zinc-500">Cache management, data portability, and debugging tools.</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="space-y-6">
         {/* Cache Management */}
-        <div className="border border-zinc-800 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <HardDrive className="w-4 h-4 text-zinc-400" />
-            <h3 className="text-sm font-medium text-zinc-200">Translation Cache</h3>
-          </div>
+        <Card title="Translation Cache" icon={<HardDrive className="w-4 h-4" />} variant="bordered">
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="bg-zinc-900 rounded-lg p-3 text-center">
               <p className="text-lg font-semibold text-zinc-200">{settings.cacheTTLDays}d</p>
@@ -97,35 +123,50 @@ export function AdvancedSection() {
               <p className="text-[10px] text-zinc-500">Batch Chars</p>
             </div>
           </div>
-          <button
+          {/* Cache usage bar */}
+          <div className="mb-4">
+            <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
+              <span>Cache capacity</span>
+              <span>{settings.maxCacheSizeMB}MB max</span>
+            </div>
+            <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500/60 rounded-full transition-all duration-500"
+                style={{ width: `${cacheUsagePct}%` }}
+              />
+            </div>
+          </div>
+          <Button
             id="clear-cache-btn"
+            variant="danger"
             onClick={handleClearCache}
             disabled={clearStatus === 'clearing'}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 text-red-400 text-sm rounded-lg transition-colors"
+            loading={clearStatus === 'clearing'}
+            icon={<Trash2 className="w-4 h-4" />}
           >
-            <Trash2 className="w-4 h-4" />
-            {clearStatus === 'clearing' ? 'Clearing...' : clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
-          </button>
-        </div>
+            {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
+          </Button>
+        </Card>
 
         {/* Export / Import */}
-        <div className="border border-zinc-800 rounded-lg p-4 space-y-3">
-          <h3 className="text-sm font-medium text-zinc-200">Settings Data</h3>
+        <Card title="Settings Data" variant="bordered">
           <div className="flex gap-3">
-            <button
+            <Button
               id="export-settings-btn"
+              variant="secondary"
               onClick={handleExportSettings}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+              icon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" /> Export Settings
-            </button>
-            <button
+              Export Settings
+            </Button>
+            <Button
               id="import-settings-btn"
+              variant="secondary"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+              icon={<Upload className="w-4 h-4" />}
             >
-              <Upload className="w-4 h-4" /> Import Settings
-            </button>
+              Import Settings
+            </Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -138,44 +179,42 @@ export function AdvancedSection() {
               }}
             />
           </div>
-        </div>
+        </Card>
 
         {/* Debug Mode */}
-        <div className="flex items-center justify-between p-4 border border-zinc-800 rounded-lg">
-          <div className="flex items-center gap-3">
-            <Bug className="w-4 h-4 text-zinc-400" />
-            <div>
-              <p className="text-sm font-medium text-zinc-200">Debug Mode</p>
-              <p className="text-xs text-zinc-500">Enable verbose logging in the browser console.</p>
-            </div>
-          </div>
-          <button
+        <Card variant="bordered" icon={<Bug className="w-4 h-4" />}>
+          <Toggle
             id="debug-mode-toggle"
-            onClick={() => updateSettings({ debugMode: !settings.debugMode })}
-            className={`relative w-11 h-6 rounded-full transition-colors ${
-              settings.debugMode ? 'bg-blue-600' : 'bg-zinc-700'
-            }`}
-            aria-label="Toggle debug mode"
-          >
-            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-              settings.debugMode ? 'translate-x-5' : ''
-            }`} />
-          </button>
-        </div>
+            checked={settings.debugMode}
+            onChange={(checked) => updateSettings({ debugMode: checked })}
+            label="Debug Mode"
+            description="Enable verbose logging in the browser console."
+          />
+        </Card>
 
         {/* Reset */}
-        <button
+        <Button
           id="reset-all-settings-btn"
-          onClick={() => {
-            if (confirm('Reset all settings to defaults? This cannot be undone.')) {
-              resetToDefaults();
-            }
-          }}
-          className="w-full py-2.5 bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 text-red-400 text-sm rounded-lg transition-colors"
+          variant="danger"
+          className="w-full"
+          onClick={() => setShowResetModal(true)}
         >
           Reset All Settings to Default
-        </button>
+        </Button>
       </div>
+
+      {/* Reset Confirmation Modal */}
+      {showResetModal && (
+        <Modal
+          title="Reset All Settings?"
+          message="This will restore all settings to their default values. Your custom dictionary, site rules, and provider configuration will be lost. This cannot be undone."
+          variant="danger"
+          confirmLabel="Reset Everything"
+          cancelLabel="Keep Settings"
+          onConfirm={handleReset}
+          onCancel={() => setShowResetModal(false)}
+        />
+      )}
     </div>
   );
 }

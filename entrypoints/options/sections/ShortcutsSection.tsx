@@ -1,8 +1,11 @@
 /**
  * Keyboard Shortcuts Section — display current bindings, link to Chrome management.
+ * Refactored with shared components.
  */
 
-import { Keyboard, ExternalLink } from 'lucide-react';
+import { Keyboard as KeyboardIcon, ExternalLink } from 'lucide-react';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
 
 const DEFAULT_SHORTCUTS = [
   { action: 'Toggle Translation', shortcut: 'Alt+T', description: 'Start or stop translating the current page' },
@@ -11,32 +14,44 @@ const DEFAULT_SHORTCUTS = [
 
 export function ShortcutsSection() {
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">Keyboard Shortcuts</h2>
-      <p className="text-sm text-zinc-500 mb-8">View and customize keyboard shortcuts for LinguaLens.</p>
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <KeyboardIcon className="w-5 h-5 text-blue-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Keyboard Shortcuts</h2>
+            <p className="text-xs text-zinc-500">View and customize keyboard shortcuts for LinguaLens.</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Current Shortcuts */}
       <div className="space-y-3 mb-6">
-        {DEFAULT_SHORTCUTS.map((shortcut) => (
-          <div
+        {DEFAULT_SHORTCUTS.map((shortcut, idx) => (
+          <Card
             key={shortcut.action}
-            className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg"
+            variant="default"
+            className="animate-stagger"
+            style={{ '--stagger-delay': idx } as React.CSSProperties}
           >
-            <div>
-              <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
-              <p className="text-xs text-zinc-500">{shortcut.description}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
+                <p className="text-xs text-zinc-500">{shortcut.description}</p>
+              </div>
+              <kbd className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono">
+                {shortcut.shortcut}
+              </kbd>
             </div>
-            <kbd className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono">
-              {shortcut.shortcut}
-            </kbd>
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Chrome Shortcuts Link */}
-      <div className="border border-zinc-800 bg-zinc-900 rounded-lg p-4">
+      <Card variant="bordered">
         <div className="flex items-start gap-3">
-          <Keyboard className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+          <KeyboardIcon className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-medium text-zinc-200 mb-1">Customize Shortcuts</p>
             <p className="text-xs text-zinc-400 mb-3">
@@ -48,11 +63,10 @@ export function ShortcutsSection() {
               rel="noopener noreferrer"
               onClick={(e) => {
                 e.preventDefault();
-                // chrome:// URLs can't be opened directly, show the path to follow
                 try {
                   chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
                 } catch {
-                  alert('Navigate to chrome://extensions/shortcuts in your browser address bar.');
+                  // Fallback: user will need to type the URL manually
                 }
               }}
               className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
@@ -62,7 +76,7 @@ export function ShortcutsSection() {
             </a>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

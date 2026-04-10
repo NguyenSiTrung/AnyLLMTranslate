@@ -1,10 +1,11 @@
 /**
- * Display Themes Section — gallery grid of all 16+ themes with preview.
+ * Display Themes Section — gallery grid with enhanced previews and selection animation.
  */
 
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ThemeName } from '@/types/config';
-import { Check } from 'lucide-react';
+import { Check, Palette } from 'lucide-react';
+import { Card } from '@/ui/Card';
 
 interface ThemeCard {
   id: ThemeName;
@@ -42,27 +43,36 @@ export function ThemesSection() {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">Display Themes</h2>
-      <p className="text-sm text-zinc-500 mb-8">Choose how translated text appears on web pages.</p>
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <Palette className="w-5 h-5 text-blue-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Display Themes</h2>
+            <p className="text-xs text-zinc-500">Choose how translated text appears on web pages.</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3">
-        {THEMES.map((theme) => {
+        {THEMES.map((theme, idx) => {
           const isActive = currentTheme === theme.id;
           return (
             <button
               key={theme.id}
               id={`theme-${theme.id}`}
               onClick={() => updateSettings({ theme: theme.id })}
-              className={`relative text-left p-4 rounded-xl border transition-all duration-200 ${
+              className={`relative text-left p-4 rounded-xl border transition-all duration-200 cursor-pointer animate-stagger ${
                 isActive
-                  ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30'
+                  ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30 animate-select-bounce'
                   : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50'
               }`}
+              style={{ '--stagger-delay': idx } as React.CSSProperties}
             >
               {/* Active indicator */}
               {isActive && (
-                <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                <div className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center animate-scale-in">
                   <Check className="w-3 h-3 text-white" />
                 </div>
               )}

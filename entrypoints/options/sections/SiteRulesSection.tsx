@@ -1,11 +1,17 @@
 /**
  * Site Rules Section — per-site translation rules management.
+ * Refactored with shared components.
  */
 
 import { useState, useCallback } from 'react';
-import { Plus, Trash2, Edit2, Search, Shield, ShieldOff } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Input } from '@/ui/Input';
+import { Badge } from '@/ui/Badge';
+import { EmptyState } from '@/ui/EmptyState';
 
 export function SiteRulesSection() {
   const siteRules = useSettingsStore((s) => s.siteRules);
@@ -49,31 +55,37 @@ export function SiteRulesSection() {
   }, [siteRules, updateSettings]);
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold text-zinc-100 mb-1">Site Rules</h2>
-      <p className="text-sm text-zinc-500 mb-6">Configure per-site translation behavior.</p>
+    <div className="animate-fade-in-up">
+      {/* Section header */}
+      <Card accent="blue" className="mb-8">
+        <div className="flex items-center gap-3">
+          <Globe className="w-5 h-5 text-blue-400" />
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-100">Site Rules</h2>
+            <p className="text-xs text-zinc-500">Configure per-site translation behavior.</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Search & Add */}
       <div className="flex gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
+        <div className="flex-1">
+          <Input
             id="site-rules-search"
-            type="text"
+            type="search"
             placeholder="Search by hostname..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+            icon={<Globe className="w-4 h-4" />}
           />
         </div>
-        <button
+        <Button
           id="add-site-rule-btn"
           onClick={handleAddRule}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+          icon={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
           Add Rule
-        </button>
+        </Button>
       </div>
 
       {/* Edit Form */}
@@ -87,15 +99,21 @@ export function SiteRulesSection() {
 
       {/* Rules List */}
       {filteredRules.length === 0 ? (
-        <div className="text-center py-12 text-zinc-500 text-sm">
-          {siteRules.length === 0 ? 'No site rules configured. Add a rule to customize translation behavior per site.' : 'No rules match your search.'}
-        </div>
+        <EmptyState
+          icon={<Globe className="w-8 h-8" />}
+          message={siteRules.length === 0
+            ? 'No site rules configured. Add a rule to customize translation behavior per site.'
+            : 'No rules match your search.'}
+          actionLabel={siteRules.length === 0 ? 'Add First Rule' : undefined}
+          onAction={siteRules.length === 0 ? handleAddRule : undefined}
+        />
       ) : (
         <div className="space-y-2">
-          {filteredRules.map((rule) => (
+          {filteredRules.map((rule, idx) => (
             <div
               key={rule.id}
-              className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg"
+              className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg animate-stagger"
+              style={{ '--stagger-delay': idx } as React.CSSProperties}
             >
               <div className="flex items-center gap-3">
                 {rule.alwaysTranslate ? (
@@ -107,25 +125,28 @@ export function SiteRulesSection() {
                 )}
                 <div>
                   <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
-                  {rule.builtIn && <span className="ml-2 text-[10px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded">Built-in</span>}
+                  {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
                 </div>
               </div>
               {!rule.builtIn && (
                 <div className="flex items-center gap-1">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setEditingRule(rule)}
-                    className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors"
                     aria-label="Edit rule"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleDeleteRule(rule.id)}
-                    className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors"
                     aria-label="Delete rule"
+                    className="hover:text-red-400"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -144,13 +165,13 @@ function RuleEditForm({ rule, onSave, onCancel }: {
   const [form, setForm] = useState({ ...rule });
 
   return (
-    <div className="mb-4 p-4 bg-zinc-900 border border-zinc-700 rounded-lg space-y-3">
-      <input
+    <Card variant="bordered" className="mb-4 space-y-3 border-zinc-700">
+      <Input
         type="text"
         placeholder="*.example.com"
         value={form.hostname}
         onChange={(e) => setForm({ ...form, hostname: e.target.value })}
-        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        className="font-mono"
       />
       <div className="flex gap-3">
         <label className="flex items-center gap-2 text-sm text-zinc-300">
@@ -173,15 +194,9 @@ function RuleEditForm({ rule, onSave, onCancel }: {
         </label>
       </div>
       <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200">Cancel</button>
-        <button
-          onClick={() => onSave(form)}
-          disabled={!form.hostname}
-          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm rounded-lg transition-colors"
-        >
-          Save
-        </button>
+        <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" disabled={!form.hostname} onClick={() => onSave(form)}>Save</Button>
       </div>
-    </div>
+    </Card>
   );
 }
