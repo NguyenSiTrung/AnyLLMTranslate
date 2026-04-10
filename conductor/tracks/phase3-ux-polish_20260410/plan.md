@@ -4,64 +4,64 @@
 <!-- execution: sequential -->
 <!-- depends: -->
 
-- [ ] Task 1: Extend type system for themes, site rules, glossary, and settings
+- [x] Task 1: Extend type system for themes, site rules, glossary, and settings (0e87cb1)
   <!-- files: types/config.ts -->
-  - [ ] Add `ThemeName` union type (16 theme IDs) to `types/config.ts`
-  - [ ] Add `TranslationPosition` type ('below' | 'above' | 'side')
-  - [ ] Add `SiteRule` interface to `types/config.ts`
-  - [ ] Add `GlossaryEntry` interface to `types/config.ts`
-  - [ ] Add `SubtitleSettings` interface to `types/config.ts`
-  - [ ] Extend `ExtensionSettings` with theme, position, glossary, siteRules, subtitleSettings, customSystemPrompt, darkMode fields
-  - [ ] Update `DEFAULT_SETTINGS` with new defaults
-  - [ ] Write unit tests for type exports and defaults
+  - [x] Add `ThemeName` union type (16 theme IDs) to `types/config.ts`
+  - [x] Add `TranslationPosition` type ('below' | 'above' | 'side')
+  - [x] Add `SiteRule` interface to `types/config.ts`
+  - [x] Add `GlossaryEntry` interface to `types/config.ts`
+  - [x] Add `SubtitleSettings` interface to `types/config.ts`
+  - [x] Extend `ExtensionSettings` with theme, position, glossary, siteRules, subtitleSettings, customSystemPrompt, darkMode fields
+  - [x] Update `DEFAULT_SETTINGS` with new defaults
+  - [x] Write unit tests for type exports and defaults
 
-- [ ] Task 2: Create Zustand settings store with chrome.storage sync
+- [x] Task 2: Create Zustand settings store with chrome.storage sync (0e87cb1)
   <!-- files: stores/settingsStore.ts, stores/__tests__/settingsStore.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Create `stores/settingsStore.ts` — Zustand store wrapping `ExtensionSettings`
-  - [ ] Implement `chrome.storage.local` read on init, write on change
-  - [ ] Implement `chrome.storage.onChanged` listener for cross-context sync
-  - [ ] Export typed hooks: `useSettings()`, `useTheme()`, `useProvider()`
-  - [ ] Write unit tests for store init, persistence, and sync logic
+  - [x] Create `stores/settingsStore.ts` — Zustand store wrapping `ExtensionSettings`
+  - [x] Implement `chrome.storage.local` read on init, write on change
+  - [x] Implement `chrome.storage.onChanged` listener for cross-context sync
+  - [x] Export typed hooks: `useSettings()`, `useTheme()`, `useProvider()`
+  - [x] Write unit tests for store init, persistence, and sync logic
 
-- [ ] Task 3: Implement 15+ CSS themes in inject.css
+- [x] Task 3: Implement 15+ CSS themes in inject.css (0e87cb1)
   <!-- files: styles/inject.css, styles/__tests__/themes.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Define CSS Custom Property sets for each theme, scoped by `[data-lingua-theme="<name>"]`
-  - [ ] Themes: dividing-line (existing), blockquote, paper, underline, dashed-underline, highlight, wavy-underline, bubble, side-by-side, mask, fade-in, italic, dotted-border, shadow-card, minimal, gradient-accent
-  - [ ] Each theme defines light and dark variants via `@media (prefers-color-scheme: dark)`
-  - [ ] Add manual dark mode class support: `html.lingua-dark`
-  - [ ] Write visual regression test (snapshot test of theme class output)
+  - [x] Define CSS Custom Property sets for each theme, scoped by `[data-lingua-theme="<name>"]`
+  - [x] Themes: dividing-line (existing), blockquote, paper, underline, dashed-underline, highlight, wavy-underline, bubble, side-by-side, mask, fade-in, italic, dotted-border, shadow-card, minimal, gradient-accent
+  - [x] Each theme defines light and dark variants via `@media (prefers-color-scheme: dark)`
+  - [x] Add manual dark mode class support: `html.lingua-dark`
+  - [x] Write visual regression test (snapshot test of theme class output)
 
-- [ ] Task 4: Wire theme system into content script
+- [x] Task 4: Wire theme system into content script (0e87cb1)
   <!-- files: content/translationDisplay.ts, entrypoints/content.ts, content/__tests__/translationDisplay.test.ts -->
   <!-- depends: task2, task3 -->
-  - [ ] Update `content/translationDisplay.ts` to read theme from storage and set `data-lingua-theme` on `<html>`
-  - [ ] Add `storage.onChanged` listener in `entrypoints/content.ts` to update theme dynamically
-  - [ ] Support `TranslationPosition` (below/above/side) in `applyTranslation()`
-  - [ ] Write unit tests for theme application and position variants
+  - [x] Update `content/translationDisplay.ts` to read theme from storage and set `data-lingua-theme` on `<html>`
+  - [x] Add `storage.onChanged` listener in `entrypoints/content.ts` to update theme dynamically
+  - [x] Support `TranslationPosition` (below/above/side) in `applyTranslation()`
+  - [x] Write unit tests for theme application and position variants
 
 ## Phase 2: Provider Validation & System Prompt
 <!-- execution: parallel -->
 <!-- depends: -->
 
-- [ ] Task 1: Implement provider connection tester
+- [x] Task 1: Implement provider connection tester (0e87cb1)
   <!-- files: services/providerTester.ts, services/__tests__/providerTester.test.ts -->
-  - [ ] Create `services/providerTester.ts` with `testConnection()` function
-  - [ ] Step 1: Simple ping — send minimal request, check 200
-  - [ ] Step 2: Model listing — `GET /v1/models`, return model array
-  - [ ] Step 3: Translation test — translate sample sentence, return result + latency
-  - [ ] Return structured `ConnectionTestResult` (steps, latency, models, error)
-  - [ ] Write unit tests with mocked fetch responses
+  - [x] Create `services/providerTester.ts` with `testConnection()` function
+  - [x] Step 1: Simple ping — send minimal request, check 200
+  - [x] Step 2: Model listing — `GET /v1/models`, return model array
+  - [x] Step 3: Translation test — translate sample sentence, return result + latency
+  - [x] Return structured `ConnectionTestResult` (steps, latency, models, error)
+  - [x] Write unit tests with mocked fetch responses
 
-- [ ] Task 2: Implement template-based system prompt
+- [x] Task 2: Implement template-based system prompt (0e87cb1)
   <!-- files: services/base.ts, lib/glossary.ts, services/__tests__/base.test.ts, lib/__tests__/glossary.test.ts -->
-  - [ ] Update `services/base.ts` → `buildSystemPrompt()` to accept optional custom template
-  - [ ] Implement `{{targetLanguage}}` and `{{glossary}}` variable injection
-  - [ ] Add `DEFAULT_SYSTEM_PROMPT_TEMPLATE` constant
-  - [ ] Add `validatePromptTemplate()` — check for critical rules (JSON format)
-  - [ ] Create `lib/glossary.ts` — format glossary entries for prompt injection
-  - [ ] Write unit tests for variable injection, defaults, and validation
+  - [x] Update `services/base.ts` → `buildSystemPrompt()` to accept optional custom template
+  - [x] Implement `{{targetLanguage}}` and `{{glossary}}` variable injection
+  - [x] Add `DEFAULT_SYSTEM_PROMPT_TEMPLATE` constant
+  - [x] Add `validatePromptTemplate()` — check for critical rules (JSON format)
+  - [x] Create `lib/glossary.ts` — format glossary entries for prompt injection
+  - [x] Write unit tests for variable injection, defaults, and validation
 
 ## Phase 3: Options Page UI
 <!-- execution: sequential -->
