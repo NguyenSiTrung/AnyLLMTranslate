@@ -6,14 +6,14 @@
   - [x] Sub-task: Write component test (rendering, basic structure)
   - [x] Sub-task: Implement component with bilingual sample text layout
   - [x] Sub-task: Add component to General tab below theme selector
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Theme CSS Integration
 
-- [ ] Task: Integrate existing theme CSS system into preview component
-  - [ ] Sub-task: Write test for theme CSS application
-  - [ ] Sub-task: Import theme styles from styles/themes.css
-  - [ ] Sub-task: Apply theme-specific CSS variables to preview container
+- [x] Task: Integrate existing theme CSS system into preview component
+  - [x] Sub-task: Write test for theme CSS application
+  - [x] Sub-task: Import theme styles from styles/inject.css
+  - [x] Sub-task: Apply theme-specific CSS variables to preview container
 - [ ] Task: Verify all 16 themes render correctly in preview
   - [ ] Sub-task: Write test to iterate through all theme names
   - [ ] Sub-task: Manual verification of each theme's visual appearance

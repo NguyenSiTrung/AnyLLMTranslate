@@ -6,6 +6,9 @@ import { useSettingsStore } from '@/stores/settingsStore';
 // Mock the settings store
 vi.mock('@/stores/settingsStore');
 
+// Import the CSS to ensure it's available in tests
+import '@/styles/inject.css';
+
 describe('ThemePreview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,5 +79,38 @@ describe('ThemePreview', () => {
     expect(translatedText).toBeInTheDocument();
     expect(translatedText).toHaveClass('lingua-lens-translation');
     expect(translatedText).toHaveTextContent('El rápido zorro marrón salta sobre el perro perezoso.');
+  });
+
+  it('applies different theme when settings change', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'blockquote',
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
+  });
+
+  it('applies bubble theme correctly', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'bubble',
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'bubble');
+  });
+
+  it('applies minimal theme correctly', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'minimal',
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-lingua-theme]');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'minimal');
   });
 });

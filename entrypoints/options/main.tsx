@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './style.css';
+import '@/styles/inject.css';
 
 // Ensure minimum window size for options page
 const ensureMinimumSize = () => {
