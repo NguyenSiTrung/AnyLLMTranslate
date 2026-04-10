@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Plus, Trash2, FileJson, FileText, Upload, BookOpen } from 'lucide-react';
+import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { GlossaryEntry } from '@/types/config';
 import {
@@ -18,6 +18,7 @@ import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { EmptyState } from '@/ui/EmptyState';
 import { useToast } from '@/ui/ToastProvider';
+import { GlossaryTranslatePreview } from './GlossaryTranslatePreview';
 
 export function DictionarySection() {
   const glossary = useSettingsStore((s) => s.glossary);
@@ -27,8 +28,11 @@ export function DictionarySection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSource, setEditSource] = useState('');
   const [editTarget, setEditTarget] = useState('');
+  const [mismatchedIds, setMismatchedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
+
+  const clearMismatches = useCallback(() => setMismatchedIds(new Set()), []);
 
   const handleAdd = useCallback(() => {
     if (!newSource.trim() || !newTarget.trim()) return;
@@ -40,11 +44,13 @@ export function DictionarySection() {
     updateSettings({ glossary: [...glossary, entry] });
     setNewSource('');
     setNewTarget('');
-  }, [newSource, newTarget, glossary, updateSettings]);
+    clearMismatches();
+  }, [newSource, newTarget, glossary, updateSettings, clearMismatches]);
 
   const handleDelete = useCallback((id: string) => {
     updateSettings({ glossary: glossary.filter((e) => e.id !== id) });
-  }, [glossary, updateSettings]);
+    clearMismatches();
+  }, [glossary, updateSettings, clearMismatches]);
 
   const handleEditStart = useCallback((entry: GlossaryEntry) => {
     setEditingId(entry.id);
@@ -60,7 +66,8 @@ export function DictionarySection() {
       ),
     });
     setEditingId(null);
-  }, [editSource, editTarget, glossary, updateSettings]);
+    clearMismatches();
+  }, [editSource, editTarget, glossary, updateSettings, clearMismatches]);
 
   const handleExport = useCallback((format: 'csv' | 'json') => {
     const content = format === 'csv' ? exportGlossaryCSV(glossary) : exportGlossaryJSON(glossary);
@@ -192,6 +199,7 @@ export function DictionarySection() {
                   className="border-t border-zinc-800 hover:bg-zinc-800/50 animate-stagger"
                   style={{ '--stagger-delay': idx } as React.CSSProperties}
                 >
+                  {/* Mismatch badge column */}
                   {editingId === entry.id ? (
                     <>
                       <td className="px-4 py-1.5">
@@ -220,7 +228,15 @@ export function DictionarySection() {
                         className="px-4 py-2 text-zinc-200 cursor-pointer hover:text-blue-400 transition-colors"
                         onClick={() => handleEditStart(entry)}
                       >
-                        {entry.source}
+                        <span className="flex items-center gap-1.5">
+                          {mismatchedIds.has(entry.id) && (
+                            <AlertTriangle
+                              className="w-3.5 h-3.5 text-amber-400 flex-shrink-0"
+                              aria-label="Glossary mismatch detected"
+                            />
+                          )}
+                          {entry.source}
+                        </span>
                       </td>
                       <td
                         className="px-4 py-2 text-zinc-300 cursor-pointer hover:text-blue-400 transition-colors"
@@ -248,6 +264,9 @@ export function DictionarySection() {
           </div>
         </div>
       )}
+
+      {/* Live translate preview panel */}
+      <GlossaryTranslatePreview onMismatchUpdate={setMismatchedIds} />
     </div>
   );
 }

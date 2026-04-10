@@ -9,6 +9,7 @@ import {
   exportGlossaryCSV,
   exportGlossaryJSON,
   parseGlossaryJSON,
+  checkGlossaryMismatches,
 } from '@/lib/glossary';
 import type { GlossaryEntry } from '@/types/config';
 
@@ -138,5 +139,67 @@ describe('parseGlossaryJSON', () => {
     const json = '[{"id": "custom-id", "source": "hello", "target": "xin chào"}]';
     const result = parseGlossaryJSON(json);
     expect(result[0].id).toBe('custom-id');
+  });
+});
+
+describe('checkGlossaryMismatches', () => {
+  const entries: GlossaryEntry[] = [
+    { id: '1', source: 'machine learning', target: 'học máy' },
+    { id: '2', source: 'API', target: 'API' },
+    { id: '3', source: 'neural network', target: 'mạng nơ-ron' },
+  ];
+
+  it('returns entries whose target is missing from output', () => {
+    const result = checkGlossaryMismatches(
+      entries,
+      'We use machine learning and API in our system.',
+      'Chúng tôi sử dụng ML và API trong hệ thống.',
+    );
+    // 'machine learning' source in input, 'học máy' absent from output → flagged
+    // 'API' source in input, 'API' present in output → not flagged
+    expect(result.map((e) => e.id)).toContain('1');
+    expect(result.map((e) => e.id)).not.toContain('2');
+  });
+
+  it('returns empty array when all glossary entries are correctly translated', () => {
+    const result = checkGlossaryMismatches(
+      entries,
+      'machine learning and API',
+      'học máy và API',
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it('is case-insensitive for source term matching', () => {
+    const result = checkGlossaryMismatches(
+      entries,
+      'Machine Learning is great.',  // uppercase 'M'
+      'Something else entirely.',
+    );
+    expect(result.map((e) => e.id)).toContain('1');
+  });
+
+  it('is case-insensitive for target term matching', () => {
+    const result = checkGlossaryMismatches(
+      entries,
+      'machine learning',
+      'HỌC MÁY is mentioned here.',  // uppercase target
+    );
+    // 'học máy'.toLowerCase() is in output.toLowerCase() → no mismatch
+    expect(result).toHaveLength(0);
+  });
+
+  it('does not flag entries whose source is not in the input', () => {
+    const result = checkGlossaryMismatches(
+      entries,
+      'Hello world',  // no glossary source terms
+      'Xin chào thế giới',
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array for empty entries list', () => {
+    const result = checkGlossaryMismatches([], 'machine learning', 'hello');
+    expect(result).toHaveLength(0);
   });
 });

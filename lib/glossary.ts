@@ -12,6 +12,26 @@ export function formatGlossary(entries: GlossaryEntry[]): string {
   return `Translation Glossary (always use these translations):\n${lines.join('\n')}`;
 }
 
+/**
+ * Check which glossary entries were not honoured in the translation output.
+ * An entry is flagged when its source term appears (case-insensitively) in
+ * `inputText` but its target term is absent from `outputText`.
+ */
+export function checkGlossaryMismatches(
+  entries: GlossaryEntry[],
+  inputText: string,
+  outputText: string,
+): GlossaryEntry[] {
+  const inputLower = inputText.toLowerCase();
+  const outputLower = outputText.toLowerCase();
+
+  return entries.filter(
+    (e) =>
+      inputLower.includes(e.source.toLowerCase()) &&
+      !outputLower.includes(e.target.toLowerCase()),
+  );
+}
+
 /** Parse a CSV string into GlossaryEntry objects */
 export function parseGlossaryCSV(csv: string): GlossaryEntry[] {
   const entries: GlossaryEntry[] = [];

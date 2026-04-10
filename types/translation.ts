@@ -28,6 +28,10 @@ export interface TranslationRequest {
   sourceLanguage: string;
   /** Target language (ISO 639-1) */
   targetLanguage: string;
+  /** Pre-formatted glossary block from formatGlossary() — injected into system prompt */
+  glossaryBlock?: string;
+  /** User's custom system prompt template override */
+  customSystemPrompt?: string | null;
 }
 
 /** Result from the translation service */

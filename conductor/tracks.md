@@ -22,5 +22,5 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [ ] Track: Custom Dictionary (Glossary) — Wire & Validate
+## [~] Track: Custom Dictionary (Glossary) — Wire & Validate
 *Link: [./conductor/tracks/glossary-wire_20260410/](./conductor/tracks/glossary-wire_20260410/)*

@@ -15,6 +15,7 @@ import { loadSettings, onSettingsChange } from '@/lib/config';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
+import { formatGlossary } from '@/lib/glossary';
 
  
 
@@ -41,6 +42,8 @@ async function handleTranslate(
 ): Promise<TranslationResultMessage> {
   try {
     const service = await initService();
+    const settings = await loadSettings();
+    const glossaryBlock = formatGlossary(settings.glossary ?? []);
 
     const texts = new Map<string, string>();
     for (const piece of message.pieces) {
@@ -51,6 +54,8 @@ async function handleTranslate(
       texts,
       sourceLanguage: message.sourceLanguage,
       targetLanguage: message.targetLanguage,
+      glossaryBlock: glossaryBlock || undefined,
+      customSystemPrompt: settings.customSystemPrompt ?? null,
     });
 
     if (result.success) {
@@ -125,10 +130,15 @@ async function handleTranslateSubtitle(
         texts.set(cue.text, cue.text);
       }
 
+      const subtitleSettings = await loadSettings();
+      const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
+
       const result = await service.translate({
         texts,
         sourceLanguage,
         targetLanguage,
+        glossaryBlock: subtitleGlossary || undefined,
+        customSystemPrompt: subtitleSettings.customSystemPrompt ?? null,
       });
 
       if (result.success) {
@@ -184,6 +194,8 @@ async function handleTranslateSelection(
 ): Promise<{ success: boolean; translatedText?: string; error?: string }> {
   try {
     const service = await initService();
+    const selectionSettings = await loadSettings();
+    const selectionGlossary = formatGlossary(selectionSettings.glossary ?? []);
     const texts = new Map<string, string>();
     texts.set('selection', message.text);
 
@@ -191,6 +203,8 @@ async function handleTranslateSelection(
       texts,
       sourceLanguage: message.sourceLanguage,
       targetLanguage: message.targetLanguage,
+      glossaryBlock: selectionGlossary || undefined,
+      customSystemPrompt: selectionSettings.customSystemPrompt ?? null,
     });
 
     if (result.success) {

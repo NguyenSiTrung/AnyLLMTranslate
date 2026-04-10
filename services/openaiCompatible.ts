@@ -27,7 +27,11 @@ export class OpenAICompatibleService implements TranslationService {
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     try {
-      const systemPrompt = buildSystemPrompt(request.targetLanguage);
+      const systemPrompt = buildSystemPrompt(
+        request.targetLanguage,
+        request.customSystemPrompt,
+        request.glossaryBlock,
+      );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
       const completionRequest: ChatCompletionRequest = {

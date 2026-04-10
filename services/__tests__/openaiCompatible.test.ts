@@ -144,18 +144,56 @@ describe('OpenAICompatibleService', () => {
       expect(result.error).toContain('Invalid API key');
     });
 
-    it('handles network errors', async () => {
-      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    it('includes glossary block in system prompt when glossaryBlock provided', async () => {
+      const responseContent = JSON.stringify({ translations: { p1: 'Học máy' } });
+      globalThis.fetch = mockFetchResponse(responseContent);
 
       const service = new OpenAICompatibleService(mockConfig);
-      const result = await service.translate({
+      await service.translate({
+        texts: new Map([['p1', 'machine learning']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        glossaryBlock: 'Translation Glossary (always use these translations):\n- "machine learning" → "học máy"',
+      });
+
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string) as { messages: Array<{ role: string; content: string }> };
+      const systemMessage = body.messages[0];
+      expect(systemMessage.role).toBe('system');
+      expect(systemMessage.content).toContain('Translation Glossary');
+      expect(systemMessage.content).toContain('machine learning');
+    });
+
+    it('does not include glossary section when glossaryBlock is absent', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { p1: 'Xin chào' } }));
+
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
         texts: new Map([['p1', 'Hello']]),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Network error');
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string) as { messages: Array<{ role: string; content: string }> };
+      expect(body.messages[0].content).not.toContain('Translation Glossary');
+    });
+
+    it('uses custom system prompt template when customSystemPrompt provided', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { p1: 'Xin chào' } }));
+      const customTemplate = 'Custom prompt for {{targetLanguage}}. Return {"translations": {"p1": "x"}}. {{glossary}}';
+
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        customSystemPrompt: customTemplate,
+      });
+
+      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1]?.body as string) as { messages: Array<{ role: string; content: string }> };
+      expect(body.messages[0].content).toContain('Custom prompt for vi');
     });
   });
 

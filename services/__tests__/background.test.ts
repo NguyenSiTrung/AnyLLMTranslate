@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleMessage } from '../background';
 
 // Mock chrome APIs
@@ -43,6 +43,11 @@ function mockFetch(content: string) {
 }
 
 describe('services/background', () => {
+  beforeEach(() => {
+    // Reset stored settings before each test
+    delete mockStorage['lingua-lens-settings'];
+  });
+
   describe('handleMessage — translate', () => {
     it('translates pieces and returns results', async () => {
       mockFetch(JSON.stringify({ translations: { p1: 'Xin chào' } }));
@@ -80,6 +85,81 @@ describe('services/background', () => {
       expect(typedResult.success).toBe(false);
       expect(typedResult.error).toBeDefined();
     });
+
+    it('forwards glossaryBlock to service.translate() when settings have glossary entries', async () => {
+      // Store settings with glossary entries
+      mockStorage['lingua-lens-settings'] = {
+        provider: {
+          preset: 'ollama',
+          baseUrl: 'http://localhost:11434/v1',
+          apiKey: '',
+          model: 'gemma3:4b',
+          temperature: 0.3,
+          maxTokens: 4096,
+          displayName: 'Ollama',
+          requiresApiKey: false,
+        },
+        glossary: [
+          { id: 'g1', source: 'machine learning', target: 'học máy' },
+        ],
+        customSystemPrompt: null,
+      };
+
+      mockFetch(JSON.stringify({ translations: { p1: 'Học máy' } }));
+
+      await handleMessage(
+        {
+          action: 'translate',
+          pieces: [{ id: 'p1', text: 'machine learning' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      expect(fetchMock).toHaveBeenCalled();
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('machine learning');
+      expect(body.messages[0].content).toContain('Translation Glossary');
+    });
+
+    it('omits glossaryBlock when settings have empty glossary', async () => {
+      mockStorage['lingua-lens-settings'] = {
+        provider: {
+          preset: 'ollama',
+          baseUrl: 'http://localhost:11434/v1',
+          apiKey: '',
+          model: 'gemma3:4b',
+          temperature: 0.3,
+          maxTokens: 4096,
+          displayName: 'Ollama',
+          requiresApiKey: false,
+        },
+        glossary: [],
+        customSystemPrompt: null,
+      };
+
+      mockFetch(JSON.stringify({ translations: { p1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translate',
+          pieces: [{ id: 'p1', text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).not.toContain('Translation Glossary');
+    });
   });
 
   describe('handleMessage — unknown action', () => {
@@ -92,3 +172,4 @@ describe('services/background', () => {
     });
   });
 });
+
