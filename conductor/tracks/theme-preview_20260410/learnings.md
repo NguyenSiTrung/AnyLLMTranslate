@@ -65,4 +65,13 @@ Patterns, gotchas, and context discovered during implementation.
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## [2026-04-10 13:59] - Phase 1-5: Complete Theme Preview Implementation
+Thread: N/A
+- **Implemented:** ThemePreview component with live theme preview in options page
+- **Files changed:** entrypoints/options/ThemePreview.tsx, entrypoints/options/__tests__/ThemePreview.test.tsx, entrypoints/options/main.tsx, entrypoints/options/sections/GeneralSection.tsx
+- **Commit:** bdcde1d
+- **Learnings:**
+  - Patterns: Theme preview requires importing actual theme CSS (styles/inject.css) into options page for accurate preview; component uses useSettingsStore() for automatic reactivity to theme changes; light/dark mode toggle applies lingua-dark class to preview container for CSS scoping
+  - Gotchas: Component must handle undefined/empty theme values - default to 'dividing-line' to prevent rendering issues; unused imports (Moon, Sun) must be removed to pass lint
+  - Context: Theme CSS uses [data-lingua-theme] attribute on container for scoping; dark mode supported via html.lingua-dark class and @media (prefers-color-scheme: dark)
+---

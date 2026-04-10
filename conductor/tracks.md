@@ -22,5 +22,5 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [~] Track: Translation Theme Visual Style Preview
+## [x] Track: Translation Theme Visual Style Preview
 *Link: [./conductor/tracks/theme-preview_20260410/](./conductor/tracks/theme-preview_20260410/)*
