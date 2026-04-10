@@ -148,5 +148,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Clear badges on ANY mutation (add/delete/edit) by calling `clearMismatches()` in each handler's useCallback. (from: glossary-wire_20260410, archived 2026-04-10)
 
 ---
-Last refreshed: 2026-04-10T16:54:00+07:00
-Codebase health: 403 tests across 32 files, 504KB build (chrome-mv3)
+Last refreshed: 2026-04-10T18:20:00+07:00
+Codebase health: 408 tests across 32 files, 524KB build (chrome-mv3)

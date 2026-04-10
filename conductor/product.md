@@ -80,7 +80,7 @@ LinguaLens is an open-source, privacy-first Chrome extension for immersive bilin
 - **Paragraph Translation Progress Indicators** (Archived 2026-04-10): Pure CSS border-trick spinner via `::before` pseudo-element, in-place placeholder update system (no layout shift), batch spinner pattern (show all before `await`), error state on translation element itself.
 
 ### Current State
-- All tracks completed and archived. 403 tests passing across 32 files. 504KB build.
+- All tracks completed and archived. 408 tests passing across 32 files. 524KB build.
 
 ## Out of Scope (Initial Release)
 
