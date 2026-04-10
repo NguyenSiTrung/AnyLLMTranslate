@@ -47,6 +47,20 @@ function updateTabState(tabId: number, updates: Partial<TabState>): void {
   const state = getTabState(tabId);
   Object.assign(state, updates);
   tabStates.set(tabId, state);
+
+  // Notify popup of status change
+  chrome.runtime.sendMessage({
+    action: 'statusUpdate',
+    tabId,
+    status: {
+      status: state.status,
+      translatedCount: state.translatedCount,
+      totalCount: state.totalCount,
+      error: state.error,
+    },
+  }).catch(() => {
+    // Popup may not be open, ignore error
+  });
 }
 
 /** Initialize or re-create translation service from settings */
@@ -292,7 +306,8 @@ export function handleMessage(
     case 'restore':
       return Promise.resolve(handleRestore(tabId));
     case 'getStatus':
-      return Promise.resolve(handleGetStatus(tabId));
+      // Use message.tabId if provided (from popup), otherwise fall back to sender.tab?.id
+      return Promise.resolve(handleGetStatus('tabId' in message ? (message as { tabId: number }).tabId : tabId));
     case 'testConnection':
       return handleTestConnection();
     case 'updateSettings':

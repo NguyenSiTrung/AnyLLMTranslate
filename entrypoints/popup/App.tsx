@@ -3,7 +3,7 @@ import {
   Languages, Zap, Loader2, CheckCircle2, AlertCircle, Settings,
   ArrowRightLeft, Palette, ChevronDown, ExternalLink,
 } from 'lucide-react';
-import type { StatusResponse, TabTranslationStatus } from '@/types/messages';
+import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS } from '@/types/config';
 import type { ThemeName, DisplayMode, ExtensionSettings } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
@@ -39,13 +39,26 @@ export default function App() {
     loadSettingsFromStorage();
     queryTabStatus();
     // Listen for cross-context settings changes
-    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+    const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local' && changes[STORAGE_KEYS.SETTINGS]) {
         setSettings({ ...DEFAULT_SETTINGS, ...changes[STORAGE_KEYS.SETTINGS].newValue });
       }
     };
-    chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
+    chrome.storage.onChanged.addListener(storageListener);
+
+    // Listen for status updates from background
+    const messageListener = (message: ExtensionMessage) => {
+      if (message.action === 'statusUpdate') {
+        setStatus(message.status);
+        setIsTranslating(message.status.status === 'translating');
+      }
+    };
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(storageListener);
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
   }, []);
 
   async function loadSettingsFromStorage() {

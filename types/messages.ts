@@ -14,7 +14,8 @@ export type MessageAction =
   | 'updateSettings'
   | 'translateSubtitle'
   | 'translateSelection'
-  | 'FETCH_SUBTITLE';
+  | 'FETCH_SUBTITLE'
+  | 'statusUpdate';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -75,6 +76,13 @@ export interface TranslateSelectionMessage {
   targetLanguage: string;
 }
 
+/** Status update notification from background → popup */
+export interface StatusUpdateMessage {
+  action: 'statusUpdate';
+  tabId: number;
+  status: StatusResponse;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -84,7 +92,8 @@ export type ExtensionMessage =
   | UpdateSettingsMessage
   | TranslateSubtitleMessage
   | TranslateSelectionMessage
-  | FetchSubtitleMessage;
+  | FetchSubtitleMessage
+  | StatusUpdateMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {
