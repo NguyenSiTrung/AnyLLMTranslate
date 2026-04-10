@@ -16,4 +16,7 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
-*No active tracks.*
+
+- [ ] Track: Fix Display Theme Not Applied Bug (`display-theme-fix_20260410`)
+  *Link: [./conductor/tracks/display-theme-fix_20260410/](./conductor/tracks/display-theme-fix_20260410/)*
+  *Priority: High*
