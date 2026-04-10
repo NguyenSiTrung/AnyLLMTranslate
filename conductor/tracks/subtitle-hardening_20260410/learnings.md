@@ -27,4 +27,15 @@ From `conductor/patterns.md`:
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## [2026-04-10 19:00] - All Phases: Subtitle Hardening Implementation
+- **Implemented:** XHR block-and-wait, addEventListener patching, coordinator timeout clearing, origin validation, fetch error guard, overlay video targeting, YouTube JSON3 segment join fix
+- **Files changed:** inject/xhrInterceptor.ts, inject/fetchInterceptor.ts, inject/messageBridge.ts, inject/subtitleHandlers/youtube.ts, content/subtitleCoordinator.ts, content/subtitleOverlay.ts, tests/unit/xhrInterceptor.test.ts, tests/unit/fetchInterceptor.test.ts, tests/unit/messageBridge.test.ts, tests/unit/subtitleCoordinator.test.ts, tests/unit/subtitleOverlay.test.ts, tests/unit/youtubeHandler.test.ts
+- **Commit:** cde44e6
+- **Learnings:**
+  - Patterns: XHR `addEventListener` patch must capture handlers in a Map per XHR instance, suppressing real registration and replaying manually after translation.
+  - Patterns: `eslint-disable-next-line @typescript-eslint/no-this-alias` needed for `this` capture in patched prototype methods.
+  - Gotchas: jsdom's XMLHttpRequest fires real readystatechange events when properties change — test mocks must capture handlers via spy on `addEventListener` and NOT call the real impl.
+  - Gotchas: FetchInterceptor captures `window.fetch` at module load time — tests must mock `window.fetch` BEFORE dynamic import of the module.
+  - Gotchas: YouTube JSON3 `join('')` collapses segment boundaries — `join(' ')` with `filter` + `replace(/\s+/g, ' ')` preserves word spacing.
+  - Context: `clearPendingRequest` is wired via `onMessage('SUBTITLE_TRANSLATED')` in the coordinator's `startCoordinator()`.
+---
