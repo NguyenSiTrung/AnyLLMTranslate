@@ -86,7 +86,12 @@ export class MutationWatcher {
     if (this.debounceTimer) return;
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.flush();
+      // Defer to idle callback for non-critical processing
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(() => this.flush(), { timeout: 2000 });
+      } else {
+        this.flush();
+      }
     }, this.debounceMs);
   }
 

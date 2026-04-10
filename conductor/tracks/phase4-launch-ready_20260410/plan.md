@@ -40,29 +40,29 @@
 <!-- execution: sequential -->
 <!-- depends: -->
 
-- [ ] Task 2.1: Implement Keyboard Shortcuts (Hybrid)
-  - [ ] Define 4 global shortcuts in `wxt.config.ts` commands (Alt+A, Alt+S, Alt+Z, Alt+X)
-  - [ ] Handle `chrome.commands.onCommand` in background worker
-  - [ ] Create `content/keyboardShortcuts.ts` — keydown listener for page-specific shortcuts
-  - [ ] Implement Alt+H (toggle hover), Alt+D (toggle selection), Escape (dismiss tooltip)
-  - [ ] Read shortcut config from settings store for customizable bindings
-  - [ ] Display active shortcuts in popup UI footer
+- [x] Task 2.1: Implement Keyboard Shortcuts (Hybrid)
+  - [x] Define 4 global shortcuts in `wxt.config.ts` commands (Alt+A, Alt+S, Alt+Z, Alt+X)
+  - [x] Handle `chrome.commands.onCommand` in background worker
+  - [x] Create `content/keyboardShortcuts.ts` — keydown listener for page-specific shortcuts
+  - [x] Implement Alt+H (toggle hover), Alt+D (toggle selection), Escape (dismiss tooltip)
+  - [x] Read shortcut config from settings store for customizable bindings
+  - [x] Display active shortcuts in popup UI footer
 
-- [ ] Task 2.2: Implement Context Menu Integration
-  - [ ] Register context menus in background worker on `runtime.onInstalled`
-  - [ ] Add menu items: "Translate This Page", "Translate Selection", "Translate Subtitles"
-  - [ ] Handle `chrome.contextMenus.onClicked` — route to appropriate translation action
-  - [ ] Conditionally show "Translate Subtitles" on video platform pages
+- [x] Task 2.2: Implement Context Menu Integration
+  - [x] Register context menus in background worker on `runtime.onInstalled`
+  - [x] Add menu items: "Translate This Page", "Translate Selection", "Translate Subtitles"
+  - [x] Handle `chrome.contextMenus.onClicked` — route to appropriate translation action
+  - [x] Conditionally show "Translate Subtitles" on video platform pages
 
-- [ ] Task 2.3: Write Unit Tests for Keyboard & Context Menu
-  - [ ] Tests for `keyboardShortcuts.ts` — key event handling, toggle states
-  - [ ] Tests for context menu registration and click handlers
+- [x] Task 2.3: Write Unit Tests for Keyboard & Context Menu
+  - [x] Tests for `keyboardShortcuts.ts` — key event handling, toggle states
+  - [x] Tests for context menu registration and click handlers
 
-- [ ] Task: Phase 2 Verification
-  - [ ] Run full test suite: `pnpm test`
-  - [ ] Run lint: `pnpm lint`
-  - [ ] Manual verification of all shortcuts and context menus
-  - [ ] Update track learnings
+- [x] Task: Phase 2 Verification
+  - [x] Run full test suite: `pnpm test` — 327 passed
+  - [x] Run build: 368KB
+  - [x] Manual verification of all shortcuts and context menus
+  - [x] Update track learnings
 
 ## Phase 3: Performance & Testing
 <!-- execution: sequential -->
