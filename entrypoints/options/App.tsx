@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Settings, Zap, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Languages,
+  Languages, Check,
 } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
+import { ToastProvider } from '@/ui/ToastProvider';
 import { GeneralSection } from './sections/GeneralSection';
 import { ProviderSection } from './sections/ProviderSection';
 import { ThemesSection } from './sections/ThemesSection';
@@ -13,21 +14,59 @@ import { SubtitlesSection } from './sections/SubtitlesSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AdvancedSection } from './sections/AdvancedSection';
 
-const TABS = [
-  { id: 'general', label: 'General', icon: Settings },
-  { id: 'provider', label: 'Translation Provider', icon: Zap },
-  { id: 'themes', label: 'Display Themes', icon: Palette },
-  { id: 'site-rules', label: 'Site Rules', icon: Globe },
-  { id: 'dictionary', label: 'Custom Dictionary', icon: BookOpen },
-  { id: 'subtitles', label: 'Subtitles', icon: Subtitles },
-  { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
-  { id: 'advanced', label: 'Advanced', icon: Wrench },
-] as const;
+/* ── Grouped Navigation ─────────────────────────────────────── */
 
-type TabId = (typeof TABS)[number]['id'];
+interface TabDef {
+  id: string;
+  label: string;
+  icon: typeof Settings;
+}
+
+interface TabGroup {
+  label: string;
+  tabs: TabDef[];
+}
+
+const TAB_GROUPS: TabGroup[] = [
+  {
+    label: 'DISPLAY',
+    tabs: [
+      { id: 'general', label: 'General', icon: Settings },
+      { id: 'themes', label: 'Display Themes', icon: Palette },
+    ],
+  },
+  {
+    label: 'TRANSLATION',
+    tabs: [
+      { id: 'provider', label: 'Translation Provider', icon: Zap },
+      { id: 'dictionary', label: 'Custom Dictionary', icon: BookOpen },
+      { id: 'site-rules', label: 'Site Rules', icon: Globe },
+    ],
+  },
+  {
+    label: 'MEDIA',
+    tabs: [
+      { id: 'subtitles', label: 'Subtitles', icon: Subtitles },
+    ],
+  },
+  {
+    label: 'SYSTEM',
+    tabs: [
+      { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Keyboard },
+      { id: 'advanced', label: 'Advanced', icon: Wrench },
+    ],
+  },
+];
+
+const ALL_TAB_IDS = TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id));
+type TabId = string;
+
+/* ── Component ───────────────────────────────────────────────── */
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const [showSaved, setShowSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const loadFromStorage = useSettingsStore((s) => s.loadFromStorage);
   const isLoaded = useSettingsStore((s) => s.isLoaded);
 
@@ -36,6 +75,35 @@ export default function App() {
     const cleanup = initStorageSync();
     return cleanup;
   }, [loadFromStorage]);
+
+  // Auto-save feedback: listen for store updates
+  useEffect(() => {
+    const unsub = useSettingsStore.subscribe(() => {
+      setShowSaved(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setShowSaved(false), 2000);
+    });
+    return () => {
+      unsub();
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  /* Keyboard navigation within sidebar */
+  const handleSidebarKeyDown = (e: React.KeyboardEvent) => {
+    const idx = ALL_TAB_IDS.indexOf(activeTab);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = ALL_TAB_IDS[(idx + 1) % ALL_TAB_IDS.length];
+      setActiveTab(next);
+      document.getElementById(`tab-${next}`)?.focus();
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prev = ALL_TAB_IDS[(idx - 1 + ALL_TAB_IDS.length) % ALL_TAB_IDS.length];
+      setActiveTab(prev);
+      document.getElementById(`tab-${prev}`)?.focus();
+    }
+  };
 
   if (!isLoaded) {
     return (
@@ -60,54 +128,94 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-950">
-      {/* Sidebar */}
-      <nav className="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col shrink-0" aria-label="Settings navigation">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 py-5 border-b border-zinc-800">
-          <Languages className="w-6 h-6 text-blue-400" />
-          <span className="text-base font-semibold tracking-tight text-zinc-100">LinguaLens</span>
-          <span className="text-[10px] text-zinc-500 ml-auto font-mono">v0.1.0</span>
-        </div>
+    <ToastProvider>
+      <div className="flex min-h-screen bg-zinc-950">
+        {/* ── Sidebar ── */}
+        <nav
+          className="w-64 border-r border-zinc-800 bg-zinc-950 flex flex-col shrink-0"
+          aria-label="Settings navigation"
+        >
+          {/* Brand header */}
+          <div className="flex items-center gap-2.5 px-5 py-5 border-b border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950">
+            <Languages className="w-6 h-6 text-blue-400" />
+            <span className="text-base font-semibold tracking-tight text-zinc-100">LinguaLens</span>
+            <span className="text-[10px] text-zinc-500 ml-auto font-mono">v0.1.0</span>
+          </div>
 
-        {/* Tab List */}
-        <div className="flex-1 py-3 space-y-0.5 overflow-y-auto" role="tablist" aria-orientation="vertical">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`panel-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-all duration-150 cursor-pointer ${
-                  isActive
-                    ? 'text-blue-400 bg-blue-500/10 border-r-2 border-blue-400'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+          {/* Grouped tab list */}
+          <div
+            className="flex-1 py-2 overflow-y-auto"
+            role="tablist"
+            aria-orientation="vertical"
+            onKeyDown={handleSidebarKeyDown}
+          >
+            {TAB_GROUPS.map((group) => (
+              <div key={group.label} className="mb-1">
+                {/* Group label */}
+                <div className="px-5 pt-3 pb-1">
+                  <span className="text-[10px] font-semibold tracking-widest text-zinc-600 uppercase">
+                    {group.label}
+                  </span>
+                </div>
+                {/* Group tabs */}
+                {group.tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      id={`tab-${tab.id}`}
+                      role="tab"
+                      tabIndex={isActive ? 0 : -1}
+                      aria-selected={isActive}
+                      aria-controls={`panel-${tab.id}`}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 px-5 py-2 text-sm transition-all duration-150 cursor-pointer relative ${
+                        isActive
+                          ? 'text-blue-400 bg-blue-500/10'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 hover:translate-x-0.5'
+                      }`}
+                    >
+                      {/* Animated active indicator */}
+                      {isActive && (
+                        <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-blue-400 rounded-full sidebar-indicator" />
+                      )}
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
 
-      {/* Content Area */}
-      <main
-        className="flex-1 overflow-y-auto"
-        id={`panel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-      >
-        <div className="max-w-3xl mx-auto px-8 py-8">
-          {renderSection()}
-        </div>
-      </main>
-    </div>
+          {/* Auto-save badge in footer */}
+          <div className="px-5 py-3 border-t border-zinc-800">
+            <div
+              className={`flex items-center gap-1.5 text-xs transition-opacity duration-300 ${
+                showSaved ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-zinc-400">Auto-saved</span>
+            </div>
+          </div>
+        </nav>
+
+        {/* ── Content Area ── */}
+        <main
+          className="flex-1 overflow-y-auto"
+          id={`panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+        >
+          <div className="max-w-3xl mx-auto px-8 py-8">
+            <div key={activeTab} className="tab-content-enter">
+              {renderSection()}
+            </div>
+          </div>
+        </main>
+      </div>
+    </ToastProvider>
   );
 }
