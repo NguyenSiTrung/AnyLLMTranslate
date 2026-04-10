@@ -23,8 +23,8 @@ describe('Button', () => {
 
   it('applies variant classes', () => {
     const { container } = render(<Button variant="danger">Delete</Button>);
-    const btn = container.querySelector('button')!;
-    expect(btn.className).toContain('bg-red-600/20');
+    const btn = container.querySelector('button');
+    expect(btn?.className).toContain('bg-red-600/20');
   });
 
   it('shows loading spinner and disables', () => {
@@ -60,7 +60,7 @@ describe('Input', () => {
 
   it('toggles password visibility', () => {
     render(<Input type="password" value="secret" onChange={() => {}} />);
-    const input = document.querySelector('input')!;
+    const input = document.querySelector('input') as HTMLInputElement;
     expect(input.type).toBe('password');
     fireEvent.click(screen.getByLabelText('Show password'));
     expect(input.type).toBe('text');

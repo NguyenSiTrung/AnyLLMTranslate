@@ -16,5 +16,5 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [ ] Track: Phase 5 — Settings UI/UX Overhaul
+## [~] Track: Phase 5 — Settings UI/UX Overhaul
 *Link: [./conductor/tracks/phase5-settings-ux_20260410/](./conductor/tracks/phase5-settings-ux_20260410/)*

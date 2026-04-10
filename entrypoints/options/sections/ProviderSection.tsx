@@ -238,6 +238,19 @@ export function ProviderSection() {
                     <p className="text-sm text-zinc-200">&ldquo;{testResult.translationSample}&rdquo;</p>
                   </div>
                 )}
+
+                {/* Success celebration */}
+                {testResult && testResult.overall && (
+                  <div className="mt-3 flex items-center gap-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg animate-scale-in animate-glow-pulse">
+                    <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center animate-scale-in">
+                      <CheckCircle2 className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-emerald-400">All checks passed!</p>
+                      <p className="text-xs text-zinc-500">Your provider is configured correctly.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

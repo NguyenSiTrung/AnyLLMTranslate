@@ -129,6 +129,13 @@ export default function App() {
 
   return (
     <ToastProvider>
+      {/* Skip to main content — accessibility */}
+      <a
+        href="#settings-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:text-sm"
+      >
+        Skip to content
+      </a>
       <div className="flex min-h-screen bg-zinc-950">
         {/* ── Sidebar ── */}
         <nav
@@ -209,7 +216,7 @@ export default function App() {
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
         >
-          <div className="max-w-3xl mx-auto px-8 py-8">
+          <div id="settings-content" className="max-w-3xl mx-auto px-8 py-8">
             <div key={activeTab} className="tab-content-enter">
               {renderSection()}
             </div>

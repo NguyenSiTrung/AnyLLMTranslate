@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from '@/ui/ToastProvider';
 import { Toast } from '@/ui/Toast';
 import { Modal } from '@/ui/Modal';
