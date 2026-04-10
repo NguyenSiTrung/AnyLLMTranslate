@@ -131,7 +131,7 @@ Build a Chrome extension that replicates the core value proposition of Immersive
 | **State** | **Zustand v5** + `chrome.storage.local` | ✅ Implemented |
 | **Icons** | **Lucide React** | ✅ Implemented |
 | **Cache** | IndexedDB via `idb-keyval` (SHA-256 keys, TTL+LRU) | ✅ Implemented |
-| **Testing** | **Vitest 3.1** + `@testing-library/react` + `jsdom` | ✅ 400 tests, 32 files |
+| **Testing** | **Vitest 3.1** + `@testing-library/react` + `jsdom` | ✅ 408 tests, 32 files |
 | **Linting** | ESLint 9 + `typescript-eslint` + Prettier | ✅ Implemented |
 | **Packaging** | `wxt zip` → Chrome Web Store | ✅ Ready |
 
@@ -164,6 +164,7 @@ AnyLLMTranslate/
 │           ├── ProviderSection.tsx      # API endpoint, key, model, connection test
 │           ├── ThemesSection.tsx        # 16 themes + ThemePreview
 │           ├── DictionarySection.tsx    # Glossary CRUD + CSV/JSON import/export
+│           ├── GlossaryTranslatePreview.tsx # Live dictionary mismatch validation preview
 │           ├── SiteRulesSection.tsx     # Per-site include/exclude selectors
 │           ├── SubtitlesSection.tsx     # Position, font size, opacity, toggle
 │           ├── ShortcutsSection.tsx     # Keyboard shortcut reference
@@ -226,7 +227,7 @@ AnyLLMTranslate/
     ├── constants.ts                     # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
     ├── config.ts                        # loadSettings() helper
     ├── languages.ts                     # 30+ languages with ISO codes + native names
-    ├── glossary.ts                      # Glossary formatting + CSV/JSON import/export
+    ├── glossary.ts                      # Glossary formatting, mismatch detection + CSV/JSON import/export
     ├── subtitleParser.ts                # WebVTT parser
     ├── subtitleBuilder.ts               # Bilingual VTT builder
     └── performance.ts                   # Performance measurement utilities
@@ -597,18 +598,18 @@ interface TranslationService {
 }
 
 interface TranslationRequest {
-  texts: string[];              // Batched text segments
+  texts: Map<string, string>;   // Batched text segments keyed by ID
   sourceLanguage: string;       // ISO 639-1 code or 'auto'
   targetLanguage: string;       // ISO 639-1 code
-  context?: string;             // For LLM-based: surrounding context
-  glossary?: Record<string, string>; // Custom term translations
+  glossaryBlock?: string;       // Formatted glossary block
+  customSystemPrompt?: string | null; // User's custom system prompt override
 }
 
 interface TranslationResult {
-  translations: string[];       // Translated texts (same order)
+  success: boolean;
+  translations: Map<string, string>; // Translated texts keyed by piece ID
+  error?: string;
   detectedLanguage?: string;
-  service: string;
-  tokensUsed?: number;          // For LLM services
 }
 ```
 
@@ -1711,7 +1712,7 @@ Overall ████████████████████████
 
 ## 17. Testing Strategy
 
-> **✅ ACTUAL STATUS: 400 tests / 32 test files — all passing (Vitest 3.1)**
+> **✅ ACTUAL STATUS: 408 tests / 32 test files — all passing (Vitest 3.1)**
 
 ### 17.1 Unit Test Coverage (Implemented)
 
@@ -1752,7 +1753,7 @@ Overall ████████████████████████
 
 **Run tests:**
 ```bash
-npm test                     # Run all 400 tests
+npm test                     # Run all 408 tests
 npm run test:watch           # Watch mode
 npm run test:coverage        # Coverage report
 ```
@@ -1903,7 +1904,7 @@ npm run build         # Output in .output/chrome-mv3
 npm run build:firefox # Output in .output/firefox-mv2
 
 # Run tests
-npm test              # Vitest — 400 unit tests
+npm test              # Vitest — 408 unit tests
 npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
 
@@ -1922,4 +1923,4 @@ npm run zip           # Creates .output/lingua-lens-<version>-chrome.zip
 ---
 
 *Plan Version: 1.7 | Created: April 2026 | Updated: April 10, 2026 | Status: All Phases Complete — v1.0.0 READY*
-*Change: Deep codebase sync — updated tech stack (React 19, WXT 0.20, Tailwind v4, Vitest 3.1), replaced placeholder project structure with actual file tree, corrected test count to 400 tests / 32 files, updated Appendix C npm commands.*
+*Change: Deep codebase sync — updated tech stack (React 19, WXT 0.20, Tailwind v4, Vitest 3.1), replaced placeholder project structure with actual file tree, corrected test count to 408 tests / 32 files, updated Appendix C npm commands.*

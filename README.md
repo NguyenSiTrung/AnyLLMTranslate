@@ -35,7 +35,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 - **Connection tester** — sends a round-trip ping and reports latency
 - **Customizable system prompt** with `{{SOURCE_LANG}}` / `{{TARGET_LANG}}` variable injection
 - **Per-site translation rules** — include/exclude CSS selectors, always/never translate
-- **Custom glossary / dictionary** — term-protected translation via prompt injection; CSV & JSON import/export
+- **Custom glossary / dictionary** — term-protected translation via prompt injection, live mismatch validation; CSV & JSON import/export
 - **Translation cache** — IndexedDB via `idb-keyval`, SHA-256 keyed, TTL (default 30 days), LRU eviction (default 100 MB cap)
 - **Subtitle settings** — position, font size, background opacity
 
@@ -104,7 +104,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 | `npm run dev:firefox` | Start development server (Firefox) |
 | `npm run build` | Production build → `.output/chrome-mv3` |
 | `npm run build:firefox` | Production build → `.output/firefox-mv2` |
-| `npm test` | Run all 400 unit tests |
+| `npm test` | Run all 408 unit tests |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:coverage` | Coverage report |
 | `npm run lint` | ESLint check |
@@ -130,6 +130,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 │           ├── ProviderSection.tsx
 │           ├── ThemesSection.tsx
 │           ├── DictionarySection.tsx
+│           ├── GlossaryTranslatePreview.tsx
 │           ├── SiteRulesSection.tsx
 │           ├── SubtitlesSection.tsx
 │           ├── ShortcutsSection.tsx
@@ -183,7 +184,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 │   ├── constants.ts           # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
 │   ├── config.ts              # loadSettings() helper
 │   ├── languages.ts           # 30+ language codes with native names
-│   ├── glossary.ts            # Glossary formatting, CSV/JSON import/export
+│   ├── glossary.ts            # Glossary formatting, mismatch detection, CSV/JSON import/export
 │   ├── subtitleParser.ts      # WebVTT parser
 │   ├── subtitleBuilder.ts     # Bilingual VTT builder
 │   └── performance.ts         # Performance measurement utilities
@@ -237,10 +238,10 @@ All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)`
 
 ## 🧪 Testing
 
-The project maintains **400 tests across 32 test files**:
+The project maintains **408 tests across 32 test files**:
 
 ```bash
-npm test             # Run all 400 tests
+npm test             # Run all 408 tests
 npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -285,7 +286,7 @@ Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/your-feature`
 3. Write tests for new functionality
-4. Ensure all 400 tests pass: `npm test`
+4. Ensure all 408 tests pass: `npm test`
 5. Submit a pull request
 
 ---
