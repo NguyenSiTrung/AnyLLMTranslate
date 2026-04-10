@@ -1,32 +1,39 @@
 {
-  "last_refresh": "2026-04-16T19:31:00+07:00",
+  "last_refresh": "2026-04-10T08:50:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/tech-stack.md",
-      "change": "Added missing dev dependency versions: ESLint 9.x, Prettier 3.x, Vitest 3.x"
+      "file": "conductor/patterns.md",
+      "change": "Updated build size from 252KB to ~270KB (verified via wxt build)"
+    },
+    {
+      "file": "conductor/patterns.md",
+      "change": "Corrected last_refresh timestamp (was future-dated)"
     },
     {
       "file": "conductor/product.md",
-      "change": "Added Implementation Status section documenting completed Phase 1 and Phase 2"
+      "change": "Updated Phase 2 test count from 111 to 205 tests across 19 files"
     },
     {
-      "file": "conductor/patterns.md",
-      "change": "Added 11 new patterns from phase2-subtitles (MAIN world injection, postMessage bridge, XHR/fetch interception, subtitle parsing, overlay rendering)"
-    },
-    {
-      "file": "conductor/patterns.md",
-      "change": "Updated 'Last refreshed' timestamp"
+      "file": "PLAN-immersive-translate-clone.md",
+      "change": "Updated version footer: v1.3→v1.4, Phase 2 Next → Phase 3 Next"
     }
   ],
   "drift_summary": {
-    "tech_stack": "3 drift (missing dev dependency versions)",
-    "product": "1 drift (missing implementation status)",
+    "tech_stack": "no drift",
+    "product": "1 drift (stale test count — fixed)",
     "workflow": "no drift",
     "tracks": "no drift",
-    "learnings": "1 gap (phase2 learnings not consolidated)"
+    "patterns": "1 drift (stale build size — fixed)",
+    "plan": "1 drift (stale footer — fixed)",
+    "learnings": "all elevated — no new patterns"
   },
-  "beads_check": "skipped — user confirmed proceed without Beads drift check",
+  "beads_check": "skipped — Dolt server not running, cannot verify task sync",
   "active_tracks": [],
-  "archived_tracks": ["phase1-foundation_20260409", "phase2-subtitles_20260409"]
+  "archived_tracks": ["phase1-foundation_20260409", "phase2-subtitles_20260409"],
+  "codebase_health": {
+    "tests": "205 passed (19 files)",
+    "build": "270.43 KB (chrome-mv3)",
+    "git_status": "clean"
+  }
 }
