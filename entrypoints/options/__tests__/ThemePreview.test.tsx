@@ -218,4 +218,18 @@ describe('ThemePreview', () => {
     // Note: This is a simplified test - in a real scenario, we'd need to mock useState
     // or use a more sophisticated testing approach
   });
+
+  it('preview container has correct initial state without lingua-dark class', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'dividing-line',
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('.theme-preview-container');
+    expect(previewContainer).toBeInTheDocument();
+    expect(previewContainer).not.toHaveClass('lingua-dark');
+    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-lingua-state', 'dual');
+  });
 });
