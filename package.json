@@ -2,7 +2,7 @@
   "name": "lingua-lens",
   "description": "Bilingual web page translation powered by any OpenAI-compatible LLM",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",

@@ -53,4 +53,37 @@ Patterns, gotchas, and context discovered during implementation.
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## Phase 4 Implementation Learnings
+
+### Text Selection Translate
+- `event.target` can be `document` (not an Element) when `mouseup` is dispatched on document directly — guard `target.closest` with `typeof target.closest !== 'function'` check.
+- Async event handlers (`async function onMouseUp`) fire-and-forget — `dispatchEvent` is synchronous but the handler's promise is not awaited by the DOM.
+- Module-level state (`let isEnabled = true`) persists across test cases — must reset in `beforeEach`.
+- Tooltip positioning requires `window.scrollY` offset to handle scrolled pages correctly.
+
+### Hover Translate
+- `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements.
+- Element skip logic must check both `DATA_ATTRS.TRANSLATED` and `DATA_ATTRS.ROLE` to avoid re-translating hover'd elements.
+- `hoverCache` (Map<Element, string>) prevents redundant API calls when re-hovering same element.
+- Hover delay clamped to 200-500ms range for UX balance.
+
+### Keyboard Shortcuts
+- Hybrid approach: global shortcuts via `chrome.commands` (4 max suggested_key entries), page-specific via `document.addEventListener('keydown')`.
+- Capture phase (`true` as third arg) ensures shortcuts intercept before page handlers.
+- `chrome.commands` shortcuts are customizable by users at `chrome://extensions/shortcuts`.
+
+### Context Menus
+- `chrome.contextMenus.create` must be called inside `runtime.onInstalled` (not at top level) to avoid duplicate entries.
+- `documentUrlPatterns` array on menu items enables platform-specific entries (e.g., subtitle translate only on YouTube/Udemy/Coursera).
+- Context menu `onClicked` handler receives `info.selectionText` for text selection context.
+
+### Performance
+- `requestIdleCallback` with `{ timeout: 2000 }` prevents starvation while deferring non-critical mutation processing.
+- `requestAnimationFrame`-based DOM write batching via `scheduleDomWrite()` coalesces multiple writes into single frame.
+- ViewportObserver already implements 100ms batch delay — adequate for translation triggers.
+
+### Build & Packaging
+- `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (368KB uncompressed).
+- Manifest `commands` limited to 4 entries with `suggested_key` — additional shortcuts must use content script keydown listener.
+- `contextMenus` permission required in manifest for `chrome.contextMenus` API access.
+
