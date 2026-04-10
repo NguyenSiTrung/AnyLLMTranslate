@@ -19,3 +19,8 @@ This file tracks all major tracks for the project.
 
 ## [x] Track: Phase 5 — Settings UI/UX Overhaul
 *Link: [./conductor/tracks/phase5-settings-ux_20260410/](./conductor/tracks/phase5-settings-ux_20260410/)*
+
+---
+
+## [ ] Track: Translation Theme Visual Style Preview
+*Link: [./conductor/tracks/theme-preview_20260410/](./conductor/tracks/theme-preview_20260410/)*
