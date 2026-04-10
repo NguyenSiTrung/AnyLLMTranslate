@@ -8,12 +8,19 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 } as unknown as typeof ResizeObserver;
 
+// Mock WXT defineContentScript
+global.defineContentScript = vi.fn();
+
 // Mock chrome API for extension tests
 global.chrome = {
   storage: {
     local: {
       get: vi.fn(),
       set: vi.fn(),
+    },
+    onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
     },
   },
   runtime: {

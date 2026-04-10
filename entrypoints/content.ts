@@ -8,7 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
-import { applyTranslation, setPageState, removeAllTranslations, getPageState } from '@/content/translationDisplay';
+import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
@@ -52,6 +52,14 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
 
 /** Start translation on the current page */
 export async function startTranslation(): Promise<void> {
+  // Load settings to apply visual settings
+  const settings = await loadSettings();
+
+  // Apply visual settings to DOM
+  applyTheme(settings.theme);
+  applyPosition(settings.translationPosition);
+  applyDarkMode(settings.darkMode);
+
   // Extract translatable pieces from the DOM
   allPieces = extractPieces(document.body);
 
@@ -72,6 +80,11 @@ export async function startTranslation(): Promise<void> {
 
 /** Stop translation and restore the page */
 export function stopTranslation(): void {
+  // Clean up visual settings
+  document.documentElement.removeAttribute('data-lingua-theme');
+  document.documentElement.removeAttribute('data-lingua-position');
+  document.documentElement.classList.remove('lingua-dark');
+
   if (viewportObserver) {
     viewportObserver.disconnect();
     viewportObserver = null;
@@ -128,6 +141,16 @@ async function initInteractionFeatures(): Promise<void> {
       }
       if (typeof newSettings.hoverDelay === 'number') {
         setHoverDelay(newSettings.hoverDelay);
+      }
+      // Apply visual settings when they change (only if translation is active)
+      if (newSettings.theme && getPageState() !== 'off') {
+        applyTheme(newSettings.theme);
+      }
+      if (newSettings.translationPosition && getPageState() !== 'off') {
+        applyPosition(newSettings.translationPosition);
+      }
+      if (newSettings.darkMode && getPageState() !== 'off') {
+        applyDarkMode(newSettings.darkMode);
       }
     }
   });
