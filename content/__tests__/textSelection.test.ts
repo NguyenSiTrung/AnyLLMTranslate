@@ -186,7 +186,7 @@ describe('content/textSelection', () => {
 
       vi.spyOn(window, 'getSelection').mockReturnValue(selectionMock);
 
-      const para = document.querySelector('p')!;
+      const para = document.querySelector('p') as HTMLElement;
       const mouseupEvent = new MouseEvent('mouseup', {
         clientX: 125,
         clientY: 110,

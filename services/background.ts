@@ -249,7 +249,7 @@ function handleStatusUpdate(
     } else {
       chrome.action.setBadgeText({ text: '', tabId });
     }
-  } catch (_error) {
+  } catch {
     // Ignore badge setting errors (e.g., if tab is no longer available)
   }
 }

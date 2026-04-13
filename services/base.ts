@@ -15,14 +15,6 @@ export interface TranslationService {
   testConnection(): Promise<{ success: boolean; error?: string }>;
 }
 
-/** Factory to create a translation service from provider config */
-export function createTranslationService(config: ProviderConfig): TranslationService {
-  // All providers use OpenAI-compatible API, so we have a single implementation
-  // Lazy import to avoid circular deps
-  const { OpenAICompatibleService } = require('./openaiCompatible');
-  return new OpenAICompatibleService(config);
-}
-
 /** Default system prompt template with injectable variables */
 export const DEFAULT_SYSTEM_PROMPT_TEMPLATE = `You are a professional translator. Translate the given text to {{targetLanguage}}.
 

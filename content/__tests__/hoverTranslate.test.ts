@@ -127,7 +127,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(false);
 
-      const para = document.getElementById('test-para')!;
+      const para = document.getElementById('test-para') as HTMLElement;
       const event = new MouseEvent('mouseover', { bubbles: true });
       para.dispatchEvent(event);
 
@@ -141,7 +141,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
-      const span = document.getElementById('test-inline')!;
+      const span = document.getElementById('test-inline') as HTMLElement;
       const event = new MouseEvent('mouseover', { bubbles: true });
       span.dispatchEvent(event);
 
@@ -157,7 +157,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
-      const para = document.getElementById('test-para')!;
+      const para = document.getElementById('test-para') as HTMLElement;
 
       // Hover over
       const overEvent = new MouseEvent('mouseover', { bubbles: true });
@@ -193,7 +193,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
-      const para = document.getElementById('test-para')!;
+      const para = document.getElementById('test-para') as HTMLElement;
       para.setAttribute('data-lingua-translated', '');
 
       const event = new MouseEvent('mouseover', { bubbles: true });
@@ -207,7 +207,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
-      const para = document.getElementById('test-para')!;
+      const para = document.getElementById('test-para') as HTMLElement;
       para.setAttribute('data-lingua-role', 'translation');
 
       const event = new MouseEvent('mouseover', { bubbles: true });
@@ -221,7 +221,7 @@ describe('content/hoverTranslate', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
-      const para = document.getElementById('test-para')!;
+      const para = document.getElementById('test-para') as HTMLElement;
       para.textContent = 'a'; // Too short
 
       const event = new MouseEvent('mouseover', { bubbles: true });

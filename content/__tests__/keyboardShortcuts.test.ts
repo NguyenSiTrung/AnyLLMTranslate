@@ -23,8 +23,8 @@ vi.mock('@/content/hoverTranslate', () => ({
   isHoverTranslateEnabled: vi.fn(() => false),
 }));
 
-import { setTextSelectionEnabled, isTextSelectionEnabled, removeTooltip, removeTranslateButton } from '@/content/textSelection';
-import { setHoverTranslateEnabled, isHoverTranslateEnabled } from '@/content/hoverTranslate';
+import { setTextSelectionEnabled, removeTooltip, removeTranslateButton } from '@/content/textSelection';
+import { setHoverTranslateEnabled } from '@/content/hoverTranslate';
 
 describe('content/keyboardShortcuts', () => {
   let cleanup: (() => void) | null = null;

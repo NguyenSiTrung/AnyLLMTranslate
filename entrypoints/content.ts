@@ -21,10 +21,10 @@ import '@/styles/tooltip.css';
 let viewportObserver: ViewportObserver | null = null;
 let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
-let textSelectionCleanup: (() => void) | null = null;
-let hoverTranslateCleanup: (() => void) | null = null;
-let keyboardShortcutsCleanup: (() => void) | null = null;
 let activeRequests = 0;
+let _textSelectionCleanup: (() => void) | null = null;
+let _hoverTranslateCleanup: (() => void) | null = null;
+let _keyboardShortcutsCleanup: (() => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -162,16 +162,16 @@ async function initInteractionFeatures(): Promise<void> {
   const settings = await loadSettings();
 
   // Text selection translate
-  textSelectionCleanup = initTextSelection();
+  _textSelectionCleanup = initTextSelection();
   setTextSelectionEnabled(settings.textSelectionEnabled);
 
   // Hover translate
-  hoverTranslateCleanup = initHoverTranslate();
+  _hoverTranslateCleanup = initHoverTranslate();
   setHoverTranslateEnabled(settings.hoverTranslateEnabled);
   setHoverDelay(settings.hoverDelay);
 
   // Keyboard shortcuts (page-specific)
-  keyboardShortcutsCleanup = initKeyboardShortcuts();
+  _keyboardShortcutsCleanup = initKeyboardShortcuts();
 
   // Listen for settings changes to toggle features dynamically
   chrome.storage.onChanged.addListener((changes, areaName) => {

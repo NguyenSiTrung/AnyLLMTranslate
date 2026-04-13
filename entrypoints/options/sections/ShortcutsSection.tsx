@@ -5,7 +5,6 @@
 
 import { Keyboard as KeyboardIcon, ExternalLink } from 'lucide-react';
 import { Card } from '@/ui/Card';
-import { Button } from '@/ui/Button';
 
 const DEFAULT_SHORTCUTS = [
   { action: 'Toggle Translation', shortcut: 'Alt+T', description: 'Start or stop translating the current page' },

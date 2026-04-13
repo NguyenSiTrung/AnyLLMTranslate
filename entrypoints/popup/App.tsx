@@ -1,10 +1,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Languages, Zap, Loader2, CheckCircle2, AlertCircle, Settings,
-  ArrowRightLeft, Palette, ChevronDown, ExternalLink, Search,
-  Globe2, Sparkles, Activity, Maximize2, Play, Square, Info
+  Languages, Loader2, CheckCircle2, AlertCircle, Settings,
+  ArrowRightLeft, Palette, ChevronDown, Search,
+  Globe2, Sparkles, Activity, Square
 } from 'lucide-react';
+import type { Zap } from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
 import { DEFAULT_SETTINGS, PROVIDER_PRESETS } from '@/types/config';
 import type { ThemeName, DisplayMode, ExtensionSettings } from '@/types/config';
@@ -41,7 +42,7 @@ function CustomSelect({
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   label?: string;
-  icon?: any;
+  icon?: typeof Zap;
   variant?: 'default' | 'ghost' | 'minimal';
 }) {
   const [isOpen, setIsOpen] = useState(false);

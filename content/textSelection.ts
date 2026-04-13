@@ -106,9 +106,7 @@ function createTooltip(
   }
 
   // Position near selection (above or below)
-  const viewportHeight = window.innerHeight;
-  const tooltipHeight = 80; // approximate
-  const posY = y - 40 - tooltipHeight > 0 ? y - 40 - tooltipHeight : y + 20;
+  const posY = y - 40 - 80 > 0 ? y - 40 - 80 : y + 20;
 
   tooltip.style.left = `${Math.max(10, Math.min(x - 100, window.innerWidth - 320))}px`;
   tooltip.style.top = `${posY + window.scrollY}px`;

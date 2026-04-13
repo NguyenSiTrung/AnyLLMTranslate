@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { testConnection } from '@/services/providerTester';
 import type { ProviderConfig } from '@/types/config';
-import type { ConnectionTestResult, ConnectionTestProgress } from '@/services/providerTester';
+import type { ConnectionTestProgress } from '@/services/providerTester';
 
 const mockConfig: ProviderConfig = {
   preset: 'ollama',
@@ -31,9 +31,7 @@ describe('testConnection', () => {
   });
 
   it('returns overall success when all 3 steps pass', async () => {
-    let callCount = 0;
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
-      callCount++;
       const urlStr = typeof url === 'string' ? url : (url as URL).toString();
 
       if (urlStr.includes('/chat/completions')) {

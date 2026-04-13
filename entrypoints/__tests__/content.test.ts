@@ -3,6 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ExtensionSettings } from '@/types/config';
+import type { TranslationPiece } from '@/types/translation';
 
 // Mock dependencies (but not translationDisplay functions we want to test)
 vi.mock('@/content/domWalker');
@@ -13,8 +15,19 @@ vi.mock('@/content/textSelection');
 vi.mock('@/content/hoverTranslate');
 vi.mock('@/content/keyboardShortcuts');
 
-import { startTranslation } from '../content';
-import { applyTheme, applyPosition, applyDarkMode } from '@/content/translationDisplay';
+import { startTranslation, stopTranslation } from '../content';
+import { applyTheme, applyPosition, applyDarkMode, setPageState, getPageState } from '@/content/translationDisplay';
+import { extractPieces } from '@/content/domWalker';
+import { ViewportObserver } from '@/content/viewportObserver';
+import { loadSettings } from '@/lib/config';
+
+const mockSettings: ExtensionSettings = {
+  theme: 'dividing-line',
+  translationPosition: 'below',
+  darkMode: 'auto',
+  sourceLanguage: 'en',
+  targetLanguage: 'vi',
+} as ExtensionSettings;
 
 describe('content.ts', () => {
   beforeEach(() => {
@@ -28,16 +41,10 @@ describe('content.ts', () => {
 
   describe('startTranslation visual settings application', () => {
     it('applies theme from settings when translation starts', async () => {
-      const { loadSettings } = await import('@/lib/config');
-      const { extractPieces } = await import('@/content/domWalker');
-
       vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
         theme: 'bubble',
-        translationPosition: 'below',
-        darkMode: 'auto',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      } as any);
+      });
 
       vi.mocked(extractPieces).mockReturnValue([]);
 
@@ -47,16 +54,12 @@ describe('content.ts', () => {
     });
 
     it('applies translation position from settings when translation starts', async () => {
-      const { loadSettings } = await import('@/lib/config');
-      const { extractPieces } = await import('@/content/domWalker');
-
       vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
         theme: 'dividing-line',
         translationPosition: 'above',
         darkMode: 'light',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      } as any);
+      });
 
       vi.mocked(extractPieces).mockReturnValue([]);
 
@@ -66,16 +69,12 @@ describe('content.ts', () => {
     });
 
     it('applies dark mode from settings when translation starts', async () => {
-      const { loadSettings } = await import('@/lib/config');
-      const { extractPieces } = await import('@/content/domWalker');
-
       vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
         theme: 'paper',
         translationPosition: 'side',
         darkMode: 'dark',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      } as any);
+      });
 
       vi.mocked(extractPieces).mockReturnValue([]);
 
@@ -85,32 +84,30 @@ describe('content.ts', () => {
     });
 
     it('sets all DOM attributes correctly when translation starts with pieces', async () => {
-      const { loadSettings } = await import('@/lib/config');
-      const { extractPieces } = await import('@/content/domWalker');
-      const { ViewportObserver } = await import('@/content/viewportObserver');
-
       vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
         theme: 'shadow-card',
         translationPosition: 'below',
         darkMode: 'dark',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      } as any);
+      });
 
-      // Create mock pieces to prevent early return
-      vi.mocked(extractPieces).mockReturnValue([
-        { id: 'piece-1', text: 'Hello', parentElement: document.createElement('p') },
-      ] as any);
+      const mockPiece: TranslationPiece = {
+        id: 'piece-1',
+        text: 'Hello',
+        parentElement: document.createElement('p'),
+        textNodes: [],
+        originalHTML: 'Hello',
+        isTranslated: false,
+      };
 
-      // Mock ViewportObserver to avoid actual DOM observation
+      vi.mocked(extractPieces).mockReturnValue([mockPiece]);
       vi.mocked(ViewportObserver).mockImplementation(() => ({
         observeAll: vi.fn(),
         disconnect: vi.fn(),
-      } as any));
+      } as unknown as ViewportObserver));
 
       await startTranslation();
 
-      // Verify DOM attributes are set
       expect(document.documentElement.getAttribute('data-lingua-theme')).toBe('shadow-card');
       expect(document.documentElement.getAttribute('data-lingua-position')).toBe('below');
       expect(document.documentElement.classList.contains('lingua-dark')).toBe(true);
@@ -119,13 +116,9 @@ describe('content.ts', () => {
 
   describe('settings change listeners', () => {
     it('applies theme when settings change and translation is active', async () => {
-      const { setPageState, getPageState } = await import('@/content/translationDisplay');
-
-      // Set page state to active
       setPageState('dual');
 
-      // Create a listener callback similar to the one in content.ts
-      const listener = (changes: any, areaName: string) => {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
         const settingsKey = 'lingua-lens-settings';
         if (changes[settingsKey]?.newValue) {
@@ -136,7 +129,6 @@ describe('content.ts', () => {
         }
       };
 
-      // Simulate settings change
       listener(
         {
           'lingua-lens-settings': {
@@ -154,13 +146,9 @@ describe('content.ts', () => {
     });
 
     it('applies position when settings change and translation is active', async () => {
-      const { setPageState, getPageState } = await import('@/content/translationDisplay');
-
-      // Set page state to active
       setPageState('dual');
 
-      // Create a listener callback similar to the one in content.ts
-      const listener = (changes: any, areaName: string) => {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
         const settingsKey = 'lingua-lens-settings';
         if (changes[settingsKey]?.newValue) {
@@ -171,7 +159,6 @@ describe('content.ts', () => {
         }
       };
 
-      // Simulate settings change
       listener(
         {
           'lingua-lens-settings': {
@@ -189,13 +176,9 @@ describe('content.ts', () => {
     });
 
     it('applies dark mode when settings change and translation is active', async () => {
-      const { setPageState, getPageState } = await import('@/content/translationDisplay');
-
-      // Set page state to active
       setPageState('dual');
 
-      // Create a listener callback similar to the one in content.ts
-      const listener = (changes: any, areaName: string) => {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
         const settingsKey = 'lingua-lens-settings';
         if (changes[settingsKey]?.newValue) {
@@ -206,7 +189,6 @@ describe('content.ts', () => {
         }
       };
 
-      // Simulate settings change
       listener(
         {
           'lingua-lens-settings': {
@@ -224,13 +206,9 @@ describe('content.ts', () => {
     });
 
     it('does not apply visual settings when translation is not active', async () => {
-      const { setPageState, getPageState } = await import('@/content/translationDisplay');
-
-      // Set page state to off
       setPageState('off');
 
-      // Create a listener callback similar to the one in content.ts
-      const listener = (changes: any, areaName: string) => {
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
         const settingsKey = 'lingua-lens-settings';
         if (changes[settingsKey]?.newValue) {
@@ -241,7 +219,6 @@ describe('content.ts', () => {
         }
       };
 
-      // Simulate settings change
       listener(
         {
           'lingua-lens-settings': {
@@ -255,16 +232,12 @@ describe('content.ts', () => {
         'local',
       );
 
-      // Verify visual settings were not applied
       expect(document.documentElement.getAttribute('data-lingua-theme')).not.toBe('paper');
     });
   });
 
   describe('stopTranslation cleanup', () => {
     it('removes data-lingua-theme attribute when translation stops', async () => {
-      const { stopTranslation } = await import('../content');
-
-      // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');
       document.documentElement.setAttribute('data-lingua-position', 'below');
       document.documentElement.classList.add('lingua-dark');
@@ -275,9 +248,6 @@ describe('content.ts', () => {
     });
 
     it('removes data-lingua-position attribute when translation stops', async () => {
-      const { stopTranslation } = await import('../content');
-
-      // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');
       document.documentElement.setAttribute('data-lingua-position', 'below');
       document.documentElement.classList.add('lingua-dark');
@@ -288,9 +258,6 @@ describe('content.ts', () => {
     });
 
     it('removes lingua-dark class when translation stops', async () => {
-      const { stopTranslation } = await import('../content');
-
-      // Set attributes before stopping
       document.documentElement.setAttribute('data-lingua-theme', 'bubble');
       document.documentElement.setAttribute('data-lingua-position', 'below');
       document.documentElement.classList.add('lingua-dark');

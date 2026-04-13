@@ -39,7 +39,9 @@ describe('useSettingsStore', () => {
     // Reset store to defaults
     useSettingsStore.setState({ ...DEFAULT_SETTINGS, isLoaded: false });
     // Clear mock storage
-    Object.keys(mockStorageData).forEach((k) => delete mockStorageData[k]);
+    for (const k of Object.keys(mockStorageData)) {
+      Reflect.deleteProperty(mockStorageData, k);
+    }
     vi.clearAllMocks();
     mockListeners.length = 0;
   });
