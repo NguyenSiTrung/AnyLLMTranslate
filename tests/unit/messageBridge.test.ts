@@ -45,7 +45,7 @@ describe('messageBridge', () => {
       const requestId = sendMessage('SUBTITLE_INTERCEPTED', { test: true });
       expect(postedMessages[0]).toEqual(
         expect.objectContaining({
-          channel: 'lingua-lens',
+          channel: 'anyllm-translate',
           type: 'SUBTITLE_INTERCEPTED',
           requestId,
           payload: { test: true },
@@ -66,7 +66,7 @@ describe('messageBridge', () => {
       onMessage('SUBTITLE_TRANSLATED', handler);
 
       fireMessageEvent({
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_TRANSLATED',
         requestId: 'test-123',
         payload: { vttContent: 'test' },
@@ -94,7 +94,7 @@ describe('messageBridge', () => {
       onMessage('SUBTITLE_TRANSLATED', handler);
 
       fireMessageEvent({
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_INTERCEPTED',
         requestId: 'test-123',
         payload: {},
@@ -109,7 +109,7 @@ describe('messageBridge', () => {
       cleanup();
 
       fireMessageEvent({
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_INTERCEPTED',
         requestId: 'test',
         payload: {},
@@ -124,7 +124,7 @@ describe('messageBridge', () => {
 
       fireMessageEvent(
         {
-          channel: 'lingua-lens',
+          channel: 'anyllm-translate',
           type: 'SUBTITLE_TRANSLATED',
           requestId: 'test-123',
           payload: { vttContent: 'test' },
@@ -141,7 +141,7 @@ describe('messageBridge', () => {
 
       fireMessageEvent(
         {
-          channel: 'lingua-lens',
+          channel: 'anyllm-translate',
           type: 'SUBTITLE_TRANSLATED',
           requestId: 'test-456',
           payload: { vttContent: 'test' },
@@ -157,14 +157,14 @@ describe('messageBridge', () => {
       onMessage('SUBTITLE_INTERCEPTED', handler, { once: true });
 
       fireMessageEvent({
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_INTERCEPTED',
         requestId: 'test',
         payload: {},
       });
 
       fireMessageEvent({
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_INTERCEPTED',
         requestId: 'test2',
         payload: {},

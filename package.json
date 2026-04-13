@@ -1,5 +1,5 @@
 {
-  "name": "lingua-lens",
+  "name": "anyllm-translate",
   "description": "Bilingual web page translation powered by any OpenAI-compatible LLM",
   "private": true,
   "version": "1.0.0",

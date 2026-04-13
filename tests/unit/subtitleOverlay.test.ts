@@ -34,17 +34,17 @@ describe('content/subtitleOverlay', () => {
 
       initializeOverlay(cues);
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
       expect(overlay).toBeTruthy();
-      expect(overlay?.querySelector('.lingua-lens-subtitle-original')).toBeTruthy();
-      expect(overlay?.querySelector('.lingua-lens-subtitle-translated')).toBeTruthy();
+      expect(overlay?.querySelector('.anyllm-translate-subtitle-original')).toBeTruthy();
+      expect(overlay?.querySelector('.anyllm-translate-subtitle-translated')).toBeTruthy();
     });
 
     it('does not create overlay when no video element exists', () => {
       const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
       initializeOverlay(cues);
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
       expect(overlay).toBeFalsy();
     });
 
@@ -71,7 +71,7 @@ describe('content/subtitleOverlay', () => {
       const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
       initializeOverlay(cues);
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay') as HTMLElement;
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
       expect(overlay?.style.width).toBe('640px');
       expect(overlay?.style.height).toBe('360px');
     });
@@ -148,9 +148,9 @@ describe('content/subtitleOverlay', () => {
 
       updateConfig({ position: 'top' });
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
-      expect(overlay?.classList.contains('lingua-lens-position-top')).toBe(true);
-      expect(overlay?.classList.contains('lingua-lens-position-bottom')).toBe(false);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
+      expect(overlay?.classList.contains('anyllm-translate-position-top')).toBe(true);
+      expect(overlay?.classList.contains('anyllm-translate-position-bottom')).toBe(false);
     });
   });
 
@@ -210,7 +210,7 @@ describe('content/subtitleOverlay', () => {
 
       cleanup();
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
       expect(overlay).toBeFalsy();
     });
 
@@ -269,8 +269,8 @@ describe('content/subtitleOverlay', () => {
       video.dispatchEvent(new Event('timeupdate'));
 
       // Verify the second cue should be active (time 4 is between 3 and 5)
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
-      const translatedText = overlay?.querySelector('.lingua-lens-subtitle-translated');
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
+      const translatedText = overlay?.querySelector('.anyllm-translate-subtitle-translated');
       expect(translatedText?.textContent).toBe('Second');
     });
 
@@ -292,8 +292,8 @@ describe('content/subtitleOverlay', () => {
 
       video.dispatchEvent(new Event('timeupdate'));
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
-      expect(overlay?.classList.contains('lingua-lens-subtitle-visible')).toBe(false);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
+      expect(overlay?.classList.contains('anyllm-translate-subtitle-visible')).toBe(false);
     });
   });
 
@@ -321,8 +321,8 @@ describe('content/subtitleOverlay', () => {
       Object.defineProperty(video2, 'currentTime', { value: 1, writable: true });
       video2.dispatchEvent(new Event('timeupdate'));
 
-      const overlay = document.querySelector('.lingua-lens-subtitle-overlay');
-      const translatedText = overlay?.querySelector('.lingua-lens-subtitle-translated');
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
+      const translatedText = overlay?.querySelector('.anyllm-translate-subtitle-translated');
       expect(translatedText?.textContent).toBe('Hello');
     });
 

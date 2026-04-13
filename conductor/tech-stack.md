@@ -1,4 +1,4 @@
-# Tech Stack — LinguaLens
+# Tech Stack — AnyLLMTranslate
 
 ## Core Language
 

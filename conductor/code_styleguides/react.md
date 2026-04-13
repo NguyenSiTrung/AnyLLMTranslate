@@ -1,4 +1,4 @@
-# React Style Guide — LinguaLens
+# React Style Guide — AnyLLMTranslate
 
 ## Component Structure
 

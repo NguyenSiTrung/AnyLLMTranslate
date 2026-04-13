@@ -34,17 +34,17 @@ export function ThemePreview() {
       </div>
 
       <div
-        className={`theme-preview-container ${isDarkMode ? 'lingua-dark' : ''}`}
-        data-lingua-theme={theme}
-        data-lingua-state="dual"
+        className={`theme-preview-container ${isDarkMode ? 'anyllm-dark' : ''}`}
+        data-anyllm-theme={theme}
+        data-anyllm-state="dual"
       >
         <div className="space-y-2">
           {/* Original text */}
-          <div data-lingua-role="original" className="text-sm text-zinc-700">
+          <div data-anyllm-role="original" className="text-sm text-zinc-700">
             {SAMPLE_TEXT.original}
           </div>
           {/* Translated text with theme applied */}
-          <div data-lingua-role="translation" className="lingua-lens-translation text-sm">
+          <div data-anyllm-role="translation" className="anyllm-translate-translation text-sm">
             {SAMPLE_TEXT.translation}
           </div>
         </div>

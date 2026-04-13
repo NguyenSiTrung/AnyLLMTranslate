@@ -41,8 +41,8 @@ export class XhrInterceptor {
 
       if (match) {
         // Store match info on the XHR instance
-        (this as XMLHttpRequest & { __linguaLensMatch?: UrlMatch; __linguaLensUrl?: string }).__linguaLensMatch = match;
-        (this as XMLHttpRequest & { __linguaLensUrl?: string }).__linguaLensUrl = urlString;
+        (this as XMLHttpRequest & { __anyllmTranslateMatch?: UrlMatch; __anyllmTranslateUrl?: string }).__anyllmTranslateMatch = match;
+        (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
       }
 
       return originalOpen.apply(this, [method, url, ...args]);
@@ -56,17 +56,17 @@ export class XhrInterceptor {
       options?: boolean | AddEventListenerOptions,
     ) {
       const xhr = this as XMLHttpRequest & {
-        __linguaLensMatch?: UrlMatch;
-        __linguaLensEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
+        __anyllmTranslateMatch?: UrlMatch;
+        __anyllmTranslateEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
       };
 
-      if (xhr.__linguaLensMatch && (type === 'load' || type === 'readystatechange')) {
-        if (!xhr.__linguaLensEventHandlers) {
-          xhr.__linguaLensEventHandlers = new Map();
+      if (xhr.__anyllmTranslateMatch && (type === 'load' || type === 'readystatechange')) {
+        if (!xhr.__anyllmTranslateEventHandlers) {
+          xhr.__anyllmTranslateEventHandlers = new Map();
         }
-        const handlers = xhr.__linguaLensEventHandlers.get(type) || [];
+        const handlers = xhr.__anyllmTranslateEventHandlers.get(type) || [];
         handlers.push(listener);
-        xhr.__linguaLensEventHandlers.set(type, handlers);
+        xhr.__anyllmTranslateEventHandlers.set(type, handlers);
         // Don't register with the real addEventListener — we'll call them manually
         return;
       }
@@ -78,11 +78,11 @@ export class XhrInterceptor {
     const originalSend = OriginalXHR.prototype.send;
     OriginalXHR.prototype.send = function (_body?: Document | XMLHttpRequestBodyInit | null) {
       const xhr = this as XMLHttpRequest & {
-        __linguaLensMatch?: UrlMatch;
-        __linguaLensUrl?: string;
-        __linguaLensEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
+        __anyllmTranslateMatch?: UrlMatch;
+        __anyllmTranslateUrl?: string;
+        __anyllmTranslateEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
       };
-      const match = xhr.__linguaLensMatch;
+      const match = xhr.__anyllmTranslateMatch;
 
       if (!match) {
         return originalSend.apply(this, [_body]);
@@ -104,7 +104,7 @@ export class XhrInterceptor {
 
         const responseText = xhrRef.responseText;
         const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
-          url: xhr.__linguaLensUrl || '',
+          url: xhr.__anyllmTranslateUrl || '',
           contentType: xhrRef.getResponseHeader('Content-Type') || '',
           body: responseText,
           platform: match.platform,
@@ -119,7 +119,7 @@ export class XhrInterceptor {
           if (originalOnLoad) originalOnLoad.call(xhrRef, new ProgressEvent('load'));
 
           // Fire addEventListener-registered handlers
-          const eventHandlers = xhr.__linguaLensEventHandlers;
+          const eventHandlers = xhr.__anyllmTranslateEventHandlers;
           if (eventHandlers) {
             const rscHandlers = eventHandlers.get('readystatechange') || [];
             for (const h of rscHandlers) {
@@ -136,7 +136,7 @@ export class XhrInterceptor {
 
         // Listen for translation result
         const translatedHandler = (event: MessageEvent) => {
-          if (event.data?.channel !== 'lingua-lens') return;
+          if (event.data?.channel !== 'anyllm-translate') return;
           if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
           if (event.data?.requestId !== requestId) return;
 

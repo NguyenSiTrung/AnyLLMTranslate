@@ -1,5 +1,5 @@
 /**
- * Keyboard Shortcuts — page-specific keydown listener for LinguaLens.
+ * Keyboard Shortcuts — page-specific keydown listener for AnyLLMTranslate.
  * Handles Alt+H (toggle hover), Alt+D (toggle selection), Escape (dismiss tooltip).
  * Global shortcuts (Alt+A/S/Z/X) are handled via chrome.commands in background.
  */
@@ -29,7 +29,7 @@ function getDefaultShortcuts(): ShortcutConfig[] {
       action: () => {
         const newState = !isHoverTranslateEnabled();
         setHoverTranslateEnabled(newState);
-        console.log(`[LinguaLens] Hover translate: ${newState ? 'ON' : 'OFF'}`);
+        console.log(`[AnyLLMTranslate] Hover translate: ${newState ? 'ON' : 'OFF'}`);
       },
     },
     {
@@ -41,7 +41,7 @@ function getDefaultShortcuts(): ShortcutConfig[] {
       action: () => {
         const newState = !isTextSelectionEnabled();
         setTextSelectionEnabled(newState);
-        console.log(`[LinguaLens] Text selection translate: ${newState ? 'ON' : 'OFF'}`);
+        console.log(`[AnyLLMTranslate] Text selection translate: ${newState ? 'ON' : 'OFF'}`);
       },
     },
     {

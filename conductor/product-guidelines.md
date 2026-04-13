@@ -1,9 +1,9 @@
-# Product Guidelines — LinguaLens
+# Product Guidelines — AnyLLMTranslate
 
 ## Brand Identity
 
 ### Name & Positioning
-- **Name:** LinguaLens
+- **Name:** AnyLLMTranslate
 - **Tagline:** "See the web in your language"
 - **Positioning:** Open-source, privacy-first alternative to Immersive Translate — powered by any LLM you choose
 

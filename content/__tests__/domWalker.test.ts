@@ -82,8 +82,8 @@ describe('content/domWalker', () => {
       expect(pieces[0].text).toBe('Normal');
     });
 
-    it('skips elements with data-lingua-translated', () => {
-      document.body.innerHTML = '<p>Normal</p><div data-lingua-translated>Injected</div>';
+    it('skips elements with data-anyllm-translated', () => {
+      document.body.innerHTML = '<p>Normal</p><div data-anyllm-translated>Injected</div>';
       const pieces = extractPieces(document.body);
 
       expect(pieces.length).toBe(1);

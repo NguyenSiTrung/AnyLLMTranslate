@@ -67,7 +67,7 @@ describe('XhrInterceptor', () => {
   function fireTranslatedMessage(requestId: string, vttContent: string) {
     const event = {
       data: {
-        channel: 'lingua-lens',
+        channel: 'anyllm-translate',
         type: 'SUBTITLE_TRANSLATED',
         requestId,
         payload: { vttContent },

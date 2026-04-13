@@ -45,7 +45,7 @@ export function AdvancedSection() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lingua-lens-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `anyllm-translate-settings-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showSuccess('Settings exported successfully');
@@ -68,7 +68,7 @@ export function AdvancedSection() {
     try {
       const dbs = await indexedDB.databases();
       for (const db of dbs) {
-        if (db.name?.includes('lingua-lens')) {
+        if (db.name?.includes('anyllm-translate')) {
           indexedDB.deleteDatabase(db.name);
         }
       }

@@ -42,8 +42,8 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
 
   it('sets dual state for bilingual display', () => {
@@ -53,8 +53,8 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-state]');
-    expect(previewContainer).toHaveAttribute('data-lingua-state', 'dual');
+    const previewContainer = container.querySelector('[data-anyllm-state]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-state', 'dual');
   });
 
   it('marks original text with role attribute', () => {
@@ -64,21 +64,21 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const originalText = container.querySelector('[data-lingua-role="original"]');
+    const originalText = container.querySelector('[data-anyllm-role="original"]');
     expect(originalText).toBeInTheDocument();
     expect(originalText).toHaveTextContent('The quick brown fox jumps over the lazy dog.');
   });
 
-  it('marks translated text with role and lingua-lens-translation class', () => {
+  it('marks translated text with role and anyllm-translate-translation class', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       theme: 'dividing-line',
     });
 
     const { container } = render(<ThemePreview />);
 
-    const translatedText = container.querySelector('[data-lingua-role="translation"]');
+    const translatedText = container.querySelector('[data-anyllm-role="translation"]');
     expect(translatedText).toBeInTheDocument();
-    expect(translatedText).toHaveClass('lingua-lens-translation');
+    expect(translatedText).toHaveClass('anyllm-translate-translation');
     expect(translatedText).toHaveTextContent('El rápido zorro marrón salta sobre el perro perezoso.');
   });
 
@@ -89,8 +89,8 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
 
   it('applies bubble theme correctly', () => {
@@ -100,8 +100,8 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'bubble');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'bubble');
   });
 
   it('applies minimal theme correctly', () => {
@@ -111,8 +111,8 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'minimal');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'minimal');
   });
 
   it('renders all 16 theme names correctly', () => {
@@ -140,8 +140,8 @@ describe('ThemePreview', () => {
 
       const { container, unmount } = render(<ThemePreview />);
 
-      const previewContainer = container.querySelector('[data-lingua-theme]');
-      expect(previewContainer).toHaveAttribute('data-lingua-theme', theme);
+      const previewContainer = container.querySelector('[data-anyllm-theme]');
+      expect(previewContainer).toHaveAttribute('data-anyllm-theme', theme);
 
       unmount();
     });
@@ -155,8 +155,8 @@ describe('ThemePreview', () => {
 
     const { container, rerender } = render(<ThemePreview />);
 
-    let previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+    let previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
 
     // Change theme
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -165,8 +165,8 @@ describe('ThemePreview', () => {
 
     rerender(<ThemePreview />);
 
-    previewContainer = container.querySelector('[data-lingua-theme]');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'blockquote');
+    previewContainer = container.querySelector('[data-anyllm-theme]');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
 
   it('updates preview in under 100ms (performance test)', () => {
@@ -182,8 +182,8 @@ describe('ThemePreview', () => {
       const renderTime = endTime - startTime;
       expect(renderTime).toBeLessThan(100);
 
-      const previewContainer = container.querySelector('[data-lingua-theme]');
-      expect(previewContainer).toHaveAttribute('data-lingua-theme', theme);
+      const previewContainer = container.querySelector('[data-anyllm-theme]');
+      expect(previewContainer).toHaveAttribute('data-anyllm-theme', theme);
 
       unmount();
     });
@@ -200,7 +200,7 @@ describe('ThemePreview', () => {
     expect(screen.getByText('Preview theme in dark mode')).toBeInTheDocument();
   });
 
-  it('applies lingua-dark class when toggle is checked', () => {
+  it('applies anyllm-dark class when toggle is checked', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       theme: 'dividing-line',
     });
@@ -208,18 +208,18 @@ describe('ThemePreview', () => {
     const { container } = render(<ThemePreview />);
 
     const previewContainer = container.querySelector('.theme-preview-container');
-    expect(previewContainer).not.toHaveClass('lingua-dark');
+    expect(previewContainer).not.toHaveClass('anyllm-dark');
 
     // Toggle dark mode
     const toggle = screen.getByRole('switch');
     fireEvent.click(toggle);
 
-    // After toggle, the component should re-render with lingua-dark class
+    // After toggle, the component should re-render with anyllm-dark class
     // Note: This is a simplified test - in a real scenario, we'd need to mock useState
     // or use a more sophisticated testing approach
   });
 
-  it('preview container has correct initial state without lingua-dark class', () => {
+  it('preview container has correct initial state without anyllm-dark class', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       theme: 'dividing-line',
     });
@@ -228,9 +228,9 @@ describe('ThemePreview', () => {
 
     const previewContainer = container.querySelector('.theme-preview-container');
     expect(previewContainer).toBeInTheDocument();
-    expect(previewContainer).not.toHaveClass('lingua-dark');
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
-    expect(previewContainer).toHaveAttribute('data-lingua-state', 'dual');
+    expect(previewContainer).not.toHaveClass('anyllm-dark');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-anyllm-state', 'dual');
   });
 
   it('toggle is keyboard navigable', () => {
@@ -265,10 +265,10 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
     expect(previewContainer).toBeInTheDocument();
     // Component should default to dividing-line when theme is undefined
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
   });
 
   it('handles edge case with empty string theme', () => {
@@ -278,9 +278,9 @@ describe('ThemePreview', () => {
 
     const { container } = render(<ThemePreview />);
 
-    const previewContainer = container.querySelector('[data-lingua-theme]');
+    const previewContainer = container.querySelector('[data-anyllm-theme]');
     expect(previewContainer).toBeInTheDocument();
     // Component should default to dividing-line when theme is empty string
-    expect(previewContainer).toHaveAttribute('data-lingua-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
   });
 });

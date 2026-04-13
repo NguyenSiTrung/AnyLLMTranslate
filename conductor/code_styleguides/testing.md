@@ -1,4 +1,4 @@
-# Testing Style Guide — LinguaLens
+# Testing Style Guide — AnyLLMTranslate
 
 ## Framework
 

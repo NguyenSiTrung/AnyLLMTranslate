@@ -9,8 +9,8 @@ import { loadSettings } from '@/lib/config';
 const MIN_SELECTION_CHARS = 2;
 
 /** Translate button template HTML */
-const TRANSLATE_BUTTON_CLASS = 'lingua-selection-btn';
-const TOOLTIP_CLASS = 'lingua-selection-tooltip';
+const TRANSLATE_BUTTON_CLASS = 'anyllm-selection-btn';
+const TOOLTIP_CLASS = 'anyllm-selection-tooltip';
 
 /** State management */
 let isEnabled = true;
@@ -23,7 +23,7 @@ function createTranslateButton(x: number, y: number): HTMLElement {
 
   const btn = document.createElement('div');
   btn.className = TRANSLATE_BUTTON_CLASS;
-  btn.setAttribute('data-lingua-role', 'selection-btn');
+  btn.setAttribute('data-anyllm-role', 'selection-btn');
   btn.setAttribute('role', 'button');
   btn.setAttribute('aria-label', 'Translate selection');
   btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>`;
@@ -57,33 +57,33 @@ function createTooltip(
 
   const tooltip = document.createElement('div');
   tooltip.className = TOOLTIP_CLASS;
-  tooltip.setAttribute('data-lingua-role', 'selection-tooltip');
+  tooltip.setAttribute('data-anyllm-role', 'selection-tooltip');
   tooltip.setAttribute('role', 'tooltip');
 
   if (isLoading) {
     tooltip.innerHTML = `
-      <div class="lingua-tooltip-content">
-        <div class="lingua-tooltip-loading">
-          <div class="lingua-tooltip-spinner"></div>
+      <div class="anyllm-tooltip-content">
+        <div class="anyllm-tooltip-loading">
+          <div class="anyllm-tooltip-spinner"></div>
           <span>Translating...</span>
         </div>
       </div>
     `;
   } else {
     tooltip.innerHTML = `
-      <div class="lingua-tooltip-content">
-        <div class="lingua-tooltip-text">${escapeHtml(text)}</div>
-        <div class="lingua-tooltip-actions">
-          <button class="lingua-tooltip-copy" aria-label="Copy translation" title="Copy">
+      <div class="anyllm-tooltip-content">
+        <div class="anyllm-tooltip-text">${escapeHtml(text)}</div>
+        <div class="anyllm-tooltip-actions">
+          <button class="anyllm-tooltip-copy" aria-label="Copy translation" title="Copy">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           </button>
-          <button class="lingua-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
+          <button class="anyllm-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
         </div>
       </div>
     `;
 
     // Wire up copy button
-    const copyBtn = tooltip.querySelector('.lingua-tooltip-copy');
+    const copyBtn = tooltip.querySelector('.anyllm-tooltip-copy');
     if (copyBtn) {
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -96,7 +96,7 @@ function createTooltip(
     }
 
     // Wire up close button
-    const closeBtn = tooltip.querySelector('.lingua-tooltip-close');
+    const closeBtn = tooltip.querySelector('.anyllm-tooltip-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -121,21 +121,21 @@ function createTooltip(
 function updateTooltipContent(translatedText: string): void {
   if (!currentTooltip) return;
 
-  const contentDiv = currentTooltip.querySelector('.lingua-tooltip-content');
+  const contentDiv = currentTooltip.querySelector('.anyllm-tooltip-content');
   if (!contentDiv) return;
 
   contentDiv.innerHTML = `
-    <div class="lingua-tooltip-text">${escapeHtml(translatedText)}</div>
-    <div class="lingua-tooltip-actions">
-      <button class="lingua-tooltip-copy" aria-label="Copy translation" title="Copy">
+    <div class="anyllm-tooltip-text">${escapeHtml(translatedText)}</div>
+    <div class="anyllm-tooltip-actions">
+      <button class="anyllm-tooltip-copy" aria-label="Copy translation" title="Copy">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
       </button>
-      <button class="lingua-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
+      <button class="anyllm-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
     </div>
   `;
 
   // Re-wire buttons
-  const copyBtn = contentDiv.querySelector('.lingua-tooltip-copy');
+  const copyBtn = contentDiv.querySelector('.anyllm-tooltip-copy');
   if (copyBtn) {
     copyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -147,7 +147,7 @@ function updateTooltipContent(translatedText: string): void {
     });
   }
 
-  const closeBtn = contentDiv.querySelector('.lingua-tooltip-close');
+  const closeBtn = contentDiv.querySelector('.anyllm-tooltip-close');
   if (closeBtn) {
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();

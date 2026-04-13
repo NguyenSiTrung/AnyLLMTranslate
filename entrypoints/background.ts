@@ -101,5 +101,5 @@ export default defineBackground(() => {
     }
   });
 
-  console.log('[LinguaLens] Background service worker initialized');
+  console.log('[AnyLLMTranslate] Background service worker initialized');
 });

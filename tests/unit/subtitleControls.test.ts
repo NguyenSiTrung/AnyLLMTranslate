@@ -90,7 +90,7 @@ describe('content/subtitleControls', () => {
     });
 
     it('loads saved preferences from storage', async () => {
-      mockStorage.set('lingua-lens-subtitle-prefs', {
+      mockStorage.set('anyllm-translate-subtitle-prefs', {
         fontSize: 24,
         position: 'top',
         backgroundOpacity: 0.5,
@@ -107,7 +107,7 @@ describe('content/subtitleControls', () => {
     });
 
     it('merges partial saved preferences with defaults', async () => {
-      mockStorage.set('lingua-lens-subtitle-prefs', {
+      mockStorage.set('anyllm-translate-subtitle-prefs', {
         fontSize: 28,
       });
 
@@ -138,7 +138,7 @@ describe('content/subtitleControls', () => {
 
       await savePreferences(config);
 
-      expect(mockStorage.get('lingua-lens-subtitle-prefs')).toEqual(config);
+      expect(mockStorage.get('anyllm-translate-subtitle-prefs')).toEqual(config);
     });
 
     it('handles storage errors gracefully', async () => {
@@ -211,7 +211,7 @@ describe('content/subtitleControls', () => {
 
   describe('resetPreferences', () => {
     it('resets to default preferences', async () => {
-      mockStorage.set('lingua-lens-subtitle-prefs', {
+      mockStorage.set('anyllm-translate-subtitle-prefs', {
         fontSize: 28,
         position: 'top',
       });
@@ -277,7 +277,7 @@ describe('content/subtitleControls', () => {
 
   describe('initializeControls', () => {
     it('initializes controls with saved preferences', async () => {
-      mockStorage.set('lingua-lens-subtitle-prefs', {
+      mockStorage.set('anyllm-translate-subtitle-prefs', {
         fontSize: 24,
         position: 'top',
       });

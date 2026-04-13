@@ -65,7 +65,7 @@ describe('content/mutationWatcher', () => {
       watcher.start();
 
       const translation = document.createElement('div');
-      translation.setAttribute('data-lingua-role', 'translation');
+      translation.setAttribute('data-anyllm-role', 'translation');
       translation.textContent = 'Injected translation';
       document.body.appendChild(translation);
 

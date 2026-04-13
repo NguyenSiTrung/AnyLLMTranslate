@@ -8,7 +8,7 @@ export default defineConfig({
   }),
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'LinguaLens',
+    name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
     permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel'],
     commands: {

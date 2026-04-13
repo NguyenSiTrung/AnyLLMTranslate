@@ -9,20 +9,20 @@ import type { ThemeName, TranslationPosition, DarkMode } from '@/types/config';
 
 /** Apply theme attribute to document root */
 export function applyTheme(theme: ThemeName): void {
-  document.documentElement.setAttribute('data-lingua-theme', theme);
+  document.documentElement.setAttribute('data-anyllm-theme', theme);
 }
 
 /** Apply translation position attribute to document root */
 export function applyPosition(position: TranslationPosition): void {
-  document.documentElement.setAttribute('data-lingua-position', position);
+  document.documentElement.setAttribute('data-anyllm-position', position);
 }
 
 /** Apply dark mode class to document root */
 export function applyDarkMode(mode: DarkMode): void {
   if (mode === 'dark') {
-    document.documentElement.classList.add('lingua-dark');
+    document.documentElement.classList.add('anyllm-dark');
   } else {
-    document.documentElement.classList.remove('lingua-dark');
+    document.documentElement.classList.remove('anyllm-dark');
   }
   // 'auto' mode relies on CSS @media (prefers-color-scheme: dark) — no class needed
 }
@@ -42,7 +42,7 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
   const placeholder = document.createElement('span');
   placeholder.setAttribute(DATA_ATTRS.ROLE, 'translation');
   placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
-  placeholder.className = 'lingua-lens-translation lingua-lens-loading';
+  placeholder.className = 'anyllm-translate-translation anyllm-translate-loading';
 
   parentElement.after(placeholder);
 }
@@ -62,7 +62,7 @@ export function applyTranslation(
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
     // Update placeholder in-place: remove spinner class, set translated text
-    existing.classList.remove('lingua-lens-loading');
+    existing.classList.remove('anyllm-translate-loading');
     existing.textContent = translatedText;
     // Re-trigger fade-in animation by forcing reflow
     (existing as HTMLElement).style.animation = 'none';
@@ -76,7 +76,7 @@ export function applyTranslation(
   const translationEl = document.createElement('span');
   translationEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   translationEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
-  translationEl.className = 'lingua-lens-translation';
+  translationEl.className = 'anyllm-translate-translation';
   translationEl.textContent = translatedText;
 
   parentElement.after(translationEl);
@@ -91,13 +91,13 @@ export function setErrorState(
   errorMessage: string,
   onRetry?: () => void,
 ): void {
-  parentElement.setAttribute('data-lingua-error', '');
+  parentElement.setAttribute('data-anyllm-error', '');
 
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
     // Update placeholder in-place: swap loading class for error state
-    existing.classList.remove('lingua-lens-loading');
-    existing.setAttribute('data-lingua-error', '');
+    existing.classList.remove('anyllm-translate-loading');
+    existing.setAttribute('data-anyllm-error', '');
     existing.textContent = `⚠ Translation failed: ${errorMessage}`;
     existing.setAttribute('title', 'Click to retry');
 
@@ -114,8 +114,8 @@ export function setErrorState(
   const errorEl = document.createElement('span');
   errorEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
-  errorEl.className = 'lingua-lens-translation';
-  errorEl.setAttribute('data-lingua-error', '');
+  errorEl.className = 'anyllm-translate-translation';
+  errorEl.setAttribute('data-anyllm-error', '');
   errorEl.textContent = `⚠ Translation failed: ${errorMessage}`;
   errorEl.title = 'Click to retry';
 
@@ -131,7 +131,7 @@ export function setErrorState(
 
 /** Clear error state from an element */
 export function clearErrorState(parentElement: Element, pieceId: string): void {
-  parentElement.removeAttribute('data-lingua-error');
+  parentElement.removeAttribute('data-anyllm-error');
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
     existing.remove();
@@ -168,14 +168,14 @@ export function removeAllTranslations(): void {
     original.removeAttribute(DATA_ATTRS.TRANSLATED);
   }
 
-  // Clean up loading/error states on original elements (legacy data-lingua-loading)
-  const loadingEls = document.querySelectorAll('[data-lingua-loading]');
+  // Clean up loading/error states on original elements (legacy data-anyllm-loading)
+  const loadingEls = document.querySelectorAll('[data-anyllm-loading]');
   for (const el of loadingEls) {
-    el.removeAttribute('data-lingua-loading');
+    el.removeAttribute('data-anyllm-loading');
   }
-  const errorEls = document.querySelectorAll('[data-lingua-error]');
+  const errorEls = document.querySelectorAll('[data-anyllm-error]');
   for (const el of errorEls) {
-    el.removeAttribute('data-lingua-error');
+    el.removeAttribute('data-anyllm-error');
   }
 
   // Reset page state

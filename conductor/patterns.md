@@ -22,7 +22,7 @@ Reusable patterns discovered during development. Read this before starting new w
 
 ## Subtitle & Interception
 - WXT MAIN world injection uses `world: 'MAIN'` and `run_at: 'document_start'` in wxt.config.ts for XHR/fetch access. (from: phase2-subtitles_20260409, archived 2026-04-09)
-- postMessage bridge uses channel identifier ('lingua-lens') with origin validation and requestId correlation for MAIN ↔ ISOLATED world communication. (from: phase2-subtitles_20260409, archived 2026-04-09)
+- postMessage bridge uses channel identifier ('anyllm-translate') with origin validation and requestId correlation for MAIN ↔ ISOLATED world communication. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - Fetch interceptor must call `response.clone()` before `.text()` — Response body can only be read once. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - XHR responseText override via `Object.defineProperty` needs `configurable: true` for reassignment. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - DOMParser (browser API) for XML parsing (YouTube srv3 format) — no external parser needed. (from: phase2-subtitles_20260409, archived 2026-04-09)
@@ -44,7 +44,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - `isLoaded` flag in store prevents rendering before storage load completes — critical to avoid flash of defaults. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 
 ## Theming & CSS
-- Attribute scoping: `[data-lingua-theme="name"]` on `<html>` cleanly scopes themes without class conflicts. (from: phase3-ux-polish_20260410, archived 2026-04-10)
+- Attribute scoping: `[data-anyllm-theme="name"]` on `<html>` cleanly scopes themes without class conflicts. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 
 ## Options Page
 - WXT auto-discovers `entrypoints/options/` as the options page — no manifest config needed. (from: phase3-ux-polish_20260410, archived 2026-04-10)
@@ -90,17 +90,17 @@ Reusable patterns discovered during development. Read this before starting new w
 - ViewportObserver already implements 100ms batch delay — adequate for translation triggers. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Build & Packaging
-- `pnpm zip` produces `.output/lingua-lens-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `pnpm zip` produces `.output/anyllm-translate-{version}-chrome.zip` — 119KB compressed (423KB uncompressed). (from: phase4-launch-ready_20260410, archived 2026-04-10)
 - Manifest `commands` limited to 4 entries with `suggested_key` — additional shortcuts must use content script keydown listener. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 - `contextMenus` permission required in manifest for `chrome.contextMenus` API access. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 
 ## Theme Preview
 - Theme preview requires importing actual theme CSS (styles/inject.css) into options page for accurate preview. (from: theme-preview_20260410, archived 2026-04-10)
 - Component uses useSettingsStore() for automatic reactivity to theme changes. (from: theme-preview_20260410, archived 2026-04-10)
-- Light/dark mode toggle applies lingua-dark class to preview container for CSS scoping. (from: theme-preview_20260410, archived 2026-04-10)
+- Light/dark mode toggle applies anyllm-dark class to preview container for CSS scoping. (from: theme-preview_20260410, archived 2026-04-10)
 - Component must handle undefined/empty theme values - default to 'dividing-line' to prevent rendering issues. (from: theme-preview_20260410, archived 2026-04-10)
-- Theme CSS uses [data-lingua-theme] attribute on container for scoping. (from: theme-preview_20260410, archived 2026-04-10)
-- Dark mode supported via html.lingua-dark class and @media (prefers-color-scheme: dark). (from: theme-preview_20260410, archived 2026-04-10)
+- Theme CSS uses [data-anyllm-theme] attribute on container for scoping. (from: theme-preview_20260410, archived 2026-04-10)
+- Dark mode supported via html.anyllm-dark class and @media (prefers-color-scheme: dark). (from: theme-preview_20260410, archived 2026-04-10)
 
 ## UI Components
 - Shared UI library: ui/ at project root, not inside entrypoints — reusable across popup, options, and content. (from: phase5-settings-ux_20260410, archived 2026-04-10)
@@ -132,8 +132,8 @@ Reusable patterns discovered during development. Read this before starting new w
 
 ## Progress Indicators & Loading States
 - CSS spinner: Use `::before` pseudo-element with border-trick — keeps the DOM clean, no extra child elements needed. (from: para-progress-indicator_20260410, archived 2026-04-10)
-- `animation: none !important; opacity: 1 !important` on a spinner parent overrides the base `.lingua-lens-translation` fade-in, so the spinner appears immediately without delay. (from: para-progress-indicator_20260410, archived 2026-04-10)
-- Always provide CSS custom property fallbacks in inject.css: `var(--lingua-accent, #3b82f6)` — the host page may not define the extension's custom properties. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- `animation: none !important; opacity: 1 !important` on a spinner parent overrides the base `.anyllm-translate-translation` fade-in, so the spinner appears immediately without delay. (from: para-progress-indicator_20260410, archived 2026-04-10)
+- Always provide CSS custom property fallbacks in inject.css: `var(--anyllm-accent, #3b82f6)` — the host page may not define the extension's custom properties. (from: para-progress-indicator_20260410, archived 2026-04-10)
 - In-place DOM update pattern: find by pieceId → swap class + set textContent → force reflow via `el.style.animation = 'none'; el.offsetHeight; el.style.animation = ''` to re-trigger the CSS fade-in animation. (from: para-progress-indicator_20260410, archived 2026-04-10)
 - For batch translation, show spinners for ALL pieces **before** the single `await` — gives immediate visual feedback for all pending paragraphs simultaneously. (from: para-progress-indicator_20260410, archived 2026-04-10)
 - Wrap `chrome.runtime.sendMessage` in try/catch in content scripts — sendMessage can throw synchronously if the service worker is asleep on first call. (from: para-progress-indicator_20260410, archived 2026-04-10)

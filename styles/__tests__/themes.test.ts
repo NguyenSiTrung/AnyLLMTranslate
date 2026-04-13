@@ -18,48 +18,48 @@ const EXPECTED_THEMES = [
 describe('CSS themes', () => {
   it('contains all 16 theme selectors', () => {
     for (const theme of EXPECTED_THEMES) {
-      expect(cssContent).toContain(`data-lingua-theme="${theme}"`);
+      expect(cssContent).toContain(`data-anyllm-theme="${theme}"`);
     }
   });
 
-  it('each theme has a dark mode variant (either media query or .lingua-dark)', () => {
+  it('each theme has a dark mode variant (either media query or .anyllm-dark)', () => {
     for (const theme of EXPECTED_THEMES) {
       const hasMediaQuery = cssContent.includes(`prefers-color-scheme: dark`) &&
-        cssContent.includes(`data-lingua-theme="${theme}"`);
-      const hasManualDark = cssContent.includes(`lingua-dark`) &&
-        cssContent.includes(`data-lingua-theme="${theme}"`);
+        cssContent.includes(`data-anyllm-theme="${theme}"`);
+      const hasManualDark = cssContent.includes(`anyllm-dark`) &&
+        cssContent.includes(`data-anyllm-theme="${theme}"`);
 
       expect(hasMediaQuery || hasManualDark).toBe(true);
     }
   });
 
-  it('has base .lingua-lens-translation styles', () => {
-    expect(cssContent).toContain('.lingua-lens-translation');
-    expect(cssContent).toContain('linguaFadeIn');
+  it('has base .anyllm-translate-translation styles', () => {
+    expect(cssContent).toContain('.anyllm-translate-translation');
+    expect(cssContent).toContain('anyllmFadeIn');
   });
 
   it('has loading state styles', () => {
-    expect(cssContent).toContain('lingua-lens-loading');
-    expect(cssContent).toContain('linguaSpinnerRotate');
+    expect(cssContent).toContain('anyllm-translate-loading');
+    expect(cssContent).toContain('anyllmSpinnerRotate');
   });
 
   it('has error state styles', () => {
-    expect(cssContent).toContain('data-lingua-error');
+    expect(cssContent).toContain('data-anyllm-error');
     expect(cssContent).toContain('#ef4444');
   });
 
   it('has page state rules for dual, translation-only, and off', () => {
-    expect(cssContent).toContain('data-lingua-state="dual"');
-    expect(cssContent).toContain('data-lingua-state="translation-only"');
-    expect(cssContent).toContain('data-lingua-state="off"');
+    expect(cssContent).toContain('data-anyllm-state="dual"');
+    expect(cssContent).toContain('data-anyllm-state="translation-only"');
+    expect(cssContent).toContain('data-anyllm-state="off"');
   });
 
   it('has translation position variants', () => {
-    expect(cssContent).toContain('data-lingua-position="above"');
-    expect(cssContent).toContain('data-lingua-position="side"');
+    expect(cssContent).toContain('data-anyllm-position="above"');
+    expect(cssContent).toContain('data-anyllm-position="side"');
   });
 
-  it('default theme applies when no data-lingua-theme attribute', () => {
-    expect(cssContent).toContain('html:not([data-lingua-theme]) .lingua-lens-translation');
+  it('default theme applies when no data-anyllm-theme attribute', () => {
+    expect(cssContent).toContain('html:not([data-anyllm-theme]) .anyllm-translate-translation');
   });
 });

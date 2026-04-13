@@ -189,12 +189,12 @@ describe('content/hoverTranslate', () => {
   });
 
   describe('skip logic', () => {
-    it('skips elements with data-lingua-translated attribute', () => {
+    it('skips elements with data-anyllm-translated attribute', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
       const para = document.getElementById('test-para') as HTMLElement;
-      para.setAttribute('data-lingua-translated', '');
+      para.setAttribute('data-anyllm-translated', '');
 
       const event = new MouseEvent('mouseover', { bubbles: true });
       para.dispatchEvent(event);
@@ -203,12 +203,12 @@ describe('content/hoverTranslate', () => {
       expect(hoverCache.size).toBe(0);
     });
 
-    it('skips elements with data-lingua-role attribute', () => {
+    it('skips elements with data-anyllm-role attribute', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
 
       const para = document.getElementById('test-para') as HTMLElement;
-      para.setAttribute('data-lingua-role', 'translation');
+      para.setAttribute('data-anyllm-role', 'translation');
 
       const event = new MouseEvent('mouseover', { bubbles: true });
       para.dispatchEvent(event);

@@ -1,4 +1,4 @@
-# Contributing to LinguaLens
+# Contributing to AnyLLMTranslate
 
 Thank you for your interest in contributing! This guide covers the development setup, architecture overview, and contribution workflow.
 
@@ -30,7 +30,7 @@ pnpm dev
 
 ## 🏗️ Architecture Overview
 
-LinguaLens is a Chrome Manifest V3 extension built with WXT, React, and TypeScript.
+AnyLLMTranslate is a Chrome Manifest V3 extension built with WXT, React, and TypeScript.
 
 ### Extension Contexts
 
@@ -194,7 +194,7 @@ pnpm zip
 Themes are defined in `styles/inject.css` using CSS attribute selectors:
 
 ```css
-[data-lingua-theme="my-theme"] .lingua-lens-translation {
+[data-anyllm-theme="my-theme"] .anyllm-translate-translation {
   /* Your theme styles */
   border-bottom: 2px solid #1a73e8;
   color: #1a73e8;

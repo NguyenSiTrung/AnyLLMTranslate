@@ -75,7 +75,7 @@ export function DictionarySection() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `lingua-lens-dictionary.${format}`;
+    a.download = `anyllm-translate-dictionary.${format}`;
     a.click();
     URL.revokeObjectURL(url);
     showSuccess(`Dictionary exported as ${format.toUpperCase()}`);

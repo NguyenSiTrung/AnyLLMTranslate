@@ -1,4 +1,4 @@
-# Development Workflow — LinguaLens
+# Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
 

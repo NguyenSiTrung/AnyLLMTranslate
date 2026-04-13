@@ -8,7 +8,7 @@ import { Card } from '@/ui/Card';
 
 const DEFAULT_SHORTCUTS = [
   { action: 'Toggle Translation', shortcut: 'Alt+T', description: 'Start or stop translating the current page' },
-  { action: 'Open Options', shortcut: 'Alt+O', description: 'Open the LinguaLens settings page' },
+  { action: 'Open Options', shortcut: 'Alt+O', description: 'Open the AnyLLMTranslate settings page' },
 ];
 
 export function ShortcutsSection() {
@@ -20,7 +20,7 @@ export function ShortcutsSection() {
           <KeyboardIcon className="w-5 h-5 text-blue-400" />
           <div>
             <h2 className="text-lg font-semibold text-zinc-100">Keyboard Shortcuts</h2>
-            <p className="text-xs text-zinc-500">View and customize keyboard shortcuts for LinguaLens.</p>
+            <p className="text-xs text-zinc-500">View and customize keyboard shortcuts for AnyLLMTranslate.</p>
           </div>
         </div>
       </Card>

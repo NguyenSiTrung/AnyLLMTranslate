@@ -224,7 +224,7 @@ export default function App() {
         setStatus((prev) => ({ ...prev, status: 'translating' }));
       }
     } catch (error) {
-      console.error('[LinguaLens] Toggle error:', error);
+      console.error('[AnyLLMTranslate] Toggle error:', error);
     }
   }, [isTranslating, status.status]);
 
@@ -256,7 +256,7 @@ export default function App() {
             )}
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight text-zinc-100">LinguaLens</h1>
+            <h1 className="text-sm font-bold tracking-tight text-zinc-100">AnyLLMTranslate</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className={`w-1.5 h-1.5 rounded-full ${isTranslating ? 'bg-blue-500 animate-pulse' : isActive ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
               <span className="text-[10px] uppercase tracking-wider font-medium text-zinc-500">{isActive ? (isTranslating ? 'Translating' : 'Active') : 'Ready'}</span>

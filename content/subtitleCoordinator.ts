@@ -39,7 +39,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
   const timeoutId = setTimeout(() => {
     // If no response received within timeout, switch to overlay mode
     if (!state.isOverlayMode) {
-      console.warn('LinguaLens: Subtitle interception timeout, switching to overlay mode');
+      console.warn('AnyLLMTranslate: Subtitle interception timeout, switching to overlay mode');
       activateOverlayMode(url, body);
     }
     state.pendingRequests.delete(requestId);
@@ -55,7 +55,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   if (state.isOverlayMode) return;
 
   state.isOverlayMode = true;
-  console.log('LinguaLens: Activating overlay fallback mode');
+  console.log('AnyLLMTranslate: Activating overlay fallback mode');
 
   // Fetch subtitle content if not provided
   let subtitleContent = content;
@@ -63,7 +63,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     try {
       subtitleContent = await fetchSubtitleContent(subtitleUrl);
     } catch (error) {
-      console.error('LinguaLens: Failed to fetch subtitle content', error);
+      console.error('AnyLLMTranslate: Failed to fetch subtitle content', error);
       return;
     }
   }
@@ -71,7 +71,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   // Parse subtitles
   const cues = parseSubtitles(subtitleContent);
   if (cues.length === 0) {
-    console.warn('LinguaLens: No cues found in subtitle content');
+    console.warn('AnyLLMTranslate: No cues found in subtitle content');
     return;
   }
 
@@ -99,7 +99,7 @@ async function fetchSubtitleContent(url: string): Promise<string> {
     return await response.text();
   } catch (error) {
     // If direct fetch fails, try via background worker
-    console.warn('LinguaLens: Direct fetch failed, trying background worker', error);
+    console.warn('AnyLLMTranslate: Direct fetch failed, trying background worker', error);
     return fetchViaBackground(url);
   }
 }
@@ -134,7 +134,7 @@ async function fetchViaBackground(url: string): Promise<string> {
  */
 export function updateTranslatedCues(cues: SubtitleCue[]): void {
   if (!state.isOverlayMode) {
-    console.warn('LinguaLens: Cannot update cues - not in overlay mode');
+    console.warn('AnyLLMTranslate: Cannot update cues - not in overlay mode');
     return;
   }
   updateCues(cues);
@@ -157,7 +157,7 @@ export function clearPendingRequest(requestId: string): void {
  * Returns a cleanup function.
  */
 export function startCoordinator(): () => void {
-  console.log('LinguaLens: Starting subtitle coordinator');
+  console.log('AnyLLMTranslate: Starting subtitle coordinator');
 
   // Listen for intercepted subtitles
   const cleanupBridge = onSubtitleIntercepted(handleIntercepted);
@@ -169,7 +169,7 @@ export function startCoordinator(): () => void {
 
   // Return cleanup function
   return () => {
-    console.log('LinguaLens: Stopping subtitle coordinator');
+    console.log('AnyLLMTranslate: Stopping subtitle coordinator');
     cleanupBridge();
     cleanupTranslated();
 

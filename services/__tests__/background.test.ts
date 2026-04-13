@@ -45,7 +45,7 @@ function mockFetch(content: string) {
 describe('services/background', () => {
   beforeEach(() => {
     // Reset stored settings before each test
-    delete mockStorage['lingua-lens-settings'];
+    delete mockStorage['anyllm-translate-settings'];
   });
 
   describe('handleMessage — translate', () => {
@@ -88,7 +88,7 @@ describe('services/background', () => {
 
     it('forwards glossaryBlock to service.translate() when settings have glossary entries', async () => {
       // Store settings with glossary entries
-      mockStorage['lingua-lens-settings'] = {
+      mockStorage['anyllm-translate-settings'] = {
         provider: {
           preset: 'ollama',
           baseUrl: 'http://localhost:11434/v1',
@@ -127,7 +127,7 @@ describe('services/background', () => {
     });
 
     it('omits glossaryBlock when settings have empty glossary', async () => {
-      mockStorage['lingua-lens-settings'] = {
+      mockStorage['anyllm-translate-settings'] = {
         provider: {
           preset: 'ollama',
           baseUrl: 'http://localhost:11434/v1',

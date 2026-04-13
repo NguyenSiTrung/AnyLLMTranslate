@@ -23,7 +23,7 @@ export class MutationWatcher {
     // Skip our own injected nodes
     if (el.hasAttribute(DATA_ATTRS.TRANSLATED)) return;
     if (el.getAttribute(DATA_ATTRS.ROLE) === 'translation') return;
-    if (el.classList.contains('lingua-lens-translation')) return;
+    if (el.classList.contains('anyllm-translate-translation')) return;
 
     // Skip non-translatable elements
     if (SKIP_ELEMENTS.has(el.tagName)) return;

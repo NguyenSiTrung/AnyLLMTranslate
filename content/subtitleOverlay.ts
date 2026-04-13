@@ -65,22 +65,22 @@ function findVideoElement(): HTMLVideoElement | null {
  */
 function createOverlay(): HTMLElement {
   const overlay = document.createElement('div');
-  overlay.className = 'lingua-lens-subtitle-overlay';
-  overlay.setAttribute('data-lingua-role', 'subtitle-overlay');
+  overlay.className = 'anyllm-translate-subtitle-overlay';
+  overlay.setAttribute('data-anyllm-role', 'subtitle-overlay');
 
   // Container for subtitle text
   const textContainer = document.createElement('div');
-  textContainer.className = 'lingua-lens-subtitle-text';
+  textContainer.className = 'anyllm-translate-subtitle-text';
   overlay.appendChild(textContainer);
 
   // Original text (smaller, dimmer)
   const originalText = document.createElement('div');
-  originalText.className = 'lingua-lens-subtitle-original';
+  originalText.className = 'anyllm-translate-subtitle-original';
   textContainer.appendChild(originalText);
 
   // Translated text (larger, brighter)
   const translatedText = document.createElement('div');
-  translatedText.className = 'lingua-lens-subtitle-translated';
+  translatedText.className = 'anyllm-translate-subtitle-translated';
   textContainer.appendChild(translatedText);
 
   return overlay;
@@ -116,11 +116,11 @@ function updateOverlayStyle(config: OverlayConfig): void {
   overlay.style.fontSize = `${config.fontSize}px`;
 
   // Set position class
-  overlay.classList.remove('lingua-lens-position-top', 'lingua-lens-position-bottom');
-  overlay.classList.add(`lingua-lens-position-${config.position}`);
+  overlay.classList.remove('anyllm-translate-position-top', 'anyllm-translate-position-bottom');
+  overlay.classList.add(`anyllm-translate-position-${config.position}`);
 
   // Set background opacity
-  overlay.style.setProperty('--lingua-subtitle-bg-opacity', config.backgroundOpacity.toString());
+  overlay.style.setProperty('--anyllm-subtitle-bg-opacity', config.backgroundOpacity.toString());
 }
 
 /**
@@ -142,18 +142,18 @@ function findActiveCue(currentTime: number): number {
 function updateDisplayedText(cueIndex: number): void {
   if (!overlayState.overlay) return;
 
-  const originalEl = overlayState.overlay.querySelector('.lingua-lens-subtitle-original') as HTMLElement;
-  const translatedEl = overlayState.overlay.querySelector('.lingua-lens-subtitle-translated') as HTMLElement;
+  const originalEl = overlayState.overlay.querySelector('.anyllm-translate-subtitle-original') as HTMLElement;
+  const translatedEl = overlayState.overlay.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
 
   if (cueIndex >= 0 && cueIndex < overlayState.cues.length) {
     const cue = overlayState.cues[cueIndex];
     originalEl.textContent = cue.originalText || cue.text;
     translatedEl.textContent = cue.text;
-    overlayState.overlay.classList.add('lingua-lens-subtitle-visible');
+    overlayState.overlay.classList.add('anyllm-translate-subtitle-visible');
   } else {
     originalEl.textContent = '';
     translatedEl.textContent = '';
-    overlayState.overlay.classList.remove('lingua-lens-subtitle-visible');
+    overlayState.overlay.classList.remove('anyllm-translate-subtitle-visible');
   }
 }
 
@@ -241,7 +241,7 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
   // Use provided video element or find one
   const video = videoNode || findVideoElement();
   if (!video) {
-    console.warn('LinguaLens: No video element found for subtitle overlay');
+    console.warn('AnyLLMTranslate: No video element found for subtitle overlay');
     return;
   }
 

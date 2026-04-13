@@ -1,8 +1,8 @@
-# 🌐 LinguaLens — Bilingual Web Translation Extension
+# 🌐 AnyLLMTranslate — Bilingual Web Translation Extension
 
 > **Translate any webpage & video subtitles into your language using any OpenAI-compatible LLM.**
 
-LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual translation for web pages and video subtitles. Unlike traditional translation tools, it shows translations **inline alongside original text** — preserving context while enabling comprehension. Powered entirely by your own LLM endpoint: no data leaves your machine except to your configured API.
+AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilingual translation for web pages and video subtitles. Unlike traditional translation tools, it shows translations **inline alongside original text** — preserving context while enabling comprehension. Powered entirely by your own LLM endpoint: no data leaves your machine except to your configured API.
 
 ---
 
@@ -68,7 +68,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 
 ### Configuration
 
-1. Click the **LinguaLens** icon in the Chrome toolbar
+1. Click the **AnyLLMTranslate** icon in the Chrome toolbar
 2. Click the **Settings** gear icon to open the Options page
 3. Go to the **Provider** tab and configure your LLM:
    - **Preset**: Choose `Ollama` (local, no key) or `Custom`
@@ -172,7 +172,7 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 │   ├── Modal.tsx, Toast.tsx, ToastProvider.tsx
 │   ├── FieldGroup.tsx, EmptyState.tsx
 ├── styles/
-│   ├── inject.css             # 16 themes + page states (data-lingua-theme, data-lingua-position)
+│   ├── inject.css             # 16 themes + page states (data-anyllm-theme, data-anyllm-position)
 │   ├── subtitle.css           # Subtitle overlay styles
 │   └── tooltip.css            # Selection translate tooltip styles
 ├── types/                     # TypeScript type definitions
@@ -211,9 +211,9 @@ LinguaLens is a Chrome (Manifest V3) extension that provides seamless bilingual 
 
 ## 🎨 Visual Themes
 
-LinguaLens includes **16 built-in themes** that apply via CSS data-attributes on `<html>`:
+AnyLLMTranslate includes **16 built-in themes** that apply via CSS data-attributes on `<html>`:
 
-| Theme | Key = `data-lingua-theme` |
+| Theme | Key = `data-anyllm-theme` |
 |-------|--------------------------|
 | Dividing Line | `dividing-line` *(default)* |
 | Blockquote | `blockquote` |
@@ -232,7 +232,7 @@ LinguaLens includes **16 built-in themes** that apply via CSS data-attributes on
 | Minimal | `minimal` |
 | Gradient Accent | `gradient-accent` |
 
-All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.lingua-dark` class).
+All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class).
 
 ---
 

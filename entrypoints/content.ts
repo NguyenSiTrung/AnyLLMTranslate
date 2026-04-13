@@ -126,9 +126,9 @@ export async function startTranslation(): Promise<void> {
 /** Stop translation and restore the page */
 export function stopTranslation(): void {
   // Clean up visual settings
-  document.documentElement.removeAttribute('data-lingua-theme');
-  document.documentElement.removeAttribute('data-lingua-position');
-  document.documentElement.classList.remove('lingua-dark');
+  document.documentElement.removeAttribute('data-anyllm-theme');
+  document.documentElement.removeAttribute('data-anyllm-position');
+  document.documentElement.classList.remove('anyllm-dark');
 
   if (viewportObserver) {
     viewportObserver.disconnect();
@@ -176,7 +176,7 @@ async function initInteractionFeatures(): Promise<void> {
   // Listen for settings changes to toggle features dynamically
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
-    const settingsKey = 'lingua-lens-settings';
+    const settingsKey = 'anyllm-translate-settings';
     if (changes[settingsKey]?.newValue) {
       const newSettings = changes[settingsKey].newValue;
       if (typeof newSettings.textSelectionEnabled === 'boolean') {
@@ -235,6 +235,6 @@ export default defineContentScript({
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
     await initInteractionFeatures();
-    console.log('[LinguaLens] Content script loaded');
+    console.log('[AnyLLMTranslate] Content script loaded');
   },
 });

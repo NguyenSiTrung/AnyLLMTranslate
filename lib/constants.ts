@@ -41,13 +41,13 @@ export const MUTATION_DEBOUNCE_MS = 500;
 /** Data attributes used by the extension */
 export const DATA_ATTRS = {
   /** Role marker: 'original' or 'translation' */
-  ROLE: 'data-lingua-role',
+  ROLE: 'data-anyllm-role',
   /** Page-level translation state */
-  STATE: 'data-lingua-state',
+  STATE: 'data-anyllm-state',
   /** Piece ID reference */
-  PIECE_ID: 'data-lingua-piece-id',
+  PIECE_ID: 'data-anyllm-piece-id',
   /** Marks an element as translated */
-  TRANSLATED: 'data-lingua-translated',
+  TRANSLATED: 'data-anyllm-translated',
 } as const;
 
 /** Translation page states */
@@ -55,7 +55,7 @@ export type PageState = 'dual' | 'translation-only' | 'off';
 
 /** Extension storage keys */
 export const STORAGE_KEYS = {
-  SETTINGS: 'lingua-lens-settings',
-  CACHE_DB: 'lingua-lens-cache',
+  SETTINGS: 'anyllm-translate-settings',
+  CACHE_DB: 'anyllm-translate-cache',
   CACHE_STORE: 'translations',
 } as const;

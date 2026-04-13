@@ -1,10 +1,10 @@
-# Privacy Policy — LinguaLens
+# Privacy Policy — AnyLLMTranslate
 
 **Last updated:** April 10, 2026
 
 ## Summary
 
-LinguaLens does **not** collect, store, or transmit any personal data. All translation processing happens through your own configured API provider.
+AnyLLMTranslate does **not** collect, store, or transmit any personal data. All translation processing happens through your own configured API provider.
 
 ## Data Handling
 
@@ -20,13 +20,13 @@ LinguaLens does **not** collect, store, or transmit any personal data. All trans
 - ✅ **Translation cache** — cached translations stored in IndexedDB for performance, never uploaded
 
 ### What is sent to your API provider
-When you translate text, the selected text is sent to the API endpoint **you configure**. This is the only external network request the extension makes. LinguaLens connects only to the URL you provide (e.g., `https://api.openai.com/v1`).
+When you translate text, the selected text is sent to the API endpoint **you configure**. This is the only external network request the extension makes. AnyLLMTranslate connects only to the URL you provide (e.g., `https://api.openai.com/v1`).
 
-**LinguaLens never contacts any server owned by the extension developers.**
+**AnyLLMTranslate never contacts any server owned by the extension developers.**
 
 ## Bring Your Own Key (BYOK)
 
-LinguaLens uses a **BYOK (Bring Your Own Key)** model:
+AnyLLMTranslate uses a **BYOK (Bring Your Own Key)** model:
 - You provide your own API key and endpoint
 - Your API key is stored only in your browser's local storage
 - The extension communicates directly with your chosen provider — no proxy, no middleware
@@ -42,11 +42,11 @@ LinguaLens uses a **BYOK (Bring Your Own Key)** model:
 
 ## Third-Party Services
 
-LinguaLens does not integrate with any third-party analytics, advertising, or tracking services. The only external communication is with the LLM API provider that **you** configure.
+AnyLLMTranslate does not integrate with any third-party analytics, advertising, or tracking services. The only external communication is with the LLM API provider that **you** configure.
 
 ## Children's Privacy
 
-LinguaLens does not knowingly collect information from children under 13.
+AnyLLMTranslate does not knowingly collect information from children under 13.
 
 ## Changes
 

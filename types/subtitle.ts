@@ -24,7 +24,7 @@ export type BridgeMessageType =
 export interface BridgeMessage<T = unknown> {
   type: BridgeMessageType;
   requestId: string;
-  channel: 'lingua-lens';
+  channel: 'anyllm-translate';
   payload: T;
 }
 

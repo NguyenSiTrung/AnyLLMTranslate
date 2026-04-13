@@ -5,12 +5,12 @@
  * to relay intercepted subtitle data to the ISOLATED world content script,
  * which can then communicate with the background service worker.
  *
- * Uses channel identifier 'lingua-lens' with origin validation and requestId correlation.
+ * Uses channel identifier 'anyllm-translate' with origin validation and requestId correlation.
  */
 
 import type { BridgeMessage, BridgeMessageType } from '@/types/subtitle';
 
-const CHANNEL = 'lingua-lens';
+const CHANNEL = 'anyllm-translate';
 
 /** Interface for the bridge send function used by interceptors */
 export interface MessageBridgeSender {
@@ -86,8 +86,8 @@ export function requestResponse<TReq, TRes>(
     const requestId = sendMessage(type, payload);
 
     // Store the requestId so the responder can correlate
-    (window as Window & { __linguaLensRequests?: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }> })
-      .__linguaLensRequests = (window as Window & { __linguaLensRequests?: Map<string, unknown> }).__linguaLensRequests || new Map();
+    (window as Window & { __anyllmTranslateRequests?: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }> })
+      .__anyllmTranslateRequests = (window as Window & { __anyllmTranslateRequests?: Map<string, unknown> }).__anyllmTranslateRequests || new Map();
 
     const timer = setTimeout(() => {
       cleanup();

@@ -1,38 +1,38 @@
 /**
  * Inject CSS — 16 visual translation themes for bilingual display.
  * Applied to host pages via content script CSS injection.
- * Each theme is scoped via [data-lingua-theme="<name>"] on <html>.
+ * Each theme is scoped via [data-anyllm-theme="<name>"] on <html>.
  */
 
 /* ===== Base Translation Container ===== */
 
-.lingua-lens-translation {
+.anyllm-translate-translation {
   all: revert;
   display: block;
   box-sizing: border-box;
-  font-size: var(--lingua-font-size, inherit);
-  line-height: var(--lingua-line-height, 1.6);
-  font-style: var(--lingua-font-style, normal);
+  font-size: var(--anyllm-font-size, inherit);
+  line-height: var(--anyllm-line-height, 1.6);
+  font-style: var(--anyllm-font-style, normal);
   opacity: 0;
-  animation: linguaFadeIn 0.3s ease-out forwards;
+  animation: anyllmFadeIn 0.3s ease-out forwards;
 }
 
-@keyframes linguaFadeIn {
+@keyframes anyllmFadeIn {
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* ===== Page State Rules ===== */
 
-html[data-lingua-state="dual"] [data-lingua-role="translation"] {
+html[data-anyllm-state="dual"] [data-anyllm-role="translation"] {
   display: block;
 }
 
-html[data-lingua-state="translation-only"] [data-lingua-role="original"] {
+html[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
   display: none;
 }
 
-html[data-lingua-state="translation-only"] [data-lingua-role="translation"] {
+html[data-anyllm-state="translation-only"] [data-anyllm-role="translation"] {
   display: block;
   border: none;
   margin: 0;
@@ -42,15 +42,15 @@ html[data-lingua-state="translation-only"] [data-lingua-role="translation"] {
   box-shadow: none;
 }
 
-html[data-lingua-state="off"] [data-lingua-role="translation"],
-html:not([data-lingua-state]) [data-lingua-role="translation"] {
+html[data-anyllm-state="off"] [data-anyllm-role="translation"],
+html:not([data-anyllm-state]) [data-anyllm-role="translation"] {
   display: none;
 }
 
 /* ===== Loading & Error States ===== */
 
 /* Per-paragraph spinner — pure CSS border-trick, no SVG, no JS loops */
-.lingua-lens-loading {
+.anyllm-translate-loading {
   display: inline-block;
   min-height: 1.4em;
   vertical-align: middle;
@@ -59,52 +59,52 @@ html:not([data-lingua-state]) [data-lingua-role="translation"] {
   opacity: 1 !important;
 }
 
-.lingua-lens-loading::before {
+.anyllm-translate-loading::before {
   content: '';
   display: inline-block;
   width: 0.9em;
   height: 0.9em;
   border: 2px solid transparent;
-  border-top-color: var(--lingua-accent, #3b82f6);
-  border-right-color: var(--lingua-accent, #3b82f6);
+  border-top-color: var(--anyllm-accent, #3b82f6);
+  border-right-color: var(--anyllm-accent, #3b82f6);
   border-radius: 50%;
   vertical-align: middle;
-  animation: linguaSpinnerRotate 0.7s linear infinite;
+  animation: anyllmSpinnerRotate 0.7s linear infinite;
   margin-right: 0.4em;
 }
 
-@keyframes linguaSpinnerRotate {
+@keyframes anyllmSpinnerRotate {
   to { transform: rotate(360deg); }
 }
 
 /* Reduced motion: show static dot instead of spinner */
 @media (prefers-reduced-motion: reduce) {
-  .lingua-lens-loading::before {
+  .anyllm-translate-loading::before {
     animation: none;
-    border-color: var(--lingua-accent, #3b82f6);
+    border-color: var(--anyllm-accent, #3b82f6);
     opacity: 0.5;
   }
 }
 
-.lingua-lens-translation[data-lingua-error] {
+.anyllm-translate-translation[data-anyllm-error] {
   border-left: 3px solid #ef4444;
   padding-left: 8px;
   color: #ef4444;
   font-size: 0.85em;
   cursor: pointer;
   opacity: 0.8;
-  animation: linguaFadeIn 0.3s ease-out forwards !important;
+  animation: anyllmFadeIn 0.3s ease-out forwards !important;
 }
 
-.lingua-lens-translation[data-lingua-error]:hover {
+.anyllm-translate-translation[data-anyllm-error]:hover {
   opacity: 1;
 }
 
 /* ============================================
    THEME 1: dividing-line (default)
    ============================================ */
-[data-lingua-theme="dividing-line"] .lingua-lens-translation,
-html:not([data-lingua-theme]) .lingua-lens-translation {
+[data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
+html:not([data-anyllm-theme]) .anyllm-translate-translation {
   border-top: 1px solid #e2e2e2;
   margin-top: 4px;
   padding-top: 4px;
@@ -115,16 +115,16 @@ html:not([data-lingua-theme]) .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="dividing-line"] .lingua-lens-translation,
-  html:not([data-lingua-theme]) .lingua-lens-translation {
+  [data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
+  html:not([data-anyllm-theme]) .anyllm-translate-translation {
     border-top-color: #444;
     color: #aaa;
     background: #422006;
   }
 }
 
-html.lingua-dark [data-lingua-theme="dividing-line"] .lingua-lens-translation,
-html.lingua-dark:not([data-lingua-theme]) .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
+html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation {
   border-top-color: #444;
   color: #aaa;
   background: #422006;
@@ -133,7 +133,7 @@ html.lingua-dark:not([data-lingua-theme]) .lingua-lens-translation {
 /* ============================================
    THEME 2: blockquote
    ============================================ */
-[data-lingua-theme="blockquote"] .lingua-lens-translation {
+[data-anyllm-theme="blockquote"] .anyllm-translate-translation {
   border-left: 3px solid #3b82f6;
   padding-left: 12px;
   margin-top: 6px;
@@ -142,13 +142,13 @@ html.lingua-dark:not([data-lingua-theme]) .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="blockquote"] .lingua-lens-translation {
+  [data-anyllm-theme="blockquote"] .anyllm-translate-translation {
     border-left-color: #60a5fa;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="blockquote"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="blockquote"] .anyllm-translate-translation {
   border-left-color: #60a5fa;
   color: #aaa;
 }
@@ -156,7 +156,7 @@ html.lingua-dark [data-lingua-theme="blockquote"] .lingua-lens-translation {
 /* ============================================
    THEME 3: paper
    ============================================ */
-[data-lingua-theme="paper"] .lingua-lens-translation {
+[data-anyllm-theme="paper"] .anyllm-translate-translation {
   background: #fefce8;
   padding: 8px 12px;
   margin-top: 6px;
@@ -166,14 +166,14 @@ html.lingua-dark [data-lingua-theme="blockquote"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="paper"] .lingua-lens-translation {
+  [data-anyllm-theme="paper"] .anyllm-translate-translation {
     background: #422006;
     color: #fef08a;
     border-color: #713f12;
   }
 }
 
-html.lingua-dark [data-lingua-theme="paper"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="paper"] .anyllm-translate-translation {
   background: #422006;
   color: #fef08a;
   border-color: #713f12;
@@ -182,7 +182,7 @@ html.lingua-dark [data-lingua-theme="paper"] .lingua-lens-translation {
 /* ============================================
    THEME 4: underline
    ============================================ */
-[data-lingua-theme="underline"] .lingua-lens-translation {
+[data-anyllm-theme="underline"] .anyllm-translate-translation {
   border-bottom: 2px solid #3b82f6;
   padding-bottom: 2px;
   margin-top: 4px;
@@ -190,13 +190,13 @@ html.lingua-dark [data-lingua-theme="paper"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="underline"] .lingua-lens-translation {
+  [data-anyllm-theme="underline"] .anyllm-translate-translation {
     border-bottom-color: #60a5fa;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="underline"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="underline"] .anyllm-translate-translation {
   border-bottom-color: #60a5fa;
   color: #aaa;
 }
@@ -204,7 +204,7 @@ html.lingua-dark [data-lingua-theme="underline"] .lingua-lens-translation {
 /* ============================================
    THEME 5: dashed-underline
    ============================================ */
-[data-lingua-theme="dashed-underline"] .lingua-lens-translation {
+[data-anyllm-theme="dashed-underline"] .anyllm-translate-translation {
   border-bottom: 2px dashed #8b5cf6;
   padding-bottom: 2px;
   margin-top: 4px;
@@ -212,13 +212,13 @@ html.lingua-dark [data-lingua-theme="underline"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="dashed-underline"] .lingua-lens-translation {
+  [data-anyllm-theme="dashed-underline"] .anyllm-translate-translation {
     border-bottom-color: #a78bfa;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="dashed-underline"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="dashed-underline"] .anyllm-translate-translation {
   border-bottom-color: #a78bfa;
   color: #aaa;
 }
@@ -226,7 +226,7 @@ html.lingua-dark [data-lingua-theme="dashed-underline"] .lingua-lens-translation
 /* ============================================
    THEME 6: highlight
    ============================================ */
-[data-lingua-theme="highlight"] .lingua-lens-translation {
+[data-anyllm-theme="highlight"] .anyllm-translate-translation {
   background: linear-gradient(to bottom, transparent 60%, #fde047 60%);
   padding: 2px 4px;
   margin-top: 4px;
@@ -234,13 +234,13 @@ html.lingua-dark [data-lingua-theme="dashed-underline"] .lingua-lens-translation
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="highlight"] .lingua-lens-translation {
+  [data-anyllm-theme="highlight"] .anyllm-translate-translation {
     background: linear-gradient(to bottom, transparent 60%, rgba(253,224,71,0.3) 60%);
     color: #d4d4d4;
   }
 }
 
-html.lingua-dark [data-lingua-theme="highlight"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="highlight"] .anyllm-translate-translation {
   background: linear-gradient(to bottom, transparent 60%, rgba(253,224,71,0.3) 60%);
   color: #d4d4d4;
 }
@@ -248,7 +248,7 @@ html.lingua-dark [data-lingua-theme="highlight"] .lingua-lens-translation {
 /* ============================================
    THEME 7: wavy-underline
    ============================================ */
-[data-lingua-theme="wavy-underline"] .lingua-lens-translation {
+[data-anyllm-theme="wavy-underline"] .anyllm-translate-translation {
   text-decoration: underline wavy #f97316;
   text-underline-offset: 4px;
   margin-top: 4px;
@@ -256,13 +256,13 @@ html.lingua-dark [data-lingua-theme="highlight"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="wavy-underline"] .lingua-lens-translation {
+  [data-anyllm-theme="wavy-underline"] .anyllm-translate-translation {
     text-decoration-color: #fb923c;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="wavy-underline"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="wavy-underline"] .anyllm-translate-translation {
   text-decoration-color: #fb923c;
   color: #aaa;
 }
@@ -270,7 +270,7 @@ html.lingua-dark [data-lingua-theme="wavy-underline"] .lingua-lens-translation {
 /* ============================================
    THEME 8: bubble
    ============================================ */
-[data-lingua-theme="bubble"] .lingua-lens-translation {
+[data-anyllm-theme="bubble"] .anyllm-translate-translation {
   background: #f0f9ff;
   border: 1px solid #bae6fd;
   border-radius: 12px;
@@ -280,7 +280,7 @@ html.lingua-dark [data-lingua-theme="wavy-underline"] .lingua-lens-translation {
   position: relative;
 }
 
-[data-lingua-theme="bubble"] .lingua-lens-translation::before {
+[data-anyllm-theme="bubble"] .anyllm-translate-translation::before {
   content: '';
   position: absolute;
   top: -6px;
@@ -294,25 +294,25 @@ html.lingua-dark [data-lingua-theme="wavy-underline"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="bubble"] .lingua-lens-translation {
+  [data-anyllm-theme="bubble"] .anyllm-translate-translation {
     background: #0c4a6e;
     border-color: #0369a1;
     color: #e0f2fe;
   }
-  [data-lingua-theme="bubble"] .lingua-lens-translation::before {
+  [data-anyllm-theme="bubble"] .anyllm-translate-translation::before {
     background: #0c4a6e;
     border-left-color: #0369a1;
     border-top-color: #0369a1;
   }
 }
 
-html.lingua-dark [data-lingua-theme="bubble"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation {
   background: #0c4a6e;
   border-color: #0369a1;
   color: #e0f2fe;
 }
 
-html.lingua-dark [data-lingua-theme="bubble"] .lingua-lens-translation::before {
+html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation::before {
   background: #0c4a6e;
   border-left-color: #0369a1;
   border-top-color: #0369a1;
@@ -321,13 +321,13 @@ html.lingua-dark [data-lingua-theme="bubble"] .lingua-lens-translation::before {
 /* ============================================
    THEME 9: side-by-side
    ============================================ */
-[data-lingua-theme="side-by-side"] [data-lingua-role="original"] {
+[data-anyllm-theme="side-by-side"] [data-anyllm-role="original"] {
   display: inline-block;
   width: 48%;
   vertical-align: top;
 }
 
-[data-lingua-theme="side-by-side"] .lingua-lens-translation {
+[data-anyllm-theme="side-by-side"] .anyllm-translate-translation {
   display: inline-block;
   width: 48%;
   vertical-align: top;
@@ -338,13 +338,13 @@ html.lingua-dark [data-lingua-theme="bubble"] .lingua-lens-translation::before {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="side-by-side"] .lingua-lens-translation {
+  [data-anyllm-theme="side-by-side"] .anyllm-translate-translation {
     border-left-color: #4b5563;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="side-by-side"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="side-by-side"] .anyllm-translate-translation {
   border-left-color: #4b5563;
   color: #aaa;
 }
@@ -352,7 +352,7 @@ html.lingua-dark [data-lingua-theme="side-by-side"] .lingua-lens-translation {
 /* ============================================
    THEME 10: mask
    ============================================ */
-[data-lingua-theme="mask"] .lingua-lens-translation {
+[data-anyllm-theme="mask"] .anyllm-translate-translation {
   filter: blur(4px);
   transition: filter 0.2s ease;
   margin-top: 4px;
@@ -360,50 +360,50 @@ html.lingua-dark [data-lingua-theme="side-by-side"] .lingua-lens-translation {
   cursor: pointer;
 }
 
-[data-lingua-theme="mask"] .lingua-lens-translation:hover,
-[data-lingua-theme="mask"] .lingua-lens-translation:focus {
+[data-anyllm-theme="mask"] .anyllm-translate-translation:hover,
+[data-anyllm-theme="mask"] .anyllm-translate-translation:focus {
   filter: blur(0);
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="mask"] .lingua-lens-translation {
+  [data-anyllm-theme="mask"] .anyllm-translate-translation {
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="mask"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="mask"] .anyllm-translate-translation {
   color: #aaa;
 }
 
 /* ============================================
    THEME 11: fade-in
    ============================================ */
-[data-lingua-theme="fade-in"] .lingua-lens-translation {
+[data-anyllm-theme="fade-in"] .anyllm-translate-translation {
   margin-top: 4px;
   color: #888;
   opacity: 0;
-  animation: linguaSlowFadeIn 1s ease-out 0.3s forwards;
+  animation: anyllmSlowFadeIn 1s ease-out 0.3s forwards;
 }
 
-@keyframes linguaSlowFadeIn {
+@keyframes anyllmSlowFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 0.85; transform: translateY(0); }
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="fade-in"] .lingua-lens-translation {
+  [data-anyllm-theme="fade-in"] .anyllm-translate-translation {
     color: #999;
   }
 }
 
-html.lingua-dark [data-lingua-theme="fade-in"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="fade-in"] .anyllm-translate-translation {
   color: #999;
 }
 
 /* ============================================
    THEME 12: italic
    ============================================ */
-[data-lingua-theme="italic"] .lingua-lens-translation {
+[data-anyllm-theme="italic"] .anyllm-translate-translation {
   font-style: italic;
   color: #777;
   margin-top: 4px;
@@ -411,19 +411,19 @@ html.lingua-dark [data-lingua-theme="fade-in"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="italic"] .lingua-lens-translation {
+  [data-anyllm-theme="italic"] .anyllm-translate-translation {
     color: #999;
   }
 }
 
-html.lingua-dark [data-lingua-theme="italic"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="italic"] .anyllm-translate-translation {
   color: #999;
 }
 
 /* ============================================
    THEME 13: dotted-border
    ============================================ */
-[data-lingua-theme="dotted-border"] .lingua-lens-translation {
+[data-anyllm-theme="dotted-border"] .anyllm-translate-translation {
   border: 1px dotted #9ca3af;
   padding: 6px 10px;
   margin-top: 6px;
@@ -432,13 +432,13 @@ html.lingua-dark [data-lingua-theme="italic"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="dotted-border"] .lingua-lens-translation {
+  [data-anyllm-theme="dotted-border"] .anyllm-translate-translation {
     border-color: #6b7280;
     color: #aaa;
   }
 }
 
-html.lingua-dark [data-lingua-theme="dotted-border"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="dotted-border"] .anyllm-translate-translation {
   border-color: #6b7280;
   color: #aaa;
 }
@@ -446,7 +446,7 @@ html.lingua-dark [data-lingua-theme="dotted-border"] .lingua-lens-translation {
 /* ============================================
    THEME 14: shadow-card
    ============================================ */
-[data-lingua-theme="shadow-card"] .lingua-lens-translation {
+[data-anyllm-theme="shadow-card"] .anyllm-translate-translation {
   background: #fff;
   padding: 10px 14px;
   margin-top: 8px;
@@ -456,14 +456,14 @@ html.lingua-dark [data-lingua-theme="dotted-border"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="shadow-card"] .lingua-lens-translation {
+  [data-anyllm-theme="shadow-card"] .anyllm-translate-translation {
     background: #1e1e1e;
     box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
     color: #c4c4c4;
   }
 }
 
-html.lingua-dark [data-lingua-theme="shadow-card"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="shadow-card"] .anyllm-translate-translation {
   background: #1e1e1e;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
   color: #c4c4c4;
@@ -472,26 +472,26 @@ html.lingua-dark [data-lingua-theme="shadow-card"] .lingua-lens-translation {
 /* ============================================
    THEME 15: minimal
    ============================================ */
-[data-lingua-theme="minimal"] .lingua-lens-translation {
+[data-anyllm-theme="minimal"] .anyllm-translate-translation {
   margin-top: 2px;
   color: #888;
   font-size: 0.92em;
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="minimal"] .lingua-lens-translation {
+  [data-anyllm-theme="minimal"] .anyllm-translate-translation {
     color: #777;
   }
 }
 
-html.lingua-dark [data-lingua-theme="minimal"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="minimal"] .anyllm-translate-translation {
   color: #777;
 }
 
 /* ============================================
    THEME 16: gradient-accent
    ============================================ */
-[data-lingua-theme="gradient-accent"] .lingua-lens-translation {
+[data-anyllm-theme="gradient-accent"] .anyllm-translate-translation {
   background: linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%);
   padding: 8px 12px;
   margin-top: 6px;
@@ -501,14 +501,14 @@ html.lingua-dark [data-lingua-theme="minimal"] .lingua-lens-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="gradient-accent"] .lingua-lens-translation {
+  [data-anyllm-theme="gradient-accent"] .anyllm-translate-translation {
     background: linear-gradient(135deg, #1e1b4b 0%, #172554 100%);
     color: #a5b4fc;
     border-left-color: #818cf8;
   }
 }
 
-html.lingua-dark [data-lingua-theme="gradient-accent"] .lingua-lens-translation {
+html.anyllm-dark [data-anyllm-theme="gradient-accent"] .anyllm-translate-translation {
   background: linear-gradient(135deg, #1e1b4b 0%, #172554 100%);
   color: #a5b4fc;
   border-left-color: #818cf8;
@@ -517,27 +517,27 @@ html.lingua-dark [data-lingua-theme="gradient-accent"] .lingua-lens-translation 
 /* ===== Translation Position Variants ===== */
 
 /* Position: above */
-[data-lingua-position="above"] [data-lingua-role="original"] {
+[data-anyllm-position="above"] [data-anyllm-role="original"] {
   order: 2;
 }
 
-[data-lingua-position="above"] .lingua-lens-translation {
+[data-anyllm-position="above"] .anyllm-translate-translation {
   order: 1;
 }
 
-[data-lingua-position="above"] [data-lingua-role="original"],
-[data-lingua-position="above"] .lingua-lens-translation {
+[data-anyllm-position="above"] [data-anyllm-role="original"],
+[data-anyllm-position="above"] .anyllm-translate-translation {
   display: block;
 }
 
 /* Position: side (handled by side-by-side theme primarily, but available for any theme) */
-[data-lingua-position="side"]:not([data-lingua-theme="side-by-side"]) [data-lingua-role="original"] {
+[data-anyllm-position="side"]:not([data-anyllm-theme="side-by-side"]) [data-anyllm-role="original"] {
   display: inline-block;
   width: 48%;
   vertical-align: top;
 }
 
-[data-lingua-position="side"]:not([data-lingua-theme="side-by-side"]) .lingua-lens-translation {
+[data-anyllm-position="side"]:not([data-anyllm-theme="side-by-side"]) .anyllm-translate-translation {
   display: inline-block;
   width: 48%;
   vertical-align: top;

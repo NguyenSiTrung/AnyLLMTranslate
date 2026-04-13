@@ -21,7 +21,7 @@ export default defineContentScript({
   world: 'MAIN',
   runAt: 'document_start',
   async main() {
-    console.log('[LinguaLens] MAIN world script injected');
+    console.log('[AnyLLMTranslate] MAIN world script injected');
 
     // Register platform handlers
     registerSubtitleHandlers([
@@ -42,6 +42,6 @@ export default defineContentScript({
     xhrInterceptor.enable();
     fetchInterceptor.enable();
 
-    console.log('[LinguaLens] XHR/Fetch interceptors enabled');
+    console.log('[AnyLLMTranslate] XHR/Fetch interceptors enabled');
   },
 });

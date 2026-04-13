@@ -1,4 +1,4 @@
-# 🌐 LinguaLens — Immersive Bilingual Translation Chrome Extension
+# 🌐 AnyLLMTranslate — Immersive Bilingual Translation Chrome Extension
 
 ## Full Implementation Plan
 
@@ -144,7 +144,7 @@ Build a Chrome extension that replicates the core value proposition of Immersive
 ```
 AnyLLMTranslate/
 ├── wxt.config.ts                        # WXT config: permissions, commands, Tailwind plugin
-├── package.json                         # name: lingua-lens, version: 1.0.0
+├── package.json                         # name: anyllm-translate, version: 1.0.0
 ├── vitest.config.ts
 ├── vitest.setup.ts
 │
@@ -242,7 +242,7 @@ AnyLLMTranslate/
 ```jsonc
 {
   "manifest_version": 3,
-  "name": "LinguaLens — Immersive Bilingual Translator",
+  "name": "AnyLLMTranslate — Immersive Bilingual Translator",
   "version": "1.0.0",
   "description": "Bilingual translation for web pages and video subtitles (Udemy, Coursera, YouTube)",
 
@@ -404,7 +404,7 @@ const mutationObserver = new MutationObserver((mutations) => {
     for (const node of mutation.addedNodes) {
       if (node instanceof HTMLElement && isBlockElement(node)) {
         // Skip our own injected translation nodes
-        if (!node.hasAttribute('data-lingua-translated')) {
+        if (!node.hasAttribute('data-anyllm-translated')) {
           addedBlocks.push(node);
         }
       }
@@ -447,12 +447,12 @@ function applyBilingualTranslation(
   
   // 1. Clone original as backup
   const originalClone = parent.cloneNode(true) as HTMLElement;
-  originalClone.setAttribute('data-lingua-role', 'original');
+  originalClone.setAttribute('data-anyllm-role', 'original');
   originalClone.classList.add('notranslate');
   
   // 2. Create translation wrapper
   const translationWrapper = document.createElement('font');
-  translationWrapper.setAttribute('data-lingua-role', 'translation');
+  translationWrapper.setAttribute('data-anyllm-role', 'translation');
   translationWrapper.innerHTML = translatedHTML;
   
   // 3. Apply layout based on display mode
@@ -476,7 +476,7 @@ function applyBilingualTranslation(
 
 ### 7.2 Translation Visual Themes (15+ themes)
 
-Each theme is defined via CSS custom properties applied to `[data-lingua-role="translation"]`:
+Each theme is defined via CSS custom properties applied to `[data-anyllm-role="translation"]`:
 
 | # | Theme Name | CSS Effect | Best For |
 |---|-----------|-----------|---------|
@@ -503,49 +503,49 @@ The page-level translation state is controlled via a data attribute on `<html>`:
 
 ```css
 /* inject.css */
-html[data-lingua-state="dual"] [data-lingua-role="original"] {
+html[data-anyllm-state="dual"] [data-anyllm-role="original"] {
   display: block;
 }
 
-html[data-lingua-state="dual"] [data-lingua-role="translation"] {
+html[data-anyllm-state="dual"] [data-anyllm-role="translation"] {
   display: block;
 }
 
-html[data-lingua-state="translation-only"] [data-lingua-role="original"] {
+html[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
   display: none !important;
 }
 
-html[data-lingua-state="off"] [data-lingua-role="translation"] {
+html[data-anyllm-state="off"] [data-anyllm-role="translation"] {
   display: none !important;
 }
 
 /* Theme: Mask — reveals on hover */
-[data-lingua-theme="mask"] [data-lingua-role="translation"] {
+[data-anyllm-theme="mask"] [data-anyllm-role="translation"] {
   filter: blur(5px);
   transition: filter 0.2s ease;
   cursor: pointer;
 }
 
-[data-lingua-theme="mask"] [data-lingua-role="translation"]:hover {
+[data-anyllm-theme="mask"] [data-anyllm-role="translation"]:hover {
   filter: blur(0);
 }
 
 /* Theme: Paper card */
-[data-lingua-theme="paper"] [data-lingua-role="translation"] {
-  background: var(--lingua-bg, #ffffff);
+[data-anyllm-theme="paper"] [data-anyllm-role="translation"] {
+  background: var(--anyllm-bg, #ffffff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   border-radius: 6px;
   padding: 8px 12px;
   margin: 4px 0;
   font-size: 0.95em;
-  color: var(--lingua-text, #333);
+  color: var(--anyllm-text, #333);
 }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  [data-lingua-theme="paper"] [data-lingua-role="translation"] {
-    background: var(--lingua-bg, #1e1e2e);
-    color: var(--lingua-text, #cdd6f4);
+  [data-anyllm-theme="paper"] [data-anyllm-role="translation"] {
+    background: var(--anyllm-bg, #1e1e2e);
+    color: var(--anyllm-text, #cdd6f4);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   }
 }
@@ -557,10 +557,10 @@ Users can toggle where translations appear:
 
 ```
 ┌──────────────────────────────────────┐
-│ Original English paragraph text      │  ← data-lingua-role="original"
+│ Original English paragraph text      │  ← data-anyllm-role="original"
 │ that spans multiple lines.           │
 ├──────────────────────────────────────┤
-│ 翻译后的中文段落文本，跨越多行。        │  ← data-lingua-role="translation"
+│ 翻译后的中文段落文本，跨越多行。        │  ← data-anyllm-role="translation"
 │                                      │     theme: "dividing-line"
 └──────────────────────────────────────┘
 
@@ -814,7 +814,7 @@ class GlossaryProtector {
 ┌────────────────────────────────────────────────┐
 │              IndexedDB                          │
 │                                                 │
-│  Database: "lingua-lens-cache"                  │
+│  Database: "anyllm-translate-cache"                  │
 │  ┌──────────────────────────────────────────┐  │
 │  │ Object Store: "translations"              │  │
 │  │                                           │  │
@@ -1066,9 +1066,9 @@ function buildBilingualVTT(
     vtt += '\n';
     
     // Original on top (smaller, dimmer)
-    vtt += `<c.lingua-original>${cue.text}</c>\n`;
+    vtt += `<c.anyllm-original>${cue.text}</c>\n`;
     // Translation below (larger, brighter)
-    vtt += `<c.lingua-translated>${translations[i]}</c>\n`;
+    vtt += `<c.anyllm-translated>${translations[i]}</c>\n`;
     vtt += '\n';
   });
   
@@ -1111,7 +1111,7 @@ class SubtitleOverlay {
 **Subtitle Overlay CSS:**
 
 ```css
-.lingua-subtitle-overlay {
+.anyllm-subtitle-overlay {
   position: absolute;
   bottom: 60px;
   left: 50%;
@@ -1123,7 +1123,7 @@ class SubtitleOverlay {
   transition: opacity 0.15s ease;
 }
 
-.lingua-sub-original {
+.anyllm-sub-original {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.75);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
@@ -1131,7 +1131,7 @@ class SubtitleOverlay {
   line-height: 1.4;
 }
 
-.lingua-sub-translated {
+.anyllm-sub-translated {
   font-size: 18px;
   color: #fff;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
@@ -1298,7 +1298,7 @@ const BUILTIN_RULES: SiteRule[] = [
 
 ```
 ┌──────────────────────────────────────────┐
-│  🌐 LinguaLens                    ⚙️ ✕  │
+│  🌐 AnyLLMTranslate                    ⚙️ ✕  │
 ├──────────────────────────────────────────┤
 │                                          │
 │  ┌──────────────┐ ┌──────────────────┐   │
@@ -1392,7 +1392,7 @@ document.addEventListener('mouseover', (e) => {
   const target = e.target as HTMLElement;
   const paragraph = target.closest('p, div, h1, h2, h3, h4, h5, h6, li, td');
   
-  if (!paragraph || paragraph.hasAttribute('data-lingua-role')) return;
+  if (!paragraph || paragraph.hasAttribute('data-anyllm-role')) return;
   
   hoverTimer = window.setTimeout(async () => {
     const text = paragraph.textContent?.trim();
@@ -1430,21 +1430,21 @@ Every theme includes a `prefers-color-scheme: dark` variant:
 /* Auto dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
-    --lingua-bg: #1e1e2e;
-    --lingua-text: #cdd6f4;
-    --lingua-accent: #89b4fa;
-    --lingua-border: #45475a;
-    --lingua-highlight: rgba(249, 226, 175, 0.15);
+    --anyllm-bg: #1e1e2e;
+    --anyllm-text: #cdd6f4;
+    --anyllm-accent: #89b4fa;
+    --anyllm-border: #45475a;
+    --anyllm-highlight: rgba(249, 226, 175, 0.15);
   }
 }
 
 /* Light mode */
 :root {
-  --lingua-bg: #ffffff;
-  --lingua-text: #333333;
-  --lingua-accent: #0077b6;
-  --lingua-border: #e0e0e0;
-  --lingua-highlight: rgba(255, 224, 102, 0.4);
+  --anyllm-bg: #ffffff;
+  --anyllm-text: #333333;
+  --anyllm-accent: #0077b6;
+  --anyllm-border: #e0e0e0;
+  --anyllm-highlight: rgba(255, 224, 102, 0.4);
 }
 ```
 
@@ -1475,11 +1475,11 @@ Every theme includes a `prefers-color-scheme: dark` variant:
 While translation is in progress:
 
 ```css
-[data-lingua-loading] {
+[data-anyllm-loading] {
   position: relative;
 }
 
-[data-lingua-loading]::after {
+[data-anyllm-loading]::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -1489,7 +1489,7 @@ While translation is in progress:
   background: linear-gradient(
     90deg,
     transparent,
-    var(--lingua-accent),
+    var(--anyllm-accent),
     transparent
   );
   animation: lingua-loading 1.5s infinite;
@@ -1504,13 +1504,13 @@ While translation is in progress:
 ### 14.5 Error State UX
 
 ```css
-[data-lingua-error] {
+[data-anyllm-error] {
   border-left: 3px solid #ef4444;
   padding-left: 8px;
   opacity: 0.7;
 }
 
-[data-lingua-error]::before {
+[data-anyllm-error]::before {
   content: '⚠ Translation failed';
   display: block;
   font-size: 11px;
@@ -1556,8 +1556,8 @@ User presses Alt+A (or clicks "Translate This Page")
 │                      │
 │ 1. Clone original    │──── cloneNode(true) + notranslate
 │ 2. Inject translation│──── createElement('font')
-│ 3. Apply theme       │──── data-lingua-theme="paper"
-│ 4. Set state         │──── html[data-lingua-state="dual"]
+│ 3. Apply theme       │──── data-anyllm-theme="paper"
+│ 4. Set state         │──── html[data-anyllm-state="dual"]
 │ 5. Setup restore     │──── Track for undo
 └─────────────────────┘
 ```
@@ -1663,14 +1663,14 @@ Video player requests subtitle file
 | Task | Priority | Effort | Status | Implementation |
 |------|----------|--------|--------|----------------|
 | All 15+ visual themes | P0 | 3 days | ✅ Done | `styles/inject.css` — 16 themes (dividing-line, highlight, underline, wavy, dotted, dashed, mask, thinMask, opacity, blur, paper, blockquote, neon, gradientBorder, fadein, sideBySide) |
-| Dark mode support | P0 | 1 day | ✅ Done | `@media (prefers-color-scheme: dark)` + `.lingua-dark` class + `data-lingua-state` attribute |
+| Dark mode support | P0 | 1 day | ✅ Done | `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class + `data-anyllm-state` attribute |
 | "Test Connection" button + provider validation | P0 | 0.5 day | ✅ Done | `services/providerTester.ts` — 3-step validation (ping → models → translation) with progress callback |
 | Custom system prompt editor | P1 | 0.5 day | ✅ Done | Template variable injection (`{{targetLanguage}}`, `{{glossary}}`) via regex replace in `services/base.ts` |
 | Full popup UI (React) | P0 | 3 days | ✅ Done | `entrypoints/popup/App.tsx` — enhanced with quick settings, theme/provider/position selectors, integration status |
 | Options page (React) with provider config | P0 | 4 days | ✅ Done | `entrypoints/options/` — 8-tab vertical layout (General, Provider, Themes, Site Rules, Dictionary, Subtitles, Shortcuts, Advanced) |
 | Site rules editor | P1 | 2 days | ✅ Done | Site rules section in Options page |
 | Custom dictionary/glossary | P1 | 2 days | ✅ Done | Dictionary section in Options page |
-| Loading/error state UX | P0 | 1 day | ✅ Done | CSS shimmer animation + error indicators via `data-lingua-loading` / `data-lingua-error` attributes |
+| Loading/error state UX | P0 | 1 day | ✅ Done | CSS shimmer animation + error indicators via `data-anyllm-loading` / `data-anyllm-error` attributes |
 | **Subtotal** | | **~17 days** | **9/9** | |
 
 **Bonus deliverables:** Zustand settings store (`stores/settingsStore.ts`) with chrome.storage bidirectional sync, provider presets array, type system extensions (`types/config.ts`), 5 new test files.
@@ -1854,9 +1854,9 @@ type Message =
 
 // Inject Script ↔ Content Script Messages (postMessage)
 type InjectMessage =
-  | { channel: 'lingua-lens'; type: 'SUBTITLE_INTERCEPTED'; url: string; responseText: string; requestId: string }
-  | { channel: 'lingua-lens'; type: 'SUBTITLE_TRANSLATED'; content: string; requestId: string }
-  | { channel: 'lingua-lens'; type: 'SUBTITLE_METADATA'; platform: string; captions: CaptionInfo[] };
+  | { channel: 'anyllm-translate'; type: 'SUBTITLE_INTERCEPTED'; url: string; responseText: string; requestId: string }
+  | { channel: 'anyllm-translate'; type: 'SUBTITLE_TRANSLATED'; content: string; requestId: string }
+  | { channel: 'anyllm-translate'; type: 'SUBTITLE_METADATA'; platform: string; captions: CaptionInfo[] };
 ```
 
 ## Appendix B: Language Code Reference
@@ -1917,7 +1917,7 @@ npm run format        # Prettier
 npm run compile       # tsc --noEmit
 
 # Package for Chrome Web Store
-npm run zip           # Creates .output/lingua-lens-<version>-chrome.zip
+npm run zip           # Creates .output/anyllm-translate-<version>-chrome.zip
 ```
 
 ---

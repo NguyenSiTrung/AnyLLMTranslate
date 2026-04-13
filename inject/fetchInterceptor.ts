@@ -57,7 +57,7 @@ export class FetchInterceptor {
         }, 5000);
 
         const translatedHandler = (event: MessageEvent) => {
-          if (event.data?.channel !== 'lingua-lens') return;
+          if (event.data?.channel !== 'anyllm-translate') return;
           if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
           if (event.data?.requestId !== requestId) return;
 

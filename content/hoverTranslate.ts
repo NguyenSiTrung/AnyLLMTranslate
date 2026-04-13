@@ -37,7 +37,7 @@ function shouldSkip(element: Element): boolean {
   // Skip elements already translated by page translation
   if (element.hasAttribute(DATA_ATTRS.TRANSLATED)) return true;
 
-  // Skip elements with lingua role (our elements)
+  // Skip elements with anyllm role (our elements)
   const role = element.getAttribute(DATA_ATTRS.ROLE);
   if (role) return true;
 
@@ -141,7 +141,7 @@ async function translateHoverTarget(element: Element): Promise<void> {
       hoverCache.set(element, response.translatedText);
     }
   } catch (error) {
-    console.warn('[LinguaLens] Hover translate failed:', error);
+    console.warn('[AnyLLMTranslate] Hover translate failed:', error);
   }
 }
 

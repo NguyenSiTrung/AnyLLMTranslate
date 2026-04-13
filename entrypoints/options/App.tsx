@@ -145,7 +145,7 @@ export default function App() {
           {/* Brand header */}
           <div className="sidebar-header">
             <Languages className="sidebar-brand-icon" />
-            <span className="sidebar-brand-name">LinguaLens</span>
+            <span className="sidebar-brand-name">AnyLLMTranslate</span>
             <span className="sidebar-version">v0.1.0</span>
           </div>
 

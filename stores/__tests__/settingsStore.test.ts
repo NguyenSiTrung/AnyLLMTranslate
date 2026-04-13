@@ -58,7 +58,7 @@ describe('useSettingsStore', () => {
 
   describe('loadFromStorage', () => {
     it('loads stored settings and merges with defaults', async () => {
-      mockStorageData['lingua-lens-settings'] = {
+      mockStorageData['anyllm-translate-settings'] = {
         theme: 'bubble',
         targetLanguage: 'ja',
       };
@@ -90,7 +90,7 @@ describe('useSettingsStore', () => {
       expect(state.theme).toBe('shadow-card');
       expect(chrome.storage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          'lingua-lens-settings': expect.objectContaining({ theme: 'shadow-card' }),
+          'anyllm-translate-settings': expect.objectContaining({ theme: 'shadow-card' }),
         }),
       );
     });
@@ -130,7 +130,7 @@ describe('useSettingsStore', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: { theme: 'paper', targetLanguage: 'ko' },
             oldValue: DEFAULT_SETTINGS,
           },
@@ -149,7 +149,7 @@ describe('useSettingsStore', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: { theme: 'paper' },
             oldValue: DEFAULT_SETTINGS,
           },

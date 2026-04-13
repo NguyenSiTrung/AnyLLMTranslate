@@ -14,7 +14,7 @@ import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { updateConfig, getConfig } from '@/content/subtitleOverlay';
 
 /** Storage key for subtitle preferences */
-const STORAGE_KEY = 'lingua-lens-subtitle-prefs';
+const STORAGE_KEY = 'anyllm-translate-subtitle-prefs';
 
 /** Default preferences */
 const DEFAULT_PREFS: OverlayConfig = {
@@ -51,7 +51,7 @@ export async function loadPreferences(): Promise<OverlayConfig> {
     const prefs = result[STORAGE_KEY];
     return prefs ? { ...DEFAULT_PREFS, ...prefs } : { ...DEFAULT_PREFS };
   } catch (error) {
-    console.warn('LinguaLens: Failed to load subtitle preferences', error);
+    console.warn('AnyLLMTranslate: Failed to load subtitle preferences', error);
     return { ...DEFAULT_PREFS };
   }
 }
@@ -63,7 +63,7 @@ export async function savePreferences(config: OverlayConfig): Promise<void> {
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: config });
   } catch (error) {
-    console.warn('LinguaLens: Failed to save subtitle preferences', error);
+    console.warn('AnyLLMTranslate: Failed to save subtitle preferences', error);
   }
 }
 
@@ -178,8 +178,8 @@ export function enableDragReposition(element: HTMLElement): () => void {
  */
 export function createControlsUI(): HTMLElement {
   const container = document.createElement('div');
-  container.className = 'lingua-lens-subtitle-controls';
-  container.setAttribute('data-lingua-role', 'subtitle-controls');
+  container.className = 'anyllm-translate-subtitle-controls';
+  container.setAttribute('data-anyllm-role', 'subtitle-controls');
 
   // Font size slider
   const fontSizeGroup = createSliderGroup(
@@ -212,7 +212,7 @@ export function createControlsUI(): HTMLElement {
   // Reset button
   const resetButton = document.createElement('button');
   resetButton.textContent = 'Reset to Defaults';
-  resetButton.className = 'lingua-lens-reset-button';
+  resetButton.className = 'anyllm-translate-reset-button';
   resetButton.addEventListener('click', () => resetPreferences());
   container.appendChild(resetButton);
 
@@ -230,7 +230,7 @@ function createSliderGroup(
   onChange: (value: number) => void,
 ): HTMLElement {
   const group = document.createElement('div');
-  group.className = 'lingua-lens-control-group';
+  group.className = 'anyllm-translate-control-group';
 
   const labelEl = document.createElement('label');
   labelEl.textContent = label;
@@ -249,7 +249,7 @@ function createSliderGroup(
 
   const valueDisplay = document.createElement('span');
   valueDisplay.textContent = value.toString();
-  valueDisplay.className = 'lingua-lens-value-display';
+  valueDisplay.className = 'anyllm-translate-value-display';
   slider.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     valueDisplay.textContent = target.value;
@@ -264,7 +264,7 @@ function createSliderGroup(
  */
 function createToggleGroup(label: string, currentValue: string, onToggle: () => void): HTMLElement {
   const group = document.createElement('div');
-  group.className = 'lingua-lens-control-group';
+  group.className = 'anyllm-translate-control-group';
 
   const labelEl = document.createElement('label');
   labelEl.textContent = label;
@@ -272,7 +272,7 @@ function createToggleGroup(label: string, currentValue: string, onToggle: () => 
 
   const button = document.createElement('button');
   button.textContent = currentValue;
-  button.className = 'lingua-lens-toggle-button';
+  button.className = 'anyllm-translate-toggle-button';
   button.addEventListener('click', () => {
     onToggle();
     button.textContent = button.textContent === 'Top' ? 'Bottom' : 'Top';

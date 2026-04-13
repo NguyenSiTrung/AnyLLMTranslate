@@ -85,7 +85,7 @@ describe('content/subtitleCoordinator', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const cues: SubtitleCue[] = [{ startTime: 0, endTime: 4, text: 'Test' }];
       updateTranslatedCues(cues);
-      expect(consoleSpy).toHaveBeenCalledWith('LinguaLens: Cannot update cues - not in overlay mode');
+      expect(consoleSpy).toHaveBeenCalledWith('AnyLLMTranslate: Cannot update cues - not in overlay mode');
       consoleSpy.mockRestore();
     });
   });

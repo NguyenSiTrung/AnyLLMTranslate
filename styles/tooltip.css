@@ -6,7 +6,7 @@
 /* =============================================
    Text Selection Translate Button
    ============================================= */
-.lingua-selection-btn {
+.anyllm-selection-btn {
   position: absolute;
   z-index: 2147483647;
   display: flex;
@@ -22,27 +22,27 @@
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  animation: linguaBtnFadeIn 0.15s ease;
+  animation: anyllmBtnFadeIn 0.15s ease;
   pointer-events: auto;
 }
 
-.lingua-selection-btn:hover {
+.anyllm-selection-btn:hover {
   background: #1557b0;
   transform: scale(1.1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
-.lingua-selection-btn:active {
+.anyllm-selection-btn:active {
   transform: scale(0.95);
 }
 
-.lingua-selection-btn svg {
+.anyllm-selection-btn svg {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
 }
 
-@keyframes linguaBtnFadeIn {
+@keyframes anyllmBtnFadeIn {
   from {
     opacity: 0;
     transform: translateY(4px) scale(0.9);
@@ -56,7 +56,7 @@
 /* =============================================
    Translation Tooltip
    ============================================= */
-.lingua-selection-tooltip {
+.anyllm-selection-tooltip {
   position: absolute;
   z-index: 2147483647;
   max-width: 360px;
@@ -65,7 +65,7 @@
   background: #fff;
   color: #1a1a2e;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  animation: linguaTooltipFadeIn 0.2s ease;
+  animation: anyllmTooltipFadeIn 0.2s ease;
   pointer-events: auto;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -73,7 +73,7 @@
   line-height: 1.5;
 }
 
-@keyframes linguaTooltipFadeIn {
+@keyframes anyllmTooltipFadeIn {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -84,11 +84,11 @@
   }
 }
 
-.lingua-tooltip-content {
+.anyllm-tooltip-content {
   padding: 12px 14px;
 }
 
-.lingua-tooltip-text {
+.anyllm-tooltip-text {
   margin: 0;
   padding: 0;
   word-wrap: break-word;
@@ -96,7 +96,7 @@
   color: #1a1a2e;
 }
 
-.lingua-tooltip-actions {
+.anyllm-tooltip-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -106,8 +106,8 @@
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
-.lingua-tooltip-copy,
-.lingua-tooltip-close {
+.anyllm-tooltip-copy,
+.anyllm-tooltip-close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,8 +124,8 @@
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.lingua-tooltip-copy:hover,
-.lingua-tooltip-close:hover {
+.anyllm-tooltip-copy:hover,
+.anyllm-tooltip-close:hover {
   background: rgba(0, 0, 0, 0.06);
   color: #333;
 }
@@ -133,7 +133,7 @@
 /* =============================================
    Loading State
    ============================================= */
-.lingua-tooltip-loading {
+.anyllm-tooltip-loading {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -141,16 +141,16 @@
   font-size: 13px;
 }
 
-.lingua-tooltip-spinner {
+.anyllm-tooltip-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(0, 0, 0, 0.1);
   border-top-color: #1a73e8;
   border-radius: 50%;
-  animation: linguaSpinnerSpin 0.7s linear infinite;
+  animation: anyllmSpinnerSpin 0.7s linear infinite;
 }
 
-@keyframes linguaSpinnerSpin {
+@keyframes anyllmSpinnerSpin {
   to {
     transform: rotate(360deg);
   }
@@ -160,62 +160,62 @@
    Dark Mode Support
    ============================================= */
 @media (prefers-color-scheme: dark) {
-  .lingua-selection-tooltip {
+  .anyllm-selection-tooltip {
     background: #2a2a3e;
     color: #e0e0e8;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
-  .lingua-tooltip-text {
+  .anyllm-tooltip-text {
     color: #e0e0e8;
   }
 
-  .lingua-tooltip-actions {
+  .anyllm-tooltip-actions {
     border-top-color: rgba(255, 255, 255, 0.08);
   }
 
-  .lingua-tooltip-copy,
-  .lingua-tooltip-close {
+  .anyllm-tooltip-copy,
+  .anyllm-tooltip-close {
     color: #aaa;
   }
 
-  .lingua-tooltip-copy:hover,
-  .lingua-tooltip-close:hover {
+  .anyllm-tooltip-copy:hover,
+  .anyllm-tooltip-close:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #ddd;
   }
 
-  .lingua-tooltip-loading {
+  .anyllm-tooltip-loading {
     color: #aaa;
   }
 }
 
 /* Explicit dark mode class */
-.lingua-dark .lingua-selection-tooltip {
+.anyllm-dark .anyllm-selection-tooltip {
   background: #2a2a3e;
   color: #e0e0e8;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-.lingua-dark .lingua-tooltip-text {
+.anyllm-dark .anyllm-tooltip-text {
   color: #e0e0e8;
 }
 
-.lingua-dark .lingua-tooltip-actions {
+.anyllm-dark .anyllm-tooltip-actions {
   border-top-color: rgba(255, 255, 255, 0.08);
 }
 
-.lingua-dark .lingua-tooltip-copy,
-.lingua-dark .lingua-tooltip-close {
+.anyllm-dark .anyllm-tooltip-copy,
+.anyllm-dark .anyllm-tooltip-close {
   color: #aaa;
 }
 
-.lingua-dark .lingua-tooltip-copy:hover,
-.lingua-dark .lingua-tooltip-close:hover {
+.anyllm-dark .anyllm-tooltip-copy:hover,
+.anyllm-dark .anyllm-tooltip-close:hover {
   background: rgba(255, 255, 255, 0.08);
   color: #ddd;
 }
 
-.lingua-dark .lingua-tooltip-loading {
+.anyllm-dark .anyllm-tooltip-loading {
   color: #aaa;
 }

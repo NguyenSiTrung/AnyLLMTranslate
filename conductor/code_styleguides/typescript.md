@@ -1,4 +1,4 @@
-# TypeScript Style Guide — LinguaLens
+# TypeScript Style Guide — AnyLLMTranslate
 
 ## General Rules
 

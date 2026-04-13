@@ -33,10 +33,10 @@ describe('content.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     document.body.innerHTML = '';
-    document.documentElement.removeAttribute('data-lingua-theme');
-    document.documentElement.removeAttribute('data-lingua-position');
-    document.documentElement.removeAttribute('data-lingua-state');
-    document.documentElement.classList.remove('lingua-dark');
+    document.documentElement.removeAttribute('data-anyllm-theme');
+    document.documentElement.removeAttribute('data-anyllm-position');
+    document.documentElement.removeAttribute('data-anyllm-state');
+    document.documentElement.classList.remove('anyllm-dark');
   });
 
   describe('startTranslation visual settings application', () => {
@@ -50,7 +50,7 @@ describe('content.ts', () => {
 
       await startTranslation();
 
-      expect(document.documentElement.getAttribute('data-lingua-theme')).toBe('bubble');
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('bubble');
     });
 
     it('applies translation position from settings when translation starts', async () => {
@@ -65,7 +65,7 @@ describe('content.ts', () => {
 
       await startTranslation();
 
-      expect(document.documentElement.getAttribute('data-lingua-position')).toBe('above');
+      expect(document.documentElement.getAttribute('data-anyllm-position')).toBe('above');
     });
 
     it('applies dark mode from settings when translation starts', async () => {
@@ -80,7 +80,7 @@ describe('content.ts', () => {
 
       await startTranslation();
 
-      expect(document.documentElement.classList.contains('lingua-dark')).toBe(true);
+      expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
     });
 
     it('sets all DOM attributes correctly when translation starts with pieces', async () => {
@@ -108,9 +108,9 @@ describe('content.ts', () => {
 
       await startTranslation();
 
-      expect(document.documentElement.getAttribute('data-lingua-theme')).toBe('shadow-card');
-      expect(document.documentElement.getAttribute('data-lingua-position')).toBe('below');
-      expect(document.documentElement.classList.contains('lingua-dark')).toBe(true);
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('shadow-card');
+      expect(document.documentElement.getAttribute('data-anyllm-position')).toBe('below');
+      expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
     });
   });
 
@@ -120,7 +120,7 @@ describe('content.ts', () => {
 
       const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
-        const settingsKey = 'lingua-lens-settings';
+        const settingsKey = 'anyllm-translate-settings';
         if (changes[settingsKey]?.newValue) {
           const newSettings = changes[settingsKey].newValue;
           if (newSettings.theme && getPageState() !== 'off') {
@@ -131,7 +131,7 @@ describe('content.ts', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: {
               theme: 'paper',
               translationPosition: 'below',
@@ -142,7 +142,7 @@ describe('content.ts', () => {
         'local',
       );
 
-      expect(document.documentElement.getAttribute('data-lingua-theme')).toBe('paper');
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('paper');
     });
 
     it('applies position when settings change and translation is active', async () => {
@@ -150,7 +150,7 @@ describe('content.ts', () => {
 
       const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
-        const settingsKey = 'lingua-lens-settings';
+        const settingsKey = 'anyllm-translate-settings';
         if (changes[settingsKey]?.newValue) {
           const newSettings = changes[settingsKey].newValue;
           if (newSettings.translationPosition && getPageState() !== 'off') {
@@ -161,7 +161,7 @@ describe('content.ts', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: {
               theme: 'bubble',
               translationPosition: 'above',
@@ -172,7 +172,7 @@ describe('content.ts', () => {
         'local',
       );
 
-      expect(document.documentElement.getAttribute('data-lingua-position')).toBe('above');
+      expect(document.documentElement.getAttribute('data-anyllm-position')).toBe('above');
     });
 
     it('applies dark mode when settings change and translation is active', async () => {
@@ -180,7 +180,7 @@ describe('content.ts', () => {
 
       const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
-        const settingsKey = 'lingua-lens-settings';
+        const settingsKey = 'anyllm-translate-settings';
         if (changes[settingsKey]?.newValue) {
           const newSettings = changes[settingsKey].newValue;
           if (newSettings.darkMode && getPageState() !== 'off') {
@@ -191,7 +191,7 @@ describe('content.ts', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: {
               theme: 'bubble',
               translationPosition: 'below',
@@ -202,7 +202,7 @@ describe('content.ts', () => {
         'local',
       );
 
-      expect(document.documentElement.classList.contains('lingua-dark')).toBe(true);
+      expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
     });
 
     it('does not apply visual settings when translation is not active', async () => {
@@ -210,7 +210,7 @@ describe('content.ts', () => {
 
       const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
         if (areaName !== 'local') return;
-        const settingsKey = 'lingua-lens-settings';
+        const settingsKey = 'anyllm-translate-settings';
         if (changes[settingsKey]?.newValue) {
           const newSettings = changes[settingsKey].newValue;
           if (newSettings.theme && getPageState() !== 'off') {
@@ -221,7 +221,7 @@ describe('content.ts', () => {
 
       listener(
         {
-          'lingua-lens-settings': {
+          'anyllm-translate-settings': {
             newValue: {
               theme: 'paper',
               translationPosition: 'above',
@@ -232,39 +232,39 @@ describe('content.ts', () => {
         'local',
       );
 
-      expect(document.documentElement.getAttribute('data-lingua-theme')).not.toBe('paper');
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).not.toBe('paper');
     });
   });
 
   describe('stopTranslation cleanup', () => {
-    it('removes data-lingua-theme attribute when translation stops', async () => {
-      document.documentElement.setAttribute('data-lingua-theme', 'bubble');
-      document.documentElement.setAttribute('data-lingua-position', 'below');
-      document.documentElement.classList.add('lingua-dark');
+    it('removes data-anyllm-theme attribute when translation stops', async () => {
+      document.documentElement.setAttribute('data-anyllm-theme', 'bubble');
+      document.documentElement.setAttribute('data-anyllm-position', 'below');
+      document.documentElement.classList.add('anyllm-dark');
 
       stopTranslation();
 
-      expect(document.documentElement.getAttribute('data-lingua-theme')).toBeNull();
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBeNull();
     });
 
-    it('removes data-lingua-position attribute when translation stops', async () => {
-      document.documentElement.setAttribute('data-lingua-theme', 'bubble');
-      document.documentElement.setAttribute('data-lingua-position', 'below');
-      document.documentElement.classList.add('lingua-dark');
+    it('removes data-anyllm-position attribute when translation stops', async () => {
+      document.documentElement.setAttribute('data-anyllm-theme', 'bubble');
+      document.documentElement.setAttribute('data-anyllm-position', 'below');
+      document.documentElement.classList.add('anyllm-dark');
 
       stopTranslation();
 
-      expect(document.documentElement.getAttribute('data-lingua-position')).toBeNull();
+      expect(document.documentElement.getAttribute('data-anyllm-position')).toBeNull();
     });
 
-    it('removes lingua-dark class when translation stops', async () => {
-      document.documentElement.setAttribute('data-lingua-theme', 'bubble');
-      document.documentElement.setAttribute('data-lingua-position', 'below');
-      document.documentElement.classList.add('lingua-dark');
+    it('removes anyllm-dark class when translation stops', async () => {
+      document.documentElement.setAttribute('data-anyllm-theme', 'bubble');
+      document.documentElement.setAttribute('data-anyllm-position', 'below');
+      document.documentElement.classList.add('anyllm-dark');
 
       stopTranslation();
 
-      expect(document.documentElement.classList.contains('lingua-dark')).toBe(false);
+      expect(document.documentElement.classList.contains('anyllm-dark')).toBe(false);
     });
   });
 });
