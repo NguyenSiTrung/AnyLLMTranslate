@@ -185,6 +185,12 @@ Reusable patterns discovered during development. Read this before starting new w
 - `DisplayMode` (`'bilingual-below'` | `'translation-only'`) ≠ `PageState` (`'dual'` | `'translation-only'` | `'off'`) — these are two separate types. The mapping is: `bilingual-below → dual`, `translation-only → translation-only`. (from: display-mode-fix_20260416, archived 2026-04-16)
 - Host page CSS (e.g. Docusaurus) can overpower extension display rules. Always use `!important` on `display: none` for hiding original text and `display: X` resets for translated nodes. (from: display-mode-fix_20260416, archived 2026-04-16)
 
+## URL Pattern Filtering
+- Negative lookahead regex `(?!.*(keyword1|keyword2|keyword3))` for excluding multiple URL patterns — must be placed before the matching pattern to work correctly. (from: udemy-sprites_20260416, 2026-04-16)
+- Early-exit optimization: only trigger when ALL items are filtered, not just first — allows mixed content handling. (from: udemy-sprites_20260416, 2026-04-16)
+- Cue-level filtering allows mixed content (some items filtered, others retained) — useful for subtitle handlers with mixed metadata. (from: udemy-sprites_20260416, 2026-04-16)
+- Test with actual platform-specific patterns (sprite-en.vtt, thumb-sprites.jpg#xywh=...) rather than generic placeholders. (from: udemy-sprites_20260416, 2026-04-16)
+
 ---
-Last refreshed: 2026-04-16T01:30:00+07:00
-Codebase health: 459 tests passing (including 13 new cache config UI tests), lint-clean
+Last refreshed: 2026-04-16T02:02:00+07:00
+Codebase health: 468 tests passing (including 3 new udemy sprite tests), lint-clean
