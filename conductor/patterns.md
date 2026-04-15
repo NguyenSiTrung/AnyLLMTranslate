@@ -163,6 +163,15 @@ Reusable patterns discovered during development. Read this before starting new w
 - All extension identifiers use `anyllm-` prefix: CSS classes (`anyllm-translate-*`), data attributes (`data-anyllm-*`), storage keys, postMessage channel, global window flags (`__anyllmTranslate*`). Never use the old `lingua*` prefix. (from: rename_20260413)
 - CSS keyframe names, custom properties, and selectors must match the `anyllm-` prefix system — changing any one of them requires updating `styles/__tests__/themes.test.ts` which checks CSS as a raw string. (from: rename_20260413)
 
+## Cache Integration
+- `getCachedTranslation` returns `null` on miss (not `undefined` or falsy) — always guard with `!== null` to avoid treating a cached empty string as a miss. (from: cache-hardening_20260415, 2026-04-16)
+- LLM translates by piece `id` (Map key), but cache reads/writes use piece `text` as the lookup key — retain `text` alongside `id` in uncachedPieces[] for write-back after LLM response. (from: cache-hardening_20260415, 2026-04-16)
+- All-cached early return (`if (uncachedPieces.length === 0) return cachedResults`) avoids calling `initService()` entirely — zero LLM calls for fully-cached pages. (from: cache-hardening_20260415, 2026-04-16)
+- `chrome.alarms` persist across MV3 service worker restarts — use them for periodic background tasks (vs `setInterval` which dies with the SW). (from: cache-hardening_20260415, 2026-04-16)
+- Export scheduling/eviction logic from `services/background.ts`, not from WXT entrypoints — WXT's `defineBackground` is not available in the Vitest jsdom environment. (from: cache-hardening_20260415, 2026-04-16)
+- Debounce LRU writes with a module-level Map + setTimeout: Map gives per-key dedup (latest wins), snapshot+clear before async flush prevents races. (from: cache-hardening_20260415, 2026-04-16)
+- `vi.clearAllMocks()` resets mock implementations but NOT module-level variables — re-acquire mocks via `await import(...)` after clearAllMocks; use `vi.useFakeTimers()` / `vi.useRealTimers()` per test to manage timer state. (from: cache-hardening_20260415, 2026-04-16)
+
 ---
-Last refreshed: 2026-04-15T17:30:00+07:00
-Codebase health: 430 tests across 34 files, 524KB build (chrome-mv3), lint-clean
+Last refreshed: 2026-04-16T00:14:00+07:00
+Codebase health: 396 non-UI tests passing (3 React UI tests fail pre-existing from missing @testing-library/dom), 16 new cache tests added, lint-clean
