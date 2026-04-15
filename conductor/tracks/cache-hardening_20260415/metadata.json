@@ -1,0 +1,11 @@
+{
+  "track_id": "cache-hardening_20260415",
+  "type": "refactor",
+  "status": "new",
+  "priority": "critical",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-04-15T15:54:40Z",
+  "updated_at": "2026-04-15T15:54:40Z",
+  "description": "Close 4 cache integration gaps: handleTranslate cache bypass, handleTranslateSelection cache read miss, missing evictCache scheduling, and LRU write batching"
+}

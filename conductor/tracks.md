@@ -21,3 +21,8 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+---
+
+## [ ] Track: Cache Integration Hardening
+*Link: [./tracks/cache-hardening_20260415/](./tracks/cache-hardening_20260415/)*
