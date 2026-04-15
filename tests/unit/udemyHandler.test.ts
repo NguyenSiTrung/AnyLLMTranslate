@@ -67,5 +67,17 @@ Normal subtitle text`;
       expect(cues).toHaveLength(1);
       expect(cues[0].text).toBe('Normal subtitle text');
     });
+
+    it('keeps long subtitles that mention image files', () => {
+      const longSubtitleVtt = `WEBVTT
+
+1
+00:00:01.000 --> 00:00:04.000
+In this lecture we will learn how to work with jpg and png files in your project`;
+
+      const cues = handler.transformResponse(longSubtitleVtt, 'text/vtt', 'https://cdna.udemycdn.com/subtitles/course.vtt');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('In this lecture we will learn how to work with jpg and png files in your project');
+    });
   });
 });
