@@ -192,5 +192,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - Test with actual platform-specific patterns (sprite-en.vtt, thumb-sprites.jpg#xywh=...) rather than generic placeholders. (from: udemy-sprites_20260416, 2026-04-16)
 
 ---
+
+## Subtitle Translation Bridge & Testing
+- PostMessage Bridge Correlation: Any 'response' message (e.g., `SUBTITLE_TRANSLATED`) MUST carry the same `requestId` as its corresponding 'request' message. Never auto-generate a new `requestId`. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
+- Coordinator test pattern: call `vi.resetModules()` BEFORE import in `beforeEach`, then call `startCoordinator()` explicitly after import. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
+- Capture listener handlers in module-level variables (`let capturedHandler = null`) assigned in the mock factory. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
+- ESLint: `no-non-null-assertion` forbids `handler!()`. `no-unused-expressions` forbids `&&`-chained awaits. Always use an `if`. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
+- Testing singleton guards: Call explicit reset methods (e.g. `resetCoordinatorState()`) before forcing modes in tests to clear guards. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
+
+---
 Last refreshed: 2026-04-16T02:02:00+07:00
 Codebase health: 468 tests passing (including 3 new udemy sprite tests), lint-clean
