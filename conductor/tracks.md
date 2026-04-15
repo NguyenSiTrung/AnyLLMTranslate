@@ -20,12 +20,8 @@ This file tracks all major tracks for the project.
 - ✅ **Cache Integration Hardening** (`cache-hardening_20260415`) — Archived 2026-04-16. [View](./conductor/archive/cache-hardening_20260415/)
 - ✅ **Cache Configuration UI** (`cache-settings-ui_20260416`) — Archived 2026-04-16. [View](./conductor/archive/cache-settings-ui_20260416/) ← Added in refresh 2026-04-16
 - ✅ **Fix Display Mode — Wire displayMode Setting to Page State** (`display-mode-fix_20260416`) — Archived 2026-04-16. [View](./conductor/archive/display-mode-fix_20260416/)
+- ✅ **Udemy Sprite Subtitle Fix** (`udemy-sprites_20260416`) — Archived 2026-04-16. [View](./conductor/archive/udemy-sprites_20260416/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: Udemy Sprite Subtitle Fix
-*Link: [./conductor/tracks/udemy-sprites_20260416/](./conductor/tracks/udemy-sprites_20260416/)*
