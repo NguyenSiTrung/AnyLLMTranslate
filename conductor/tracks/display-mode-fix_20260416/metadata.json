@@ -1,0 +1,11 @@
+{
+  "track_id": "display-mode-fix_20260416",
+  "type": "bug",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": 1.5,
+  "created_at": "2026-04-16T01:07:00Z",
+  "updated_at": "2026-04-16T01:07:00Z",
+  "description": "Fix displayMode setting not applied — Replace mode is stored in settings but never wired to setPageState() in the content script, so only Bilingual (dual) ever renders."
+}
