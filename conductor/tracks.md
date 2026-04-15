@@ -22,3 +22,8 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+---
+
+## [ ] Track: Cache Configuration UI
+*Link: [./conductor/tracks/cache-settings-ui_20260416/](./conductor/tracks/cache-settings-ui_20260416/)*

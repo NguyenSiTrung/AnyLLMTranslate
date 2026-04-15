@@ -1,0 +1,11 @@
+{
+  "track_id": "cache-settings-ui_20260416",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-04-16T00:43:00Z",
+  "updated_at": "2026-04-16T00:43:00Z",
+  "description": "Add user-configurable input controls for cache settings in Advanced section"
+}
