@@ -180,6 +180,11 @@ Reusable patterns discovered during development. Read this before starting new w
 - Need local state for inputs to allow typing without immediately updating settings store. (from: cache-settings-ui_20260416, archived 2026-04-16)
 - useEffect syncs local state with settings store to handle reset/import scenarios. (from: cache-settings-ui_20260416, archived 2026-04-16)
 
+## Display Mode
+- When `setPageState('off')` is called, it explicitly sets the `data-anyllm-state` attribute to `'off'`, it doesn't remove it. Test assertions must expect `'off'`, not `null`. (from: display-mode-fix_20260416, archived 2026-04-16)
+- `DisplayMode` (`'bilingual-below'` | `'translation-only'`) ≠ `PageState` (`'dual'` | `'translation-only'` | `'off'`) — these are two separate types. The mapping is: `bilingual-below → dual`, `translation-only → translation-only`. (from: display-mode-fix_20260416, archived 2026-04-16)
+- Host page CSS (e.g. Docusaurus) can overpower extension display rules. Always use `!important` on `display: none` for hiding original text and `display: X` resets for translated nodes. (from: display-mode-fix_20260416, archived 2026-04-16)
+
 ---
 Last refreshed: 2026-04-16T00:53:00+07:00
 Codebase health: 459 tests passing (including 13 new cache config UI tests), lint-clean
