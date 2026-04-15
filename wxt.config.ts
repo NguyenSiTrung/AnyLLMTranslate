@@ -10,7 +10,7 @@ export default defineConfig({
   manifest: {
     name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
-    permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel'],
+    permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms'],
     commands: {
       'translate-page': {
         suggested_key: { default: 'Alt+A' },

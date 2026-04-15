@@ -3,7 +3,7 @@
  * Wires up the message router, settings listener, keyboard commands, and context menus.
  */
 
-import { handleMessage, initSettingsListener } from '@/services/background';
+import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule } from '@/services/background';
 
 /** Send message to the active tab's content script */
 async function sendToActiveTab(message: Record<string, unknown>): Promise<void> {
@@ -55,7 +55,9 @@ export default defineBackground(() => {
   // Re-create service when settings change
   initSettingsListener();
 
-
+  // FR-3: Schedule daily cache eviction via chrome.alarms
+  initEvictionSchedule();
+  scheduleEviction();
 
   // Set up context menus on install
   chrome.runtime.onInstalled.addListener(() => {

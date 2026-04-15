@@ -14,7 +14,7 @@ import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
-import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
+import { getCachedTranslation, cacheTranslation, evictCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 
  
@@ -330,6 +330,34 @@ export function handleMessage(
 export function initSettingsListener(): () => void {
   return onSettingsChange(() => {
     initService();
+  });
+}
+
+/**
+ * FR-3: Run eviction once and schedule daily repeating alarm.
+ * Called on service worker startup (fire-and-forget, non-blocking).
+ */
+export async function scheduleEviction(): Promise<void> {
+  // Run immediately on startup
+  evictCache().catch(() => {
+    // Silently fail — eviction is best-effort
+  });
+
+  // Schedule daily eviction via chrome.alarms (persists across SW restarts)
+  chrome.alarms.create('cache-evict', { periodInMinutes: 1440 });
+}
+
+/**
+ * FR-3: Register the alarm listener that fires evictCache on schedule.
+ * Must be called at SW startup before any alarm can fire.
+ */
+export function initEvictionSchedule(): void {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'cache-evict') {
+      evictCache().catch(() => {
+        // Silently fail — eviction is best-effort
+      });
+    }
   });
 }
 
