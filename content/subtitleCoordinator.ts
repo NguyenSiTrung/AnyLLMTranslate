@@ -59,7 +59,18 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     // FR-2: Translate cues via background service
     const settings = await loadSettings();
-    const sourceLanguage = originalLanguage || settings.sourceLanguage;
+    // Use user's source language setting as primary, fall back to extracted language only if user set to 'auto'
+    const sourceLanguage = settings.sourceLanguage === 'auto' 
+      ? (originalLanguage || 'en') 
+      : settings.sourceLanguage;
+
+    console.log('AnyLLMTranslate: Subtitle translation request', {
+      originalLanguage,
+      settingsSourceLanguage: settings.sourceLanguage,
+      finalSourceLanguage: sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+      platform,
+    });
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',

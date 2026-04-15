@@ -111,6 +111,12 @@ export class XhrInterceptor {
           originalLanguage: match.language || '',
         } as SubtitleInterceptedPayload);
 
+        console.log('AnyLLMTranslate: XHR interceptor intercepted subtitle', {
+          url: xhr.__anyllmTranslateUrl,
+          platform: match.platform,
+          extractedLanguage: match.language,
+        });
+
         /** Replay all captured handlers with the (possibly translated) response */
         const replayHandlers = () => {
           // Fire onreadystatechange property handler

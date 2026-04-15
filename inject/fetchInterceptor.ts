@@ -48,6 +48,12 @@ export class FetchInterceptor {
         originalLanguage: match.language || '',
       } as SubtitleInterceptedPayload);
 
+      console.log('AnyLLMTranslate: Fetch interceptor intercepted subtitle', {
+        url: urlString,
+        platform: match.platform,
+        extractedLanguage: match.language,
+      });
+
       // Wait for translated response and return it
       return new Promise((resolve) => {
         const timeout = setTimeout(() => {

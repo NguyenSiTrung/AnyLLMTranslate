@@ -23,6 +23,11 @@ export class UdemyHandler implements SubtitleHandler {
           const pathParts = url.pathname.split('/');
           // Language is usually in the path: /subtitle-en/ or /en/
           const langMatch = pathParts.find((p) => /^[a-z]{2}(-[A-Z]{2})?$/.test(p));
+          console.log('AnyLLMTranslate: Udemy language extractor', {
+            url: url.href,
+            pathParts,
+            extractedLanguage: langMatch || '',
+          });
           return langMatch || '';
         },
       },
