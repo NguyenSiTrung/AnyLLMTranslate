@@ -163,8 +163,13 @@ async function handleTranslateSubtitle(
     // Batch translate uncached texts
     if (uncachedTexts.size > 0) {
       const texts = new Map<string, string>();
+      const idToOriginalText = new Map<string, string>();
+      
+      let counter = 1;
       for (const [, cue] of uncachedTexts.entries()) {
-        texts.set(cue.text, cue.text);
+        const id = `s${counter++}`;
+        texts.set(id, cue.text);
+        idToOriginalText.set(id, cue.text);
       }
 
       const subtitleSettings = await loadSettings();
@@ -179,7 +184,10 @@ async function handleTranslateSubtitle(
       });
 
       if (result.success) {
-        for (const [originalText, translatedText] of result.translations.entries()) {
+        for (const [id, translatedText] of result.translations.entries()) {
+          const originalText = idToOriginalText.get(id);
+          if (!originalText) continue;
+          
           const cue = uncachedTexts.get(originalText);
           if (cue) {
             const translatedCue = {
@@ -338,6 +346,10 @@ export function initSettingsListener(): () => void {
  * Called on service worker startup (fire-and-forget, non-blocking).
  */
 export async function scheduleEviction(): Promise<void> {
+  // Temporary: force clear cache on start to fix stale English subtitle translations
+  import('@/services/cacheManager').then(m => m.clearCache().catch(() => {}))
+    .catch(() => {});
+
   // Run immediately on startup
   evictCache().catch(() => {
     // Silently fail — eviction is best-effort

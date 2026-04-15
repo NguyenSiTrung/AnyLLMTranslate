@@ -45,8 +45,12 @@ export class OpenAICompatibleService implements TranslationService {
         response_format: { type: 'json_object' },
       };
 
+      console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
+
       const response = await this.fetchCompletion(completionRequest);
       const responseText = response.choices[0]?.message?.content ?? '';
+
+      console.log('AnyLLMTranslate: LLM Response', { responseText });
 
       if (!responseText.trim()) {
         return {

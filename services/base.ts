@@ -5,6 +5,7 @@
 
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
 import type { ProviderConfig } from '@/types/config';
+import { getLanguageName } from '@/lib/languages';
 
 /** Abstract base for all translation services */
 export interface TranslationService {
@@ -35,7 +36,12 @@ export function buildSystemPrompt(
 ): string {
   const template = customTemplate || DEFAULT_SYSTEM_PROMPT_TEMPLATE;
 
-  let prompt = template.replace(/\{\{targetLanguage\}\}/g, targetLanguage);
+  const targetLanguageName = getLanguageName(targetLanguage);
+  const displayTargetLanguage = targetLanguageName !== targetLanguage 
+    ? `${targetLanguageName} (${targetLanguage})` 
+    : targetLanguage;
+
+  let prompt = template.replace(/\{\{targetLanguage\}\}/g, displayTargetLanguage);
 
   const glossaryContent = glossaryBlock
     ? `\n${glossaryBlock}`
@@ -83,9 +89,14 @@ export function buildUserPrompt(
     entries[id] = text;
   }
 
-  const langHint = sourceLanguage === 'auto'
-    ? ''
-    : ` The source language is ${sourceLanguage}.`;
+  let langHint = '';
+  if (sourceLanguage !== 'auto') {
+    const sourceLanguageName = getLanguageName(sourceLanguage);
+    const displaySourceLanguage = sourceLanguageName !== sourceLanguage 
+      ? `${sourceLanguageName} (${sourceLanguage})` 
+      : sourceLanguage;
+    langHint = ` The source language is ${displaySourceLanguage}.`;
+  }
 
   return `Translate the following texts.${langHint}
 

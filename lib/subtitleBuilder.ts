@@ -40,7 +40,9 @@ export function buildBilingualVTT(
 
     // Build cue text
     let cueText: string;
-    if (mode === 'bilingual' && includeOriginal && cue.originalText) {
+    const isIdentical = cue.originalText && cue.text.trim().toLowerCase() === cue.originalText.trim().toLowerCase();
+    
+    if (mode === 'bilingual' && includeOriginal && cue.originalText && !isIdentical) {
       cueText = `${cue.text}\n${cue.originalText}`;
     } else {
       cueText = cue.text;
