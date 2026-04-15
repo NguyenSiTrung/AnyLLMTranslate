@@ -12,6 +12,7 @@
 import { onSubtitleIntercepted, sendTranslatedSubtitle } from '@/content/messageBridge';
 import { onMessage } from '@/inject/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay } from '@/content/subtitleOverlay';
+import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { initializeControls } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform } from '@/inject/subtitleHandlers/registry';
@@ -29,7 +30,7 @@ interface CoordinatorState {
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
-  interceptTimeout: 5000, // 5 seconds timeout for interception
+  interceptTimeout: 30000, // 30 seconds timeout for local LLMs
 };
 
 /**
@@ -72,6 +73,8 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       platform,
     });
 
+    showSubtitleToast('Translating Native Subtitles...', true);
+
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
       cues,
@@ -81,8 +84,13 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
+      hideSubtitleToast();
+      showSubtitleToast('Subtitle translation failed.');
       return;
     }
+
+    hideSubtitleToast();
+    showSubtitleToast('Subtitles translated successfully!');
 
     // FR-3: Build VTT and post back to MAIN world interceptor
     const vttContent =
@@ -130,6 +138,8 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   // FR-5: Translate cues before handing to overlay
   let cuesToDisplay = cues;
   try {
+    showSubtitleToast('Translating Overlay Subtitles...', true);
+
     const settings = await loadSettings();
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
@@ -140,8 +150,15 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 
     if (response?.success && response.cues) {
       cuesToDisplay = response.cues;
+      hideSubtitleToast();
+      showSubtitleToast('Overlay mapped successfully!');
+    } else {
+      hideSubtitleToast();
+      showSubtitleToast('Overlay mapping failed.');
     }
   } catch (error) {
+    hideSubtitleToast();
+    showSubtitleToast('Overlay translation error.');
     console.warn('AnyLLMTranslate: Overlay translation failed — showing original cues', error);
   }
 

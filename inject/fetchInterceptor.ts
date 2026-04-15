@@ -60,7 +60,7 @@ export class FetchInterceptor {
           window.removeEventListener('message', translatedHandler);
           // Translation timed out — return original response
           resolve(response);
-        }, 5000);
+        }, 30000);
 
         const translatedHandler = (event: MessageEvent) => {
           if (event.data?.channel !== 'anyllm-translate') return;

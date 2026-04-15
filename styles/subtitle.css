@@ -128,3 +128,34 @@
   font-weight: 500;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
+
+/* Subtitle Toast */
+.anyllm-translate-subtitle-toast {
+  all: revert;
+  position: fixed;
+  bottom: 80px;  /* Position slightly above typical video controls */
+  left: 50%;
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  color: white !important;
+  padding: 10px 16px !important;
+  border-radius: 8px !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  pointer-events: none !important;
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.anyllm-translate-subtitle-toast.anyllm-translate-subtitle-toast-visible {
+  opacity: 1 !important;
+  transform: translate(-50%, 0) !important;
+}
+

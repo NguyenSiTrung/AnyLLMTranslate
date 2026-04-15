@@ -163,7 +163,7 @@ export class XhrInterceptor {
         const timeoutId = setTimeout(() => {
           window.removeEventListener('message', translatedHandler);
           replayHandlers();
-        }, 5000);
+        }, 30000);
 
         window.addEventListener('message', translatedHandler);
       };
