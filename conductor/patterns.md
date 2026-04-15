@@ -172,6 +172,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - Debounce LRU writes with a module-level Map + setTimeout: Map gives per-key dedup (latest wins), snapshot+clear before async flush prevents races. (from: cache-hardening_20260415, 2026-04-16)
 - `vi.clearAllMocks()` resets mock implementations but NOT module-level variables — re-acquire mocks via `await import(...)` after clearAllMocks; use `vi.useFakeTimers()` / `vi.useRealTimers()` per test to manage timer state. (from: cache-hardening_20260415, 2026-04-16)
 
+## Cache Settings UI
+- Input component from shared UI library doesn't have a `label` prop - must add manual `<label>` elements with `htmlFor` attribute. (from: cache-settings-ui_20260416, archived 2026-04-16)
+- Number inputs return string values from `e.target.value` - must convert to `Number()` before setting state to avoid TypeScript errors. (from: cache-settings-ui_20260416, archived 2026-04-16)
+- Validation on blur (not on change) allows users to type freely without immediate error feedback. (from: cache-settings-ui_20260416, archived 2026-04-16)
+- Auto-save on blur eliminates need for explicit save button - existing "Auto-saved" badge in sidebar provides feedback. (from: cache-settings-ui_20260416, archived 2026-04-16)
+- Need local state for inputs to allow typing without immediately updating settings store. (from: cache-settings-ui_20260416, archived 2026-04-16)
+- useEffect syncs local state with settings store to handle reset/import scenarios. (from: cache-settings-ui_20260416, archived 2026-04-16)
+
 ---
-Last refreshed: 2026-04-16T00:14:00+07:00
-Codebase health: 396 non-UI tests passing (3 React UI tests fail pre-existing from missing @testing-library/dom), 16 new cache tests added, lint-clean
+Last refreshed: 2026-04-16T00:53:00+07:00
+Codebase health: 459 tests passing (including 13 new cache config UI tests), lint-clean
