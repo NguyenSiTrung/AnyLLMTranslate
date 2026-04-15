@@ -17,12 +17,8 @@ This file tracks all major tracks for the project.
 - ✅ **Paragraph Translation Progress Indicators** (`para-progress-indicator_20260410`) — Archived 2026-04-10. [View](./conductor/archive/para-progress-indicator_20260410/)
 - ✅ **Custom Dictionary (Glossary) — Wire & Validate** (`glossary-wire_20260410`) — Archived 2026-04-10. [View](./conductor/archive/glossary-wire_20260410/)
 - ✅ **Video Subtitle Interception — Hardening & Bug Fixes** (`subtitle-hardening_20260410`) — Archived 2026-04-10. [View](./conductor/archive/subtitle-hardening_20260410/)
+- ✅ **Cache Integration Hardening** (`cache-hardening_20260415`) — Archived 2026-04-16. [View](./conductor/archive/cache-hardening_20260415/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: Cache Integration Hardening
-*Link: [./tracks/cache-hardening_20260415/](./tracks/cache-hardening_20260415/)*
