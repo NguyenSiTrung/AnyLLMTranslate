@@ -3,17 +3,20 @@
  * Detects interception failure and auto-activates overlay fallback.
  *
  * Features:
- * - Detect when interception fails (timeout, error, no handler matched)
- * - Automatically activate overlay renderer
- * - Fetch subtitles directly via background worker (CORS bypass)
- * - Coordinate between bridge, translation, and overlay
+ * - Parse intercepted subtitles via platform handler
+ * - Translate cues via background service
+ * - Build bilingual or translation-only VTT and post back to interceptor
+ * - Activate overlay fallback with translated cues when interception times out
  */
 
-import { onSubtitleIntercepted } from '@/content/messageBridge';
+import { onSubtitleIntercepted, sendTranslatedSubtitle } from '@/content/messageBridge';
 import { onMessage } from '@/inject/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay } from '@/content/subtitleOverlay';
 import { initializeControls } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
+import { getHandlerByPlatform } from '@/inject/subtitleHandlers/registry';
+import { buildBilingualVTT, buildTranslationOnlyVTT } from '@/lib/subtitleBuilder';
+import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload } from '@/types/subtitle';
 
 /** Coordinator state */
@@ -33,11 +36,10 @@ const state: CoordinatorState = {
  * Handle subtitle interception from MAIN world.
  */
 async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId: string): Promise<void> {
-  const { url, body } = payload;
+  const { url, body, contentType, platform, originalLanguage } = payload;
 
-  // Set up timeout for interception response
+  // Set up timeout — if translation doesn't complete in time, fall back to overlay
   const timeoutId = setTimeout(() => {
-    // If no response received within timeout, switch to overlay mode
     if (!state.isOverlayMode) {
       console.warn('AnyLLMTranslate: Subtitle interception timeout, switching to overlay mode');
       activateOverlayMode(url, body);
@@ -46,6 +48,45 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
   }, state.interceptTimeout);
 
   state.pendingRequests.set(requestId, timeoutId);
+
+  try {
+    // FR-1: Resolve handler by platform and parse raw cues
+    const handler = getHandlerByPlatform(platform);
+    if (!handler) return;
+
+    const cues = handler.transformResponse(body, contentType, url);
+    if (cues.length === 0) return; // sprite/empty track — skip silently
+
+    // FR-2: Translate cues via background service
+    const settings = await loadSettings();
+    const sourceLanguage = originalLanguage || settings.sourceLanguage;
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues,
+      sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+
+    if (!response?.success || !response.cues) {
+      console.warn('AnyLLMTranslate: Translation failed', response?.error);
+      return;
+    }
+
+    // FR-3: Build VTT and post back to MAIN world interceptor
+    const vttContent =
+      settings.displayMode === 'translation-only'
+        ? buildTranslationOnlyVTT(response.cues)
+        : buildBilingualVTT(response.cues);
+
+    sendTranslatedSubtitle({ requestId, vttContent });
+
+    // FR-4: Cancel the overlay-fallback timer
+    clearPendingRequest(requestId);
+  } catch (error) {
+    console.warn('AnyLLMTranslate: handleIntercepted error — timeout will replay original', error);
+    // Timeout will fire and replay original via overlay fallback
+  }
 }
 
 /**
@@ -75,9 +116,27 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     return;
   }
 
+  // FR-5: Translate cues before handing to overlay
+  let cuesToDisplay = cues;
+  try {
+    const settings = await loadSettings();
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+
+    if (response?.success && response.cues) {
+      cuesToDisplay = response.cues;
+    }
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Overlay translation failed — showing original cues', error);
+  }
+
   // Initialize overlay with controls
   await initializeControls();
-  initializeOverlay(cues);
+  initializeOverlay(cuesToDisplay);
 
   // Clear all pending timeouts since we're in overlay mode now
   for (const timeoutId of state.pendingRequests.values()) {

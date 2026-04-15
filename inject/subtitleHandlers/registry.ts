@@ -63,3 +63,8 @@ export function getAllPatterns(): SubtitleUrlPattern[] {
   }
   return patterns;
 }
+
+/** Find a handler by its platform identifier string */
+export function getHandlerByPlatform(platform: string): SubtitleHandler | null {
+  return handlers.find((h) => h.platform === platform) ?? null;
+}
