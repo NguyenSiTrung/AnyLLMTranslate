@@ -1,0 +1,11 @@
+{
+  "track_id": "subtitle-translation-wire_20260416",
+  "type": "bug",
+  "status": "new",
+  "priority": "critical",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-04-16T02:26:00Z",
+  "updated_at": "2026-04-16T02:26:00Z",
+  "description": "Wire the missing execution path in subtitle translation flow — handleIntercepted() never calls the translation service, causing every subtitle intercept to time out and produce untranslated output."
+}

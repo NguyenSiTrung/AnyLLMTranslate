@@ -25,3 +25,8 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+---
+
+## [ ] Track: Subtitle Translation Flow — Wire Missing Execution Path
+*Link: [./conductor/tracks/subtitle-translation-wire_20260416/](./conductor/tracks/subtitle-translation-wire_20260416/)*
