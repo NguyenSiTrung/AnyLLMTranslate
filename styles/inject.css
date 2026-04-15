@@ -29,22 +29,22 @@ html[data-anyllm-state="dual"] [data-anyllm-role="translation"] {
 }
 
 html[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
-  display: none;
+  display: none !important;
 }
 
 html[data-anyllm-state="translation-only"] [data-anyllm-role="translation"] {
   display: block;
-  border: none;
-  margin: 0;
-  padding: 0;
-  color: inherit;
-  background: none;
-  box-shadow: none;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 html[data-anyllm-state="off"] [data-anyllm-role="translation"],
 html:not([data-anyllm-state]) [data-anyllm-role="translation"] {
-  display: none;
+  display: none !important;
 }
 
 /* ===== Loading & Error States ===== */
