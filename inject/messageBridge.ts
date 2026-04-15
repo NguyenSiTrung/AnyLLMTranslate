@@ -30,9 +30,10 @@ function generateRequestId(): string {
 /**
  * Send a message from the current world.
  * Can be called from either MAIN or ISOLATED world.
+ * Pass `overrideRequestId` to preserve an existing correlation ID.
  */
-export function sendMessage<T>(type: BridgeMessageType, payload: T): string {
-  const requestId = generateRequestId();
+export function sendMessage<T>(type: BridgeMessageType, payload: T, overrideRequestId?: string): string {
+  const requestId = overrideRequestId ?? generateRequestId();
   const message: BridgeMessage<T> = {
     type,
     requestId,

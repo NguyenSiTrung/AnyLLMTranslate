@@ -30,9 +30,11 @@ export function onSubtitleIntercepted(
 
 /**
  * Send translated subtitle content back to the MAIN world.
+ * IMPORTANT: The envelope requestId MUST match the original SUBTITLE_INTERCEPTED requestId
+ * so that XHR/fetch interceptors can correlate and unblock the response.
  */
 export function sendTranslatedSubtitle(payload: SubtitleTranslatedPayload): void {
-  sendMessage('SUBTITLE_TRANSLATED', payload);
+  sendMessage('SUBTITLE_TRANSLATED', payload, payload.requestId);
 }
 
 /**
