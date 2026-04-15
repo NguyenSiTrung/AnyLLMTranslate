@@ -43,6 +43,23 @@ export async function generateCacheKey(
   return `fnv-${(hash >>> 0).toString(16)}`;
 }
 
+/** Pending LRU updates — Map ensures per-key deduplication (latest wins) */
+const pendingLruUpdates = new Map<string, CacheEntry>();
+
+/** Debounce timer for LRU flush */
+let lruFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Flush all pending LRU updates in one batch */
+async function flushLruUpdates(): Promise<void> {
+  lruFlushTimer = null;
+  // Snapshot and clear before async ops to avoid races
+  const batch = new Map(pendingLruUpdates);
+  pendingLruUpdates.clear();
+  for (const [key, entry] of batch) {
+    await set(key, entry, getStore());
+  }
+}
+
 /** Get a cached translation */
 export async function getCachedTranslation(
   text: string,
@@ -63,9 +80,15 @@ export async function getCachedTranslation(
       return null;
     }
 
-    // Update last access time for LRU
+    // FR-4: Defer LRU update — accumulate in Map and flush via debounce
     entry.lastAccessedAt = Date.now();
-    await set(key, entry, getStore());
+    pendingLruUpdates.set(key, entry);
+    if (lruFlushTimer !== null) clearTimeout(lruFlushTimer);
+    lruFlushTimer = setTimeout(() => {
+      flushLruUpdates().catch(() => {
+        // Silently fail — LRU update is best-effort
+      });
+    }, 500);
 
     return entry.translatedText;
   } catch {
