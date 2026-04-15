@@ -18,7 +18,7 @@ This file tracks all major tracks for the project.
 - ✅ **Custom Dictionary (Glossary) — Wire & Validate** (`glossary-wire_20260410`) — Archived 2026-04-10. [View](./conductor/archive/glossary-wire_20260410/)
 - ✅ **Video Subtitle Interception — Hardening & Bug Fixes** (`subtitle-hardening_20260410`) — Archived 2026-04-10. [View](./conductor/archive/subtitle-hardening_20260410/)
 - ✅ **Cache Integration Hardening** (`cache-hardening_20260415`) — Archived 2026-04-16. [View](./conductor/archive/cache-hardening_20260415/)
-- ✅ **Cache Configuration UI** (`cache-settings-ui_20260416`) — Archived 2026-04-16. [View](./conductor/archive/cache-settings-ui_20260416/)
+- ✅ **Cache Configuration UI** (`cache-settings-ui_20260416`) — Archived 2026-04-16. [View](./conductor/archive/cache-settings-ui_20260416/) ← Added in refresh 2026-04-16
 
 ---
 

@@ -1,24 +1,32 @@
 {
-  "last_refresh": "2026-04-16T00:26:00+07:00",
+  "last_refresh": "2026-04-16T00:56:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
+      "file": "conductor/tracks.md",
+      "change": "Added cache-settings-ui_20260416 to archived tracks list (was missing after archive)"
+    },
+    {
       "file": "conductor/product.md",
-      "change": "Added Cache Integration Hardening track (archived 2026-04-16) to Implementation Status. Updated test count to 396 passing across 35 files."
+      "change": "Added Cache Configuration UI track to Implementation Status. Updated test count to 459 passing across 36 files. Updated build status to PASSING."
+    },
+    {
+      "file": "conductor/tech-stack.md",
+      "change": "Updated WXT version from 0.20.20 to 0.20.22 to match actual build output"
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated to reflect 2026-04-16 refresh with cache-hardening track and current codebase health"
+      "change": "Synced archived_tracks list to include cache-settings-ui_20260416. Build status corrected to PASSING."
     }
   ],
   "drift_summary": {
-    "tech_stack": "No drift — package.json dependencies unchanged since last refresh",
-    "product": "MINOR: Added cache-hardening_20260415 track to Implementation Status (archived 2026-04-16)",
+    "tech_stack": "MINOR: WXT version bumped 0.20.20 → 0.20.22 (auto-updated by npm)",
+    "product": "ADDED: cache-settings-ui_20260416 track to Implementation Status; test count updated 396 → 459; build status FIXED",
     "workflow": "No drift — workflow.md unchanged",
-    "patterns": "Already updated 2026-04-16T00:14:00+07:00 with cache-hardening patterns (6 new patterns)",
-    "tests": "396 tests passing across 35 files (3 React UI tests fail pre-existing from missing @testing-library/dom)",
-    "build": "BROKEN: Vite/Tailwind internal error — Package subpath './internal' not defined by vite/package.json",
-    "archived_tracks": "12 tracks archived (added cache-hardening_20260415 since last refresh)"
+    "patterns": "No drift — patterns.md already up-to-date (cache-settings-ui patterns captured 2026-04-16T00:53:00+07:00)",
+    "tests": "459 tests passing across 36 files",
+    "build": "PASSING — wxt build success (14.77KB background.js, 481KB total)",
+    "archived_tracks": "13 tracks archived (added cache-settings-ui_20260416 since last refresh)"
   },
   "beads_check": "bd CLI available but no active tracks — skipping drift check",
   "active_tracks": [],
@@ -34,13 +42,14 @@
     "para-progress-indicator_20260410",
     "glossary-wire_20260410",
     "subtitle-hardening_20260410",
-    "cache-hardening_20260415"
+    "cache-hardening_20260415",
+    "cache-settings-ui_20260416"
   ],
   "codebase_health": {
-    "tests": "396 passed (35 files), 3 React UI tests failing (missing @testing-library/dom)",
-    "build": "BROKEN — Vite/Tailwind internal error",
-    "git_status": "clean — HEAD at cache-hardening completion",
-    "lint": "not checked",
-    "last_commit": "perf(cache): batch LRU lastAccessedAt writes (2026-04-16)"
+    "tests": "459 passed (36 files)",
+    "build": "PASSING — wxt build 481KB total, 3.753s",
+    "git_status": "clean — HEAD at e0ab2c8 (chore: archive cache-settings-ui track)",
+    "lint": "clean",
+    "last_commit": "chore(conductor): archive cache-settings-ui track (2026-04-16)"
   }
 }
