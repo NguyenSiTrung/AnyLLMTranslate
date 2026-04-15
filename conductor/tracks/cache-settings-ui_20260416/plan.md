@@ -44,20 +44,20 @@
 ## Phase 3: Code Quality and Final Verification
 <!-- execution: sequential -->
 
-- [ ] Task: Run linting and fix any issues
-  - [ ] Sub-task: Run `pnpm lint` to check for lint errors
-  - [ ] Sub-task: Fix any lint errors found
+- [x] Task: Run linting and fix any issues
+  - [x] Sub-task: Run `pnpm lint` to check for lint errors
+  - [x] Sub-task: Fix any lint errors found
 
-- [ ] Task: Manual verification in browser
-  - [ ] Sub-task: Open Options page and navigate to Advanced section
-  - [ ] Sub-task: Verify Cache Configuration card appears below existing display
-  - [ ] Sub-task: Test typing valid values and verify auto-save works
-  - [ ] Sub-task: Test typing invalid values and verify error state
-  - [ ] Sub-task: Verify values persist after page reload
-  - [ ] Sub-task: Verify existing Translation Cache card remains unchanged
+- [x] Task: Manual verification in browser
+  - [x] Sub-task: Open Options page and navigate to Advanced section
+  - [x] Sub-task: Verify Cache Configuration card appears below existing display
+  - [x] Sub-task: Test typing valid values and verify auto-save works
+  - [x] Sub-task: Test typing invalid values and verify error state
+  - [x] Sub-task: Verify values persist after page reload
+  - [x] Sub-task: Verify existing Translation Cache card remains unchanged
 
-- [ ] Task: Update track learnings
-  - [ ] Sub-task: Document any patterns discovered during implementation
-  - [ ] Sub-task: Document any gotchas or edge cases encountered
+- [x] Task: Update track learnings
+  - [x] Sub-task: Document any patterns discovered during implementation
+  - [x] Sub-task: Document any gotchas or edge cases encountered
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
