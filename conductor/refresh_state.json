@@ -1,28 +1,30 @@
 {
-  "last_refresh": "2026-04-10T17:05:00+07:00",
+  "last_refresh": "2026-04-15T17:30:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/product.md",
-      "change": "Added Paragraph Translation Progress Indicators track to completed list"
-    },
-    {
-      "file": "conductor/product.md",
-      "change": "Updated test count from 400/32 to 403/32"
+      "file": "conductor/patterns.md",
+      "change": "Added 2 new sections: 'ESLint & Code Quality' (3 patterns from eslint-fix commit 219b515) and 'Branding & Naming Conventions' (2 patterns from rename commit 25f30b9)"
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Confirmed 7 new patterns already elevated from para-progress-indicator: CSS spinner via ::before, animation override, CSS custom property fallbacks, in-place DOM update with forced reflow, batch-before-await spinner pattern, sendMessage try/catch, themes.test.ts CSS string update rule"
+      "change": "Updated footer: timestamp, confirmed health metrics (430 tests / 34 files / 524KB / lint-clean)"
+    },
+    {
+      "file": "conductor/refresh_state.json",
+      "change": "Updated to reflect 2026-04-15 refresh with full drift analysis"
     }
   ],
   "drift_summary": {
-    "tech_stack": "No drift detected",
-    "product": "2 drifts fixed (missing para-progress track, test count 400→403)",
-    "workflow": "No drift detected",
-    "patterns": "No new drift — para-progress-indicator patterns already elevated in previous session",
-    "tests": "No failing tests"
+    "tech_stack": "No drift — package.json dependencies unchanged since last refresh",
+    "product": "No drift — product.md already updated in rename commit (25f30b9)",
+    "workflow": "No drift — workflow.md already updated in rename commit",
+    "patterns": "2 new sections added: ESLint & Code Quality, Branding & Naming Conventions (from commits 219b515, 25f30b9)",
+    "tests": "430 tests passing across 34 files — no regressions",
+    "branding": "MAJOR: LinguaLens → AnyLLMTranslate rename complete (commit 25f30b9, 2026-04-13). All 56 affected files updated: CSS classes, data attributes, storage keys, postMessage channels, global vars, docs, tests",
+    "eslint": "37 ESLint errors resolved (commit 219b515, 2026-04-13). varsIgnorePattern added for _-prefixed vars, dead createTranslationService removed, content.test.ts rewritten"
   },
-  "beads_check": "Beads CLI not checked — no active tracks",
+  "beads_check": "bd CLI available but no active tracks — skipping drift check",
   "active_tracks": [],
   "archived_tracks": [
     "phase1-foundation_20260409",
@@ -33,12 +35,15 @@
     "phase5-settings-ux_20260410",
     "theme-preview_20260410",
     "display-theme-fix_20260410",
-    "para-progress-indicator_20260410"
+    "para-progress-indicator_20260410",
+    "glossary-wire_20260410",
+    "subtitle-hardening_20260410"
   ],
   "codebase_health": {
-    "tests": "403 passed (32 files)",
-    "build": "504 KB (chrome-mv3)",
-    "git_status": "clean",
-    "source_files": "72 source files, 39 test files"
+    "tests": "430 passed (34 files)",
+    "build": "524 KB (chrome-mv3)",
+    "git_status": "clean — HEAD at 25f30b9",
+    "lint": "0 errors, 0 warnings",
+    "last_commit": "chore: rename extension from LinguaLens to AnyLLMTranslate (2026-04-13)"
   }
 }

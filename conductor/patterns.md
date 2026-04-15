@@ -154,6 +154,15 @@ Reusable patterns discovered during development. Read this before starting new w
 - FetchInterceptor captures `window.fetch` at module load time — tests must mock `window.fetch` BEFORE dynamic import of the module. (from: subtitle-hardening_20260410, archived 2026-04-10)
 - YouTube JSON3 `join('')` collapses segment boundaries — `join(' ')` with `filter` + `replace(/\s+/g, ' ')` preserves word spacing. (from: subtitle-hardening_20260410, archived 2026-04-10)
 
+## ESLint & Code Quality
+- ESLint `varsIgnorePattern` in `eslint.config.mjs` allows underscore-prefixed unused variables (e.g. `_error`) — use this convention for intentionally unused catch bindings and destructured vars. (from: eslint-fix_20260413)
+- Dead code with `require()` (forbidden in ESM) must be fully removed, not patched — WXT projects are pure ESM, use dynamic `import()` instead. (from: eslint-fix_20260413)
+- When rewriting tests to eliminate dynamic `import()` types, move mocks to top-level with `vi.mock()` hoisting — avoids type erasure and `any` casts. (from: eslint-fix_20260413)
+
+## Branding & Naming Conventions
+- All extension identifiers use `anyllm-` prefix: CSS classes (`anyllm-translate-*`), data attributes (`data-anyllm-*`), storage keys, postMessage channel, global window flags (`__anyllmTranslate*`). Never use the old `lingua*` prefix. (from: rename_20260413)
+- CSS keyframe names, custom properties, and selectors must match the `anyllm-` prefix system — changing any one of them requires updating `styles/__tests__/themes.test.ts` which checks CSS as a raw string. (from: rename_20260413)
+
 ---
-Last refreshed: 2026-04-10T19:10:00+07:00
-Codebase health: 430 tests across 34 files, 524KB build (chrome-mv3)
+Last refreshed: 2026-04-15T17:30:00+07:00
+Codebase health: 430 tests across 34 files, 524KB build (chrome-mv3), lint-clean
