@@ -23,23 +23,23 @@
   - [x] Sub-task: Ensure only valid values are saved (validation before save)
   - [x] Sub-task: Test that "Auto-saved" badge appears after successful save
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Testing
 <!-- execution: sequential -->
 
-- [ ] Task: Write unit tests for cache configuration inputs
-  - [ ] Sub-task: Create test file for AdvancedSection cache config
-  - [ ] Sub-task: Test that inputs render with correct initial values
-  - [ ] Sub-task: Test validation logic for min/max bounds
-  - [ ] Sub-task: Test that updateSettings is called on blur with valid values
-  - [ ] Sub-task: Test that updateSettings is NOT called with invalid values
+- [x] Task: Write unit tests for cache configuration inputs
+  - [x] Sub-task: Create test file for AdvancedSection cache config
+  - [x] Sub-task: Test that inputs render with correct initial values
+  - [x] Sub-task: Test validation logic for min/max bounds
+  - [x] Sub-task: Test that updateSettings is called on blur with valid values
+  - [x] Sub-task: Test that updateSettings is NOT called with invalid values
 
-- [ ] Task: Run test suite and ensure all tests pass
-  - [ ] Sub-task: Run `pnpm test` to verify all tests pass
-  - [ ] Sub-task: Fix any failing tests
+- [x] Task: Run test suite and ensure all tests pass
+  - [x] Sub-task: Run `pnpm test` to verify all tests pass
+  - [x] Sub-task: Fix any failing tests
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ## Phase 3: Code Quality and Final Verification
 <!-- execution: sequential -->
