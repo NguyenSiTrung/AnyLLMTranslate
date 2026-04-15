@@ -26,5 +26,5 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [ ] Track: Fix Display Mode — Wire `displayMode` Setting to Page State
+## [x] Track: Fix Display Mode — Wire `displayMode` Setting to Page State
 *Link: [./conductor/tracks/display-mode-fix_20260416/](./conductor/tracks/display-mode-fix_20260416/)*
