@@ -3,25 +3,25 @@
 ## Phase 1: UI Implementation
 <!-- execution: sequential -->
 
-- [ ] Task: Add Cache Configuration card to AdvancedSection
-  - [ ] Sub-task: Add new Card component below existing Translation Cache card with title "Cache Configuration"
-  - [ ] Sub-task: Import Input component from @/ui/Input
-  - [ ] Sub-task: Add three Input fields for cacheTTLDays, maxCacheSizeMB, maxBatchChars
-  - [ ] Sub-task: Add labels and helper text for each field explaining the setting's purpose
-  - [ ] Sub-task: Set type="number" and min/max attributes on each input
-  - [ ] Sub-task: Bind input values to settings from useSettingsStore
+- [x] Task: Add Cache Configuration card to AdvancedSection
+  - [x] Sub-task: Add new Card component below existing Translation Cache card with title "Cache Configuration"
+  - [x] Sub-task: Import Input component from @/ui/Input
+  - [x] Sub-task: Add three Input fields for cacheTTLDays, maxCacheSizeMB, maxBatchChars
+  - [x] Sub-task: Add labels and helper text for each field explaining the setting's purpose
+  - [x] Sub-task: Set type="number" and min/max attributes on each input
+  - [x] Sub-task: Bind input values to settings from useSettingsStore
 
-- [ ] Task: Implement validation logic
-  - [ ] Sub-task: Add validation for cacheTTLDays (min 1, max 365)
-  - [ ] Sub-task: Add validation for maxCacheSizeMB (min 10, max 1000)
-  - [ ] Sub-task: Add validation for maxBatchChars (min 500, max 10000)
-  - [ ] Sub-task: Show visual error state when validation fails
+- [x] Task: Implement validation logic
+  - [x] Sub-task: Add validation for cacheTTLDays (min 1, max 365)
+  - [x] Sub-task: Add validation for maxCacheSizeMB (min 10, max 1000)
+  - [x] Sub-task: Add validation for maxBatchChars (min 500, max 10000)
+  - [x] Sub-task: Show visual error state when validation fails
 
-- [ ] Task: Implement auto-save behavior
-  - [ ] Sub-task: Add onBlur handler to each input field
-  - [ ] Sub-task: Call updateSettings with new values on valid blur
-  - [ ] Sub-task: Ensure only valid values are saved (validation before save)
-  - [ ] Sub-task: Test that "Auto-saved" badge appears after successful save
+- [x] Task: Implement auto-save behavior
+  - [x] Sub-task: Add onBlur handler to each input field
+  - [x] Sub-task: Call updateSettings with new values on valid blur
+  - [x] Sub-task: Ensure only valid values are saved (validation before save)
+  - [x] Sub-task: Test that "Auto-saved" badge appears after successful save
 
 - [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 

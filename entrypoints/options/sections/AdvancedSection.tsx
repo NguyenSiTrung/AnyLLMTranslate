@@ -3,7 +3,7 @@
  * Refactored with shared components, Modal, and Toast.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Upload, Trash2, Bug, HardDrive, Wrench } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SETTINGS } from '@/types/config';
@@ -11,6 +11,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
 import { Modal } from '@/ui/Modal';
+import { Input } from '@/ui/Input';
 import { useToast } from '@/ui/ToastProvider';
 
 export function AdvancedSection() {
@@ -21,6 +22,14 @@ export function AdvancedSection() {
   const [showResetModal, setShowResetModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
+
+  // Cache configuration local state
+  const [cacheTTL, setCacheTTL] = useState(settings.cacheTTLDays);
+  const [maxCacheSize, setMaxCacheSize] = useState(settings.maxCacheSizeMB);
+  const [maxBatchChars, setMaxBatchChars] = useState(settings.maxBatchChars);
+  const [cacheTTLError, setCacheTTLError] = useState('');
+  const [maxCacheSizeError, setMaxCacheSizeError] = useState('');
+  const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
 
   const handleExportSettings = useCallback(() => {
     const exportData = {
@@ -87,6 +96,44 @@ export function AdvancedSection() {
     showSuccess('All settings reset to defaults');
   }, [resetToDefaults, showSuccess]);
 
+  // Sync local state with settings (for reset/import scenarios)
+  useEffect(() => {
+    setCacheTTL(settings.cacheTTLDays);
+    setMaxCacheSize(settings.maxCacheSizeMB);
+    setMaxBatchChars(settings.maxBatchChars);
+  }, [settings.cacheTTLDays, settings.maxCacheSizeMB, settings.maxBatchChars]);
+
+  // Cache configuration handlers
+  const handleCacheTTLBlur = useCallback(() => {
+    const value = Number(cacheTTL);
+    if (value < 1 || value > 365) {
+      setCacheTTLError('Must be between 1 and 365 days');
+      return;
+    }
+    setCacheTTLError('');
+    updateSettings({ cacheTTLDays: value });
+  }, [cacheTTL, updateSettings]);
+
+  const handleMaxCacheSizeBlur = useCallback(() => {
+    const value = Number(maxCacheSize);
+    if (value < 10 || value > 1000) {
+      setMaxCacheSizeError('Must be between 10 and 1000 MB');
+      return;
+    }
+    setMaxCacheSizeError('');
+    updateSettings({ maxCacheSizeMB: value });
+  }, [maxCacheSize, updateSettings]);
+
+  const handleMaxBatchCharsBlur = useCallback(() => {
+    const value = Number(maxBatchChars);
+    if (value < 500 || value > 10000) {
+      setMaxBatchCharsError('Must be between 500 and 10000 characters');
+      return;
+    }
+    setMaxBatchCharsError('');
+    updateSettings({ maxBatchChars: value });
+  }, [maxBatchChars, updateSettings]);
+
   // Calculate simple cache usage visualization
   const cacheUsagePct = Math.min(
     ((settings.cacheTTLDays / 30) * 100),
@@ -146,6 +193,60 @@ export function AdvancedSection() {
           >
             {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
           </Button>
+        </Card>
+
+        {/* Cache Configuration */}
+        <Card title="Cache Configuration" icon={<HardDrive className="w-4 h-4" />} variant="bordered">
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="cache-ttl-input" className="block text-sm font-medium text-zinc-300 mb-1">
+                Cache TTL (days)
+              </label>
+              <Input
+                id="cache-ttl-input"
+                type="number"
+                value={cacheTTL}
+                onChange={(e) => setCacheTTL(Number(e.target.value))}
+                onBlur={handleCacheTTLBlur}
+                min={1}
+                max={365}
+                error={cacheTTLError}
+                hint="How long translations are cached before expiration"
+              />
+            </div>
+            <div>
+              <label htmlFor="max-cache-size-input" className="block text-sm font-medium text-zinc-300 mb-1">
+                Max Cache Size (MB)
+              </label>
+              <Input
+                id="max-cache-size-input"
+                type="number"
+                value={maxCacheSize}
+                onChange={(e) => setMaxCacheSize(Number(e.target.value))}
+                onBlur={handleMaxCacheSizeBlur}
+                min={10}
+                max={1000}
+                error={maxCacheSizeError}
+                hint="Maximum storage limit for translation cache"
+              />
+            </div>
+            <div>
+              <label htmlFor="max-batch-chars-input" className="block text-sm font-medium text-zinc-300 mb-1">
+                Max Batch Characters
+              </label>
+              <Input
+                id="max-batch-chars-input"
+                type="number"
+                value={maxBatchChars}
+                onChange={(e) => setMaxBatchChars(Number(e.target.value))}
+                onBlur={handleMaxBatchCharsBlur}
+                min={500}
+                max={10000}
+                error={maxBatchCharsError}
+                hint="Maximum characters sent per translation batch"
+              />
+            </div>
+          </div>
         </Card>
 
         {/* Export / Import */}
