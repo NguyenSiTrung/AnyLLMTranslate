@@ -41,12 +41,35 @@ async function handleTranslate(
   message: ExtensionMessage & { action: 'translate' }
 ): Promise<TranslationResultMessage> {
   try {
-    const service = await initService();
     const settings = await loadSettings();
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
 
-    const texts = new Map<string, string>();
+    // FR-1: Split pieces into cached and uncached
+    const cachedResults: Array<{ id: string; translatedText: string }> = [];
+    const uncachedPieces: Array<{ id: string; text: string }> = [];
+
     for (const piece of message.pieces) {
+      const cached = await getCachedTranslation(
+        piece.text,
+        message.sourceLanguage,
+        message.targetLanguage,
+      );
+      if (cached !== null) {
+        cachedResults.push({ id: piece.id, translatedText: cached });
+      } else {
+        uncachedPieces.push(piece);
+      }
+    }
+
+    // If all pieces were cached, return immediately — no LLM call
+    if (uncachedPieces.length === 0) {
+      return { success: true, results: cachedResults };
+    }
+
+    // Translate only uncached pieces
+    const service = await initService();
+    const texts = new Map<string, string>();
+    for (const piece of uncachedPieces) {
       texts.set(piece.id, piece.text);
     }
 
@@ -59,12 +82,26 @@ async function handleTranslate(
     });
 
     if (result.success) {
+      const freshResults: Array<{ id: string; translatedText: string }> = [];
+
+      for (const [id, translatedText] of result.translations.entries()) {
+        freshResults.push({ id, translatedText });
+
+        // Write each fresh translation back to cache
+        const piece = uncachedPieces.find((p) => p.id === id);
+        if (piece) {
+          await cacheTranslation(
+            piece.text,
+            translatedText,
+            message.sourceLanguage,
+            message.targetLanguage,
+          );
+        }
+      }
+
       return {
         success: true,
-        results: Array.from(result.translations.entries()).map(([id, translatedText]) => ({
-          id,
-          translatedText,
-        })),
+        results: [...cachedResults, ...freshResults],
       };
     } else {
       return {

@@ -5,20 +5,20 @@
 
 > File: `services/background.ts`
 
-- [ ] Task 1: Write failing tests — `handleTranslateSelection` cache read behavior
+- [x] Task 1: Write failing tests — `handleTranslateSelection` cache read behavior
   - Test: mock `getCachedTranslation` to return a hit → assert `service.translate` NOT called, cached value returned
   - Test: mock `getCachedTranslation` to return null → assert `service.translate` IS called
   - Test: cache hit path still returns correct `{ success: true, translatedText }` shape
 
-- [ ] Task 2: Implement cache read in `handleTranslateSelection`
+- [x] Task 2: Implement cache read in `handleTranslateSelection`
   - Call `getCachedTranslation(message.text, message.sourceLanguage, message.targetLanguage)` before `service.translate()`
   - If hit: return `{ success: true, translatedText: cached }` immediately
   - If miss: proceed with existing LLM call + write-back (unchanged)
 
-- [ ] Task 3: Run tests + lint, commit
+- [x] Task 3: Run tests + lint, commit
   - `pnpm test` — all passing
   - `pnpm lint` — clean
-  - Commit: `fix(cache): add cache read to handleTranslateSelection`
+  - Commit: `fix(cache): add cache read to handleTranslateSelection` (cce9d19)
 
 ---
 
