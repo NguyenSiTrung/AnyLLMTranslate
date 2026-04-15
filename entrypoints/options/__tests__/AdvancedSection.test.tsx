@@ -29,7 +29,7 @@ describe('AdvancedSection - Cache Configuration', () => {
     },
     sourceLanguage: 'en',
     targetLanguage: 'es',
-    displayMode: 'dual',
+    displayMode: 'bilingual-below',
     theme: 'dividing-line',
     translationPosition: 'below',
     darkMode: false,
