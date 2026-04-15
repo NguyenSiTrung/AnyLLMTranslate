@@ -186,5 +186,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Host page CSS (e.g. Docusaurus) can overpower extension display rules. Always use `!important` on `display: none` for hiding original text and `display: X` resets for translated nodes. (from: display-mode-fix_20260416, archived 2026-04-16)
 
 ---
-Last refreshed: 2026-04-16T00:53:00+07:00
+Last refreshed: 2026-04-16T01:30:00+07:00
 Codebase health: 459 tests passing (including 13 new cache config UI tests), lint-clean

@@ -80,6 +80,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Paragraph Translation Progress Indicators** (Archived 2026-04-10): Pure CSS border-trick spinner via `::before` pseudo-element, in-place placeholder update system (no layout shift), batch spinner pattern (show all before `await`), error state on translation element itself.
 - **Cache Integration Hardening** (Archived 2026-04-16): Cache read/write in page translation pipeline, cache read in text selection translate, daily LRU eviction via chrome.alarms, batch LRU writes with 500ms debounce. 16 new cache tests added.
 - **Cache Configuration UI** (Archived 2026-04-16): Configurable cache settings (TTL days, max size MB, max batch chars) in Options → Advanced section. Validation on blur, auto-save to chrome.storage. 13 new unit tests.
+- **Fix Display Mode** (Archived 2026-04-16): Wire displayMode setting to translation-only page state correctly, implement shortcut toggle handling for display mode, and clean up test mock types.
 
 ### Current State
 - All tracks completed and archived. 459 tests passing across 36 files. Build passing (`wxt build` ✅). Lint-clean.

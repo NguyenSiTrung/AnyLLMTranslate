@@ -1,32 +1,28 @@
 {
-  "last_refresh": "2026-04-16T00:56:00+07:00",
+  "last_refresh": "2026-04-16T01:30:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/tracks.md",
-      "change": "Added cache-settings-ui_20260416 to archived tracks list (was missing after archive)"
-    },
-    {
       "file": "conductor/product.md",
-      "change": "Added Cache Configuration UI track to Implementation Status. Updated test count to 459 passing across 36 files. Updated build status to PASSING."
+      "change": "Added Fix Display Mode track to Implementation Status."
     },
     {
-      "file": "conductor/tech-stack.md",
-      "change": "Updated WXT version from 0.20.20 to 0.20.22 to match actual build output"
+      "file": "conductor/patterns.md",
+      "change": "Updated Last refreshed timestamp."
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Synced archived_tracks list to include cache-settings-ui_20260416. Build status corrected to PASSING."
+      "change": "Updated refresh state with recent updates."
     }
   ],
   "drift_summary": {
     "tech_stack": "MINOR: WXT version bumped 0.20.20 → 0.20.22 (auto-updated by npm)",
-    "product": "ADDED: cache-settings-ui_20260416 track to Implementation Status; test count updated 396 → 459; build status FIXED",
+    "product": "ADDED: display-mode-fix_20260416 track to Implementation Status.",
     "workflow": "No drift — workflow.md unchanged",
-    "patterns": "No drift — patterns.md already up-to-date (cache-settings-ui patterns captured 2026-04-16T00:53:00+07:00)",
+    "patterns": "No drift — patterns.md already up-to-date, updated timestamp",
     "tests": "459 tests passing across 36 files",
     "build": "PASSING — wxt build success (14.77KB background.js, 481KB total)",
-    "archived_tracks": "13 tracks archived (added cache-settings-ui_20260416 since last refresh)"
+    "archived_tracks": "14 tracks archived (display-mode-fix_20260416 added since last refresh)"
   },
   "beads_check": "bd CLI available but no active tracks — skipping drift check",
   "active_tracks": [],
@@ -43,13 +39,14 @@
     "glossary-wire_20260410",
     "subtitle-hardening_20260410",
     "cache-hardening_20260415",
-    "cache-settings-ui_20260416"
+    "cache-settings-ui_20260416",
+    "display-mode-fix_20260416"
   ],
   "codebase_health": {
     "tests": "459 passed (36 files)",
     "build": "PASSING — wxt build 481KB total, 3.753s",
-    "git_status": "clean — HEAD at e0ab2c8 (chore: archive cache-settings-ui track)",
+    "git_status": "clean",
     "lint": "clean",
-    "last_commit": "chore(conductor): archive cache-settings-ui track (2026-04-16)"
+    "last_commit": "chore(conductor): refresh"
   }
 }
