@@ -193,6 +193,16 @@ async function handleTranslateSelection(
   message: TranslateSelectionMessage,
 ): Promise<{ success: boolean; translatedText?: string; error?: string }> {
   try {
+    // FR-2: Check cache before calling LLM
+    const cached = await getCachedTranslation(
+      message.text,
+      message.sourceLanguage,
+      message.targetLanguage,
+    );
+    if (cached !== null) {
+      return { success: true, translatedText: cached };
+    }
+
     const service = await initService();
     const selectionSettings = await loadSettings();
     const selectionGlossary = formatGlossary(selectionSettings.glossary ?? []);
@@ -210,7 +220,7 @@ async function handleTranslateSelection(
     if (result.success) {
       const translated = result.translations.get('selection') ?? '';
 
-      // Cache the translation
+      // Write-back to cache after successful LLM call
       await cacheTranslation(
         message.text,
         translated,
