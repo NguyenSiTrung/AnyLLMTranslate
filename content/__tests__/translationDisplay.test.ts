@@ -262,8 +262,18 @@ describe('translationDisplay', () => {
       expect(getPageState()).toBe('off');
     });
 
-    it('togglePageState cycles correctly', () => {
+    it('togglePageState cycles correctly (backward compat to dual)', () => {
       expect(togglePageState()).toBe('dual');
+      expect(togglePageState()).toBe('off');
+    });
+
+    it('togglePageState cycles to translation-only when requested', () => {
+      expect(togglePageState('translation-only')).toBe('translation-only');
+      expect(togglePageState()).toBe('off');
+    });
+
+    it('togglePageState cycles to dual when requested', () => {
+      expect(togglePageState('bilingual-below')).toBe('dual');
       expect(togglePageState()).toBe('off');
     });
   });

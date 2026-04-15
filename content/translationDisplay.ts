@@ -5,7 +5,7 @@
 
 import { DATA_ATTRS } from '@/lib/constants';
 import type { PageState } from '@/lib/constants';
-import type { ThemeName, TranslationPosition, DarkMode } from '@/types/config';
+import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
 
 /** Apply theme attribute to document root */
 export function applyTheme(theme: ThemeName): void {
@@ -192,14 +192,14 @@ export function getPageState(): PageState {
   return (document.documentElement.getAttribute(DATA_ATTRS.STATE) as PageState) ?? 'off';
 }
 
-/** Toggle page state: off → dual → translation-only → off */
-export function togglePageState(): PageState {
+/** Toggle page state: off → mode → off */
+export function togglePageState(displayMode?: DisplayMode): PageState {
   const current = getPageState();
   let next: PageState;
 
   switch (current) {
     case 'off':
-      next = 'dual';
+      next = displayMode === 'translation-only' ? 'translation-only' : 'dual';
       break;
     case 'dual':
       next = 'off';
