@@ -110,8 +110,8 @@ export async function startTranslation(): Promise<void> {
 
   if (allPieces.length === 0) return;
 
-  // Set page state to dual
-  setPageState('dual');
+  // Set page state based on displayMode setting
+  setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
 
   // Create viewport observer for lazy translation
   viewportObserver = new ViewportObserver(
@@ -197,6 +197,10 @@ async function initInteractionFeatures(): Promise<void> {
       }
       if (newSettings.darkMode && getPageState() !== 'off') {
         applyDarkMode(newSettings.darkMode);
+      }
+      if (newSettings.displayMode && getPageState() !== 'off') {
+        const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
+        setPageState(next);
       }
     }
   });

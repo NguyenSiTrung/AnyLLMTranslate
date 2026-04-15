@@ -112,6 +112,42 @@ describe('content.ts', () => {
       expect(document.documentElement.getAttribute('data-anyllm-position')).toBe('below');
       expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
     });
+
+    it('applies dual page state when translation starts with bilingual-below displayMode', async () => {
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        displayMode: 'bilingual-below',
+      });
+      const mockPiece: TranslationPiece = {
+        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], originalHTML: 'Hello', isTranslated: false,
+      };
+      vi.mocked(extractPieces).mockReturnValue([mockPiece]);
+      vi.mocked(ViewportObserver).mockImplementation(() => ({
+        observeAll: vi.fn(),
+        disconnect: vi.fn(),
+      } as unknown as ViewportObserver));
+
+      await startTranslation();
+      expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('dual');
+    });
+
+    it('applies translation-only page state when translation starts with translation-only displayMode', async () => {
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        displayMode: 'translation-only',
+      });
+      const mockPiece: TranslationPiece = {
+        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], originalHTML: 'Hello', isTranslated: false,
+      };
+      vi.mocked(extractPieces).mockReturnValue([mockPiece]);
+      vi.mocked(ViewportObserver).mockImplementation(() => ({
+        observeAll: vi.fn(),
+        disconnect: vi.fn(),
+      } as unknown as ViewportObserver));
+
+      await startTranslation();
+      expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('translation-only');
+    });
   });
 
   describe('settings change listeners', () => {
@@ -205,6 +241,35 @@ describe('content.ts', () => {
       expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
     });
 
+    it('applies translation-only state when displayMode changes to translation-only and translation is active', async () => {
+      setPageState('dual');
+
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+        if (areaName !== 'local') return;
+        const settingsKey = 'anyllm-translate-settings';
+        if (changes[settingsKey]?.newValue) {
+          const newSettings = changes[settingsKey].newValue;
+          if (newSettings.displayMode && getPageState() !== 'off') {
+            const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
+            setPageState(next);
+          }
+        }
+      };
+
+      listener(
+        {
+          'anyllm-translate-settings': {
+            newValue: {
+              displayMode: 'translation-only',
+            },
+          },
+        },
+        'local'
+      );
+
+      expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('translation-only');
+    });
+
     it('does not apply visual settings when translation is not active', async () => {
       setPageState('off');
 
@@ -233,6 +298,36 @@ describe('content.ts', () => {
       );
 
       expect(document.documentElement.getAttribute('data-anyllm-theme')).not.toBe('paper');
+    });
+
+    it('does not apply displayMode when translation is not active', async () => {
+      setPageState('off');
+
+      const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+        if (areaName !== 'local') return;
+        const settingsKey = 'anyllm-translate-settings';
+        if (changes[settingsKey]?.newValue) {
+          const newSettings = changes[settingsKey].newValue;
+          if (newSettings.displayMode && getPageState() !== 'off') {
+            const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
+            setPageState(next);
+          }
+        }
+      };
+
+      listener(
+        {
+          'anyllm-translate-settings': {
+            newValue: {
+              displayMode: 'translation-only',
+            },
+          },
+        },
+        'local'
+      );
+
+      // 'off' state means the data attribute is set to 'off', it should not change to 'translation-only'
+      expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('off');
     });
   });
 
