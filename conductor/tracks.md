@@ -27,5 +27,5 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [ ] Track: Udemy Sprite Subtitle Fix
+## [x] Track: Udemy Sprite Subtitle Fix
 *Link: [./conductor/tracks/udemy-sprites_20260416/](./conductor/tracks/udemy-sprites_20260416/)*
