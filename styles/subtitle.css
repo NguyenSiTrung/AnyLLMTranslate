@@ -13,7 +13,7 @@
   justify-content: center;
   padding: 20px;
   box-sizing: border-box;
-  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  background-color: transparent;
   transition: opacity 0.3s ease-out;
   opacity: 0;
 }
@@ -39,6 +39,9 @@
   text-align: center;
   max-width: 80%;
   gap: 4px;
+  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  padding: 10px 16px;
+  border-radius: 8px;
 }
 
 /* Original text (smaller, dimmer) */
@@ -76,7 +79,7 @@
 
 /* Dark/light video background support */
 @media (prefers-color-scheme: dark) {
-  .anyllm-translate-subtitle-overlay {
+  .anyllm-translate-subtitle-text {
     background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.85));
   }
 }
@@ -91,7 +94,7 @@
   justify-content: center;
   padding: 20px;
   box-sizing: border-box;
-  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  background-color: transparent;
   transition: opacity 0.3s ease-out;
   opacity: 0;
 }
@@ -104,6 +107,9 @@
   text-align: center;
   max-width: 80%;
   gap: 4px;
+  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  padding: 10px 16px;
+  border-radius: 8px;
 }
 
 .anyllm-translate-subtitle-original {
