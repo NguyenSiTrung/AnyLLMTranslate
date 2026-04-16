@@ -17,11 +17,18 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Dark mode support** — auto (system `prefers-color-scheme`), light, or forced dark
 
 ### 🎬 Video Subtitle Translation
-- **Platform handlers** for YouTube, Udemy, and Coursera
-- **XHR + Fetch interception** via injected in-page script (`inject.content` entrypoint)
-- **WebVTT parsing & bilingual builder** — merges original + translated cues
-- **Custom subtitle overlay** with keyboard controls and resize
-- **Subtitle coordinator** orchestrates all subtitle modules from the content script
+- **Platform-specific handlers** with extensible registry pattern
+  - **YouTube**: Supports `/api/timedtext` endpoint with srv3 XML and JSON3 formats
+  - **Udemy**: Handles VTT from `udemycdn.com` with sprite metadata filtering
+  - **Coursera**: Processes VTT from `coursera.org` with query/path language extraction
+- **XHR + Fetch interception** via MAIN world script (`inject.content` at `document_start`)
+- **Dual-mode architecture**:
+  - **Interception mode**: Hijacks subtitle requests, translates, and returns bilingual VTT
+  - **Overlay fallback**: Auto-activates on timeout (30s) with custom subtitle renderer
+- **Subtitle parser** supports WebVTT and SRT formats with auto-detection
+- **Bilingual builder** generates merged or translation-only VTT output
+- **Custom overlay** with keyboard controls, resize, and position settings
+- **Subtitle coordinator** orchestrates parsing, translation, fallback, and cleanup
 
 ### 🖱️ Interactive Translation
 - **Text selection translate** — select any text, click the floating translate button; results appear in a tooltip with copy & close actions
@@ -147,16 +154,16 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 │   ├── subtitleCoordinator.ts # Coordinates all subtitle modules
 │   ├── subtitleControls.ts    # Subtitle control UI
 │   └── subtitleOverlay.ts     # Custom overlay renderer
-├── inject/                    # In-page injected script modules
+├── inject/                    # In-page injected script modules (MAIN world)
 │   ├── fetchInterceptor.ts    # Fetch API interception
 │   ├── xhrInterceptor.ts      # XHR interception
-│   ├── interceptorRegistry.ts # Handler registry
-│   ├── messageBridge.ts       # Inject ↔ content messaging
-│   └── subtitleHandlers/      # Platform-specific handlers
-│       ├── youtube.ts
-│       ├── udemy.ts
-│       ├── coursera.ts
-│       └── registry.ts
+│   ├── interceptorRegistry.ts # URL pattern matching registry
+│   ├── messageBridge.ts       # Inject ↔ content postMessage bridge
+│   └── subtitleHandlers/      # Platform-specific subtitle handlers
+│       ├── youtube.ts         # YouTube /api/timedtext (srv3 XML, JSON3)
+│       ├── udemy.ts           # Udemy VTT with sprite filtering
+│       ├── coursera.ts        # Coursera VTT with language extraction
+│       └── registry.ts        # Handler interface + registration system
 ├── services/                  # Background services
 │   ├── background.ts          # Tab state machine + translation message handler
 │   ├── base.ts                # Abstract TranslationService + prompt builder + response parser
@@ -233,6 +240,62 @@ AnyLLMTranslate includes **16 built-in themes** that apply via CSS data-attribut
 | Gradient Accent | `gradient-accent` |
 
 All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class).
+
+---
+
+## 🎬 Subtitle Handler Architecture
+
+The extension uses a modular, extensible subtitle handler system:
+
+### Handler Interface
+All platform handlers implement the `SubtitleHandler` interface:
+- `platform`: Unique identifier (e.g., `'youtube'`, `'udemy'`, `'coursera'`)
+- `detect()`: Returns `true` if the handler applies to the current page
+- `getPatterns()`: Returns URL patterns for interception with optional language extractors
+- `transformResponse()`: Transforms raw subtitle content into normalized `SubtitleCue[]`
+
+### Handler Registry
+- Centralized registration system for platform handlers
+- Auto-detects current platform by hostname
+- Aggregates URL patterns for XHR/Fetch interceptors
+- Pattern matching with optional `languageExtractor` functions
+
+### Supported Platforms
+
+#### YouTube
+- **Endpoint**: `/api/timedtext`
+- **Formats**: srv3 XML (default), JSON3
+- **Detection**: `youtube.com` hostname
+- **Language**: Extracted from `lang` query parameter
+- **Parser**: Custom XML DOM parser + JSON3 event parser
+
+#### Udemy
+- **Endpoint**: `*.udemycdn.com/*.vtt`
+- **Format**: Standard WebVTT
+- **Detection**: `udemy.com` hostname
+- **Language**: Extracted from path segments (e.g., `/subtitle-en/`, `/en/`)
+- **Special**: Filters sprite metadata cues (image file references with `#xywh=` coordinates) using length heuristic (>100 chars)
+
+#### Coursera
+- **Endpoints**: `coursera.org/*subtitle`, `coursera.org/*.vtt`
+- **Format**: Standard WebVTT
+- **Detection**: `coursera.org` hostname
+- **Language**: Extracted from `lang` query param or path segment (e.g., `/en/`)
+
+### Dual-Mode Architecture
+
+**Interception Mode** (primary):
+- MAIN world script intercepts XHR/Fetch requests at `document_start`
+- Platform handler transforms response to `SubtitleCue[]`
+- Coordinator translates cues via background service
+- Bilingual or translation-only VTT built and returned to page
+- Native player displays translated subtitles
+
+**Overlay Fallback** (backup):
+- Auto-activates if interception times out (30s default for local LLMs)
+- Fetches subtitle content via background worker (CORS bypass)
+- Parses, translates, and renders in custom overlay
+- Includes keyboard controls, resize, and position settings
 
 ---
 
