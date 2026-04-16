@@ -32,8 +32,8 @@ describe('ThemePreview', () => {
 
     render(<ThemePreview />);
 
-    expect(screen.getByText('The quick brown fox jumps over the lazy dog.')).toBeInTheDocument();
-    expect(screen.getByText('El rápido zorro marrón salta sobre el perro perezoso.')).toBeInTheDocument();
+    expect(screen.getByText("Artificial intelligence is reshaping how we communicate across languages and cultures.")).toBeInTheDocument();
+    expect(screen.getByText("L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.")).toBeInTheDocument();
   });
 
   it('applies the current theme from settings', () => {
@@ -66,7 +66,7 @@ describe('ThemePreview', () => {
 
     const originalText = container.querySelector('[data-anyllm-role="original"]');
     expect(originalText).toBeInTheDocument();
-    expect(originalText).toHaveTextContent('The quick brown fox jumps over the lazy dog.');
+    expect(originalText).toHaveTextContent("Artificial intelligence is reshaping how we communicate across languages and cultures.");
   });
 
   it('marks translated text with role and anyllm-translate-translation class', () => {
@@ -79,7 +79,7 @@ describe('ThemePreview', () => {
     const translatedText = container.querySelector('[data-anyllm-role="translation"]');
     expect(translatedText).toBeInTheDocument();
     expect(translatedText).toHaveClass('anyllm-translate-translation');
-    expect(translatedText).toHaveTextContent('El rápido zorro marrón salta sobre el perro perezoso.');
+    expect(translatedText).toHaveTextContent("L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.");
   });
 
   it('applies different theme when settings change', () => {
@@ -196,8 +196,8 @@ describe('ThemePreview', () => {
 
     render(<ThemePreview />);
 
-    expect(screen.getByText('Dark Mode')).toBeInTheDocument();
-    expect(screen.getByText('Preview theme in dark mode')).toBeInTheDocument();
+    expect(screen.getByText('Dark Mode Preview')).toBeInTheDocument();
+    expect(screen.getByText('Preview how the theme looks on dark-background pages')).toBeInTheDocument();
   });
 
   it('applies anyllm-dark class when toggle is checked', () => {
@@ -255,7 +255,7 @@ describe('ThemePreview', () => {
 
     const toggle = screen.getByRole('switch');
     expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(toggle).toHaveAttribute('aria-label', 'Dark Mode');
+    expect(toggle).toHaveAttribute('aria-label', 'Dark Mode Preview');
   });
 
   it('handles edge case with undefined theme', () => {

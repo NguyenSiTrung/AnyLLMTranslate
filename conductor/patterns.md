@@ -212,5 +212,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - `buildSystemPrompt` and `buildUserPrompt` now format language codes as `"Full Name (code)"` (e.g. `"Vietnamese (vi)"`) when `getLanguageName(code) !== code` — tests asserting on prompt content must use the full display format, not bare codes. (from: incremental, 2026-04-17)
 
 ---
-Last refreshed: 2026-04-17T00:32:00+07:00
+Last refreshed: 2026-04-17T01:02:00+07:00
 Codebase health: 483 tests passing across 40 files, lint-clean

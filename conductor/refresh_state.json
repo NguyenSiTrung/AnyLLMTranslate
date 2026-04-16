@@ -1,43 +1,39 @@
 {
-  "last_refresh": "2026-04-17T00:32:00+07:00",
+  "last_refresh": "2026-04-17T01:02:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
+      "file": "conductor/tech-stack.md",
+      "change": "Fixed WXT version from 0.20.22 to 0.20.20 to match package.json"
+    },
+    {
       "file": "conductor/product.md",
-      "change": "Added Subtitle Translation Refinements and Custom Extension Icon incremental completions. Updated test count to 483/40."
+      "change": "Added Settings UI/UX Improvements incremental completion (2026-04-17)"
+    },
+    {
+      "file": "entrypoints/options/__tests__/ThemePreview.test.tsx",
+      "change": "Fixed 5 tests: Updated sample text expectations to match AI-themed content (French translation), fixed aria-label expectation to 'Dark Mode Preview'"
+    },
+    {
+      "file": "entrypoints/options/__tests__/AdvancedSection.test.tsx",
+      "change": "Fixed 1 test: Updated helper text expectations to match actual component descriptions (with periods and 'the')"
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Added Subtitle Translation Refinements and Language Name Formatting patterns. Updated Last refreshed timestamp and health."
+      "change": "Updated Last refreshed timestamp to 2026-04-17T01:02:00+07:00"
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-17 refresh."
-    },
-    {
-      "file": "services/__tests__/base.test.ts",
-      "change": "Fixed test: source language hint now expects full name format 'English (en)'."
-    },
-    {
-      "file": "services/__tests__/openaiCompatible.test.ts",
-      "change": "Fixed test: {{targetLanguage}} now resolves to 'Vietnamese (vi)' not bare 'vi'."
-    },
-    {
-      "file": "tests/unit/subtitleCoordinator.test.ts",
-      "change": "Fixed test: overlay timeout advance updated from 6000ms to 31000ms (interceptTimeout is 30s)."
-    },
-    {
-      "file": "tests/unit/xhrInterceptor.test.ts",
-      "change": "Fixed 2 tests: XHR fallback timeout advance updated from 5100ms to 30100ms (timeout extended to 30s)."
+      "change": "Updated refresh state with 2026-04-17 01:02 refresh"
     }
   ],
   "drift_summary": {
-    "tech_stack": "No drift — same versions",
-    "product": "ADDED: Subtitle Translation Refinements and Custom Extension Icon incremental completions. Test count updated 459→483.",
+    "tech_stack": "FIXED: WXT version corrected from 0.20.22 to 0.20.20",
+    "product": "ADDED: Settings UI/UX Improvements incremental completion (refactored settings tabs, SegmentedControl, improved Card styling, subtitle toggle, close button)",
     "workflow": "No drift — workflow.md unchanged",
-    "patterns": "ADDED: Subtitle Translation Refinements and Language Name Formatting sections",
-    "tests": "483 tests passing across 40 files (was 459/36, 5 regressions fixed)",
-    "build": "Not re-run — node_modules was missing; reinstalled and test suite passes",
+    "patterns": "UPDATED: Refresh timestamp only (learnings already consolidated from previous refresh)",
+    "tests": "483 tests passing across 40 files (fixed 6 test regressions from UI refactoring)",
+    "build": "Not re-run — test suite passes",
     "archived_tracks": "16 tracks in archive — tracks.md already up to date"
   },
   "beads_check": "bd CLI skipped — no active tracks",
@@ -62,9 +58,9 @@
   ],
   "codebase_health": {
     "tests": "483 passed (40 files)",
-    "build": "node_modules reinstalled; tests passing",
-    "git_status": "clean",
+    "build": "tests passing",
+    "git_status": "clean (before refresh changes)",
     "lint": "clean",
-    "last_commit": "feat(ui): add loading toast notification during local LLM subtitle interception"
+    "last_commit": "ui: refactor settings tabs for UI/UX consistency with general tab"
   }
 }

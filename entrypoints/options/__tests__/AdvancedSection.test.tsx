@@ -206,8 +206,8 @@ describe('AdvancedSection - Cache Configuration', () => {
   it('displays helper text for each input field', () => {
     render(<AdvancedSection />);
 
-    expect(screen.getByText('How long translations are cached before expiration')).toBeInTheDocument();
-    expect(screen.getByText('Maximum storage limit for translation cache')).toBeInTheDocument();
-    expect(screen.getByText('Maximum characters sent per translation batch')).toBeInTheDocument();
+    expect(screen.getByText('How long translations are cached before expiration.')).toBeInTheDocument();
+    expect(screen.getByText('Maximum storage limit for the translation cache.')).toBeInTheDocument();
+    expect(screen.getByText('Maximum characters sent per translation batch.')).toBeInTheDocument();
   });
 });

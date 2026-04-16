@@ -10,7 +10,7 @@
 
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
-| **WXT** | 0.20.22 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
+| **WXT** | 0.20.20 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
 | **Vite** | 6.x | Bundled with WXT — fast builds, HMR, ESBuild-powered |
 | **pnpm** | 9.x | Fast, disk-efficient package manager |
 
