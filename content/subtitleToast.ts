@@ -18,7 +18,14 @@ export function showSubtitleToast(message: string, isSticky = false) {
   toastContainer.innerHTML = `
     ${isTranslating ? '<div class="anyllm-translate-loading" style="margin-right: 8px; border-color: white; border-bottom-color: transparent;"></div>' : ''}
     <span>${message}</span>
+    <button class="anyllm-translate-toast-close" aria-label="Close">✕</button>
   `;
+
+  // Wire up close button
+  const closeButton = toastContainer.querySelector('.anyllm-translate-toast-close');
+  if (closeButton) {
+    closeButton.addEventListener('click', hideSubtitleToast);
+  }
   
   toastContainer.classList.add('anyllm-translate-subtitle-toast-visible');
 

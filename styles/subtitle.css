@@ -159,3 +159,30 @@
   transform: translate(-50%, 0) !important;
 }
 
+/* Toast close button */
+.anyllm-translate-toast-close {
+  all: revert;
+  background: none !important;
+  border: none !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 18px !important;
+  font-weight: 300 !important;
+  line-height: 1 !important;
+  padding: 4px 8px !important;
+  margin-left: 8px !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  transition: color 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.anyllm-translate-toast-close:hover {
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+.anyllm-translate-toast-close:active {
+  transform: scale(0.95) !important;
+}
+
