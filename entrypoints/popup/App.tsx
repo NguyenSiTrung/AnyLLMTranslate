@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Languages, Loader2, CheckCircle2, AlertCircle, Settings,
   ArrowRightLeft, Palette, ChevronDown, Search,
-  Globe2, Sparkles, Activity, Square
+  Globe2, Sparkles, Activity, Square, Subtitles
 } from 'lucide-react';
 import type { Zap } from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
@@ -205,6 +205,15 @@ export default function App() {
 
   const updateSetting = useCallback(async (partial: Partial<ExtensionSettings>) => {
     const updated = { ...settings, ...partial };
+    setSettings(updated);
+    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
+  }, [settings]);
+
+  const updateSubtitleSetting = useCallback(async (partial: Partial<typeof settings.subtitleSettings>) => {
+    const updated = {
+      ...settings,
+      subtitleSettings: { ...settings.subtitleSettings, ...partial }
+    };
     setSettings(updated);
     await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   }, [settings]);
@@ -424,6 +433,25 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <Subtitles className="w-4 h-4 text-zinc-400" />
+                  <label className="text-xs text-zinc-300 font-medium">Subtitle Translation</label>
+                </div>
+                <button
+                  onClick={() => updateSubtitleSetting({ enabled: !settings.subtitleSettings.enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                    settings.subtitleSettings.enabled ? 'bg-blue-600' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                      settings.subtitleSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
           </div>
         </div>
