@@ -1,5 +1,6 @@
 /**
  * Display Themes Section — gallery grid with enhanced previews and selection animation.
+ * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -44,16 +45,16 @@ export function ThemesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Section header */}
-      <Card accent="blue" className="mb-8">
-        <div className="flex items-center gap-3">
-          <Palette className="w-5 h-5 text-blue-400" />
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-100">Display Themes</h2>
-            <p className="text-xs text-zinc-500">Choose how translated text appears on web pages.</p>
-          </div>
+      {/* Inline section header — consistent with GeneralSection */}
+      <div className="flex items-center gap-3 mb-7">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
+          <Palette className="w-4 h-4 text-blue-400" />
         </div>
-      </Card>
+        <div>
+          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Display Themes</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Choose how translated text appears on web pages.</p>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {THEMES.map((theme, idx) => {

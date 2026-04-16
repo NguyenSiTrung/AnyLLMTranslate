@@ -1,6 +1,6 @@
 /**
  * Site Rules Section — per-site translation rules management.
- * Refactored with shared components.
+ * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
 import { useState, useCallback } from 'react';
@@ -56,103 +56,107 @@ export function SiteRulesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Section header */}
-      <Card accent="blue" className="mb-8">
-        <div className="flex items-center gap-3">
-          <Globe className="w-5 h-5 text-blue-400" />
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-100">Site Rules</h2>
-            <p className="text-xs text-zinc-500">Configure per-site translation behavior.</p>
-          </div>
+      {/* Inline section header — consistent with GeneralSection */}
+      <div className="flex items-center gap-3 mb-7">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
+          <Globe className="w-4 h-4 text-blue-400" />
         </div>
-      </Card>
-
-      {/* Search & Add */}
-      <div className="flex gap-3 mb-4">
-        <div className="flex-1">
-          <Input
-            id="site-rules-search"
-            type="search"
-            placeholder="Search by hostname..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            icon={<Globe className="w-4 h-4" />}
-          />
+        <div>
+          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Site Rules</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Configure per-site translation behavior.</p>
         </div>
-        <Button
-          id="add-site-rule-btn"
-          onClick={handleAddRule}
-          icon={<Plus className="w-4 h-4" />}
-        >
-          Add Rule
-        </Button>
       </div>
 
-      {/* Edit Form */}
-      {editingRule && (
-        <RuleEditForm
-          rule={editingRule}
-          onSave={handleSaveRule}
-          onCancel={() => { setEditingRule(null); setIsAdding(false); }}
-        />
-      )}
-
-      {/* Rules List */}
-      {filteredRules.length === 0 ? (
-        <EmptyState
-          icon={<Globe className="w-8 h-8" />}
-          message={siteRules.length === 0
-            ? 'No site rules configured. Add a rule to customize translation behavior per site.'
-            : 'No rules match your search.'}
-          actionLabel={siteRules.length === 0 ? 'Add First Rule' : undefined}
-          onAction={siteRules.length === 0 ? handleAddRule : undefined}
-        />
-      ) : (
-        <div className="space-y-2">
-          {filteredRules.map((rule, idx) => (
-            <div
-              key={rule.id}
-              className="flex items-center justify-between p-3 bg-zinc-900 border border-zinc-800 rounded-lg animate-stagger"
-              style={{ '--stagger-delay': idx } as React.CSSProperties}
-            >
-              <div className="flex items-center gap-3">
-                {rule.alwaysTranslate ? (
-                  <Shield className="w-4 h-4 text-emerald-400" />
-                ) : rule.neverTranslate ? (
-                  <ShieldOff className="w-4 h-4 text-red-400" />
-                ) : (
-                  <div className="w-4 h-4" />
-                )}
-                <div>
-                  <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
-                  {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
-                </div>
-              </div>
-              {!rule.builtIn && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingRule(rule)}
-                    aria-label="Edit rule"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteRule(rule.id)}
-                    aria-label="Delete rule"
-                    className="hover:text-red-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
+      <div className="space-y-4">
+        {/* Search & Add */}
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <Input
+              id="site-rules-search"
+              type="search"
+              placeholder="Search by hostname..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              icon={<Globe className="w-4 h-4" />}
+            />
+          </div>
+          <Button
+            id="add-site-rule-btn"
+            onClick={handleAddRule}
+            icon={<Plus className="w-4 h-4" />}
+          >
+            Add Rule
+          </Button>
         </div>
-      )}
+
+        {/* Edit Form */}
+        {editingRule && (
+          <RuleEditForm
+            rule={editingRule}
+            onSave={handleSaveRule}
+            onCancel={() => { setEditingRule(null); setIsAdding(false); }}
+          />
+        )}
+
+        {/* Rules List */}
+        {filteredRules.length === 0 ? (
+          <EmptyState
+            icon={<Globe className="w-8 h-8" />}
+            message={siteRules.length === 0
+              ? 'No site rules configured. Add a rule to customize translation behavior per site.'
+              : 'No rules match your search.'}
+            actionLabel={siteRules.length === 0 ? 'Add First Rule' : undefined}
+            onAction={siteRules.length === 0 ? handleAddRule : undefined}
+          />
+        ) : (
+          <Card variant="bordered" className="p-0 overflow-hidden">
+            <div className="divide-y divide-zinc-800">
+              {filteredRules.map((rule, idx) => (
+                <div
+                  key={rule.id}
+                  className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors animate-stagger"
+                  style={{ '--stagger-delay': idx } as React.CSSProperties}
+                >
+                  <div className="flex items-center gap-3">
+                    {rule.alwaysTranslate ? (
+                      <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : rule.neverTranslate ? (
+                      <ShieldOff className="w-4 h-4 text-red-400 shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 shrink-0" />
+                    )}
+                    <div>
+                      <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
+                      {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
+                    </div>
+                  </div>
+                  {!rule.builtIn && (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingRule(rule)}
+                        aria-label="Edit rule"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteRule(rule.id)}
+                        aria-label="Delete rule"
+                        className="hover:text-red-400"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
@@ -165,7 +169,7 @@ function RuleEditForm({ rule, onSave, onCancel }: {
   const [form, setForm] = useState({ ...rule });
 
   return (
-    <Card variant="bordered" className="mb-4 space-y-3 border-zinc-700">
+    <Card variant="bordered" className="space-y-3 border-zinc-700">
       <Input
         type="text"
         placeholder="*.example.com"
