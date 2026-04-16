@@ -1,6 +1,11 @@
 /**
  * ThemePreview component - Shows live preview of translation themes.
  * Displays bilingual sample text with the selected theme applied.
+ *
+ * Improvements:
+ * - More meaningful sample text (not "quick brown fox")
+ * - Card title uses category-label style (inherits Card update)
+ * - Eye icon kept for recognition
  */
 
 import { useState } from 'react';
@@ -10,8 +15,10 @@ import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 
 const SAMPLE_TEXT = {
-  original: 'The quick brown fox jumps over the lazy dog.',
-  translation: 'El rápido zorro marrón salta sobre el perro perezoso.',
+  original:
+    'Artificial intelligence is reshaping how we communicate across languages and cultures.',
+  translation:
+    "L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.",
 };
 
 export function ThemePreview() {
@@ -22,29 +29,35 @@ export function ThemePreview() {
   const theme = settings.theme || 'dividing-line';
 
   return (
-    <Card title="Theme Preview" icon={<Eye className="w-4 h-4" />} variant="bordered" className="mt-4">
+    <Card title="Theme Preview" icon={<Eye className="w-3.5 h-3.5" />} variant="bordered">
       {/* Light/Dark mode toggle */}
       <div className="mb-4">
         <Toggle
           checked={isDarkMode}
           onChange={setIsDarkMode}
-          label="Dark Mode"
-          description="Preview theme in dark mode"
+          label="Dark Mode Preview"
+          description="Preview how the theme looks on dark-background pages"
         />
       </div>
 
       <div
-        className={`theme-preview-container ${isDarkMode ? 'anyllm-dark' : ''}`}
+        className={`theme-preview-container rounded-lg p-4 border border-zinc-700/40 transition-colors duration-200 ${isDarkMode ? 'anyllm-dark bg-zinc-950' : 'bg-white'}`}
         data-anyllm-theme={theme}
         data-anyllm-state="dual"
       >
         <div className="space-y-2">
           {/* Original text */}
-          <div data-anyllm-role="original" className="text-sm text-zinc-700">
+          <div
+            data-anyllm-role="original"
+            className={`text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}
+          >
             {SAMPLE_TEXT.original}
           </div>
           {/* Translated text with theme applied */}
-          <div data-anyllm-role="translation" className="anyllm-translate-translation text-sm">
+          <div
+            data-anyllm-role="translation"
+            className="anyllm-translate-translation text-sm leading-relaxed"
+          >
             {SAMPLE_TEXT.translation}
           </div>
         </div>

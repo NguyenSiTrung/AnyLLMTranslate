@@ -1,5 +1,7 @@
 /**
  * Shared Card component with variant support.
+ * bordered variant: subtle bg-zinc-900/50 for depth on dark background.
+ * Title uses category-label style (xs, uppercase, tracked) for clear hierarchy.
  */
 
 import type { ReactNode } from 'react';
@@ -17,9 +19,9 @@ interface CardProps {
 }
 
 const variantStyles: Record<CardVariant, string> = {
-  default: 'bg-zinc-900 border border-zinc-800 rounded-lg',
-  bordered: 'border border-zinc-700 rounded-lg',
-  elevated: 'bg-zinc-900 border border-zinc-800 rounded-lg shadow-lg shadow-black/20',
+  default: 'bg-zinc-900 border border-zinc-800 rounded-xl',
+  bordered: 'bg-zinc-900/50 border border-zinc-700/60 rounded-xl',
+  elevated: 'bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg shadow-black/30',
 };
 
 const accentBorders: Record<string, string> = {
@@ -31,11 +33,15 @@ const accentBorders: Record<string, string> = {
 
 export function Card({ variant = 'default', title, icon, accent, className = '', style, children }: CardProps) {
   return (
-    <div className={`${variantStyles[variant]} ${accent ? `border-l-3 ${accentBorders[accent]}` : ''} p-4 ${className}`} style={style}>
+    <div className={`${variantStyles[variant]} ${accent ? `border-l-4 ${accentBorders[accent]}` : ''} p-5 ${className}`} style={style}>
       {(title || icon) && (
-        <div className="flex items-center gap-2 mb-3">
-          {icon && <span className="text-zinc-400 shrink-0">{icon}</span>}
-          {title && <h3 className="text-sm font-medium text-zinc-200">{title}</h3>}
+        <div className="flex items-center gap-2 mb-4">
+          {icon && <span className="text-zinc-500 shrink-0">{icon}</span>}
+          {title && (
+            <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+              {title}
+            </h3>
+          )}
         </div>
       )}
       {children}

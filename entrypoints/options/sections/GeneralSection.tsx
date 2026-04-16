@@ -1,15 +1,21 @@
 /**
  * General Settings Section — target language, display mode, theme, position, dark mode.
- * Refactored to use shared UI components and Card-based content grouping.
+ *
+ * Refactored UI/UX improvements:
+ * - Removed redundant header Card; uses inline SectionHeader pattern
+ * - Display Mode / Translation Position / Dark Mode use SegmentedControl (radio group)
+ * - ThemePreview sits at same card level (no card-in-card nesting)
+ * - Cards have stagger entrance animation
+ * - Language FieldGroups include search hint
  */
 
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Globe, Monitor, Paintbrush } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Select } from '@/ui/Select';
 import { Card } from '@/ui/Card';
-import { Button } from '@/ui/Button';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { ThemePreview } from '../ThemePreview';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
 
@@ -32,6 +38,23 @@ const THEME_OPTIONS = [
   { value: 'gradient-accent', label: 'Gradient Accent' },
 ];
 
+const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
+  { value: 'bilingual-below', label: 'Bilingual' },
+  { value: 'translation-only', label: 'Translation Only' },
+];
+
+const POSITION_OPTIONS: { value: TranslationPosition; label: string }[] = [
+  { value: 'below', label: 'Below' },
+  { value: 'above', label: 'Above' },
+  { value: 'side', label: 'Side' },
+];
+
+const DARK_MODE_OPTIONS: { value: DarkMode; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 export function GeneralSection() {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -40,123 +63,126 @@ export function GeneralSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Section header */}
-      <Card accent="blue" className="mb-8">
-        <div className="flex items-center gap-3">
-          <SettingsIcon className="w-5 h-5 text-blue-400" />
-          <div>
-            <h2 className="text-lg font-semibold text-zinc-100">General Settings</h2>
-            <p className="text-xs text-zinc-500">Configure language, display, and appearance preferences.</p>
-          </div>
+      {/* Inline section header — no redundant card */}
+      <div className="flex items-center gap-3 mb-7">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
+          <Monitor className="w-4 h-4 text-blue-400" />
         </div>
-      </Card>
+        <div>
+          <h2 className="text-base font-semibold text-zinc-100 leading-tight">General</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">Language, display, and appearance preferences.</p>
+        </div>
+      </div>
 
-      <div className="space-y-6">
-        {/* Language group */}
-        <Card title="Language" variant="bordered">
-          <div className="space-y-4">
-            <FieldGroup label="Source Language" description="The language of pages you want to translate from." htmlFor="general-source-language">
-              <Select
-                id="general-source-language"
-                value={settings.sourceLanguage}
-                onChange={(e) => updateSettings({ sourceLanguage: e.target.value })}
-                options={sourceLanguages.map((lang) => ({
-                  value: lang.code,
-                  label: `${lang.nativeName} (${lang.name})`,
-                }))}
-              />
-            </FieldGroup>
+      <div className="space-y-4">
+        {/* Language card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+          <Card title="Language" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-5">
+              <FieldGroup
+                label="Source Language"
+                description="The language of pages you want to translate from."
+                hint="Type the first few letters to jump to a language."
+                htmlFor="general-source-language"
+              >
+                <Select
+                  id="general-source-language"
+                  value={settings.sourceLanguage}
+                  onChange={(e) => updateSettings({ sourceLanguage: e.target.value })}
+                  options={sourceLanguages.map((lang) => ({
+                    value: lang.code,
+                    label: `${lang.nativeName} (${lang.name})`,
+                  }))}
+                />
+              </FieldGroup>
 
-            <FieldGroup label="Target Language" description="The language to translate into." htmlFor="general-target-language">
-              <Select
-                id="general-target-language"
-                value={settings.targetLanguage}
-                onChange={(e) => updateSettings({ targetLanguage: e.target.value })}
-                options={targetLanguages.map((lang) => ({
-                  value: lang.code,
-                  label: `${lang.nativeName} (${lang.name})`,
-                }))}
-              />
-            </FieldGroup>
-          </div>
-        </Card>
+              <FieldGroup
+                label="Target Language"
+                description="The language to translate into."
+                hint="Type the first few letters to jump to a language."
+                htmlFor="general-target-language"
+              >
+                <Select
+                  id="general-target-language"
+                  value={settings.targetLanguage}
+                  onChange={(e) => updateSettings({ targetLanguage: e.target.value })}
+                  options={targetLanguages.map((lang) => ({
+                    value: lang.code,
+                    label: `${lang.nativeName} (${lang.name})`,
+                  }))}
+                />
+              </FieldGroup>
+            </div>
+          </Card>
+        </div>
 
-        {/* Display group */}
-        <Card title="Display" variant="bordered">
-          <div className="space-y-4">
-            <FieldGroup label="Display Mode" description="How translations appear on the page.">
-              <div className="flex gap-3">
-                {([
-                  { value: 'bilingual-below' as DisplayMode, label: 'Bilingual' },
-                  { value: 'translation-only' as DisplayMode, label: 'Translation Only' },
-                ] as const).map((opt) => (
-                  <Button
-                    key={opt.value}
-                    variant={settings.displayMode === opt.value ? 'primary' : 'secondary'}
-                    className="flex-1"
-                    onClick={() => updateSettings({ displayMode: opt.value })}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-            </FieldGroup>
+        {/* Display card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+          <Card title="Display" icon={<Monitor className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-5">
+              <FieldGroup
+                label="Display Mode"
+                description="How translations appear on the page."
+              >
+                <SegmentedControl
+                  label="Display Mode"
+                  options={DISPLAY_MODE_OPTIONS}
+                  value={settings.displayMode}
+                  onChange={(val) => updateSettings({ displayMode: val })}
+                />
+              </FieldGroup>
 
-            <FieldGroup label="Translation Theme" description="Visual style for translated text." htmlFor="general-theme">
-              <Select
-                id="general-theme"
-                value={settings.theme}
-                onChange={(e) => updateSettings({ theme: e.target.value as ThemeName })}
-                options={THEME_OPTIONS}
-              />
-            </FieldGroup>
+              <FieldGroup
+                label="Translation Theme"
+                description="Visual style for translated text."
+                htmlFor="general-theme"
+              >
+                <Select
+                  id="general-theme"
+                  value={settings.theme}
+                  onChange={(e) => updateSettings({ theme: e.target.value as ThemeName })}
+                  options={THEME_OPTIONS}
+                />
+              </FieldGroup>
+            </div>
+          </Card>
+        </div>
 
-            <ThemePreview />
-          </div>
-        </Card>
+        {/* Theme Preview — at same card level, not nested */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+          <ThemePreview />
+        </div>
 
-        {/* Appearance group */}
-        <Card title="Appearance" variant="bordered">
-          <div className="space-y-4">
-            <FieldGroup label="Translation Position" description="Where the translation appears relative to the original.">
-              <div className="flex gap-3">
-                {([
-                  { value: 'below' as TranslationPosition, label: 'Below' },
-                  { value: 'above' as TranslationPosition, label: 'Above' },
-                  { value: 'side' as TranslationPosition, label: 'Side' },
-                ] as const).map((opt) => (
-                  <Button
-                    key={opt.value}
-                    variant={settings.translationPosition === opt.value ? 'primary' : 'secondary'}
-                    className="flex-1"
-                    onClick={() => updateSettings({ translationPosition: opt.value })}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-            </FieldGroup>
+        {/* Appearance card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
+          <Card title="Appearance" icon={<Paintbrush className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-5">
+              <FieldGroup
+                label="Translation Position"
+                description="Where the translation appears relative to the original text."
+              >
+                <SegmentedControl
+                  label="Translation Position"
+                  options={POSITION_OPTIONS}
+                  value={settings.translationPosition}
+                  onChange={(val) => updateSettings({ translationPosition: val })}
+                />
+              </FieldGroup>
 
-            <FieldGroup label="Dark Mode" description="Control the appearance of translated text on host pages.">
-              <div className="flex gap-3">
-                {([
-                  { value: 'auto' as DarkMode, label: 'Auto' },
-                  { value: 'light' as DarkMode, label: 'Light' },
-                  { value: 'dark' as DarkMode, label: 'Dark' },
-                ] as const).map((opt) => (
-                  <Button
-                    key={opt.value}
-                    variant={settings.darkMode === opt.value ? 'primary' : 'secondary'}
-                    className="flex-1"
-                    onClick={() => updateSettings({ darkMode: opt.value })}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-            </FieldGroup>
-          </div>
-        </Card>
+              <FieldGroup
+                label="Dark Mode"
+                description="Control the appearance of translated text on host pages."
+              >
+                <SegmentedControl
+                  label="Dark Mode"
+                  options={DARK_MODE_OPTIONS}
+                  value={settings.darkMode}
+                  onChange={(val) => updateSettings({ darkMode: val })}
+                />
+              </FieldGroup>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );
