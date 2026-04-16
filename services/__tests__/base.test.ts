@@ -117,7 +117,7 @@ describe('buildUserPrompt', () => {
   it('includes source language hint when not auto', () => {
     const texts = new Map([['id1', 'Hello']]);
     const prompt = buildUserPrompt(texts, 'en');
-    expect(prompt).toContain('source language is en');
+    expect(prompt).toContain('source language is English (en)');
   });
 });
 

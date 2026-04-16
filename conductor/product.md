@@ -81,9 +81,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Cache Integration Hardening** (Archived 2026-04-16): Cache read/write in page translation pipeline, cache read in text selection translate, daily LRU eviction via chrome.alarms, batch LRU writes with 500ms debounce. 16 new cache tests added.
 - **Cache Configuration UI** (Archived 2026-04-16): Configurable cache settings (TTL days, max size MB, max batch chars) in Options → Advanced section. Validation on blur, auto-save to chrome.storage. 13 new unit tests.
 - **Fix Display Mode** (Archived 2026-04-16): Wire displayMode setting to translation-only page state correctly, implement shortcut toggle handling for display mode, and clean up test mock types.
+- **Subtitle Translation Refinements** (2026-04-17, incremental): Fixed subtitle language preference (use user setting over extracted language), fixed requestId propagation in SUBTITLE_TRANSLATED envelope, resolved subtitle mirroring-to-English bug, corrected overlay opacity blocking video playback, added loading toast notification during local LLM subtitle interception. XHR/coordinator timeout extended from 5s to 30s for slow local LLM support.
+- **Custom Extension Icon** (2026-04-17, incremental): Replaced default extension icons with custom transparent neon design.
 
 ### Current State
-- All tracks completed and archived. 459 tests passing across 36 files. Build passing (`wxt build` ✅). Lint-clean.
+- All tracks completed and archived. 483 tests passing across 40 files. Build passing (`wxt build` ✅). Lint-clean.
 
 ## Out of Scope (Initial Release)
 

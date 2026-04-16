@@ -201,5 +201,16 @@ Reusable patterns discovered during development. Read this before starting new w
 - Testing singleton guards: Call explicit reset methods (e.g. `resetCoordinatorState()`) before forcing modes in tests to clear guards. (from: subtitle-translation-wire_20260416, archived 2026-04-16)
 
 ---
-Last refreshed: 2026-04-16T02:02:00+07:00
-Codebase health: 468 tests passing (including 3 new udemy sprite tests), lint-clean
+
+## Subtitle Translation Refinements (2026-04-17)
+- Language preference hierarchy: use `settingsStore.targetLanguage` over extracted `originalLanguage` from XHR/fetch — user intent always wins. (from: subtitle-translation-wire_20260416 follow-up, 2026-04-17)
+- Subtitle interception timeout extended to 30s (`interceptTimeout: 30000`) in both `subtitleCoordinator.ts` and `xhrInterceptor.ts` — slow local LLMs (Ollama, vLLM) need more headroom than 5s. (from: incremental, 2026-04-17)
+- Loading toast pattern: `content/subtitleToast.ts` encapsulates a singleton toast DOM element, shown via `showSubtitleLoadingToast()` and hidden via `hideSubtitleLoadingToast()` — call show before awaiting translation, hide in the finally branch. (from: incremental, 2026-04-17)
+- Overlay `z-index` + `opacity` both need setting — `z-index: 2147483647` ensures overlay is on top, `opacity: 1` (not default `0`) ensures it is visible; missing either causes invisible-but-blocking overlay. (from: incremental, 2026-04-17)
+
+## Language Name Formatting in Prompts
+- `buildSystemPrompt` and `buildUserPrompt` now format language codes as `"Full Name (code)"` (e.g. `"Vietnamese (vi)"`) when `getLanguageName(code) !== code` — tests asserting on prompt content must use the full display format, not bare codes. (from: incremental, 2026-04-17)
+
+---
+Last refreshed: 2026-04-17T00:32:00+07:00
+Codebase health: 483 tests passing across 40 files, lint-clean

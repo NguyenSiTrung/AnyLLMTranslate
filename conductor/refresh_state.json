@@ -1,30 +1,46 @@
 {
-  "last_refresh": "2026-04-16T01:30:00+07:00",
+  "last_refresh": "2026-04-17T00:32:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/product.md",
-      "change": "Added Fix Display Mode track to Implementation Status."
+      "change": "Added Subtitle Translation Refinements and Custom Extension Icon incremental completions. Updated test count to 483/40."
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Updated Last refreshed timestamp."
+      "change": "Added Subtitle Translation Refinements and Language Name Formatting patterns. Updated Last refreshed timestamp and health."
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with recent updates."
+      "change": "Updated refresh state with 2026-04-17 refresh."
+    },
+    {
+      "file": "services/__tests__/base.test.ts",
+      "change": "Fixed test: source language hint now expects full name format 'English (en)'."
+    },
+    {
+      "file": "services/__tests__/openaiCompatible.test.ts",
+      "change": "Fixed test: {{targetLanguage}} now resolves to 'Vietnamese (vi)' not bare 'vi'."
+    },
+    {
+      "file": "tests/unit/subtitleCoordinator.test.ts",
+      "change": "Fixed test: overlay timeout advance updated from 6000ms to 31000ms (interceptTimeout is 30s)."
+    },
+    {
+      "file": "tests/unit/xhrInterceptor.test.ts",
+      "change": "Fixed 2 tests: XHR fallback timeout advance updated from 5100ms to 30100ms (timeout extended to 30s)."
     }
   ],
   "drift_summary": {
-    "tech_stack": "MINOR: WXT version bumped 0.20.20 → 0.20.22 (auto-updated by npm)",
-    "product": "ADDED: display-mode-fix_20260416 track to Implementation Status.",
+    "tech_stack": "No drift — same versions",
+    "product": "ADDED: Subtitle Translation Refinements and Custom Extension Icon incremental completions. Test count updated 459→483.",
     "workflow": "No drift — workflow.md unchanged",
-    "patterns": "No drift — patterns.md already up-to-date, updated timestamp",
-    "tests": "459 tests passing across 36 files",
-    "build": "PASSING — wxt build success (14.77KB background.js, 481KB total)",
-    "archived_tracks": "14 tracks archived (display-mode-fix_20260416 added since last refresh)"
+    "patterns": "ADDED: Subtitle Translation Refinements and Language Name Formatting sections",
+    "tests": "483 tests passing across 40 files (was 459/36, 5 regressions fixed)",
+    "build": "Not re-run — node_modules was missing; reinstalled and test suite passes",
+    "archived_tracks": "16 tracks in archive — tracks.md already up to date"
   },
-  "beads_check": "bd CLI available but no active tracks — skipping drift check",
+  "beads_check": "bd CLI skipped — no active tracks",
   "active_tracks": [],
   "archived_tracks": [
     "phase1-foundation_20260409",
@@ -40,13 +56,15 @@
     "subtitle-hardening_20260410",
     "cache-hardening_20260415",
     "cache-settings-ui_20260416",
-    "display-mode-fix_20260416"
+    "display-mode-fix_20260416",
+    "udemy-sprites_20260416",
+    "subtitle-translation-wire_20260416"
   ],
   "codebase_health": {
-    "tests": "459 passed (36 files)",
-    "build": "PASSING — wxt build 481KB total, 3.753s",
+    "tests": "483 passed (40 files)",
+    "build": "node_modules reinstalled; tests passing",
     "git_status": "clean",
     "lint": "clean",
-    "last_commit": "chore(conductor): refresh"
+    "last_commit": "feat(ui): add loading toast notification during local LLM subtitle interception"
   }
 }

@@ -140,7 +140,7 @@ describe('XhrInterceptor', () => {
       expect(onloadHandler).toHaveBeenCalled();
     });
 
-    it('calls handlers with original content after 5s timeout', () => {
+    it('calls handlers with original content after 30s timeout', () => {
       interceptor.enable();
       const xhr = new XMLHttpRequest();
       const onloadHandler = vi.fn();
@@ -151,8 +151,8 @@ describe('XhrInterceptor', () => {
 
       simulateXhrComplete(xhr);
 
-      // Advance past 5s timeout
-      vi.advanceTimersByTime(5100);
+      // Advance past 30s timeout (extended for local LLM support)
+      vi.advanceTimersByTime(30100);
 
       expect(onloadHandler).toHaveBeenCalled();
     });
@@ -169,7 +169,8 @@ describe('XhrInterceptor', () => {
       const listenerCountBefore = messageListeners.length;
       expect(listenerCountBefore).toBeGreaterThan(0);
 
-      vi.advanceTimersByTime(5100);
+      // Advance past 30s timeout (extended for local LLM support)
+      vi.advanceTimersByTime(30100);
 
       expect(messageListeners.length).toBeLessThan(listenerCountBefore);
     });

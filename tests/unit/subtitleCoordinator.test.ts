@@ -175,8 +175,8 @@ describe('content/subtitleCoordinator', () => {
         'test-request-id',
       );
 
-      // Fast-forward past timeout
-      vi.advanceTimersByTime(6000);
+      // Fast-forward past timeout (interceptTimeout is 30s for local LLM support)
+      vi.advanceTimersByTime(31000);
 
       expect(isInOverlayMode()).toBe(true);
     });

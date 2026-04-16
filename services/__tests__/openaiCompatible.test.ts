@@ -193,7 +193,7 @@ describe('OpenAICompatibleService', () => {
 
       const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       const body = JSON.parse(fetchCall[1]?.body as string) as { messages: Array<{ role: string; content: string }> };
-      expect(body.messages[0].content).toContain('Custom prompt for vi');
+      expect(body.messages[0].content).toContain('Custom prompt for Vietnamese (vi)');
     });
   });
 
