@@ -30,4 +30,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(No active tracks)*
+## [ ] Track: Settings UI UX Pro-Max refactor
+*Link: [./conductor/tracks/settings-ui-refactor_20260417/](./conductor/tracks/settings-ui-refactor_20260417/)*
