@@ -26,9 +26,8 @@ This file tracks all major tracks for the project.
 - ✅ **Fix subtitle translation overlay visibility in full screen video mode** (`fullscreen-overlay_20260417`) — Archived 2026-04-17. [View](./conductor/archive/fullscreen-overlay_20260417/)
 - ✅ **Progressive chunked subtitle translation** (`progressive-chunking_20260417`) — Archived 2026-04-17. [View](./conductor/archive/progressive-chunking_20260417/)
 
+- ✅ **Settings UI UX Pro-Max refactor** (`settings-ui-refactor_20260417`) — Archived 2026-04-17. [View](./conductor/archive/settings-ui-refactor_20260417/)
+
 ---
 
 ## Active Tracks
-
-## [ ] Track: Settings UI UX Pro-Max refactor
-*Link: [./conductor/tracks/settings-ui-refactor_20260417/](./conductor/tracks/settings-ui-refactor_20260417/)*
