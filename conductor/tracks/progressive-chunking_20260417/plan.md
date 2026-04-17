@@ -1,4 +1,5 @@
 # Implementation Plan: Progressive Chunked Subtitle Translation
+*(Last Revised: 2026-04-17 - Added Priority Queue)*
 
 ## Phase 1: Background Chunking Logic
 
@@ -10,7 +11,9 @@
 
 ## Phase 2: Coordinator & Overlay Integration
 
-- [ ] Task 1: Update `content/subtitleOverlay.ts` to gracefully append or merge incoming cue chunks without overwriting unaffected cues.
-- [ ] Task 2: Refactor `content/subtitleCoordinator.ts` to immediately activate the Custom Subtitle Overlay fallback upon interception instead of waiting for the full translation.
-- [ ] Task 3: Add event listener in `subtitleCoordinator.ts` to receive `SUBTITLE_CHUNK_TRANSLATED` events and push updates to the overlay.
+- [x] Task 1: Update `content/subtitleOverlay.ts` to gracefully append or merge incoming cue chunks without overwriting unaffected cues.
+- [x] Task 2: Refactor `content/subtitleCoordinator.ts` to immediately activate the Custom Subtitle Overlay fallback upon interception instead of waiting for the full translation.
+- [x] Task 3: Add event listener in `subtitleCoordinator.ts` to receive `SUBTITLE_CHUNK_TRANSLATED` events and push updates to the overlay.
+- [x] Task 3.1 (REVISED): Listen to `seeked` event in overlay to send `PRIORITIZE_SUBTITLE_CHUNK` message to background.
+- [x] Task 3.2 (REVISED): Implement Priority Queue in `services/background.ts` to reorder the chunk translation queue dynamically based on user skips.
 - [ ] Task 4: Conductor - User Manual Verification 'Coordinator & Overlay Integration' (Protocol in workflow.md)
