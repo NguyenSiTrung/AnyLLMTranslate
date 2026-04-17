@@ -6,7 +6,6 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ThemeName } from '@/types/config';
 import { Check, Palette } from 'lucide-react';
-import { Card } from '@/ui/Card';
 
 interface ThemeCard {
   id: ThemeName;
