@@ -397,6 +397,15 @@ export function isOverlayActive(): boolean {
 }
 
 /**
+ * Get the overlay's interactive text container element.
+ * Used by subtitleControls to attach drag-to-reposition listeners.
+ * Returns null if overlay is not attached.
+ */
+export function getOverlayTextContainer(): HTMLElement | null {
+  return overlayState.overlay?.querySelector('.anyllm-translate-subtitle-text') ?? null;
+}
+
+/**
  * Clean up and remove the overlay.
  */
 export function cleanup(): void {

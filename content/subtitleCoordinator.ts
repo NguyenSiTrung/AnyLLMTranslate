@@ -10,9 +10,9 @@
  */
 
 import { onSubtitleIntercepted, sendTranslatedSubtitle } from '@/content/messageBridge';
-import { initializeOverlay, updateCues, cleanup as cleanupOverlay } from '@/content/subtitleOverlay';
+import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
-import { initializeControls } from '@/content/subtitleControls';
+import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
@@ -23,12 +23,14 @@ interface CoordinatorState {
   isOverlayMode: boolean;
   pendingRequests: Map<string, ReturnType<typeof setTimeout>>;
   interceptTimeout: number;
+  dragCleanup: (() => void) | null;
 }
 
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
   interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
+  dragCleanup: null,
 };
 
 /**
@@ -64,6 +66,12 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
       // Initialize with original cues so they show immediately
       initializeOverlay(cues, { fontFamily, displayMode });
+
+      // Attach drag-to-reposition on the subtitle text container
+      const textContainer = getOverlayTextContainer();
+      if (textContainer) {
+        state.dragCleanup = enableDragReposition(textContainer);
+      }
     } else {
       // If already in overlay mode, just update cues
       updateCues(cues);
@@ -175,6 +183,12 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 
   initializeOverlay(cuesToDisplay, { fontFamily, displayMode });
 
+  // Attach drag-to-reposition on the subtitle text container
+  const textContainer = getOverlayTextContainer();
+  if (textContainer) {
+    state.dragCleanup = enableDragReposition(textContainer);
+  }
+
   // Clear all pending timeouts since we're in overlay mode now
   for (const timeoutId of state.pendingRequests.values()) {
     clearTimeout(timeoutId);
@@ -283,7 +297,11 @@ export function startCoordinator(): () => void {
     }
     state.pendingRequests.clear();
 
-    // Cleanup overlay if active
+    // Cleanup drag listeners and overlay if active
+    if (state.dragCleanup) {
+      state.dragCleanup();
+      state.dragCleanup = null;
+    }
     if (state.isOverlayMode) {
       cleanupOverlay();
     }
@@ -309,6 +327,10 @@ export function isInOverlayMode(): boolean {
  */
 export function resetCoordinatorState(): void {
   state.isOverlayMode = false;
+  if (state.dragCleanup) {
+    state.dragCleanup();
+    state.dragCleanup = null;
+  }
   for (const timeoutId of state.pendingRequests.values()) {
     clearTimeout(timeoutId);
   }

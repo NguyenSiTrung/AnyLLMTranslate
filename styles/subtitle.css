@@ -112,6 +112,18 @@
   padding: 10px 16px;
   border-radius: 8px;
   font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
+  pointer-events: auto;
+  cursor: grab;
+  transition: box-shadow 0.2s ease, outline 0.2s ease;
+}
+
+/* Drag affordance — subtle highlight on hover */
+.anyllm-translate-subtitle-text:hover {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.anyllm-translate-subtitle-text:active {
+  cursor: grabbing;
 }
 
 /* Hide original line when overlay displayMode = translation-only */

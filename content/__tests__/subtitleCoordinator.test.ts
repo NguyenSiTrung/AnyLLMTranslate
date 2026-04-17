@@ -40,15 +40,19 @@ vi.mock('@/inject/messageBridge', () => ({
 const mockInitializeOverlay = vi.fn();
 const mockUpdateCues = vi.fn();
 const mockCleanupOverlay = vi.fn();
+const mockGetOverlayTextContainer = vi.fn(() => null);
 vi.mock('@/content/subtitleOverlay', () => ({
   initializeOverlay: (...args: unknown[]) => mockInitializeOverlay(...args),
   updateCues: (...args: unknown[]) => mockUpdateCues(...args),
   cleanup: (...args: unknown[]) => mockCleanupOverlay(...args),
+  getOverlayTextContainer: (...args: unknown[]) => mockGetOverlayTextContainer(...args),
 }));
 
 const mockInitializeControls = vi.fn();
+const mockEnableDragReposition = vi.fn(() => vi.fn());
 vi.mock('@/content/subtitleControls', () => ({
   initializeControls: (...args: unknown[]) => mockInitializeControls(...args),
+  enableDragReposition: (...args: unknown[]) => mockEnableDragReposition(...args),
 }));
 
 const mockParseSubtitles = vi.fn();

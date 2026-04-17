@@ -29,10 +29,12 @@ vi.mock('@/content/subtitleOverlay', () => ({
   isOverlayActive: vi.fn(() => false),
   cleanup: vi.fn(),
   resetOverlayState: vi.fn(),
+  getOverlayTextContainer: vi.fn(() => null),
 }));
 
 vi.mock('@/content/subtitleControls', () => ({
   initializeControls: vi.fn(() => Promise.resolve()),
+  enableDragReposition: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@/lib/subtitleParser', () => ({
