@@ -1,16 +1,18 @@
 /**
  * Subtitles Settings Section — position, font size, opacity, font family,
- * display mode, and translation timeout controls.
+ * display mode, translation timeout, preferred language, and auto-activate controls.
  * Includes an animated mini video player preview reactive to all settings.
  */
 
 import { useState, useEffect } from 'react';
-import { Subtitles as SubtitlesIcon, Play } from 'lucide-react';
+import { Subtitles as SubtitlesIcon, Play, Languages } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { LANGUAGES } from '@/lib/languages';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { Card } from '@/ui/Card';
+import { Select } from '@/ui/Select';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import type { SubtitleFontFamily, SubtitleDisplayMode } from '@/types/config';
 
@@ -97,6 +99,8 @@ export function SubtitlesSection() {
       subtitleSettings: { ...subtitleSettings, ...partial },
     });
   };
+
+  const preferredLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
 
   return (
     <div className="animate-fade-in-up">
@@ -209,8 +213,40 @@ export function SubtitlesSection() {
           </Card>
         </div>
 
-        {/* Enhanced mini video player preview */}
+        {/* Language Discovery card */}
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+          <Card title="Language Discovery" icon={<Languages className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-5">
+              <FieldGroup
+                label="Preferred Subtitle Language"
+                description="The extension will auto-detect this language when available on video platforms like YouTube and Udemy."
+                hint="Select the language you most commonly want subtitles translated from."
+                htmlFor="subtitle-preferred-language"
+              >
+                <Select
+                  id="subtitle-preferred-language"
+                  value={subtitleSettings.preferredSubtitleLanguage}
+                  onChange={(e) => handleUpdate({ preferredSubtitleLanguage: e.target.value })}
+                  options={preferredLanguages.map((lang) => ({
+                    value: lang.code,
+                    label: `${lang.nativeName} (${lang.name})`,
+                  }))}
+                />
+              </FieldGroup>
+
+              <Toggle
+                id="subtitle-auto-activate-toggle"
+                checked={subtitleSettings.autoActivateSubtitles}
+                onChange={(checked) => handleUpdate({ autoActivateSubtitles: checked })}
+                label="Auto-Activate Subtitles"
+                description="Automatically fetch and translate subtitles when the preferred language is detected on a video page, without needing to manually enable captions."
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Enhanced mini video player preview */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
           <Card title="Preview" variant="bordered">
             <div
               className="relative rounded-lg overflow-hidden"
@@ -256,3 +292,4 @@ export function SubtitlesSection() {
     </div>
   );
 }
+

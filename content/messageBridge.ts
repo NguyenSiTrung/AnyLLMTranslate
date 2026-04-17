@@ -7,7 +7,7 @@
  */
 
 import { onMessage, sendMessage } from '@/inject/messageBridge';
-import type { SubtitleInterceptedPayload, SubtitleTranslatedPayload } from '@/types/subtitle';
+import type { SubtitleInterceptedPayload, SubtitleTranslatedPayload, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
 
 /**
  * Listen for subtitle interception events from the MAIN world.
@@ -24,6 +24,22 @@ export function onSubtitleIntercepted(
         message: error instanceof Error ? error.message : 'Unknown error',
         code: 'INTERCEPTION_FAILED',
       });
+    }
+  });
+}
+
+/**
+ * Listen for subtitle track discovery events from the MAIN world.
+ * Returns a cleanup function.
+ */
+export function onTracksDiscovered(
+  handler: (payload: SubtitleTracksDiscoveredPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_TRACKS_DISCOVERED', async (payload) => {
+    try {
+      await handler(payload as SubtitleTracksDiscoveredPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: Track discovery handler error', error);
     }
   });
 }
@@ -46,3 +62,4 @@ export function startContentBridge(
 ): () => void {
   return onSubtitleIntercepted(handler);
 }
+

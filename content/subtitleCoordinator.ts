@@ -9,14 +9,14 @@
  * - Activate overlay fallback with translated cues when interception times out
  */
 
-import { onSubtitleIntercepted, sendTranslatedSubtitle } from '@/content/messageBridge';
+import { onSubtitleIntercepted, sendTranslatedSubtitle, onTracksDiscovered } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
-import { getHandlerByPlatform } from '@/inject/subtitleHandlers/registry';
+import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
-import type { SubtitleCue, SubtitleInterceptedPayload } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
 
 /** Coordinator state */
 interface CoordinatorState {
@@ -24,6 +24,7 @@ interface CoordinatorState {
   pendingRequests: Map<string, ReturnType<typeof setTimeout>>;
   interceptTimeout: number;
   dragCleanup: (() => void) | null;
+  availableTracks: AvailableSubtitleTrack[];
 }
 
 const state: CoordinatorState = {
@@ -31,6 +32,7 @@ const state: CoordinatorState = {
   pendingRequests: new Map(),
   interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
   dragCleanup: null,
+  availableTracks: [],
 };
 
 /**
@@ -272,15 +274,30 @@ export function startCoordinator(): () => void {
   // Listen for intercepted subtitles
   const cleanupBridge = onSubtitleIntercepted(handleIntercepted);
 
+  // Listen for track discovery from MAIN world
+  const cleanupDiscovery = onTracksDiscovered(handleTracksDiscovered);
+
   // Listen for progressive chunk updates from background
   const handleExtensionMessage = (
     message: unknown,
     _sender: chrome.runtime.MessageSender,
     _sendResponse: () => void
   ) => {
-    const msg = message as { action?: string; cues?: SubtitleCue[] };
+    const msg = message as { action?: string; cues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED' && msg.cues) {
       updateTranslatedCues(msg.cues);
+    }
+    // Handle popup requesting subtitle track selection
+    if (msg.action === 'SELECT_SUBTITLE_TRACK' && msg.language) {
+      selectSubtitleTrack(msg.language);
+    }
+    // Handle popup querying available tracks
+    if (msg.action === 'GET_AVAILABLE_TRACKS') {
+      _sendResponse();
+      chrome.runtime.sendMessage({
+        action: 'SUBTITLE_TRACKS_AVAILABLE',
+        tracks: state.availableTracks,
+      });
     }
   };
   chrome.runtime.onMessage.addListener(handleExtensionMessage);
@@ -289,6 +306,7 @@ export function startCoordinator(): () => void {
   return () => {
     console.log('AnyLLMTranslate: Stopping subtitle coordinator');
     cleanupBridge();
+    cleanupDiscovery();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
 
     // Clear all pending timeouts
@@ -327,6 +345,7 @@ export function isInOverlayMode(): boolean {
  */
 export function resetCoordinatorState(): void {
   state.isOverlayMode = false;
+  state.availableTracks = [];
   if (state.dragCleanup) {
     state.dragCleanup();
     state.dragCleanup = null;
@@ -335,4 +354,91 @@ export function resetCoordinatorState(): void {
     clearTimeout(timeoutId);
   }
   state.pendingRequests.clear();
+}
+
+/**
+ * Handle discovered subtitle tracks from MAIN world bridge.
+ * Deduplicates, stores, notifies popup, and auto-activates if configured.
+ */
+async function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload): Promise<void> {
+  const handler = detectCurrentHandler();
+  let tracks: AvailableSubtitleTrack[];
+
+  // If the current handler can extract structured tracks, use it
+  if (handler?.extractAvailableTracks) {
+    const rawPayload = payload as unknown as { body?: string; contentType?: string; url?: string };
+    tracks = handler.extractAvailableTracks(
+      rawPayload.body || JSON.stringify(payload),
+      rawPayload.contentType || 'application/json',
+      rawPayload.url || '',
+    );
+  } else if (payload.tracks && Array.isArray(payload.tracks)) {
+    // Direct tracks from TextTrack discovery (html5 fallback)
+    tracks = payload.tracks;
+  } else {
+    return;
+  }
+
+  if (tracks.length === 0) return;
+
+  // Merge with existing tracks (deduplicate by language+platform)
+  for (const track of tracks) {
+    const existing = state.availableTracks.find(
+      (t) => t.language === track.language && t.platform === track.platform,
+    );
+    if (!existing) {
+      state.availableTracks.push(track);
+    } else if (track.url && !existing.url) {
+      // Update URL if newly discovered
+      existing.url = track.url;
+    }
+  }
+
+  console.log('AnyLLMTranslate: Subtitle tracks discovered', {
+    total: state.availableTracks.length,
+    languages: state.availableTracks.map((t) => t.language),
+    platform: payload.platform,
+  });
+
+  // Notify popup/UI about available tracks
+  try {
+    chrome.runtime.sendMessage({
+      action: 'SUBTITLE_TRACKS_AVAILABLE',
+      tracks: state.availableTracks,
+    });
+  } catch { /* popup may not be open */ }
+
+  // Auto-activate if configured
+  const settings = await loadSettings();
+  const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
+  const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
+
+  if (autoActivate && preferredLang && !state.isOverlayMode) {
+    const preferred = state.availableTracks.find((t) => t.language === preferredLang);
+    if (preferred?.url) {
+      console.log('AnyLLMTranslate: Auto-activating preferred subtitle track', preferredLang);
+      await selectSubtitleTrack(preferredLang);
+    }
+  }
+}
+
+/**
+ * Proactively fetch and translate a specific subtitle track by language.
+ */
+export async function selectSubtitleTrack(language: string): Promise<void> {
+  const track = state.availableTracks.find((t) => t.language === language);
+  if (!track?.url) {
+    console.warn('AnyLLMTranslate: No URL for track', language);
+    return;
+  }
+
+  console.log('AnyLLMTranslate: Selecting subtitle track', { language, url: track.url });
+  await activateOverlayMode(track.url);
+}
+
+/**
+ * Get all discovered subtitle tracks.
+ */
+export function getAvailableTracks(): AvailableSubtitleTrack[] {
+  return [...state.availableTracks];
 }

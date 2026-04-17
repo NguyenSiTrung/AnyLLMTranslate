@@ -10,8 +10,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // ============================================================================
 
 const mockGetHandlerByPlatform = vi.fn();
+const mockDetectCurrentHandler = vi.fn(() => null);
 vi.mock('@/inject/subtitleHandlers/registry', () => ({
   getHandlerByPlatform: mockGetHandlerByPlatform,
+  detectCurrentHandler: mockDetectCurrentHandler,
 }));
 
 const mockBuildBilingualVTT = vi.fn();
@@ -24,9 +26,14 @@ vi.mock('@/lib/subtitleBuilder', () => ({
 const mockSendTranslatedSubtitle = vi.fn();
 let capturedInterceptedHandler: ((payload: unknown, requestId: string) => Promise<void>) | null =
   null;
+let capturedTracksHandler: ((payload: unknown) => Promise<void>) | null = null;
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: (handler: (payload: unknown, requestId: string) => Promise<void>) => {
     capturedInterceptedHandler = handler;
+    return () => {};
+  },
+  onTracksDiscovered: (handler: (payload: unknown) => Promise<void>) => {
+    capturedTracksHandler = handler;
     return () => {};
   },
   sendTranslatedSubtitle: (...args: unknown[]) => mockSendTranslatedSubtitle(...args),

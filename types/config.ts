@@ -98,6 +98,10 @@ export interface SubtitleSettings {
   displayMode: SubtitleDisplayMode;
   /** Translation timeout in seconds (10–120) */
   translationTimeout: number;
+  /** Preferred subtitle source language (ISO code, e.g. 'en') — auto-selects when tracks are discovered */
+  preferredSubtitleLanguage: string;
+  /** Auto-activate subtitles when preferred language is available */
+  autoActivateSubtitles: boolean;
 }
 
 /** Extension settings stored in chrome.storage.local */
@@ -159,6 +163,8 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   fontFamily: 'system',
   displayMode: 'bilingual',
   translationTimeout: 30,
+  preferredSubtitleLanguage: 'en',
+  autoActivateSubtitles: false,
 };
 
 /** Default settings */

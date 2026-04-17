@@ -15,6 +15,7 @@ export interface UrlMatch {
 
 export class InterceptorRegistry {
   private patterns: SubtitleUrlPattern[] = [];
+  private metadataPatterns: SubtitleUrlPattern[] = [];
 
   constructor(
     private messageSender?: { send: (type: string, payload: unknown) => string },
@@ -30,9 +31,34 @@ export class InterceptorRegistry {
     this.patterns.push(...patterns);
   }
 
-  /** Match a URL against all registered patterns */
+  /** Register a new metadata URL pattern (read-only interception) */
+  registerMetadataPattern(pattern: SubtitleUrlPattern): void {
+    this.metadataPatterns.push(pattern);
+  }
+
+  /** Register multiple metadata patterns at once */
+  registerMetadataPatterns(patterns: SubtitleUrlPattern[]): void {
+    this.metadataPatterns.push(...patterns);
+  }
+
+  /** Match a URL against all registered subtitle patterns */
   matchUrl(url: string): UrlMatch | null {
     for (const entry of this.patterns) {
+      if (entry.pattern.test(url)) {
+        const parsedUrl = new URL(url, 'http://example.com');
+        return {
+          platform: entry.platform,
+          language: entry.languageExtractor?.(parsedUrl),
+          pattern: entry.pattern,
+        };
+      }
+    }
+    return null;
+  }
+
+  /** Match a URL against all registered metadata patterns (read-only) */
+  matchMetadataUrl(url: string): UrlMatch | null {
+    for (const entry of this.metadataPatterns) {
       if (entry.pattern.test(url)) {
         const parsedUrl = new URL(url, 'http://example.com');
         return {
@@ -50,8 +76,14 @@ export class InterceptorRegistry {
     return [...this.patterns];
   }
 
+  /** Get all registered metadata patterns */
+  getMetadataPatterns(): SubtitleUrlPattern[] {
+    return [...this.metadataPatterns];
+  }
+
   /** Clear all patterns */
   clearPatterns(): void {
     this.patterns = [];
+    this.metadataPatterns = [];
   }
 }

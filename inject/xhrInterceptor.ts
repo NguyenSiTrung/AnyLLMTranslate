@@ -45,6 +45,13 @@ export class XhrInterceptor {
         (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
       }
 
+      // Check for metadata match (read-only, non-blocking)
+      const metadataMatch = registry.matchMetadataUrl(urlString);
+      if (metadataMatch) {
+        (this as XMLHttpRequest & { __anyllmMetadataMatch?: UrlMatch; __anyllmTranslateUrl?: string }).__anyllmMetadataMatch = metadataMatch;
+        (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
+      }
+
       return originalOpen.apply(this, [method, url, ...args]);
     };
 
@@ -79,9 +86,34 @@ export class XhrInterceptor {
     OriginalXHR.prototype.send = function (_body?: Document | XMLHttpRequestBodyInit | null) {
       const xhr = this as XMLHttpRequest & {
         __anyllmTranslateMatch?: UrlMatch;
+        __anyllmMetadataMatch?: UrlMatch;
         __anyllmTranslateUrl?: string;
         __anyllmTranslateEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
       };
+
+      // Handle metadata match: non-blocking, read-only pass-through
+      const metadataMatch = xhr.__anyllmMetadataMatch;
+      if (metadataMatch && !xhr.__anyllmTranslateMatch) {
+        // Attach a non-blocking listener to capture the response body
+        const metadataListener = () => {
+          if (this.readyState !== 4 || this.status !== 200) return;
+          try {
+            bridge.send('SUBTITLE_TRACKS_DISCOVERED', {
+              url: xhr.__anyllmTranslateUrl || '',
+              body: this.responseText,
+              contentType: this.getResponseHeader('Content-Type') || '',
+              platform: metadataMatch.platform,
+            });
+            console.log('AnyLLMTranslate: XHR interceptor discovered metadata', {
+              url: xhr.__anyllmTranslateUrl,
+              platform: metadataMatch.platform,
+            });
+          } catch { /* silently ignore parse errors */ }
+        };
+        originalAddEventListener.call(this, 'readystatechange', metadataListener);
+        return originalSend.apply(this, [_body]);
+      }
+
       const match = xhr.__anyllmTranslateMatch;
 
       if (!match) {

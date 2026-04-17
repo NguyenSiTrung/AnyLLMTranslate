@@ -11,10 +11,11 @@ import { InterceptorRegistry } from '@/inject/interceptorRegistry';
 import { createBridgeSender } from '@/inject/messageBridge';
 import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
-import { registerSubtitleHandlers, getAllPatterns } from '@/inject/subtitleHandlers/registry';
+import { registerSubtitleHandlers, getAllPatterns, getMetadataPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
+import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -33,8 +34,11 @@ export default defineContentScript({
     const registry = new InterceptorRegistry();
     const bridge = createBridgeSender();
 
-    // Register all platform URL patterns
+    // Register all platform URL patterns (subtitle content interception)
     registry.registerPatterns(getAllPatterns());
+
+    // Register metadata patterns (read-only, non-blocking track discovery)
+    registry.registerMetadataPatterns(getMetadataPatternsForCurrentHost());
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
     const fetchInterceptor = new FetchInterceptor(registry, bridge);
@@ -43,5 +47,18 @@ export default defineContentScript({
     fetchInterceptor.enable();
 
     console.log('[AnyLLMTranslate] XHR/Fetch interceptors enabled');
+
+    // Start HTML5 TextTrack discovery (universal fallback)
+    // Wait for DOM to be ready before scanning for video elements
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        startTextTrackDiscovery(bridge);
+      });
+    } else {
+      startTextTrackDiscovery(bridge);
+    }
+
+    console.log('[AnyLLMTranslate] TextTrack discovery started');
   },
 });
+

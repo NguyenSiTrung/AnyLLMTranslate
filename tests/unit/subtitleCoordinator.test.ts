@@ -16,6 +16,7 @@ import * as subtitleParser from '@/lib/subtitleParser';
 // Mock dependencies
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: vi.fn(() => vi.fn()),
+  onTracksDiscovered: vi.fn(() => vi.fn()),
   sendTranslatedSubtitle: vi.fn(),
 }));
 
@@ -45,6 +46,7 @@ vi.mock('@/inject/subtitleHandlers/registry', () => ({
   getHandlerByPlatform: vi.fn(() => ({
     transformResponse: vi.fn(() => [{ startTime: 0, endTime: 4, text: 'Test' }]),
   })),
+  detectCurrentHandler: vi.fn(() => null),
 }));
 
 describe('content/subtitleCoordinator', () => {

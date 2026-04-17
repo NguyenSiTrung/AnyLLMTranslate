@@ -3,7 +3,7 @@
  * Background ↔ Content Script ↔ Popup
  */
 
-import type { SubtitleCue } from './subtitle';
+import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 
 /** Actions the background service worker handles */
 export type MessageAction =
@@ -17,7 +17,10 @@ export type MessageAction =
   | 'FETCH_SUBTITLE'
   | 'statusUpdate'
   | 'SUBTITLE_CHUNK_TRANSLATED'
-  | 'PRIORITIZE_SUBTITLE_CHUNK';
+  | 'PRIORITIZE_SUBTITLE_CHUNK'
+  | 'SUBTITLE_TRACKS_AVAILABLE'
+  | 'SELECT_SUBTITLE_TRACK'
+  | 'GET_AVAILABLE_TRACKS';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -109,7 +112,10 @@ export type ExtensionMessage =
   | FetchSubtitleMessage
   | StatusUpdateMessage
   | SubtitleChunkTranslatedMessage
-  | PrioritizeSubtitleChunkMessage;
+  | PrioritizeSubtitleChunkMessage
+  | SubtitleTracksAvailableMessage
+  | SelectSubtitleTrackMessage
+  | GetAvailableTracksMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {
@@ -133,4 +139,21 @@ export interface StatusResponse {
   translatedCount: number;
   totalCount: number;
   error?: string;
+}
+
+/** Available subtitle tracks notification from content → popup */
+export interface SubtitleTracksAvailableMessage {
+  action: 'SUBTITLE_TRACKS_AVAILABLE';
+  tracks: AvailableSubtitleTrack[];
+}
+
+/** Select a subtitle track request from popup → content */
+export interface SelectSubtitleTrackMessage {
+  action: 'SELECT_SUBTITLE_TRACK';
+  language: string;
+}
+
+/** Query available tracks from popup → content */
+export interface GetAvailableTracksMessage {
+  action: 'GET_AVAILABLE_TRACKS';
 }

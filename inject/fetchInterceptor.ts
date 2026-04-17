@@ -28,6 +28,30 @@ export class FetchInterceptor {
 
     window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+      // Check for metadata match first (non-blocking, read-only)
+      const metadataMatch = registry.matchMetadataUrl(urlString);
+      if (metadataMatch) {
+        const response = await originalFetch(input, init);
+        if (response.ok) {
+          const responseClone = response.clone();
+          responseClone.text().then((body) => {
+            bridge.send('SUBTITLE_TRACKS_DISCOVERED', {
+              url: urlString,
+              body,
+              contentType: response.headers.get('Content-Type') || '',
+              platform: metadataMatch.platform,
+            });
+            console.log('AnyLLMTranslate: Fetch interceptor discovered metadata', {
+              url: urlString,
+              platform: metadataMatch.platform,
+            });
+          }).catch(() => { /* silently ignore clone read errors */ });
+        }
+        return response; // Always pass through immediately
+      }
+
+      // Check for subtitle content match (blocking interception)
       const match = registry.matchUrl(urlString);
 
       if (!match) {

@@ -3,7 +3,7 @@
  * Platform handlers implement this interface and register via the registry.
  */
 
-import type { SubtitleCue, SubtitleUrlPattern } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack } from '@/types/subtitle';
 
 /** Abstract interface that all platform handlers must implement */
 export interface SubtitleHandler {
@@ -18,6 +18,12 @@ export interface SubtitleHandler {
 
   /** Transform a raw subtitle response body into SubtitleCue[] */
   transformResponse(body: string, contentType: string, url: string): SubtitleCue[];
+
+  /** Get URL patterns for metadata API responses that list available tracks (optional) */
+  getMetadataPatterns?(): SubtitleUrlPattern[];
+
+  /** Extract available subtitle tracks from a metadata API response (optional) */
+  extractAvailableTracks?(body: string, contentType: string, url: string): AvailableSubtitleTrack[];
 }
 
 /** Handler registry — auto-detects platform by hostname and routes to the right handler */
@@ -67,4 +73,15 @@ export function getAllPatterns(): SubtitleUrlPattern[] {
 /** Find a handler by its platform identifier string */
 export function getHandlerByPlatform(platform: string): SubtitleHandler | null {
   return handlers.find((h) => h.platform === platform) ?? null;
+}
+
+/** Get all metadata URL patterns from handlers that match the current hostname */
+export function getMetadataPatternsForCurrentHost(): SubtitleUrlPattern[] {
+  const patterns: SubtitleUrlPattern[] = [];
+  for (const handler of handlers) {
+    if (handler.detect() && handler.getMetadataPatterns) {
+      patterns.push(...handler.getMetadataPatterns());
+    }
+  }
+  return patterns;
 }

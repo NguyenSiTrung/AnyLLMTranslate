@@ -125,6 +125,29 @@ describe('SubtitlesSection', () => {
     });
   });
 
+  describe('language discovery controls', () => {
+    it('renders the Language Discovery card', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Language Discovery')).toBeInTheDocument();
+    });
+
+    it('renders Preferred Subtitle Language select', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Preferred Subtitle Language')).toBeInTheDocument();
+    });
+
+    it('renders Auto-Activate Subtitles toggle', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Auto-Activate Subtitles')).toBeInTheDocument();
+    });
+
+    it('renders preferred language select with English selected by default', () => {
+      render(<SubtitlesSection />);
+      const select = screen.getByLabelText('Preferred Subtitle Language') as HTMLSelectElement;
+      expect(select.value).toBe('en');
+    });
+  });
+
   describe('default values', () => {
     it('default fontFamily is system', () => {
       const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
@@ -139,6 +162,16 @@ describe('SubtitlesSection', () => {
     it('default translationTimeout is 30', () => {
       const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
       expect(state.subtitleSettings.translationTimeout).toBe(30);
+    });
+
+    it('default preferredSubtitleLanguage is en', () => {
+      const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
+      expect(state.subtitleSettings.preferredSubtitleLanguage).toBe('en');
+    });
+
+    it('default autoActivateSubtitles is false', () => {
+      const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
+      expect(state.subtitleSettings.autoActivateSubtitles).toBe(false);
     });
   });
 });
