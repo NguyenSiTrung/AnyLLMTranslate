@@ -1,30 +1,30 @@
 {
-  "last_refresh": "2026-04-17T11:07:00+07:00",
+  "last_refresh": "2026-04-17T13:25:42+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/product.md",
-      "change": "Added 2 new archived features (Settings Subtitle UX, Fullscreen Overlay Fix), updated test count 483→518, file count 40→42, build size to 545KB"
+      "change": "Added progressive-chunking_20260417 to completed tracks"
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Updated footer metrics to 518 tests / 42 files, refreshed timestamp"
+      "change": "Updated refreshed timestamp"
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-17 11:07 refresh"
+      "change": "Updated refresh state with 2026-04-17 13:25 refresh"
     }
   ],
   "drift_summary": {
-    "tech_stack": "No drift — package.json unchanged since last refresh",
-    "product": "ADDED: 2 archived track summaries (settings-subtitle-ux, fullscreen-overlay). FIXED: test count 483→518, file count 40→42, build size to 545KB",
-    "workflow": "No drift — workflow.md unchanged",
-    "patterns": "UPDATED: Footer metrics only. All learnings from new tracks already elevated in previous sessions",
-    "tests": "518 tests passing across 42 files (up from 483/40 at last refresh)",
+    "tech_stack": "No drift",
+    "product": "ADDED: 1 archived track summary (progressive-chunking)",
+    "workflow": "No drift",
+    "patterns": "UPDATED: Timestamp. All learnings from new tracks already elevated in previous sessions",
+    "tests": "518 tests passing across 42 files",
     "build": "545KB total (wxt build ✅)",
-    "archived_tracks": "18 tracks in archive — tracks.md already up to date"
+    "archived_tracks": "19 tracks in archive"
   },
-  "beads_check": "bd CLI skipped — no active tracks",
+  "beads_check": "Resolved Bead vs Conductor drift by closing open tasks/epics left over in Beads",
   "active_tracks": [],
   "archived_tracks": [
     "phase1-foundation_20260409",
@@ -44,13 +44,14 @@
     "udemy-sprites_20260416",
     "subtitle-translation-wire_20260416",
     "settings-subtitle-ux_20260417",
-    "fullscreen-overlay_20260417"
+    "fullscreen-overlay_20260417",
+    "progressive-chunking_20260417"
   ],
   "codebase_health": {
     "tests": "518 passed (42 files)",
     "build": "545KB total, wxt build passing",
     "git_status": "clean (before refresh changes)",
     "lint": "clean",
-    "last_commit": "fix(subtitles): refactor overlay positioning to fixed for fullscreen visibility"
+    "last_commit": "conductor: archive progressive-chunking_20260417 track"
   }
 }

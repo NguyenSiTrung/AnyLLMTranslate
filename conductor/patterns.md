@@ -223,5 +223,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events to translate the current timestamp first). (from: progressive-chunking_20260417, archived 2026-04-17)
 
 ---
-Last refreshed: 2026-04-17T11:07:00+07:00
+Last refreshed: 2026-04-17T13:25:42+07:00
 Codebase health: 518 tests passing across 42 files, lint-clean
