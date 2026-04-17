@@ -20,10 +20,10 @@ export function FieldGroup({ label, description, error, hint, htmlFor, children 
       <label className="block text-sm font-medium text-zinc-200 mb-1" htmlFor={htmlFor}>
         {label}
       </label>
-      {description && <p className="text-xs text-zinc-500 mb-2">{description}</p>}
+      {description && <p className="text-xs text-zinc-500 leading-relaxed mb-3">{description}</p>}
       {children}
-      {error && <p className="text-xs text-red-400 mt-1.5">{error}</p>}
-      {hint && !error && <p className="text-xs text-zinc-500 mt-1.5">{hint}</p>}
+      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+      {hint && !error && <p className="text-xs text-zinc-500 leading-relaxed mt-2">{hint}</p>}
     </div>
   );
 }

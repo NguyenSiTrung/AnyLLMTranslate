@@ -175,9 +175,6 @@ export default function App() {
                       onClick={() => setActiveTab(tab.id)}
                       className={`sidebar-tab ${isActive ? 'sidebar-tab--active' : ''}`}
                     >
-                      {isActive && (
-                        <div className="sidebar-tab-indicator" />
-                      )}
                       <Icon className="sidebar-tab-icon" />
                       <span className="sidebar-tab-label">{tab.label}</span>
                     </button>

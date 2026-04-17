@@ -24,7 +24,7 @@ export function Select({ options, icon, className = '', ...props }: SelectProps)
         </span>
       )}
       <select
-        className={`w-full appearance-none bg-zinc-800 border border-zinc-700 rounded-lg py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors cursor-pointer ${
+        className={`w-full appearance-none bg-zinc-800 border border-zinc-700 rounded-lg py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-150 active:scale-[0.98] cursor-pointer ${
           icon ? 'pl-9 pr-9' : 'px-3 pr-9'
         } ${className}`}
         {...props}

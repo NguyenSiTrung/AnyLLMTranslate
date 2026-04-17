@@ -55,7 +55,6 @@ select, input, textarea { font-family: inherit; }
   height: 100vh;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #27272a;
   background: #09090b;
   overflow: hidden;
 }
@@ -120,15 +119,18 @@ select, input, textarea { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  width: calc(100% - 24px);
+  margin: 2px 12px;
   height: 40px;       /* ← Fixed height = all tabs identical */
-  padding: 0 20px;
+  padding: 0 16px;
   border: none;
   background: transparent;
+  border-radius: 8px;
   font-size: 14px;
+  font-weight: 500;
   color: #a1a1aa;
   cursor: pointer;
-  transition: all 150ms ease;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -139,26 +141,19 @@ select, input, textarea { font-family: inherit; }
   background: rgba(39, 39, 42, 0.5);
 }
 
+.sidebar-tab:active {
+  transform: scale(0.97);
+}
+
 .sidebar-tab--active {
-  color: #60a5fa;
-  background: rgba(59, 130, 246, 0.1);
+  color: #f4f4f5;
+  background: rgba(39, 39, 42, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-tab--active:hover {
-  color: #60a5fa;
-  background: rgba(59, 130, 246, 0.1);
-}
-
-/* Active indicator — right edge blue bar */
-.sidebar-tab-indicator {
-  position: absolute;
-  right: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: #60a5fa;
-  border-radius: 1px;
-  animation: indicatorSlide 200ms ease-out;
+  color: #f4f4f5;
+  background: rgba(39, 39, 42, 1);
 }
 
 /* Tab icon — fixed size */
@@ -249,9 +244,11 @@ select, input, textarea { font-family: inherit; }
   }
 
   .sidebar-tab {
+    width: calc(100% - 16px);
+    margin: 2px 8px;
     height: 38px;
     font-size: 13px;
-    padding: 0 16px;
+    padding: 0 12px;
     gap: 10px;
   }
 
@@ -286,8 +283,12 @@ select, input, textarea { font-family: inherit; }
   }
 
   .sidebar-tab {
-    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin: 4px auto;
     padding: 0;
+    justify-content: center;
+    border-radius: 8px;
     gap: 0;
   }
 

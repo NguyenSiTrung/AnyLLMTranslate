@@ -26,14 +26,14 @@ vi.mock('@/lib/subtitleBuilder', () => ({
 const mockSendTranslatedSubtitle = vi.fn();
 let capturedInterceptedHandler: ((payload: unknown, requestId: string) => Promise<void>) | null =
   null;
-let capturedTracksHandler: ((payload: unknown) => Promise<void>) | null = null;
+let _capturedTracksHandler: ((payload: unknown) => Promise<void>) | null = null;
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: (handler: (payload: unknown, requestId: string) => Promise<void>) => {
     capturedInterceptedHandler = handler;
     return () => {};
   },
   onTracksDiscovered: (handler: (payload: unknown) => Promise<void>) => {
-    capturedTracksHandler = handler;
+    _capturedTracksHandler = handler;
     return () => {};
   },
   sendTranslatedSubtitle: (...args: unknown[]) => mockSendTranslatedSubtitle(...args),

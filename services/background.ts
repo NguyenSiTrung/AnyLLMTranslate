@@ -276,7 +276,8 @@ async function handleTranslateSubtitle(
 
       (async () => {
          while (session.queue.length > 0) {
-            const i = session.queue.shift()!;
+            const i = session.queue.shift();
+            if (i === undefined) break;
             const chunkCues = cues.slice(i, i + CHUNK_SIZE);
             const contextCues = cues.slice(Math.max(0, i - CONTEXT_SIZE), i);
             

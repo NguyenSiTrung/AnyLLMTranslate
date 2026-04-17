@@ -19,9 +19,9 @@ interface CardProps {
 }
 
 const variantStyles: Record<CardVariant, string> = {
-  default: 'bg-zinc-900 border border-zinc-800 rounded-xl',
-  bordered: 'bg-zinc-900/50 border border-zinc-700/60 rounded-xl',
-  elevated: 'bg-zinc-900 border border-zinc-800 rounded-xl shadow-lg shadow-black/30',
+  default: 'bg-white/[0.02] border border-white/5 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+  bordered: 'bg-white/[0.01] border border-white/10 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+  elevated: 'bg-white/[0.02] border border-white/5 rounded-xl shadow-lg shadow-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
 };
 
 const accentBorders: Record<string, string> = {
@@ -38,7 +38,7 @@ export function Card({ variant = 'default', title, icon, accent, className = '',
         <div className="flex items-center gap-2 mb-4">
           {icon && <span className="text-zinc-500 shrink-0">{icon}</span>}
           {title && (
-            <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">
+            <h3 className="text-sm font-semibold text-zinc-200">
               {title}
             </h3>
           )}
