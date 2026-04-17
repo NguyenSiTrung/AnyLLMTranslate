@@ -40,6 +40,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Platform handlers: YouTube, Udemy, Coursera, Netflix
 - WebVTT parser and bilingual builder
 - Custom subtitle overlay (fallback renderer)
+- Drag-and-drop subtitle repositioning with session persistence
+- Proactive subtitle track discovery (HTML5 TextTrack + platform handlers)
 
 ### UI & Settings
 - Popup UI (redesigned dropdown with permanent quick settings)
@@ -87,9 +89,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Settings UI/UX Enhancement & Subtitle Configuration** (Archived 2026-04-17): Extended SubtitleSettings type with fontFamily, displayMode, translationTimeout. Enhanced SubtitlesSection with mini video preview, font family selector, display mode toggle. Wired settings to runtime overlay. Visual polish with icon-and-card consistency and hover micro-animations. 35 new tests added.
 - **Fullscreen Overlay Fix** (Archived 2026-04-17): Refactored subtitle overlay from absolute to fixed positioning for fullscreen visibility. Implemented dynamic reparenting and Popover API fallback for Top Layer support. 7 new overlay tests added.
 - **Progressive Chunked Subtitle Translation** (Archived 2026-04-17): Implemented a progressive subtitle priority queue to respond to video seek events. Replaced batch processing with a progressive, chunked delivery system to reduce latency. Added context-aware processing with cue overlaps.
+- **Subtitle Drag-and-Drop Repositioning** (2026-04-17, incremental): Interactive drag-and-drop for subtitle overlay via pointer events, persistent position across sessions via chrome.storage, fullscreen-aware repositioning. CSS `cursor: grab/grabbing` and `user-select: none` for drag UX.
+- **Proactive Subtitle Discovery & Auto-Activation** (2026-04-17, incremental): Universal HTML5 TextTrack fallback discovery via MutationObserver + `addtrack` events (`inject/textTrackDiscovery.ts`). Extended YouTube, Udemy, and Coursera handlers to emit `SUBTITLE_TRACKS_DISCOVERED` messages. Auto-activation UI in Options → Subtitles section with language preference and toggle. New `subtitleAutoActivate` config option. 4 new tests added.
 
 ### Current State
-- All tracks completed and archived. 518 tests passing across 42 files. Build passing (`wxt build` ✅, 545KB total). Lint-clean.
+- All tracks completed and archived. 522 tests passing across 42 files. Build passing (`wxt build` ✅). Lint-clean.
 
 ## Out of Scope (Initial Release)
 

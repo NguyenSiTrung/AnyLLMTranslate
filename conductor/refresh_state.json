@@ -1,30 +1,29 @@
 {
-  "last_refresh": "2026-04-17T13:25:42+07:00",
+  "last_refresh": "2026-04-17T15:32:38+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/product.md",
-      "change": "Added progressive-chunking_20260417 to completed tracks"
+      "change": "Added 2 new incremental features: subtitle drag-and-drop, proactive subtitle discovery. Updated Key Features section. Updated test count 518→522."
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Updated refreshed timestamp"
+      "change": "Added 2 new pattern sections: Subtitle Drag-and-Drop (3 patterns), Proactive Subtitle Discovery (4 patterns). Updated timestamp and health metrics."
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-17 13:25 refresh"
+      "change": "Updated refresh state with 2026-04-17 15:32 refresh"
     }
   ],
   "drift_summary": {
     "tech_stack": "No drift",
-    "product": "ADDED: 1 archived track summary (progressive-chunking)",
+    "product": "ADDED: 2 incremental features (subtitle drag-and-drop, proactive subtitle discovery)",
     "workflow": "No drift",
-    "patterns": "UPDATED: Timestamp. All learnings from new tracks already elevated in previous sessions",
-    "tests": "518 tests passing across 42 files",
-    "build": "545KB total (wxt build ✅)",
+    "patterns": "ADDED: 7 new patterns across 2 new sections",
+    "tests": "522 tests passing across 42 files",
     "archived_tracks": "19 tracks in archive"
   },
-  "beads_check": "Resolved Bead vs Conductor drift by closing open tasks/epics left over in Beads",
+  "beads_check": "Clean — 0 open tasks, 0 open epics. No drift.",
   "active_tracks": [],
   "archived_tracks": [
     "phase1-foundation_20260409",
@@ -48,10 +47,9 @@
     "progressive-chunking_20260417"
   ],
   "codebase_health": {
-    "tests": "518 passed (42 files)",
-    "build": "545KB total, wxt build passing",
+    "tests": "522 passed (42 files)",
     "git_status": "clean (before refresh changes)",
     "lint": "clean",
-    "last_commit": "conductor: archive progressive-chunking_20260417 track"
+    "last_commit": "feat: implement proactive subtitle discovery and auto-activation"
   }
 }

@@ -222,6 +222,17 @@ Reusable patterns discovered during development. Read this before starting new w
 - When chunking LLM translation requests, deduplicating texts via a Map will alter the output array length and destroy index alignment with the source chunk. If alignment is required, process duplicates gracefully without removing them from the iteration order. (from: progressive-chunking_20260417, archived 2026-04-17)
 - Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events to translate the current timestamp first). (from: progressive-chunking_20260417, archived 2026-04-17)
 
+## Subtitle Drag-and-Drop (2026-04-17)
+- Use `pointerdown`/`pointermove`/`pointerup` (not `mousedown`) for drag-and-drop — works uniformly across mouse and touch. `setPointerCapture(e.pointerId)` ensures events are received even if the cursor leaves the element during drag. (from: incremental, 2026-04-17)
+- Persist overlay position via `chrome.storage.local` on `pointerup` — read on overlay creation to restore user's last placement. Key pattern: `{ subtitleOverlayX, subtitleOverlayY }`. (from: incremental, 2026-04-17)
+- CSS `cursor: grab` (idle) / `cursor: grabbing` (active) + `user-select: none` during drag prevents text selection and provides visual affordance. (from: incremental, 2026-04-17)
+
+## Proactive Subtitle Discovery (2026-04-17)
+- HTML5 TextTrack discovery via `video.textTracks` + `addtrack` event listener provides universal fallback for sites without platform-specific handlers. Use `WeakSet<HTMLVideoElement>` to deduplicate reported videos. (from: incremental, 2026-04-17)
+- MutationObserver for dynamically inserted `<video>` elements — check both direct `HTMLVideoElement` nodes and descendants of added containers via `node.querySelectorAll('video')`. (from: incremental, 2026-04-17)
+- Platform handlers (YouTube, Udemy, Coursera) extended with discovery emission: parse available tracks from intercepted responses and emit `SUBTITLE_TRACKS_DISCOVERED` via the postMessage bridge before proceeding with translation. (from: incremental, 2026-04-17)
+- `AvailableSubtitleTrack` type with `platform` field enables the coordinator to differentiate discovery sources and apply platform-specific logic. (from: incremental, 2026-04-17)
+
 ---
-Last refreshed: 2026-04-17T13:25:42+07:00
-Codebase health: 518 tests passing across 42 files, lint-clean
+Last refreshed: 2026-04-17T15:32:38+07:00
+Codebase health: 522 tests passing across 42 files, lint-clean
