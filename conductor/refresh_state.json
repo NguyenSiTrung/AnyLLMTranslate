@@ -1,40 +1,28 @@
 {
-  "last_refresh": "2026-04-17T01:02:00+07:00",
+  "last_refresh": "2026-04-17T11:07:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
-      "file": "conductor/tech-stack.md",
-      "change": "Fixed WXT version from 0.20.22 to 0.20.20 to match package.json"
-    },
-    {
       "file": "conductor/product.md",
-      "change": "Added Settings UI/UX Improvements incremental completion (2026-04-17)"
-    },
-    {
-      "file": "entrypoints/options/__tests__/ThemePreview.test.tsx",
-      "change": "Fixed 5 tests: Updated sample text expectations to match AI-themed content (French translation), fixed aria-label expectation to 'Dark Mode Preview'"
-    },
-    {
-      "file": "entrypoints/options/__tests__/AdvancedSection.test.tsx",
-      "change": "Fixed 1 test: Updated helper text expectations to match actual component descriptions (with periods and 'the')"
+      "change": "Added 2 new archived features (Settings Subtitle UX, Fullscreen Overlay Fix), updated test count 483→518, file count 40→42, build size to 545KB"
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Updated Last refreshed timestamp to 2026-04-17T01:02:00+07:00"
+      "change": "Updated footer metrics to 518 tests / 42 files, refreshed timestamp"
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-17 01:02 refresh"
+      "change": "Updated refresh state with 2026-04-17 11:07 refresh"
     }
   ],
   "drift_summary": {
-    "tech_stack": "FIXED: WXT version corrected from 0.20.22 to 0.20.20",
-    "product": "ADDED: Settings UI/UX Improvements incremental completion (refactored settings tabs, SegmentedControl, improved Card styling, subtitle toggle, close button)",
+    "tech_stack": "No drift — package.json unchanged since last refresh",
+    "product": "ADDED: 2 archived track summaries (settings-subtitle-ux, fullscreen-overlay). FIXED: test count 483→518, file count 40→42, build size to 545KB",
     "workflow": "No drift — workflow.md unchanged",
-    "patterns": "UPDATED: Refresh timestamp only (learnings already consolidated from previous refresh)",
-    "tests": "483 tests passing across 40 files (fixed 6 test regressions from UI refactoring)",
-    "build": "Not re-run — test suite passes",
-    "archived_tracks": "16 tracks in archive — tracks.md already up to date"
+    "patterns": "UPDATED: Footer metrics only. All learnings from new tracks already elevated in previous sessions",
+    "tests": "518 tests passing across 42 files (up from 483/40 at last refresh)",
+    "build": "545KB total (wxt build ✅)",
+    "archived_tracks": "18 tracks in archive — tracks.md already up to date"
   },
   "beads_check": "bd CLI skipped — no active tracks",
   "active_tracks": [],
@@ -54,13 +42,15 @@
     "cache-settings-ui_20260416",
     "display-mode-fix_20260416",
     "udemy-sprites_20260416",
-    "subtitle-translation-wire_20260416"
+    "subtitle-translation-wire_20260416",
+    "settings-subtitle-ux_20260417",
+    "fullscreen-overlay_20260417"
   ],
   "codebase_health": {
-    "tests": "483 passed (40 files)",
-    "build": "tests passing",
+    "tests": "518 passed (42 files)",
+    "build": "545KB total, wxt build passing",
     "git_status": "clean (before refresh changes)",
     "lint": "clean",
-    "last_commit": "ui: refactor settings tabs for UI/UX consistency with general tab"
+    "last_commit": "fix(subtitles): refactor overlay positioning to fixed for fullscreen visibility"
   }
 }

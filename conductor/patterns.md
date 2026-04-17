@@ -217,5 +217,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Context: The overlay is `position: fixed` because we want it to stay above the video. In full screen, the `position: fixed` works well because the `videoRect` coordinates correctly correspond to the viewport. (from: fullscreen-overlay_20260417, archived 2026-04-17)
 
 ---
-Last refreshed: 2026-04-17T11:01:00+07:00
-Codebase health: 517 tests passing across 41 files, lint-clean
+Last refreshed: 2026-04-17T11:07:00+07:00
+Codebase health: 518 tests passing across 42 files, lint-clean
