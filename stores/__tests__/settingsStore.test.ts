@@ -167,4 +167,99 @@ describe('useSettingsStore', () => {
       expect(chrome.storage.onChanged.removeListener).toHaveBeenCalled();
     });
   });
+
+  describe('subtitleSettings — new fields', () => {
+    it('defaults: fontFamily=system, displayMode=bilingual, translationTimeout=30', () => {
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.fontFamily).toBe('system');
+      expect(state.subtitleSettings.displayMode).toBe('bilingual');
+      expect(state.subtitleSettings.translationTimeout).toBe(30);
+    });
+
+    it('loads stored subtitleSettings and deep-merges with defaults', async () => {
+      mockStorageData['anyllm-translate-settings'] = {
+        subtitleSettings: { fontFamily: 'serif', displayMode: 'translation-only', translationTimeout: 60 },
+      };
+
+      await useSettingsStore.getState().loadFromStorage();
+
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.fontFamily).toBe('serif');
+      expect(state.subtitleSettings.displayMode).toBe('translation-only');
+      expect(state.subtitleSettings.translationTimeout).toBe(60);
+      // Existing fields preserved
+      expect(state.subtitleSettings.position).toBe('bottom');
+      expect(state.subtitleSettings.enabled).toBe(true);
+    });
+
+    it('merges defaults when stored subtitleSettings is missing new fields', async () => {
+      mockStorageData['anyllm-translate-settings'] = {
+        subtitleSettings: { position: 'top', fontSize: 20, backgroundOpacity: 0.5, enabled: true },
+      };
+
+      await useSettingsStore.getState().loadFromStorage();
+
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.position).toBe('top');
+      expect(state.subtitleSettings.fontSize).toBe(20);
+      // New fields fall back to defaults
+      expect(state.subtitleSettings.fontFamily).toBe('system');
+      expect(state.subtitleSettings.displayMode).toBe('bilingual');
+      expect(state.subtitleSettings.translationTimeout).toBe(30);
+    });
+
+    it('updateSettings persists subtitleSettings changes', async () => {
+      await useSettingsStore.getState().updateSettings({
+        subtitleSettings: {
+          ...DEFAULT_SETTINGS.subtitleSettings,
+          fontFamily: 'monospace',
+          translationTimeout: 90,
+        },
+      });
+
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.fontFamily).toBe('monospace');
+      expect(state.subtitleSettings.translationTimeout).toBe(90);
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'anyllm-translate-settings': expect.objectContaining({
+            subtitleSettings: expect.objectContaining({
+              fontFamily: 'monospace',
+              translationTimeout: 90,
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('storage sync deep-merges new subtitle fields', () => {
+      initStorageSync();
+      const listener = mockListeners[0];
+
+      listener(
+        {
+          'anyllm-translate-settings': {
+            newValue: {
+              subtitleSettings: {
+                position: 'top',
+                fontSize: 18,
+                backgroundOpacity: 0.8,
+                enabled: true,
+                fontFamily: 'serif',
+                displayMode: 'translation-only',
+                translationTimeout: 45,
+              },
+            },
+            oldValue: DEFAULT_SETTINGS,
+          },
+        },
+        'local',
+      );
+
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.fontFamily).toBe('serif');
+      expect(state.subtitleSettings.displayMode).toBe('translation-only');
+      expect(state.subtitleSettings.translationTimeout).toBe(45);
+    });
+  });
 });

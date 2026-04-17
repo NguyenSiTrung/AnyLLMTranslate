@@ -57,27 +57,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   updateSettings: async (partial) => {
     const current = get();
     const updated: ExtensionSettings = {
-      provider: current.provider,
-      sourceLanguage: current.sourceLanguage,
-      targetLanguage: current.targetLanguage,
-      displayMode: current.displayMode,
-      maxBatchChars: current.maxBatchChars,
-      cacheTTLDays: current.cacheTTLDays,
-      maxCacheSizeMB: current.maxCacheSizeMB,
-      theme: current.theme,
-      translationPosition: current.translationPosition,
-      darkMode: current.darkMode,
-      siteRules: current.siteRules,
-      glossary: current.glossary,
-      subtitleSettings: current.subtitleSettings,
-      customSystemPrompt: current.customSystemPrompt,
-      debugMode: current.debugMode,
+      ...extractSettings(current),
       ...partial,
     };
 
     set(partial);
     await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   },
+
 
   updateProvider: async (partial) => {
     const current = get();

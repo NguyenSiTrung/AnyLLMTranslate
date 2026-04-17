@@ -76,6 +76,12 @@ export interface GlossaryEntry {
   target: string;
 }
 
+/** Subtitle font family options */
+export type SubtitleFontFamily = 'system' | 'serif' | 'monospace';
+
+/** Subtitle overlay display mode (independent of page displayMode) */
+export type SubtitleDisplayMode = 'bilingual' | 'translation-only';
+
 /** Subtitle display settings */
 export interface SubtitleSettings {
   /** Subtitle position on video */
@@ -86,6 +92,12 @@ export interface SubtitleSettings {
   backgroundOpacity: number;
   /** Whether subtitles are enabled */
   enabled: boolean;
+  /** Font family for subtitle overlay */
+  fontFamily: SubtitleFontFamily;
+  /** Overlay display mode: show original + translated, or translated only */
+  displayMode: SubtitleDisplayMode;
+  /** Translation timeout in seconds (10–120) */
+  translationTimeout: number;
 }
 
 /** Extension settings stored in chrome.storage.local */
@@ -144,6 +156,9 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   fontSize: 16,
   backgroundOpacity: 0.7,
   enabled: true,
+  fontFamily: 'system',
+  displayMode: 'bilingual',
+  translationTimeout: 30,
 };
 
 /** Default settings */
