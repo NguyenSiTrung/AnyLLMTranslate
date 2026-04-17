@@ -79,6 +79,15 @@ const MOCK_SETTINGS = {
   targetLanguage: 'vi',
   sourceLanguage: 'en',
   displayMode: 'bilingual-below',
+  subtitleSettings: {
+    fontFamily: 'system',
+    displayMode: 'bilingual',
+    translationTimeout: 30,
+    position: 'bottom',
+    fontSize: 16,
+    backgroundOpacity: 0.7,
+    enabled: true,
+  },
 };
 
 const mockHandler = {
@@ -382,8 +391,11 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
     await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
 
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
-    expect(mockInitializeOverlay).not.toHaveBeenCalledWith(MOCK_CUES);
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_TRANSLATED_CUES,
+      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+    );
+    expect(mockInitializeOverlay).not.toHaveBeenCalledWith(MOCK_CUES, expect.anything());
   });
 
   it('gracefully falls back to original cues when translation rejects', async () => {
@@ -399,7 +411,10 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
     await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
 
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(MOCK_CUES);
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+    );
   });
 
   it('gracefully falls back when background returns success: false', async () => {
@@ -416,6 +431,9 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
     await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
 
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(MOCK_CUES);
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+    );
   });
 });

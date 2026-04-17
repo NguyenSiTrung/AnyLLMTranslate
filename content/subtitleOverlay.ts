@@ -19,6 +19,10 @@ export interface OverlayConfig {
   backgroundOpacity: number; // 0-1
   offsetX: number; // Drag offset X
   offsetY: number; // Drag offset Y
+  /** Font family for subtitle text (CSS value) */
+  fontFamily: string;
+  /** Whether to show original + translated, or translated only */
+  displayMode: 'bilingual' | 'translation-only';
 }
 
 /** Default overlay configuration */
@@ -28,6 +32,8 @@ const DEFAULT_CONFIG: OverlayConfig = {
   backgroundOpacity: 0.75,
   offsetX: 0,
   offsetY: 0,
+  fontFamily: 'system-ui, sans-serif',
+  displayMode: 'bilingual',
 };
 
 /** Overlay state */
@@ -121,6 +127,12 @@ function updateOverlayStyle(config: OverlayConfig): void {
 
   // Set background opacity
   overlay.style.setProperty('--anyllm-subtitle-bg-opacity', config.backgroundOpacity.toString());
+
+  // Set font family via CSS custom property
+  overlay.style.setProperty('--anyllm-subtitle-font-family', config.fontFamily);
+
+  // Set display mode via data attribute (CSS handles show/hide of original text)
+  overlay.setAttribute('data-display-mode', config.displayMode);
 }
 
 /**

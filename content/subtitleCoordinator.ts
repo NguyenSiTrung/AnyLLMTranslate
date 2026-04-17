@@ -30,7 +30,7 @@ interface CoordinatorState {
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
-  interceptTimeout: 30000, // 30 seconds timeout for local LLMs
+  interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
 };
 
 /**
@@ -60,6 +60,10 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     // FR-2: Translate cues via background service
     const settings = await loadSettings();
+
+    // Update timeout from settings before next interception
+    state.interceptTimeout = (settings.subtitleSettings.translationTimeout ?? 30) * 1000;
+
     // Use user's source language setting as primary, fall back to extracted language only if user set to 'auto'
     const sourceLanguage = settings.sourceLanguage === 'auto' 
       ? (originalLanguage || 'en') 
@@ -164,7 +168,19 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 
   // Initialize overlay with controls
   await initializeControls();
-  initializeOverlay(cuesToDisplay);
+
+  // Pass subtitle appearance settings to the overlay
+  const overlaySettings = await loadSettings().catch(() => null);
+  const subtitleCfg = overlaySettings?.subtitleSettings;
+  const fontFamilyMap: Record<string, string> = {
+    serif: 'Georgia, serif',
+    monospace: 'monospace',
+    system: 'system-ui, sans-serif',
+  };
+  const fontFamily = fontFamilyMap[subtitleCfg?.fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
+  const displayMode = subtitleCfg?.displayMode ?? 'bilingual';
+
+  initializeOverlay(cuesToDisplay, { fontFamily, displayMode });
 
   // Clear all pending timeouts since we're in overlay mode now
   for (const timeoutId of state.pendingRequests.values()) {

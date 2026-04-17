@@ -42,6 +42,7 @@
   background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
   padding: 10px 16px;
   border-radius: 8px;
+  font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
 }
 
 /* Original text (smaller, dimmer) */
@@ -110,6 +111,12 @@
   background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
   padding: 10px 16px;
   border-radius: 8px;
+  font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
+}
+
+/* Hide original line when overlay displayMode = translation-only */
+.anyllm-translate-subtitle-overlay[data-display-mode="translation-only"] .anyllm-translate-subtitle-original {
+  display: none !important;
 }
 
 .anyllm-translate-subtitle-original {
