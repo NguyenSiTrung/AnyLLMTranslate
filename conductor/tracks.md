@@ -29,3 +29,7 @@ This file tracks all major tracks for the project.
 ## Active Tracks
 
 *No active tracks.*
+
+
+## [ ] Track: Fix subtitle translation overlay visibility in full screen video mode
+*Link: [./conductor/tracks/fullscreen-overlay_20260417/](./conductor/tracks/fullscreen-overlay_20260417/)*
