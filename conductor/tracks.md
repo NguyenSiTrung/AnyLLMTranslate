@@ -24,10 +24,10 @@ This file tracks all major tracks for the project.
 - ✅ **Subtitle Translation Flow — Wire Missing Execution Path** (`subtitle-translation-wire_20260416`) — Archived 2026-04-16. [View](./conductor/archive/subtitle-translation-wire_20260416/)
 - ✅ **Settings UI/UX Enhancement & Subtitle Configuration** (`settings-subtitle-ux_20260417`) — Archived 2026-04-17. [View](./conductor/archive/settings-subtitle-ux_20260417/)
 - ✅ **Fix subtitle translation overlay visibility in full screen video mode** (`fullscreen-overlay_20260417`) — Archived 2026-04-17. [View](./conductor/archive/fullscreen-overlay_20260417/)
+- ✅ **Progressive chunked subtitle translation** (`progressive-chunking_20260417`) — Archived 2026-04-17. [View](./conductor/archive/progressive-chunking_20260417/)
 
 ---
 
 ## Active Tracks
 
-- [ ] Track: Progressive chunked subtitle translation
-*Link: [./conductor/tracks/progressive-chunking_20260417/](./conductor/tracks/progressive-chunking_20260417/)*
+*(No active tracks)*

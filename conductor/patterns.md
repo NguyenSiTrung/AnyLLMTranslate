@@ -216,6 +216,12 @@ Reusable patterns discovered during development. Read this before starting new w
 - jsdom does not implement `HTMLElement.prototype.popover` or `showPopover`. Must manually define them in tests to test Popover API degradation. (from: fullscreen-overlay_20260417, archived 2026-04-17)
 - Context: The overlay is `position: fixed` because we want it to stay above the video. In full screen, the `position: fixed` works well because the `videoRect` coordinates correctly correspond to the viewport. (from: fullscreen-overlay_20260417, archived 2026-04-17)
 
+## Progressive Chunking & Priorities (2026-04-17)
+- Content scripts running in the ISOLATED world cannot access global registries populated by the MAIN world inject scripts. Handlers must be explicitly re-registered in the content script's entry point to be available for processing. (from: progressive-chunking_20260417, archived 2026-04-17)
+- Comparing objects with `undefined === undefined` evaluates to true in `findIndex`, which can cause devastating bugs where the first element of an array is repeatedly overwritten. Always verify interface properties (`id`) exist before using them as keys. (from: progressive-chunking_20260417, archived 2026-04-17)
+- When chunking LLM translation requests, deduplicating texts via a Map will alter the output array length and destroy index alignment with the source chunk. If alignment is required, process duplicates gracefully without removing them from the iteration order. (from: progressive-chunking_20260417, archived 2026-04-17)
+- Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events to translate the current timestamp first). (from: progressive-chunking_20260417, archived 2026-04-17)
+
 ---
 Last refreshed: 2026-04-17T11:07:00+07:00
 Codebase health: 518 tests passing across 42 files, lint-clean
