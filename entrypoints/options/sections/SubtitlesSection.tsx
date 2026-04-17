@@ -1,21 +1,92 @@
 /**
- * Subtitles Settings Section — position, font size, opacity controls.
- * Header uses inline SectionHeader pattern (consistent with GeneralSection).
- * Position uses SegmentedControl for consistency with General tab.
+ * Subtitles Settings Section — position, font size, opacity, font family,
+ * display mode, and translation timeout controls.
+ * Includes an animated mini video player preview reactive to all settings.
  */
 
-import { Subtitles as SubtitlesIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Subtitles as SubtitlesIcon, Play } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { Card } from '@/ui/Card';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import type { SubtitleFontFamily, SubtitleDisplayMode } from '@/types/config';
 
 const POSITION_OPTIONS: { value: 'bottom' | 'top'; label: string }[] = [
   { value: 'bottom', label: 'Bottom' },
   { value: 'top', label: 'Top' },
 ];
+
+const FONT_FAMILY_OPTIONS: { value: SubtitleFontFamily; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'serif', label: 'Serif' },
+  { value: 'monospace', label: 'Mono' },
+];
+
+const DISPLAY_MODE_OPTIONS: { value: SubtitleDisplayMode; label: string }[] = [
+  { value: 'bilingual', label: 'Bilingual' },
+  { value: 'translation-only', label: 'Translated Only' },
+];
+
+/** Map font family setting to a CSS font-family string */
+function resolveFontFamily(family: SubtitleFontFamily): string {
+  switch (family) {
+    case 'serif':
+      return 'Georgia, serif';
+    case 'monospace':
+      return 'monospace';
+    default:
+      return 'system-ui, sans-serif';
+  }
+}
+
+/** Animated cue that fades in/out for the preview */
+function AnimatedCue({
+  fontSize,
+  backgroundOpacity,
+  fontFamily,
+  displayMode,
+  position,
+}: {
+  fontSize: number;
+  backgroundOpacity: number;
+  fontFamily: SubtitleFontFamily;
+  displayMode: SubtitleDisplayMode;
+  position: 'bottom' | 'top';
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const id = setInterval(() => setVisible((v) => !v), 1800);
+    return () => clearInterval(id);
+  }, []);
+
+  const previewFontSize = Math.min(fontSize, 13);
+  const resolvedFont = resolveFontFamily(fontFamily);
+  const isTop = position === 'top';
+
+  return (
+    <div
+      className={`absolute z-10 px-3 py-1.5 rounded text-center transition-opacity duration-700 ${
+        isTop ? 'top-3' : 'bottom-3'
+      } left-1/2 -translate-x-1/2`}
+      style={{
+        backgroundColor: `rgba(0, 0, 0, ${backgroundOpacity})`,
+        opacity: visible ? 1 : 0,
+        fontFamily: resolvedFont,
+        fontSize: `${previewFontSize}px`,
+        maxWidth: '90%',
+      }}
+    >
+      {displayMode === 'bilingual' && (
+        <div className="text-zinc-300 leading-tight">Hello world</div>
+      )}
+      <div className="text-white leading-tight font-medium">Xin chào thế giới</div>
+    </div>
+  );
+}
 
 export function SubtitlesSection() {
   const subtitleSettings = useSettingsStore((s) => s.subtitleSettings);
@@ -29,7 +100,7 @@ export function SubtitlesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
+      {/* Inline section header */}
       <div className="flex items-center gap-3 mb-7">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
           <SubtitlesIcon className="w-4 h-4 text-blue-400" />
@@ -41,6 +112,7 @@ export function SubtitlesSection() {
       </div>
 
       <div className="space-y-4">
+        {/* Controls card */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
           <Card variant="bordered">
             <div className="space-y-5">
@@ -53,7 +125,7 @@ export function SubtitlesSection() {
                 description="Show translated subtitles on video players."
               />
 
-              {/* Position — SegmentedControl for consistency */}
+              {/* Position */}
               <FieldGroup
                 label="Subtitle Position"
                 description="Where subtitles appear relative to the video player."
@@ -63,6 +135,32 @@ export function SubtitlesSection() {
                   options={POSITION_OPTIONS}
                   value={subtitleSettings.position}
                   onChange={(val) => handleUpdate({ position: val })}
+                />
+              </FieldGroup>
+
+              {/* Font Family */}
+              <FieldGroup
+                label="Font Family"
+                description="Typeface used for subtitle text in the overlay."
+              >
+                <SegmentedControl
+                  label="Font Family"
+                  options={FONT_FAMILY_OPTIONS}
+                  value={subtitleSettings.fontFamily}
+                  onChange={(val) => handleUpdate({ fontFamily: val })}
+                />
+              </FieldGroup>
+
+              {/* Display Mode */}
+              <FieldGroup
+                label="Display Mode"
+                description="Show both original and translated text, or translated text only."
+              >
+                <SegmentedControl
+                  label="Display Mode"
+                  options={DISPLAY_MODE_OPTIONS}
+                  value={subtitleSettings.displayMode}
+                  onChange={(val) => handleUpdate({ displayMode: val })}
                 />
               </FieldGroup>
 
@@ -93,26 +191,64 @@ export function SubtitlesSection() {
                 minLabel="0%"
                 maxLabel="100%"
               />
+
+              {/* Translation Timeout */}
+              <Slider
+                id="subtitle-timeout"
+                label="Translation Timeout"
+                value={subtitleSettings.translationTimeout}
+                min={10}
+                max={120}
+                step={5}
+                onChange={(v) => handleUpdate({ translationTimeout: v })}
+                formatValue={(v) => `${v}s`}
+                minLabel="10s"
+                maxLabel="120s"
+              />
             </div>
           </Card>
         </div>
 
-        {/* Preview */}
+        {/* Enhanced mini video player preview */}
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
           <Card title="Preview" variant="bordered">
-            <div className="relative bg-zinc-950 rounded-lg h-28 flex items-end justify-center overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-b from-zinc-800 to-zinc-900" />
+            <div
+              className="relative rounded-lg overflow-hidden"
+              style={{ height: '130px', background: 'linear-gradient(135deg, #0f1117 0%, #1a1d26 50%, #111318 100%)' }}
+            >
+              {/* Film grain overlay */}
               <div
-                className={`relative z-10 px-4 py-2 rounded text-center mb-2 ${
-                  subtitleSettings.position === 'top' ? 'self-start mt-2 mb-auto' : ''
-                }`}
+                className="absolute inset-0 opacity-30"
                 style={{
-                  backgroundColor: `rgba(0, 0, 0, ${subtitleSettings.backgroundOpacity})`,
-                  fontSize: `${Math.min(subtitleSettings.fontSize, 18)}px`,
+                  backgroundImage:
+                    'radial-gradient(ellipse at 20% 50%, rgba(30,40,80,0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(20,30,60,0.3) 0%, transparent 50%)',
                 }}
-              >
-                <span className="text-white">Xin chào thế giới</span>
+              />
+
+              {/* Scan-line accent */}
+              <div className="absolute inset-0 opacity-5"
+                style={{
+                  backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)',
+                }}
+              />
+
+              {/* Decorative play button */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm">
+                  <Play className="w-4 h-4 text-white/60 fill-white/60 ml-0.5" />
+                </div>
               </div>
+
+              {/* Animated subtitle cue */}
+              <AnimatedCue
+                fontSize={subtitleSettings.fontSize}
+                backgroundOpacity={subtitleSettings.backgroundOpacity}
+                fontFamily={subtitleSettings.fontFamily}
+                displayMode={subtitleSettings.displayMode}
+                position={subtitleSettings.position}
+              />
+
+              {/* Watermark label removed — Card title 'Preview' already identifies this section */}
             </div>
           </Card>
         </div>
