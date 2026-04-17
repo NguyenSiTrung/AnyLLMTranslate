@@ -29,4 +29,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*No active tracks.*
+- [ ] Track: Progressive chunked subtitle translation
+*Link: [./conductor/tracks/progressive-chunking_20260417/](./conductor/tracks/progressive-chunking_20260417/)*
