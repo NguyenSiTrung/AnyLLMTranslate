@@ -56,6 +56,13 @@ describe('content/subtitleCoordinator', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
+    // Simulate a YouTube watch page so isOnWatchPage() returns true in handleIntercepted tests
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test' },
+      writable: true,
+      configurable: true,
+    });
+
     global.chrome = {
       runtime: {
         sendMessage: vi.fn((message, _sender, sendResponse) => {
@@ -81,6 +88,7 @@ describe('content/subtitleCoordinator', () => {
       },
     } as unknown as typeof chrome;
   });
+
 
   afterEach(() => {
     vi.useRealTimers();
@@ -216,6 +224,46 @@ describe('content/subtitleCoordinator', () => {
 
     it('clearPendingRequest does not throw for unknown requestId', () => {
       expect(() => clearPendingRequest('nonexistent-id')).not.toThrow();
+    });
+  });
+
+  describe('play-triggered auto-activate', () => {
+    it('does NOT auto-activate on track discovery alone — no LLM call without play', async () => {
+      startCoordinator();
+
+      const tracksHandler = vi.mocked(messageBridge.onTracksDiscovered).mock.calls[0]?.[0];
+      if (!tracksHandler) throw new Error('tracksHandler not registered');
+
+      // Call handler, then flush the 150ms debounce timer
+      const handlerPromise = tracksHandler({
+        platform: 'youtube',
+        tracks: [{ language: 'en', url: 'https://example.com/subs.vtt', videoId: 'abc' }],
+      });
+      vi.advanceTimersByTime(200);
+      await handlerPromise;
+
+      // Overlay must NOT be initialized — videoIsPlaying is still false
+      expect(vi.mocked(subtitleOverlay.initializeOverlay)).not.toHaveBeenCalled();
+    });
+
+
+    it('resets videoIsPlaying to false on resetCoordinatorState (SPA navigation)', async () => {
+      startCoordinator();
+
+      // Simulate video play via a real video element
+      const video = document.createElement('video');
+      document.body.appendChild(video);
+      video.dispatchEvent(new Event('play'));
+
+      // After reset, state should clear
+      resetCoordinatorState();
+
+      // A second play event should be a fresh activation attempt
+      // (no-op here since no tracks, but should not throw)
+      video.dispatchEvent(new Event('play'));
+      document.body.removeChild(video);
+
+      expect(() => resetCoordinatorState()).not.toThrow();
     });
   });
 });

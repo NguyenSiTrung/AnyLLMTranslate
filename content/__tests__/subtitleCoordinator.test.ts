@@ -120,6 +120,13 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     // Reset module registry so coordinator re-registers on import
     vi.resetModules();
 
+    // Simulate a YouTube watch page so isOnWatchPage() returns true
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
+
     // Per-test mock defaults
     mockInitializeControls.mockResolvedValue(undefined);
     mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
@@ -331,6 +338,13 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     vi.clearAllMocks();
     capturedInterceptedHandler = null;
     vi.resetModules();
+
+    // Simulate a YouTube watch page so isOnWatchPage() returns true
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
 
     mockInitializeControls.mockResolvedValue(undefined);
     mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);

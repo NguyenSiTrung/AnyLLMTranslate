@@ -61,35 +61,57 @@ function watchVideo(video: HTMLVideoElement, bridge: MessageBridgeSender): void 
 }
 
 /**
+ * Find the "primary" video element on the page — the one the user is watching.
+ * Heuristic: largest visible area + has a currentSrc (not a thumbnail preview).
+ * Falls back to any video with a src if nothing dominant is found.
+ */
+function findPrimaryVideo(): HTMLVideoElement | null {
+  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
+  if (videos.length === 0) return null;
+  if (videos.length === 1) return videos[0];
+
+  // Score by visible area × (has currentSrc bonus)
+  const scored = videos
+    .filter((v) => v.readyState >= 1) // HAVE_METADATA or more
+    .map((v) => {
+      const rect = v.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      const srcBonus = v.currentSrc ? 2 : 1;
+      return { video: v, score: area * srcBonus };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.video ?? null;
+}
+
+/**
  * Start HTML5 TextTrack discovery.
- * Scans for existing <video> elements and watches for new ones via MutationObserver.
+ * Targets only the primary (largest/loaded) video element to avoid
+ * picking up thumbnail preview videos on listing pages.
  * Returns a cleanup function.
  */
 export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void {
-  // Scan existing video elements
-  const scanAll = () => {
-    const videos = document.querySelectorAll('video');
-    for (const video of videos) {
-      watchVideo(video, bridge);
+  const scanPrimary = () => {
+    const primary = findPrimaryVideo();
+    if (primary) {
+      watchVideo(primary, bridge);
     }
   };
 
   // Initial scan
-  scanAll();
+  scanPrimary();
 
   // Watch for dynamically inserted video elements
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node instanceof HTMLVideoElement) {
-          watchVideo(node, bridge);
+          // Re-evaluate primary on each new video addition
+          scanPrimary();
         }
         // Also check descendants of added containers
-        if (node instanceof HTMLElement) {
-          const nestedVideos = node.querySelectorAll('video');
-          for (const video of nestedVideos) {
-            watchVideo(video, bridge);
-          }
+        if (node instanceof HTMLElement && node.querySelector('video')) {
+          scanPrimary();
         }
       }
     }
@@ -104,3 +126,4 @@ export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void
     observer.disconnect();
   };
 }
+

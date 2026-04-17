@@ -25,6 +25,12 @@ interface CoordinatorState {
   interceptTimeout: number;
   dragCleanup: (() => void) | null;
   availableTracks: AvailableSubtitleTrack[];
+  /** Incremented on SPA navigation to invalidate stale async callbacks */
+  navigationEpoch: number;
+  /** Debounce timer for track discovery events */
+  discoverDebounceTimer: ReturnType<typeof setTimeout> | null;
+  /** True once the user has pressed play on the primary video */
+  videoIsPlaying: boolean;
 }
 
 const state: CoordinatorState = {
@@ -33,6 +39,9 @@ const state: CoordinatorState = {
   interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
   dragCleanup: null,
   availableTracks: [],
+  navigationEpoch: 0,
+  discoverDebounceTimer: null,
+  videoIsPlaying: false,
 };
 
 /**
@@ -41,12 +50,22 @@ const state: CoordinatorState = {
 async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId: string): Promise<void> {
   const { url, body, contentType, platform, originalLanguage } = payload;
 
+  // Guard: only activate on actual watch pages.
+  // On listing/search/home pages (e.g. YouTube /results, /), pass the original
+  // subtitle content straight back so native thumbnail preview playback is unaffected.
+  if (!isOnWatchPage()) {
+    console.log('AnyLLMTranslate: Skipping subtitle interception — not a watch page', { url });
+    sendTranslatedSubtitle({ requestId, vttContent: body });
+    return;
+  }
+
   try {
     const handler = getHandlerByPlatform(platform);
     if (!handler) return;
 
     const cues = handler.transformResponse(body, contentType, url);
     if (cues.length === 0) return;
+
 
     const settings = await loadSettings();
 
@@ -265,6 +284,49 @@ export function clearPendingRequest(requestId: string): void {
 }
 
 /**
+ * Hook into SPA navigation events to reset state when the user navigates away
+ * from a watch page (e.g. YouTube home → /watch or /watch → home).
+ * Returns a cleanup function.
+ */
+function startSpaNavigationWatcher(): () => void {
+  let lastUrl = window.location.href;
+
+  const handleNavigation = () => {
+    const currentUrl = window.location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      console.log('AnyLLMTranslate: SPA navigation detected, resetting coordinator state');
+      resetCoordinatorState();
+    }
+  };
+
+  // YouTube emits 'yt-navigate-finish' on SPA nav; fall back to history API patching
+  window.addEventListener('yt-navigate-finish', handleNavigation);
+
+  // Patch pushState / replaceState for generic SPA support
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function (...args) {
+    originalPushState(...args);
+    handleNavigation();
+  };
+  history.replaceState = function (...args) {
+    originalReplaceState(...args);
+    handleNavigation();
+  };
+
+  window.addEventListener('popstate', handleNavigation);
+
+  return () => {
+    window.removeEventListener('yt-navigate-finish', handleNavigation);
+    window.removeEventListener('popstate', handleNavigation);
+    history.pushState = originalPushState;
+    history.replaceState = originalReplaceState;
+  };
+}
+
+/**
  * Start the subtitle coordinator.
  * Returns a cleanup function.
  */
@@ -276,6 +338,12 @@ export function startCoordinator(): () => void {
 
   // Listen for track discovery from MAIN world
   const cleanupDiscovery = onTracksDiscovered(handleTracksDiscovered);
+
+  // Watch for SPA navigations to reset per-video state
+  const cleanupNavWatcher = startSpaNavigationWatcher();
+
+  // Watch for video play events — the ONLY trigger for auto-activate
+  const cleanupPlaybackWatcher = startVideoPlaybackWatcher();
 
   // Listen for progressive chunk updates from background
   const handleExtensionMessage = (
@@ -307,7 +375,14 @@ export function startCoordinator(): () => void {
     console.log('AnyLLMTranslate: Stopping subtitle coordinator');
     cleanupBridge();
     cleanupDiscovery();
+    cleanupNavWatcher();
+    cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
+
+    if (state.discoverDebounceTimer !== null) {
+      clearTimeout(state.discoverDebounceTimer);
+      state.discoverDebounceTimer = null;
+    }
 
     // Clear all pending timeouts
     for (const timeoutId of state.pendingRequests.values()) {
@@ -341,11 +416,21 @@ export function isInOverlayMode(): boolean {
 }
 
 /**
- * Reset coordinator state (for testing).
+ * Reset coordinator state (for testing or SPA navigation).
  */
 export function resetCoordinatorState(): void {
+  // Clean up active overlay before resetting the flag
+  if (state.isOverlayMode) {
+    cleanupOverlay();
+  }
   state.isOverlayMode = false;
   state.availableTracks = [];
+  state.navigationEpoch++;
+  state.videoIsPlaying = false;
+  if (state.discoverDebounceTimer !== null) {
+    clearTimeout(state.discoverDebounceTimer);
+    state.discoverDebounceTimer = null;
+  }
   if (state.dragCleanup) {
     state.dragCleanup();
     state.dragCleanup = null;
@@ -357,10 +442,53 @@ export function resetCoordinatorState(): void {
 }
 
 /**
- * Handle discovered subtitle tracks from MAIN world bridge.
- * Deduplicates, stores, notifies popup, and auto-activates if configured.
+ * Detect if current page is a video watch page (not a listing/home page).
+ * Guards against auto-activate firing on YouTube home, search, etc.
  */
-async function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload): Promise<void> {
+function isOnWatchPage(): boolean {
+  const { pathname, hostname } = window.location;
+
+  // For known platforms, use strict explicit matching.
+  // Return false immediately for non-watch paths — never fall through to
+  // the generic heuristic, since these platforms have listing/home/search
+  // pages with autoplay thumbnail videos that would trigger it incorrectly.
+  if (hostname.includes('youtube.com')) {
+    return pathname === '/watch';
+  }
+  if (hostname.includes('udemy.com')) {
+    return pathname.includes('/learn/');
+  }
+  if (hostname.includes('coursera.org')) {
+    return pathname.includes('/lecture/');
+  }
+
+  // Generic fallback for unlisted platforms only:
+  // treat as a watch page if there is exactly one video element with a loaded source.
+  const videos = document.querySelectorAll('video');
+  return videos.length === 1 && !!(videos[0] as HTMLVideoElement).currentSrc;
+}
+
+
+/**
+ * Handle discovered subtitle tracks from MAIN world bridge.
+ * Deduplicates by videoId+language+platform, notifies popup, and auto-activates if configured.
+ * Debounced 150ms to coalesce rapid events (e.g. YouTube home carousel).
+ */
+function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload): Promise<void> {
+  if (state.discoverDebounceTimer !== null) {
+    clearTimeout(state.discoverDebounceTimer);
+  }
+  return new Promise((resolve) => {
+    state.discoverDebounceTimer = setTimeout(() => {
+      state.discoverDebounceTimer = null;
+      processTracksDiscovered(payload).then(resolve).catch(resolve);
+    }, 150);
+  });
+}
+
+async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload): Promise<void> {
+  const epochAtStart = state.navigationEpoch;
+
   const handler = detectCurrentHandler();
   let tracks: AvailableSubtitleTrack[];
 
@@ -381,10 +509,28 @@ async function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload):
 
   if (tracks.length === 0) return;
 
-  // Merge with existing tracks (deduplicate by language+platform)
+  // Determine the video scope: prefer videoId from tracks themselves or from payload
+  const incomingVideoId = tracks[0]?.videoId || payload.videoId;
+
+  // If we have a videoId, clear stale tracks from a different video before accumulating
+  if (incomingVideoId) {
+    const currentVideoId = state.availableTracks[0]?.videoId;
+    if (currentVideoId && currentVideoId !== incomingVideoId) {
+      console.log('AnyLLMTranslate: New video detected, clearing stale tracks', {
+        previous: currentVideoId,
+        next: incomingVideoId,
+      });
+      state.availableTracks = [];
+    }
+  }
+
+  // Merge with existing tracks — deduplicate by videoId+language+platform
   for (const track of tracks) {
     const existing = state.availableTracks.find(
-      (t) => t.language === track.language && t.platform === track.platform,
+      (t) =>
+        t.language === track.language &&
+        t.platform === track.platform &&
+        (t.videoId === track.videoId || (!t.videoId && !track.videoId)),
     );
     if (!existing) {
       state.availableTracks.push(track);
@@ -398,6 +544,7 @@ async function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload):
     total: state.availableTracks.length,
     languages: state.availableTracks.map((t) => t.language),
     platform: payload.platform,
+    videoId: incomingVideoId,
   });
 
   // Notify popup/UI about available tracks
@@ -408,18 +555,109 @@ async function handleTracksDiscovered(payload: SubtitleTracksDiscoveredPayload):
     });
   } catch { /* popup may not be open */ }
 
-  // Auto-activate if configured
+  // Tracks are now stored. Auto-activate will fire only when the user
+  // actually presses play — see startVideoPlaybackWatcher().
+  // If video is already playing when tracks arrive, try immediately.
+  if (state.videoIsPlaying) {
+    await tryAutoActivate(epochAtStart);
+  }
+}
+
+/**
+ * Shared auto-activate logic. Runs when BOTH conditions are true:
+ *   1. The user has started playing the video (videoIsPlaying = true)
+ *   2. Subtitle tracks have been discovered (availableTracks is populated)
+ *
+ * @param epochAtStart - navigationEpoch captured before any async call.
+ *   Pass `state.navigationEpoch` when calling synchronously.
+ */
+async function tryAutoActivate(epochAtStart: number): Promise<void> {
+  if (state.isOverlayMode) return;
+  if (!isOnWatchPage()) return;
+
+  // Only activate if all known tracks belong to a single video
+  const knownVideoIds = new Set(
+    state.availableTracks.map((t) => t.videoId).filter((id): id is string => !!id),
+  );
+  if (knownVideoIds.size > 1) {
+    console.log('AnyLLMTranslate: Skipping auto-activate — tracks from multiple videos', {
+      videoIds: [...knownVideoIds],
+    });
+    return;
+  }
+
   const settings = await loadSettings();
+  if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
+
   const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
   if (autoActivate && preferredLang && !state.isOverlayMode) {
     const preferred = state.availableTracks.find((t) => t.language === preferredLang);
     if (preferred?.url) {
-      console.log('AnyLLMTranslate: Auto-activating preferred subtitle track', preferredLang);
+      console.log('AnyLLMTranslate: Auto-activating preferred subtitle track on play', preferredLang);
       await selectSubtitleTrack(preferredLang);
     }
   }
+}
+
+/**
+ * Watch for the user pressing play on any video element.
+ * This is the single trigger for auto-activate — we never activate on
+ * discovery alone to avoid unnecessary LLM calls for unplayed videos.
+ *
+ * Handles two orderings:
+ *   A) play fires before tracks arrive  → sets videoIsPlaying, tryAutoActivate
+ *      will be called again from processTracksDiscovered when they arrive.
+ *   B) tracks arrive before play fires  → tryAutoActivate called on play.
+ *
+ * Returns a cleanup function.
+ */
+function startVideoPlaybackWatcher(): () => void {
+  const watchedVideos = new WeakSet<HTMLVideoElement>();
+
+  const attachPlayListener = (video: HTMLVideoElement) => {
+    if (watchedVideos.has(video)) return;
+    watchedVideos.add(video);
+
+    video.addEventListener('play', () => {
+      if (state.videoIsPlaying) return; // already handled
+      state.videoIsPlaying = true;
+      console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
+      const epoch = state.navigationEpoch;
+      tryAutoActivate(epoch).catch((err) => {
+        console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
+      });
+    });
+
+    // Reset flag when the video stops so re-play re-triggers correctly
+    video.addEventListener('pause', () => {
+      // Don't reset here — a brief pause shouldn't lose the "playing" state.
+      // Only SPA navigation (resetCoordinatorState) should clear it.
+    });
+  };
+
+  const scanForVideos = () => {
+    if (typeof document === 'undefined') return;
+    const videos = document.querySelectorAll<HTMLVideoElement>('video');
+    for (const video of videos) {
+      attachPlayListener(video);
+    }
+  };
+
+  // Initial scan
+  scanForVideos();
+
+  // Watch for dynamically added videos (e.g. YouTube player loads after page)
+  const observer = new MutationObserver(() => {
+    scanForVideos();
+  });
+
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  return () => {
+    observer.disconnect();
+  };
 }
 
 /**

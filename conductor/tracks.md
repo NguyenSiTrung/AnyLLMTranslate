@@ -31,3 +31,4 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+- 🚧 **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Started 2026-04-17. [View](./conductor/tracks/multipage-subtitle-fix_20260417/)
