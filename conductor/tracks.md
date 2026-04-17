@@ -26,3 +26,8 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+---
+
+## [ ] Track: Settings UI/UX Enhancement & Subtitle Configuration
+*Link: [./conductor/tracks/settings-subtitle-ux_20260417/](./conductor/tracks/settings-subtitle-ux_20260417/)*
