@@ -122,6 +122,10 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     global.chrome = {
       runtime: {
         sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES }),
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
       },
     } as unknown as typeof chrome;
 
@@ -195,10 +199,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
   });
 
-  it('calls sendTranslatedSubtitle with correct requestId and VTT', async () => {
-    const vttContent = 'WEBVTT\n\nbilingual';
-    mockBuildBilingualVTT.mockReturnValue(vttContent);
-
+  it('calls sendTranslatedSubtitle with correct requestId and empty VTT to disable native player', async () => {
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://youtube.com/timedtext',
@@ -212,13 +213,11 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
 
     expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
       requestId: 'req-004',
-      vttContent,
+      vttContent: 'WEBVTT\n\n',
     });
   });
 
-  it('calls clearPendingRequest so overlay is never triggered', async () => {
-    vi.useFakeTimers();
-
+  it('activates overlay immediately with original cues', async () => {
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://youtube.com/timedtext',
@@ -230,12 +229,10 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       'req-005',
     );
 
-    // Run all timers — overlay should NOT activate because timeout was cleared
-    await vi.runAllTimersAsync();
-
-    expect(mockInitializeOverlay).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+    );
   });
 
   it('silently skips when cues.length === 0 — no background call made', async () => {
@@ -274,7 +271,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect(mockSendTranslatedSubtitle).not.toHaveBeenCalled();
   });
 
-  it('logs warning and does NOT call sendTranslatedSubtitle on translation error', async () => {
+  it('logs warning and does NOT call updateTranslatedCues on translation error', async () => {
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('Background unavailable'),
@@ -291,14 +288,14 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       'req-008',
     );
 
-    expect(mockSendTranslatedSubtitle).not.toHaveBeenCalled();
+    // Initial empty VTT is still sent to prevent duplicate, but cues aren't updated
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalled();
+    expect(mockUpdateCues).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 
-  it('uses buildBilingualVTT when displayMode is bilingual-below', async () => {
-    mockLoadSettings.mockResolvedValue({ ...MOCK_SETTINGS, displayMode: 'bilingual-below' });
-
+  it('calls updateTranslatedCues when background responds successfully', async () => {
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://youtube.com/timedtext',
@@ -310,26 +307,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       'req-009',
     );
 
-    expect(mockBuildBilingualVTT).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
-    expect(mockBuildTranslationOnlyVTT).not.toHaveBeenCalled();
-  });
-
-  it('uses buildTranslationOnlyVTT when displayMode is translation-only', async () => {
-    mockLoadSettings.mockResolvedValue({ ...MOCK_SETTINGS, displayMode: 'translation-only' });
-
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(
-      {
-        url: 'https://youtube.com/timedtext',
-        body: '<transcript>...</transcript>',
-        contentType: 'application/json',
-        platform: 'youtube',
-        originalLanguage: 'en',
-      },
-      'req-010',
-    );
-
-    expect(mockBuildTranslationOnlyVTT).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
-    expect(mockBuildBilingualVTT).not.toHaveBeenCalled();
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
 });
 
@@ -354,6 +332,10 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       runtime: {
         sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES }),
         lastError: undefined,
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
       },
     } as unknown as typeof chrome;
 

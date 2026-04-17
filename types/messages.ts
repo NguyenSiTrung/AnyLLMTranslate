@@ -15,7 +15,9 @@ export type MessageAction =
   | 'translateSubtitle'
   | 'translateSelection'
   | 'FETCH_SUBTITLE'
-  | 'statusUpdate';
+  | 'statusUpdate'
+  | 'SUBTITLE_CHUNK_TRANSLATED'
+  | 'PRIORITIZE_SUBTITLE_CHUNK';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -83,6 +85,18 @@ export interface StatusUpdateMessage {
   status: StatusResponse;
 }
 
+/** Chunk of translated subtitles from background → content script */
+export interface SubtitleChunkTranslatedMessage {
+  action: 'SUBTITLE_CHUNK_TRANSLATED';
+  cues: SubtitleCue[];
+}
+
+/** Priority queue request from content script → background */
+export interface PrioritizeSubtitleChunkMessage {
+  action: 'PRIORITIZE_SUBTITLE_CHUNK';
+  cueIndex: number;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -93,7 +107,9 @@ export type ExtensionMessage =
   | TranslateSubtitleMessage
   | TranslateSelectionMessage
   | FetchSubtitleMessage
-  | StatusUpdateMessage;
+  | StatusUpdateMessage
+  | SubtitleChunkTranslatedMessage
+  | PrioritizeSubtitleChunkMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

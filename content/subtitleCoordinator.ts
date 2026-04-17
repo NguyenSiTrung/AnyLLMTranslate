@@ -10,13 +10,11 @@
  */
 
 import { onSubtitleIntercepted, sendTranslatedSubtitle } from '@/content/messageBridge';
-import { onMessage } from '@/inject/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay } from '@/content/subtitleOverlay';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { initializeControls } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform } from '@/inject/subtitleHandlers/registry';
-import { buildBilingualVTT, buildTranslationOnlyVTT } from '@/lib/subtitleBuilder';
 import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload } from '@/types/subtitle';
 
@@ -39,45 +37,47 @@ const state: CoordinatorState = {
 async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId: string): Promise<void> {
   const { url, body, contentType, platform, originalLanguage } = payload;
 
-  // Set up timeout — if translation doesn't complete in time, fall back to overlay
-  const timeoutId = setTimeout(() => {
-    if (!state.isOverlayMode) {
-      console.warn('AnyLLMTranslate: Subtitle interception timeout, switching to overlay mode');
-      activateOverlayMode(url, body);
-    }
-    state.pendingRequests.delete(requestId);
-  }, state.interceptTimeout);
-
-  state.pendingRequests.set(requestId, timeoutId);
-
   try {
-    // FR-1: Resolve handler by platform and parse raw cues
     const handler = getHandlerByPlatform(platform);
     if (!handler) return;
 
     const cues = handler.transformResponse(body, contentType, url);
-    if (cues.length === 0) return; // sprite/empty track — skip silently
+    if (cues.length === 0) return;
 
-    // FR-2: Translate cues via background service
     const settings = await loadSettings();
 
-    // Update timeout from settings before next interception
-    state.interceptTimeout = (settings.subtitleSettings.translationTimeout ?? 30) * 1000;
+    // Immediately activate overlay fallback to handle progressive chunks
+    if (!state.isOverlayMode) {
+      console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
+      state.isOverlayMode = true;
+      
+      await initializeControls();
+      
+      const subtitleCfg = settings.subtitleSettings;
+      const fontFamilyMap: Record<string, string> = {
+        serif: 'Georgia, serif',
+        monospace: 'monospace',
+        system: 'system-ui, sans-serif',
+      };
+      const fontFamily = fontFamilyMap[subtitleCfg?.fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
+      const displayMode = subtitleCfg?.displayMode ?? 'bilingual';
 
-    // Use user's source language setting as primary, fall back to extracted language only if user set to 'auto'
+      // Initialize with original cues so they show immediately
+      initializeOverlay(cues, { fontFamily, displayMode });
+    } else {
+      // If already in overlay mode, just update cues
+      updateCues(cues);
+    }
+
+    // Post an empty VTT back to the interceptor to disable native subtitles
+    // and prevent duplicate rendering
+    sendTranslatedSubtitle({ requestId, vttContent: 'WEBVTT\n\n' });
+
     const sourceLanguage = settings.sourceLanguage === 'auto' 
       ? (originalLanguage || 'en') 
       : settings.sourceLanguage;
 
-    console.log('AnyLLMTranslate: Subtitle translation request', {
-      originalLanguage,
-      settingsSourceLanguage: settings.sourceLanguage,
-      finalSourceLanguage: sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      platform,
-    });
-
-    showSubtitleToast('Translating Native Subtitles...', true);
+    showSubtitleToast('Translating subtitles progressively...', true);
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
@@ -93,22 +93,15 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       return;
     }
 
+    // The first chunk comes back immediately in response.cues
+    updateTranslatedCues(response.cues);
+    
     hideSubtitleToast();
-    showSubtitleToast('Subtitles translated successfully!');
-
-    // FR-3: Build VTT and post back to MAIN world interceptor
-    const vttContent =
-      settings.displayMode === 'translation-only'
-        ? buildTranslationOnlyVTT(response.cues)
-        : buildBilingualVTT(response.cues);
-
-    sendTranslatedSubtitle({ requestId, vttContent });
-
-    // FR-4: Cancel the overlay-fallback timer
-    clearPendingRequest(requestId);
+    showSubtitleToast('Subtitles processing...');
   } catch (error) {
-    console.warn('AnyLLMTranslate: handleIntercepted error — timeout will replay original', error);
-    // Timeout will fire and replay original via overlay fallback
+    console.warn('AnyLLMTranslate: handleIntercepted error', error);
+    hideSubtitleToast();
+    showSubtitleToast('Subtitle translation error.');
   }
 }
 
@@ -265,16 +258,24 @@ export function startCoordinator(): () => void {
   // Listen for intercepted subtitles
   const cleanupBridge = onSubtitleIntercepted(handleIntercepted);
 
-  // Listen for successful subtitle translations to cancel overlay fallback
-  const cleanupTranslated = onMessage('SUBTITLE_TRANSLATED', (_payload, requestId) => {
-    clearPendingRequest(requestId);
-  });
+  // Listen for progressive chunk updates from background
+  const handleExtensionMessage = (
+    message: unknown,
+    _sender: chrome.runtime.MessageSender,
+    _sendResponse: () => void
+  ) => {
+    const msg = message as { action?: string; cues?: SubtitleCue[] };
+    if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED' && msg.cues) {
+      updateTranslatedCues(msg.cues);
+    }
+  };
+  chrome.runtime.onMessage.addListener(handleExtensionMessage);
 
   // Return cleanup function
   return () => {
     console.log('AnyLLMTranslate: Stopping subtitle coordinator');
     cleanupBridge();
-    cleanupTranslated();
+    chrome.runtime.onMessage.removeListener(handleExtensionMessage);
 
     // Clear all pending timeouts
     for (const timeoutId of state.pendingRequests.values()) {

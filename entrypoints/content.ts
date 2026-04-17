@@ -14,6 +14,10 @@ import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
+import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
+import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
+import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
+import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -236,6 +240,13 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   cssInjectionMode: 'manifest',
   async main() {
+    // Register platform handlers for isolated world
+    registerSubtitleHandlers([
+      new YouTubeHandler(),
+      new UdemyHandler(),
+      new CourseraHandler(),
+    ]);
+
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
     await initInteractionFeatures();

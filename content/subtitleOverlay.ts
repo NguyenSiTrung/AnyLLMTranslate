@@ -186,6 +186,25 @@ function handleTimeUpdate(): void {
 }
 
 /**
+ * Handle video seeked event to prioritize translation of the target chunk.
+ */
+function handleSeeked(): void {
+  if (!overlayState.video) return;
+
+  const currentTime = overlayState.video.currentTime;
+  const activeCueIndex = findActiveCue(currentTime);
+
+  if (activeCueIndex !== -1) {
+    chrome.runtime.sendMessage({
+      action: 'PRIORITIZE_SUBTITLE_CHUNK',
+      cueIndex: activeCueIndex,
+    }).catch(() => {
+      // Ignore background script not listening errors
+    });
+  }
+}
+
+/**
  * Handle video resize using ResizeObserver.
  */
 function handleResize(entries: ResizeObserverEntry[]): void {
@@ -267,6 +286,7 @@ function handleFullscreenChange(): void {
  */
 function attachVideoListeners(video: HTMLVideoElement): void {
   video.addEventListener('timeupdate', handleTimeUpdate);
+  video.addEventListener('seeked', handleSeeked);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
 }
 
@@ -275,6 +295,7 @@ function attachVideoListeners(video: HTMLVideoElement): void {
  */
 function detachVideoListeners(video: HTMLVideoElement): void {
   video.removeEventListener('timeupdate', handleTimeUpdate);
+  video.removeEventListener('seeked', handleSeeked);
   document.removeEventListener('fullscreenchange', handleFullscreenChange);
 }
 

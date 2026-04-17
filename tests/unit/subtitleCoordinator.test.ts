@@ -16,6 +16,7 @@ import * as subtitleParser from '@/lib/subtitleParser';
 // Mock dependencies
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: vi.fn(() => vi.fn()),
+  sendTranslatedSubtitle: vi.fn(),
 }));
 
 vi.mock('@/inject/messageBridge', () => ({
@@ -38,12 +39,43 @@ vi.mock('@/lib/subtitleParser', () => ({
   parseSubtitles: vi.fn(() => []),
 }));
 
+vi.mock('@/inject/subtitleHandlers/registry', () => ({
+  getHandlerByPlatform: vi.fn(() => ({
+    transformResponse: vi.fn(() => [{ startTime: 0, endTime: 4, text: 'Test' }]),
+  })),
+}));
+
 describe('content/subtitleCoordinator', () => {
   beforeEach(() => {
     resetCoordinatorState();
     resetOverlayState();
     vi.clearAllMocks();
     vi.useFakeTimers();
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn((message, _sender, sendResponse) => {
+          let cb = sendResponse;
+          // In some chrome environments, if there's no sender, it's the second argument
+          if (typeof _sender === 'function') {
+            cb = _sender;
+          }
+          if (cb) {
+            if (message.type === 'FETCH_SUBTITLE') {
+               cb({ error: 'Background fetch failed' }); // simulate failure
+            } else {
+               cb({ success: true, cues: [] });
+            }
+            return;
+          }
+          return Promise.resolve({ success: true, cues: [] });
+        }),
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
   });
 
   afterEach(() => {
@@ -150,20 +182,18 @@ describe('content/subtitleCoordinator', () => {
     });
   });
 
-  describe('interception timeout', () => {
-    it('activates overlay mode on timeout', async () => {
+  describe('immediate overlay activation', () => {
+    it('activates overlay mode immediately upon interception', async () => {
       vi.mocked(subtitleParser.parseSubtitles).mockReturnValue([{ startTime: 0, endTime: 4, text: 'Test' }]);
+      vi.mocked(subtitleOverlay.isOverlayActive).mockReturnValue(false);
 
       startCoordinator();
 
-      // Get the handler that was registered
       const handler = vi.mocked(messageBridge.onSubtitleIntercepted).mock.calls[0]?.[0];
-
       if (!handler) {
         throw new Error('Handler not found');
       }
 
-      // Trigger interception
       await handler(
         {
           url: 'http://example.com/subs.vtt',
@@ -175,39 +205,9 @@ describe('content/subtitleCoordinator', () => {
         'test-request-id',
       );
 
-      // Fast-forward past timeout (interceptTimeout is 30s for local LLM support)
-      vi.advanceTimersByTime(31000);
-
+      // Verify immediate initialization
+      expect(vi.mocked(subtitleOverlay.initializeOverlay)).toHaveBeenCalled();
       expect(isInOverlayMode()).toBe(true);
-    });
-
-    it('does NOT activate overlay when translation succeeds before timeout', async () => {
-      vi.mocked(subtitleParser.parseSubtitles).mockReturnValue([{ startTime: 0, endTime: 4, text: 'Test' }]);
-
-      startCoordinator();
-
-      const handler = vi.mocked(messageBridge.onSubtitleIntercepted).mock.calls[0]?.[0];
-      if (!handler) throw new Error('Handler not found');
-
-      await handler(
-        {
-          url: 'http://example.com/subs.vtt',
-          contentType: 'text/vtt',
-          body: 'WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest',
-          platform: 'test',
-          originalLanguage: 'en',
-        },
-        'test-request-id',
-      );
-
-      // Clear the pending request (simulates successful translation)
-      clearPendingRequest('test-request-id');
-
-      // Fast-forward past timeout
-      vi.advanceTimersByTime(6000);
-
-      // Overlay should NOT activate because we cleared the timeout
-      expect(isInOverlayMode()).toBe(false);
     });
 
     it('clearPendingRequest does not throw for unknown requestId', () => {
