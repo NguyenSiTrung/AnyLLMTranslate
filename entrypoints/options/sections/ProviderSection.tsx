@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import {
   Loader2, CheckCircle2, XCircle, RotateCcw,
-  Zap, ChevronDown, AlertTriangle,
+  Zap, ChevronDown, AlertTriangle, Server, Radio,
 } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { PROVIDER_PRESETS } from '@/types/config';
@@ -92,7 +92,7 @@ export function ProviderSection() {
       <div className="space-y-4">
         {/* Essential fields */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
-          <Card title="Provider Configuration" variant="bordered">
+          <Card title="Provider Configuration" icon={<Server className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               {/* Provider Preset — visual cards */}
               <FieldGroup label="Provider Preset">
@@ -192,7 +192,7 @@ export function ProviderSection() {
 
         {/* Connection Test */}
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
-          <Card title="Connection Test" variant="bordered">
+          <Card title="Connection Test" icon={<Radio className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-3">
               {/* Progress bar */}
               {(testProgress.length > 0 || isTesting) && (

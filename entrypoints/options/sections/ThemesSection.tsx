@@ -64,10 +64,10 @@ export function ThemesSection() {
               key={theme.id}
               id={`theme-${theme.id}`}
               onClick={() => updateSettings({ theme: theme.id })}
-              className={`relative text-left p-4 rounded-xl border transition-all duration-200 cursor-pointer animate-stagger ${
+              className={`relative text-left p-4 rounded-xl border transition-all duration-200 cursor-pointer animate-stagger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
                 isActive
-                  ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30 animate-select-bounce'
-                  : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50'
+                  ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30 animate-select-bounce scale-[1.01]'
+                  : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50 hover:scale-[1.02] active:scale-[0.98]'
               }`}
               style={{ '--stagger-delay': idx } as React.CSSProperties}
             >

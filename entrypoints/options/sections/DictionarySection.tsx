@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle, PenLine, ArrowLeftRight } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { GlossaryEntry } from '@/types/config';
 import {
@@ -110,7 +110,7 @@ export function DictionarySection() {
       <div className="space-y-4">
         {/* Add Entry */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
-          <Card title="Add Entry" variant="bordered">
+          <Card title="Add Entry" icon={<PenLine className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-2">
               <Input
                 id="dict-source"
@@ -142,7 +142,7 @@ export function DictionarySection() {
 
         {/* Import/Export */}
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
-          <Card title="Import / Export" variant="bordered">
+          <Card title="Import / Export" icon={<ArrowLeftRight className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-2 flex-wrap">
               <Button
                 variant="secondary"

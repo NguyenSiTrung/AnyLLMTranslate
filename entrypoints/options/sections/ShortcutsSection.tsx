@@ -28,7 +28,7 @@ export function ShortcutsSection() {
       <div className="space-y-4">
         {/* Current Shortcuts */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
-          <Card title="Active Shortcuts" variant="bordered" className="p-0 overflow-hidden">
+          <Card title="Active Shortcuts" icon={<KeyboardIcon className="w-3.5 h-3.5" />} variant="bordered" className="p-0 overflow-hidden">
             <div className="divide-y divide-zinc-800">
               {DEFAULT_SHORTCUTS.map((shortcut, idx) => (
                 <div
@@ -51,7 +51,7 @@ export function ShortcutsSection() {
 
         {/* Chrome Shortcuts Link */}
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
-          <Card variant="bordered">
+          <Card title="Customize Shortcuts" icon={<ExternalLink className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex items-start gap-3">
               <KeyboardIcon className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
               <div>

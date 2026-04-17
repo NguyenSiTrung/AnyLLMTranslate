@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, Bug, HardDrive, Wrench } from 'lucide-react';
+import { Download, Upload, Trash2, Bug, HardDrive, Wrench, Database } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { Card } from '@/ui/Card';
@@ -257,7 +257,7 @@ export function AdvancedSection() {
 
         {/* Export / Import */}
         <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
-          <Card title="Settings Data" variant="bordered">
+          <Card title="Settings Data" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-3">
               <Button
                 id="export-settings-btn"
