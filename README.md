@@ -12,6 +12,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Full-page bilingual translation** — original + translated text displayed together
 - **Smart DOM walker** — TreeWalker-based extraction groups text into semantic pieces at block boundaries, splitting long texts at sentence boundaries
 - **Lazy viewport loading** — `IntersectionObserver` with 200px pre-load margin; batches pieces every 100ms
+- **Zero-layout-shift progress indicators** — pure CSS spinners display per-paragraph translation status
 - **16 visual themes** — Dividing Line, Blockquote, Paper, Underline, Dashed Underline, Highlight, Wavy Underline, Bubble, Side-by-side, Mask, Fade In, Italic, Dotted Border, Shadow Card, Minimal, Gradient Accent
 - **Translation position control** — below / above / side via CSS data-attributes
 - **Dark mode support** — auto (system `prefers-color-scheme`), light, or forced dark
@@ -21,13 +22,16 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
   - **YouTube**: Supports `/api/timedtext` endpoint with srv3 XML and JSON3 formats
   - **Udemy**: Handles VTT from `udemycdn.com` with sprite metadata filtering
   - **Coursera**: Processes VTT from `coursera.org` with query/path language extraction
+- **Proactive subtitle track discovery** via HTML5 TextTrack fallback
 - **XHR + Fetch interception** via MAIN world script (`inject.content` at `document_start`)
 - **Dual-mode architecture**:
   - **Interception mode**: Hijacks subtitle requests, translates, and returns bilingual VTT
   - **Overlay fallback**: Auto-activates on timeout (30s) with custom subtitle renderer
 - **Subtitle parser** supports WebVTT and SRT formats with auto-detection
+- **Progressive chunked translation** with seek-aware priority queue for instant feedback
 - **Bilingual builder** generates merged or translation-only VTT output
-- **Custom overlay** with keyboard controls, resize, and position settings
+- **Custom overlay** with keyboard controls, resize, and position settings, including **Popover API Top Layer support** for native fullscreen
+- **Interactive drag-and-drop repositioning** with session and fullscreen persistence
 - **Subtitle coordinator** orchestrates parsing, translation, fallback, and cleanup
 
 ### 🖱️ Interactive Translation
@@ -42,9 +46,9 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Connection tester** — sends a round-trip ping and reports latency
 - **Customizable system prompt** with `{{SOURCE_LANG}}` / `{{TARGET_LANG}}` variable injection
 - **Per-site translation rules** — include/exclude CSS selectors, always/never translate
-- **Custom glossary / dictionary** — term-protected translation via prompt injection, live mismatch validation; CSV & JSON import/export
-- **Translation cache** — IndexedDB via `idb-keyval`, SHA-256 keyed, TTL (default 30 days), LRU eviction (default 100 MB cap)
-- **Subtitle settings** — position, font size, background opacity
+- **Custom glossary / dictionary** — term-protected translation via prompt injection, live mismatch validation preview; CSV & JSON import/export
+- **Translation cache** — IndexedDB via `idb-keyval`, SHA-256 keyed, configurable TTL/size limits, LRU eviction via `chrome.alarms`
+- **Subtitle settings** — position, font family, display mode (bilingual vs translation-only), background opacity, and translation timeout
 
 ---
 
@@ -95,7 +99,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 | Layer | Technology |
 |-------|------------|
 | Extension framework | **WXT** v0.20 (Manifest V3) |
-| UI | **React 19** + **TypeScript 5.9** |
+| UI | **React 19** + **TypeScript 5.9** (12-component shared UI library) |
 | Styling | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes) |
 | State management | **Zustand v5** with `chrome.storage.local` sync |
 | Translation cache | **IndexedDB** via `idb-keyval` |
@@ -111,7 +115,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 | `npm run dev:firefox` | Start development server (Firefox) |
 | `npm run build` | Production build → `.output/chrome-mv3` |
 | `npm run build:firefox` | Production build → `.output/firefox-mv2` |
-| `npm test` | Run all 408 unit tests |
+| `npm test` | Run all 522 tests |
 | `npm run test:watch` | Vitest watch mode |
 | `npm run test:coverage` | Coverage report |
 | `npm run lint` | ESLint check |
@@ -301,10 +305,10 @@ All platform handlers implement the `SubtitleHandler` interface:
 
 ## 🧪 Testing
 
-The project maintains **408 tests across 32 test files**:
+The project maintains **522 tests across 42 test files**:
 
 ```bash
-npm test             # Run all 408 tests
+npm test             # Run all 522 tests
 npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -349,7 +353,7 @@ Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/your-feature`
 3. Write tests for new functionality
-4. Ensure all 408 tests pass: `npm test`
+4. Ensure all 522 tests pass: `npm test`
 5. Submit a pull request
 
 ---
