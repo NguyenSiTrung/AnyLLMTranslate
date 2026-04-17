@@ -103,9 +103,9 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
   overlay.style.height = `${videoRect.height}px`;
 
   // Position overlay over video
-  overlay.style.position = 'absolute';
-  overlay.style.top = `${videoRect.top + window.scrollY}px`;
-  overlay.style.left = `${videoRect.left + window.scrollX}px`;
+  overlay.style.position = 'fixed';
+  overlay.style.top = `${videoRect.top}px`;
+  overlay.style.left = `${videoRect.left}px`;
   overlay.style.zIndex = '2147483647'; // Maximum z-index
 
   // Apply user offsets (drag-to-reposition)
@@ -206,6 +206,56 @@ function handleFullscreenChange(): void {
   const video = overlayState.video;
   if (!overlay || !video) return;
 
+  const fullscreenEl = document.fullscreenElement;
+
+  if (fullscreenEl) {
+    if (fullscreenEl === video) {
+      // The video element itself is fullscreen.
+      // We must append to document.body and use Popover API to bring it to the Top Layer.
+      if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+      }
+      if ('popover' in overlay) {
+        overlay.setAttribute('popover', 'manual');
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (overlay as any).showPopover();
+        } catch {
+          // ignore error if already open
+        }
+      }
+    } else {
+      // The fullscreen element is a container (e.g. custom player).
+      // Move the overlay into the fullscreen container.
+      if (overlay.parentElement !== fullscreenEl) {
+        fullscreenEl.appendChild(overlay);
+      }
+      if (overlay.hasAttribute('popover')) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (overlay as any).hidePopover();
+        } catch {
+          // ignore error
+        }
+        overlay.removeAttribute('popover');
+      }
+    }
+  } else {
+    // Exited fullscreen. Revert to document.body.
+    if (overlay.parentElement !== document.body) {
+      document.body.appendChild(overlay);
+    }
+    if (overlay.hasAttribute('popover')) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (overlay as any).hidePopover();
+      } catch {
+        // ignore error
+      }
+      overlay.removeAttribute('popover');
+    }
+  }
+
   // Re-position after fullscreen transition
   setTimeout(() => {
     positionOverlay(overlay, video, overlayState.config);
@@ -277,6 +327,11 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
   setupResizeObserver(video);
 
   overlayState.isAttached = true;
+
+  // Apply fullscreen logic immediately if already in fullscreen
+  if (document.fullscreenElement) {
+    handleFullscreenChange();
+  }
 
   // Import CSS (will be handled by content script entrypoint)
 }

@@ -23,13 +23,10 @@ This file tracks all major tracks for the project.
 - ✅ **Udemy Sprite Subtitle Fix** (`udemy-sprites_20260416`) — Archived 2026-04-16. [View](./conductor/archive/udemy-sprites_20260416/)
 - ✅ **Subtitle Translation Flow — Wire Missing Execution Path** (`subtitle-translation-wire_20260416`) — Archived 2026-04-16. [View](./conductor/archive/subtitle-translation-wire_20260416/)
 - ✅ **Settings UI/UX Enhancement & Subtitle Configuration** (`settings-subtitle-ux_20260417`) — Archived 2026-04-17. [View](./conductor/archive/settings-subtitle-ux_20260417/)
+- ✅ **Fix subtitle translation overlay visibility in full screen video mode** (`fullscreen-overlay_20260417`) — Archived 2026-04-17. [View](./conductor/archive/fullscreen-overlay_20260417/)
 
 ---
 
 ## Active Tracks
 
 *No active tracks.*
-
-
-## [ ] Track: Fix subtitle translation overlay visibility in full screen video mode
-*Link: [./conductor/tracks/fullscreen-overlay_20260417/](./conductor/tracks/fullscreen-overlay_20260417/)*

@@ -211,6 +211,11 @@ Reusable patterns discovered during development. Read this before starting new w
 ## Language Name Formatting in Prompts
 - `buildSystemPrompt` and `buildUserPrompt` now format language codes as `"Full Name (code)"` (e.g. `"Vietnamese (vi)"`) when `getLanguageName(code) !== code` — tests asserting on prompt content must use the full display format, not bare codes. (from: incremental, 2026-04-17)
 
+## Fullscreen Overlay (2026-04-17)
+- Use `Object.defineProperty(document, 'fullscreenElement', ...)` for simulating fullscreen in jsdom, but MUST clean it up in `afterEach()` to avoid polluting other tests. (from: fullscreen-overlay_20260417, archived 2026-04-17)
+- jsdom does not implement `HTMLElement.prototype.popover` or `showPopover`. Must manually define them in tests to test Popover API degradation. (from: fullscreen-overlay_20260417, archived 2026-04-17)
+- Context: The overlay is `position: fixed` because we want it to stay above the video. In full screen, the `position: fixed` works well because the `videoRect` coordinates correctly correspond to the viewport. (from: fullscreen-overlay_20260417, archived 2026-04-17)
+
 ---
-Last refreshed: 2026-04-17T01:02:00+07:00
-Codebase health: 483 tests passing across 40 files, lint-clean
+Last refreshed: 2026-04-17T11:01:00+07:00
+Codebase health: 517 tests passing across 41 files, lint-clean
