@@ -169,7 +169,22 @@ function RuleEditForm({ rule, onSave, onCancel }: {
   onSave: (rule: SiteRule) => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState({ ...rule });
+  const [form, setForm] = useState({
+    ...rule,
+    includeSelectorText: rule.includeSelectors?.join(', ') ?? '',
+    excludeSelectorText: rule.excludeSelectors?.join(', ') ?? '',
+  });
+
+  const handleSave = () => {
+    const parsedRule = {
+      ...form,
+      includeSelectors: form.includeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
+      excludeSelectors: form.excludeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
+    };
+    delete (parsedRule as any).includeSelectorText;
+    delete (parsedRule as any).excludeSelectorText;
+    onSave(parsedRule);
+  };
 
   return (
     <Card variant="bordered" className="space-y-3 border-zinc-700">
@@ -180,6 +195,30 @@ function RuleEditForm({ rule, onSave, onCancel }: {
         onChange={(e) => setForm({ ...form, hostname: e.target.value })}
         className="font-mono"
       />
+      <FieldGroup
+        label="Include Selectors"
+        description="Comma-separated CSS selectors to translate."
+      >
+        <Input
+          type="text"
+          placeholder=".content, article, main"
+          value={form.includeSelectorText}
+          onChange={(e) => setForm({ ...form, includeSelectorText: e.target.value })}
+          className="font-mono"
+        />
+      </FieldGroup>
+      <FieldGroup
+        label="Exclude Selectors"
+        description="Comma-separated CSS selectors to skip."
+      >
+        <Input
+          type="text"
+          placeholder=".nav, .sidebar, footer"
+          value={form.excludeSelectorText}
+          onChange={(e) => setForm({ ...form, excludeSelectorText: e.target.value })}
+          className="font-mono"
+        />
+      </FieldGroup>
       <div className="flex gap-3">
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input
@@ -202,7 +241,7 @@ function RuleEditForm({ rule, onSave, onCancel }: {
       </div>
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button size="sm" disabled={!form.hostname} onClick={() => onSave(form)}>Save</Button>
+        <Button size="sm" disabled={!form.hostname} onClick={handleSave}>Save</Button>
       </div>
     </Card>
   );
