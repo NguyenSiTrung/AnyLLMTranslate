@@ -4,7 +4,7 @@
  * Includes an animated mini video player preview reactive to all settings.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Subtitles as SubtitlesIcon, Play, Languages } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
@@ -32,6 +32,13 @@ const DISPLAY_MODE_OPTIONS: { value: SubtitleDisplayMode; label: string }[] = [
   { value: 'translation-only', label: 'Translated Only' },
 ];
 
+/** Sample subtitle cues that cycle through the preview */
+const PREVIEW_CUES: { original: string; translated: string }[] = [
+  { original: 'Hello world', translated: 'Xin chào thế giới' },
+  { original: 'How are you today?', translated: 'Hôm nay bạn thế nào?' },
+  { original: 'Welcome back', translated: 'Chào mừng trở lại' },
+];
+
 /** Map font family setting to a CSS font-family string */
 function resolveFontFamily(family: SubtitleFontFamily): string {
   switch (family) {
@@ -44,48 +51,112 @@ function resolveFontFamily(family: SubtitleFontFamily): string {
   }
 }
 
-/** Animated cue that fades in/out for the preview */
+/** Scale font size proportionally for the compact preview viewport */
+function scalePreviewFontSize(fontSize: number): number {
+  return Math.max(10, Math.min(Math.round(fontSize * 0.65), 18));
+}
+
+/** Animated cue that smoothly cycles through sample phrases */
 function AnimatedCue({
   fontSize,
   backgroundOpacity,
   fontFamily,
   displayMode,
   position,
+  disabled,
 }: {
   fontSize: number;
   backgroundOpacity: number;
   fontFamily: SubtitleFontFamily;
   displayMode: SubtitleDisplayMode;
   position: 'bottom' | 'top';
+  disabled: boolean;
 }) {
-  const [visible, setVisible] = useState(true);
+  const [cueIndex, setCueIndex] = useState(0);
+  const [phase, setPhase] = useState<'visible' | 'fading'>('visible');
 
-  useEffect(() => {
-    const id = setInterval(() => setVisible((v) => !v), 1800);
-    return () => clearInterval(id);
+  const advanceCue = useCallback(() => {
+    setPhase('fading');
+    const fadeTimer = setTimeout(() => {
+      setCueIndex((i) => (i + 1) % PREVIEW_CUES.length);
+      setPhase('visible');
+    }, 500); // match CSS transition duration
+    return fadeTimer;
   }, []);
 
-  const previewFontSize = Math.min(fontSize, 13);
+  useEffect(() => {
+    if (disabled) return;
+    const interval = setInterval(() => {
+      const fadeTimer = advanceCue();
+      return () => clearTimeout(fadeTimer);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [disabled, advanceCue]);
+
+  const previewFontSize = scalePreviewFontSize(fontSize);
   const resolvedFont = resolveFontFamily(fontFamily);
   const isTop = position === 'top';
+  const cue = PREVIEW_CUES[cueIndex];
+
+  if (disabled) {
+    return (
+      <div
+        className={`absolute z-10 px-3 py-1.5 rounded text-center ${
+          isTop ? 'top-4' : 'bottom-6'
+        } left-1/2 -translate-x-1/2`}
+        style={{
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          fontSize: '11px',
+          maxWidth: '90%',
+        }}
+      >
+        <div className="text-zinc-500 leading-tight italic text-[11px]">Subtitles disabled</div>
+      </div>
+    );
+  }
 
   return (
     <div
-      className={`absolute z-10 px-3 py-1.5 rounded text-center transition-opacity duration-700 ${
-        isTop ? 'top-3' : 'bottom-3'
+      className={`absolute z-10 px-3 py-1.5 rounded text-center ${
+        isTop ? 'top-4' : 'bottom-6'
       } left-1/2 -translate-x-1/2`}
       style={{
         backgroundColor: `rgba(0, 0, 0, ${backgroundOpacity})`,
-        opacity: visible ? 1 : 0,
+        opacity: phase === 'visible' ? 1 : 0,
+        transition: 'opacity 0.5s ease-in-out',
         fontFamily: resolvedFont,
         fontSize: `${previewFontSize}px`,
         maxWidth: '90%',
       }}
     >
       {displayMode === 'bilingual' && (
-        <div className="text-zinc-300 leading-tight">Hello world</div>
+        <div className="text-zinc-300 leading-tight">{cue.original}</div>
       )}
-      <div className="text-white leading-tight font-medium">Xin chào thế giới</div>
+      <div className="text-white leading-tight font-medium">{cue.translated}</div>
+    </div>
+  );
+}
+
+/** Fake progress bar that slowly animates to simulate video playback */
+function ProgressBar() {
+  const [progress, setProgress] = useState(35);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setProgress((p) => (p >= 85 ? 35 : p + 0.3));
+    }, 100);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/5">
+      <div
+        className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-r-full"
+        style={{
+          width: `${progress}%`,
+          transition: 'width 0.1s linear',
+        }}
+      />
     </div>
   );
 }
@@ -101,6 +172,7 @@ export function SubtitlesSection() {
   };
 
   const preferredLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
+  const isDisabled = !subtitleSettings.enabled;
 
   return (
     <div className="animate-fade-in-up">
@@ -116,8 +188,61 @@ export function SubtitlesSection() {
       </div>
 
       <div className="space-y-4">
-        {/* Controls card */}
+        {/* Preview card — placed first so users see live changes while adjusting controls */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+          <Card title="Preview" variant="bordered">
+            <div
+              className={`relative rounded-lg overflow-hidden transition-opacity duration-300 ${
+                isDisabled ? 'opacity-50' : ''
+              }`}
+              style={{
+                height: '170px',
+                background: 'linear-gradient(135deg, #0f1117 0%, #1a1d26 50%, #111318 100%)',
+              }}
+            >
+              {/* Film grain overlay */}
+              <div
+                className="absolute inset-0 opacity-30"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(ellipse at 20% 50%, rgba(30,40,80,0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(20,30,60,0.3) 0%, transparent 50%)',
+                }}
+              />
+
+              {/* Scan-line accent */}
+              <div className="absolute inset-0 opacity-5"
+                style={{
+                  backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)',
+                }}
+              />
+
+              {/* Decorative play button */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className={`flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm transition-opacity duration-300 ${
+                  isDisabled ? 'opacity-40' : ''
+                }`}>
+                  <Play className="w-4 h-4 text-white/60 fill-white/60 ml-0.5" />
+                </div>
+              </div>
+
+              {/* Animated subtitle cue */}
+              <AnimatedCue
+                fontSize={subtitleSettings.fontSize}
+                backgroundOpacity={subtitleSettings.backgroundOpacity}
+                fontFamily={subtitleSettings.fontFamily}
+                displayMode={subtitleSettings.displayMode}
+                position={subtitleSettings.position}
+                disabled={isDisabled}
+              />
+
+              {/* Progress bar — simulates video playback timeline */}
+              {!isDisabled && <ProgressBar />}
+            </div>
+          </Card>
+        </div>
+
+        {/* Controls card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
           <Card variant="bordered">
             <div className="space-y-5">
               {/* Enabled Toggle */}
@@ -214,7 +339,7 @@ export function SubtitlesSection() {
         </div>
 
         {/* Language Discovery card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
           <Card title="Language Discovery" icon={<Languages className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup
@@ -244,52 +369,7 @@ export function SubtitlesSection() {
             </div>
           </Card>
         </div>
-
-        {/* Enhanced mini video player preview */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
-          <Card title="Preview" variant="bordered">
-            <div
-              className="relative rounded-lg overflow-hidden"
-              style={{ height: '130px', background: 'linear-gradient(135deg, #0f1117 0%, #1a1d26 50%, #111318 100%)' }}
-            >
-              {/* Film grain overlay */}
-              <div
-                className="absolute inset-0 opacity-30"
-                style={{
-                  backgroundImage:
-                    'radial-gradient(ellipse at 20% 50%, rgba(30,40,80,0.4) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(20,30,60,0.3) 0%, transparent 50%)',
-                }}
-              />
-
-              {/* Scan-line accent */}
-              <div className="absolute inset-0 opacity-5"
-                style={{
-                  backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)',
-                }}
-              />
-
-              {/* Decorative play button */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="flex items-center justify-center w-9 h-9 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm">
-                  <Play className="w-4 h-4 text-white/60 fill-white/60 ml-0.5" />
-                </div>
-              </div>
-
-              {/* Animated subtitle cue */}
-              <AnimatedCue
-                fontSize={subtitleSettings.fontSize}
-                backgroundOpacity={subtitleSettings.backgroundOpacity}
-                fontFamily={subtitleSettings.fontFamily}
-                displayMode={subtitleSettings.displayMode}
-                position={subtitleSettings.position}
-              />
-
-              {/* Watermark label removed — Card title 'Preview' already identifies this section */}
-            </div>
-          </Card>
-        </div>
       </div>
     </div>
   );
 }
-

@@ -1,6 +1,6 @@
 /**
- * Tests for SubtitlesSection — new controls (font family, display mode, timeout)
- * and the mini video player preview.
+ * Tests for SubtitlesSection — controls, preview cycling, disabled state,
+ * and language discovery.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -93,12 +93,11 @@ describe('SubtitlesSection', () => {
   describe('preview card', () => {
     it('renders the Preview card', () => {
       render(<SubtitlesSection />);
-      // Card renders 'Preview' as title; use getAllByText since label is only h3
       const previewEls = screen.getAllByText('Preview');
       expect(previewEls.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('renders translated text in preview', () => {
+    it('renders first cue translated text in preview', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Xin chào thế giới')).toBeInTheDocument();
     });
@@ -122,6 +121,25 @@ describe('SubtitlesSection', () => {
       render(<SubtitlesSection />);
       expect(screen.queryByText('Hello world')).not.toBeInTheDocument();
       expect(screen.getByText('Xin chào thế giới')).toBeInTheDocument();
+    });
+
+    it('shows disabled state when subtitles are turned off', () => {
+      mockState.subtitleSettings = { ...baseSubtitleSettings, enabled: false };
+
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') {
+          return selector(mockState);
+        }
+        return mockState;
+      });
+
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Subtitles disabled')).toBeInTheDocument();
+    });
+
+    it('does not show disabled state when subtitles are enabled', () => {
+      render(<SubtitlesSection />);
+      expect(screen.queryByText('Subtitles disabled')).not.toBeInTheDocument();
     });
   });
 
