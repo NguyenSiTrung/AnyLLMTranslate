@@ -16,6 +16,7 @@ import {
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
+import { Modal } from '@/ui/Modal';
 import { EmptyState } from '@/ui/EmptyState';
 import { useToast } from '@/ui/ToastProvider';
 import { GlossaryTranslatePreview } from './GlossaryTranslatePreview';
@@ -29,6 +30,7 @@ export function DictionarySection() {
   const [editSource, setEditSource] = useState('');
   const [editTarget, setEditTarget] = useState('');
   const [mismatchedIds, setMismatchedIds] = useState<Set<string>>(new Set());
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
 
@@ -98,8 +100,8 @@ export function DictionarySection() {
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
       <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <BookOpen className="w-4 h-4 text-blue-400" />
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600/15 border border-emerald-500/20">
+          <BookOpen className="w-4 h-4 text-emerald-400" />
         </div>
         <div>
           <h2 className="text-base font-semibold text-zinc-100 leading-tight">Custom Dictionary</h2>
@@ -257,7 +259,7 @@ export function DictionarySection() {
                       )}
                       <td className="px-2 py-2.5">
                         <button
-                          onClick={() => handleDelete(entry.id)}
+                          onClick={() => setPendingDeleteId(entry.id)}
                           className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
                           aria-label={`Delete ${entry.source}`}
                         >
@@ -278,6 +280,18 @@ export function DictionarySection() {
         {/* Live translate preview panel */}
         <GlossaryTranslatePreview onMismatchUpdate={setMismatchedIds} />
       </div>
+
+      {pendingDeleteId && (
+        <Modal
+          title="Delete Dictionary Entry?"
+          message={`Are you sure you want to delete "${glossary.find(e => e.id === pendingDeleteId)?.source ?? ''}"? This cannot be undone.`}
+          variant="danger"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={() => { handleDelete(pendingDeleteId); setPendingDeleteId(null); }}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -80,8 +80,8 @@ export function ProviderSection() {
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
       <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <Zap className="w-4 h-4 text-blue-400" />
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-600/15 border border-amber-500/20">
+          <Zap className="w-4 h-4 text-amber-400" />
         </div>
         <div>
           <h2 className="text-base font-semibold text-zinc-100 leading-tight">Translation Provider</h2>
@@ -103,7 +103,7 @@ export function ProviderSection() {
                       <button
                         key={p.preset}
                         onClick={() => handlePresetChange(p.preset)}
-                        className={`text-left p-3 rounded-lg border transition-all duration-150 cursor-pointer ${
+                        className={`text-left p-3.5 rounded-lg border transition-all duration-150 cursor-pointer ${
                           isActive
                             ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/30'
                             : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50'
@@ -112,7 +112,7 @@ export function ProviderSection() {
                         <p className={`text-sm font-medium ${isActive ? 'text-blue-400' : 'text-zinc-200'}`}>
                           {p.displayName}
                         </p>
-                        <p className="text-[10px] text-zinc-500 mt-0.5 truncate">{p.baseUrl}</p>
+                        <p className="text-xs text-zinc-500 mt-0.5 truncate">{p.baseUrl}</p>
                       </button>
                     );
                   })}

@@ -11,6 +11,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Badge } from '@/ui/Badge';
+import { FieldGroup } from '@/ui/FieldGroup';
 import { EmptyState } from '@/ui/EmptyState';
 
 export function SiteRulesSection() {
@@ -58,8 +59,8 @@ export function SiteRulesSection() {
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
       <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <Globe className="w-4 h-4 text-blue-400" />
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-teal-600/15 border border-teal-500/20">
+          <Globe className="w-4 h-4 text-teal-400" />
         </div>
         <div>
           <h2 className="text-base font-semibold text-zinc-100 leading-tight">Site Rules</h2>
@@ -128,6 +129,8 @@ export function SiteRulesSection() {
                     <div>
                       <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
                       {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
+                      {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors!.length} include</Badge>}
+                      {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors!.length} exclude</Badge>}
                     </div>
                   </div>
                   {!rule.builtIn && (

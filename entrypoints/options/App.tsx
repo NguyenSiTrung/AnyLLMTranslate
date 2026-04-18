@@ -67,6 +67,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [showSaved, setShowSaved] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const contentRef = useRef<HTMLDivElement>(null);
   const loadFromStorage = useSettingsStore((s) => s.loadFromStorage);
   const isLoaded = useSettingsStore((s) => s.isLoaded);
 
@@ -75,6 +76,10 @@ export default function App() {
     const cleanup = initStorageSync();
     return cleanup;
   }, [loadFromStorage]);
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeTab]);
 
   // Auto-save feedback: listen for store updates
   useEffect(() => {
@@ -146,7 +151,7 @@ export default function App() {
           <div className="sidebar-header">
             <Languages className="sidebar-brand-icon" />
             <span className="sidebar-brand-name">AnyLLMTranslate</span>
-            <span className="sidebar-version">v0.1.0</span>
+            <span className="sidebar-version">v1.0.0</span>
           </div>
 
           {/* Grouped tab list */}
@@ -195,6 +200,7 @@ export default function App() {
 
         {/* ── Content Area ── */}
         <main
+          ref={contentRef}
           className="settings-content"
           id={`panel-${activeTab}`}
           role="tabpanel"

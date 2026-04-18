@@ -18,7 +18,7 @@ const SAMPLE_TEXT = {
   original:
     'Artificial intelligence is reshaping how we communicate across languages and cultures.',
   translation:
-    "L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.",
+    'Trí tuệ nhân tạo đang định hình lại cách chúng ta giao tiếp giữa các ngôn ngữ và nền văn hóa.',
 };
 
 export function ThemePreview() {

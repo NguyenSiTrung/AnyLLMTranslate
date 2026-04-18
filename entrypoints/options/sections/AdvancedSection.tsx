@@ -138,18 +138,12 @@ export function AdvancedSection() {
     updateSettings({ maxBatchChars: value });
   }, [maxBatchChars, updateSettings]);
 
-  // Calculate simple cache usage visualization
-  const cacheUsagePct = Math.min(
-    ((settings.cacheTTLDays / 30) * 100),
-    100,
-  );
-
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
       <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <Wrench className="w-4 h-4 text-blue-400" />
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-600/15 border border-zinc-500/20">
+          <Wrench className="w-4 h-4 text-zinc-400" />
         </div>
         <div>
           <h2 className="text-base font-semibold text-zinc-100 leading-tight">Advanced</h2>
@@ -173,19 +167,6 @@ export function AdvancedSection() {
               <div className="bg-zinc-900 rounded-lg p-3 text-center">
                 <p className="text-lg font-semibold text-zinc-200">{settings.maxBatchChars}</p>
                 <p className="text-[10px] text-zinc-500">Batch Chars</p>
-              </div>
-            </div>
-            {/* Cache usage bar */}
-            <div className="mb-4">
-              <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
-                <span>Cache capacity</span>
-                <span>{settings.maxCacheSizeMB}MB max</span>
-              </div>
-              <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500/60 rounded-full transition-all duration-500"
-                  style={{ width: `${cacheUsagePct}%` }}
-                />
               </div>
             </div>
             <Button
