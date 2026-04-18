@@ -234,5 +234,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - `AvailableSubtitleTrack` type with `platform` field enables the coordinator to differentiate discovery sources and apply platform-specific logic. (from: incremental, 2026-04-17)
 
 ---
-Last refreshed: 2026-04-17T15:32:38+07:00
-Codebase health: 522 tests passing across 42 files, lint-clean
+Last refreshed: 2026-04-18T12:00:00+07:00
+Codebase health: 524 tests passing across 42 files, lint-clean

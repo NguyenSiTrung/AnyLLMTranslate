@@ -93,7 +93,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Proactive Subtitle Discovery & Auto-Activation** (2026-04-17, incremental): Universal HTML5 TextTrack fallback discovery via MutationObserver + `addtrack` events (`inject/textTrackDiscovery.ts`). Extended YouTube, Udemy, and Coursera handlers to emit `SUBTITLE_TRACKS_DISCOVERED` messages. Auto-activation UI in Options → Subtitles section with language preference and toggle. New `subtitleAutoActivate` config option. 4 new tests added.
 
 ### Current State
-- All tracks completed and archived. 522 tests passing across 42 files. Build passing (`wxt build` ✅). Lint-clean.
+- 524 tests passing across 42 files. Build passing (`wxt build` ✅). Lint-clean.
+- **Active track:** `multipage-subtitle-fix_20260417` — Per-video subtitle state isolation to prevent auto-activation on multi-video pages (YouTube home, search results).
 
 ## Out of Scope (Initial Release)
 

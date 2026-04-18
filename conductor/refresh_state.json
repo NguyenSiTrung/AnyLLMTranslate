@@ -1,30 +1,32 @@
 {
-  "last_refresh": "2026-04-17T15:32:38+07:00",
+  "last_refresh": "2026-04-18T12:00:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/product.md",
-      "change": "Added 2 new incremental features: subtitle drag-and-drop, proactive subtitle discovery. Updated Key Features section. Updated test count 518→522."
+      "change": "Fixed test count 522→524. Updated Current State: removed 'all tracks completed' claim, added active track multipage-subtitle-fix_20260417."
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Added 2 new pattern sections: Subtitle Drag-and-Drop (3 patterns), Proactive Subtitle Discovery (4 patterns). Updated timestamp and health metrics."
+      "change": "Updated timestamp and health metrics (522→524 tests)."
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-17 15:32 refresh"
+      "change": "Updated refresh state with 2026-04-18 12:00 refresh."
     }
   ],
   "drift_summary": {
     "tech_stack": "No drift",
-    "product": "ADDED: 2 incremental features (subtitle drag-and-drop, proactive subtitle discovery)",
+    "product": "FIXED: test count 522→524, corrected 'all tracks completed' to note active track",
     "workflow": "No drift",
-    "patterns": "ADDED: 7 new patterns across 2 new sections",
-    "tests": "522 tests passing across 42 files",
-    "archived_tracks": "19 tracks in archive"
+    "patterns": "No new patterns to add (settings-ui-refactor had empty learnings, multipage-subtitle-fix still active)",
+    "tests": "524 tests passing across 42 files",
+    "archived_tracks": "20 tracks in archive"
   },
-  "beads_check": "Clean — 0 open tasks, 0 open epics. No drift.",
-  "active_tracks": [],
+  "beads_check": "Synced — closed AnyLLMTranslate-a4h epic + 4 subtasks (settings-ui-refactor archived). Remaining open: 0 conductor-related.",
+  "active_tracks": [
+    "multipage-subtitle-fix_20260417"
+  ],
   "archived_tracks": [
     "phase1-foundation_20260409",
     "phase2-subtitles_20260409",
@@ -44,12 +46,13 @@
     "subtitle-translation-wire_20260416",
     "settings-subtitle-ux_20260417",
     "fullscreen-overlay_20260417",
-    "progressive-chunking_20260417"
+    "progressive-chunking_20260417",
+    "settings-ui-refactor_20260417"
   ],
   "codebase_health": {
-    "tests": "522 passed (42 files)",
+    "tests": "524 passed (42 files)",
     "git_status": "clean (before refresh changes)",
     "lint": "clean",
-    "last_commit": "feat: implement proactive subtitle discovery and auto-activation"
+    "last_commit": "feat: implement per-video state isolation and play-triggered auto-activation"
   }
 }
