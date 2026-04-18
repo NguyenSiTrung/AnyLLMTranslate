@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, Bug, HardDrive, Wrench, Database } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { Card } from '@/ui/Card';
@@ -152,10 +152,10 @@ export function AdvancedSection() {
       </div>
 
       <div className="space-y-4">
-        {/* Cache Management */}
+        {/* Cache Management (merged: stats + configuration + clear) */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
-          <Card title="Translation Cache" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="grid grid-cols-3 gap-3 mb-4">
+          <Card title="Cache Management" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="grid grid-cols-3 gap-3 mb-5">
               <div className="bg-zinc-900 rounded-lg p-3 text-center">
                 <p className="text-lg font-semibold text-zinc-200">{settings.cacheTTLDays}d</p>
                 <p className="text-[10px] text-zinc-500">TTL</p>
@@ -169,23 +169,7 @@ export function AdvancedSection() {
                 <p className="text-[10px] text-zinc-500">Batch Chars</p>
               </div>
             </div>
-            <Button
-              id="clear-cache-btn"
-              variant="danger"
-              onClick={() => setShowClearCacheModal(true)}
-              disabled={clearStatus === 'clearing'}
-              loading={clearStatus === 'clearing'}
-              icon={<Trash2 className="w-4 h-4" />}
-            >
-              {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
-            </Button>
-          </Card>
-        </div>
-
-        {/* Cache Configuration — FieldGroup for consistency */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
-          <Card title="Cache Configuration" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-5">
+            <div className="space-y-5 mb-5">
               <FieldGroup
                 label="Cache TTL (days)"
                 description="How long translations are cached before expiration."
@@ -235,13 +219,23 @@ export function AdvancedSection() {
                 />
               </FieldGroup>
             </div>
+            <Button
+              id="clear-cache-btn"
+              variant="danger"
+              onClick={() => setShowClearCacheModal(true)}
+              disabled={clearStatus === 'clearing'}
+              loading={clearStatus === 'clearing'}
+              icon={<Trash2 className="w-4 h-4" />}
+            >
+              {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
+            </Button>
           </Card>
         </div>
 
-        {/* Export / Import */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
-          <Card title="Settings Data" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="flex gap-3">
+        {/* Data & Developer Tools (merged: export/import + debug) */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+          <Card title="Data & Developer Tools" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="flex gap-3 mb-5">
               <Button
                 id="export-settings-btn"
                 variant="secondary"
@@ -270,24 +264,20 @@ export function AdvancedSection() {
                 }}
               />
             </div>
-          </Card>
-        </div>
-
-        {/* Debug Mode */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
-          <Card title="Developer" icon={<Bug className="w-3.5 h-3.5" />} variant="bordered">
-            <Toggle
-              id="debug-mode-toggle"
-              checked={settings.debugMode}
-              onChange={(checked) => updateSettings({ debugMode: checked })}
-              label="Debug Mode"
-              description="Enable verbose logging in the browser console."
-            />
+            <div className="border-t border-zinc-800 pt-4">
+              <Toggle
+                id="debug-mode-toggle"
+                checked={settings.debugMode}
+                onChange={(checked) => updateSettings({ debugMode: checked })}
+                label="Debug Mode"
+                description="Enable verbose logging in the browser console."
+              />
+            </div>
           </Card>
         </div>
 
         {/* Reset */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '4' } as React.CSSProperties}>
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
           <Button
             id="reset-all-settings-btn"
             variant="danger"

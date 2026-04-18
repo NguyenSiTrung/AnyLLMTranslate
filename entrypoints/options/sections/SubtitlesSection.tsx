@@ -245,7 +245,6 @@ export function SubtitlesSection() {
         <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
           <Card variant="bordered">
             <div className="space-y-5">
-              {/* Enabled Toggle */}
               <Toggle
                 id="subtitle-enabled-toggle"
                 checked={subtitleSettings.enabled}
@@ -254,86 +253,90 @@ export function SubtitlesSection() {
                 description="Show translated subtitles on video players."
               />
 
-              {/* Position */}
-              <FieldGroup
-                label="Subtitle Position"
-                description="Where subtitles appear relative to the video player."
-              >
-                <SegmentedControl
-                  label="Subtitle Position"
-                  options={POSITION_OPTIONS}
-                  value={subtitleSettings.position}
-                  onChange={(val) => handleUpdate({ position: val })}
-                />
-              </FieldGroup>
+              <div className="border-t border-zinc-800 pt-4">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-4">Appearance</p>
+                <div className="space-y-5">
+                  <FieldGroup
+                    label="Subtitle Position"
+                    description="Where subtitles appear relative to the video player."
+                  >
+                    <SegmentedControl
+                      label="Subtitle Position"
+                      options={POSITION_OPTIONS}
+                      value={subtitleSettings.position}
+                      onChange={(val) => handleUpdate({ position: val })}
+                    />
+                  </FieldGroup>
 
-              {/* Font Family */}
-              <FieldGroup
-                label="Font Family"
-                description="Typeface used for subtitle text in the overlay."
-              >
-                <SegmentedControl
-                  label="Font Family"
-                  options={FONT_FAMILY_OPTIONS}
-                  value={subtitleSettings.fontFamily}
-                  onChange={(val) => handleUpdate({ fontFamily: val })}
-                />
-              </FieldGroup>
+                  <FieldGroup
+                    label="Font Family"
+                    description="Typeface used for subtitle text in the overlay."
+                  >
+                    <SegmentedControl
+                      label="Font Family"
+                      options={FONT_FAMILY_OPTIONS}
+                      value={subtitleSettings.fontFamily}
+                      onChange={(val) => handleUpdate({ fontFamily: val })}
+                    />
+                  </FieldGroup>
 
-              {/* Display Mode */}
-              <FieldGroup
-                label="Display Mode"
-                description="Show both original and translated text, or translated text only."
-              >
-                <SegmentedControl
-                  label="Display Mode"
-                  options={DISPLAY_MODE_OPTIONS}
-                  value={subtitleSettings.displayMode}
-                  onChange={(val) => handleUpdate({ displayMode: val })}
-                />
-              </FieldGroup>
+                  <Slider
+                    id="subtitle-font-size"
+                    label="Font Size"
+                    value={subtitleSettings.fontSize}
+                    min={10}
+                    max={32}
+                    step={1}
+                    onChange={(v) => handleUpdate({ fontSize: v })}
+                    formatValue={(v) => `${v}px`}
+                    minLabel="10px"
+                    maxLabel="32px"
+                  />
 
-              {/* Font Size */}
-              <Slider
-                id="subtitle-font-size"
-                label="Font Size"
-                value={subtitleSettings.fontSize}
-                min={10}
-                max={32}
-                step={1}
-                onChange={(v) => handleUpdate({ fontSize: v })}
-                formatValue={(v) => `${v}px`}
-                minLabel="10px"
-                maxLabel="32px"
-              />
+                  <Slider
+                    id="subtitle-opacity"
+                    label="Background Opacity"
+                    value={subtitleSettings.backgroundOpacity}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    onChange={(v) => handleUpdate({ backgroundOpacity: v })}
+                    formatValue={(v) => `${Math.round(v * 100)}%`}
+                    minLabel="0%"
+                    maxLabel="100%"
+                  />
+                </div>
+              </div>
 
-              {/* Background Opacity */}
-              <Slider
-                id="subtitle-opacity"
-                label="Background Opacity"
-                value={subtitleSettings.backgroundOpacity}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => handleUpdate({ backgroundOpacity: v })}
-                formatValue={(v) => `${Math.round(v * 100)}%`}
-                minLabel="0%"
-                maxLabel="100%"
-              />
+              <div className="border-t border-zinc-800 pt-4">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-4">Behavior</p>
+                <div className="space-y-5">
+                  <FieldGroup
+                    label="Display Mode"
+                    description="Show both original and translated text, or translated text only."
+                  >
+                    <SegmentedControl
+                      label="Display Mode"
+                      options={DISPLAY_MODE_OPTIONS}
+                      value={subtitleSettings.displayMode}
+                      onChange={(val) => handleUpdate({ displayMode: val })}
+                    />
+                  </FieldGroup>
 
-              {/* Translation Timeout */}
-              <Slider
-                id="subtitle-timeout"
-                label="Translation Timeout"
-                value={subtitleSettings.translationTimeout}
-                min={10}
-                max={120}
-                step={5}
-                onChange={(v) => handleUpdate({ translationTimeout: v })}
-                formatValue={(v) => `${v}s`}
-                minLabel="10s"
-                maxLabel="120s"
-              />
+                  <Slider
+                    id="subtitle-timeout"
+                    label="Translation Timeout"
+                    value={subtitleSettings.translationTimeout}
+                    min={10}
+                    max={120}
+                    step={5}
+                    onChange={(v) => handleUpdate({ translationTimeout: v })}
+                    formatValue={(v) => `${v}s`}
+                    minLabel="10s"
+                    maxLabel="120s"
+                  />
+                </div>
+              </div>
             </div>
           </Card>
         </div>

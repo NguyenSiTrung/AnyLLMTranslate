@@ -209,7 +209,7 @@ export function DictionarySection() {
                     <tr
                       key={entry.id}
                       className="hover:bg-zinc-800/50 transition-colors animate-stagger"
-                      style={{ '--stagger-delay': idx } as React.CSSProperties}
+                      style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
                     >
                       {editingId === entry.id ? (
                         <>

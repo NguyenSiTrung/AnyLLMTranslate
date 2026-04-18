@@ -116,7 +116,7 @@ export function SiteRulesSection() {
                 <div
                   key={rule.id}
                   className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors animate-stagger"
-                  style={{ '--stagger-delay': idx } as React.CSSProperties}
+                  style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
                 >
                   <div className="flex items-center gap-3">
                     {rule.alwaysTranslate ? (
