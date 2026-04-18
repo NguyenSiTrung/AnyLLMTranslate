@@ -114,8 +114,6 @@ export interface InlineTranslateSettings {
   tapCount: number;
   /** Time window in ms for consecutive presses (200–1000, default: 500) */
   timeWindowMs: number;
-  /** Target language for inline translation (ISO 639-1 code) */
-  targetLanguage: string;
 }
 
 /** Extension settings stored in chrome.storage.local */
@@ -187,7 +185,6 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
 export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   enabled: true,
   triggerKey: ' ',
-  targetLanguage: 'vi',
   tapCount: 3,
   timeWindowMs: 500,
 };

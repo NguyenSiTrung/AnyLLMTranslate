@@ -8,9 +8,7 @@ import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { FieldGroup } from '@/ui/FieldGroup';
-import { Select } from '@/ui/Select';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { LANGUAGES } from '@/lib/languages';
 
 export function InlineTranslateSection() {
   const inlineTranslate = useSettingsStore((s) => s.inlineTranslate);
@@ -26,10 +24,6 @@ export function InlineTranslateSection() {
 
   const handleTimeWindow = (timeWindowMs: number) => {
     updateSetting({ inlineTranslate: { ...inlineTranslate, timeWindowMs } });
-  };
-
-  const handleTargetLanguage = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    updateSetting({ inlineTranslate: { ...inlineTranslate, targetLanguage: e.target.value } });
   };
 
   const gestureLabel =
@@ -53,23 +47,6 @@ export function InlineTranslateSection() {
             checked={inlineTranslate.enabled}
             onChange={handleToggle}
           />
-
-          {/* Target Language */}
-          <FieldGroup
-            label="Target Language"
-            description="Language to translate text input content to"
-          >
-            <Select
-              id="inline-translate-target-language"
-              value={inlineTranslate.targetLanguage}
-              onChange={handleTargetLanguage}
-              disabled={!inlineTranslate.enabled}
-              options={LANGUAGES.map((lang) => ({
-                value: lang.code,
-                label: lang.name,
-              }))}
-            />
-          </FieldGroup>
 
           {/* Current gesture display */}
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
@@ -132,7 +109,6 @@ export function InlineTranslateSection() {
             <li>Works in text inputs, search boxes, textareas, and rich text editors</li>
             <li>Translated text replaces the original — use <kbd className="px-1 py-0.5 bg-zinc-800/60 border border-zinc-700/50 rounded text-zinc-400 font-mono text-[10px]">Ctrl+Z</kbd> to undo</li>
             <li>Password fields and code editors are automatically excluded</li>
-            <li>Uses separate target language from page translation</li>
           </ul>
         </div>
       </Card>
