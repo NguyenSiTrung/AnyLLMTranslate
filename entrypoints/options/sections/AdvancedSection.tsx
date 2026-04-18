@@ -22,6 +22,7 @@ export function AdvancedSection() {
   const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
   const [clearStatus, setClearStatus] = useState<'idle' | 'clearing' | 'done'>('idle');
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
 
@@ -75,6 +76,7 @@ export function AdvancedSection() {
   }, [updateSettings, showSuccess, showError]);
 
   const handleClearCache = useCallback(async () => {
+    setShowClearCacheModal(false);
     setClearStatus('clearing');
     try {
       const dbs = await indexedDB.databases();
@@ -189,7 +191,7 @@ export function AdvancedSection() {
             <Button
               id="clear-cache-btn"
               variant="danger"
-              onClick={handleClearCache}
+              onClick={() => setShowClearCacheModal(true)}
               disabled={clearStatus === 'clearing'}
               loading={clearStatus === 'clearing'}
               icon={<Trash2 className="w-4 h-4" />}
@@ -315,6 +317,19 @@ export function AdvancedSection() {
           </Button>
         </div>
       </div>
+
+      {/* Clear Cache Confirmation Modal */}
+      {showClearCacheModal && (
+        <Modal
+          title="Clear Translation Cache?"
+          message="This will permanently delete all cached translations. Future translations will need to be fetched again from your provider, which may incur additional API costs."
+          variant="danger"
+          confirmLabel="Clear Cache"
+          cancelLabel="Keep Cache"
+          onConfirm={handleClearCache}
+          onCancel={() => setShowClearCacheModal(false)}
+        />
+      )}
 
       {/* Reset Confirmation Modal */}
       {showResetModal && (
