@@ -9,7 +9,7 @@
  * - Language FieldGroups include search hint
  */
 
-import { Globe, Monitor, Paintbrush } from 'lucide-react';
+import { Globe, SlidersHorizontal, Monitor, Paintbrush } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
 import { FieldGroup } from '@/ui/FieldGroup';
@@ -66,7 +66,7 @@ export function GeneralSection() {
       {/* Inline section header — no redundant card */}
       <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <Monitor className="w-4 h-4 text-blue-400" />
+          <SlidersHorizontal className="w-4 h-4 text-blue-400" />
         </div>
         <div>
           <h2 className="text-base font-semibold text-zinc-100 leading-tight">General</h2>
