@@ -33,7 +33,7 @@ describe('ThemePreview', () => {
     render(<ThemePreview />);
 
     expect(screen.getByText("Artificial intelligence is reshaping how we communicate across languages and cultures.")).toBeInTheDocument();
-    expect(screen.getByText("L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.")).toBeInTheDocument();
+    expect(screen.getByText("Trí tuệ nhân tạo đang định hình lại cách chúng ta giao tiếp giữa các ngôn ngữ và nền văn hóa.")).toBeInTheDocument();
   });
 
   it('applies the current theme from settings', () => {
@@ -79,7 +79,7 @@ describe('ThemePreview', () => {
     const translatedText = container.querySelector('[data-anyllm-role="translation"]');
     expect(translatedText).toBeInTheDocument();
     expect(translatedText).toHaveClass('anyllm-translate-translation');
-    expect(translatedText).toHaveTextContent("L'intelligence artificielle redéfinit notre façon de communiquer entre les langues et les cultures.");
+    expect(translatedText).toHaveTextContent("Trí tuệ nhân tạo đang định hình lại cách chúng ta giao tiếp giữa các ngôn ngữ và nền văn hóa.");
   });
 
   it('applies different theme when settings change', () => {
