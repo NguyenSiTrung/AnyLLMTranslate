@@ -15,12 +15,14 @@ export interface InlineTranslateConfig {
   triggerKey: string;
   tapCount: number;
   timeWindowMs: number;
+  targetLanguage: string;
 }
 
 const DEFAULT_CONFIG: InlineTranslateConfig = {
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
+  targetLanguage: 'vi',
   timeWindowMs: 500,
 };
 
@@ -222,14 +224,14 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
     console.debug('[AnyLLMTranslate:inline] sending translation request', {
       text,
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
+      targetLanguage: config.targetLanguage,
     });
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSelection',
       text,
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
+      targetLanguage: config.targetLanguage,
     });
 
     console.debug('[AnyLLMTranslate:inline] received response', response);
