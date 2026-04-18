@@ -16,6 +16,8 @@ interface SettingsState extends ExtensionSettings {
   loadFromStorage: () => Promise<void>;
   /** Update partial settings (merges and persists) */
   updateSettings: (partial: Partial<ExtensionSettings>) => Promise<void>;
+  /** Convenience: update partial with nested merge (for sections) */
+  updateSetting: (partial: Partial<ExtensionSettings>) => Promise<void>;
   /** Update provider config (merges and persists) */
   updateProvider: (partial: Partial<ProviderConfig>) => Promise<void>;
   /** Reset to default settings */
@@ -44,6 +46,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             ...DEFAULT_SETTINGS.subtitleSettings,
             ...stored.subtitleSettings,
           },
+          inlineTranslate: {
+            ...DEFAULT_SETTINGS.inlineTranslate,
+            ...stored.inlineTranslate,
+          },
           isLoaded: true,
         });
       } else {
@@ -55,6 +61,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   updateSettings: async (partial) => {
+    const current = get();
+    const updated: ExtensionSettings = {
+      ...extractSettings(current),
+      ...partial,
+    };
+
+    set(partial);
+    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
+  },
+
+  updateSetting: async (partial) => {
     const current = get();
     const updated: ExtensionSettings = {
       ...extractSettings(current),
@@ -103,6 +120,10 @@ export function initStorageSync(): () => void {
           ...DEFAULT_SETTINGS.subtitleSettings,
           ...newVal.subtitleSettings,
         },
+        inlineTranslate: {
+          ...DEFAULT_SETTINGS.inlineTranslate,
+          ...newVal.inlineTranslate,
+        },
       });
     }
   };
@@ -145,5 +166,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     textSelectionEnabled: state.textSelectionEnabled,
     hoverTranslateEnabled: state.hoverTranslateEnabled,
     hoverDelay: state.hoverDelay,
+    inlineTranslate: state.inlineTranslate,
   };
 }

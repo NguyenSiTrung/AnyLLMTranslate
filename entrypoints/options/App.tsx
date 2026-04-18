@@ -13,6 +13,7 @@ import { DictionarySection } from './sections/DictionarySection';
 import { SubtitlesSection } from './sections/SubtitlesSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AdvancedSection } from './sections/AdvancedSection';
+import { InlineTranslateSection } from './sections/InlineTranslateSection';
 
 /* ── Grouped Navigation ─────────────────────────────────────── */
 
@@ -53,6 +54,7 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'SYSTEM',
     tabs: [
       { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+      { id: 'inline', label: 'Inline', icon: Zap },
       { id: 'advanced', label: 'Advanced', icon: Wrench },
     ],
   },
@@ -127,6 +129,7 @@ export default function App() {
       case 'dictionary': return <DictionarySection />;
       case 'subtitles': return <SubtitlesSection />;
       case 'shortcuts': return <ShortcutsSection />;
+      case 'inline': return <InlineTranslateSection />;
       case 'advanced': return <AdvancedSection />;
       default: return <GeneralSection />;
     }

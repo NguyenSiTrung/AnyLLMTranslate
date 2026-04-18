@@ -543,3 +543,71 @@ html.anyllm-dark [data-anyllm-theme="gradient-accent"] .anyllm-translate-transla
   vertical-align: top;
   margin-left: 2%;
 }
+
+/* ===== Inline Translate — Pulsing Border ===== */
+
+.anyllm-inline-translating {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 1px !important;
+  animation: anyllmInlinePulse 1.2s ease-in-out infinite !important;
+}
+
+@keyframes anyllmInlinePulse {
+  0%, 100% { outline-color: rgba(59, 130, 246, 0.6); }
+  50% { outline-color: rgba(59, 130, 246, 1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anyllm-inline-translating {
+    animation: none !important;
+    outline-color: #3b82f6 !important;
+  }
+}
+
+/* ===== Inline Translate — Floating Toast ===== */
+
+.anyllm-inline-toast {
+  all: initial;
+  display: inline-block;
+  position: fixed;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  animation: anyllmToastIn 0.2s ease-out forwards;
+  z-index: 2147483647;
+}
+
+.anyllm-inline-toast[data-type="loading"] {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+}
+
+.anyllm-inline-toast[data-type="success"] {
+  background: #064e3b;
+  color: #6ee7b7;
+  border: 1px solid #065f46;
+}
+
+.anyllm-inline-toast[data-type="error"] {
+  background: #450a0a;
+  color: #fca5a5;
+  border: 1px solid #7f1d1d;
+}
+
+@keyframes anyllmToastIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anyllm-inline-toast {
+    animation: none;
+    opacity: 1;
+  }
+}

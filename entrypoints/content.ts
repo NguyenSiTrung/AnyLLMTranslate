@@ -14,6 +14,7 @@ import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
+import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
@@ -29,6 +30,7 @@ let activeRequests = 0;
 let _textSelectionCleanup: (() => void) | null = null;
 let _hoverTranslateCleanup: (() => void) | null = null;
 let _keyboardShortcutsCleanup: (() => void) | null = null;
+let _inlineTranslateCleanup: (() => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -177,6 +179,13 @@ async function initInteractionFeatures(): Promise<void> {
   // Keyboard shortcuts (page-specific)
   _keyboardShortcutsCleanup = initKeyboardShortcuts();
 
+  // Inline translate (key-gesture)
+  _inlineTranslateCleanup = initInlineTranslate();
+  if (settings.inlineTranslate) {
+    setInlineTranslateEnabled(settings.inlineTranslate.enabled);
+    updateInlineTranslateConfig(settings.inlineTranslate);
+  }
+
   // Listen for settings changes to toggle features dynamically
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
@@ -205,6 +214,11 @@ async function initInteractionFeatures(): Promise<void> {
       if (newSettings.displayMode && getPageState() !== 'off') {
         const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
         setPageState(next);
+      }
+      // Inline translate settings
+      if (newSettings.inlineTranslate) {
+        setInlineTranslateEnabled(newSettings.inlineTranslate.enabled);
+        updateInlineTranslateConfig(newSettings.inlineTranslate);
       }
     }
   });

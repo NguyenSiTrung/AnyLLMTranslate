@@ -104,6 +104,18 @@ export interface SubtitleSettings {
   autoActivateSubtitles: boolean;
 }
 
+/** Inline translate settings for key-gesture translation */
+export interface InlineTranslateSettings {
+  /** Whether inline translate is enabled */
+  enabled: boolean;
+  /** Trigger key for the gesture (default: Space) */
+  triggerKey: string;
+  /** Number of consecutive key presses required (2–5, default: 3) */
+  tapCount: number;
+  /** Time window in ms for consecutive presses (200–1000, default: 500) */
+  timeWindowMs: number;
+}
+
 /** Extension settings stored in chrome.storage.local */
 export interface ExtensionSettings {
   /** Active provider configuration */
@@ -142,6 +154,8 @@ export interface ExtensionSettings {
   hoverTranslateEnabled: boolean;
   /** Hover translate delay in ms (200-500, default 300) */
   hoverDelay: number;
+  /** Inline translate settings (key-gesture) */
+  inlineTranslate: InlineTranslateSettings;
 }
 
 /** Provider preset definitions */
@@ -165,6 +179,14 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   translationTimeout: 30,
   preferredSubtitleLanguage: 'en',
   autoActivateSubtitles: false,
+};
+
+/** Default inline translate settings */
+export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
+  enabled: true,
+  triggerKey: ' ',
+  tapCount: 3,
+  timeWindowMs: 500,
 };
 
 /** Default settings */
@@ -196,6 +218,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   textSelectionEnabled: true,
   hoverTranslateEnabled: false,
   hoverDelay: 300,
+  inlineTranslate: { ...DEFAULT_INLINE_TRANSLATE_SETTINGS },
 };
 
 /** All available provider presets */

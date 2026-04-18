@@ -23,6 +23,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
         ...DEFAULT_SETTINGS.provider,
         ...stored.provider,
       },
+      inlineTranslate: {
+        ...DEFAULT_SETTINGS.inlineTranslate,
+        ...stored.inlineTranslate,
+      },
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -45,6 +49,10 @@ export async function updateSettings(
     provider: {
       ...current.provider,
       ...(partial.provider ?? {}),
+    },
+    inlineTranslate: {
+      ...current.inlineTranslate,
+      ...(partial.inlineTranslate ?? {}),
     },
   };
   await saveSettings(updated);

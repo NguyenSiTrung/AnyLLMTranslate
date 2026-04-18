@@ -9,6 +9,7 @@ import { Card } from '@/ui/Card';
 const DEFAULT_SHORTCUTS = [
   { action: 'Toggle Translation', shortcut: 'Alt+T', description: 'Start or stop translating the current page' },
   { action: 'Open Options', shortcut: 'Alt+O', description: 'Open the AnyLLMTranslate settings page' },
+  { action: 'Inline Translate', shortcut: 'Space × 3', description: 'Translate text in the focused input field (configurable)' },
 ];
 
 export function ShortcutsSection() {
