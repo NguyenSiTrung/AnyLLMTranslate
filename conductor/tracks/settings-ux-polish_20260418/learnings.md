@@ -15,4 +15,14 @@ Patterns, gotchas, and context discovered during implementation.
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## [2026-04-18 15:00] - All Phases Complete
+- **Implemented:** All 5 phases — bug fixes, section restructuring, visual polish, micro-interactions, verification
+- **Files changed:** App.tsx, ThemePreview.tsx, Card.tsx, GeneralSection, ProviderSection, ThemesSection, DictionarySection, SiteRulesSection, SubtitlesSection, ShortcutsSection, AdvancedSection + 2 test files
+- **Learnings:**
+  - Patterns: Merging cards uses `border-t border-zinc-800 pt-4` as visual divider within a single Card
+  - Patterns: Sub-group labels use `text-[10px] uppercase tracking-widest text-zinc-600` for category headers within controls
+  - Patterns: `motion-reduce:hover:translate-y-0` Tailwind class respects `prefers-reduced-motion` without needing extra CSS
+  - Patterns: Cap stagger delays with `Math.min(idx, 5)` to prevent 1.5s+ entrance delays on large lists
+  - Gotchas: Changing ThemePreview sample text requires updating ThemePreview.test.tsx assertions for both `getByText` and `toHaveTextContent`
+  - Gotchas: Merging card titles requires updating test assertions (`screen.getByText('Cache Configuration')` → `'Cache Management'`)
+---

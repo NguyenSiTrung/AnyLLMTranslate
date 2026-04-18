@@ -32,4 +32,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 - 🚧 **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Started 2026-04-17. [View](./conductor/tracks/multipage-subtitle-fix_20260417/)
-- 🆕 **Settings UI/UX Polish & Bug Fixes** (`settings-ux-polish_20260418`) — Created 2026-04-18. [View](./conductor/tracks/settings-ux-polish_20260418/)
+- ✅ **Settings UI/UX Polish & Bug Fixes** (`settings-ux-polish_20260418`) — Completed 2026-04-18. [View](./conductor/tracks/settings-ux-polish_20260418/)
