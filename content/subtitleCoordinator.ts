@@ -492,8 +492,10 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
   const handler = detectCurrentHandler();
   let tracks: AvailableSubtitleTrack[];
 
-  // If the current handler can extract structured tracks, use it
-  if (handler?.extractAvailableTracks) {
+  // If payload is from html5 textTrackDiscovery, use it directly
+  if (payload.platform === 'html5' && payload.tracks && Array.isArray(payload.tracks)) {
+    tracks = payload.tracks;
+  } else if (handler?.extractAvailableTracks) {
     const rawPayload = payload as unknown as { body?: string; contentType?: string; url?: string };
     tracks = handler.extractAvailableTracks(
       rawPayload.body || JSON.stringify(payload),
@@ -501,7 +503,7 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
       rawPayload.url || '',
     );
   } else if (payload.tracks && Array.isArray(payload.tracks)) {
-    // Direct tracks from TextTrack discovery (html5 fallback)
+    // Fallback for other cases
     tracks = payload.tracks;
   } else {
     return;
