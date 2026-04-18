@@ -222,14 +222,14 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
     console.debug('[AnyLLMTranslate:inline] sending translation request', {
       text,
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
+      targetLanguage: settings.inlineTranslate.targetLanguage,
     });
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSelection',
       text,
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
+      targetLanguage: settings.inlineTranslate.targetLanguage,
     });
 
     console.debug('[AnyLLMTranslate:inline] received response', response);

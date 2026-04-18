@@ -3,16 +3,19 @@
  * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
-import { Zap } from 'lucide-react';
+import { Zap, Globe } from 'lucide-react';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { FieldGroup } from '@/ui/FieldGroup';
+import { Select } from '@/ui/Select';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { LANGUAGES } from '@/lib/languages';
 
 export function InlineTranslateSection() {
   const inlineTranslate = useSettingsStore((s) => s.inlineTranslate);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
+  const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
 
   const handleToggle = (enabled: boolean) => {
     updateSetting({ inlineTranslate: { ...inlineTranslate, enabled } });
@@ -24,6 +27,10 @@ export function InlineTranslateSection() {
 
   const handleTimeWindow = (timeWindowMs: number) => {
     updateSetting({ inlineTranslate: { ...inlineTranslate, timeWindowMs } });
+  };
+
+  const handleTargetLanguage = (targetLanguage: string) => {
+    updateSetting({ inlineTranslate: { ...inlineTranslate, targetLanguage } });
   };
 
   const gestureLabel =
@@ -60,6 +67,25 @@ export function InlineTranslateSection() {
               within {inlineTranslate.timeWindowMs}ms
             </span>
           </div>
+
+          {/* Target Language */}
+          <FieldGroup
+            label="Target Language"
+            description="The language to translate text inputs into."
+            hint="Type the first few letters to jump to a language."
+            htmlFor="inline-translate-target-language"
+          >
+            <Select
+              id="inline-translate-target-language"
+              value={inlineTranslate.targetLanguage}
+              onChange={(e) => handleTargetLanguage(e.target.value)}
+              options={targetLanguages.map((lang) => ({
+                value: lang.code,
+                label: `${lang.nativeName} (${lang.name})`,
+              }))}
+              disabled={!inlineTranslate.enabled}
+            />
+          </FieldGroup>
 
           {/* Tap Count */}
           <FieldGroup

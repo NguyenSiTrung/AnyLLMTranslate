@@ -114,6 +114,8 @@ export interface InlineTranslateSettings {
   tapCount: number;
   /** Time window in ms for consecutive presses (200–1000, default: 500) */
   timeWindowMs: number;
+  /** Target language for inline translation (ISO 639-1 code) */
+  targetLanguage: string;
 }
 
 /** Extension settings stored in chrome.storage.local */
@@ -187,6 +189,7 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   triggerKey: ' ',
   tapCount: 3,
   timeWindowMs: 500,
+  targetLanguage: 'en',
 };
 
 /** Default settings */
