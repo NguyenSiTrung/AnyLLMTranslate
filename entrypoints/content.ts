@@ -181,7 +181,8 @@ async function initInteractionFeatures(): Promise<void> {
 
   // Inline translate (key-gesture)
   _inlineTranslateCleanup = initInlineTranslate();
-  if (settings.inlineTranslate) {
+  // Always apply inline translate settings (defaults are guaranteed by loadSettings)
+  if (settings.inlineTranslate?.enabled !== undefined) {
     setInlineTranslateEnabled(settings.inlineTranslate.enabled);
     updateInlineTranslateConfig(settings.inlineTranslate);
   }

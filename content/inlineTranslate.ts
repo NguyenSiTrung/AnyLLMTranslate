@@ -199,7 +199,12 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
   text = text.trim();
 
   // Skip empty / whitespace-only inputs
-  if (!text) return;
+  if (!text) {
+    console.debug('[AnyLLMTranslate:inline] gesture ignored - empty text');
+    return;
+  }
+
+  console.debug('[AnyLLMTranslate:inline] starting translation', { text, length: text.length });
 
   // Store original for fallback undo
   const originalText = getElementText(el);
@@ -214,6 +219,11 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
 
   try {
     const settings = await loadSettings();
+    console.debug('[AnyLLMTranslate:inline] sending translation request', {
+      text,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    });
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSelection',
@@ -222,6 +232,8 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
       targetLanguage: settings.targetLanguage,
     });
 
+    console.debug('[AnyLLMTranslate:inline] received response', response);
+
     if (response?.success && response.translatedText) {
       replaceElementText(el, response.translatedText);
       showToast(el, 'Translated ✓', 'success');
@@ -229,11 +241,13 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
       // Restore original on failure
       replaceElementText(el, originalText);
       showToast(el, '⚠ Translation failed', 'error');
+      console.warn('[AnyLLMTranslate:inline] translation failed', response);
     }
-  } catch {
+  } catch (error) {
     // Restore original on error
     replaceElementText(el, originalText);
     showToast(el, '⚠ Translation failed', 'error');
+    console.error('[AnyLLMTranslate:inline] translation error', error);
   } finally {
     isTranslating = false;
     removePulsingBorder(el);
@@ -245,7 +259,9 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
 /* ── Keydown Listener ─────────────────────────────────────────── */
 
 function onKeyDown(event: KeyboardEvent): void {
-  if (!config.enabled) return;
+  if (!config.enabled) {
+    return;
+  }
 
   // Only handle the configured trigger key
   if (event.key !== config.triggerKey) {
@@ -257,24 +273,33 @@ function onKeyDown(event: KeyboardEvent): void {
 
   // Guard: must be an editable element
   if (!isEditableElement(target)) {
+    console.debug('[AnyLLMTranslate:inline] key press ignored - not an editable element', {
+      target: target?.tagName,
+      isEditable: false,
+    });
     keyTimestamps = [];
     return;
   }
 
   // Guard: skip password fields
   if (isPasswordField(target)) {
+    console.debug('[AnyLLMTranslate:inline] key press ignored - password field');
     keyTimestamps = [];
     return;
   }
 
   // Guard: skip code editors
   if (isCodeEditor(target)) {
+    console.debug('[AnyLLMTranslate:inline] key press ignored - code editor');
     keyTimestamps = [];
     return;
   }
 
   // Guard: debounce during translation
-  if (isTranslating) return;
+  if (isTranslating) {
+    console.debug('[AnyLLMTranslate:inline] key press ignored - already translating');
+    return;
+  }
 
   const now = Date.now();
   keyTimestamps.push(now);
@@ -282,8 +307,17 @@ function onKeyDown(event: KeyboardEvent): void {
   // Keep only timestamps within the time window
   keyTimestamps = keyTimestamps.filter((t) => now - t <= config.timeWindowMs);
 
+  console.debug('[AnyLLMTranslate:inline] key tap', {
+    count: keyTimestamps.length,
+    needed: config.tapCount,
+    windowMs: config.timeWindowMs,
+    target: target.tagName,
+    targetType: (target as HTMLInputElement).type ?? 'N/A',
+  });
+
   if (keyTimestamps.length >= config.tapCount) {
     keyTimestamps = [];
+    console.debug('[AnyLLMTranslate:inline] gesture triggered!');
     // Trigger translation after a microtask to let the key input land in the field
     setTimeout(() => handleGestureTrigger(target), 0);
   }
@@ -320,6 +354,7 @@ export function isInlineTranslating(): boolean {
 /** Initialize the inline translate feature. Returns a cleanup function. */
 export function initInlineTranslate(): () => void {
   document.addEventListener('keydown', onKeyDown, true);
+  console.log('[AnyLLMTranslate:inline] Initialized — config:', { ...config });
 
   return () => {
     document.removeEventListener('keydown', onKeyDown, true);
