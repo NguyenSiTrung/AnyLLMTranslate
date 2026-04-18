@@ -91,9 +91,10 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Progressive Chunked Subtitle Translation** (Archived 2026-04-17): Implemented a progressive subtitle priority queue to respond to video seek events. Replaced batch processing with a progressive, chunked delivery system to reduce latency. Added context-aware processing with cue overlaps.
 - **Subtitle Drag-and-Drop Repositioning** (2026-04-17, incremental): Interactive drag-and-drop for subtitle overlay via pointer events, persistent position across sessions via chrome.storage, fullscreen-aware repositioning. CSS `cursor: grab/grabbing` and `user-select: none` for drag UX.
 - **Proactive Subtitle Discovery & Auto-Activation** (2026-04-17, incremental): Universal HTML5 TextTrack fallback discovery via MutationObserver + `addtrack` events (`inject/textTrackDiscovery.ts`). Extended YouTube, Udemy, and Coursera handlers to emit `SUBTITLE_TRACKS_DISCOVERED` messages. Auto-activation UI in Options → Subtitles section with language preference and toggle. New `subtitleAutoActivate` config option. 4 new tests added.
+- **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
 
 ### Current State
-- 524 tests passing across 42 files. Build passing (`wxt build` ✅). Lint-clean.
+- 526 tests passing across 42 files. Build passing (`wxt build` ✅, 576.75 KB). 4 lint errors in SiteRulesSection.tsx (non-null assertions, explicit any).
 - **Active track:** `multipage-subtitle-fix_20260417` — Per-video subtitle state isolation to prevent auto-activation on multi-video pages (YouTube home, search results).
 
 ## Out of Scope (Initial Release)

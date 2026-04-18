@@ -10,7 +10,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - WXT uses `entrypoints/` dir (not `src/`) for background.ts, content.ts, popup/. Other code lives at project root (lib/, types/, services/, content/). (from: phase1-foundation_20260409, archived 2026-04-09)
 - CSS import in content script must use `@/styles/inject.css` (not relative), since entrypoint is in `entrypoints/` but CSS is in `styles/`. (from: phase1-foundation_20260409, archived 2026-04-09)
 - Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB. (from: phase1-foundation_20260409, archived 2026-04-09)
-- WXT build produces ~346KB total for chrome-mv3 output (grew from ~270KB after Phase 3 options page). (from: phase1-foundation_20260409, updated 2026-04-10)
+- WXT build produces ~577KB total for chrome-mv3 output (grew from ~346KB after Phase 5 settings overhaul, subtitle features, and UI library). (from: phase1-foundation_20260409, updated 2026-04-18)
 
 ## Gotchas
 - WXT `init` refuses to run in non-empty directories — init in temp dir, then copy. (from: phase1-foundation_20260409, archived 2026-04-09)
@@ -233,6 +233,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - Platform handlers (YouTube, Udemy, Coursera) extended with discovery emission: parse available tracks from intercepted responses and emit `SUBTITLE_TRACKS_DISCOVERED` via the postMessage bridge before proceeding with translation. (from: incremental, 2026-04-17)
 - `AvailableSubtitleTrack` type with `platform` field enables the coordinator to differentiate discovery sources and apply platform-specific logic. (from: incremental, 2026-04-17)
 
+## Settings UI/UX Polish (2026-04-18)
+- Merging cards uses `border-t border-zinc-800 pt-4` as visual divider within a single Card — keeps related controls grouped without separate Card overhead. (from: settings-ux-polish_20260418, archived 2026-04-18)
+- Sub-group labels use `text-[10px] uppercase tracking-widest text-zinc-600` for category headers within controls — provides visual hierarchy without adding Card nesting. (from: settings-ux-polish_20260418, archived 2026-04-18)
+- `motion-reduce:hover:translate-y-0` Tailwind class respects `prefers-reduced-motion` without needing extra CSS — use alongside `hover:-translate-y-[1px]` for accessible hover lift. (from: settings-ux-polish_20260418, archived 2026-04-18)
+- Cap stagger delays with `Math.min(idx, 5)` to prevent 1.5s+ entrance delays on large lists (Dictionary entries, SiteRules items). (from: settings-ux-polish_20260418, archived 2026-04-18)
+- Changing ThemePreview sample text requires updating ThemePreview.test.tsx assertions for both `getByText` and `toHaveTextContent`. (from: settings-ux-polish_20260418, archived 2026-04-18)
+- Merging card titles (e.g. "Cache Configuration" → "Cache Management") requires updating test assertions (`screen.getByText(...)`) to match new names. (from: settings-ux-polish_20260418, archived 2026-04-18)
+
 ---
-Last refreshed: 2026-04-18T12:00:00+07:00
-Codebase health: 524 tests passing across 42 files, lint-clean
+Last refreshed: 2026-04-18T15:06:00+07:00
+Codebase health: 526 tests passing across 42 files, 4 lint errors in SiteRulesSection.tsx
