@@ -40,7 +40,7 @@ export function ShortcutsSection() {
                     <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
                     <p className="text-xs text-zinc-500 mt-0.5">{shortcut.description}</p>
                   </div>
-                  <kbd className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono shrink-0">
+                  <kbd className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono shrink-0 transition-transform duration-150 hover:-translate-y-[2px] hover:shadow-md active:translate-y-[1px] motion-reduce:hover:translate-y-0">
                     {shortcut.shortcut}
                   </kbd>
                 </div>

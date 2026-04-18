@@ -20,7 +20,7 @@ interface CardProps {
 
 const variantStyles: Record<CardVariant, string> = {
   default: 'bg-white/[0.02] border border-white/5 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
-  bordered: 'bg-white/[0.01] border border-white/10 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+  bordered: 'bg-white/[0.01] border border-white/10 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-lg motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none',
   elevated: 'bg-white/[0.02] border border-white/5 rounded-xl shadow-lg shadow-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
 };
 

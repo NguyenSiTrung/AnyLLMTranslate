@@ -192,8 +192,8 @@ export function SubtitlesSection() {
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
           <Card title="Preview" variant="bordered">
             <div
-              className={`relative rounded-lg overflow-hidden transition-opacity duration-300 ${
-                isDisabled ? 'opacity-50' : ''
+              className={`relative rounded-lg overflow-hidden transition-all duration-300 ${
+                isDisabled ? 'opacity-50 grayscale pointer-events-none' : ''
               }`}
               style={{
                 height: '170px',
