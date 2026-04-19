@@ -26,6 +26,9 @@ vi.mock('@/lib/config', () => ({
   loadSettings: vi.fn().mockResolvedValue({
     sourceLanguage: 'vi',
     targetLanguage: 'en',
+    inlineTranslate: {
+      targetLanguage: 'en',
+    },
   }),
 }));
 
