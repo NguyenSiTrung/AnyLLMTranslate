@@ -33,6 +33,13 @@ let isTranslating = false;
 /** Fallback undo map: element → original text before last translation */
 const undoMap = new WeakMap<Element, string>();
 
+/**
+ * Dedup guard — because we register on both `window` and `document` (capture),
+ * the same KeyboardEvent propagates through both listeners. This WeakSet
+ * ensures each event is processed exactly once.
+ */
+const processedEvents = new WeakSet<Event>();
+
 /* ── Guards ───────────────────────────────────────────────────── */
 
 /** Check if an element is an editable field we should handle */
@@ -194,28 +201,45 @@ function removeToast(): void {
 async function handleGestureTrigger(el: HTMLElement): Promise<void> {
   if (isTranslating) return;
 
-  let text = getElementText(el);
+  // Re-acquire the element if the originally captured target has been detached
+  // or is no longer editable (common on SPAs like Google Search that re-render
+  // the search box after our capture-phase keydown handler ran).
+  let targetEl = el;
+  if (!targetEl.isConnected || !isEditableElement(targetEl)) {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && isEditableElement(active)) {
+      targetEl = active;
+    } else {
+      console.debug('[AnyLLMTranslate:inline] gesture ignored - target detached');
+      return;
+    }
+  }
+
+  let text = getElementText(targetEl);
   text = stripTrailingTrigger(text, config.triggerKey, config.tapCount);
   text = text.trim();
 
-  // Skip empty / whitespace-only inputs
+  // Skip empty / whitespace-only inputs, but give the user visible feedback
+  // so the gesture is not silently eaten (e.g. mashing space in an empty box).
   if (!text) {
     console.debug('[AnyLLMTranslate:inline] gesture ignored - empty text');
+    showToast(targetEl, '⚠ Type something first', 'error');
+    setTimeout(removeToast, 2000);
     return;
   }
 
   console.debug('[AnyLLMTranslate:inline] starting translation', { text, length: text.length });
 
   // Store original for fallback undo
-  const originalText = getElementText(el);
-  undoMap.set(el, originalText);
+  const originalText = getElementText(targetEl);
+  undoMap.set(targetEl, originalText);
 
   // First, replace the trailing trigger characters in the field immediately
-  replaceElementText(el, text);
+  replaceElementText(targetEl, text);
 
   isTranslating = true;
-  addPulsingBorder(el);
-  showToast(el, 'Translating...', 'loading');
+  addPulsingBorder(targetEl);
+  showToast(targetEl, 'Translating...', 'loading');
 
   try {
     const settings = await loadSettings();
@@ -235,22 +259,22 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
     console.debug('[AnyLLMTranslate:inline] received response', response);
 
     if (response?.success && response.translatedText) {
-      replaceElementText(el, response.translatedText);
-      showToast(el, 'Translated ✓', 'success');
+      replaceElementText(targetEl, response.translatedText);
+      showToast(targetEl, 'Translated ✓', 'success');
     } else {
       // Restore original on failure
-      replaceElementText(el, originalText);
-      showToast(el, '⚠ Translation failed', 'error');
+      replaceElementText(targetEl, originalText);
+      showToast(targetEl, '⚠ Translation failed', 'error');
       console.warn('[AnyLLMTranslate:inline] translation failed', response);
     }
   } catch (error) {
     // Restore original on error
-    replaceElementText(el, originalText);
-    showToast(el, '⚠ Translation failed', 'error');
+    replaceElementText(targetEl, originalText);
+    showToast(targetEl, '⚠ Translation failed', 'error');
     console.error('[AnyLLMTranslate:inline] translation error', error);
   } finally {
     isTranslating = false;
-    removePulsingBorder(el);
+    removePulsingBorder(targetEl);
     // Auto-dismiss toast after 2 seconds
     setTimeout(removeToast, 2000);
   }
@@ -259,6 +283,10 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
 /* ── Keydown Listener ─────────────────────────────────────────── */
 
 function onKeyDown(event: KeyboardEvent): void {
+  // Dedup: we listen on both window + document (capture). Process each event once.
+  if (processedEvents.has(event)) return;
+  processedEvents.add(event);
+
   if (!config.enabled) {
     return;
   }
@@ -298,6 +326,15 @@ function onKeyDown(event: KeyboardEvent): void {
   // Guard: debounce during translation
   if (isTranslating) {
     console.debug('[AnyLLMTranslate:inline] key press ignored - already translating');
+    return;
+  }
+
+  // Guard: don't count trigger taps on empty / whitespace-only fields. This
+  // prevents the gesture from being silently consumed when the user mashes
+  // the spacebar before typing anything.
+  if (!getElementText(target).trim()) {
+    console.debug('[AnyLLMTranslate:inline] key press ignored - empty field');
+    keyTimestamps = [];
     return;
   }
 
@@ -353,10 +390,17 @@ export function isInlineTranslating(): boolean {
 
 /** Initialize the inline translate feature. Returns a cleanup function. */
 export function initInlineTranslate(): () => void {
+  // Register on both `window` and `document` in capture phase. Some sites
+  // (e.g. Google Search) install capture-phase listeners on `window` that
+  // call `stopImmediatePropagation()` — listening at window ensures we still
+  // see the event. The `processedEvents` WeakSet guarantees each event is
+  // processed exactly once across both listeners.
+  window.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('keydown', onKeyDown, true);
   console.log('[AnyLLMTranslate:inline] Initialized — config:', { ...config });
 
   return () => {
+    window.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
     removeToast();
     keyTimestamps = [];

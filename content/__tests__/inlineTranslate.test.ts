@@ -638,10 +638,184 @@ describe('debounce', () => {
 
 describe('cleanup', () => {
   it('removes event listeners on cleanup', () => {
-    const removeSpy = vi.spyOn(document, 'removeEventListener');
+    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
+    const winRemoveSpy = vi.spyOn(window, 'removeEventListener');
     const cleanup = initInlineTranslate();
     cleanup();
-    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
-    removeSpy.mockRestore();
+    expect(docRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    expect(winRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    docRemoveSpy.mockRestore();
+    winRemoveSpy.mockRestore();
+  });
+
+  it('registers keydown listeners on both window and document (capture)', () => {
+    const docAddSpy = vi.spyOn(document, 'addEventListener');
+    const winAddSpy = vi.spyOn(window, 'addEventListener');
+    const cleanup = initInlineTranslate();
+    expect(docAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    expect(winAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    cleanup();
+    docAddSpy.mockRestore();
+    winAddSpy.mockRestore();
+  });
+});
+
+/* ── Dedup (Window + Document) ────────────────────────────────── */
+
+describe('event dedup', () => {
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    cleanup = initInlineTranslate();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('processes each keydown event exactly once across window + document listeners', async () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = 'hello   ';
+    document.body.appendChild(input);
+    input.focus();
+
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'xin chào',
+    });
+
+    // Dispatch three keydown events — each propagates through window AND
+    // document capture phase. Without dedup, tapCount would be reached
+    // after ~2 events (6 counts), producing multiple translation calls.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ── Empty-field Guard & Re-acquisition ───────────────────────── */
+
+describe('empty field guard', () => {
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    cleanup = initInlineTranslate();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('does not count taps on empty field (prevents swallowed gestures)', async () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = '';
+    document.body.appendChild(input);
+    input.focus();
+
+    // Fire many more than tapCount — should never trigger because field is empty.
+    for (let i = 0; i < 6; i++) {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    }
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
+  });
+
+  it('does not count taps when field has only whitespace', async () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = '     ';
+    document.body.appendChild(input);
+    input.focus();
+
+    for (let i = 0; i < 6; i++) {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    }
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('active-element re-acquisition', () => {
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    cleanup = initInlineTranslate();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('falls back to document.activeElement when original target is detached', async () => {
+    const original = document.createElement('input');
+    original.type = 'text';
+    original.value = 'hello   ';
+    document.body.appendChild(original);
+    original.focus();
+
+    // Fire the gesture to completion, but before the microtask runs,
+    // swap the original element out and focus a replacement.
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'xin chào',
+    });
+
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+
+    // Simulate Google-style DOM swap: remove the original, add a fresh one.
+    original.remove();
+    const replacement = document.createElement('input');
+    replacement.type = 'text';
+    replacement.value = 'hello   ';
+    document.body.appendChild(replacement);
+    replacement.focus();
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    // Translation should still happen — operating on the re-acquired element.
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSelection',
+        text: 'hello',
+      }),
+    );
+  });
+
+  it('shows "Type something first" toast when gesture fires but active element is empty', async () => {
+    const original = document.createElement('input');
+    original.type = 'text';
+    original.value = 'hello   ';
+    document.body.appendChild(original);
+    original.focus();
+
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+
+    // Detach original and focus an empty replacement
+    original.remove();
+    const empty = document.createElement('input');
+    empty.type = 'text';
+    empty.value = '';
+    document.body.appendChild(empty);
+    empty.focus();
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    const toast = document.querySelector(`.${TOAST_CLASS}`);
+    expect(toast).not.toBeNull();
+    expect(toast?.getAttribute('data-type')).toBe('error');
+    expect(toast?.textContent).toBe('⚠ Type something first');
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });
