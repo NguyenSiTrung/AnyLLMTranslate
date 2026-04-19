@@ -28,9 +28,9 @@ This file tracks all major tracks for the project.
 
 - ✅ **Settings UI UX Pro-Max refactor** (`settings-ui-refactor_20260417`) — Archived 2026-04-17. [View](./conductor/archive/settings-ui-refactor_20260417/)
 - ✅ **Settings UI/UX Polish & Bug Fixes** (`settings-ux-polish_20260418`) — Archived 2026-04-18. [View](./conductor/archive/settings-ux-polish_20260418/)
+- ✅ **Inline Input Translation via Key Gesture** (`inline-translate_20260418`) — Archived 2026-04-18. [View](./conductor/archive/inline-translate_20260418/)
 
 ---
 
 ## Active Tracks
 - 🚧 **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Started 2026-04-17. [View](./conductor/tracks/multipage-subtitle-fix_20260417/)
-- 🆕 **Inline Input Translation via Key Gesture** (`inline-translate_20260418`) — Created 2026-04-18. [View](./conductor/tracks/inline-translate_20260418/)

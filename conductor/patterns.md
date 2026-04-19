@@ -19,6 +19,7 @@ Reusable patterns discovered during development. Read this before starting new w
 
 ## Testing
 - Vitest `@/` alias needs `resolve.alias` in vitest.config.ts (tsconfig paths are not auto-resolved by Vite). (from: phase1-foundation_20260409, archived 2026-04-09)
+- Always ensure `loadSettings` mocks in unit tests include all properties used by the implementation (including nested objects like `inlineTranslate`), otherwise tests may fail in try/catch blocks or during property access. (from: inline-translate_20260418, archived 2026-04-18)
 
 ## Subtitle & Interception
 - WXT MAIN world injection uses `world: 'MAIN'` and `run_at: 'document_start'` in wxt.config.ts for XHR/fetch access. (from: phase2-subtitles_20260409, archived 2026-04-09)
