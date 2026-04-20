@@ -210,7 +210,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   maxBatchChars: 2000,
   cacheTTLDays: 30,
   maxCacheSizeMB: 100,
-  theme: 'dividing-line',
+  theme: 'blockquote',
   translationPosition: 'below',
   darkMode: 'auto',
   siteRules: [],

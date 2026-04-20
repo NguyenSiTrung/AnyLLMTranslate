@@ -101,10 +101,9 @@ html:not([data-anyllm-state]) [data-anyllm-role="translation"] {
 }
 
 /* ============================================
-   THEME 1: dividing-line (default)
+   THEME 1: dividing-line
    ============================================ */
-[data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
-html:not([data-anyllm-theme]) .anyllm-translate-translation {
+[data-anyllm-theme="dividing-line"] .anyllm-translate-translation {
   border-top: 1px solid #e2e2e2;
   margin-top: 4px;
   padding-top: 4px;
@@ -115,25 +114,24 @@ html:not([data-anyllm-theme]) .anyllm-translate-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
-  html:not([data-anyllm-theme]) .anyllm-translate-translation {
+  [data-anyllm-theme="dividing-line"] .anyllm-translate-translation {
     border-top-color: #444;
     color: #aaa;
     background: #422006;
   }
 }
 
-html.anyllm-dark [data-anyllm-theme="dividing-line"] .anyllm-translate-translation,
-html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation {
+html.anyllm-dark [data-anyllm-theme="dividing-line"] .anyllm-translate-translation {
   border-top-color: #444;
   color: #aaa;
   background: #422006;
 }
 
 /* ============================================
-   THEME 2: blockquote
+   THEME 2: blockquote (default)
    ============================================ */
-[data-anyllm-theme="blockquote"] .anyllm-translate-translation {
+[data-anyllm-theme="blockquote"] .anyllm-translate-translation,
+html:not([data-anyllm-theme]) .anyllm-translate-translation {
   border-left: 3px solid #3b82f6;
   padding-left: 12px;
   margin-top: 6px;
@@ -142,13 +140,15 @@ html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation {
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-anyllm-theme="blockquote"] .anyllm-translate-translation {
+  [data-anyllm-theme="blockquote"] .anyllm-translate-translation,
+  html:not([data-anyllm-theme]) .anyllm-translate-translation {
     border-left-color: #60a5fa;
     color: #aaa;
   }
 }
 
-html.anyllm-dark [data-anyllm-theme="blockquote"] .anyllm-translate-translation {
+html.anyllm-dark [data-anyllm-theme="blockquote"] .anyllm-translate-translation,
+html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation {
   border-left-color: #60a5fa;
   color: #aaa;
 }

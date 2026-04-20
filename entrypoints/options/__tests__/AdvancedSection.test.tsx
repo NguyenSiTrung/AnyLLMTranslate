@@ -30,7 +30,7 @@ describe('AdvancedSection - Cache Configuration', () => {
     sourceLanguage: 'en',
     targetLanguage: 'es',
     displayMode: 'bilingual-below',
-    theme: 'dividing-line',
+    theme: 'blockquote',
     translationPosition: 'below',
     darkMode: false,
     siteRules: [],

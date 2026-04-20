@@ -226,8 +226,8 @@ AnyLLMTranslate includes **16 built-in themes** that apply via CSS data-attribut
 
 | Theme | Key = `data-anyllm-theme` |
 |-------|--------------------------|
-| Dividing Line | `dividing-line` *(default)* |
-| Blockquote | `blockquote` |
+| Dividing Line | `dividing-line` |
+| Blockquote | `blockquote` *(default)* |
 | Paper | `paper` |
 | Underline | `underline` |
 | Dashed Underline | `dashed-underline` |

@@ -123,7 +123,7 @@ describe('config types', () => {
     });
 
     it('has new Phase 3 defaults', () => {
-      expect(DEFAULT_SETTINGS.theme).toBe('dividing-line');
+      expect(DEFAULT_SETTINGS.theme).toBe('blockquote');
       expect(DEFAULT_SETTINGS.translationPosition).toBe('below');
       expect(DEFAULT_SETTINGS.darkMode).toBe('auto');
       expect(DEFAULT_SETTINGS.siteRules).toEqual([]);

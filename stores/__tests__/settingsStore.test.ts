@@ -49,7 +49,7 @@ describe('useSettingsStore', () => {
   describe('initial state', () => {
     it('starts with DEFAULT_SETTINGS', () => {
       const state = useSettingsStore.getState();
-      expect(state.theme).toBe('dividing-line');
+      expect(state.theme).toBe('blockquote');
       expect(state.targetLanguage).toBe('vi');
       expect(state.provider.preset).toBe('ollama');
       expect(state.isLoaded).toBe(false);
@@ -78,7 +78,7 @@ describe('useSettingsStore', () => {
 
       const state = useSettingsStore.getState();
       expect(state.isLoaded).toBe(true);
-      expect(state.theme).toBe('dividing-line');
+      expect(state.theme).toBe('blockquote');
     });
   });
 
@@ -112,7 +112,7 @@ describe('useSettingsStore', () => {
       await useSettingsStore.getState().resetToDefaults();
 
       const state = useSettingsStore.getState();
-      expect(state.theme).toBe('dividing-line');
+      expect(state.theme).toBe('blockquote');
       expect(state.targetLanguage).toBe('vi');
       expect(state.isLoaded).toBe(true);
     });
@@ -158,7 +158,7 @@ describe('useSettingsStore', () => {
       );
 
       const state = useSettingsStore.getState();
-      expect(state.theme).toBe('dividing-line');
+      expect(state.theme).toBe('blockquote');
     });
 
     it('returns cleanup function that removes listener', () => {

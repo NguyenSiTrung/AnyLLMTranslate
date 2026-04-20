@@ -25,8 +25,8 @@ export function ThemePreview() {
   const settings = useSettingsStore();
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Default to dividing-line if theme is undefined or empty
-  const theme = settings.theme || 'dividing-line';
+  // Default to blockquote if theme is undefined or empty
+  const theme = settings.theme || 'blockquote';
 
   return (
     <Card title="Theme Preview" icon={<Eye className="w-3.5 h-3.5" />} variant="bordered">

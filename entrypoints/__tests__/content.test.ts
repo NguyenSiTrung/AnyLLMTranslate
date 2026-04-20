@@ -22,7 +22,7 @@ import { ViewportObserver } from '@/content/viewportObserver';
 import { loadSettings } from '@/lib/config';
 
 const mockSettings: ExtensionSettings = {
-  theme: 'dividing-line',
+  theme: 'blockquote',
   translationPosition: 'below',
   darkMode: 'auto',
   sourceLanguage: 'en',
@@ -56,7 +56,7 @@ describe('content.ts', () => {
     it('applies translation position from settings when translation starts', async () => {
       vi.mocked(loadSettings).mockResolvedValue({
         ...mockSettings,
-        theme: 'dividing-line',
+        theme: 'blockquote',
         translationPosition: 'above',
         darkMode: 'light',
       });

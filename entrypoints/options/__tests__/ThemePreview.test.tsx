@@ -17,7 +17,7 @@ describe('ThemePreview', () => {
 
   it('renders the theme preview card', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     render(<ThemePreview />);
@@ -27,7 +27,7 @@ describe('ThemePreview', () => {
 
   it('displays bilingual sample text', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     render(<ThemePreview />);
@@ -48,7 +48,7 @@ describe('ThemePreview', () => {
 
   it('sets dual state for bilingual display', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container } = render(<ThemePreview />);
@@ -59,7 +59,7 @@ describe('ThemePreview', () => {
 
   it('marks original text with role attribute', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container } = render(<ThemePreview />);
@@ -71,7 +71,7 @@ describe('ThemePreview', () => {
 
   it('marks translated text with role and anyllm-translate-translation class', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container } = render(<ThemePreview />);
@@ -117,7 +117,7 @@ describe('ThemePreview', () => {
 
   it('renders all 16 theme names correctly', () => {
     const themes: Array<ThemeName> = [
-      'dividing-line',
+      'blockquote',
       'blockquote',
       'paper',
       'underline',
@@ -150,13 +150,13 @@ describe('ThemePreview', () => {
   it('updates preview when theme changes in settings store', () => {
     // Initial theme
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container, rerender } = render(<ThemePreview />);
 
     let previewContainer = container.querySelector('[data-anyllm-theme]');
-    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
 
     // Change theme
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -170,7 +170,7 @@ describe('ThemePreview', () => {
   });
 
   it('updates preview in under 100ms (performance test)', () => {
-    const themes: Array<ThemeName> = ['dividing-line', 'blockquote', 'paper', 'underline'];
+    const themes: Array<ThemeName> = ['blockquote', 'dividing-line', 'paper', 'underline'];
 
     themes.forEach((theme) => {
       (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ theme });
@@ -191,7 +191,7 @@ describe('ThemePreview', () => {
 
   it('renders dark mode toggle', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     render(<ThemePreview />);
@@ -202,7 +202,7 @@ describe('ThemePreview', () => {
 
   it('applies anyllm-dark class when toggle is checked', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container } = render(<ThemePreview />);
@@ -221,7 +221,7 @@ describe('ThemePreview', () => {
 
   it('preview container has correct initial state without anyllm-dark class', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     const { container } = render(<ThemePreview />);
@@ -229,13 +229,13 @@ describe('ThemePreview', () => {
     const previewContainer = container.querySelector('.theme-preview-container');
     expect(previewContainer).toBeInTheDocument();
     expect(previewContainer).not.toHaveClass('anyllm-dark');
-    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
     expect(previewContainer).toHaveAttribute('data-anyllm-state', 'dual');
   });
 
   it('toggle is keyboard navigable', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     render(<ThemePreview />);
@@ -248,7 +248,7 @@ describe('ThemePreview', () => {
 
   it('toggle has proper ARIA attributes', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      theme: 'dividing-line',
+      theme: 'blockquote',
     });
 
     render(<ThemePreview />);
@@ -267,8 +267,8 @@ describe('ThemePreview', () => {
 
     const previewContainer = container.querySelector('[data-anyllm-theme]');
     expect(previewContainer).toBeInTheDocument();
-    // Component should default to dividing-line when theme is undefined
-    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
+    // Component should default to blockquote when theme is undefined
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
 
   it('handles edge case with empty string theme', () => {
@@ -280,7 +280,7 @@ describe('ThemePreview', () => {
 
     const previewContainer = container.querySelector('[data-anyllm-theme]');
     expect(previewContainer).toBeInTheDocument();
-    // Component should default to dividing-line when theme is empty string
-    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'dividing-line');
+    // Component should default to blockquote when theme is empty string
+    expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
 });
