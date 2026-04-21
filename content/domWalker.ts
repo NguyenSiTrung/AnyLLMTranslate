@@ -5,7 +5,7 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
-import { BLOCK_ELEMENTS, SKIP_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
+import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
 
 let pieceCounter = 0;
 
@@ -132,6 +132,22 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
     let anchorElement = getCommonAncestor(currentTextNodes);
     if (!anchorElement || anchorElement.tagName === 'BODY' || anchorElement.tagName === 'HTML') {
       anchorElement = currentParent;
+    }
+
+    // Walk up from inline elements to ensure anchor is a suitable container for hiding
+    // This fixes translation-only mode where we'd otherwise hide just a link/span
+    while (anchorElement && INLINE_ELEMENTS.has(anchorElement.tagName)) {
+      anchorElement = anchorElement.parentElement;
+    }
+    // Ensure we have a valid anchor after walking up
+    if (!anchorElement || anchorElement.tagName === 'BODY' || anchorElement.tagName === 'HTML') {
+      anchorElement = currentParent;
+    }
+
+    // Never anchor to <body> or <html> — in replace mode hiding those would blank the page
+    if (anchorElement && (anchorElement.tagName === 'BODY' || anchorElement.tagName === 'HTML')) {
+      currentTextNodes = [];
+      return;
     }
 
     // Split long texts at sentence boundaries

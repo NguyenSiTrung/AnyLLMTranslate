@@ -119,11 +119,21 @@ describe('content/domWalker', () => {
       expect(pieces.every((p) => p.isTranslated === false)).toBe(true);
     });
 
-    it('stores original HTML', () => {
-      document.body.innerHTML = '<p>Hello <strong>world</strong></p>';
+    it('skips body-anchored pieces (text inside inline elements directly under body)', () => {
+      // Simulates Wikipedia's "Jump to content" link — inline <a> directly in <body>
+      document.body.innerHTML = '<a href="#content">Jump to content</a>';
       const pieces = extractPieces(document.body);
 
-      expect(pieces[0].originalHTML).toContain('<strong>');
+      expect(pieces.length).toBe(0);
+    });
+
+    it('still extracts normal content when inline elements are nested in blocks', () => {
+      document.body.innerHTML = '<p><a href="#">Link text</a> and more text</p>';
+      const pieces = extractPieces(document.body);
+
+      expect(pieces.length).toBe(1);
+      expect(pieces[0].text).toBe('Link text and more text');
+      expect(pieces[0].parentElement.tagName).toBe('P');
     });
   });
 });

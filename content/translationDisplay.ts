@@ -30,6 +30,11 @@ export function applyDarkMode(mode: DarkMode): void {
 /** Show a loading spinner placeholder below parentElement, in the same slot as the eventual translation.
  * Idempotent: calling twice for the same pieceId does nothing. */
 export function showLoadingPlaceholder(parentElement: Element, pieceId: string): void {
+  // Defensive: never mark <body> or <html> as original
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') {
+    return;
+  }
+
   // Already exists — do nothing
   if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) {
     return;
@@ -55,6 +60,11 @@ export function applyTranslation(
   pieceId: string,
   translatedText: string,
 ): void {
+  // Defensive: never mark <body> or <html> as original — that would hide the page
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') {
+    return;
+  }
+
   // Mark original element
   parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
   parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
@@ -91,6 +101,11 @@ export function setErrorState(
   errorMessage: string,
   onRetry?: () => void,
 ): void {
+  // Defensive: never attach states to layout roots
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') {
+    return;
+  }
+
   parentElement.setAttribute('data-anyllm-error', '');
 
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);

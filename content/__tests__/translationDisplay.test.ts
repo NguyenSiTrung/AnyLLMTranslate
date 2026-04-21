@@ -115,6 +115,13 @@ describe('translationDisplay', () => {
       expect(parent.getAttribute('data-anyllm-role')).toBe('original');
       expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
     });
+
+    it('refuses to mark body or html as original', () => {
+      const before = document.body.innerHTML;
+      applyTranslation(document.body, 'piece-1', 'Translation');
+      expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(document.body.innerHTML).toBe(before);
+    });
   });
 
   describe('showLoadingPlaceholder', () => {
@@ -149,6 +156,12 @@ describe('translationDisplay', () => {
 
       const placeholders = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
       expect(placeholders).toHaveLength(1);
+    });
+
+    it('refuses to attach spinner to body or html', () => {
+      showLoadingPlaceholder(document.body, 'piece-body');
+      expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
+      expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
     });
   });
 
@@ -189,6 +202,12 @@ describe('translationDisplay', () => {
       const errors = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
       expect(errors).toHaveLength(1);
       expect(errors[0].textContent).toContain('Second error');
+    });
+
+    it('refuses to attach error state to body or html', () => {
+      setErrorState(document.body, 'piece-body', 'Error');
+      expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
+      expect(document.body.hasAttribute('data-anyllm-error')).toBe(false);
     });
   });
 
