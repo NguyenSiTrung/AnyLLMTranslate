@@ -20,6 +20,12 @@ const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: str
   error: { icon: AlertCircle, label: 'Translation Error', color: 'text-red-400', badge: 'bg-red-500/10 text-red-400 border-red-500/20' },
 };
 
+const CONNECTION_STATUS_CONFIG: Record<'unknown' | 'success' | 'error', { color: string }> = {
+  unknown: { color: 'bg-zinc-500/50' },
+  success: { color: 'bg-emerald-500/50' },
+  error: { color: 'bg-red-500/50' },
+};
+
 const THEME_LABELS: Record<ThemeName, string> = {
   'dividing-line': 'Dividing Line', blockquote: 'Blockquote', paper: 'Paper',
   underline: 'Underline', 'dashed-underline': 'Dashed', highlight: 'Highlight',
@@ -277,6 +283,8 @@ export default function App() {
   }, [isTranslating, status.status]);
 
   const statusConfig = STATUS_CONFIG[status.status];
+  const connectionStatus = settings.provider.connectionStatus ?? 'unknown';
+  const connectionStatusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
   const StatusIcon = statusConfig.icon;
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
   const sourceLanguages = LANGUAGES;
@@ -527,7 +535,7 @@ export default function App() {
           <span className="font-medium group-hover:text-zinc-300 transition-colors">{providerPreset?.displayName ?? settings.provider.displayName}</span>
         </div>
         <div className="flex items-center gap-1 bg-zinc-900 px-2 py-0.5 rounded-full border border-zinc-800/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
+          <span className={`w-1.5 h-1.5 rounded-full ${connectionStatusConfig.color}`} />
           <span className="text-zinc-400 font-mono tracking-tight">{settings.provider.model}</span>
         </div>
       </div>

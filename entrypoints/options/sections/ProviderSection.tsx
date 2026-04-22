@@ -60,13 +60,16 @@ export function ProviderSection() {
     setTestResult(result);
     setIsTesting(false);
 
+    // Save connection status to provider config
+    updateProvider({ connectionStatus: result.overall ? 'success' : 'error' });
+
     if (result.overall) {
       showSuccess('Connection test passed! All checks successful.');
     } else {
       const failedStep = result.steps.find((s) => !s.success);
       showError(`Connection test failed: ${failedStep?.error ?? 'Unknown error'}`);
     }
-  }, [settings.provider, showSuccess, showError]);
+  }, [settings.provider, showSuccess, showError, updateProvider]);
 
   const promptValidation = settings.customSystemPrompt
     ? validatePromptTemplate(settings.customSystemPrompt)

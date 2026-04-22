@@ -20,6 +20,8 @@ export interface ProviderConfig {
   requiresApiKey: boolean;
   /** Request timeout in milliseconds (default: 60000) */
   requestTimeoutMs?: number;
+  /** Connection test result status */
+  connectionStatus?: 'unknown' | 'success' | 'error';
 }
 
 /** Translation display mode */
@@ -204,6 +206,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     temperature: 0.3,
     maxTokens: 4096,
     displayName: 'Custom',
+    connectionStatus: 'unknown',
     requiresApiKey: false,
     requestTimeoutMs: 60000,
   },

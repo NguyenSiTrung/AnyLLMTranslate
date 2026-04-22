@@ -58,4 +58,5 @@ export const STORAGE_KEYS = {
   SETTINGS: 'anyllm-translate-settings',
   CACHE_DB: 'anyllm-translate-cache',
   CACHE_STORE: 'translations',
+  CONNECTION_STATUS: 'anyllm-connection-status',
 } as const;
