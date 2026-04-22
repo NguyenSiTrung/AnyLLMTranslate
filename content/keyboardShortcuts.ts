@@ -6,6 +6,8 @@
 
 import { setTextSelectionEnabled, isTextSelectionEnabled, removeTooltip, removeTranslateButton } from '@/content/textSelection';
 import { setHoverTranslateEnabled, isHoverTranslateEnabled } from '@/content/hoverTranslate';
+import { enterPickerMode, isPickerActive, exitPickerMode } from '@/content/sectionPicker';
+import { translateSection } from '@/content/sectionTranslate';
 
 /** Shortcut definitions for page-specific shortcuts */
 export interface ShortcutConfig {
@@ -42,6 +44,20 @@ function getDefaultShortcuts(): ShortcutConfig[] {
         const newState = !isTextSelectionEnabled();
         setTextSelectionEnabled(newState);
         console.log(`[AnyLLMTranslate] Text selection translate: ${newState ? 'ON' : 'OFF'}`);
+      },
+    },
+    {
+      key: 'q',
+      altKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      description: 'Translate section (picker mode)',
+      action: () => {
+        if (isPickerActive()) {
+          exitPickerMode();
+        } else {
+          enterPickerMode((el) => translateSection(el));
+        }
       },
     },
     {

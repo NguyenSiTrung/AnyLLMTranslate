@@ -29,6 +29,12 @@ function setupContextMenus(): void {
     });
 
     chrome.contextMenus.create({
+      id: 'translate-section',
+      title: 'Translate This Section',
+      contexts: ['page'],
+    });
+
+    chrome.contextMenus.create({
       id: 'translate-subtitles',
       title: 'Translate Subtitles',
       contexts: ['page'],
@@ -78,6 +84,9 @@ export default defineBackground(() => {
             text: info.selectionText,
           });
         }
+        break;
+      case 'translate-section':
+        sendToActiveTab({ action: 'enterSectionPicker' });
         break;
       case 'translate-subtitles':
         sendToActiveTab({ action: 'startSubtitleTranslation' });

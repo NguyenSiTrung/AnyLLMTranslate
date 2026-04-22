@@ -63,9 +63,9 @@ describe('content/keyboardShortcuts', () => {
   });
 
   describe('getDefaultShortcuts', () => {
-    it('returns 3 default shortcuts', () => {
+    it('returns 4 default shortcuts', () => {
       const shortcuts = getDefaultShortcuts();
-      expect(shortcuts).toHaveLength(3);
+      expect(shortcuts).toHaveLength(4);
     });
 
     it('includes Alt+H for hover translate toggle', () => {

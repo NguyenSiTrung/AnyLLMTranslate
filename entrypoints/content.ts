@@ -19,6 +19,8 @@ import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
 import { findMatchingRule } from '@/lib/siteRules';
+import { enterPickerMode } from '@/content/sectionPicker';
+import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -145,6 +147,7 @@ export function stopTranslation(): void {
     viewportObserver = null;
   }
   removeAllTranslations();
+  removeAllSectionTranslations();
   hideAutoTranslateNotification();
   allPieces = [];
 
@@ -246,6 +249,8 @@ function setupMessageListener(): void {
       stopTranslation();
     } else if (message.action === 'toggleTranslation') {
       toggleTranslation();
+    } else if (message.action === 'enterSectionPicker') {
+      enterPickerMode((el) => translateSection(el));
     } else if (message.action === 'getStatus') {
       const pageState = getPageState();
       let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
