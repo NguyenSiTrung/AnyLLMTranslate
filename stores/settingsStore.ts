@@ -1,13 +1,15 @@
 /**
  * Zustand settings store — reactive state management for extension settings.
  * Syncs with chrome.storage.local and listens for cross-context changes.
+ * All persistence goes through lib/config.ts so API keys are encrypted at rest.
  */
 
 import { create } from 'zustand';
 import type { ExtensionSettings, ThemeName } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
-import { STORAGE_KEYS } from '@/lib/constants';
 import type { ProviderConfig } from '@/types/config';
+import { loadSettings, saveSettings, updateSettings as updateSettingsInStorage } from '@/lib/config';
+import { deepMerge } from '@/lib/utils';
 
 interface SettingsState extends ExtensionSettings {
   /** Whether the store has loaded from storage */
@@ -31,71 +33,33 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   loadFromStorage: async () => {
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
-      const stored = result[STORAGE_KEYS.SETTINGS] as Partial<ExtensionSettings> | undefined;
-
-      if (stored) {
-        set({
-          ...DEFAULT_SETTINGS,
-          ...stored,
-          provider: {
-            ...DEFAULT_SETTINGS.provider,
-            ...stored.provider,
-          },
-          subtitleSettings: {
-            ...DEFAULT_SETTINGS.subtitleSettings,
-            ...stored.subtitleSettings,
-          },
-          inlineTranslate: {
-            ...DEFAULT_SETTINGS.inlineTranslate,
-            ...stored.inlineTranslate,
-          },
-          isLoaded: true,
-        });
-      } else {
-        set({ isLoaded: true });
-      }
+      const loaded = await loadSettings();
+      set({ ...loaded, isLoaded: true });
     } catch {
       set({ isLoaded: true });
     }
   },
 
   updateSettings: async (partial) => {
-    const current = get();
-    const updated: ExtensionSettings = {
-      ...extractSettings(current),
-      ...partial,
-    };
-
+    await updateSettingsInStorage(partial);
     set(partial);
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   },
 
   updateSetting: async (partial) => {
-    const current = get();
-    const updated: ExtensionSettings = {
-      ...extractSettings(current),
-      ...partial,
-    };
-
+    await updateSettingsInStorage(partial);
     set(partial);
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   },
-
 
   updateProvider: async (partial) => {
     const current = get();
     const provider = { ...current.provider, ...partial };
-    const updated = extractSettings(current);
-    updated.provider = provider;
-
+    await updateSettingsInStorage({ provider });
     set({ provider });
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   },
 
   resetToDefaults: async () => {
+    await saveSettings(DEFAULT_SETTINGS);
     set({ ...DEFAULT_SETTINGS, isLoaded: true });
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: DEFAULT_SETTINGS });
   },
 }));
 
@@ -105,27 +69,22 @@ export function initStorageSync(): () => void {
     changes: Record<string, chrome.storage.StorageChange>,
     areaName: string,
   ) => {
-    if (areaName !== 'local' || !changes[STORAGE_KEYS.SETTINGS]) return;
+    if (areaName !== 'local' || !changes['anyllm-translate-settings']) return;
 
-    const newVal = changes[STORAGE_KEYS.SETTINGS].newValue as Partial<ExtensionSettings> | undefined;
-    if (newVal) {
-      useSettingsStore.setState({
-        ...DEFAULT_SETTINGS,
-        ...newVal,
-        provider: {
-          ...DEFAULT_SETTINGS.provider,
-          ...newVal.provider,
-        },
-        subtitleSettings: {
-          ...DEFAULT_SETTINGS.subtitleSettings,
-          ...newVal.subtitleSettings,
-        },
-        inlineTranslate: {
-          ...DEFAULT_SETTINGS.inlineTranslate,
-          ...newVal.inlineTranslate,
-        },
-      });
-    }
+    const newVal = changes['anyllm-translate-settings'].newValue as
+      | Partial<ExtensionSettings>
+      | undefined;
+    if (!newVal) return;
+
+    // Synchronous merge for immediate UI updates
+    const merged = deepMerge(
+      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+      newVal as Record<string, unknown>,
+    ) as unknown as ExtensionSettings;
+    useSettingsStore.setState(merged);
+
+    // Async reload to decrypt any encrypted fields (e.g. apiKey)
+    useSettingsStore.getState().loadFromStorage().catch(() => {});
   };
 
   chrome.storage.onChanged.addListener(listener);

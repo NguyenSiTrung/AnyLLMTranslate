@@ -12,21 +12,33 @@ export function showSubtitleToast(message: string, isSticky = false) {
     document.body.appendChild(toastContainer);
   }
 
+  // Clear previous children
+  while (toastContainer.firstChild) {
+    toastContainer.removeChild(toastContainer.firstChild);
+  }
+
   // Inject standard loading spinner from inject.css if "Translating" is in message
   const isTranslating = message.toLowerCase().includes('translating');
-  
-  toastContainer.innerHTML = `
-    ${isTranslating ? '<div class="anyllm-translate-loading" style="margin-right: 8px; border-color: white; border-bottom-color: transparent;"></div>' : ''}
-    <span>${message}</span>
-    <button class="anyllm-translate-toast-close" aria-label="Close">✕</button>
-  `;
-
-  // Wire up close button
-  const closeButton = toastContainer.querySelector('.anyllm-translate-toast-close');
-  if (closeButton) {
-    closeButton.addEventListener('click', hideSubtitleToast);
+  if (isTranslating) {
+    const spinner = document.createElement('div');
+    spinner.className = 'anyllm-translate-loading';
+    spinner.style.marginRight = '8px';
+    spinner.style.borderColor = 'white';
+    spinner.style.borderBottomColor = 'transparent';
+    toastContainer.appendChild(spinner);
   }
-  
+
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = message;
+  toastContainer.appendChild(msgSpan);
+
+  const closeButton = document.createElement('button');
+  closeButton.className = 'anyllm-translate-toast-close';
+  closeButton.setAttribute('aria-label', 'Close');
+  closeButton.textContent = '✕';
+  closeButton.addEventListener('click', hideSubtitleToast);
+  toastContainer.appendChild(closeButton);
+
   toastContainer.classList.add('anyllm-translate-subtitle-toast-visible');
 
   if (toastTimeout) {

@@ -68,7 +68,7 @@ type TabId = string;
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [showSaved, setShowSaved] = useState(false);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const contentRef = useRef<HTMLDivElement>(null);
   const loadFromStorage = useSettingsStore((s) => s.loadFromStorage);
   const isLoaded = useSettingsStore((s) => s.isLoaded);
@@ -85,7 +85,7 @@ export default function App() {
 
   // Auto-save feedback: listen for store updates
   useEffect(() => {
-    const unsub = useSettingsStore.subscribe(() => {
+    const unsub = useSettingsStore.subscribe((_state) => {
       setShowSaved(true);
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => setShowSaved(false), 2000);

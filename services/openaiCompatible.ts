@@ -117,31 +117,46 @@ export class OpenAICompatibleService implements TranslationService {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-    });
+    const timeout = this.config.requestTimeoutMs ?? 60000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '');
-      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
-      // Try to extract a meaningful error message from the response body
-      try {
-        const errorJson = JSON.parse(errorBody);
-        if (errorJson.error?.message) {
-          errorMessage = errorJson.error.message;
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+        // Try to extract a meaningful error message from the response body
+        try {
+          const errorJson = JSON.parse(errorBody);
+          if (errorJson.error?.message) {
+            errorMessage = errorJson.error.message;
+          }
+        } catch {
+          if (errorBody) {
+            errorMessage += ` — ${errorBody.slice(0, 200)}`;
+          }
         }
-      } catch {
-        if (errorBody) {
-          errorMessage += ` — ${errorBody.slice(0, 200)}`;
-        }
+
+        throw new Error(errorMessage);
       }
 
-      throw new Error(errorMessage);
+      return (await response.json()) as ChatCompletionResponse;
+    } catch (error) {
+      clearTimeout(timer);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Translation request timed out after ${timeout}ms`, { cause: error });
+      }
+      throw error;
     }
 
-    return (await response.json()) as ChatCompletionResponse;
   }
 }

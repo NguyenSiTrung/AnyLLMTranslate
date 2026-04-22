@@ -20,7 +20,8 @@ export type MessageAction =
   | 'PRIORITIZE_SUBTITLE_CHUNK'
   | 'SUBTITLE_TRACKS_AVAILABLE'
   | 'SELECT_SUBTITLE_TRACK'
-  | 'GET_AVAILABLE_TRACKS';
+  | 'GET_AVAILABLE_TRACKS'
+  | 'FLUSH_LRU';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -101,6 +102,12 @@ export interface PrioritizeSubtitleChunkMessage {
 }
 
 /** Union type for all messages */
+/** Flush LRU cache updates on page unload */
+export interface FlushLruMessage {
+  action: 'FLUSH_LRU';
+}
+
+/** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
   | RestoreMessage
@@ -115,7 +122,8 @@ export type ExtensionMessage =
   | PrioritizeSubtitleChunkMessage
   | SubtitleTracksAvailableMessage
   | SelectSubtitleTrackMessage
-  | GetAvailableTracksMessage;
+  | GetAvailableTracksMessage
+  | FlushLruMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

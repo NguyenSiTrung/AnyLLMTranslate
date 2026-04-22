@@ -129,8 +129,8 @@ export function SiteRulesSection() {
                     <div>
                       <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
                       {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
-                      {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors!.length} include</Badge>}
-                      {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors!.length} exclude</Badge>}
+                      {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors.length} include</Badge>}
+                      {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
                     </div>
                   </div>
                   {!rule.builtIn && (
@@ -181,8 +181,8 @@ function RuleEditForm({ rule, onSave, onCancel }: {
       includeSelectors: form.includeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
       excludeSelectors: form.excludeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
     };
-    delete (parsedRule as any).includeSelectorText;
-    delete (parsedRule as any).excludeSelectorText;
+    const { includeSelectorText: _inc, excludeSelectorText: _exc, ...cleanRule } = parsedRule;
+    onSave(cleanRule as SiteRule);
     onSave(parsedRule);
   };
 

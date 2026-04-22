@@ -36,30 +36,30 @@ vi.mock('@/content/messageBridge', () => ({
     _capturedTracksHandler = handler;
     return () => {};
   },
-  sendTranslatedSubtitle: (...args: unknown[]) => mockSendTranslatedSubtitle(...args),
+  sendTranslatedSubtitle: (...args: unknown[]) => { mockSendTranslatedSubtitle(...args); },
 }));
 
-const mockOnMessage = vi.fn(() => () => {});
+const mockOnMessage = vi.fn().mockReturnValue(() => {});
 vi.mock('@/inject/messageBridge', () => ({
-  onMessage: (...args: unknown[]) => mockOnMessage(...args),
+  onMessage: (...args: unknown[]) => { mockOnMessage(...args); },
 }));
 
 const mockInitializeOverlay = vi.fn();
 const mockUpdateCues = vi.fn();
 const mockCleanupOverlay = vi.fn();
-const mockGetOverlayTextContainer = vi.fn(() => null);
+const mockGetOverlayTextContainer = vi.fn<(...args: unknown[]) => null>(() => null);
 vi.mock('@/content/subtitleOverlay', () => ({
-  initializeOverlay: (...args: unknown[]) => mockInitializeOverlay(...args),
-  updateCues: (...args: unknown[]) => mockUpdateCues(...args),
-  cleanup: (...args: unknown[]) => mockCleanupOverlay(...args),
-  getOverlayTextContainer: (...args: unknown[]) => mockGetOverlayTextContainer(...args),
+  initializeOverlay: (...args: unknown[]) => { mockInitializeOverlay(...args); },
+  updateCues: (...args: unknown[]) => { mockUpdateCues(...args); },
+  cleanup: (...args: unknown[]) => { mockCleanupOverlay(...args); },
+  getOverlayTextContainer: (...args: unknown[]) => { mockGetOverlayTextContainer(...args); },
 }));
 
 const mockInitializeControls = vi.fn();
-const mockEnableDragReposition = vi.fn(() => vi.fn());
+const mockEnableDragReposition = vi.fn<(...args: unknown[]) => (() => void)>(() => vi.fn());
 vi.mock('@/content/subtitleControls', () => ({
-  initializeControls: (...args: unknown[]) => mockInitializeControls(...args),
-  enableDragReposition: (...args: unknown[]) => mockEnableDragReposition(...args),
+  initializeControls: (...args: unknown[]) => { mockInitializeControls(...args); },
+  enableDragReposition: (...args: unknown[]) => { mockEnableDragReposition(...args); },
 }));
 
 const mockParseSubtitles = vi.fn();

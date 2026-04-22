@@ -85,13 +85,20 @@ function createTooltip(
     // Wire up copy button
     const copyBtn = tooltip.querySelector('.anyllm-tooltip-copy');
     if (copyBtn) {
-      copyBtn.addEventListener('click', (e) => {
+      copyBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(text);
-        (copyBtn as HTMLElement).innerHTML = '✓';
-        setTimeout(() => {
-          (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-        }, 1500);
+        try {
+          await navigator.clipboard.writeText(text);
+          (copyBtn as HTMLElement).innerHTML = '✓';
+          setTimeout(() => {
+            (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+          }, 1500);
+        } catch {
+          (copyBtn as HTMLElement).innerHTML = '!';
+          setTimeout(() => {
+            (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+          }, 1500);
+        }
       });
     }
 
@@ -137,13 +144,20 @@ function updateTooltipContent(translatedText: string): void {
   // Re-wire buttons
   const copyBtn = contentDiv.querySelector('.anyllm-tooltip-copy');
   if (copyBtn) {
-    copyBtn.addEventListener('click', (e) => {
+    copyBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      navigator.clipboard.writeText(translatedText);
-      (copyBtn as HTMLElement).innerHTML = '✓';
-      setTimeout(() => {
-        (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-      }, 1500);
+      try {
+        await navigator.clipboard.writeText(translatedText);
+        (copyBtn as HTMLElement).innerHTML = '✓';
+        setTimeout(() => {
+          (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+        }, 1500);
+      } catch {
+        (copyBtn as HTMLElement).innerHTML = '!';
+        setTimeout(() => {
+          (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+        }, 1500);
+      }
     });
   }
 

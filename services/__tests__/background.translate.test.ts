@@ -23,6 +23,12 @@ vi.stubGlobal('chrome', {
   },
   runtime: { sendMessage: vi.fn().mockResolvedValue(undefined) },
   tabs: { onRemoved: { addListener: vi.fn() } },
+  alarms: {
+    create: vi.fn(),
+    get: vi.fn(),
+    clear: vi.fn(),
+    onAlarm: { addListener: vi.fn(), removeListener: vi.fn() },
+  },
 });
 
 // ── Module-level mocks (hoisted) ─────────────────────────────────────────────

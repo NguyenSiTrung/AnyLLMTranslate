@@ -97,6 +97,11 @@ describe('config types', () => {
         fontSize: 18,
         backgroundOpacity: 0.5,
         enabled: true,
+        fontFamily: 'system',
+        displayMode: 'bilingual',
+        translationTimeout: 30,
+        preferredSubtitleLanguage: 'en',
+        autoActivateSubtitles: false,
       };
       expect(settings.fontSize).toBe(18);
       expect(settings.backgroundOpacity).toBe(0.5);

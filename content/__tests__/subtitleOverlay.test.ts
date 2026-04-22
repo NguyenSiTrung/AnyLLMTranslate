@@ -3,7 +3,7 @@
  * display mode data attribute, and updateConfig integration.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ============================================================================
 // DOM setup — jsdom provides document/window but not ResizeObserver

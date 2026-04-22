@@ -462,10 +462,8 @@ function isOnWatchPage(): boolean {
     return pathname.includes('/lecture/');
   }
 
-  // Generic fallback for unlisted platforms only:
-  // treat as a watch page if there is exactly one video element with a loaded source.
-  const videos = document.querySelectorAll('video');
-  return videos.length === 1 && !!(videos[0] as HTMLVideoElement).currentSrc;
+  // Unknown platform — do not auto-activate on generic video elements
+  return false;
 }
 
 
@@ -550,12 +548,10 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
   });
 
   // Notify popup/UI about available tracks
-  try {
-    chrome.runtime.sendMessage({
-      action: 'SUBTITLE_TRACKS_AVAILABLE',
-      tracks: state.availableTracks,
-    });
-  } catch { /* popup may not be open */ }
+  chrome.runtime.sendMessage({
+    action: 'SUBTITLE_TRACKS_AVAILABLE',
+    tracks: state.availableTracks,
+  }).catch(() => { /* popup may not be open */ });
 
   // Tracks are now stored. Auto-activate will fire only when the user
   // actually presses play — see startVideoPlaybackWatcher().

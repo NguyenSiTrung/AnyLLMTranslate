@@ -40,7 +40,7 @@ export function sendMessage<T>(type: BridgeMessageType, payload: T, overrideRequ
     channel: CHANNEL,
     payload,
   };
-  window.postMessage(message, '*');
+  window.postMessage(message, window.location.origin);
   return requestId;
 }
 
@@ -97,7 +97,7 @@ export function requestResponse<TReq, TRes>(
 
     // Override resolve to clear timer
     const originalResolve = resolve;
-    resolve = ((value: unknown) => {
+    resolve = ((value: TRes | PromiseLike<TRes>) => {
       clearTimeout(timer);
       originalResolve(value);
     }) as typeof resolve;

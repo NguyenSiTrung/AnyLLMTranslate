@@ -13,7 +13,6 @@ import {
   setInlineTranslateEnabled,
   updateInlineTranslateConfig,
   getInlineTranslateConfig,
-  isInlineTranslating,
   undoMap,
   PULSING_CLASS,
   TOAST_CLASS,
@@ -421,7 +420,7 @@ describe('visual feedback', () => {
   it('adds pulsing class during translation, removes after', async () => {
     const input = createFocusedInput('hello   ');
 
-    let resolveTranslation: (value: unknown) => void;
+    let resolveTranslation = (_value: unknown) => {};
     const translationPromise = new Promise((resolve) => {
       resolveTranslation = resolve;
     });
@@ -436,7 +435,7 @@ describe('visual feedback', () => {
     expect(input.classList.contains(PULSING_CLASS)).toBe(true);
 
     // Resolve the translation
-    resolveTranslation!({ success: true, translatedText: 'xin chào' });
+    resolveTranslation({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
 
     // Pulsing should be removed
@@ -446,7 +445,7 @@ describe('visual feedback', () => {
   it('shows toast with loading state', async () => {
     const input = createFocusedInput('hello   ');
 
-    let resolveTranslation: (value: unknown) => void;
+    let resolveTranslation = (_value: unknown) => {};
     const translationPromise = new Promise((resolve) => {
       resolveTranslation = resolve;
     });
@@ -463,7 +462,7 @@ describe('visual feedback', () => {
     expect(toast?.getAttribute('data-type')).toBe('loading');
     expect(toast?.textContent).toBe('Translating...');
 
-    resolveTranslation!({ success: true, translatedText: 'xin chào' });
+    resolveTranslation({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
   });
 
@@ -600,7 +599,7 @@ describe('debounce', () => {
     document.body.appendChild(input);
     input.focus();
 
-    let resolveFirst: (value: unknown) => void;
+    let resolveFirst = (_value: unknown) => {};
     const firstPromise = new Promise((resolve) => {
       resolveFirst = resolve;
     });
@@ -629,7 +628,7 @@ describe('debounce', () => {
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
 
     // Resolve first
-    resolveFirst!({ success: true, translatedText: 'xin chào' });
+    resolveFirst({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
   });
 });

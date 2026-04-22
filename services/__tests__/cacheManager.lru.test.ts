@@ -141,11 +141,11 @@ describe('getCachedTranslation — LRU batch writes (FR-4)', () => {
     // Act — same key hit twice in quick succession
     const t1 = Date.now();
     await getCachedTranslation('Hello', 'en', 'vi');
-    vi.advanceTimersByTime(100); // still within debounce
+    vi.advanceTimersByTime(50); // still within debounce
     await getCachedTranslation('Hello', 'en', 'vi');
 
     // Flush
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(200);
 
     // Assert — should have only 1 write for this key (latest wins)
     const key = await generateCacheKey('Hello', 'en', 'vi');

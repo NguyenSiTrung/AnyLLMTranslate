@@ -24,10 +24,75 @@ interface TranslationSession {
 }
 const activeSessions = new Map<number, TranslationSession>();
 
+/** Keep-alive alarm name for MV3 service worker */
+const KEEPALIVE_ALARM = 'sw-keepalive';
+
+/** Create or ensure keep-alive alarm exists when sessions are active */
+function ensureKeepaliveAlarm(): void {
+  chrome.alarms.get(KEEPALIVE_ALARM, (alarm) => {
+    if (!alarm) {
+      chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.33 }); // ~20s
+    }
+  });
+}
+
+/** Clear keep-alive alarm when no sessions remain */
+function clearKeepaliveAlarm(): void {
+  if (activeSessions.size === 0) {
+    chrome.alarms.clear(KEEPALIVE_ALARM);
+  }
+}
+
+// Alarm listener — existence of alarm keeps SW alive
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEPALIVE_ALARM) {
+    // No-op: alarm firing keeps service worker alive
+  }
+});
+
  
 
 /** Active translation service instance */
 let translationService: OpenAICompatibleService | null = null;
+
+/** Rate-limiting semaphore: max 3 concurrent, queue up to 10 */
+interface SemaphoreState {
+  active: number;
+  queue: Array<() => void>;
+}
+const semaphore: SemaphoreState = { active: 0, queue: [] };
+const MAX_CONCURRENT = 3;
+const MAX_QUEUE = 10;
+
+async function acquireSemaphore(): Promise<void> {
+  if (semaphore.active < MAX_CONCURRENT) {
+    semaphore.active++;
+    return;
+  }
+  if (semaphore.queue.length >= MAX_QUEUE) {
+    throw new Error('Too many translation requests — please try again later');
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const idx = semaphore.queue.indexOf(resolve);
+      if (idx !== -1) semaphore.queue.splice(idx, 1);
+      reject(new Error('Translation request timed out waiting in queue'));
+    }, 30000);
+    semaphore.queue.push(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+function releaseSemaphore(): void {
+  if (semaphore.queue.length > 0) {
+    const next = semaphore.queue.shift();
+    if (next) next();
+  } else {
+    semaphore.active = Math.max(0, semaphore.active - 1);
+  }
+}
 
 /** Initialize or re-create translation service from settings */
 async function initService(): Promise<OpenAICompatibleService> {
@@ -47,6 +112,7 @@ async function initService(): Promise<OpenAICompatibleService> {
 async function handleTranslate(
   message: ExtensionMessage & { action: 'translate' }
 ): Promise<TranslationResultMessage> {
+  await acquireSemaphore();
   try {
     const settings = await loadSettings();
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
@@ -72,6 +138,8 @@ async function handleTranslate(
     if (uncachedPieces.length === 0) {
       return { success: true, results: cachedResults };
     }
+
+    ensureKeepaliveAlarm();
 
     // Translate only uncached pieces
     const service = await initService();
@@ -106,19 +174,24 @@ async function handleTranslate(
         }
       }
 
+      clearKeepaliveAlarm();
       return {
         success: true,
         results: [...cachedResults, ...freshResults],
       };
     } else {
+      clearKeepaliveAlarm();
       return {
         success: false,
         error: result.error ?? 'Translation failed',
       };
     }
   } catch (error) {
+    clearKeepaliveAlarm();
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: errorMsg };
+  } finally {
+    releaseSemaphore();
   }
 }
 
@@ -147,6 +220,7 @@ async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
   sender?: chrome.runtime.MessageSender,
 ): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+  await acquireSemaphore();
   try {
     const service = await initService();
     const { cues, sourceLanguage, targetLanguage } = message;
@@ -271,8 +345,9 @@ async function handleTranslateSubtitle(
           }
         }
       };
-      
+
       activeSessions.set(tabId, session);
+      ensureKeepaliveAlarm();
 
       (async () => {
          while (session.queue.length > 0) {
@@ -299,6 +374,7 @@ async function handleTranslateSubtitle(
             }
          }
          activeSessions.delete(tabId);
+         clearKeepaliveAlarm();
       })();
     }
 
@@ -306,13 +382,42 @@ async function handleTranslateSubtitle(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
     return { success: false, error: errorMsg };
+  } finally {
+    releaseSemaphore();
   }
+}
+
+/** Allowed subtitle domains for CORS bypass */
+const SUBTITLE_ALLOWLIST = [
+  /youtube\.com/,
+  /googlevideo\.com/,
+  /youtu\.be/,
+  /udemycdn\.com/,
+  /udemy\.com/,
+  /coursera\.org/,
+  /coursera-user-content\.net/,
+  /vimeo\.com/,
+  /vimeocdn\.com/,
+  /netflix\.com/,
+  /nflxvideo\.net/,
+  /amazon\.com/,
+  /primevideo\.com/,
+  /aiv-cdn\.net/,
+  /cloudfront\.net/,
+  /akamaized\.net/,
+];
+
+function isAllowedSubtitleUrl(url: string): boolean {
+  return SUBTITLE_ALLOWLIST.some((pattern) => pattern.test(url));
 }
 
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
 async function handleFetchSubtitle(
   message: FetchSubtitleMessage,
 ): Promise<{ success: boolean; content?: string; error?: string }> {
+  if (!isAllowedSubtitleUrl(message.url)) {
+    return { success: false, error: 'URL not in subtitle allow-list' };
+  }
   try {
     const response = await fetch(message.url);
     if (!response.ok) {
@@ -422,6 +527,10 @@ export function handleMessage(
     case 'statusUpdate':
       handleStatusUpdate(message, _sender.tab?.id);
       return undefined;
+    case 'FLUSH_LRU': {
+      // No-op: content script sends this on beforeunload to keep SW alive briefly
+      return undefined;
+    }
     case 'PRIORITIZE_SUBTITLE_CHUNK': {
       const tabId = _sender.tab?.id;
       if (tabId) {

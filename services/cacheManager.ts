@@ -49,14 +49,23 @@ const pendingLruUpdates = new Map<string, CacheEntry>();
 /** Debounce timer for LRU flush */
 let lruFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Mutex to prevent overlapping async flush calls */
+let isFlushing = false;
+
 /** Flush all pending LRU updates in one batch */
-async function flushLruUpdates(): Promise<void> {
+export async function flushLruUpdates(): Promise<void> {
+  if (isFlushing) return;
+  isFlushing = true;
   lruFlushTimer = null;
   // Snapshot and clear before async ops to avoid races
   const batch = new Map(pendingLruUpdates);
   pendingLruUpdates.clear();
-  for (const [key, entry] of batch) {
-    await set(key, entry, getStore());
+  try {
+    for (const [key, entry] of batch) {
+      await set(key, entry, getStore());
+    }
+  } finally {
+    isFlushing = false;
   }
 }
 
@@ -88,7 +97,7 @@ export async function getCachedTranslation(
       flushLruUpdates().catch(() => {
         // Silently fail — LRU update is best-effort
       });
-    }, 500);
+    }, 100);
 
     return entry.translatedText;
   } catch {

@@ -16,6 +16,7 @@ import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/c
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
 import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
+import { flushLruUpdates } from '@/services/cacheManager';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -31,6 +32,7 @@ let _textSelectionCleanup: (() => void) | null = null;
 let _hoverTranslateCleanup: (() => void) | null = null;
 let _keyboardShortcutsCleanup: (() => void) | null = null;
 let _inlineTranslateCleanup: (() => void) | null = null;
+let _storageChangeListener: ((changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void) | null = null;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -143,13 +145,19 @@ export function stopTranslation(): void {
   removeAllTranslations();
   allPieces = [];
 
-  chrome.runtime.sendMessage({ action: 'restore' });
+  chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
   sendStatusUpdate(); // Broadcast idle state
 
   // Cleanup subtitle coordinator
   if (coordinatorCleanup) {
     coordinatorCleanup();
     coordinatorCleanup = null;
+  }
+
+  // Cleanup storage change listener
+  if (_storageChangeListener) {
+    chrome.storage.onChanged.removeListener(_storageChangeListener);
+    _storageChangeListener = null;
   }
 }
 
@@ -188,7 +196,7 @@ async function initInteractionFeatures(): Promise<void> {
   }
 
   // Listen for settings changes to toggle features dynamically
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  _storageChangeListener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
     if (areaName !== 'local') return;
     const settingsKey = 'anyllm-translate-settings';
     if (changes[settingsKey]?.newValue) {
@@ -222,7 +230,8 @@ async function initInteractionFeatures(): Promise<void> {
         updateInlineTranslateConfig(newSettings.inlineTranslate);
       }
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(_storageChangeListener);
 }
 
 /** Listen for messages from popup/background */
@@ -255,6 +264,10 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   cssInjectionMode: 'manifest',
   async main() {
+    // Guard against re-injection on SPA re-routes or WXT reloads
+    if ((window as unknown as Record<string, unknown>).__anyllmTranslateInitialized) return;
+    (window as unknown as Record<string, unknown>).__anyllmTranslateInitialized = true;
+
     // Register platform handlers for isolated world
     registerSubtitleHandlers([
       new YouTubeHandler(),
@@ -265,6 +278,12 @@ export default defineContentScript({
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
     await initInteractionFeatures();
+
+    // Flush pending cache LRU updates on page unload
+    window.addEventListener('beforeunload', () => {
+      flushLruUpdates().catch(() => {});
+      chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
+    });
     console.log('[AnyLLMTranslate] Content script loaded');
   },
 });

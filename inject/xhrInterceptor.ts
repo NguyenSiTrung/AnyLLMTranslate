@@ -52,7 +52,7 @@ export class XhrInterceptor {
         (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
       }
 
-      return originalOpen.apply(this, [method, url, ...args]);
+      return (originalOpen as (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) => void).apply(this, [method, url, ...args]);
     };
 
     // Patch XMLHttpRequest.prototype.addEventListener to capture load/readystatechange handlers

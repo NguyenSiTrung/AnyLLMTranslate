@@ -1,10 +1,13 @@
 /**
  * Settings store — reads/writes chrome.storage.local with defaults.
+ * API keys are encrypted at rest via AES-GCM.
  */
 
 import type { ExtensionSettings } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
+import { encryptApiKey, decryptApiKey } from './crypto';
+import { deepMerge } from './utils';
 
 /** Load settings from chrome.storage.local with defaults */
 export async function loadSettings(): Promise<ExtensionSettings> {
@@ -16,18 +19,15 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       return { ...DEFAULT_SETTINGS };
     }
 
-    return {
-      ...DEFAULT_SETTINGS,
-      ...stored,
-      provider: {
-        ...DEFAULT_SETTINGS.provider,
-        ...stored.provider,
-      },
-      inlineTranslate: {
-        ...DEFAULT_SETTINGS.inlineTranslate,
-        ...stored.inlineTranslate,
-      },
-    };
+    const merged = deepMerge(
+      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+      stored as Record<string, unknown>,
+    ) as unknown as ExtensionSettings;
+
+    // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
+    merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);
+
+    return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -35,7 +35,14 @@ export async function loadSettings(): Promise<ExtensionSettings> {
 
 /** Save settings to chrome.storage.local */
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: settings });
+  const encrypted = {
+    ...settings,
+    provider: {
+      ...settings.provider,
+      apiKey: await encryptApiKey(settings.provider.apiKey),
+    },
+  };
+  await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: encrypted });
 }
 
 /** Update partial settings (merges with existing) */
@@ -43,18 +50,10 @@ export async function updateSettings(
   partial: Partial<ExtensionSettings>,
 ): Promise<ExtensionSettings> {
   const current = await loadSettings();
-  const updated: ExtensionSettings = {
-    ...current,
-    ...partial,
-    provider: {
-      ...current.provider,
-      ...(partial.provider ?? {}),
-    },
-    inlineTranslate: {
-      ...current.inlineTranslate,
-      ...(partial.inlineTranslate ?? {}),
-    },
-  };
+  const updated = deepMerge(
+    current as unknown as Record<string, unknown>,
+    partial as Record<string, unknown>,
+  ) as unknown as ExtensionSettings;
   await saveSettings(updated);
   return updated;
 }

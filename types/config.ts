@@ -18,6 +18,8 @@ export interface ProviderConfig {
   displayName: string;
   /** Whether this provider requires an API key */
   requiresApiKey: boolean;
+  /** Request timeout in milliseconds (default: 60000) */
+  requestTimeoutMs?: number;
 }
 
 /** Translation display mode */
@@ -203,6 +205,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     maxTokens: 4096,
     displayName: 'Ollama',
     requiresApiKey: false,
+    requestTimeoutMs: 60000,
   },
   sourceLanguage: 'auto',
   targetLanguage: 'vi',

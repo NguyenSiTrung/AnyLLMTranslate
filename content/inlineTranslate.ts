@@ -38,7 +38,8 @@ const undoMap = new WeakMap<Element, string>();
  * the same KeyboardEvent propagates through both listeners. This WeakSet
  * ensures each event is processed exactly once.
  */
-const processedEvents = new WeakSet<Event>();
+const processedEventIds = new Map<string, number>();
+const DEDUP_WINDOW_MS = 50;
 
 /* ── Guards ───────────────────────────────────────────────────── */
 
@@ -284,8 +285,10 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
 
 function onKeyDown(event: KeyboardEvent): void {
   // Dedup: we listen on both window + document (capture). Process each event once.
-  if (processedEvents.has(event)) return;
-  processedEvents.add(event);
+  const dedupKey = `${event.timeStamp}-${event.key}-${event.type}`;
+  const lastSeen = processedEventIds.get(dedupKey);
+  if (lastSeen && Date.now() - lastSeen < DEDUP_WINDOW_MS) return;
+  processedEventIds.set(dedupKey, Date.now());
 
   if (!config.enabled) {
     return;

@@ -3,7 +3,7 @@
  * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
-import { Zap, Globe } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';

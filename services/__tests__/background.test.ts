@@ -26,6 +26,15 @@ vi.stubGlobal('chrome', {
       addListener: vi.fn(),
     },
   },
+  alarms: {
+    create: vi.fn(),
+    get: vi.fn(),
+    clear: vi.fn(),
+    onAlarm: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
+  },
 });
 
 // Mock fetch for translation service

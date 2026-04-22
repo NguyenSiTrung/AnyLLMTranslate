@@ -11,6 +11,7 @@ import { DEFAULT_SETTINGS, PROVIDER_PRESETS } from '@/types/config';
 import type { ThemeName, DisplayMode, ExtensionSettings } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
 import { STORAGE_KEYS } from '@/lib/constants';
+import { loadSettings, updateSettings } from '@/lib/config';
 
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string; badge: string }> = {
   idle: { icon: Globe2, label: 'Ready to Translate', color: 'text-zinc-400', badge: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
@@ -176,10 +177,8 @@ export default function App() {
 
   async function loadSettingsFromStorage() {
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEYS.SETTINGS);
-      if (result[STORAGE_KEYS.SETTINGS]) {
-        setSettings({ ...DEFAULT_SETTINGS, ...result[STORAGE_KEYS.SETTINGS] });
-      }
+      const loaded = await loadSettings();
+      setSettings(loaded);
     } catch { /* defaults */ }
   }
 
@@ -204,18 +203,15 @@ export default function App() {
   }
 
   const updateSetting = useCallback(async (partial: Partial<ExtensionSettings>) => {
-    const updated = { ...settings, ...partial };
+    const updated = await updateSettings(partial);
     setSettings(updated);
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
-  }, [settings]);
+  }, []);
 
   const updateSubtitleSetting = useCallback(async (partial: Partial<typeof settings.subtitleSettings>) => {
-    const updated = {
-      ...settings,
-      subtitleSettings: { ...settings.subtitleSettings, ...partial }
-    };
+    const updated = await updateSettings({
+      subtitleSettings: { ...settings.subtitleSettings, ...partial },
+    });
     setSettings(updated);
-    await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: updated });
   }, [settings]);
 
   const handleToggleTranslation = useCallback(async () => {

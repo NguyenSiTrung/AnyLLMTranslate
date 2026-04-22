@@ -29,7 +29,7 @@ describe('Button', () => {
 
   it('shows loading spinner and disables', () => {
     render(<Button loading>Save</Button>);
-    const btn = screen.getByRole('button');
+    const btn = screen.getByRole('button') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
 

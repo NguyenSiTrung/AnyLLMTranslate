@@ -23,6 +23,8 @@ const DEFAULT_PREFS: OverlayConfig = {
   backgroundOpacity: 0.75,
   offsetX: 0,
   offsetY: 0,
+  fontFamily: 'system',
+  displayMode: 'bilingual',
 };
 
 /** Drag state */

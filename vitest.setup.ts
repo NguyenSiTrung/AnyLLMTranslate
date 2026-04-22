@@ -9,7 +9,17 @@ global.ResizeObserver = class ResizeObserver {
 } as unknown as typeof ResizeObserver;
 
 // Mock WXT defineContentScript
-global.defineContentScript = vi.fn();
+(globalThis as unknown as Record<string, unknown>).defineContentScript = vi.fn();
+
+// Patch KeyboardEvent in jsdom to assign unique timeStamps (required for dedup tests)
+let _keyboardEventTimeStamp = 1;
+const OriginalKeyboardEvent = globalThis.KeyboardEvent;
+(globalThis as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent = class extends (OriginalKeyboardEvent as typeof KeyboardEvent) {
+  constructor(type: string, eventInitDict?: KeyboardEventInit) {
+    super(type, eventInitDict);
+    Object.defineProperty(this, 'timeStamp', { value: _keyboardEventTimeStamp++ });
+  }
+} as typeof KeyboardEvent;
 
 // Mock chrome API for extension tests
 global.chrome = {
@@ -19,6 +29,17 @@ global.chrome = {
       set: vi.fn(),
     },
     onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
+  },
+  alarms: {
+    create: vi.fn(),
+    get: vi.fn((_name: string, callback?: (alarm?: chrome.alarms.Alarm) => void) => {
+      if (callback) callback(undefined);
+    }),
+    clear: vi.fn(),
+    onAlarm: {
       addListener: vi.fn(),
       removeListener: vi.fn(),
     },

@@ -134,6 +134,8 @@ describe('content/subtitleControls', () => {
         backgroundOpacity: 0.5,
         offsetX: 10,
         offsetY: 20,
+        fontFamily: 'system' as const,
+        displayMode: 'bilingual' as const,
       };
 
       await savePreferences(config);
@@ -150,6 +152,8 @@ describe('content/subtitleControls', () => {
         backgroundOpacity: 0.5,
         offsetX: 0,
         offsetY: 0,
+        fontFamily: 'system' as const,
+        displayMode: 'bilingual' as const,
       };
 
       await expect(savePreferences(config)).resolves.not.toThrow();
