@@ -38,3 +38,8 @@ This file tracks all major tracks for the project.
 
 ## [x] Track: UX Power Features — Auto-Translate, Statistics, Section Translation
 *Link: [./conductor/tracks/ux-power-features_20260422/](./conductor/tracks/ux-power-features_20260422/)*
+
+---
+
+## [ ] Track: Custom Theme Builder & Context-Aware Translation
+*Link: [./conductor/tracks/theme-context_20260422/](./conductor/tracks/theme-context_20260422/)*
