@@ -11,7 +11,7 @@ import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
-import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
+import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
 import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
@@ -249,6 +249,10 @@ function setupMessageListener(): void {
       stopTranslation();
     } else if (message.action === 'toggleTranslation') {
       toggleTranslation();
+    } else if (message.action === 'translateSelectedText') {
+      if (message.text) {
+        translateSelectedTextViaContextMenu(message.text);
+      }
     } else if (message.action === 'enterSectionPicker') {
       enterPickerMode((el) => translateSection(el));
     } else if (message.action === 'getStatus') {

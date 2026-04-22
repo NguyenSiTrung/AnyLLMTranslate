@@ -298,4 +298,49 @@ export function isTextSelectionEnabled(): boolean {
   return isEnabled;
 }
 
+/**
+ * Handle "Translate Selection" from context menu.
+ * Uses the current window selection position for tooltip placement,
+ * shows a loading tooltip, then translates via the background service.
+ */
+export async function translateSelectedTextViaContextMenu(text: string): Promise<void> {
+  // Try to position near the current selection, fall back to viewport center
+  let x = window.innerWidth / 2 + window.scrollX;
+  let y = window.innerHeight / 3 + window.scrollY;
+
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      x = rect.left + rect.width / 2 + window.scrollX;
+      y = rect.top + window.scrollY;
+    }
+  }
+
+  // Remove any existing button/tooltip and show loading
+  removeTranslateButton();
+  createTooltip('', x, y, true);
+
+  try {
+    const settings = await loadSettings();
+
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSelection',
+      text,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    });
+
+    if (response?.success && response.translatedText) {
+      updateTooltipContent(response.translatedText);
+    } else {
+      updateTooltipContent(`⚠ ${response?.error ?? 'Translation failed'}`);
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Translation failed';
+    updateTooltipContent(`⚠ ${errorMsg}`);
+  }
+}
+
 export { removeTooltip, removeTranslateButton, TRANSLATE_BUTTON_CLASS, TOOLTIP_CLASS };
