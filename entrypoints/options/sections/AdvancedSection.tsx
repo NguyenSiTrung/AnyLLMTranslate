@@ -51,6 +51,13 @@ export function AdvancedSection() {
       cacheTTLDays: settings.cacheTTLDays,
       maxCacheSizeMB: settings.maxCacheSizeMB,
       debugMode: settings.debugMode,
+      customTheme: settings.customTheme,
+      enableContextAwareTranslation: settings.enableContextAwareTranslation,
+      enablePageCategoryDetection: settings.enablePageCategoryDetection,
+      textSelectionEnabled: settings.textSelectionEnabled,
+      hoverTranslateEnabled: settings.hoverTranslateEnabled,
+      hoverDelay: settings.hoverDelay,
+      inlineTranslate: settings.inlineTranslate,
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -271,6 +278,24 @@ export function AdvancedSection() {
                 onChange={(checked) => updateSettings({ debugMode: checked })}
                 label="Debug Mode"
                 description="Enable verbose logging in the browser console."
+              />
+            </div>
+            <div className="border-t border-zinc-800 pt-4 mt-4">
+              <Toggle
+                id="context-aware-toggle"
+                checked={settings.enableContextAwareTranslation}
+                onChange={(checked) => updateSettings({ enableContextAwareTranslation: checked })}
+                label="Context-Aware Translation"
+                description="Inject page title, description, and domain into translation prompts for more consistent terminology."
+              />
+            </div>
+            <div className={`border-t border-zinc-800 pt-4 mt-4 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
+              <Toggle
+                id="page-category-detection-toggle"
+                checked={settings.enablePageCategoryDetection}
+                onChange={(checked) => updateSettings({ enablePageCategoryDetection: checked })}
+                label="Page Category Detection"
+                description="Auto-detect page topic (e.g. software development, news, academic). Adds ~20 tokens per request."
               />
             </div>
           </Card>

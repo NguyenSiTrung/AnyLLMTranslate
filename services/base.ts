@@ -4,7 +4,7 @@
  */
 
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
-import type { ProviderConfig } from '@/types/config';
+import type { ProviderConfig, PageContext } from '@/types/config';
 import { getLanguageName } from '@/lib/languages';
 
 /** Abstract base for all translation services */
@@ -28,11 +28,12 @@ Rules:
 - The keys in "translations" must exactly match the input keys.
 {{glossary}}`;
 
-/** Build the system prompt for translation with optional custom template */
+/** Build the system prompt for translation with optional custom template and page context */
 export function buildSystemPrompt(
   targetLanguage: string,
   customTemplate?: string | null,
   glossaryBlock?: string,
+  pageContext?: PageContext,
 ): string {
   const template = customTemplate || DEFAULT_SYSTEM_PROMPT_TEMPLATE;
 
@@ -47,6 +48,19 @@ export function buildSystemPrompt(
     ? `\n${glossaryBlock}`
     : '';
   prompt = prompt.replace(/\{\{glossary\}\}/g, glossaryContent);
+
+  // Append page context block if provided and has non-empty fields
+  if (pageContext) {
+    const contextLines: string[] = [];
+    if (pageContext.title) contextLines.push(`- Title: ${pageContext.title}`);
+    if (pageContext.description) contextLines.push(`- Topic: ${pageContext.description}`);
+    if (pageContext.domain) contextLines.push(`- Domain: ${pageContext.domain}`);
+    if (pageContext.category) contextLines.push(`- Category: ${pageContext.category}`);
+
+    if (contextLines.length > 0) {
+      prompt += `\n\nPage context for consistent terminology:\n${contextLines.join('\n')}`;
+    }
+  }
 
   return prompt.trim();
 }

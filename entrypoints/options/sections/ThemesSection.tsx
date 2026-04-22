@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import type { ThemeName } from '@/types/config';
 import { Check, Palette } from 'lucide-react';
 import { ThemePreview } from '../ThemePreview';
+import { CustomThemeEditor } from '../CustomThemeEditor';
 
 interface ThemeCard {
   id: ThemeName;
@@ -37,6 +38,7 @@ const THEMES: ThemeCard[] = [
   { id: 'shadow-card', label: 'Shadow Card', description: 'Elevated card', preview: { background: 'bg-zinc-800', borderStyle: 'rounded-lg shadow-lg', textColor: 'text-zinc-300' } },
   { id: 'minimal', label: 'Minimal', description: 'Subtle text', preview: { textColor: 'text-zinc-600' } },
   { id: 'gradient-accent', label: 'Gradient Accent', description: 'Gradient bg', preview: { background: 'bg-gradient-to-br from-indigo-950 to-blue-950', borderStyle: 'rounded-md border-l-3 border-indigo-500', textColor: 'text-indigo-300' } },
+  { id: 'custom', label: 'Custom', description: 'Design your own', preview: { borderStyle: 'border-l-3 border-pink-500 pl-3', textColor: 'text-pink-300' } },
 ];
 
 export function ThemesSection() {
@@ -99,6 +101,13 @@ export function ThemesSection() {
           );
         })}
       </div>
+
+      {/* Custom Theme Editor — appears when 'custom' is selected */}
+      {currentTheme === 'custom' && (
+        <div className="mt-4 animate-fade-in-up">
+          <CustomThemeEditor />
+        </div>
+      )}
     </div>
   );
 }

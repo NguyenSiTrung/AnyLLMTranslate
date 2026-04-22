@@ -8,9 +8,10 @@
  * - Eye icon kept for recognition
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Eye } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { DEFAULT_CUSTOM_THEME } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 
@@ -28,6 +29,21 @@ export function ThemePreview() {
   // Default to blockquote if theme is undefined or empty
   const theme = settings.theme || 'blockquote';
 
+  // Compute custom theme inline styles for the preview container
+  const customPreviewStyle = useMemo<React.CSSProperties>(() => {
+    if (theme !== 'custom') return {};
+    const config = settings.customTheme ?? DEFAULT_CUSTOM_THEME;
+    const fontSizeMap = { smaller: '0.9em', same: 'inherit', larger: '1.1em' } as const;
+    return {
+      '--anyllm-custom-text-color': config.textColor,
+      '--anyllm-custom-bg-color': config.backgroundColor,
+      '--anyllm-custom-border-style': config.borderStyle,
+      '--anyllm-custom-border-color': config.borderColor,
+      '--anyllm-custom-font-style': config.fontStyle,
+      '--anyllm-custom-font-size': fontSizeMap[config.fontSize],
+    } as React.CSSProperties;
+  }, [theme, settings.customTheme]);
+
   return (
     <Card title="Theme Preview" icon={<Eye className="w-3.5 h-3.5" />} variant="bordered">
       {/* Light/Dark mode toggle */}
@@ -44,6 +60,7 @@ export function ThemePreview() {
         className={`theme-preview-container rounded-lg p-4 border border-zinc-700/40 transition-colors duration-200 ${isDarkMode ? 'anyllm-dark bg-zinc-950' : 'bg-white'}`}
         data-anyllm-theme={theme}
         data-anyllm-state="dual"
+        style={customPreviewStyle}
       >
         <div className="space-y-2">
           {/* Original text */}

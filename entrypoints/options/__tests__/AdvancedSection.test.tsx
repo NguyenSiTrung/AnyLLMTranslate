@@ -44,6 +44,8 @@ describe('AdvancedSection - Cache Configuration', () => {
     textSelectionEnabled: true,
     hoverTranslateEnabled: false,
     hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enablePageCategoryDetection: false,
   };
 
   beforeEach(() => {
@@ -209,5 +211,31 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(screen.getByText('How long translations are cached before expiration.')).toBeInTheDocument();
     expect(screen.getByText('Maximum storage limit for the translation cache.')).toBeInTheDocument();
     expect(screen.getByText('Maximum characters sent per translation batch.')).toBeInTheDocument();
+  });
+
+  it('renders Page Category Detection toggle', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('Page Category Detection')).toBeInTheDocument();
+    expect(screen.getByText('Auto-detect page topic (e.g. software development, news, academic). Adds ~20 tokens per request.')).toBeInTheDocument();
+  });
+
+  it('calls updateSettings when Page Category Detection toggle is clicked', () => {
+    render(<AdvancedSection />);
+    const toggle = screen.getByRole('switch', { name: /page category detection/i });
+    fireEvent.click(toggle);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ enablePageCategoryDetection: true });
+  });
+
+  it('renders Context-Aware Translation toggle', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('Context-Aware Translation')).toBeInTheDocument();
+    expect(screen.getByText('Inject page title, description, and domain into translation prompts for more consistent terminology.')).toBeInTheDocument();
+  });
+
+  it('calls updateSettings when Context-Aware Translation toggle is clicked', () => {
+    render(<AdvancedSection />);
+    const toggle = screen.getByRole('switch', { name: /context-aware translation/i });
+    fireEvent.click(toggle);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ enableContextAwareTranslation: false });
   });
 });

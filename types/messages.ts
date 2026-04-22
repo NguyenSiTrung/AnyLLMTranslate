@@ -4,6 +4,7 @@
  */
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
+import type { PageContext } from './config';
 
 /** Actions the background service worker handles */
 export type MessageAction =
@@ -30,6 +31,7 @@ export interface TranslateMessage {
   sourceLanguage: string;
   targetLanguage: string;
   tabId?: number;
+  pageContext?: PageContext;
 }
 
 /** Payload sent for translation (serializable subset of TranslationPiece) */

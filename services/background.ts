@@ -174,6 +174,7 @@ async function handleTranslate(
       targetLanguage: message.targetLanguage,
       glossaryBlock: glossaryBlock || undefined,
       customSystemPrompt: settings.customSystemPrompt ?? null,
+      pageContext: message.pageContext,
     });
 
     if (result.success) {

@@ -72,6 +72,46 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt('Japanese', template);
     expect(prompt).toBe('Translate to Japanese. Output in Japanese.');
   });
+
+  it('appends page context when provided', () => {
+    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+      title: 'Python Tutorial',
+      description: 'Learn Python basics',
+      domain: 'docs.python.org',
+      category: 'software documentation',
+    });
+    expect(prompt).toContain('Page context for consistent terminology');
+    expect(prompt).toContain('Title: Python Tutorial');
+    expect(prompt).toContain('Topic: Learn Python basics');
+    expect(prompt).toContain('Domain: docs.python.org');
+    expect(prompt).toContain('Category: software documentation');
+  });
+
+  it('omits empty page context fields', () => {
+    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+      title: '',
+      description: '',
+      domain: 'example.com',
+    });
+    expect(prompt).toContain('Page context for consistent terminology');
+    expect(prompt).toContain('Domain: example.com');
+    expect(prompt).not.toContain('Title:');
+    expect(prompt).not.toContain('Topic:');
+  });
+
+  it('does not append context block when all fields are empty', () => {
+    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+      title: '',
+      description: '',
+      domain: '',
+    });
+    expect(prompt).not.toContain('Page context for consistent terminology');
+  });
+
+  it('does not append context block when pageContext is undefined', () => {
+    const prompt = buildSystemPrompt('Vietnamese');
+    expect(prompt).not.toContain('Page context for consistent terminology');
+  });
 });
 
 describe('validatePromptTemplate', () => {

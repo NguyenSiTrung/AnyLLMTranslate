@@ -44,7 +44,8 @@ export type ThemeName =
   | 'dotted-border'
   | 'shadow-card'
   | 'minimal'
-  | 'gradient-accent';
+  | 'gradient-accent'
+  | 'custom';
 
 /** Translation position relative to original text */
 export type TranslationPosition = 'below' | 'above' | 'side';
@@ -108,6 +109,24 @@ export interface SubtitleSettings {
   autoActivateSubtitles: boolean;
 }
 
+/** Custom theme user-defined configuration */
+export interface CustomThemeConfig {
+  textColor: string;
+  backgroundColor: string;
+  borderStyle: 'none' | 'solid' | 'dashed' | 'dotted';
+  borderColor: string;
+  fontStyle: 'normal' | 'italic';
+  fontSize: 'smaller' | 'same' | 'larger';
+}
+
+/** Page context extracted for context-aware translation */
+export interface PageContext {
+  title: string;
+  description: string;
+  domain: string;
+  category?: string;
+}
+
 /** Inline translate settings for key-gesture translation */
 export interface InlineTranslateSettings {
   /** Whether inline translate is enabled */
@@ -162,6 +181,12 @@ export interface ExtensionSettings {
   hoverDelay: number;
   /** Inline translate settings (key-gesture) */
   inlineTranslate: InlineTranslateSettings;
+  /** User-defined custom theme configuration */
+  customTheme?: CustomThemeConfig;
+  /** Enable context-aware translation (injects page title/description/domain into prompts) */
+  enableContextAwareTranslation: boolean;
+  /** Enable automatic page category detection (requires context-aware translation) */
+  enablePageCategoryDetection: boolean;
 }
 
 /** Provider preset definitions */
@@ -196,6 +221,16 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   targetLanguage: 'en',
 };
 
+/** Default custom theme configuration */
+export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
+  textColor: '#555555',
+  backgroundColor: 'transparent',
+  borderStyle: 'solid',
+  borderColor: '#3b82f6',
+  fontStyle: 'normal',
+  fontSize: 'same',
+};
+
 /** Default settings */
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   provider: {
@@ -228,6 +263,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   hoverTranslateEnabled: false,
   hoverDelay: 300,
   inlineTranslate: { ...DEFAULT_INLINE_TRANSLATE_SETTINGS },
+  customTheme: { ...DEFAULT_CUSTOM_THEME },
+  enableContextAwareTranslation: true,
+  enablePageCategoryDetection: false,
 };
 
 /** All available provider presets */

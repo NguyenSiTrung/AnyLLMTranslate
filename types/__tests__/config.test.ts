@@ -22,14 +22,15 @@ import type {
 
 describe('config types', () => {
   describe('ThemeName', () => {
-    it('allows all 16 theme values', () => {
+    it('allows all 17 theme values including custom', () => {
       const themes: ThemeName[] = [
         'dividing-line', 'blockquote', 'paper', 'underline',
         'dashed-underline', 'highlight', 'wavy-underline', 'bubble',
         'side-by-side', 'mask', 'fade-in', 'italic',
         'dotted-border', 'shadow-card', 'minimal', 'gradient-accent',
+        'custom',
       ];
-      expect(themes).toHaveLength(16);
+      expect(themes).toHaveLength(17);
     });
   });
 
@@ -147,6 +148,24 @@ describe('config types', () => {
       expect(DEFAULT_SETTINGS.provider.model).toBe('');
     });
 
+    it('has custom theme defaults', () => {
+      expect(DEFAULT_SETTINGS.customTheme).toBeDefined();
+      expect(DEFAULT_SETTINGS.customTheme?.textColor).toBe('#555555');
+      expect(DEFAULT_SETTINGS.customTheme?.backgroundColor).toBe('transparent');
+      expect(DEFAULT_SETTINGS.customTheme?.borderStyle).toBe('solid');
+      expect(DEFAULT_SETTINGS.customTheme?.borderColor).toBe('#3b82f6');
+      expect(DEFAULT_SETTINGS.customTheme?.fontStyle).toBe('normal');
+      expect(DEFAULT_SETTINGS.customTheme?.fontSize).toBe('same');
+    });
+
+    it('has context-aware translation enabled by default', () => {
+      expect(DEFAULT_SETTINGS.enableContextAwareTranslation).toBe(true);
+    });
+
+    it('has page category detection disabled by default', () => {
+      expect(DEFAULT_SETTINGS.enablePageCategoryDetection).toBe(false);
+    });
+
     it('fulfills ExtensionSettings interface completely', () => {
       const settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
       expect(settings).toBeDefined();
@@ -157,6 +176,7 @@ describe('config types', () => {
         'theme', 'translationPosition', 'darkMode',
         'siteRules', 'glossary', 'subtitleSettings',
         'customSystemPrompt', 'debugMode',
+        'customTheme', 'enableContextAwareTranslation', 'enablePageCategoryDetection',
       ];
       for (const key of requiredKeys) {
         expect(settings).toHaveProperty(key);

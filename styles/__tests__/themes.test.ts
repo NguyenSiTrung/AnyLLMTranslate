@@ -13,10 +13,11 @@ const EXPECTED_THEMES = [
   'dashed-underline', 'highlight', 'wavy-underline', 'bubble',
   'side-by-side', 'mask', 'fade-in', 'italic',
   'dotted-border', 'shadow-card', 'minimal', 'gradient-accent',
+  'custom',
 ];
 
 describe('CSS themes', () => {
-  it('contains all 16 theme selectors', () => {
+  it('contains all 17 theme selectors including custom', () => {
     for (const theme of EXPECTED_THEMES) {
       expect(cssContent).toContain(`data-anyllm-theme="${theme}"`);
     }

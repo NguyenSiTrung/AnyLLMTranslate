@@ -35,3 +35,34 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## Implementation Learnings
+
+### Custom Theme Builder
+- CSS custom properties (`--anyllm-custom-*`) on `<html>` are the cleanest way to inject dynamic theme values into content script styles without shadow DOM complexity.
+- When `border-style: none`, the CSS rule must explicitly set `border-left-width: 0` and `padding-left: 0` to avoid leftover visual artifacts.
+- `useMemo` with a CSSProperties cast (`as React.CSSProperties`) safely injects CSS custom properties into the ThemePreview container for live preview updates.
+- Color picker inputs require paired text inputs for accessibility and precise value entry.
+
+### Context-Aware Translation
+- `PageContext` extraction should be <10ms: only DOM queries (title, meta description, hostname), zero network calls.
+- Domain-to-category heuristic map is sufficient for ~30 top domains; no LLM call needed for detection.
+- `buildSystemPrompt()` signature extension with optional `pageContext` preserves backward compatibility for all existing callers (subtitle translation, selection translation).
+- Only append the context block when at least one field is non-empty to avoid adding noise to the prompt.
+- A parent toggle (`enableContextAwareTranslation`) should gate the entire feature, with category detection as a visually-nested sub-toggle (grayed out via `opacity-40 pointer-events-none`) when parent is off.
+
+## Gotchas
+- ESLint `no-non-null-assertion` forbids `element!` in tests — use `if (element)` guard instead.
+- Adding new fields to `ExtensionSettings` requires updating `extractSettings()` in the Zustand store, otherwise persistence/export silently drops the new fields.
+- The `TranslationRequest` interface change requires updating `services/openaiCompatible.ts` to pass the new field through to `buildSystemPrompt()`.
+- `chrome.runtime.sendMessage` payload extension (adding `pageContext`) is backward compatible because the background `handleMessage` receives it as an optional property.
+- When changing description text in UI components, corresponding test assertions must be updated to match.
+
+## Test Coverage
+- 673 tests passing across 53 files (up from 526/42 at track start).
+- New test files: `CustomThemeEditor.test.tsx`, `ThemesSection.test.tsx`, `pageContext.test.ts`.
+- Updated existing tests: `ThemePreview.test.tsx`, `base.test.ts`, `config.test.ts`, `translationDisplay.test.ts`, `themes.test.ts`, `AdvancedSection.test.tsx`.
+
+## Build Health
+- `pnpm test`: 673/673 passing
+- `pnpm lint`: 0 errors, 0 warnings

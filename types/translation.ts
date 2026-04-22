@@ -2,6 +2,8 @@
  * Translation-related types used across the extension.
  */
 
+import type { PageContext } from './config';
+
 /** A translatable piece of content extracted from the DOM */
 export interface TranslationPiece {
   /** Unique identifier for this piece */
@@ -32,6 +34,8 @@ export interface TranslationRequest {
   glossaryBlock?: string;
   /** User's custom system prompt template override */
   customSystemPrompt?: string | null;
+  /** Page context for context-aware translation */
+  pageContext?: PageContext;
 }
 
 /** Result from the translation service */

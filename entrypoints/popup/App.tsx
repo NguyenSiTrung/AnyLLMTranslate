@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Languages, Loader2, CheckCircle2, AlertCircle, Settings,
   ArrowRightLeft, Palette, ChevronDown, Search,
-  Globe2, Sparkles, Activity, Square, Subtitles
+  Globe2, Sparkles, Activity, Square, Subtitles, FileText, Tag
 } from 'lucide-react';
 import type { Zap } from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
@@ -520,6 +520,44 @@ export default function App() {
                   <span
                     className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${
                       settings.subtitleSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-zinc-400" />
+                  <label className="text-xs text-zinc-300 font-medium">Context-Aware</label>
+                </div>
+                <button
+                  onClick={() => updateSetting({ enableContextAwareTranslation: !settings.enableContextAwareTranslation })}
+                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                    settings.enableContextAwareTranslation ? 'bg-blue-600' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                      settings.enableContextAwareTranslation ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className={`flex items-center justify-between py-1 pl-5 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
+                <div className="flex items-center gap-2">
+                  <Tag className="w-3.5 h-3.5 text-zinc-400" />
+                  <label className="text-[11px] text-zinc-400 font-medium">Page Category Detection</label>
+                </div>
+                <button
+                  onClick={() => updateSetting({ enablePageCategoryDetection: !settings.enablePageCategoryDetection })}
+                  className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                    settings.enablePageCategoryDetection ? 'bg-blue-600' : 'bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                      settings.enablePageCategoryDetection ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </button>

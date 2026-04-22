@@ -16,6 +16,8 @@ import {
   setPageState,
   getPageState,
   togglePageState,
+  applyCustomTheme,
+  clearCustomTheme,
 } from '@/content/translationDisplay';
 
 describe('translationDisplay', () => {
@@ -37,6 +39,76 @@ describe('translationDisplay', () => {
       applyTheme('paper');
       applyTheme('shadow-card');
       expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('shadow-card');
+    });
+
+    it('supports custom theme', () => {
+      applyTheme('custom');
+      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('custom');
+    });
+  });
+
+  describe('applyCustomTheme', () => {
+    it('sets CSS custom properties on <html>', () => {
+      applyCustomTheme({
+        textColor: '#ff0000',
+        backgroundColor: '#00ff00',
+        borderStyle: 'dashed',
+        borderColor: '#0000ff',
+        fontStyle: 'italic',
+        fontSize: 'larger',
+      });
+      const root = document.documentElement;
+      expect(root.style.getPropertyValue('--anyllm-custom-text-color')).toBe('#ff0000');
+      expect(root.style.getPropertyValue('--anyllm-custom-bg-color')).toBe('#00ff00');
+      expect(root.style.getPropertyValue('--anyllm-custom-border-style')).toBe('dashed');
+      expect(root.style.getPropertyValue('--anyllm-custom-border-color')).toBe('#0000ff');
+      expect(root.style.getPropertyValue('--anyllm-custom-font-style')).toBe('italic');
+      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('1.1em');
+    });
+
+    it('maps fontSize values correctly', () => {
+      applyCustomTheme({
+        textColor: '#555',
+        backgroundColor: 'transparent',
+        borderStyle: 'solid',
+        borderColor: '#3b82f6',
+        fontStyle: 'normal',
+        fontSize: 'smaller',
+      });
+      const root = document.documentElement;
+      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('0.9em');
+
+      clearCustomTheme();
+      applyCustomTheme({
+        textColor: '#555',
+        backgroundColor: 'transparent',
+        borderStyle: 'solid',
+        borderColor: '#3b82f6',
+        fontStyle: 'normal',
+        fontSize: 'same',
+      });
+      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('inherit');
+    });
+  });
+
+  describe('clearCustomTheme', () => {
+    it('removes all custom CSS properties', () => {
+      applyCustomTheme({
+        textColor: '#ff0000',
+        backgroundColor: '#00ff00',
+        borderStyle: 'dashed',
+        borderColor: '#0000ff',
+        fontStyle: 'italic',
+        fontSize: 'larger',
+      });
+      clearCustomTheme();
+      const root = document.documentElement;
+      expect(root.style.getPropertyValue('--anyllm-custom-text-color')).toBe('');
+      expect(root.style.getPropertyValue('--anyllm-custom-bg-color')).toBe('');
+      expect(root.style.getPropertyValue('--anyllm-custom-border-style')).toBe('');
+      expect(root.style.getPropertyValue('--anyllm-custom-border-color')).toBe('');
+      expect(root.style.getPropertyValue('--anyllm-custom-font-style')).toBe('');
+      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('');
     });
   });
 

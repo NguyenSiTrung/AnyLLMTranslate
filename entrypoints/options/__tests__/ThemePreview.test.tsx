@@ -283,4 +283,72 @@ describe('ThemePreview', () => {
     // Component should default to blockquote when theme is empty string
     expect(previewContainer).toHaveAttribute('data-anyllm-theme', 'blockquote');
   });
+
+  it('applies custom CSS variables when custom theme is selected', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'custom',
+      customTheme: {
+        textColor: '#ff0000',
+        backgroundColor: '#00ff00',
+        borderStyle: 'dashed',
+        borderColor: '#0000ff',
+        fontStyle: 'italic',
+        fontSize: 'larger',
+      },
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-anyllm-theme="custom"]');
+    expect(previewContainer).toBeInTheDocument();
+    expect(previewContainer).toHaveStyle({
+      '--anyllm-custom-text-color': '#ff0000',
+      '--anyllm-custom-bg-color': '#00ff00',
+      '--anyllm-custom-border-style': 'dashed',
+      '--anyllm-custom-border-color': '#0000ff',
+      '--anyllm-custom-font-style': 'italic',
+      '--anyllm-custom-font-size': '1.1em',
+    });
+  });
+
+  it('applies custom theme with default values when customTheme is undefined', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'custom',
+      customTheme: undefined,
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-anyllm-theme="custom"]');
+    expect(previewContainer).toBeInTheDocument();
+    expect(previewContainer).toHaveStyle({
+      '--anyllm-custom-text-color': '#555555',
+      '--anyllm-custom-bg-color': 'transparent',
+      '--anyllm-custom-border-style': 'solid',
+      '--anyllm-custom-border-color': '#3b82f6',
+      '--anyllm-custom-font-style': 'normal',
+    });
+  });
+
+  it('does not apply custom CSS variables for non-custom themes', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      theme: 'blockquote',
+      customTheme: {
+        textColor: '#ff0000',
+        backgroundColor: '#00ff00',
+        borderStyle: 'dashed',
+        borderColor: '#0000ff',
+        fontStyle: 'italic',
+        fontSize: 'larger',
+      },
+    });
+
+    const { container } = render(<ThemePreview />);
+
+    const previewContainer = container.querySelector('[data-anyllm-theme="blockquote"]');
+    expect(previewContainer).toBeInTheDocument();
+    expect(previewContainer).not.toHaveStyle({
+      '--anyllm-custom-text-color': '#ff0000',
+    });
+  });
 });

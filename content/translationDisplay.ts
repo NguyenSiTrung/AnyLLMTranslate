@@ -5,11 +5,38 @@
 
 import { DATA_ATTRS } from '@/lib/constants';
 import type { PageState } from '@/lib/constants';
-import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
+import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
 
 /** Apply theme attribute to document root */
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute('data-anyllm-theme', theme);
+}
+
+/** Apply custom CSS variables when custom theme is active */
+export function applyCustomTheme(config: CustomThemeConfig): void {
+  const root = document.documentElement;
+  root.style.setProperty('--anyllm-custom-text-color', config.textColor);
+  root.style.setProperty('--anyllm-custom-bg-color', config.backgroundColor);
+  root.style.setProperty('--anyllm-custom-border-style', config.borderStyle);
+  root.style.setProperty('--anyllm-custom-border-color', config.borderColor);
+  root.style.setProperty('--anyllm-custom-font-style', config.fontStyle);
+  const fontSizeMap: Record<CustomThemeConfig['fontSize'], string> = {
+    smaller: '0.9em',
+    same: 'inherit',
+    larger: '1.1em',
+  };
+  root.style.setProperty('--anyllm-custom-font-size', fontSizeMap[config.fontSize]);
+}
+
+/** Clear custom CSS variables when switching away from custom theme */
+export function clearCustomTheme(): void {
+  const root = document.documentElement;
+  root.style.removeProperty('--anyllm-custom-text-color');
+  root.style.removeProperty('--anyllm-custom-bg-color');
+  root.style.removeProperty('--anyllm-custom-border-style');
+  root.style.removeProperty('--anyllm-custom-border-color');
+  root.style.removeProperty('--anyllm-custom-font-style');
+  root.style.removeProperty('--anyllm-custom-font-size');
 }
 
 /** Apply translation position attribute to document root */

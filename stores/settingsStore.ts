@@ -126,5 +126,8 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     hoverTranslateEnabled: state.hoverTranslateEnabled,
     hoverDelay: state.hoverDelay,
     inlineTranslate: state.inlineTranslate,
+    customTheme: state.customTheme,
+    enableContextAwareTranslation: state.enableContextAwareTranslation,
+    enablePageCategoryDetection: state.enablePageCategoryDetection,
   };
 }

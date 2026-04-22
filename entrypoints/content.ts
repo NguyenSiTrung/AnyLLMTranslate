@@ -8,8 +8,9 @@ import type { TranslationPiece } from '@/types/translation';
 import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
-import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
+import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
+import { extractPageContext } from '@/content/utils/pageContext';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
@@ -54,11 +55,17 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     // Broadcast translating status immediately
     sendStatusUpdate();
 
+    // Extract page context for context-aware translation (only when enabled)
+    const pageContext = settings.enableContextAwareTranslation
+      ? extractPageContext(document, settings.enablePageCategoryDetection)
+      : undefined;
+
     const response: TranslationResultMessage = await chrome.runtime.sendMessage({
       action: 'translate',
       pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
+      pageContext,
     });
 
     if (response.success && response.results) {
@@ -114,6 +121,11 @@ export async function startTranslation(): Promise<void> {
 
   // Apply visual settings to DOM
   applyTheme(settings.theme);
+  if (settings.theme === 'custom' && settings.customTheme) {
+    applyCustomTheme(settings.customTheme);
+  } else {
+    clearCustomTheme();
+  }
   applyPosition(settings.translationPosition);
   applyDarkMode(settings.darkMode);
 
@@ -139,6 +151,7 @@ export async function startTranslation(): Promise<void> {
 export function stopTranslation(): void {
   // Clean up visual settings
   document.documentElement.removeAttribute('data-anyllm-theme');
+  clearCustomTheme();
   document.documentElement.removeAttribute('data-anyllm-position');
   document.documentElement.classList.remove('anyllm-dark');
 
@@ -219,6 +232,11 @@ async function initInteractionFeatures(): Promise<void> {
       // Apply visual settings when they change (only if translation is active)
       if (newSettings.theme && getPageState() !== 'off') {
         applyTheme(newSettings.theme);
+        if (newSettings.theme === 'custom' && newSettings.customTheme) {
+          applyCustomTheme(newSettings.customTheme);
+        } else {
+          clearCustomTheme();
+        }
       }
       if (newSettings.translationPosition && getPageState() !== 'off') {
         applyPosition(newSettings.translationPosition);
@@ -229,6 +247,10 @@ async function initInteractionFeatures(): Promise<void> {
       if (newSettings.displayMode && getPageState() !== 'off') {
         const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
         setPageState(next);
+      }
+      // Apply custom theme CSS variables when customTheme changes even if theme stays 'custom'
+      if (newSettings.customTheme && settings.theme === 'custom' && getPageState() !== 'off') {
+        applyCustomTheme(newSettings.customTheme);
       }
       // Inline translate settings
       if (newSettings.inlineTranslate) {

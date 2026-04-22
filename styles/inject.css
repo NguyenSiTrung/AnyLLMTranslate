@@ -514,6 +514,46 @@ html.anyllm-dark [data-anyllm-theme="gradient-accent"] .anyllm-translate-transla
   border-left-color: #818cf8;
 }
 
+/* ============================================
+   THEME 17: custom (user-defined)
+   ============================================ */
+[data-anyllm-theme="custom"] .anyllm-translate-translation {
+  color: var(--anyllm-custom-text-color, #555);
+  background: var(--anyllm-custom-bg-color, transparent);
+  border-left: 3px var(--anyllm-custom-border-style, solid) var(--anyllm-custom-border-color, #3b82f6);
+  font-style: var(--anyllm-custom-font-style, normal);
+  font-size: var(--anyllm-custom-font-size, inherit);
+  padding-left: 12px;
+  margin-top: 6px;
+}
+
+/* Hide left border when border-style is none */
+[data-anyllm-theme="custom"]:has(.anyllm-translate-translation) .anyllm-translate-translation {
+  /* container-level adjustments if needed */
+}
+
+/* When border-style is none, override border-left to 0 */
+[data-anyllm-theme="custom"] .anyllm-translate-translation[style*="--anyllm-custom-border-style: none"],
+[data-anyllm-theme="custom"] .anyllm-translate-translation[style*="--anyllm-custom-border-style:none"] {
+  border-left-width: 0;
+  padding-left: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-anyllm-theme="custom"] .anyllm-translate-translation {
+    /* User controls both light and dark values via CSS variables */
+    color: var(--anyllm-custom-text-color, #aaa);
+    background: var(--anyllm-custom-bg-color, transparent);
+    border-left: 3px var(--anyllm-custom-border-style, solid) var(--anyllm-custom-border-color, #60a5fa);
+  }
+}
+
+html.anyllm-dark [data-anyllm-theme="custom"] .anyllm-translate-translation {
+  color: var(--anyllm-custom-text-color, #aaa);
+  background: var(--anyllm-custom-bg-color, transparent);
+  border-left: 3px var(--anyllm-custom-border-style, solid) var(--anyllm-custom-border-color, #60a5fa);
+}
+
 /* ===== Translation Position Variants ===== */
 
 /* Position: above */

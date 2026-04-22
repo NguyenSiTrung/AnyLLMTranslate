@@ -31,6 +31,7 @@ export class OpenAICompatibleService implements TranslationService {
         request.targetLanguage,
         request.customSystemPrompt,
         request.glossaryBlock,
+        request.pageContext,
       );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
