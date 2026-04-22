@@ -29,9 +29,10 @@ This file tracks all major tracks for the project.
 - ✅ **Settings UI UX Pro-Max refactor** (`settings-ui-refactor_20260417`) — Archived 2026-04-17. [View](./conductor/archive/settings-ui-refactor_20260417/)
 - ✅ **Settings UI/UX Polish & Bug Fixes** (`settings-ux-polish_20260418`) — Archived 2026-04-18. [View](./conductor/archive/settings-ux-polish_20260418/)
 - ✅ **Inline Input Translation via Key Gesture** (`inline-translate_20260418`) — Archived 2026-04-18. [View](./conductor/archive/inline-translate_20260418/)
+- ✅ **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Archived 2026-04-22 (abandoned). [View](./conductor/archive/multipage-subtitle-fix_20260417/)
+- ✅ **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (`hardening-fixes_20260421`) — Archived 2026-04-22 (partial, Phase A complete). [View](./conductor/archive/hardening-fixes_20260421/)
 
 ---
 
 ## Active Tracks
-- 🚧 **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Started 2026-04-17. [View](./conductor/tracks/multipage-subtitle-fix_20260417/)
-- 🚧 **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (`hardening-fixes_20260421`) — Started 2026-04-21. [View](./conductor/tracks/hardening-fixes_20260421/)
+_No active tracks._

@@ -242,6 +242,21 @@ Reusable patterns discovered during development. Read this before starting new w
 - Changing ThemePreview sample text requires updating ThemePreview.test.tsx assertions for both `getByText` and `toHaveTextContent`. (from: settings-ux-polish_20260418, archived 2026-04-18)
 - Merging card titles (e.g. "Cache Configuration" → "Cache Management") requires updating test assertions (`screen.getByText(...)`) to match new names. (from: settings-ux-polish_20260418, archived 2026-04-18)
 
+## Security & Encryption (2026-04-21)
+- AES-GCM encryption for extension storage: Use PBKDF2 (SHA-256, 100k iterations) with `chrome.runtime.id` + static salt to derive a stable per-install key. Prepend random 12-byte IV to ciphertext, base64-encode, and prefix with `enc:` for backward-compatible encrypted/plaintext detection. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Refactor all direct `chrome.storage.local` accesses to go through `lib/config.ts` so encryption is always applied at load/save boundaries. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Safe DOM construction: Never use `innerHTML` with dynamic text; use `document.createElement` + `textContent`. Static SVG templates in innerHTML are acceptable if they contain no user data. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Subtitle fetch allow-list: Background CORS bypass must validate URL against a regex allow-list before calling `fetch()` — include common subtitle/CDN domains. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Clipboard API: `navigator.clipboard.writeText()` is async and can throw (permissions, non-secure context) — always `await` + try/catch with visual feedback on failure. (from: hardening-fixes_20260421, archived 2026-04-22)
+
+## Runtime Reliability (2026-04-21)
+- deepMerge for nested settings: Chrome storage partial updates require deep merging of nested objects (provider, subtitleSettings, inlineTranslate). Apply at `loadSettings()`, `updateSettings()`, AND `chrome.storage.onChanged` listeners. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Rate limiting via in-process semaphore: In MV3, an in-memory semaphore in the background script suffices (one SW instance). Pattern: `maxConcurrent` slots + `maxQueue` waiting promises; always release in `finally`; add queue timeout for SW restart resilience. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Strict platform detection for subtitle auto-activate: Generic `querySelectorAll('video')` is unreliable on listing/search pages with autoplay thumbnails — only known platforms should auto-activate. (from: hardening-fixes_20260421, archived 2026-04-22)
+- `chrome.storage.onChanged` listener cleanup: Store the listener in a module-level variable; remove it in `stopTranslation()` to prevent duplicate listeners on SPA re-routes. (from: hardening-fixes_20260421, archived 2026-04-22)
+- Content-script re-injection guard: WXT content scripts can be re-injected on SPA navigations; set `window.__anyllmTranslateInitialized` flag and return early if already set. (from: hardening-fixes_20260421, archived 2026-04-22)
+- React error boundaries: Wrap popup and options entrypoints with a minimal class component error boundary; provide reload button and log to console. (from: hardening-fixes_20260421, archived 2026-04-22)
+
 ---
-Last refreshed: 2026-04-18T15:06:00+07:00
+Last refreshed: 2026-04-22T15:15:00+07:00
 Codebase health: 526 tests passing across 42 files, 4 lint errors in SiteRulesSection.tsx
