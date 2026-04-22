@@ -51,7 +51,7 @@ describe('useSettingsStore', () => {
       const state = useSettingsStore.getState();
       expect(state.theme).toBe('blockquote');
       expect(state.targetLanguage).toBe('vi');
-      expect(state.provider.preset).toBe('ollama');
+      expect(state.provider.preset).toBe('custom');
       expect(state.isLoaded).toBe(false);
     });
   });
@@ -70,7 +70,7 @@ describe('useSettingsStore', () => {
       expect(state.targetLanguage).toBe('ja');
       expect(state.isLoaded).toBe(true);
       // Non-stored fields use defaults
-      expect(state.provider.preset).toBe('ollama');
+      expect(state.provider.preset).toBe('custom');
     });
 
     it('handles empty storage gracefully', async () => {
@@ -102,7 +102,7 @@ describe('useSettingsStore', () => {
 
       const state = useSettingsStore.getState();
       expect(state.provider.model).toBe('llama3');
-      expect(state.provider.preset).toBe('ollama'); // Unchanged
+      expect(state.provider.preset).toBe('custom'); // Unchanged
     });
   });
 

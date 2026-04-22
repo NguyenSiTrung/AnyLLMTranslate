@@ -197,13 +197,13 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
 /** Default settings */
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   provider: {
-    preset: 'ollama',
-    baseUrl: 'http://localhost:11434/v1',
+    preset: 'custom',
+    baseUrl: '',
     apiKey: '',
-    model: 'gemma3:4b',
+    model: '',
     temperature: 0.3,
     maxTokens: 4096,
-    displayName: 'Ollama',
+    displayName: 'Custom',
     requiresApiKey: false,
     requestTimeoutMs: 60000,
   },

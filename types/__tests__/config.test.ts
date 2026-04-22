@@ -142,9 +142,9 @@ describe('config types', () => {
     });
 
     it('has valid provider defaults', () => {
-      expect(DEFAULT_SETTINGS.provider.preset).toBe('ollama');
-      expect(DEFAULT_SETTINGS.provider.baseUrl).toContain('localhost');
-      expect(DEFAULT_SETTINGS.provider.model).toBe('gemma3:4b');
+      expect(DEFAULT_SETTINGS.provider.preset).toBe('custom');
+      expect(DEFAULT_SETTINGS.provider.baseUrl).toBe('');
+      expect(DEFAULT_SETTINGS.provider.model).toBe('');
     });
 
     it('fulfills ExtensionSettings interface completely', () => {
