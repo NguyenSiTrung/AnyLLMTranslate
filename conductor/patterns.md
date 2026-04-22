@@ -257,6 +257,21 @@ Reusable patterns discovered during development. Read this before starting new w
 - Content-script re-injection guard: WXT content scripts can be re-injected on SPA navigations; set `window.__anyllmTranslateInitialized` flag and return early if already set. (from: hardening-fixes_20260421, archived 2026-04-22)
 - React error boundaries: Wrap popup and options entrypoints with a minimal class component error boundary; provide reload button and log to console. (from: hardening-fixes_20260421, archived 2026-04-22)
 
+## Statistics & Fire-and-Forget Patterns (2026-04-22)
+- Fire-and-forget stats with `.catch(() => {})` — non-blocking, never interfere with translation pipeline. (from: ux-power-features_20260422, archived 2026-04-22)
+- Per-tab session tracking via `Set<number>` for `totalPagesTranslated` — cleared on `restore` action. (from: ux-power-features_20260422, archived 2026-04-22)
+- `@typescript-eslint/no-dynamic-delete` prohibits `delete obj[key]` — use `Object.fromEntries(filter)` instead. (from: ux-power-features_20260422, archived 2026-04-22)
+- CSS-only bar chart with hover tooltips — no charting library needed for simple data visualization. (from: ux-power-features_20260422, archived 2026-04-22)
+- Section picker uses capture phase listeners to intercept before page handlers. (from: ux-power-features_20260422, archived 2026-04-22)
+
+## Custom Theme & Context-Aware (2026-04-22)
+- CSS custom properties (`--anyllm-custom-*`) on `<html>` for dynamic theme injection without shadow DOM complexity. (from: theme-context_20260422, archived 2026-04-22)
+- `useMemo` with `as React.CSSProperties` cast safely injects CSS custom properties into live preview containers. (from: theme-context_20260422, archived 2026-04-22)
+- `PageContext` extraction should be <10ms: only DOM queries (title, meta, hostname), zero network calls. (from: theme-context_20260422, archived 2026-04-22)
+- Domain-to-category heuristic map for ~30 top domains — no LLM call needed for category detection. (from: theme-context_20260422, archived 2026-04-22)
+- Parent toggle gates child sub-toggles with `opacity-40 pointer-events-none` for visual hierarchy. (from: theme-context_20260422, archived 2026-04-22)
+- Adding fields to `ExtensionSettings` requires updating `extractSettings()` in Zustand store — otherwise persistence/export silently drops new fields. (from: theme-context_20260422, archived 2026-04-22)
+
 ---
-Last refreshed: 2026-04-22T15:15:00+07:00
-Codebase health: 526 tests passing across 42 files, 4 lint errors in SiteRulesSection.tsx
+Last refreshed: 2026-04-22T19:02:00+07:00
+Codebase health: 673 tests passing across 53 files, build 632KB

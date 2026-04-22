@@ -31,15 +31,11 @@ This file tracks all major tracks for the project.
 - ✅ **Inline Input Translation via Key Gesture** (`inline-translate_20260418`) — Archived 2026-04-18. [View](./conductor/archive/inline-translate_20260418/)
 - ✅ **Multi-Video Page Subtitle State Isolation** (`multipage-subtitle-fix_20260417`) — Archived 2026-04-22 (abandoned). [View](./conductor/archive/multipage-subtitle-fix_20260417/)
 - ✅ **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (`hardening-fixes_20260421`) — Archived 2026-04-22 (partial, Phase A complete). [View](./conductor/archive/hardening-fixes_20260421/)
+- ✅ **UX Power Features — Auto-Translate, Statistics, Section Translation** (`ux-power-features_20260422`) — Archived 2026-04-22. [View](./conductor/archive/ux-power-features_20260422/)
+- ✅ **Custom Theme Builder & Context-Aware Translation** (`theme-context_20260422`) — Archived 2026-04-22. [View](./conductor/archive/theme-context_20260422/)
 
 ---
 
 ## Active Tracks
 
-## [x] Track: UX Power Features — Auto-Translate, Statistics, Section Translation
-*Link: [./conductor/tracks/ux-power-features_20260422/](./conductor/tracks/ux-power-features_20260422/)*
-
----
-
-## [x] Track: Custom Theme Builder & Context-Aware Translation
-*Link: [./conductor/tracks/theme-context_20260422/](./conductor/tracks/theme-context_20260422/)*
+*No active tracks.*
