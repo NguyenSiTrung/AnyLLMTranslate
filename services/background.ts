@@ -335,6 +335,14 @@ async function handleTranslateSubtitle(
               chunkResult[i] = { ...cue };
             }
           }
+
+          // Track subtitle API call + character stats (fire-and-forget)
+          const chunkChars = [...uniqueTexts].reduce((sum, t) => sum + t.length, 0);
+          incrementStats({
+            totalApiCalls: 1,
+            totalCharactersTranslated: chunkChars,
+          }).catch(() => {});
+          recordDailyStats(chunkChars, 1, chunkCues.length - uncachedIndices.length).catch(() => {});
         } else {
           throw new Error(result.error ?? 'Chunk translation failed');
         }
