@@ -130,9 +130,54 @@
   - [ ] Replace with `return false;` for unknown platforms
   - [ ] Add test: unknown platform with single video returns false
 
-## Phase E: Verification
+## Phase E: Robustness & Cleanup
+<!-- execution: parallel -->
+<!-- depends: phaseb, phased -->
+
+- [ ] Task 1: Fix unhandled promise rejections
+  <!-- files: entrypoints/content.ts, content/subtitleCoordinator.ts, content/textSelection.ts -->
+  - [ ] `entrypoints/content.ts:146` — add `.catch(() => {})` to `chrome.runtime.sendMessage({ action: 'restore' })`
+  - [ ] `content/subtitleCoordinator.ts:554` — replace try/catch wrapper with `.catch(() => {})` on the sendMessage call
+  - [ ] `content/textSelection.ts:90` — await `navigator.clipboard.writeText(text)` and wrap in try/catch to show visual feedback on failure
+
+- [ ] Task 2: Add chrome.storage.onChanged listener cleanup
+  <!-- files: entrypoints/content.ts -->
+  - [ ] In `initInteractionFeatures()`, store the listener function in a module-level variable
+  - [ ] Return a cleanup function from `initInteractionFeatures()` that calls `chrome.storage.onChanged.removeListener`
+  - [ ] In `stopTranslation()`, call the cleanup if the listener was added
+  - [ ] Add test: verify listener is removed on stopTranslation
+
+- [ ] Task 3: Content-script re-injection guard
+  <!-- files: entrypoints/content.ts -->
+  - [ ] At top of `main()`, check `if ((window as any).__anyllmTranslateInitialized) return;`
+  - [ ] Set `(window as any).__anyllmTranslateInitialized = true;` before proceeding
+  - [ ] Add test: simulate second WXT load, verify modules are not re-registered
+
+- [ ] Task 4: Safe DOM construction in subtitleToast.ts
+  <!-- files: content/subtitleToast.ts -->
+  - [ ] Replace `toastContainer.innerHTML = \`...\`` with `document.createElement` calls
+  - [ ] Set `textContent` on the message span instead of template interpolation
+  - [ ] Build the spinner, message, and close button as separate DOM nodes
+  - [ ] Verify existing toast tests still pass (styling/class assertions may need update)
+
+- [ ] Task 5: Restrict handleFetchSubtitle to allow-list
+  <!-- files: services/background.ts -->
+  - [ ] Define an allow-list regex array matching known subtitle domains: `youtube\.com`, `udemycdn\.com`, `coursera\.org`
+  - [ ] In `handleFetchSubtitle()`, validate `message.url` against the allow-list before calling `fetch()`
+  - [ ] Return `{ success: false, error: 'URL not in subtitle allow-list' }` if validation fails
+  - [ ] Add test: allowed URL succeeds, disallowed URL is rejected
+
+- [ ] Task 6: React error boundaries for options/popop main entries
+  <!-- files: entrypoints/options/main.tsx, entrypoints/popup/main.tsx, ui/ErrorBoundary.tsx -->
+  - [ ] Create `ui/ErrorBoundary.tsx` — minimal class component implementing `componentDidCatch`
+  - [ ] Show fallback UI with "Something went wrong" and a reload button
+  - [ ] Wrap `<App />` in `entrypoints/options/main.tsx` with `<ErrorBoundary>`
+  - [ ] Wrap `<App />` in `entrypoints/popup/main.tsx` with `<ErrorBoundary>`
+  - [ ] Add test: simulate throw in child, verify fallback UI renders
+
+## Phase F: Verification
 <!-- execution: sequential -->
-<!-- depends: phasea, phaseb, phasec, phased -->
+<!-- depends: phasea, phaseb, phasec, phased, phasee -->
 
 - [ ] Task 1: Full verification run
   - [ ] `npm run compile` — zero errors
@@ -147,3 +192,5 @@
   - [ ] Document WeakSet unreliability for KeyboardEvent dedup
   - [ ] Document MV3 keep-alive via chrome.alarms pattern
   - [ ] Document AES-GCM encryption key derivation pattern for extension storage
+  - [ ] Document content-script re-injection guard pattern for WXT SPAs
+  - [ ] Document safe DOM construction pattern (avoid innerHTML for dynamic text)

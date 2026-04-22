@@ -94,6 +94,31 @@ In `services/background.ts`, add a semaphore limiting concurrent translation req
 **FR-D3: Tighten `isOnWatchPage()` generic fallback**  
 The current generic fallback in `content/subtitleCoordinator.ts` matches any page with exactly one `<video>` element. This incorrectly matches listing pages with autoplay thumbnails. Remove the generic fallback and default to `false` for unknown platforms. Only known platforms (youtube, udemy, coursera) get explicit watch-page detection.
 
+### Phase E — Robustness & Cleanup (Should Fix)
+
+**FR-E1: Unhandled promise rejections**  
+Three sites fire `chrome.runtime.sendMessage` or `navigator.clipboard.writeText` without `.catch()`:
+- `entrypoints/content.ts:146` — `chrome.runtime.sendMessage({ action: 'restore' })` after `stopTranslation()`.
+- `content/subtitleCoordinator.ts:554` — `chrome.runtime.sendMessage({ action: 'SUBTITLE_TRACKS_AVAILABLE' ... })` wrapped in try/catch but not awaited.
+- `content/textSelection.ts:90` — `navigator.clipboard.writeText(text)` not awaited or caught.
+
+Add `.catch(() => {})` or proper `try/catch` with `await` to prevent unhandled promise rejections from reaching the global handler.
+
+**FR-E2: Missing chrome.storage.onChanged listener cleanup**  
+`initInteractionFeatures()` in `entrypoints/content.ts` adds a `chrome.storage.onChanged` listener but never removes it. Return a cleanup function that calls `chrome.storage.onChanged.removeListener` with the same wrapper, and call it in `stopTranslation()`.
+
+**FR-E3: Content-script re-injection guard on SPA navigation**  
+WXT content scripts can re-execute on SPA navigation (e.g., YouTube). The `main()` function in `entrypoints/content.ts` should guard against duplicate initialization by checking `window.__anyllmTranslateInitialized` and returning early if already set; otherwise set it to `true` before proceeding.
+
+**FR-E4: Safe DOM construction in subtitleToast.ts**  
+`showSubtitleToast()` in `content/subtitleToast.ts` sets `toastContainer.innerHTML` with a string template containing the message text. Although the message is currently controlled internally, any future code path could pass user-influenced text. Replace `innerHTML` with safe DOM construction using `document.createElement` and `textContent`.
+
+**FR-E5: Restrict handleFetchSubtitle to allow-listed subtitle domains**  
+`handleFetchSubtitle()` in `services/background.ts` accepts an arbitrary URL from content scripts and fetches it without validation. Restrict the URL to a known-subtitle-domain allow-list (e.g., `*.youtube.com`, `*.udemycdn.com`, `*.coursera.org`) via regex matching. Reject with a clear error for non-matching URLs.
+
+**FR-E6: React error boundaries for options/popup main entries**  
+The root React renders in `entrypoints/options/main.tsx` and `entrypoints/popup/main.tsx` have no error boundary. A runtime exception in a deeply nested settings component can blank the entire options/popup UI with no recovery path. Wrap the root `<App />` in a minimal error-boundary component that logs the error and shows a fallback "Something went wrong" UI with a reload button.
+
 ---
 
 ## Out of Scope

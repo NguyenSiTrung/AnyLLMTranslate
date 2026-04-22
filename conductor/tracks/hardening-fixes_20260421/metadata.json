@@ -4,8 +4,8 @@
   "status": "new",
   "priority": "high",
   "depends_on": [],
-  "estimated_hours": 6,
+  "estimated_hours": 10,
   "created_at": "2026-04-21T23:45:00+07:00",
-  "updated_at": "2026-04-21T23:45:00+07:00",
-  "description": "Fix 18 TypeScript compilation errors, 9 ESLint errors, add fetch timeouts, MV3 keep-alive, postMessage origin hardening, API key encryption, cache LRU reliability, inline translate dedup fix, deep-merge settings, rate limiting, and CSP. Comprehensive hardening pass across build, runtime, and security layers."
+  "updated_at": "2026-04-22T11:45:00+07:00",
+  "description": "Fix 14 TypeScript compilation errors, 9 ESLint errors, add fetch timeouts, MV3 keep-alive, postMessage origin hardening, API key encryption, cache LRU reliability, inline translate dedup fix, deep-merge settings, rate limiting, CSP, unhandled promise rejections, listener cleanup, content-script re-injection guard, safe DOM construction, subtitle fetch allow-list, and React error boundaries. Comprehensive hardening pass across build, runtime, security, and robustness layers."}
 }
