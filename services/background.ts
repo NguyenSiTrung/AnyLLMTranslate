@@ -16,6 +16,7 @@ import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
+import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 
 /** Priority queue state for active translation sessions */
 interface TranslationSession {
@@ -51,6 +52,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
  
+
+/** Track which tabs have been counted for page translation stats */
+const translatedTabSessions = new Set<number>();
 
 /** Active translation service instance */
 let translationService: OpenAICompatibleService | null = null;
@@ -110,10 +114,18 @@ async function initService(): Promise<OpenAICompatibleService> {
 
 /** Handle translate message */
 async function handleTranslate(
-  message: ExtensionMessage & { action: 'translate' }
+  message: ExtensionMessage & { action: 'translate' },
+  sender?: chrome.runtime.MessageSender,
 ): Promise<TranslationResultMessage> {
   await acquireSemaphore();
   try {
+    // Track page translation (once per tab session)
+    const tabId = sender?.tab?.id;
+    if (tabId && !translatedTabSessions.has(tabId)) {
+      translatedTabSessions.add(tabId);
+      incrementStats({ totalPagesTranslated: 1 }).catch(() => {});
+    }
+
     const settings = await loadSettings();
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
 
@@ -132,6 +144,14 @@ async function handleTranslate(
       } else {
         uncachedPieces.push(piece);
       }
+    }
+
+    // Track cache hit/miss stats (fire-and-forget)
+    if (cachedResults.length > 0 || uncachedPieces.length > 0) {
+      incrementStats({
+        totalCacheHits: cachedResults.length,
+        totalCacheMisses: uncachedPieces.length,
+      }).catch(() => {});
     }
 
     // If all pieces were cached, return immediately — no LLM call
@@ -173,6 +193,14 @@ async function handleTranslate(
           );
         }
       }
+
+      // Track translation stats (fire-and-forget)
+      const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
+      incrementStats({
+        totalApiCalls: 1,
+        totalCharactersTranslated: totalChars,
+      }).catch(() => {});
+      recordDailyStats(totalChars, 1, cachedResults.length).catch(() => {});
 
       clearKeepaliveAlarm();
       return {
@@ -378,6 +406,11 @@ async function handleTranslateSubtitle(
       })();
     }
 
+    // Track subtitle stats (fire-and-forget)
+    incrementStats({
+      totalSubtitlesCuesTranslated: cues.length,
+    }).catch(() => {});
+
     return { success: true, cues: translatedCues };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
@@ -471,6 +504,13 @@ async function handleTranslateSelection(
         message.targetLanguage,
       );
 
+      // Track selection stats (fire-and-forget)
+      incrementStats({
+        totalApiCalls: 1,
+        totalCharactersTranslated: message.text.length,
+      }).catch(() => {});
+      recordDailyStats(message.text.length, 1, 0).catch(() => {});
+
       return { success: true, translatedText: translated };
     } else {
       return { success: false, error: result.error ?? 'Translation failed' };
@@ -513,7 +553,7 @@ export function handleMessage(
 ): Promise<unknown> | undefined {
   switch (message.action) {
     case 'translate':
-      return handleTranslate(message);
+      return handleTranslate(message, _sender);
     case 'testConnection':
       return handleTestConnection();
     case 'updateSettings':
@@ -524,6 +564,12 @@ export function handleMessage(
       return handleFetchSubtitle(message);
     case 'translateSelection':
       return handleTranslateSelection(message);
+    case 'restore': {
+      // Clear page translation session tracking for this tab
+      const restoreTabId = _sender.tab?.id;
+      if (restoreTabId) translatedTabSessions.delete(restoreTabId);
+      return undefined;
+    }
     case 'statusUpdate':
       handleStatusUpdate(message, _sender.tab?.id);
       return undefined;

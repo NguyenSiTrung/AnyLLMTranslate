@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Settings, Zap, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Languages, Check,
+  Languages, Check, BarChart3,
 } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
@@ -14,6 +14,7 @@ import { SubtitlesSection } from './sections/SubtitlesSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AdvancedSection } from './sections/AdvancedSection';
 import { InlineTranslateSection } from './sections/InlineTranslateSection';
+import { StatisticsSection } from './sections/StatisticsSection';
 
 /* ── Grouped Navigation ─────────────────────────────────────── */
 
@@ -53,6 +54,7 @@ const TAB_GROUPS: TabGroup[] = [
   {
     label: 'SYSTEM',
     tabs: [
+      { id: 'statistics', label: 'Statistics', icon: BarChart3 },
       { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
       { id: 'inline', label: 'Inline', icon: Zap },
       { id: 'advanced', label: 'Advanced', icon: Wrench },
@@ -128,6 +130,7 @@ export default function App() {
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;
       case 'subtitles': return <SubtitlesSection />;
+      case 'statistics': return <StatisticsSection />;
       case 'shortcuts': return <ShortcutsSection />;
       case 'inline': return <InlineTranslateSection />;
       case 'advanced': return <AdvancedSection />;
