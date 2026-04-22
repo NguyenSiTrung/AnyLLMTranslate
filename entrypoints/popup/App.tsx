@@ -150,10 +150,26 @@ export default function App() {
     totalCount: 0,
   });
   const [isTranslating, setIsTranslating] = useState(false);
+  const [activeHostname, setActiveHostname] = useState<string | null>(null);
 
   useEffect(() => {
     loadSettingsFromStorage();
     queryTabStatus();
+
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.url) {
+          try {
+            const url = new URL(tab.url);
+            if (url.protocol === 'http:' || url.protocol === 'https:') {
+              setActiveHostname(url.hostname);
+            }
+          } catch { /* invalid URL */ }
+        }
+      } catch { /* tab query failed */ }
+    })();
+
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === 'local' && changes[STORAGE_KEYS.SETTINGS]) {
         setSettings({ ...DEFAULT_SETTINGS, ...changes[STORAGE_KEYS.SETTINGS].newValue });
@@ -213,6 +229,33 @@ export default function App() {
     });
     setSettings(updated);
   }, [settings]);
+
+  const isAlwaysTranslate = activeHostname
+    ? settings.siteRules.some(r => r.hostname === activeHostname && r.alwaysTranslate)
+    : false;
+
+  const handleToggleAlwaysTranslate = useCallback(async () => {
+    if (!activeHostname) return;
+    const existingRuleIndex = settings.siteRules.findIndex(r => r.hostname === activeHostname);
+    const newRules = [...settings.siteRules];
+    if (existingRuleIndex >= 0) {
+      newRules[existingRuleIndex] = {
+        ...newRules[existingRuleIndex],
+        alwaysTranslate: !newRules[existingRuleIndex].alwaysTranslate,
+      };
+    } else {
+      newRules.push({
+        id: crypto.randomUUID(),
+        hostname: activeHostname,
+        includeSelectors: [],
+        excludeSelectors: [],
+        alwaysTranslate: true,
+        neverTranslate: false,
+        builtIn: false,
+      });
+    }
+    await updateSetting({ siteRules: newRules });
+  }, [activeHostname, settings.siteRules, updateSetting]);
 
   const handleToggleTranslation = useCallback(async () => {
     try {
@@ -394,6 +437,30 @@ export default function App() {
             )}
           </div>
         </button>
+
+        {/* Always Translate Toggle */}
+        {activeHostname && (
+          <div className="flex items-center justify-between py-2 px-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <Globe2 className="w-4 h-4 text-zinc-400 shrink-0" />
+              <span className="text-xs text-zinc-300 truncate" title={activeHostname}>
+                Always translate {activeHostname}
+              </span>
+            </div>
+            <button
+              onClick={handleToggleAlwaysTranslate}
+              className={`relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shrink-0 ${
+                isAlwaysTranslate ? 'bg-blue-600' : 'bg-zinc-700'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                  isAlwaysTranslate ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        )}
 
         {/* Display Settings */}
         <div className="pt-2">

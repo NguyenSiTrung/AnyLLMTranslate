@@ -9,7 +9,7 @@ import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
-import { loadSettings } from '@/lib/config';
+import { loadSettings, updateSettings } from '@/lib/config';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
@@ -17,6 +17,8 @@ import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
 import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
+import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
+import { findMatchingRule } from '@/lib/siteRules';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -143,6 +145,7 @@ export function stopTranslation(): void {
     viewportObserver = null;
   }
   removeAllTranslations();
+  hideAutoTranslateNotification();
   allPieces = [];
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
@@ -278,6 +281,28 @@ export default defineContentScript({
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
     await initInteractionFeatures();
+
+    // Auto-translate: check site rules for matching hostname
+    const autoTranslateSettings = await loadSettings();
+    const hostname = window.location.hostname;
+    const isExtensionPage = !hostname || location.protocol === 'chrome-extension:' || location.protocol === 'chrome:' || location.protocol === 'about:';
+    if (!isExtensionPage) {
+      const matchingRule = findMatchingRule(hostname, autoTranslateSettings.siteRules);
+      if (matchingRule?.alwaysTranslate && !matchingRule.neverTranslate) {
+        startTranslation();
+        showAutoTranslateNotification(async () => {
+          // Disable auto-translate for this site
+          const currentSettings = await loadSettings();
+          const ruleIndex = currentSettings.siteRules.findIndex(r => r.hostname === matchingRule.hostname);
+          if (ruleIndex >= 0) {
+            const updatedRules = [...currentSettings.siteRules];
+            updatedRules[ruleIndex] = { ...updatedRules[ruleIndex], alwaysTranslate: false };
+            await updateSettings({ siteRules: updatedRules });
+          }
+          stopTranslation();
+        });
+      }
+    }
 
     // Flush pending cache LRU updates on page unload
     window.addEventListener('beforeunload', () => {
