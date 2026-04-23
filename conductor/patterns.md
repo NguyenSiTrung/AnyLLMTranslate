@@ -273,5 +273,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Adding fields to `ExtensionSettings` requires updating `extractSettings()` in Zustand store — otherwise persistence/export silently drops new fields. (from: theme-context_20260422, archived 2026-04-22)
 
 ---
-Last refreshed: 2026-04-22T19:02:00+07:00
-Codebase health: 673 tests passing across 53 files, build 632KB
+Last refreshed: 2026-04-23T07:23:00+07:00
+Codebase health: 673 tests passing across 53 files, build 632KB, 0 lint errors

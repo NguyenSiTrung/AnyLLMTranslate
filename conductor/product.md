@@ -85,6 +85,10 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Fix Display Mode** (Archived 2026-04-16): Wire displayMode setting to translation-only page state correctly, implement shortcut toggle handling for display mode, and clean up test mock types.
 - **Subtitle Translation Refinements** (2026-04-17, incremental): Fixed subtitle language preference (use user setting over extracted language), fixed requestId propagation in SUBTITLE_TRANSLATED envelope, resolved subtitle mirroring-to-English bug, corrected overlay opacity blocking video playback, added loading toast notification during local LLM subtitle interception. XHR/coordinator timeout extended from 5s to 30s for slow local LLM support.
 - **Custom Extension Icon** (2026-04-17, incremental): Replaced default extension icons with custom transparent neon design.
+- **Inline Input Translation via Key Gesture** (Archived 2026-04-18): Alt+T key gesture to translate text in any input/textarea/contenteditable element inline. Supports Google Search, ChatGPT, and other input fields. Window-level capture phase listener to intercept before page autocomplete handlers.
+- **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (Archived 2026-04-22): AES-GCM encryption for API keys via `lib/crypto.ts`, deep merge for nested settings, in-process semaphore rate limiting (max 3 concurrent), subtitle fetch URL allow-list, content-script re-injection guard, React error boundaries for popup/options, `chrome.storage.onChanged` listener cleanup.
+- **UX Power Features — Auto-Translate, Statistics, Section Translation** (Archived 2026-04-22): Auto-translate on page load via hostname matching with wildcard support and notification bar. Translation statistics dashboard with CSS-only daily bar chart. Section picker with visual highlight and per-section translation via Alt+Q shortcut. Fire-and-forget stats collection pattern.
+- **Custom Theme Builder & Context-Aware Translation** (Archived 2026-04-22): Custom theme editor with live preview via CSS custom properties (`--anyllm-custom-*`). Context-aware translation with page context extraction (<10ms, DOM-only) and domain-to-category heuristic map for ~30 top domains. Parent toggle gates child sub-toggles pattern.
 - **Settings UI/UX Improvements** (2026-04-17, incremental): Refactored settings tabs for UI/UX consistency with general tab, added SegmentedControl component, improved Card styling, added subtitle translation toggle to popup menu, added close button to subtitle toast.
 - **Settings UI/UX Enhancement & Subtitle Configuration** (Archived 2026-04-17): Extended SubtitleSettings type with fontFamily, displayMode, translationTimeout. Enhanced SubtitlesSection with mini video preview, font family selector, display mode toggle. Wired settings to runtime overlay. Visual polish with icon-and-card consistency and hover micro-animations. 35 new tests added.
 - **Fullscreen Overlay Fix** (Archived 2026-04-17): Refactored subtitle overlay from absolute to fixed positioning for fullscreen visibility. Implemented dynamic reparenting and Popover API fallback for Top Layer support. 7 new overlay tests added.
@@ -94,8 +98,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
 
 ### Current State
-- 526 tests passing across 42 files. Build passing (`wxt build` ✅, 576.75 KB). 4 lint errors in SiteRulesSection.tsx (non-null assertions, explicit any).
-- **Active track:** `multipage-subtitle-fix_20260417` — Per-video subtitle state isolation to prevent auto-activation on multi-video pages (YouTube home, search results).
+- 673 tests passing across 53 files. Build passing (`wxt build` ✅, 632.11 KB). 0 lint errors.
+- **No active tracks.** All tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

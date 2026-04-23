@@ -1,41 +1,31 @@
 {
-  "last_refresh": "2026-04-18T15:06:00+07:00",
+  "last_refresh": "2026-04-23T07:23:00+07:00",
   "refreshed_by": "conductor-refresh",
   "changes": [
     {
       "file": "conductor/product.md",
-      "change": "Updated test count 524→526. Added settings-ux-polish_20260418 to Implementation Status. Updated Current State to note 4 lint errors."
+      "change": "Updated test count 526→673, file count 42→53, build size 576.75KB→632.11KB. Lint errors 4→0. Removed stale active track. Added 5 missing archived tracks: inline-translate, multipage-subtitle-fix, hardening-fixes, ux-power-features, theme-context."
     },
     {
       "file": "conductor/patterns.md",
-      "change": "Added 6 new patterns from settings-ux-polish_20260418. Updated build size ~346KB→~577KB. Updated timestamp and health metrics."
-    },
-    {
-      "file": "conductor/tracks.md",
-      "change": "Moved settings-ux-polish_20260418 from Active to Archived section."
-    },
-    {
-      "file": "conductor/tracks/settings-ux-polish_20260418/metadata.json",
-      "change": "Updated status 'new'→'completed'."
+      "change": "Updated footer timestamp and added '0 lint errors' to health metrics."
     },
     {
       "file": "conductor/refresh_state.json",
-      "change": "Updated refresh state with 2026-04-18 15:06 refresh."
+      "change": "Full refresh state update with 26 archived tracks, 0 active tracks."
     }
   ],
   "drift_summary": {
-    "tech_stack": "No drift (build size note corrected in patterns.md)",
-    "product": "FIXED: test count 524→526, added settings-ux-polish completion entry, noted 4 lint errors",
+    "tech_stack": "No drift — dependencies unchanged",
+    "product": "FIXED: test count 526→673, build 576.75→632.11KB, lint 4→0 errors, no active tracks, 5 new archived track entries added",
     "workflow": "No drift",
-    "patterns": "Added 6 new patterns from settings-ux-polish_20260418, updated build size ~346KB→~577KB",
-    "tests": "526 tests passing across 42 files",
-    "lint": "4 errors in SiteRulesSection.tsx (non-null assertions, explicit any)",
-    "archived_tracks": "21 tracks in archive"
+    "patterns": "Already up-to-date from prior track archiving; footer timestamp refreshed",
+    "tests": "673 tests passing across 53 files",
+    "lint": "0 errors (was 4 in SiteRulesSection.tsx)",
+    "archived_tracks": "26 tracks in archive"
   },
-  "beads_check": "Synced — closed 3 orphaned sub-tasks from settings-ui-refactor_20260417 (AnyLLMTranslate-a4h.3.1, a4h.3.2, a4h.3.3). settings-ux-polish_20260418 epic already closed. Remaining open: 0 conductor-related.",
-  "active_tracks": [
-    "multipage-subtitle-fix_20260417"
-  ],
+  "beads_check": "Skipped — no active tracks, no drift to check.",
+  "active_tracks": [],
   "archived_tracks": [
     "phase1-foundation_20260409",
     "phase2-subtitles_20260409",
@@ -57,13 +47,18 @@
     "fullscreen-overlay_20260417",
     "progressive-chunking_20260417",
     "settings-ui-refactor_20260417",
-    "settings-ux-polish_20260418"
+    "settings-ux-polish_20260418",
+    "inline-translate_20260418",
+    "multipage-subtitle-fix_20260417",
+    "hardening-fixes_20260421",
+    "ux-power-features_20260422",
+    "theme-context_20260422"
   ],
   "codebase_health": {
-    "tests": "526 passed (42 files)",
-    "build": "passing (576.75 KB)",
-    "git_status": "clean (before refresh changes)",
-    "lint": "4 errors in SiteRulesSection.tsx",
-    "last_commit": "chore(conductor): mark settings-ux-polish_20260418 track complete, capture learnings"
+    "tests": "673 passed (53 files)",
+    "build": "passing (632.11 KB)",
+    "git_status": "clean",
+    "lint": "0 errors",
+    "last_commit": "docs: update README with accurate codebase documentation"
   }
 }
