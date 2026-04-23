@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Languages, Loader2, CheckCircle2, AlertCircle, Settings,
   ArrowRightLeft, Palette, ChevronDown, Search,
-  Globe2, Sparkles, Activity, Square, Subtitles, FileText, Tag
+  Globe2, Sparkles, Activity, Square, Subtitles, FileText, Tag, Save
 } from 'lucide-react';
 import type { Zap } from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
@@ -12,6 +12,8 @@ import type { ThemeName, DisplayMode, ExtensionSettings } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
 import { STORAGE_KEYS } from '@/lib/constants';
 import { loadSettings, updateSettings } from '@/lib/config';
+import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import type { CategoryInfo } from '@/types/messages';
 
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string; badge: string }> = {
   idle: { icon: Globe2, label: 'Ready to Translate', color: 'text-zinc-400', badge: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
@@ -157,6 +159,8 @@ export default function App() {
   });
   const [isTranslating, setIsTranslating] = useState(false);
   const [activeHostname, setActiveHostname] = useState<string | null>(null);
+  const [categoryInfo, setCategoryInfo] = useState<CategoryInfo | null>(null);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
 
   useEffect(() => {
     loadSettingsFromStorage();
@@ -172,6 +176,19 @@ export default function App() {
               setActiveHostname(url.hostname);
             }
           } catch { /* invalid URL */ }
+        }
+      } catch { /* tab query failed */ }
+    })();
+
+    // Load current category info from content script
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.id) {
+          try {
+            const catInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageCategory' });
+            if (catInfo) setCategoryInfo(catInfo as CategoryInfo);
+          } catch { /* content script not loaded */ }
         }
       } catch { /* tab query failed */ }
     })();
@@ -263,6 +280,95 @@ export default function App() {
     await updateSetting({ siteRules: newRules });
   }, [activeHostname, settings.siteRules, updateSetting]);
 
+  const handleCategoryChange = useCallback(async (value: string) => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+
+      if (value === '__custom__') {
+        setCustomCategoryInput('');
+        return;
+      }
+
+      const category = value === '__auto__' ? null : value;
+      await chrome.runtime.sendMessage({
+        action: 'setCategoryOverride',
+        tabId: tab.id,
+        category,
+      });
+
+      // Update local state
+      setCategoryInfo(prev => ({
+        ...prev,
+        override: category ?? undefined,
+        effective: category ?? prev?.siteRule ?? prev?.autoDetected,
+      }));
+    } catch { /* failed */ }
+  }, []);
+
+  const handleCustomCategorySubmit = useCallback(async () => {
+    const trimmed = customCategoryInput.trim().slice(0, 50);
+    if (!trimmed) return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.runtime.sendMessage({
+        action: 'setCategoryOverride',
+        tabId: tab.id,
+        category: trimmed,
+      });
+      setCategoryInfo(prev => ({
+        ...prev,
+        override: trimmed,
+        effective: trimmed,
+      }));
+      setCustomCategoryInput('');
+    } catch { /* failed */ }
+  }, [customCategoryInput]);
+
+  const handleSaveAsRule = useCallback(async () => {
+    if (!activeHostname || !categoryInfo?.override) return;
+    const existingRuleIndex = settings.siteRules.findIndex(r => r.hostname === activeHostname);
+    const newRules = [...settings.siteRules];
+    if (existingRuleIndex >= 0) {
+      newRules[existingRuleIndex] = {
+        ...newRules[existingRuleIndex],
+        category: categoryInfo.override,
+      };
+    } else {
+      newRules.push({
+        id: crypto.randomUUID(),
+        hostname: activeHostname,
+        includeSelectors: [],
+        excludeSelectors: [],
+        alwaysTranslate: false,
+        neverTranslate: false,
+        builtIn: false,
+        category: categoryInfo.override,
+      });
+    }
+    await updateSetting({ siteRules: newRules });
+
+    // Clear the temporary override (SiteRule now handles it)
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await chrome.runtime.sendMessage({
+          action: 'setCategoryOverride',
+          tabId: tab.id,
+          category: null,
+        });
+      }
+    } catch { /* failed */ }
+
+    setCategoryInfo(prev => ({
+      ...prev,
+      siteRule: categoryInfo.override,
+      override: undefined,
+      effective: categoryInfo.override,
+    }));
+  }, [activeHostname, categoryInfo, settings.siteRules, updateSetting]);
+
   const handleToggleTranslation = useCallback(async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -291,6 +397,18 @@ export default function App() {
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isActive = isTranslating || status.status === 'done';
   const progressPercent = status.totalCount > 0 ? Math.round((status.translatedCount / status.totalCount) * 100) : 0;
+
+  const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enablePageCategoryDetection && activeHostname;
+  const currentCategoryValue = categoryInfo?.override ?? categoryInfo?.siteRule ?? '__auto__';
+  const isCustomEntry = currentCategoryValue !== '__auto__' && !PREDEFINED_CATEGORIES.includes(currentCategoryValue as typeof PREDEFINED_CATEGORIES[number]);
+  const effectiveCategoryDisplay = categoryInfo?.effective;
+  const showSaveAsRule = Boolean(categoryInfo?.override && activeHostname);
+
+  const categoryOptions = [
+    { value: '__auto__', label: `Auto${effectiveCategoryDisplay && !categoryInfo?.override ? ` (${effectiveCategoryDisplay})` : ''}` },
+    ...PREDEFINED_CATEGORIES.map(c => ({ value: c, label: c })),
+    { value: '__custom__', label: 'Custom...' },
+  ];
 
   return (
     <div className="w-[340px] min-h-[480px] bg-zinc-950 text-zinc-100 font-sans selection:bg-blue-500/30 relative shadow-2xl flex flex-col justify-between">
@@ -562,6 +680,60 @@ export default function App() {
                   />
                 </button>
               </div>
+
+              {/* Category Override Dropdown */}
+              {showCategoryDropdown && (
+                <div className="pl-5 space-y-2">
+                  <CustomSelect
+                    id="popup-category-override"
+                    value={isCustomEntry ? '__custom__' : currentCategoryValue}
+                    onChange={handleCategoryChange}
+                    options={categoryOptions}
+                    icon={Tag}
+                  />
+
+                  {/* Custom category input */}
+                  {(currentCategoryValue === '__custom__' || isCustomEntry) && (
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Enter custom category..."
+                        value={isCustomEntry ? currentCategoryValue : customCategoryInput}
+                        onChange={(e) => {
+                          if (isCustomEntry) {
+                            // If it was a custom entry, switch to editing mode
+                            setCustomCategoryInput(e.target.value);
+                          } else {
+                            setCustomCategoryInput(e.target.value);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleCustomCategorySubmit();
+                        }}
+                        maxLength={50}
+                        className="flex-1 bg-zinc-950/80 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 placeholder:text-zinc-600"
+                      />
+                      <button
+                        onClick={handleCustomCategorySubmit}
+                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg font-medium transition-colors"
+                      >
+                        Set
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Save as Rule shortcut */}
+                  {showSaveAsRule && (
+                    <button
+                      onClick={handleSaveAsRule}
+                      className="flex items-center gap-1.5 text-[11px] text-blue-400 hover:text-blue-300 transition-colors group"
+                    >
+                      <Save className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                      <span>Save as Rule for {activeHostname}</span>
+                    </button>
+                  )}
+                </div>
+              )}
           </div>
         </div>
       </div>
