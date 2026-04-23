@@ -3,8 +3,8 @@
  * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
-import { useState, useCallback } from 'react';
-import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
 import { Card } from '@/ui/Card';
@@ -13,6 +13,8 @@ import { Input } from '@/ui/Input';
 import { Badge } from '@/ui/Badge';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { EmptyState } from '@/ui/EmptyState';
+import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { DOMAIN_CATEGORY_MAP } from '@/content/utils/pageContext';
 
 export function SiteRulesSection() {
   const siteRules = useSettingsStore((s) => s.siteRules);
@@ -129,6 +131,7 @@ export function SiteRulesSection() {
                     <div>
                       <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
                       {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
+                      {rule.category && <Badge variant="info" className="ml-2"><Tag className="w-3 h-3 inline mr-1" />{rule.category}</Badge>}
                       {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors.length} include</Badge>}
                       {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
                     </div>
@@ -173,17 +176,37 @@ function RuleEditForm({ rule, onSave, onCancel }: {
     ...rule,
     includeSelectorText: rule.includeSelectors?.join(', ') ?? '',
     excludeSelectorText: rule.excludeSelectors?.join(', ') ?? '',
+    categoryValue: rule.category ?? '__none__',
+    customCategory: '',
   });
 
+  const suggestedCategory = useMemo(() => {
+    if (!form.hostname) return undefined;
+    const domainKey = Object.keys(DOMAIN_CATEGORY_MAP).find(key => form.hostname.includes(key));
+    return domainKey ? DOMAIN_CATEGORY_MAP[domainKey] : undefined;
+  }, [form.hostname]);
+
+  const categoryOptions = [
+    { value: '__none__', label: 'None (use auto-detect)' },
+    ...PREDEFINED_CATEGORIES.map(c => ({ value: c, label: c })),
+    { value: '__custom__', label: 'Custom...' },
+  ];
+
   const handleSave = () => {
+    const resolvedCategory = form.categoryValue === '__none__'
+      ? undefined
+      : form.categoryValue === '__custom__'
+        ? form.customCategory.trim().slice(0, 50) || undefined
+        : form.categoryValue;
+
     const parsedRule = {
       ...form,
+      category: resolvedCategory,
       includeSelectors: form.includeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
       excludeSelectors: form.excludeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
     };
-    const { includeSelectorText: _inc, excludeSelectorText: _exc, ...cleanRule } = parsedRule;
+    const { includeSelectorText: _inc, excludeSelectorText: _exc, categoryValue: _cv, customCategory: _cc, ...cleanRule } = parsedRule;
     onSave(cleanRule as SiteRule);
-    onSave(parsedRule);
   };
 
   return (
@@ -239,6 +262,38 @@ function RuleEditForm({ rule, onSave, onCancel }: {
           Never translate
         </label>
       </div>
+      <FieldGroup
+        label="Page Category"
+        description="Override auto-detected category for this hostname."
+      >
+        <select
+          value={form.categoryValue}
+          onChange={(e) => setForm({ ...form, categoryValue: e.target.value })}
+          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        >
+          {categoryOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {form.categoryValue === '__custom__' && (
+          <input
+            type="text"
+            placeholder="Enter custom category..."
+            value={form.customCategory}
+            onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+            maxLength={50}
+            className="mt-2 w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        )}
+        {suggestedCategory && form.categoryValue === '__none__' && (
+          <button
+            onClick={() => setForm({ ...form, categoryValue: suggestedCategory })}
+            className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Suggested: {suggestedCategory}
+          </button>
+        )}
+      </FieldGroup>
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
         <Button size="sm" disabled={!form.hostname} onClick={handleSave}>Save</Button>
