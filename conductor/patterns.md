@@ -280,5 +280,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Export shared data maps for cross-component reuse: `DOMAIN_CATEGORY_MAP` exported from `pageContext.ts` for auto-suggest in SiteRule editor — avoid duplicating domain knowledge. (from: category-override_20260423, archived 2026-04-23)
 
 ---
-Last refreshed: 2026-04-23T08:30:00+07:00
-Codebase health: 697 tests passing across 55 files, build 640KB, 0 lint errors
+Last refreshed: 2026-04-23T08:33:00+07:00
+Codebase health: 697 tests passing across 55 files, build 639.81KB, 0 lint errors

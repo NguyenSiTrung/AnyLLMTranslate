@@ -89,6 +89,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (Archived 2026-04-22): AES-GCM encryption for API keys via `lib/crypto.ts`, deep merge for nested settings, in-process semaphore rate limiting (max 3 concurrent), subtitle fetch URL allow-list, content-script re-injection guard, React error boundaries for popup/options, `chrome.storage.onChanged` listener cleanup.
 - **UX Power Features — Auto-Translate, Statistics, Section Translation** (Archived 2026-04-22): Auto-translate on page load via hostname matching with wildcard support and notification bar. Translation statistics dashboard with CSS-only daily bar chart. Section picker with visual highlight and per-section translation via Alt+Q shortcut. Fire-and-forget stats collection pattern.
 - **Custom Theme Builder & Context-Aware Translation** (Archived 2026-04-22): Custom theme editor with live preview via CSS custom properties (`--anyllm-custom-*`). Context-aware translation with page context extraction (<10ms, DOM-only) and domain-to-category heuristic map for ~30 top domains. Parent toggle gates child sub-toggles pattern.
+- **Two-Layer Page Category Override System** (Archived 2026-04-23): Tab-scoped temporary override via popup dropdown + persistent SiteRule-based override. Three-level resolution: tab override → site rule category → auto-detected. "Save as Rule" promotion pattern. Category field added to SiteRule editor with auto-suggest from domain map.
 - **Settings UI/UX Improvements** (2026-04-17, incremental): Refactored settings tabs for UI/UX consistency with general tab, added SegmentedControl component, improved Card styling, added subtitle translation toggle to popup menu, added close button to subtitle toast.
 - **Settings UI/UX Enhancement & Subtitle Configuration** (Archived 2026-04-17): Extended SubtitleSettings type with fontFamily, displayMode, translationTimeout. Enhanced SubtitlesSection with mini video preview, font family selector, display mode toggle. Wired settings to runtime overlay. Visual polish with icon-and-card consistency and hover micro-animations. 35 new tests added.
 - **Fullscreen Overlay Fix** (Archived 2026-04-17): Refactored subtitle overlay from absolute to fixed positioning for fullscreen visibility. Implemented dynamic reparenting and Popover API fallback for Top Layer support. 7 new overlay tests added.
@@ -98,8 +99,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
 
 ### Current State
-- 673 tests passing across 53 files. Build passing (`wxt build` ✅, 632.11 KB). 0 lint errors.
-- **No active tracks.** All tracks completed and archived.
+- 697 tests passing across 55 files. Build passing (`wxt build` ✅, 639.81 KB). 0 lint errors.
+- **No active tracks.** All 27 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
