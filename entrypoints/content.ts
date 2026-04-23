@@ -10,7 +10,7 @@ import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
-import { extractPageContext } from '@/content/utils/pageContext';
+import { extractPageContext, resolveCategory } from '@/content/utils/pageContext';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
@@ -38,6 +38,7 @@ let _hoverTranslateCleanup: (() => void) | null = null;
 let _keyboardShortcutsCleanup: (() => void) | null = null;
 let _inlineTranslateCleanup: (() => void) | null = null;
 let _storageChangeListener: ((changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void) | null = null;
+let categoryOverride: string | undefined;
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -59,6 +60,20 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     const pageContext = settings.enableContextAwareTranslation
       ? extractPageContext(document, settings.enablePageCategoryDetection)
       : undefined;
+
+    // Apply category override if present (FR-4: temp > siteRule > autoDetect)
+    if (pageContext) {
+      const hostname = window.location.hostname;
+      const matchingRule = findMatchingRule(hostname, settings.siteRules);
+      const resolved = resolveCategory(
+        pageContext.category,
+        matchingRule?.category,
+        categoryOverride,
+      );
+      if (resolved) {
+        pageContext.category = resolved;
+      }
+    }
 
     const response: TranslationResultMessage = await chrome.runtime.sendMessage({
       action: 'translate',
@@ -277,6 +292,28 @@ function setupMessageListener(): void {
       }
     } else if (message.action === 'enterSectionPicker') {
       enterPickerMode((el) => translateSection(el));
+    } else if (message.action === 'categoryChanged') {
+      // Update module-level category override from background
+      categoryOverride = message.category ?? undefined;
+    } else if (message.action === 'getPageCategory') {
+      // Return full category info to popup
+      (async () => {
+        const catSettings = await loadSettings();
+        const autoDetected = catSettings.enablePageCategoryDetection
+          ? extractPageContext(document, true).category
+          : undefined;
+        const hostname = window.location.hostname;
+        const catRule = findMatchingRule(hostname, catSettings.siteRules);
+        const siteRuleCat = catRule?.category;
+        const effective = resolveCategory(autoDetected, siteRuleCat, categoryOverride);
+        sendResponse({
+          autoDetected,
+          siteRule: siteRuleCat,
+          override: categoryOverride,
+          effective,
+        });
+      })();
+      return true; // async response
     } else if (message.action === 'getStatus') {
       const pageState = getPageState();
       let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
