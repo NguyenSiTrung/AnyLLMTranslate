@@ -1,19 +1,37 @@
-# Track Learnings: category-override_20260423
+# Learnings: Two-Layer Page Category Override System
 
-Patterns, gotchas, and context discovered during implementation.
+## Implementation Patterns
 
-## Codebase Patterns (Inherited)
+### 1. Tab-Scoped In-Memory Store
+- `Map<tabId, string>` pattern works well for tab-scoped state in service workers
+- `chrome.tabs.onRemoved` listener essential for cleanup
+- Acceptable to lose state on SW restart — keep the API simple
 
-- Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB.
-- Zustand + chrome.storage bidirectional sync: write on mutation, listen via `chrome.storage.onChanged` for cross-context updates (popup ↔ options ↔ content).
-- Parent toggle gates child sub-toggles with `opacity-40 pointer-events-none` for visual hierarchy.
-- Adding fields to `ExtensionSettings` requires updating `extractSettings()` in Zustand store — otherwise persistence/export silently drops new fields.
-- PageContext extraction should be <10ms: only DOM queries (title, meta, hostname), zero network calls.
-- Domain-to-category heuristic map for ~30 top domains — no LLM call needed for category detection.
-- Fire-and-forget stats with `.catch(() => {})` — non-blocking, never interfere with translation pipeline.
-- Per-tab session tracking via `Set<number>` for `totalPagesTranslated` — cleared on `restore` action.
-- `chrome.runtime.sendMessage` mock must return a Promise (`.mockResolvedValue(undefined)`) — source code calls `.catch()` on the result.
+### 2. Nullish Coalescing for Priority Chains
+- `tabOverride ?? siteRuleCategory ?? autoDetected` is O(1) and readable
+- Better than if/else chains or priority arrays for 3-level hierarchies
 
----
+### 3. Message Passing Flow
+- Popup → Background (setCategoryOverride) → Background forwards to Content (categoryChanged)
+- Content → Popup (getPageCategory): async response with full CategoryInfo
+- Keep message types in union discriminated by `action` field
 
-<!-- Learnings from implementation will be appended below -->
+### 4. UI Integration
+- Popup dropdown appears conditionally below its parent toggle
+- "Save as Rule" promotes temporary override to persistent SiteRule
+- DOMAIN_CATEGORY_MAP provides auto-suggest for known domains in SiteRule editor
+- Custom free-text capped at 50 chars for sanity
+
+## Gotchas
+- `DOMAIN_CATEGORY_MAP` was initially `const` (private) — needed `export` for SiteRule auto-suggest
+- RuleEditForm had duplicate `onSave()` call — fixed during implementation
+- Non-null assertions flagged by ESLint — use if-guards in tests instead
+
+## Key Files
+- `lib/categories.ts` — PREDEFINED_CATEGORIES constant
+- `services/categoryStore.ts` — tab-scoped override store
+- `content/utils/pageContext.ts` — resolveCategory() + DOMAIN_CATEGORY_MAP
+- `services/background.ts` — message handlers
+- `entrypoints/content.ts` — content script wiring
+- `entrypoints/popup/App.tsx` — category dropdown + Save as Rule
+- `entrypoints/options/sections/SiteRulesSection.tsx` — SiteRule category field

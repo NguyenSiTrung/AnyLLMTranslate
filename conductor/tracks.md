@@ -38,5 +38,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-### [~] Track: Two-Layer Page Category Override System
+### [x] Track: Two-Layer Page Category Override System
 *Link: [./conductor/tracks/category-override_20260423/](./conductor/tracks/category-override_20260423/)*
