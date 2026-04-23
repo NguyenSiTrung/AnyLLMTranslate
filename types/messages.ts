@@ -6,6 +6,18 @@
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { PageContext } from './config';
 
+/** Category resolution info returned to popup */
+export interface CategoryInfo {
+  /** Auto-detected category from heuristics */
+  autoDetected?: string;
+  /** Category set via SiteRule */
+  siteRule?: string;
+  /** Temporary tab-scoped override */
+  override?: string;
+  /** Effective category after resolution */
+  effective?: string;
+}
+
 /** Actions the background service worker handles */
 export type MessageAction =
   | 'translate'
@@ -22,7 +34,10 @@ export type MessageAction =
   | 'SUBTITLE_TRACKS_AVAILABLE'
   | 'SELECT_SUBTITLE_TRACK'
   | 'GET_AVAILABLE_TRACKS'
-  | 'FLUSH_LRU';
+  | 'FLUSH_LRU'
+  | 'setCategoryOverride'
+  | 'getCategoryOverride'
+  | 'getPageCategory';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -109,6 +124,24 @@ export interface FlushLruMessage {
   action: 'FLUSH_LRU';
 }
 
+/** Set a temporary category override for a tab (Popup → Background) */
+export interface SetCategoryOverrideMessage {
+  action: 'setCategoryOverride';
+  tabId: number;
+  category: string | null;
+}
+
+/** Get current category override for a tab (Popup → Background) */
+export interface GetCategoryOverrideMessage {
+  action: 'getCategoryOverride';
+  tabId: number;
+}
+
+/** Query full category info from content script (Popup → Content) */
+export interface GetPageCategoryMessage {
+  action: 'getPageCategory';
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -125,7 +158,10 @@ export type ExtensionMessage =
   | SubtitleTracksAvailableMessage
   | SelectSubtitleTrackMessage
   | GetAvailableTracksMessage
-  | FlushLruMessage;
+  | FlushLruMessage
+  | SetCategoryOverrideMessage
+  | GetCategoryOverrideMessage
+  | GetPageCategoryMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

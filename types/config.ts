@@ -69,6 +69,8 @@ export interface SiteRule {
   neverTranslate: boolean;
   /** Whether this is a built-in (read-only) rule */
   builtIn: boolean;
+  /** Optional page category override for this hostname (used in context-aware translation) */
+  category?: string;
 }
 
 /** Glossary entry for term-protected translation */
