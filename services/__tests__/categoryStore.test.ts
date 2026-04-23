@@ -82,7 +82,7 @@ describe('categoryStore', () => {
       setCategoryOverride(42, 'News');
       initTabCleanup();
       expect(tabRemovedCallback).toBeTruthy();
-      tabRemovedCallback!(42);
+      if (tabRemovedCallback) tabRemovedCallback(42);
       expect(getCategoryOverride(42)).toBeUndefined();
     });
 
@@ -90,7 +90,7 @@ describe('categoryStore', () => {
       setCategoryOverride(1, 'News');
       setCategoryOverride(2, 'Academic Research');
       initTabCleanup();
-      tabRemovedCallback!(1);
+      if (tabRemovedCallback) tabRemovedCallback(1);
       expect(getCategoryOverride(1)).toBeUndefined();
       expect(getCategoryOverride(2)).toBe('Academic Research');
     });
