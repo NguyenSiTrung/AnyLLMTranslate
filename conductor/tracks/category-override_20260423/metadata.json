@@ -1,0 +1,11 @@
+{
+  "track_id": "category-override_20260423",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-04-23T08:06:00+07:00",
+  "updated_at": "2026-04-23T08:06:00+07:00",
+  "description": "Two-layer page category override system: temporary popup override (tab-scoped) + persistent SiteRule.category, with predefined categories and 'Save as Rule' shortcut"
+}
