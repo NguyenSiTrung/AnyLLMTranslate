@@ -12,7 +12,7 @@ function truncate(str: string, maxLen: number): string {
 }
 
 /** Hardcoded domain-to-category map for top domains */
-const DOMAIN_CATEGORY_MAP: Record<string, string> = {
+export const DOMAIN_CATEGORY_MAP: Record<string, string> = {
   'github.com': 'software development',
   'stackoverflow.com': 'programming Q&A',
   'arxiv.org': 'academic research',
@@ -117,3 +117,18 @@ function detectCategory(doc: Document, domain: string): string | undefined {
 
   return undefined;
 }
+
+/**
+ * Resolve effective category using priority chain:
+ * 1. Temporary popup override (tab-scoped)
+ * 2. SiteRule.category (persistent per-domain)
+ * 3. Auto-detected (heuristics)
+ */
+export function resolveCategory(
+  autoDetected?: string,
+  siteRuleCategory?: string,
+  tabOverride?: string,
+): string | undefined {
+  return tabOverride ?? siteRuleCategory ?? autoDetected;
+}
+

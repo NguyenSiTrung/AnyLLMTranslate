@@ -272,6 +272,13 @@ Reusable patterns discovered during development. Read this before starting new w
 - Parent toggle gates child sub-toggles with `opacity-40 pointer-events-none` for visual hierarchy. (from: theme-context_20260422, archived 2026-04-22)
 - Adding fields to `ExtensionSettings` requires updating `extractSettings()` in Zustand store — otherwise persistence/export silently drops new fields. (from: theme-context_20260422, archived 2026-04-22)
 
+## Category Override & Two-Layer Resolution (2026-04-23)
+- Tab-scoped in-memory store: `Map<tabId, string>` with `chrome.tabs.onRemoved` cleanup for per-tab override state that doesn't persist across service worker restarts. (from: category-override_20260423, archived 2026-04-23)
+- Nullish coalescing for priority chains: `tabOverride ?? siteRuleCategory ?? autoDetected` is O(1) and readable for N-level fallback hierarchies. (from: category-override_20260423, archived 2026-04-23)
+- Popup → Background → Content forwarding: popup sends `setCategoryOverride` to background, background stores + forwards `categoryChanged` to content tab for immediate effect. (from: category-override_20260423, archived 2026-04-23)
+- "Save as Rule" promotion pattern: temporary popup override promoted to persistent `SiteRule.category` field, then temp override cleared — single-click persistent save UX. (from: category-override_20260423, archived 2026-04-23)
+- Export shared data maps for cross-component reuse: `DOMAIN_CATEGORY_MAP` exported from `pageContext.ts` for auto-suggest in SiteRule editor — avoid duplicating domain knowledge. (from: category-override_20260423, archived 2026-04-23)
+
 ---
-Last refreshed: 2026-04-23T07:23:00+07:00
-Codebase health: 673 tests passing across 53 files, build 632KB, 0 lint errors
+Last refreshed: 2026-04-23T08:30:00+07:00
+Codebase health: 697 tests passing across 55 files, build 640KB, 0 lint errors

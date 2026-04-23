@@ -77,6 +77,33 @@ describe('config types', () => {
       expect(rule.hostname).toBe('*.example.com');
       expect(rule.includeSelectors).toHaveLength(2);
     });
+
+    it('accepts a site rule with optional category', () => {
+      const rule: SiteRule = {
+        id: 'rule-cat',
+        hostname: 'github.com',
+        includeSelectors: [],
+        excludeSelectors: [],
+        alwaysTranslate: false,
+        neverTranslate: false,
+        builtIn: false,
+        category: 'Software Development',
+      };
+      expect(rule.category).toBe('Software Development');
+    });
+
+    it('accepts a site rule without category (undefined)', () => {
+      const rule: SiteRule = {
+        id: 'rule-no-cat',
+        hostname: 'example.com',
+        includeSelectors: [],
+        excludeSelectors: [],
+        alwaysTranslate: false,
+        neverTranslate: false,
+        builtIn: false,
+      };
+      expect(rule.category).toBeUndefined();
+    });
   });
 
   describe('GlossaryEntry interface', () => {

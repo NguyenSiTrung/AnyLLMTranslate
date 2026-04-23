@@ -33,6 +33,7 @@ This file tracks all major tracks for the project.
 - ✅ **Hardening & Fixes — Build Blockers, Runtime Reliability, Security** (`hardening-fixes_20260421`) — Archived 2026-04-22 (partial, Phase A complete). [View](./conductor/archive/hardening-fixes_20260421/)
 - ✅ **UX Power Features — Auto-Translate, Statistics, Section Translation** (`ux-power-features_20260422`) — Archived 2026-04-22. [View](./conductor/archive/ux-power-features_20260422/)
 - ✅ **Custom Theme Builder & Context-Aware Translation** (`theme-context_20260422`) — Archived 2026-04-22. [View](./conductor/archive/theme-context_20260422/)
+- ✅ **Two-Layer Page Category Override System** (`category-override_20260423`) — Archived 2026-04-23. [View](./conductor/archive/category-override_20260423/)
 
 ---
 

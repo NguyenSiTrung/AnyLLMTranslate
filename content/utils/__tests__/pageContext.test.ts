@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { extractPageContext } from '../pageContext';
+import { extractPageContext, resolveCategory } from '../pageContext';
 
 describe('extractPageContext', () => {
   beforeEach(() => {
@@ -107,5 +107,31 @@ describe('extractPageContext', () => {
 
     const ctx = extractPageContext(document);
     expect(ctx.description).toBe('');
+  });
+});
+
+describe('resolveCategory', () => {
+  it('returns tabOverride when all three are provided', () => {
+    expect(resolveCategory('auto', 'site', 'tab')).toBe('tab');
+  });
+
+  it('returns siteRuleCategory when no tabOverride', () => {
+    expect(resolveCategory('auto', 'site', undefined)).toBe('site');
+  });
+
+  it('returns autoDetected when no tabOverride or siteRule', () => {
+    expect(resolveCategory('auto', undefined, undefined)).toBe('auto');
+  });
+
+  it('returns undefined when all are undefined', () => {
+    expect(resolveCategory(undefined, undefined, undefined)).toBeUndefined();
+  });
+
+  it('prefers tabOverride over siteRule even when autoDetected is set', () => {
+    expect(resolveCategory('auto', 'site', 'override')).toBe('override');
+  });
+
+  it('prefers siteRule over autoDetected', () => {
+    expect(resolveCategory('auto', 'site')).toBe('site');
   });
 });

@@ -4,6 +4,7 @@
  */
 
 import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule } from '@/services/background';
+import { initTabCleanup } from '@/services/categoryStore';
 
 /** Send message to the active tab's content script */
 async function sendToActiveTab(message: Record<string, unknown>): Promise<void> {
@@ -64,6 +65,9 @@ export default defineBackground(() => {
   // FR-3: Schedule daily cache eviction via chrome.alarms
   initEvictionSchedule();
   scheduleEviction();
+
+  // Initialize tab-scoped category override cleanup
+  initTabCleanup();
 
   // Set up context menus on install
   chrome.runtime.onInstalled.addListener(() => {
