@@ -12,6 +12,7 @@ import type {
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
+import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache } from '@/services/cacheManager';
@@ -595,6 +596,19 @@ export function handleMessage(
         }
       }
       return undefined;
+    }
+    case 'setCategoryOverride': {
+      storeCategoryOverride(message.tabId, message.category);
+      // Forward categoryChanged to the content tab so it updates immediately
+      chrome.tabs.sendMessage(message.tabId, {
+        action: 'categoryChanged',
+        category: message.category,
+      }).catch(() => {});
+      return Promise.resolve({ success: true });
+    }
+    case 'getCategoryOverride': {
+      const override = fetchCategoryOverride(message.tabId);
+      return Promise.resolve({ override });
     }
     default:
       return undefined;
