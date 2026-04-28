@@ -117,7 +117,8 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 
 | Layer | Technology |
 |-------|------------|
-| Extension framework | **WXT** v0.20 (Manifest V3) |
+| Extension framework | **WXT** v0.20.20 (Manifest V3) |
+| Build output | **~640 KB** (639.79 kB) |
 | UI | **React 19** + **TypeScript 5.9** (14-component shared UI library) |
 | Styling | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes) |
 | State management | **Zustand v5** with `chrome.storage.local` sync |
@@ -232,7 +233,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 ├── lib/                       # Shared utilities
 │   ├── constants.ts           # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
 │   ├── config.ts              # loadSettings() helper
-│   ├── languages.ts           # 30+ language codes with native names
+│   ├── languages.ts           # 36 languages (ISO 639-1 codes with native names)
 │   ├── categories.ts          # 21 predefined page categories for context-aware translation
 │   ├── glossary.ts            # Glossary formatting, mismatch detection, CSV/JSON import/export
 │   ├── siteRules.ts           # Site rule matching utilities
