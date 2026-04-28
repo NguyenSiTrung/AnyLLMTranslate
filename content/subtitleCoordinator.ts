@@ -230,9 +230,8 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   // Initialize overlay with controls
   await initializeControls();
 
-  // Pass subtitle appearance settings to the overlay
-  const overlaySettings = await loadSettings().catch(() => null);
-  const subtitleCfg = overlaySettings?.subtitleSettings;
+  // Reuse settings already loaded above
+  const subtitleCfg = settings.subtitleSettings;
   const fontFamilyMap: Record<string, string> = {
     serif: 'Georgia, serif',
     monospace: 'monospace',

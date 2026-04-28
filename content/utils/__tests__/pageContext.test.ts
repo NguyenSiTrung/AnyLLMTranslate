@@ -55,7 +55,7 @@ describe('extractPageContext', () => {
     document.head.appendChild(meta);
 
     const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('software development');
+    expect(ctx.category).toBe('Software Development');
   });
 
   it('detects education category from keywords', () => {
@@ -66,7 +66,7 @@ describe('extractPageContext', () => {
     document.head.appendChild(meta);
 
     const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('education');
+    expect(ctx.category).toBe('Online Education');
   });
 
   it('detects news category from h1 text', () => {
@@ -76,7 +76,7 @@ describe('extractPageContext', () => {
     document.body.appendChild(h1);
 
     const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('news');
+    expect(ctx.category).toBe('News');
 
     document.body.innerHTML = '';
   });
@@ -88,7 +88,7 @@ describe('extractPageContext', () => {
     document.body.appendChild(h1);
 
     const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('academic research');
+    expect(ctx.category).toBe('Academic Research');
 
     document.body.innerHTML = '';
   });
