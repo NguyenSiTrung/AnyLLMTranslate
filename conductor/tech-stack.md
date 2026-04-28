@@ -60,7 +60,7 @@
 
 | Technology | Version | Usage |
 |-----------|---------|-------|
-| **ESLint** | 9.x | Linting with TypeScript rules |
+| **ESLint** | 10.x | Flat config with TypeScript rules |
 | **Prettier** | 3.x | Code formatting |
 
 ## CI/CD

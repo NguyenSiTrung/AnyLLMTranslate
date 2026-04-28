@@ -3,14 +3,18 @@
 Reusable patterns discovered during development. Read this before starting new work.
 
 ## Code Conventions
-- ESLint 9 uses flat config (eslint.config.mjs), no `--ext` flag needed. (from: phase1-foundation_20260409, archived 2026-04-09)
+- ESLint 9+ uses flat config (eslint.config.mjs), no `--ext` flag needed. (from: phase1-foundation_20260409, archived 2026-04-09)
 - `promise.finally().catch()` needed to suppress unhandled rejections when storing promises in Maps for dedup. (from: phase1-foundation_20260409, archived 2026-04-09)
+- `@typescript-eslint/no-dynamic-delete` prohibits `delete obj[key]` — use `Object.fromEntries(Object.entries(obj).filter(...))` instead. (from: ux-power-features_20260422, archived 2026-04-22)
+- Comparing objects with `undefined === undefined` evaluates to true in `findIndex`, which can cause bugs where the first element is repeatedly overwritten. Always verify interface properties (`id`) exist before using them as keys. (from: progressive-chunking_20260417, archived 2026-04-17)
 
 ## Architecture
 - WXT uses `entrypoints/` dir (not `src/`) for background.ts, content.ts, popup/. Other code lives at project root (lib/, types/, services/, content/). (from: phase1-foundation_20260409, archived 2026-04-09)
 - CSS import in content script must use `@/styles/inject.css` (not relative), since entrypoint is in `entrypoints/` but CSS is in `styles/`. (from: phase1-foundation_20260409, archived 2026-04-09)
 - Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB. (from: phase1-foundation_20260409, archived 2026-04-09)
-- WXT build produces ~577KB total for chrome-mv3 output (grew from ~346KB after Phase 5 settings overhaul, subtitle features, and UI library). (from: phase1-foundation_20260409, updated 2026-04-18)
+- Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events). (from: progressive-chunking_20260417, archived 2026-04-17)
+- Per-tab session tracking via `Set<number>` for counters like `totalPagesTranslated` — cleared on `restore` action to avoid double-counting. (from: ux-power-features_20260422, archived 2026-04-22)
+- WXT build produces ~688KB total for chrome-mv3 output (grew from ~346KB after Phase 5 settings overhaul, subtitle features, UI library, and advanced features). (from: phase1-foundation_20260409, updated 2026-04-28)
 
 ## Gotchas
 - WXT `init` refuses to run in non-empty directories — init in temp dir, then copy. (from: phase1-foundation_20260409, archived 2026-04-09)
@@ -248,6 +252,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - Safe DOM construction: Never use `innerHTML` with dynamic text; use `document.createElement` + `textContent`. Static SVG templates in innerHTML are acceptable if they contain no user data. (from: hardening-fixes_20260421, archived 2026-04-22)
 - Subtitle fetch allow-list: Background CORS bypass must validate URL against a regex allow-list before calling `fetch()` — include common subtitle/CDN domains. (from: hardening-fixes_20260421, archived 2026-04-22)
 - Clipboard API: `navigator.clipboard.writeText()` is async and can throw (permissions, non-secure context) — always `await` + try/catch with visual feedback on failure. (from: hardening-fixes_20260421, archived 2026-04-22)
+- `document.execCommand('insertText')` is the most reliable way to replace text in standard inputs while preserving the browser's native undo stack. (from: inline-translate_20260418, archived 2026-04-18)
+- Multi-framework compatibility (React, Vue, Angular) requires dispatching both `input` and `change` synthetic events manually after programmatically updating input values. (from: inline-translate_20260418, archived 2026-04-18)
 
 ## Runtime Reliability (2026-04-21)
 - deepMerge for nested settings: Chrome storage partial updates require deep merging of nested objects (provider, subtitleSettings, inlineTranslate). Apply at `loadSettings()`, `updateSettings()`, AND `chrome.storage.onChanged` listeners. (from: hardening-fixes_20260421, archived 2026-04-22)
@@ -280,5 +286,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - Export shared data maps for cross-component reuse: `DOMAIN_CATEGORY_MAP` exported from `pageContext.ts` for auto-suggest in SiteRule editor — avoid duplicating domain knowledge. (from: category-override_20260423, archived 2026-04-23)
 
 ---
-Last refreshed: 2026-04-23T08:33:00+07:00
-Codebase health: 697 tests passing across 55 files, build 639.81KB, 0 lint errors
+Last refreshed: 2026-04-28T13:40:00+07:00
+Codebase health: 697 tests passing across 55 files, build 688KB, 0 lint errors

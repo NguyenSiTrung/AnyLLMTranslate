@@ -1,16 +1,22 @@
 {
-  "lastRefresh": "2026-04-23T08:33:00+07:00",
+  "lastRefresh": "2026-04-28T13:40:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": [
-    "product.md: Added Two-Layer Page Category Override System to Implementation Status",
-    "product.md: Updated test count 673→697, files 53→55, build 632.11→639.81 KB",
-    "patterns.md: Updated health footer with exact build size"
+    "tech-stack.md: Updated ESLint 9.x → 10.x",
+    "patterns.md: Updated build size 639.81 KB → 688 KB, refreshed timestamp",
+    "patterns.md: Added document.execCommand('insertText') pattern (from inline-translate_20260418)",
+    "patterns.md: Added synthetic input/change events pattern (from inline-translate_20260418)",
+    "patterns.md: Added no-dynamic-delete → Object.fromEntries pattern (from ux-power-features_20260422)",
+    "patterns.md: Added undefined === undefined findIndex gotcha (from progressive-chunking_20260417)",
+    "patterns.md: Added mutable array queue architecture pattern (from progressive-chunking_20260417)",
+    "patterns.md: Added per-tab session tracking pattern (from ux-power-features_20260422)",
+    "product.md: Updated build size 639.81 KB → ~688 KB"
   ],
   "codebaseHealth": {
     "tests": 697,
     "testFiles": 55,
-    "buildSize": "639.81 KB",
+    "buildSize": "688 KB",
     "lintErrors": 0,
     "archivedTracks": 27,
     "activeTracks": 0

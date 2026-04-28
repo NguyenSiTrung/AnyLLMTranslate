@@ -99,7 +99,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
 
 ### Current State
-- 697 tests passing across 55 files. Build passing (`wxt build` ✅, 639.81 KB). 0 lint errors.
+- 697 tests passing across 55 files. Build passing (`wxt build` ✅, ~688 KB). 0 lint errors.
 - **No active tracks.** All 27 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
