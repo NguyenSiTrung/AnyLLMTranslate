@@ -61,17 +61,17 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
   const pageContext = extractPageContext(document, settings.enablePageCategoryDetection);
 
   // Apply category override resolution (FR-4: temp > siteRule > autoDetect)
-  if (pageContext.category || state.categoryOverride) {
-    const hostname = window.location.hostname;
-    const matchingRule = findMatchingRule(hostname, settings.siteRules ?? []);
-    const resolved = resolveCategory(
-      pageContext.category,
-      matchingRule?.category,
-      state.categoryOverride,
-    );
-    if (resolved) {
-      pageContext.category = resolved;
-    }
+  // Always run resolution — a SiteRule category may exist even when
+  // enablePageCategoryDetection is off and no tab override is active.
+  const hostname = window.location.hostname;
+  const matchingRule = findMatchingRule(hostname, settings.siteRules ?? []);
+  const resolved = resolveCategory(
+    pageContext.category,
+    matchingRule?.category,
+    state.categoryOverride,
+  );
+  if (resolved) {
+    pageContext.category = resolved;
   }
 
   return pageContext;

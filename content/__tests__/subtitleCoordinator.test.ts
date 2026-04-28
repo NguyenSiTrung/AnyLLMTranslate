@@ -248,6 +248,46 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     });
   });
 
+  it('applies SiteRule category even when category detection is off and no tab override', async () => {
+    // Edge case: enablePageCategoryDetection=false → extractPageContext returns no category
+    // No tab override set. But a SiteRule with a category exists → should still be applied.
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: true,
+      enablePageCategoryDetection: false,
+      siteRules: [{ hostname: 'youtube.com', category: 'entertainment' }],
+    });
+    mockExtractPageContext.mockReturnValue({
+      title: 'Test Video',
+      description: '',
+      domain: 'youtube.com',
+    });
+    mockFindMatchingRule.mockReturnValue({ hostname: 'youtube.com', category: 'entertainment' });
+    mockResolveCategory.mockReturnValue('entertainment');
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-013');
+
+    expect(mockFindMatchingRule).toHaveBeenCalledWith('www.youtube.com', [{ hostname: 'youtube.com', category: 'entertainment' }]);
+    expect(mockResolveCategory).toHaveBeenCalledWith(
+      undefined, // no auto-detected category (detection off)
+      'entertainment', // from SiteRule
+      undefined, // no tab override
+    );
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: expect.objectContaining({ category: 'entertainment' }),
+      }),
+    );
+  });
+
   it('activates overlay immediately with original cues', async () => {
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
