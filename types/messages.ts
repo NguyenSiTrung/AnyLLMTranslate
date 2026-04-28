@@ -83,6 +83,7 @@ export interface TranslateSubtitleMessage {
   cues: SubtitleCue[];
   sourceLanguage: string;
   targetLanguage: string;
+  pageContext?: PageContext;
 }
 
 /** Subtitle fetch request (CORS bypass) from content script → background */

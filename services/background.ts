@@ -253,7 +253,7 @@ async function handleTranslateSubtitle(
   await acquireSemaphore();
   try {
     const service = await initService();
-    const { cues, sourceLanguage, targetLanguage } = message;
+    const { cues, sourceLanguage, targetLanguage, pageContext } = message;
     const tabId = sender?.tab?.id;
 
     const subtitleSettings = await loadSettings();
@@ -309,6 +309,7 @@ async function handleTranslateSubtitle(
           targetLanguage,
           glossaryBlock: subtitleGlossary || undefined,
           customSystemPrompt: subtitleSettings.customSystemPrompt ?? null,
+          pageContext,
         });
 
         if (result.success) {

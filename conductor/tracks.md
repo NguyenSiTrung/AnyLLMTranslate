@@ -39,4 +39,8 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*No active tracks.*
+- [ ] **Subtitle Context-Aware & Category Override Integration** (`subtitle-context-aware_20260428`) — Priority: High. [View](./conductor/tracks/subtitle-context-aware_20260428/)
+
+---
+
+*No other active tracks.*

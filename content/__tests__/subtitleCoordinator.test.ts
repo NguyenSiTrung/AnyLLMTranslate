@@ -72,6 +72,19 @@ vi.mock('@/lib/config', () => ({
   loadSettings: (...args: unknown[]) => mockLoadSettings(...args),
 }));
 
+const mockExtractPageContext = vi.fn();
+const mockResolveCategory = vi.fn();
+vi.mock('@/content/utils/pageContext', () => ({
+  extractPageContext: (...args: unknown[]) => mockExtractPageContext(...args),
+  resolveCategory: (...args: unknown[]) => mockResolveCategory(...args),
+  DOMAIN_CATEGORY_MAP: {},
+}));
+
+const mockFindMatchingRule = vi.fn();
+vi.mock('@/lib/siteRules', () => ({
+  findMatchingRule: (...args: unknown[]) => mockFindMatchingRule(...args),
+}));
+
 // ============================================================================
 // Shared fixtures
 // ============================================================================
@@ -327,6 +340,107 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
 
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
+
+  it('sends pageContext when enableContextAwareTranslation is true', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: true,
+      enablePageCategoryDetection: true,
+      siteRules: [],
+    });
+    mockExtractPageContext.mockReturnValue({
+      title: 'Test Video',
+      description: 'A test video',
+      domain: 'youtube.com',
+      category: 'video platform',
+    });
+    mockResolveCategory.mockReturnValue('video platform');
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-010');
+
+    expect(mockExtractPageContext).toHaveBeenCalledWith(document, true);
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        pageContext: expect.objectContaining({
+          title: 'Test Video',
+          domain: 'youtube.com',
+          category: 'video platform',
+        }),
+      }),
+    );
+  });
+
+  it('omits pageContext when enableContextAwareTranslation is false', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: false,
+    });
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-011');
+
+    expect(mockExtractPageContext).not.toHaveBeenCalled();
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+      }),
+    );
+    const sentMessage = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sentMessage.pageContext).toBeUndefined();
+  });
+
+  it('resolves category with tab override > site rule > auto-detected', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: true,
+      enablePageCategoryDetection: true,
+      siteRules: [{ hostname: 'youtube.com', category: 'entertainment' }],
+    });
+    mockExtractPageContext.mockReturnValue({
+      title: 'Test',
+      domain: 'youtube.com',
+      category: 'video platform',
+    });
+    mockFindMatchingRule.mockReturnValue({ hostname: 'youtube.com', category: 'entertainment' });
+    mockResolveCategory.mockReturnValue('entertainment');
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-012');
+
+    expect(mockResolveCategory).toHaveBeenCalledWith(
+      'video platform',
+      'entertainment',
+      undefined,
+    );
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pageContext: expect.objectContaining({ category: 'entertainment' }),
+      }),
+    );
+  });
 });
 
 // ============================================================================
@@ -441,6 +555,39 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
       MOCK_CUES,
       expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+    );
+  });
+
+  it('sends pageContext in overlay mode when context-aware is enabled', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: true,
+      enablePageCategoryDetection: false,
+      siteRules: [],
+    });
+    mockExtractPageContext.mockReturnValue({
+      title: 'Overlay Test',
+      description: '',
+      domain: 'udemy.com',
+    });
+    mockResolveCategory.mockReturnValue(undefined);
+
+    const { forceOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
+
+    const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
+    await forceOverlayMode('https://udemy.com/subtitle.vtt', vttContent);
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        pageContext: expect.objectContaining({
+          title: 'Overlay Test',
+          domain: 'udemy.com',
+        }),
+      }),
     );
   });
 });

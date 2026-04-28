@@ -17,6 +17,9 @@ import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
+import type { PageContext } from '@/types/config';
+import { extractPageContext, resolveCategory } from '@/content/utils/pageContext';
+import { findMatchingRule } from '@/lib/siteRules';
 
 /** Coordinator state */
 interface CoordinatorState {
@@ -31,6 +34,8 @@ interface CoordinatorState {
   discoverDebounceTimer: ReturnType<typeof setTimeout> | null;
   /** True once the user has pressed play on the primary video */
   videoIsPlaying: boolean;
+  /** Temporary tab-scoped category override from popup */
+  categoryOverride: string | undefined;
 }
 
 const state: CoordinatorState = {
@@ -42,7 +47,35 @@ const state: CoordinatorState = {
   navigationEpoch: 0,
   discoverDebounceTimer: null,
   videoIsPlaying: false,
+  categoryOverride: undefined,
 };
+
+/**
+ * Build resolved page context for subtitle translation.
+ * Extracts metadata, applies site rules and tab overrides.
+ */
+async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
+  const settings = await loadSettings();
+  if (!settings.enableContextAwareTranslation) return undefined;
+
+  const pageContext = extractPageContext(document, settings.enablePageCategoryDetection);
+
+  // Apply category override resolution (FR-4: temp > siteRule > autoDetect)
+  if (pageContext.category || state.categoryOverride) {
+    const hostname = window.location.hostname;
+    const matchingRule = findMatchingRule(hostname, settings.siteRules ?? []);
+    const resolved = resolveCategory(
+      pageContext.category,
+      matchingRule?.category,
+      state.categoryOverride,
+    );
+    if (resolved) {
+      pageContext.category = resolved;
+    }
+  }
+
+  return pageContext;
+}
 
 /**
  * Handle subtitle interception from MAIN world.
@@ -108,11 +141,14 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     showSubtitleToast('Translating subtitles progressively...', true);
 
+    const pageContext = await buildSubtitlePageContext();
+
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
       cues,
       sourceLanguage,
       targetLanguage: settings.targetLanguage,
+      pageContext,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
 
     if (!response?.success || !response.cues) {
@@ -167,11 +203,14 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     showSubtitleToast('Translating Overlay Subtitles...', true);
 
     const settings = await loadSettings();
+    const pageContext = await buildSubtitlePageContext();
+
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
       cues,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
+      pageContext,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
 
     if (response?.success && response.cues) {
@@ -367,6 +406,10 @@ export function startCoordinator(): () => void {
         tracks: state.availableTracks,
       });
     }
+    // Handle category override changes from popup
+    if (msg.action === 'categoryChanged') {
+      state.categoryOverride = (message as { category?: string | null }).category ?? undefined;
+    }
   };
   chrome.runtime.onMessage.addListener(handleExtensionMessage);
 
@@ -427,6 +470,7 @@ export function resetCoordinatorState(): void {
   state.availableTracks = [];
   state.navigationEpoch++;
   state.videoIsPlaying = false;
+  state.categoryOverride = undefined;
   if (state.discoverDebounceTimer !== null) {
     clearTimeout(state.discoverDebounceTimer);
     state.discoverDebounceTimer = null;

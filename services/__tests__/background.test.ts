@@ -171,6 +171,62 @@ describe('services/background', () => {
     });
   });
 
+  describe('handleMessage — translateSubtitle', () => {
+    it('forwards pageContext to service.translate() when provided', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          pageContext: {
+            title: 'Test Video',
+            description: 'A test video',
+            domain: 'youtube.com',
+            category: 'entertainment',
+          },
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      expect(fetchMock).toHaveBeenCalled();
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('Page context for consistent terminology');
+      expect(body.messages[0].content).toContain('Domain: youtube.com');
+      expect(body.messages[0].content).toContain('Category: entertainment');
+    });
+
+    it('works correctly when pageContext is undefined (backward compat)', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      const result = await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const typedResult = result as { success: boolean; cues?: Array<{ text: string }> };
+      expect(typedResult.success).toBe(true);
+      expect(typedResult.cues).toBeDefined();
+      expect(typedResult.cues?.[0].text).toBe('Xin chào');
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).not.toContain('Page context for consistent terminology');
+    });
+  });
+
   describe('handleMessage — unknown action', () => {
     it('returns undefined for unknown actions', () => {
       const result = handleMessage(
