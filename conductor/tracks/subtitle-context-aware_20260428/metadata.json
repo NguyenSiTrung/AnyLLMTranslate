@@ -1,11 +1,11 @@
 {
   "track_id": "subtitle-context-aware_20260428",
   "type": "feature",
-  "status": "new",
+  "status": "completed",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": null,
   "created_at": "2026-04-28T00:00:00Z",
-  "updated_at": "2026-04-28T00:00:00Z",
+  "updated_at": "2026-04-28T17:45:00Z",
   "description": "Wire Context-Aware Translation and Page Category Override features into the Video Subtitle Translation pipeline"
 }
