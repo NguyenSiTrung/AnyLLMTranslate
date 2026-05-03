@@ -1,0 +1,11 @@
+{
+  "track_id": "llm-category-detection_20260504",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-05-04T00:47:00Z",
+  "updated_at": "2026-05-04T00:47:00Z",
+  "description": "LLM-based Page Category Detection with async progressive upgrade"
+}
