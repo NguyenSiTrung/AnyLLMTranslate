@@ -15,6 +15,7 @@ stats-*.json
 coverage
 web-ext.config.ts
 .factory
+__pycache__
 
 # Editor directories and files
 .vscode/*
