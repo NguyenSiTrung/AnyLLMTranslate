@@ -1,20 +1,30 @@
 {
-  "lastRefresh": "2026-05-03T23:53:00+07:00",
+  "lastRefresh": "2026-05-04T02:22:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
-  "changes": [
-    "product.md: Added subtitle-context-aware_20260428 and audit-fixes_20260503 tracks in Implementation Status",
-    "product.md: Updated build size 688KB → ~649KB, test count 697 → 704, track count 27 → 29",
-    "patterns.md: Updated build size 688KB → 649KB, test count 697 → 704, refreshed timestamp",
-    "No new patterns to elevate from 2 recent tracks (bug fixes / wiring, not novel patterns)",
-    "beads: Skipped — Beads database missing despite enabled config"
-  ],
-  "codebaseHealth": {
-    "tests": 704,
+  "changes": {
+    "product.md": [
+      "Added Built-in Site Rules & Global Excludes feature (2026-05-04)",
+      "Added LLM-based Page Category Detection feature (archived 2026-05-04)",
+      "Added 15 built-in site rules and global exclude selectors to Key Features",
+      "Updated success metrics: 50+ built-in rules → 15+ built-in rules",
+      "Updated current state: 728 tests, 673 KB build, 30 tracks"
+    ],
+    "patterns.md": [
+      "Added LLM Category Detection section (3 patterns)",
+      "Added Built-in Site Rules & Global Excludes section (4 patterns)",
+      "Updated health footer: 728 tests, 673 KB, 30 tracks"
+    ],
+    "tech-stack.md": "No drift",
+    "workflow.md": "No drift"
+  },
+  "health": {
+    "tests": 728,
     "testFiles": 55,
-    "buildSize": "649 KB",
-    "lintErrors": 0,
-    "archivedTracks": 29,
-    "activeTracks": 0
+    "buildSizeKB": 673,
+    "lintErrors": 4,
+    "lintNote": "Pre-existing in 3 source files (pageContext.ts, App.tsx, openaiCompatible.ts)",
+    "tracksArchived": 30,
+    "tracksActive": 0
   }
 }

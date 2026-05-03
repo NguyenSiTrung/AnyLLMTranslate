@@ -285,6 +285,17 @@ Reusable patterns discovered during development. Read this before starting new w
 - "Save as Rule" promotion pattern: temporary popup override promoted to persistent `SiteRule.category` field, then temp override cleared — single-click persistent save UX. (from: category-override_20260423, archived 2026-04-23)
 - Export shared data maps for cross-component reuse: `DOMAIN_CATEGORY_MAP` exported from `pageContext.ts` for auto-suggest in SiteRule editor — avoid duplicating domain knowledge. (from: category-override_20260423, archived 2026-04-23)
 
+## LLM Category Detection (2026-05-04)
+- Dual-mode detection: `async` mode translates immediately with heuristic category and upgrades context via LLM later; `blocking` mode waits for LLM result before first translation. Feature gated behind `enableLLMPageCategoryDetection` toggle (child of `enableContextAwareTranslation`). (from: llm-category-detection_20260504, archived 2026-05-04)
+- Feature toggles must be placed inside their parent toggle and conditionally rendered/disabled if parent is off — e.g., LLM detection nested under context-aware translation. (from: llm-category-detection_20260504, archived 2026-05-04)
+- Settings are defined in `types/config.ts` and managed globally via `settingsStore.ts` — always update `extractSettings()` and `DEFAULT_SETTINGS` together. (from: llm-category-detection_20260504, archived 2026-05-04)
+
+## Built-in Site Rules & Global Excludes (2026-05-04)
+- Built-in rules use `builtIn: true` flag on `SiteRule` — displayed read-only in UI, user rules always take precedence via `findEffectiveRule()`. (from: incremental, 2026-05-04)
+- `mergeExcludeSelectors()` deduplicates global + per-site exclude selectors with `Set`-based union; global selectors come first. (from: incremental, 2026-05-04)
+- `globalExcludeSelectors` defaults to `['pre', 'code', '.code-block']` — code blocks are excluded from translation universally. (from: incremental, 2026-05-04)
+- Inline edit form pattern for array settings: each entry is an editable row with delete button, plus an "Add" row at the bottom. Validate non-empty before insert. (from: incremental, 2026-05-04)
+
 ---
-Last refreshed: 2026-05-03T23:53:00+07:00
-Codebase health: 704 tests passing across 55 files, build 649KB, 0 lint errors
+Last refreshed: 2026-05-04T02:22:00+07:00
+Codebase health: 728 tests passing across 55 files, build 673KB, 30 tracks archived

@@ -47,6 +47,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Popup UI (redesigned dropdown with permanent quick settings)
 - Options page (provider config, theme selection, site rules)
 - Shared component library (12 reusable components: Button, Card, Input, Modal, Select, Slider, Toggle, Toast, Badge, EmptyState, FieldGroup, ToastProvider)
+- 15 built-in site rules for popular platforms (GitHub, StackOverflow, Reddit, Wikipedia, Medium, X/Twitter, HuggingFace, PyPI, npm, GitLab, Substack, YouTube)
+- Global default exclude selectors (pre, code, .code-block) — configurable, merged with per-site excludes
 - Side panel (reading view)
 - Text selection translate popup
 - Mouse hover translation
@@ -65,7 +67,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - < 50ms DOM injection overhead
 - < 5MB extension bundle size
 - Theme switching < 100ms
-- Support 50+ built-in site rules
+- Ship 15+ built-in site rules for popular platforms
 - 80%+ test coverage
 
 ## Implementation Status
@@ -99,10 +101,12 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
 - **Subtitle Context-Aware & Category Override Integration** (Archived 2026-04-28): Wired page context extraction and two-layer category resolution into the subtitle translation pipeline. Both interception and overlay activation paths now include domain-aware context for better translation quality. 6 new tests added (703 total at track completion).
 - **Codebase Audit Fixes — Hardening** (Archived 2026-05-03): Resolved 13 codebase audit issues: crash paths, memory leaks, TypeScript type errors, input validation, and security hardening. Semaphore correctness validated, XSS hardening, error boundary fixes.
+- **LLM-based Page Category Detection** (Archived 2026-05-04): Dual-mode (async/blocking) LLM pipeline for automatic page category identification. Async mode translates first with heuristic category, then upgrades context via LLM. Blocking mode waits for LLM category before translation. Gated behind `enableLLMPageCategoryDetection` toggle.
+- **Built-in Site Rules & Global Excludes** (2026-05-04, incremental): 15 built-in site rules for GitHub, StackOverflow, Reddit, Wikipedia, Medium, X/Twitter, HuggingFace, PyPI, npm, GitLab, Substack, YouTube — user rules take precedence. Global default exclude selectors (`pre`, `code`, `.code-block`) configurable in Advanced settings with inline edit form UX. `mergeExcludeSelectors()` deduplicates global + per-site excludes.
 
 ### Current State
-- 704 tests passing across 55 files. Build passing (`wxt build` ✅, ~649 KB). 0 lint errors.
-- **No active tracks.** All 29 tracks completed and archived.
+- 728 tests passing across 55 files. Build passing (`wxt build` ✅, ~673 KB). 4 lint warnings (pre-existing, in 3 source files).
+- **No active tracks.** All 30 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
