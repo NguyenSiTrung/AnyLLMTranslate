@@ -127,6 +127,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     translationPosition: state.translationPosition,
     darkMode: state.darkMode,
     siteRules: state.siteRules,
+    globalExcludeSelectors: state.globalExcludeSelectors,
     glossary: state.glossary,
     subtitleSettings: state.subtitleSettings,
     customSystemPrompt: state.customSystemPrompt,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchHostname, findMatchingRule, findEffectiveRule, BUILT_IN_RULES } from '@/lib/siteRules';
+import { matchHostname, findMatchingRule, findEffectiveRule, mergeExcludeSelectors, BUILT_IN_RULES } from '@/lib/siteRules';
 import type { SiteRule } from '@/types/config';
 
 function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): SiteRule {
@@ -178,5 +178,42 @@ describe('BUILT_IN_RULES', () => {
     const github = BUILT_IN_RULES.find((r) => r.hostname === 'github.com');
     expect(github?.includeSelectors).toContain('.markdown-body');
     expect(github?.excludeSelectors).toContain('pre');
+  });
+});
+
+describe('mergeExcludeSelectors', () => {
+  it('returns global excludes when no site excludes exist', () => {
+    const result = mergeExcludeSelectors(['pre', 'code'], undefined);
+    expect(result).toEqual(['pre', 'code']);
+  });
+
+  it('returns global excludes when site excludes is empty array', () => {
+    const result = mergeExcludeSelectors(['pre', 'code'], []);
+    expect(result).toEqual(['pre', 'code']);
+  });
+
+  it('merges global and site excludes without duplicates', () => {
+    const result = mergeExcludeSelectors(['pre', 'code'], ['pre', '.sidebar']);
+    expect(result).toEqual(['pre', 'code', '.sidebar']);
+  });
+
+  it('returns site excludes when global is empty', () => {
+    const result = mergeExcludeSelectors([], ['.nav', 'footer']);
+    expect(result).toEqual(['.nav', 'footer']);
+  });
+
+  it('returns empty array when both are empty', () => {
+    const result = mergeExcludeSelectors([], []);
+    expect(result).toEqual([]);
+  });
+
+  it('returns empty array when global is empty and site is undefined', () => {
+    const result = mergeExcludeSelectors([], undefined);
+    expect(result).toEqual([]);
+  });
+
+  it('handles case-sensitive selectors correctly', () => {
+    const result = mergeExcludeSelectors(['PRE'], ['pre']);
+    expect(result).toEqual(['PRE', 'pre']);
   });
 });

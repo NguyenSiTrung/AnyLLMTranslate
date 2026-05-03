@@ -167,6 +167,8 @@ export interface ExtensionSettings {
   darkMode: DarkMode;
   /** Custom site translation rules */
   siteRules: SiteRule[];
+  /** CSS selectors excluded from translation globally (merged with per-site excludes) */
+  globalExcludeSelectors: string[];
   /** Custom glossary/dictionary entries */
   glossary: GlossaryEntry[];
   /** Subtitle display settings */
@@ -259,6 +261,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   translationPosition: 'below',
   darkMode: 'auto',
   siteRules: [],
+  globalExcludeSelectors: ['pre', 'code', '.code-block'],
   glossary: [],
   subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
   customSystemPrompt: null,

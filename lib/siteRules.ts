@@ -29,6 +29,28 @@ export function findMatchingRule(
   return rules.find((rule) => matchHostname(hostname, rule.hostname));
 }
 
+/**
+ * Merge global exclude selectors with per-site exclude selectors.
+ * Returns a deduplicated union of both arrays. Global selectors come first.
+ */
+export function mergeExcludeSelectors(
+  globalExcludes: string[],
+  siteExcludes: string[] | undefined,
+): string[] {
+  if (!siteExcludes || siteExcludes.length === 0) return globalExcludes;
+  if (globalExcludes.length === 0) return siteExcludes;
+
+  const seen = new Set(globalExcludes);
+  const merged = [...globalExcludes];
+  for (const sel of siteExcludes) {
+    if (!seen.has(sel)) {
+      merged.push(sel);
+      seen.add(sel);
+    }
+  }
+  return merged;
+}
+
 /** Built-in site rules for common platforms — user rules take precedence. */
 export const BUILT_IN_RULES: SiteRule[] = [
   {

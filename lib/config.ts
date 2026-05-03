@@ -35,6 +35,11 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.siteRules = BUILT_IN_RULES.map((r) => ({ ...r }));
     }
 
+    // Migrate: inject default globalExcludeSelectors for existing users
+    if (!stored.globalExcludeSelectors) {
+      merged.globalExcludeSelectors = ['pre', 'code', '.code-block'];
+    }
+
     // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
     merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);
 
