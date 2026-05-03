@@ -9,6 +9,7 @@ import type {
   TranslateSubtitleMessage,
   TranslateSelectionMessage,
   FetchSubtitleMessage,
+  DetectPageCategoryLlmMessage,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
@@ -532,6 +533,21 @@ async function handleTranslateSelection(
   }
 }
 
+/** Handle DETECT_PAGE_CATEGORY_LLM message */
+async function handleDetectPageCategoryLLM(
+  message: DetectPageCategoryLlmMessage,
+): Promise<{ success: boolean; category?: string; error?: string }> {
+  try {
+    const service = await initService();
+    if (!service.detectPageCategory) {
+       return { success: false, error: 'Provider does not support category detection' };
+    }
+    return await service.detectPageCategory(message.pageContext);
+  } catch (error) {
+     return { success: false, error: String(error) };
+  }
+}
+
 /** Update extension badge based on status */
 function handleStatusUpdate(
   message: { status: { status: string } },
@@ -599,18 +615,24 @@ export function handleMessage(
       return undefined;
     }
     case 'setCategoryOverride': {
-      storeCategoryOverride(message.tabId, message.category);
+      const tabId = message.tabId || _sender.tab?.id;
+      if (!tabId) return Promise.resolve({ success: false });
+      storeCategoryOverride(tabId, message.category);
       // Forward categoryChanged to the content tab so it updates immediately
-      chrome.tabs.sendMessage(message.tabId, {
+      chrome.tabs.sendMessage(tabId, {
         action: 'categoryChanged',
         category: message.category,
       }).catch(() => {});
       return Promise.resolve({ success: true });
     }
     case 'getCategoryOverride': {
-      const override = fetchCategoryOverride(message.tabId);
+      const tabId = message.tabId || _sender.tab?.id;
+      if (!tabId) return Promise.resolve({ override: undefined });
+      const override = fetchCategoryOverride(tabId);
       return Promise.resolve({ override });
     }
+    case 'DETECT_PAGE_CATEGORY_LLM':
+      return handleDetectPageCategoryLLM(message);
     default:
       return undefined;
   }

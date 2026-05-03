@@ -190,7 +190,7 @@ describe('config types', () => {
     });
 
     it('has page category detection disabled by default', () => {
-      expect(DEFAULT_SETTINGS.enablePageCategoryDetection).toBe(false);
+      expect(DEFAULT_SETTINGS.enableLLMPageCategoryDetection).toBe(false);
     });
 
     it('fulfills ExtensionSettings interface completely', () => {
@@ -203,7 +203,7 @@ describe('config types', () => {
         'theme', 'translationPosition', 'darkMode',
         'siteRules', 'glossary', 'subtitleSettings',
         'customSystemPrompt', 'debugMode',
-        'customTheme', 'enableContextAwareTranslation', 'enablePageCategoryDetection',
+        'customTheme', 'enableContextAwareTranslation', 'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
       ];
       for (const key of requiredKeys) {
         expect(settings).toHaveProperty(key);

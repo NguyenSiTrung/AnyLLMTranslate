@@ -3,7 +3,7 @@
  * for context-aware translation.
  */
 
-import type { PageContext } from '@/types/config';
+import type { PageContext, ExtensionSettings } from '@/types/config';
 
 /** Truncate string to max length */
 function truncate(str: string, maxLen: number): string {
@@ -131,5 +131,36 @@ export function resolveCategory(
   tabOverride?: string,
 ): string | undefined {
   return tabOverride ?? siteRuleCategory ?? autoDetected;
+}
+
+/**
+ * Perform LLM category detection based on settings mode.
+ * - blocking: awaits detection and updates pageContext.category immediately
+ * - async: dispatches detection in background and updates system-wide override when done
+ */
+export async function detectLLMCategoryIfNeeded(
+  pageContext: PageContext,
+  settings: ExtensionSettings,
+  currentOverride: string | undefined,
+): Promise<void> {
+  if (!settings.enableLLMPageCategoryDetection) return;
+  if (currentOverride) return;
+
+  if (settings.llmCategoryDetectionMode === 'blocking') {
+    try {
+      const res = await chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext });
+      if (res?.success && res.category && res.category !== 'Other') {
+        pageContext.category = res.category;
+        chrome.runtime.sendMessage({ action: 'setCategoryOverride', category: res.category }).catch(() => {});
+      }
+    } catch {}
+  } else {
+    // async mode
+    chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext }).then((res) => {
+      if (res?.success && res.category && res.category !== 'Other') {
+        chrome.runtime.sendMessage({ action: 'setCategoryOverride', category: res.category }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
 }
 

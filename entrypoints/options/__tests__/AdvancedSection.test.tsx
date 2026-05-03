@@ -45,7 +45,7 @@ describe('AdvancedSection - Cache Configuration', () => {
     hoverTranslateEnabled: false,
     hoverDelay: 300,
     enableContextAwareTranslation: true,
-    enablePageCategoryDetection: false,
+    enableLLMPageCategoryDetection: false,
   };
 
   beforeEach(() => {
@@ -213,17 +213,17 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(screen.getByText('Maximum characters sent per translation batch.')).toBeInTheDocument();
   });
 
-  it('renders Page Category Detection toggle', () => {
+  it('renders LLM Page Category Detection toggle', () => {
     render(<AdvancedSection />);
-    expect(screen.getByText('Page Category Detection')).toBeInTheDocument();
-    expect(screen.getByText('Auto-detect page topic (e.g. software development, news, academic). Adds ~20 tokens per request.')).toBeInTheDocument();
+    expect(screen.getByText('LLM-based Page Category Detection')).toBeInTheDocument();
+    expect(screen.getByText('Auto-detect page topic using LLM for better terminology. Requires background API call.')).toBeInTheDocument();
   });
 
-  it('calls updateSettings when Page Category Detection toggle is clicked', () => {
+  it('toggles LLM Page Category Detection on click', () => {
     render(<AdvancedSection />);
-    const toggle = screen.getByRole('switch', { name: /page category detection/i });
+    const toggle = screen.getByRole('switch', { name: /LLM-based Page Category Detection/i });
     fireEvent.click(toggle);
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ enablePageCategoryDetection: true });
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ enableLLMPageCategoryDetection: true });
   });
 
   it('renders Context-Aware Translation toggle', () => {

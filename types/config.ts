@@ -187,8 +187,10 @@ export interface ExtensionSettings {
   customTheme?: CustomThemeConfig;
   /** Enable context-aware translation (injects page title/description/domain into prompts) */
   enableContextAwareTranslation: boolean;
-  /** Enable automatic page category detection (requires context-aware translation) */
-  enablePageCategoryDetection: boolean;
+  /** Enable automatic LLM-based page category detection (requires context-aware translation) */
+  enableLLMPageCategoryDetection: boolean;
+  /** Mode for LLM category detection */
+  llmCategoryDetectionMode: 'async' | 'blocking';
 }
 
 /** Provider preset definitions */
@@ -267,7 +269,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   inlineTranslate: { ...DEFAULT_INLINE_TRANSLATE_SETTINGS },
   customTheme: { ...DEFAULT_CUSTOM_THEME },
   enableContextAwareTranslation: true,
-  enablePageCategoryDetection: false,
+  enableLLMPageCategoryDetection: false,
+  llmCategoryDetectionMode: 'async',
 };
 
 /** All available provider presets */

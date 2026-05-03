@@ -37,7 +37,8 @@ export type MessageAction =
   | 'FLUSH_LRU'
   | 'setCategoryOverride'
   | 'getCategoryOverride'
-  | 'getPageCategory';
+  | 'getPageCategory'
+  | 'DETECT_PAGE_CATEGORY_LLM';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -128,19 +129,25 @@ export interface FlushLruMessage {
 /** Set a temporary category override for a tab (Popup → Background) */
 export interface SetCategoryOverrideMessage {
   action: 'setCategoryOverride';
-  tabId: number;
+  tabId?: number;
   category: string | null;
 }
 
 /** Get current category override for a tab (Popup → Background) */
 export interface GetCategoryOverrideMessage {
   action: 'getCategoryOverride';
-  tabId: number;
+  tabId?: number;
 }
 
 /** Query full category info from content script (Popup → Content) */
 export interface GetPageCategoryMessage {
   action: 'getPageCategory';
+}
+
+/** Detect page category using LLM (Content → Background) */
+export interface DetectPageCategoryLlmMessage {
+  action: 'DETECT_PAGE_CATEGORY_LLM';
+  pageContext: PageContext;
 }
 
 /** Union type for all messages */
@@ -162,7 +169,8 @@ export type ExtensionMessage =
   | FlushLruMessage
   | SetCategoryOverrideMessage
   | GetCategoryOverrideMessage
-  | GetPageCategoryMessage;
+  | GetPageCategoryMessage
+  | DetectPageCategoryLlmMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

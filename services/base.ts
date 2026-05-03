@@ -14,6 +14,9 @@ export interface TranslationService {
 
   /** Test the connection to the translation provider */
   testConnection(): Promise<{ success: boolean; error?: string }>;
+
+  /** Detect the page category using LLM */
+  detectPageCategory?(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }>;
 }
 
 /** Default system prompt template with injectable variables */

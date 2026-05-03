@@ -10,7 +10,7 @@ import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
-import { extractPageContext, resolveCategory } from '@/content/utils/pageContext';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
@@ -58,8 +58,12 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
 
     // Extract page context for context-aware translation (only when enabled)
     const pageContext = settings.enableContextAwareTranslation
-      ? extractPageContext(document, settings.enablePageCategoryDetection)
+      ? extractPageContext(document, settings.enableLLMPageCategoryDetection)
       : undefined;
+
+    if (pageContext) {
+      await detectLLMCategoryIfNeeded(pageContext, settings, categoryOverride);
+    }
 
     // Apply category override if present (FR-4: temp > siteRule > autoDetect)
     if (pageContext) {
@@ -299,7 +303,7 @@ function setupMessageListener(): void {
       // Return full category info to popup
       (async () => {
         const catSettings = await loadSettings();
-        const autoDetected = catSettings.enablePageCategoryDetection
+        const autoDetected = catSettings.enableLLMPageCategoryDetection
           ? extractPageContext(document, true).category
           : undefined;
         const hostname = window.location.hostname;

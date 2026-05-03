@@ -41,5 +41,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- [ ] **LLM-based Page Category Detection** (`llm-category-detection_20260504`)
+- [~] **LLM-based Page Category Detection** (`llm-category-detection_20260504`)
   *Link: [./conductor/tracks/llm-category-detection_20260504/](./conductor/tracks/llm-category-detection_20260504/)*

@@ -19,7 +19,7 @@ import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHan
 import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
 import type { PageContext } from '@/types/config';
-import { extractPageContext, resolveCategory } from '@/content/utils/pageContext';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
 import { findMatchingRule } from '@/lib/siteRules';
 
 /** Coordinator state */
@@ -59,11 +59,13 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
   const settings = await loadSettings();
   if (!settings.enableContextAwareTranslation) return undefined;
 
-  const pageContext = extractPageContext(document, settings.enablePageCategoryDetection);
+  const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
 
-  // Apply category override resolution (FR-4: temp > siteRule > autoDetect)
-  // Always run resolution — a SiteRule category may exist even when
-  // enablePageCategoryDetection is off and no tab override is active.
+  await detectLLMCategoryIfNeeded(pageContext, settings, state.categoryOverride);
+
+  // If a tab-level category exists, it overrides the auto-detected one.
+  // Note: pageContext.category will be empty if extractPageContext found no generic info and
+  // enableLLMPageCategoryDetection is off and no tab override is active.
   const hostname = window.location.hostname;
   const matchingRule = findMatchingRule(hostname, settings.siteRules ?? []);
   const resolved = resolveCategory(

@@ -53,7 +53,8 @@ export function AdvancedSection() {
       debugMode: settings.debugMode,
       customTheme: settings.customTheme,
       enableContextAwareTranslation: settings.enableContextAwareTranslation,
-      enablePageCategoryDetection: settings.enablePageCategoryDetection,
+      enableLLMPageCategoryDetection: settings.enableLLMPageCategoryDetection,
+      llmCategoryDetectionMode: settings.llmCategoryDetectionMode,
       textSelectionEnabled: settings.textSelectionEnabled,
       hoverTranslateEnabled: settings.hoverTranslateEnabled,
       hoverDelay: settings.hoverDelay,
@@ -289,14 +290,30 @@ export function AdvancedSection() {
                 description="Inject page title, description, and domain into translation prompts for more consistent terminology."
               />
             </div>
-            <div className={`border-t border-zinc-800 pt-4 mt-4 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className={`border-t border-zinc-800 pt-4 mt-4 space-y-4 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
               <Toggle
                 id="page-category-detection-toggle"
-                checked={settings.enablePageCategoryDetection}
-                onChange={(checked) => updateSettings({ enablePageCategoryDetection: checked })}
-                label="Page Category Detection"
-                description="Auto-detect page topic (e.g. software development, news, academic). Adds ~20 tokens per request."
+                checked={settings.enableLLMPageCategoryDetection}
+                onChange={(checked) => updateSettings({ enableLLMPageCategoryDetection: checked })}
+                label="LLM-based Page Category Detection"
+                description="Auto-detect page topic using LLM for better terminology. Requires background API call."
               />
+              
+              {settings.enableLLMPageCategoryDetection && (
+                <div className="pl-6 border-l-2 border-zinc-800 ml-2 animate-fade-in">
+                  <FieldGroup label="Detection Mode" htmlFor="llm-category-mode-select">
+                    <select
+                      id="llm-category-mode-select"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-700"
+                      value={settings.llmCategoryDetectionMode}
+                      onChange={(e) => updateSettings({ llmCategoryDetectionMode: e.target.value as 'async' | 'blocking' })}
+                    >
+                      <option value="async">Async (No delay, progressive context upgrade)</option>
+                      <option value="blocking">Blocking (Wait for exact context before first translation)</option>
+                    </select>
+                  </FieldGroup>
+                </div>
+              )}
             </div>
           </Card>
         </div>

@@ -74,9 +74,11 @@ vi.mock('@/lib/config', () => ({
 
 const mockExtractPageContext = vi.fn();
 const mockResolveCategory = vi.fn();
+const mockDetectLLMCategoryIfNeeded = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/content/utils/pageContext', () => ({
   extractPageContext: (...args: unknown[]) => mockExtractPageContext(...args),
   resolveCategory: (...args: unknown[]) => mockResolveCategory(...args),
+  detectLLMCategoryIfNeeded: (...args: unknown[]) => mockDetectLLMCategoryIfNeeded(...args),
   DOMAIN_CATEGORY_MAP: {},
 }));
 
@@ -249,12 +251,12 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
   });
 
   it('applies SiteRule category even when category detection is off and no tab override', async () => {
-    // Edge case: enablePageCategoryDetection=false → extractPageContext returns no category
+    // Edge case: enableLLMPageCategoryDetection=false → extractPageContext returns no category
     // No tab override set. But a SiteRule with a category exists → should still be applied.
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       enableContextAwareTranslation: true,
-      enablePageCategoryDetection: false,
+      enableLLMPageCategoryDetection: false,
       siteRules: [{ hostname: 'youtube.com', category: 'entertainment' }],
     });
     mockExtractPageContext.mockReturnValue({
@@ -385,7 +387,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       enableContextAwareTranslation: true,
-      enablePageCategoryDetection: true,
+      enableLLMPageCategoryDetection: true,
       siteRules: [],
     });
     mockExtractPageContext.mockReturnValue({
@@ -449,7 +451,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       enableContextAwareTranslation: true,
-      enablePageCategoryDetection: true,
+      enableLLMPageCategoryDetection: true,
       siteRules: [{ hostname: 'youtube.com', category: 'entertainment' }],
     });
     mockExtractPageContext.mockReturnValue({
@@ -602,7 +604,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       enableContextAwareTranslation: true,
-      enablePageCategoryDetection: false,
+      enableLLMPageCategoryDetection: false,
       siteRules: [],
     });
     mockExtractPageContext.mockReturnValue({

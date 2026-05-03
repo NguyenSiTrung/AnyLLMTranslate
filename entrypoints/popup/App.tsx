@@ -698,7 +698,7 @@ export default function App() {
   const isActive = isTranslating || status.status === 'done';
   const progressPercent = status.totalCount > 0 ? Math.round((status.translatedCount / status.totalCount) * 100) : 0;
 
-  const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enablePageCategoryDetection && activeHostname;
+  const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enableLLMPageCategoryDetection && activeHostname;
   const currentCategoryValue = categoryInfo?.override ?? categoryInfo?.siteRule ?? '__auto__';
   const isCustomEntry = currentCategoryValue !== '__auto__' && !PREDEFINED_CATEGORIES.includes(currentCategoryValue as typeof PREDEFINED_CATEGORIES[number]);
   const effectiveCategoryDisplay = categoryInfo?.effective;
@@ -977,8 +977,8 @@ export default function App() {
 
                 <div className={`pl-5 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
                   <Toggle
-                    checked={settings.enablePageCategoryDetection}
-                    onChange={() => updateSetting({ enablePageCategoryDetection: !settings.enablePageCategoryDetection })}
+                    checked={settings.enableLLMPageCategoryDetection}
+                    onChange={() => updateSetting({ enableLLMPageCategoryDetection: !settings.enableLLMPageCategoryDetection })}
                     label="Page Category Detection"
                     icon={Tag}
                   />

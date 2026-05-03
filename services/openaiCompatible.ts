@@ -12,6 +12,7 @@ import type {
 } from '@/types/translation';
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
+import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 
 export class OpenAICompatibleService implements TranslationService {
   private config: ProviderConfig;
@@ -100,6 +101,54 @@ export class OpenAICompatibleService implements TranslationService {
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection failed';
+      return { success: false, error: message };
+    }
+  }
+
+  async detectPageCategory(pageContext: import('@/types/config').PageContext): Promise<{ success: boolean; category?: string; error?: string }> {
+    try {
+      const categoryList = PREDEFINED_CATEGORIES.join('\n- ');
+      const systemPrompt = `You are an AI that categorizes web pages.
+Based on the page title, description, and domain, determine the most appropriate category from the following list:
+- ${categoryList}
+- Other
+
+Rules:
+- Respond ONLY with valid JSON in this format: {"category": "category_name"}
+- You MUST choose exactly one category from the list above.
+- If you cannot determine the category, return "Other".`;
+
+      const userPrompt = `Title: ${pageContext.title || 'N/A'}\nDescription: ${pageContext.description || 'N/A'}\nDomain: ${pageContext.domain || 'N/A'}`;
+
+      const completionRequest: ChatCompletionRequest = {
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 50,
+        response_format: { type: 'json_object' },
+      };
+
+      const response = await this.fetchCompletion(completionRequest);
+      const responseText = response.choices[0]?.message?.content ?? '';
+      
+      let parsed;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+        if (jsonMatch?.[1]) {
+          parsed = JSON.parse(jsonMatch[1]);
+        } else {
+          return { success: false, error: 'Failed to parse category response' };
+        }
+      }
+      
+      return { success: true, category: parsed.category };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       return { success: false, error: message };
     }
   }
