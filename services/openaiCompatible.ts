@@ -87,6 +87,7 @@ export class OpenAICompatibleService implements TranslationService {
         ],
         temperature: 0,
         max_tokens: 20,
+        response_format: { type: 'json_object' },
       };
 
       const response = await this.fetchCompletion(completionRequest);
@@ -105,6 +106,14 @@ export class OpenAICompatibleService implements TranslationService {
 
   private async fetchCompletion(
     request: ChatCompletionRequest,
+  ): Promise<ChatCompletionResponse> {
+    return this.fetchWithRetry(request, 2);
+  }
+
+  private async fetchWithRetry(
+    request: ChatCompletionRequest,
+    maxRetries: number,
+    attempt = 1,
   ): Promise<ChatCompletionResponse> {
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
@@ -147,6 +156,14 @@ export class OpenAICompatibleService implements TranslationService {
           }
         }
 
+        // Retry on 5xx or network-like errors, but NOT on 4xx client errors
+        const shouldRetry = response.status >= 500 && attempt <= maxRetries;
+        if (shouldRetry) {
+          const backoff = 500 * Math.pow(2, attempt - 1);
+          await new Promise((resolve) => setTimeout(resolve, backoff));
+          return this.fetchWithRetry(request, maxRetries, attempt + 1);
+        }
+
         throw new Error(errorMessage);
       }
 
@@ -156,8 +173,15 @@ export class OpenAICompatibleService implements TranslationService {
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Translation request timed out after ${timeout}ms`, { cause: error });
       }
+
+      // Retry on network errors (no response.status available)
+      if (attempt <= maxRetries && !(error instanceof Error && error.message.startsWith('HTTP 4'))) {
+        const backoff = 500 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        return this.fetchWithRetry(request, maxRetries, attempt + 1);
+      }
+
       throw error;
     }
-
   }
 }

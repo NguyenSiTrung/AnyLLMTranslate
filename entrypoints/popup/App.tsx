@@ -34,7 +34,7 @@ const THEME_LABELS: Record<ThemeName, string> = {
   'wavy-underline': 'Wavy', bubble: 'Bubble', 'side-by-side': 'Side by Side',
   mask: 'Mask', 'fade-in': 'Fade In', italic: 'Italic',
   'dotted-border': 'Dotted', 'shadow-card': 'Card', minimal: 'Minimal',
-  'gradient-accent': 'Gradient',
+  'gradient-accent': 'Gradient', custom: 'Custom',
 };
 
 const TYPOGRAPHY = {

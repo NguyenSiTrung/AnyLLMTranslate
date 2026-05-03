@@ -145,11 +145,18 @@ export function parseTranslationResponse(
     throw new Error('Translation response is not an object');
   }
 
+  const missingIds: string[] = [];
   for (const id of expectedIds) {
     const value = (translationsObj as Record<string, unknown>)[id];
     if (typeof value === 'string') {
       translations.set(id, value);
+    } else {
+      missingIds.push(id);
     }
+  }
+
+  if (missingIds.length > 0) {
+    console.warn('AnyLLMTranslate: Missing translation IDs in LLM response', missingIds);
   }
 
   return translations;

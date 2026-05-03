@@ -5,7 +5,6 @@ import type { SiteRule } from '@/types/config';
 function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): SiteRule {
   return {
     id: 'test',
-    hostname: overrides.hostname,
     includeSelectors: [],
     excludeSelectors: [],
     alwaysTranslate: false,

@@ -40,4 +40,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*No active tracks.*
+- [ ] **Codebase Audit Fixes — Hardening** (`audit-fixes_20260503`) — Created 2026-05-03. [View](./conductor/tracks/audit-fixes_20260503/)

@@ -47,11 +47,9 @@ describe('services/cacheManager', () => {
       expect(key1).toBe(key2);
     });
 
-    it('uses FNV fallback when SubtleCrypto is not available', async () => {
-      vi.stubGlobal('crypto', {});
-
+    it('generates 64-character hex key (SHA-256)', async () => {
       const key = await generateCacheKey('Hello', 'en', 'vi');
-      expect(key).toMatch(/^fnv-[0-9a-f]+$/);
+      expect(key).toMatch(/^[0-9a-f]{64}$/);
     });
   });
 });

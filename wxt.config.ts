@@ -12,7 +12,7 @@ export default defineConfig({
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
     permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms'],
     content_security_policy: {
-      extension_pages: "script-src 'self'; connect-src 'self' https:; object-src 'none'; style-src 'self' 'unsafe-inline';",
+      extension_pages: "script-src 'self'; connect-src 'self' http: https:; object-src 'none'; style-src 'self' 'unsafe-inline';",
     },
     commands: {
       'translate-page': {

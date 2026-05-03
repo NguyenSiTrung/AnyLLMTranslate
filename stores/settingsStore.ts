@@ -76,11 +76,15 @@ export function initStorageSync(): () => void {
       | undefined;
     if (!newVal) return;
 
-    // Synchronous merge for immediate UI updates
+    // Synchronous merge for immediate UI updates — but strip the encrypted
+    // apiKey so it doesn't briefly flash in UI before async decryption.
     const merged = deepMerge(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       newVal as Record<string, unknown>,
     ) as unknown as ExtensionSettings;
+    if (merged.provider?.apiKey) {
+      merged.provider = { ...merged.provider, apiKey: '' };
+    }
     useSettingsStore.setState(merged);
 
     // Async reload to decrypt any encrypted fields (e.g. apiKey)

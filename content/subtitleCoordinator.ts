@@ -11,6 +11,7 @@
 
 import { onSubtitleIntercepted, sendTranslatedSubtitle, onTracksDiscovered } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
+import { clearHoverCache } from '@/content/hoverTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
@@ -197,12 +198,14 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     return;
   }
 
+  // Load settings before try so they're available for overlay init regardless
+  const settings = await loadSettings();
+
   // FR-5: Translate cues before handing to overlay
   let cuesToDisplay = cues;
   try {
     showSubtitleToast('Translating Overlay Subtitles...', true);
 
-    const settings = await loadSettings();
     const pageContext = await buildSubtitlePageContext();
 
     const response = await chrome.runtime.sendMessage({
@@ -280,7 +283,7 @@ async function fetchViaBackground(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
-        type: 'FETCH_SUBTITLE',
+        action: 'FETCH_SUBTITLE',
         url,
       },
       (response) => {
@@ -482,6 +485,7 @@ export function resetCoordinatorState(): void {
     clearTimeout(timeoutId);
   }
   state.pendingRequests.clear();
+  clearHoverCache();
 }
 
 /**

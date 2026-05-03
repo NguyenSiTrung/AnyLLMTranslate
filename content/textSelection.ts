@@ -17,6 +17,94 @@ let isEnabled = true;
 let currentTooltip: HTMLElement | null = null;
 let currentButton: HTMLElement | null = null;
 
+/** Build an SVG icon using createElementNS */
+function createSvgIcon(width: number, height: number, paths: string[]): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  for (const d of paths) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
+/** Build copy SVG icon */
+function createCopySvg(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', '9');
+  rect.setAttribute('y', '9');
+  rect.setAttribute('width', '13');
+  rect.setAttribute('height', '13');
+  rect.setAttribute('rx', '2');
+  rect.setAttribute('ry', '2');
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1');
+
+  svg.appendChild(rect);
+  svg.appendChild(path);
+  return svg;
+}
+
+/** Build a copy button with SVG icon and click handler */
+function buildCopyButton(textToCopy: string): HTMLButtonElement {
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'anyllm-tooltip-copy';
+  copyBtn.setAttribute('aria-label', 'Copy translation');
+  copyBtn.setAttribute('title', 'Copy');
+  copyBtn.appendChild(createCopySvg());
+
+  copyBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      copyBtn.textContent = '✓';
+      setTimeout(() => {
+        copyBtn.textContent = '';
+        copyBtn.appendChild(createCopySvg());
+      }, 1500);
+    } catch {
+      copyBtn.textContent = '!';
+      setTimeout(() => {
+        copyBtn.textContent = '';
+        copyBtn.appendChild(createCopySvg());
+      }, 1500);
+    }
+  });
+
+  return copyBtn;
+}
+
+/** Build a close button with click handler */
+function buildCloseButton(): HTMLButtonElement {
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'anyllm-tooltip-close';
+  closeBtn.setAttribute('aria-label', 'Close tooltip');
+  closeBtn.setAttribute('title', 'Close');
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeTooltip();
+  });
+  return closeBtn;
+}
+
 /** Create the floating translate button */
 function createTranslateButton(x: number, y: number): HTMLElement {
   removeTranslateButton();
@@ -26,7 +114,16 @@ function createTranslateButton(x: number, y: number): HTMLElement {
   btn.setAttribute('data-anyllm-role', 'selection-btn');
   btn.setAttribute('role', 'button');
   btn.setAttribute('aria-label', 'Translate selection');
-  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>`;
+  btn.appendChild(
+    createSvgIcon(16, 16, [
+      'M5 8l6 6',
+      'M4 14l6-6 2-3',
+      'M2 5h12',
+      'M7 2h1',
+      'M22 22l-5-10-5 10',
+      'M14 18h6',
+    ]),
+  );
 
   // Position near selection (above the cursor)
   btn.style.left = `${x}px`;
@@ -60,57 +157,37 @@ function createTooltip(
   tooltip.setAttribute('data-anyllm-role', 'selection-tooltip');
   tooltip.setAttribute('role', 'tooltip');
 
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'anyllm-tooltip-content';
+
   if (isLoading) {
-    tooltip.innerHTML = `
-      <div class="anyllm-tooltip-content">
-        <div class="anyllm-tooltip-loading">
-          <div class="anyllm-tooltip-spinner"></div>
-          <span>Translating...</span>
-        </div>
-      </div>
-    `;
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'anyllm-tooltip-loading';
+
+    const spinner = document.createElement('div');
+    spinner.className = 'anyllm-tooltip-spinner';
+
+    const span = document.createElement('span');
+    span.textContent = 'Translating...';
+
+    loadingDiv.appendChild(spinner);
+    loadingDiv.appendChild(span);
+    contentDiv.appendChild(loadingDiv);
   } else {
-    tooltip.innerHTML = `
-      <div class="anyllm-tooltip-content">
-        <div class="anyllm-tooltip-text">${escapeHtml(text)}</div>
-        <div class="anyllm-tooltip-actions">
-          <button class="anyllm-tooltip-copy" aria-label="Copy translation" title="Copy">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          </button>
-          <button class="anyllm-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
-        </div>
-      </div>
-    `;
+    const textDiv = document.createElement('div');
+    textDiv.className = 'anyllm-tooltip-text';
+    textDiv.textContent = text;
 
-    // Wire up copy button
-    const copyBtn = tooltip.querySelector('.anyllm-tooltip-copy');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(text);
-          (copyBtn as HTMLElement).innerHTML = '✓';
-          setTimeout(() => {
-            (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-          }, 1500);
-        } catch {
-          (copyBtn as HTMLElement).innerHTML = '!';
-          setTimeout(() => {
-            (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-          }, 1500);
-        }
-      });
-    }
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'anyllm-tooltip-actions';
+    actionsDiv.appendChild(buildCopyButton(text));
+    actionsDiv.appendChild(buildCloseButton());
 
-    // Wire up close button
-    const closeBtn = tooltip.querySelector('.anyllm-tooltip-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeTooltip();
-      });
-    }
+    contentDiv.appendChild(textDiv);
+    contentDiv.appendChild(actionsDiv);
   }
+
+  tooltip.appendChild(contentDiv);
 
   // Position near selection (above or below)
   const posY = y - 40 - 80 > 0 ? y - 40 - 80 : y + 20;
@@ -131,43 +208,21 @@ function updateTooltipContent(translatedText: string): void {
   const contentDiv = currentTooltip.querySelector('.anyllm-tooltip-content');
   if (!contentDiv) return;
 
-  contentDiv.innerHTML = `
-    <div class="anyllm-tooltip-text">${escapeHtml(translatedText)}</div>
-    <div class="anyllm-tooltip-actions">
-      <button class="anyllm-tooltip-copy" aria-label="Copy translation" title="Copy">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-      </button>
-      <button class="anyllm-tooltip-close" aria-label="Close tooltip" title="Close">✕</button>
-    </div>
-  `;
-
-  // Re-wire buttons
-  const copyBtn = contentDiv.querySelector('.anyllm-tooltip-copy');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      try {
-        await navigator.clipboard.writeText(translatedText);
-        (copyBtn as HTMLElement).innerHTML = '✓';
-        setTimeout(() => {
-          (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-        }, 1500);
-      } catch {
-        (copyBtn as HTMLElement).innerHTML = '!';
-        setTimeout(() => {
-          (copyBtn as HTMLElement).innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-        }, 1500);
-      }
-    });
+  while (contentDiv.firstChild) {
+    contentDiv.removeChild(contentDiv.firstChild);
   }
 
-  const closeBtn = contentDiv.querySelector('.anyllm-tooltip-close');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeTooltip();
-    });
-  }
+  const textDiv = document.createElement('div');
+  textDiv.className = 'anyllm-tooltip-text';
+  textDiv.textContent = translatedText;
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'anyllm-tooltip-actions';
+  actionsDiv.appendChild(buildCopyButton(translatedText));
+  actionsDiv.appendChild(buildCloseButton());
+
+  contentDiv.appendChild(textDiv);
+  contentDiv.appendChild(actionsDiv);
 }
 
 /** Remove the translation tooltip */
@@ -176,13 +231,6 @@ function removeTooltip(): void {
     currentTooltip.remove();
     currentTooltip = null;
   }
-}
-
-/** Escape HTML to prevent XSS */
-function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
 }
 
 /** Handle mouseup event for text selection */

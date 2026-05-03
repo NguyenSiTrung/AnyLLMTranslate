@@ -3,7 +3,7 @@ import { DEFAULT_STATS, type TranslationStats } from '@/types/stats';
 const STORAGE_KEY = 'anyllm-translate-stats';
 
 /** Promise chain to serialize all stats storage updates and prevent race conditions. */
-let updateChain = Promise.resolve();
+let updateChain: Promise<unknown> = Promise.resolve();
 
 /** Wrap an update function in the serialized chain. Errors propagate to the caller
  *  but do not break the chain for subsequent updates. */

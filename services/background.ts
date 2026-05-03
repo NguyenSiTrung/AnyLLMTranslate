@@ -628,10 +628,6 @@ export function initSettingsListener(): () => void {
  * Called on service worker startup (fire-and-forget, non-blocking).
  */
 export async function scheduleEviction(): Promise<void> {
-  // Temporary: force clear cache on start to fix stale English subtitle translations
-  import('@/services/cacheManager').then(m => m.clearCache().catch(() => {}))
-    .catch(() => {});
-
   // Run immediately on startup
   evictCache().catch(() => {
     // Silently fail — eviction is best-effort

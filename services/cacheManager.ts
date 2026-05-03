@@ -27,20 +27,9 @@ export async function generateCacheKey(
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
 
-  // Use SubtleCrypto if available (background/service worker)
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  // Fallback: simple FNV-1a hash for environments without SubtleCrypto
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `fnv-${(hash >>> 0).toString(16)}`;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Pending LRU updates — Map ensures per-key deduplication (latest wins) */

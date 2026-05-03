@@ -290,6 +290,12 @@ function onKeyDown(event: KeyboardEvent): void {
   if (lastSeen && Date.now() - lastSeen < DEDUP_WINDOW_MS) return;
   processedEventIds.set(dedupKey, Date.now());
 
+  // Prune stale dedup entries to prevent unbounded growth
+  const pruneThreshold = Date.now() - DEDUP_WINDOW_MS * 2;
+  for (const [key, ts] of processedEventIds) {
+    if (ts < pruneThreshold) processedEventIds.delete(key);
+  }
+
   if (!config.enabled) {
     return;
   }
