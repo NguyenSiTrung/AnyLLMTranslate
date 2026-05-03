@@ -1,133 +1,139 @@
 ---
 name: verification-before-completion
-description: Evidence-based verification before declaring any task complete. Use before claiming a bug is fixed, a feature works, or a task is done.
-allowed-tools: Read, Glob, Grep, Bash
+description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
 ---
 
 # Verification Before Completion
 
-> Source: obra/superpowers (adapted for AGKit)
+## Overview
 
-## Core Principle
+Claiming work is complete without verification is dishonesty, not efficiency.
 
-**Never declare success without evidence. "It should work" is not verification.**
+**Core principle:** Evidence before claims, always.
 
-Before saying ANY task is complete, you must have concrete proof it works.
+**Violating the letter of this rule is violating the spirit of this rule.**
 
----
-
-## When This Skill Activates
-
-- After implementing a fix
-- After completing a feature
-- After any code change that should produce observable results
-- Before responding "done" to the user
-
----
-
-## Verification Checklist
-
-### 1. Did You Actually Test It?
-
-| Check | Required Evidence |
-|-------|-------------------|
-| Code compiles/builds | Exit code 0 from build command |
-| Tests pass | Test runner output showing green |
-| Feature works | Observable behavior matches expectation |
-| Bug is fixed | Reproduction steps no longer trigger the bug |
-
-### 2. Did You Test the Right Thing?
-
-| Check | Question |
-|-------|----------|
-| Correct scope | Are you testing the change you made, not something else? |
-| Correct environment | Are you testing where the bug was reported? |
-| Correct input | Are you using the same data/conditions? |
-
-### 3. Did You Check for Regressions?
-
-| Check | Action |
-|-------|--------|
-| Related tests | Run the full test suite, not just new tests |
-| Nearby functionality | Manually verify related features still work |
-| Edge cases | Test boundary conditions |
-
----
-
-## Evidence Requirements by Change Type
-
-| Change Type | Minimum Evidence |
-|-------------|-----------------|
-| Bug fix | Reproduction steps now produce correct behavior |
-| New feature | Feature works end-to-end with expected output |
-| Refactoring | All existing tests still pass, behavior unchanged |
-| Config change | Application starts and runs correctly |
-| Dependency update | Build succeeds, tests pass, no new warnings |
-| CSS/styling | Visual verification (or snapshot test) |
-| API change | Request/response matches specification |
-
----
-
-## The Verification Protocol
+## The Iron Law
 
 ```
-1. IDENTIFY what "done" means for this task
-   → What observable behavior proves it works?
-
-2. EXECUTE the verification
-   → Run the actual command, test, or check
-
-3. OBSERVE the result
-   → Read the output. Don't assume.
-
-4. COMPARE against expectation
-   → Does observed match expected? Exactly?
-
-5. REPORT honestly
-   → If it doesn't match, it's not done.
+NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 ```
 
----
+If you haven't run the verification command in this message, you cannot claim it passes.
 
-## Common Verification Commands
+## The Gate Function
 
-```bash
-# Build verification
-npm run build          # Exit code 0?
-npm run typecheck      # No type errors?
+```
+BEFORE claiming any status or expressing satisfaction:
 
-# Test verification
-npm test               # All passing?
-npm run test:e2e       # E2E passing?
+1. IDENTIFY: What command proves this claim?
+2. RUN: Execute the FULL command (fresh, complete)
+3. READ: Full output, check exit code, count failures
+4. VERIFY: Does output confirm the claim?
+   - If NO: State actual status with evidence
+   - If YES: State claim WITH evidence
+5. ONLY THEN: Make the claim
 
-# Lint verification
-npm run lint           # No errors?
-
-# Runtime verification
-npm run dev            # Starts without errors?
-curl localhost:3000/api/health  # Returns 200?
+Skip any step = lying, not verifying
 ```
 
----
+## Common Failures
 
-## Anti-Patterns
+| Claim | Requires | Not Sufficient |
+|-------|----------|----------------|
+| Tests pass | Test command output: 0 failures | Previous run, "should pass" |
+| Linter clean | Linter output: 0 errors | Partial check, extrapolation |
+| Build succeeds | Build command: exit 0 | Linter passing, logs look good |
+| Bug fixed | Test original symptom: passes | Code changed, assumed fixed |
+| Regression test works | Red-green cycle verified | Test passes once |
+| Agent completed | VCS diff shows changes | Agent reports "success" |
+| Requirements met | Line-by-line checklist | Tests passing |
 
-| Anti-Pattern | Why It Fails |
-|-------------|-------------|
-| "I changed the code so it should work now" | No evidence. Changed code can still be wrong. |
-| Running only the new test | Regressions in existing tests missed |
-| Testing in wrong environment | Bug may be environment-specific |
-| Assuming build success without checking | Build errors can be silent |
-| Declaring done after writing code but before running it | Code that hasn't run is unverified code |
-| "Tests passed" without showing which tests | May have run zero tests |
+## Red Flags - STOP
 
----
+- Using "should", "probably", "seems to"
+- Expressing satisfaction before verification ("Great!", "Perfect!", "Done!", etc.)
+- About to commit/push/PR without verification
+- Trusting agent success reports
+- Relying on partial verification
+- Thinking "just this once"
+- Tired and wanting work over
+- **ANY wording implying success without having run verification**
 
-## Integration
+## Rationalization Prevention
 
-| Skill | Relationship |
-|-------|-------------|
-| `tdd-workflow` | Tests provide verification evidence |
-| `systematic-debugging` | Phase 4 (Fix & Verify) uses this skill |
-| `subagent-driven-development` | Both review stages require evidence |
-| `lint-and-validate` | Provides automated verification tooling |
+| Excuse | Reality |
+|--------|---------|
+| "Should work now" | RUN the verification |
+| "I'm confident" | Confidence ≠ evidence |
+| "Just this once" | No exceptions |
+| "Linter passed" | Linter ≠ compiler |
+| "Agent said success" | Verify independently |
+| "I'm tired" | Exhaustion ≠ excuse |
+| "Partial check is enough" | Partial proves nothing |
+| "Different words so rule doesn't apply" | Spirit over letter |
+
+## Key Patterns
+
+**Tests:**
+```
+✅ [Run test command] [See: 34/34 pass] "All tests pass"
+❌ "Should pass now" / "Looks correct"
+```
+
+**Regression tests (TDD Red-Green):**
+```
+✅ Write → Run (pass) → Revert fix → Run (MUST FAIL) → Restore → Run (pass)
+❌ "I've written a regression test" (without red-green verification)
+```
+
+**Build:**
+```
+✅ [Run build] [See: exit 0] "Build passes"
+❌ "Linter passed" (linter doesn't check compilation)
+```
+
+**Requirements:**
+```
+✅ Re-read plan → Create checklist → Verify each → Report gaps or completion
+❌ "Tests pass, phase complete"
+```
+
+**Agent delegation:**
+```
+✅ Agent reports success → Check VCS diff → Verify changes → Report actual state
+❌ Trust agent report
+```
+
+## Why This Matters
+
+From 24 failure memories:
+- your human partner said "I don't believe you" - trust broken
+- Undefined functions shipped - would crash
+- Missing requirements shipped - incomplete features
+- Time wasted on false completion → redirect → rework
+- Violates: "Honesty is a core value. If you lie, you'll be replaced."
+
+## When To Apply
+
+**ALWAYS before:**
+- ANY variation of success/completion claims
+- ANY expression of satisfaction
+- ANY positive statement about work state
+- Committing, PR creation, task completion
+- Moving to next task
+- Delegating to agents
+
+**Rule applies to:**
+- Exact phrases
+- Paraphrases and synonyms
+- Implications of success
+- ANY communication suggesting completion/correctness
+
+## The Bottom Line
+
+**No shortcuts for verification.**
+
+Run the command. Read the output. THEN claim the result.
+
+This is non-negotiable.
