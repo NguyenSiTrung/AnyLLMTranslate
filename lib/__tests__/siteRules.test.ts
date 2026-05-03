@@ -158,6 +158,14 @@ describe('BUILT_IN_RULES', () => {
     expect(hostnames).toContain('x.com');
     expect(hostnames).toContain('*.wikipedia.org');
     expect(hostnames).toContain('medium.com');
+    expect(hostnames).toContain('huggingface.co');
+    expect(hostnames).toContain('pypi.org');
+    expect(hostnames).toContain('www.npmjs.com');
+    expect(hostnames).toContain('*.gitlab.com');
+    expect(hostnames).toContain('gitlab.com');
+    expect(hostnames).toContain('*.substack.com');
+    expect(hostnames).toContain('*.youtube.com');
+    expect(hostnames).toContain('youtube.com');
   });
 
   it('all rules are marked built-in', () => {
