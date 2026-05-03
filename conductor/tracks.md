@@ -5,6 +5,7 @@ This file tracks all major tracks for the project.
 ---
 
 ## Archived Tracks
+- ✅ **Codebase Audit Fixes — Hardening** (`audit-fixes_20260503`) — Archived 2026-05-03. [View](./conductor/archive/audit-fixes_20260503/)
 - ✅ **Subtitle Context-Aware & Category Override Integration** (`subtitle-context-aware_20260428`) — Archived 2026-04-28. [View](./conductor/archive/subtitle-context-aware_20260428/)
 - ✅ **AnyLLMTranslate Phase 1 — Foundation** (`phase1-foundation_20260409`) — Archived 2026-04-09. [View](./conductor/archive/phase1-foundation_20260409/)
 - ✅ **Video Subtitle Translation Engine (Phase 2)** (`phase2-subtitles_20260409`) — Archived 2026-04-09. [View](./conductor/archive/phase2-subtitles_20260409/)
@@ -40,4 +41,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- [ ] **Codebase Audit Fixes — Hardening** (`audit-fixes_20260503`) — Created 2026-05-03. [View](./conductor/tracks/audit-fixes_20260503/)
+<!-- No active tracks -->
