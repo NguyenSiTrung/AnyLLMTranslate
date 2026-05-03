@@ -1,24 +1,20 @@
 {
-  "lastRefresh": "2026-04-28T13:40:00+07:00",
+  "lastRefresh": "2026-05-03T23:53:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": [
-    "tech-stack.md: Updated ESLint 9.x → 10.x",
-    "patterns.md: Updated build size 639.81 KB → 688 KB, refreshed timestamp",
-    "patterns.md: Added document.execCommand('insertText') pattern (from inline-translate_20260418)",
-    "patterns.md: Added synthetic input/change events pattern (from inline-translate_20260418)",
-    "patterns.md: Added no-dynamic-delete → Object.fromEntries pattern (from ux-power-features_20260422)",
-    "patterns.md: Added undefined === undefined findIndex gotcha (from progressive-chunking_20260417)",
-    "patterns.md: Added mutable array queue architecture pattern (from progressive-chunking_20260417)",
-    "patterns.md: Added per-tab session tracking pattern (from ux-power-features_20260422)",
-    "product.md: Updated build size 639.81 KB → ~688 KB"
+    "product.md: Added subtitle-context-aware_20260428 and audit-fixes_20260503 tracks in Implementation Status",
+    "product.md: Updated build size 688KB → ~649KB, test count 697 → 704, track count 27 → 29",
+    "patterns.md: Updated build size 688KB → 649KB, test count 697 → 704, refreshed timestamp",
+    "No new patterns to elevate from 2 recent tracks (bug fixes / wiring, not novel patterns)",
+    "beads: Skipped — Beads database missing despite enabled config"
   ],
   "codebaseHealth": {
-    "tests": 697,
+    "tests": 704,
     "testFiles": 55,
-    "buildSize": "688 KB",
+    "buildSize": "649 KB",
     "lintErrors": 0,
-    "archivedTracks": 27,
+    "archivedTracks": 29,
     "activeTracks": 0
   }
 }

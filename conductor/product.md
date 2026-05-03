@@ -97,10 +97,12 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Subtitle Drag-and-Drop Repositioning** (2026-04-17, incremental): Interactive drag-and-drop for subtitle overlay via pointer events, persistent position across sessions via chrome.storage, fullscreen-aware repositioning. CSS `cursor: grab/grabbing` and `user-select: none` for drag UX.
 - **Proactive Subtitle Discovery & Auto-Activation** (2026-04-17, incremental): Universal HTML5 TextTrack fallback discovery via MutationObserver + `addtrack` events (`inject/textTrackDiscovery.ts`). Extended YouTube, Udemy, and Coursera handlers to emit `SUBTITLE_TRACKS_DISCOVERED` messages. Auto-activation UI in Options → Subtitles section with language preference and toggle. New `subtitleAutoActivate` config option. 4 new tests added.
 - **Settings UI/UX Polish & Bug Fixes** (Archived 2026-04-18): Fixed scroll position leak on tab switch, misleading cache usage bar, icon duplication. Added delete confirmation for Dictionary entries, selector fields to SiteRules. Restructured AdvancedSection (5→3 cards), added SubtitlesSection sub-groups. Section-specific accent colors, live ThemePreview integration, Card hover lift, kbd press animations. 2 new tests added.
+- **Subtitle Context-Aware & Category Override Integration** (Archived 2026-04-28): Wired page context extraction and two-layer category resolution into the subtitle translation pipeline. Both interception and overlay activation paths now include domain-aware context for better translation quality. 6 new tests added (703 total at track completion).
+- **Codebase Audit Fixes — Hardening** (Archived 2026-05-03): Resolved 13 codebase audit issues: crash paths, memory leaks, TypeScript type errors, input validation, and security hardening. Semaphore correctness validated, XSS hardening, error boundary fixes.
 
 ### Current State
-- 697 tests passing across 55 files. Build passing (`wxt build` ✅, ~688 KB). 0 lint errors.
-- **No active tracks.** All 27 tracks completed and archived.
+- 704 tests passing across 55 files. Build passing (`wxt build` ✅, ~649 KB). 0 lint errors.
+- **No active tracks.** All 29 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
