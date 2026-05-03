@@ -3,11 +3,12 @@
  * API keys are encrypted at rest via AES-GCM.
  */
 
-import type { ExtensionSettings } from '@/types/config';
+import type { ExtensionSettings, SiteRule } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
 import { encryptApiKey, decryptApiKey } from './crypto';
 import { deepMerge } from './utils';
+import { BUILT_IN_RULES } from './siteRules';
 
 /** Load settings from chrome.storage.local with defaults */
 export async function loadSettings(): Promise<ExtensionSettings> {
@@ -16,13 +17,23 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     const stored = result[STORAGE_KEYS.SETTINGS] as Partial<ExtensionSettings> | undefined;
 
     if (!stored) {
-      return { ...DEFAULT_SETTINGS };
+      return {
+        ...DEFAULT_SETTINGS,
+        siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
+      };
     }
 
     const merged = deepMerge(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       stored as Record<string, unknown>,
     ) as unknown as ExtensionSettings;
+
+    // Inject built-in site rules on first encounter (empty or never stored).
+    // If the user already has custom rules, we respect their list and do not auto-inject.
+    const storedSiteRules = stored.siteRules as SiteRule[] | undefined;
+    if (!storedSiteRules || storedSiteRules.length === 0) {
+      merged.siteRules = BUILT_IN_RULES.map((r) => ({ ...r }));
+    }
 
     // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
     merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);

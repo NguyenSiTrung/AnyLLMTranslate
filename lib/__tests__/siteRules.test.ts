@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchHostname, findMatchingRule } from '@/lib/siteRules';
+import { matchHostname, findMatchingRule, findEffectiveRule, BUILT_IN_RULES } from '@/lib/siteRules';
 import type { SiteRule } from '@/types/config';
 
 function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): SiteRule {
@@ -107,5 +107,68 @@ describe('findMatchingRule', () => {
       makeSiteRule({ id: 'second', hostname: '*.example.com' }),
     ];
     expect(findMatchingRule('sub.example.com', overlapping)?.id).toBe('first');
+  });
+
+  it('handles undefined rules by defaulting to empty array', () => {
+    expect(findMatchingRule('example.com', undefined as unknown as SiteRule[])).toBeUndefined();
+  });
+});
+
+describe('findEffectiveRule', () => {
+  it('returns user rule over built-in rule for same hostname', () => {
+    const userRule = makeSiteRule({ id: 'user-github', hostname: 'github.com', alwaysTranslate: true });
+    const result = findEffectiveRule('github.com', [userRule]);
+    expect(result?.id).toBe('user-github');
+    expect(result?.alwaysTranslate).toBe(true);
+  });
+
+  it('falls back to built-in rule when no user rule matches', () => {
+    const result = findEffectiveRule('github.com', []);
+    expect(result).toBeDefined();
+    expect(result?.builtIn).toBe(true);
+    expect(result?.hostname).toBe('github.com');
+  });
+
+  it('falls back to built-in wildcard rule', () => {
+    const result = findEffectiveRule('gist.github.com', []);
+    expect(result).toBeDefined();
+    expect(result?.builtIn).toBe(true);
+    expect(result?.hostname).toBe('*.github.com');
+  });
+
+  it('returns undefined for unknown hostnames with no user rules', () => {
+    expect(findEffectiveRule('unknown.example.com', [])).toBeUndefined();
+  });
+
+  it('handles undefined userRules gracefully', () => {
+    const result = findEffectiveRule('github.com', undefined as unknown as SiteRule[]);
+    expect(result).toBeDefined();
+    expect(result?.builtIn).toBe(true);
+  });
+});
+
+describe('BUILT_IN_RULES', () => {
+  it('contains expected platforms', () => {
+    const hostnames = BUILT_IN_RULES.map((r) => r.hostname);
+    expect(hostnames).toContain('github.com');
+    expect(hostnames).toContain('*.github.com');
+    expect(hostnames).toContain('stackoverflow.com');
+    expect(hostnames).toContain('*.reddit.com');
+    expect(hostnames).toContain('twitter.com');
+    expect(hostnames).toContain('x.com');
+    expect(hostnames).toContain('*.wikipedia.org');
+    expect(hostnames).toContain('medium.com');
+  });
+
+  it('all rules are marked built-in', () => {
+    for (const rule of BUILT_IN_RULES) {
+      expect(rule.builtIn).toBe(true);
+    }
+  });
+
+  it('github rules have include and exclude selectors', () => {
+    const github = BUILT_IN_RULES.find((r) => r.hostname === 'github.com');
+    expect(github?.includeSelectors).toContain('.markdown-body');
+    expect(github?.excludeSelectors).toContain('pre');
   });
 });

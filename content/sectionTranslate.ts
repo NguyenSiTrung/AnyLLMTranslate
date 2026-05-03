@@ -7,6 +7,7 @@ import type { TranslationPiece } from '@/types/translation';
 import { extractPieces } from '@/content/domWalker';
 import { applyTranslation, applyTheme, applyPosition, applyDarkMode, setPageState, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
+import { findEffectiveRule } from '@/lib/siteRules';
 import { DATA_ATTRS } from '@/lib/constants';
 
 interface TranslatedSection {
@@ -25,7 +26,11 @@ export async function translateSection(element: Element): Promise<void> {
   applyDarkMode(settings.darkMode);
   setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
 
-  const pieces = extractPieces(element);
+  const hostname = window.location.hostname;
+  const matchingRule = findEffectiveRule(hostname, settings.siteRules);
+  const pieces = extractPieces(element, {
+    excludeSelectors: matchingRule?.excludeSelectors,
+  });
   if (pieces.length === 0) return;
 
   translatedSections.push({ element, pieces });

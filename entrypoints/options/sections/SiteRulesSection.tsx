@@ -136,16 +136,16 @@ export function SiteRulesSection() {
                       {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
                     </div>
                   </div>
-                  {!rule.builtIn && (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingRule(rule)}
-                        aria-label="Edit rule"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingRule(rule)}
+                      aria-label="Edit rule"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </Button>
+                    {!rule.builtIn && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -155,8 +155,8 @@ export function SiteRulesSection() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS } from '@/types/config';
 import type { ProviderConfig } from '@/types/config';
 import { loadSettings, saveSettings, updateSettings as updateSettingsInStorage } from '@/lib/config';
 import { deepMerge } from '@/lib/utils';
+import { BUILT_IN_RULES } from '@/lib/siteRules';
 
 interface SettingsState extends ExtensionSettings {
   /** Whether the store has loaded from storage */
@@ -58,8 +59,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   resetToDefaults: async () => {
-    await saveSettings(DEFAULT_SETTINGS);
-    set({ ...DEFAULT_SETTINGS, isLoaded: true });
+    const defaults = {
+      ...DEFAULT_SETTINGS,
+      siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
+    };
+    await saveSettings(defaults);
+    set({ ...defaults, isLoaded: true });
   },
 }));
 

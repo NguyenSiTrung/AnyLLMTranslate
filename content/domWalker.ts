@@ -19,8 +19,13 @@ export function resetPieceCounter(): void {
   pieceCounter = 0;
 }
 
+export interface ExtractOptions {
+  includeSelectors?: string[];
+  excludeSelectors?: string[];
+}
+
 /** Check if an element should be skipped */
-function shouldSkipElement(element: Element): boolean {
+function shouldSkipElement(element: Element, excludeSelectors?: string[]): boolean {
   // Skip known non-translatable elements
   if (SKIP_ELEMENTS.has(element.tagName)) return true;
 
@@ -35,6 +40,18 @@ function shouldSkipElement(element: Element): boolean {
   // Skip contentEditable regions (attribute check as fallback for jsdom)
   if (element.getAttribute('contenteditable') === 'true') return true;
   if ('isContentEditable' in element && (element as HTMLElement).isContentEditable) return true;
+
+  // Skip elements matching any exclude selector
+  if (excludeSelectors && excludeSelectors.length > 0) {
+    for (const selector of excludeSelectors) {
+      if (!selector) continue;
+      try {
+        if (element.matches(selector)) return true;
+      } catch {
+        // Invalid selector, ignore
+      }
+    }
+  }
 
   return false;
 }
@@ -95,7 +112,40 @@ function splitAtSentenceBoundary(text: string, maxChars: number): string[] {
 }
 
 /** Extract translatable pieces from a root element */
-export function extractPieces(root: Element = document.body): TranslationPiece[] {
+export function extractPieces(root: Element = document.body, options: ExtractOptions = {}): TranslationPiece[] {
+  // If include selectors are specified, extract from each matching element
+  if (options.includeSelectors && options.includeSelectors.length > 0) {
+    const includeRoots = new Set<Element>();
+    for (const selector of options.includeSelectors) {
+      if (!selector) continue;
+      try {
+        const matches = root.querySelectorAll(selector);
+        for (const el of matches) {
+          includeRoots.add(el);
+        }
+      } catch {
+        // Invalid selector, skip
+      }
+    }
+    if (includeRoots.size === 0) return [];
+
+    // Deduplicate: keep only outermost elements
+    const elements = [...includeRoots];
+    const outermost: Element[] = [];
+    for (const el of elements) {
+      if (!elements.some((other) => other !== el && other.contains(el))) {
+        outermost.push(el);
+      }
+    }
+
+    const allPieces: TranslationPiece[] = [];
+    for (const el of outermost) {
+      const nested = extractPieces(el, { excludeSelectors: options.excludeSelectors });
+      allPieces.push(...nested);
+    }
+    return allPieces;
+  }
+
   const pieces: TranslationPiece[] = [];
   let currentTextNodes: Text[] = [];
   let currentParent: Element | null = null;
@@ -185,7 +235,7 @@ export function extractPieces(root: Element = document.body): TranslationPiece[]
       acceptNode(node: Node): number {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as Element;
-          if (shouldSkipElement(el)) {
+          if (shouldSkipElement(el, options.excludeSelectors)) {
             return NodeFilter.FILTER_REJECT; // Skip element and all descendants
           }
           return NodeFilter.FILTER_ACCEPT;

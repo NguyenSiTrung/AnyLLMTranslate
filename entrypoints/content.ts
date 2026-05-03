@@ -19,7 +19,7 @@ import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateCo
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
-import { findMatchingRule } from '@/lib/siteRules';
+import { findMatchingRule, findEffectiveRule } from '@/lib/siteRules';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
@@ -148,8 +148,13 @@ export async function startTranslation(): Promise<void> {
   applyPosition(settings.translationPosition);
   applyDarkMode(settings.darkMode);
 
-  // Extract translatable pieces from the DOM
-  allPieces = extractPieces(document.body);
+  // Extract translatable pieces from the DOM, respecting site rules
+  const hostname = window.location.hostname;
+  const matchingRule = findEffectiveRule(hostname, settings.siteRules);
+  allPieces = extractPieces(document.body, {
+    includeSelectors: matchingRule?.includeSelectors,
+    excludeSelectors: matchingRule?.excludeSelectors,
+  });
 
   if (allPieces.length === 0) return;
 
