@@ -24,6 +24,16 @@ export interface ProviderConfig {
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
 
+/** Onboarding flow state for first-run setup */
+export interface OnboardingState {
+  /** Setup wizard completed successfully */
+  completed: boolean;
+  /** User skipped the automatic first-run wizard */
+  skipped: boolean;
+  /** Last wizard step visited, used to resume setup */
+  lastStep?: 'welcome' | 'provider' | 'test' | 'language' | 'done';
+}
+
 /** Translation display mode */
 export type DisplayMode = 'bilingual-below' | 'translation-only';
 
@@ -147,6 +157,8 @@ export interface InlineTranslateSettings {
 export interface ExtensionSettings {
   /** Active provider configuration */
   provider: ProviderConfig;
+  /** First-run setup wizard state */
+  onboarding: OnboardingState;
   /** Source language (ISO 639-1 code, or 'auto' for auto-detect) */
   sourceLanguage: string;
   /** Target language (ISO 639-1 code) */
@@ -237,6 +249,13 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   fontSize: 'same',
 };
 
+/** Default onboarding state */
+export const DEFAULT_ONBOARDING_STATE: OnboardingState = {
+  completed: false,
+  skipped: false,
+  lastStep: 'welcome',
+};
+
 export const CRITICAL_GLOBAL_EXCLUDES = [
   'pre',
   '.code-block',
@@ -263,6 +282,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     requiresApiKey: false,
     requestTimeoutMs: 60000,
   },
+  onboarding: { ...DEFAULT_ONBOARDING_STATE },
   sourceLanguage: 'auto',
   targetLanguage: 'vi',
   displayMode: 'bilingual-below',

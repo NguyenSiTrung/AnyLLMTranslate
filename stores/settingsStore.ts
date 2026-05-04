@@ -117,6 +117,7 @@ export function useProvider(): ProviderConfig {
 function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSettings {
   return {
     provider: state.provider,
+    onboarding: state.onboarding,
     sourceLanguage: state.sourceLanguage,
     targetLanguage: state.targetLanguage,
     displayMode: state.displayMode,
