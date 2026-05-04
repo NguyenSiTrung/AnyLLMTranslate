@@ -127,18 +127,41 @@ export function parseTranslationResponse(
 ): Map<string, string> {
   const translations = new Map<string, string>();
 
-  // Try to parse as JSON directly
-  let parsed: Record<string, unknown>;
+  // Remove <think>...</think> blocks entirely (for models like DeepSeek R1)
+  const cleanText = responseText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+  let parsed: Record<string, unknown> | null = null;
+
+  // Strategy 1: Try to parse as JSON directly
   try {
-    parsed = JSON.parse(responseText);
+    parsed = JSON.parse(cleanText);
   } catch {
-    // Try to extract JSON from markdown code blocks
-    const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    // Strategy 2: Try to extract JSON from markdown code blocks
+    const jsonMatch = cleanText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (jsonMatch?.[1]) {
-      parsed = JSON.parse(jsonMatch[1]);
-    } else {
-      throw new Error('Failed to parse translation response as JSON');
+      try {
+        parsed = JSON.parse(jsonMatch[1]);
+      } catch {
+        // Fallthrough to strategy 3
+      }
     }
+    
+    // Strategy 3: Try to find the outermost object braces
+    if (!parsed) {
+      const firstBrace = cleanText.indexOf('{');
+      const lastBrace = cleanText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          parsed = JSON.parse(cleanText.substring(firstBrace, lastBrace + 1));
+        } catch {
+          // Failed all parsing strategies
+        }
+      }
+    }
+  }
+
+  if (!parsed) {
+    throw new Error('Failed to parse translation response as JSON');
   }
 
   // Handle { translations: { ... } } format

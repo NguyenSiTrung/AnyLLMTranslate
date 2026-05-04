@@ -175,6 +175,18 @@ describe('parseTranslationResponse', () => {
     expect(result.get('id1')).toBe('Hello');
   });
 
+  it('handles <think> tags from DeepSeek models', () => {
+    const response = '<think>\nHere is my reasoning...\n</think>\n{"translations": {"id1": "Hello"}}';
+    const result = parseTranslationResponse(response, ['id1']);
+    expect(result.get('id1')).toBe('Hello');
+  });
+
+  it('handles extraneous unformatted text around the JSON', () => {
+    const response = 'Here is the translated text:\n{"translations": {"id1": "Hello"}}\nHope this helps!';
+    const result = parseTranslationResponse(response, ['id1']);
+    expect(result.get('id1')).toBe('Hello');
+  });
+
   it('throws on invalid JSON', () => {
     expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
   });
