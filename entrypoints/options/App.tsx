@@ -15,6 +15,7 @@ import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AdvancedSection } from './sections/AdvancedSection';
 import { InlineTranslateSection } from './sections/InlineTranslateSection';
 import { StatisticsSection } from './sections/StatisticsSection';
+import { SetupWizard } from './SetupWizard';
 
 /* ── Grouped Navigation ─────────────────────────────────────── */
 
@@ -70,8 +71,10 @@ type TabId = string;
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [showSaved, setShowSaved] = useState(false);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const contentRef = useRef<HTMLDivElement>(null);
+  const settings = useSettingsStore();
   const loadFromStorage = useSettingsStore((s) => s.loadFromStorage);
   const isLoaded = useSettingsStore((s) => s.isLoaded);
 
@@ -80,6 +83,18 @@ export default function App() {
     const cleanup = initStorageSync();
     return cleanup;
   }, [loadFromStorage]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const url = new URL(window.location.href);
+    const requestedSetup = url.searchParams.get('setup') === '1' || window.location.hash === '#setup';
+    const shouldAutoOpen = !settings.onboarding.completed && !settings.onboarding.skipped;
+
+    if (requestedSetup || shouldAutoOpen) {
+      setShowSetupWizard(true);
+    }
+  }, [isLoaded, settings.onboarding.completed, settings.onboarding.skipped]);
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -125,7 +140,7 @@ export default function App() {
   const renderSection = () => {
     switch (activeTab) {
       case 'general': return <GeneralSection />;
-      case 'provider': return <ProviderSection />;
+      case 'provider': return <ProviderSection onOpenSetup={() => setShowSetupWizard(true)} />;
       case 'themes': return <ThemesSection />;
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;
@@ -219,6 +234,10 @@ export default function App() {
           </div>
         </main>
       </div>
+      <SetupWizard
+        open={showSetupWizard}
+        onClose={() => setShowSetupWizard(false)}
+      />
     </ToastProvider>
   );
 }

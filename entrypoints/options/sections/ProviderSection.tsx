@@ -13,6 +13,7 @@ import { PROVIDER_PRESETS } from '@/types/config';
 import type { ProviderPreset } from '@/types/config';
 import { testConnection } from '@/services/providerTester';
 import type { ConnectionTestResult, ConnectionTestStep } from '@/services/providerTester';
+import { getProviderReadiness, getProviderRecoveryMessage } from '@/lib/providerReadiness';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -24,11 +25,18 @@ import { Card } from '@/ui/Card';
 import { Slider } from '@/ui/Slider';
 import { useToast } from '@/ui/ToastProvider';
 
-export function ProviderSection() {
+interface ProviderSectionProps {
+  onOpenSetup?: () => void;
+}
+
+export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const updateProvider = useSettingsStore((s) => s.updateProvider);
   const { error: showError, success: showSuccess } = useToast();
+
+  const readiness = getProviderReadiness(settings.provider);
+  const recoveryMessage = getProviderRecoveryMessage(readiness);
 
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
@@ -93,8 +101,28 @@ export function ProviderSection() {
       </div>
 
       <div className="space-y-4">
-        {/* Essential fields */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+          <Card variant="bordered" className={readiness.status === 'connected' ? 'border-emerald-500/30' : 'border-amber-500/30'}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${readiness.status === 'connected' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                {readiness.status === 'connected' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-zinc-100">{recoveryMessage.title}</h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-5">{recoveryMessage.description}</p>
+                <p className="text-xs text-zinc-500 mt-1">Next: {recoveryMessage.action}</p>
+              </div>
+              {onOpenSetup && (
+                <Button size="sm" variant={readiness.status === 'connected' ? 'secondary' : 'primary'} onClick={onOpenSetup}>
+                  Open setup guide
+                </Button>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Essential fields */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
           <Card title="Provider Configuration" icon={<Server className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               {/* Provider Preset — visual cards */}
@@ -194,7 +222,7 @@ export function ProviderSection() {
         </div>
 
         {/* Connection Test */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
           <Card title="Connection Test" icon={<Radio className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-3">
               {/* Progress bar */}
@@ -272,7 +300,7 @@ export function ProviderSection() {
         </div>
 
         {/* Advanced accordion — wrapped in Card for consistency */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
           <Card variant="bordered" className="p-0 overflow-hidden">
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
