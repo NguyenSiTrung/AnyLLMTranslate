@@ -7,6 +7,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
+import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
@@ -181,8 +182,6 @@ export function SiteRulesSection() {
   );
 }
 
-const DEFAULT_GLOBAL_EXCLUDES = ['pre', 'code', '.code-block'];
-
 function GlobalExcludesCard() {
   const globalExcludeSelectors = useSettingsStore((s) => s.globalExcludeSelectors);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -212,8 +211,8 @@ function GlobalExcludesCard() {
   };
 
   const isDefault =
-    globalExcludeSelectors.length === DEFAULT_GLOBAL_EXCLUDES.length &&
-    DEFAULT_GLOBAL_EXCLUDES.every((s) => globalExcludeSelectors.includes(s));
+    globalExcludeSelectors.length === CRITICAL_GLOBAL_EXCLUDES.length &&
+    CRITICAL_GLOBAL_EXCLUDES.every((s) => globalExcludeSelectors.includes(s));
 
   return (
     <Card variant="bordered">
@@ -263,7 +262,7 @@ function GlobalExcludesCard() {
         </div>
         {!isDefault && (
           <button
-            onClick={() => updateSettings({ globalExcludeSelectors: [...DEFAULT_GLOBAL_EXCLUDES] })}
+            onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
             className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
             Reset to defaults
