@@ -13,6 +13,7 @@ import { LANGUAGES } from '@/lib/languages';
 import { STORAGE_KEYS } from '@/lib/constants';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { getProviderReadiness, getProviderRecoveryMessage } from '@/lib/providerReadiness';
 import type { CategoryInfo } from '@/types/messages';
 
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string; badge: string }> = {
@@ -688,11 +689,21 @@ export default function App() {
     }
   }, [isTranslating, status.status]);
 
+  const openSetupGuide = useCallback(() => {
+    chrome.windows.create({
+      url: chrome.runtime.getURL('options.html?setup=1'),
+      type: 'popup', width: 1200, height: 800, focused: true,
+    });
+  }, []);
+
   const statusConfig = STATUS_CONFIG[status.status];
   const connectionStatus = settings.provider.connectionStatus ?? 'unknown';
   const connectionStatusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
   const StatusIcon = statusConfig.icon;
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
+  const providerReadiness = getProviderReadiness(settings.provider);
+  const providerRecoveryMessage = getProviderRecoveryMessage(providerReadiness);
+  const shouldShowProviderRecovery = !providerReadiness.canTranslate;
   const sourceLanguages = LANGUAGES;
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isActive = isTranslating || status.status === 'done';
@@ -842,34 +853,67 @@ export default function App() {
         )}
 
         {/* Main Action Button - Hero Style */}
-        <button
-          onClick={handleToggleTranslation}
-          className="w-full relative group rounded-2xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-zinc-950 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <div className={`absolute inset-0 transition-all duration-500 ${
-            isActive
-              ? 'bg-gradient-to-r from-zinc-700 via-zinc-600 to-zinc-700'
-              : 'bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-500 bg-[length:200%_200%] animate-gradient-x'
-          }`} />
-
-          {!isActive && (
-            <div className="absolute inset-0 translate-x-[-100%] group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
-          )}
-
-          <div className="relative flex items-center justify-center gap-2.5 py-4 px-4 z-20">
-            {isActive ? (
-              <>
-                <Square className="w-4.5 h-4.5 text-zinc-300 fill-zinc-300" />
-                <span className="font-semibold text-sm text-zinc-100 tracking-wide">Restore Original</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4.5 h-4.5 text-white" />
-                <span className="font-semibold text-sm text-white tracking-wide">Translate Page</span>
-              </>
-            )}
+        {shouldShowProviderRecovery ? (
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 shadow-lg shadow-amber-500/5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-zinc-100">{providerRecoveryMessage.title}</h3>
+                <p className="text-[11px] text-zinc-400 leading-relaxed mt-1">{providerRecoveryMessage.description}</p>
+                <p className="text-[11px] text-amber-300/90 mt-2">Next: {providerRecoveryMessage.action}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={openSetupGuide}
+                className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              >
+                {settings.onboarding.skipped ? 'Resume setup' : 'Set up provider'}
+              </button>
+              {providerReadiness.canTest && (
+                <button
+                  type="button"
+                  onClick={openSetupGuide}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                >
+                  Test connection in setup guide
+                </button>
+              )}
+            </div>
           </div>
-        </button>
+        ) : (
+          <button
+            onClick={handleToggleTranslation}
+            className="w-full relative group rounded-2xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-zinc-950 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <div className={`absolute inset-0 transition-all duration-500 ${
+              isActive
+                ? 'bg-gradient-to-r from-zinc-700 via-zinc-600 to-zinc-700'
+                : 'bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-500 bg-[length:200%_200%] animate-gradient-x'
+            }`} />
+
+            {!isActive && (
+              <div className="absolute inset-0 translate-x-[-100%] group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent z-10" />
+            )}
+
+            <div className="relative flex items-center justify-center gap-2.5 py-4 px-4 z-20">
+              {isActive ? (
+                <>
+                  <Square className="w-4.5 h-4.5 text-zinc-300 fill-zinc-300" />
+                  <span className="font-semibold text-sm text-zinc-100 tracking-wide">Restore Original</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4.5 h-4.5 text-white" />
+                  <span className="font-semibold text-sm text-white tracking-wide">Translate Page</span>
+                </>
+              )}
+            </div>
+          </button>
+        )}
 
         {/* Site Rule Toggle */}
         {activeHostname && (
