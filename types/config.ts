@@ -237,6 +237,22 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   fontSize: 'same',
 };
 
+export const CRITICAL_GLOBAL_EXCLUDES = [
+  'pre',
+  'code',
+  '.code-block',
+  '[contenteditable="true"]',
+  'textarea',
+  'input',
+  '[translate="no"]',
+  '.notranslate',
+  'script',
+  'style',
+  'kbd',
+  '.mathjax',
+  '.katex'
+];
+
 /** Default settings */
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   provider: {
@@ -261,7 +277,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   translationPosition: 'below',
   darkMode: 'auto',
   siteRules: [],
-  globalExcludeSelectors: ['pre', 'code', '.code-block'],
+  globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES],
   glossary: [],
   subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
   customSystemPrompt: null,
