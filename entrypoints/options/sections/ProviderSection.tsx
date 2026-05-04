@@ -52,6 +52,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
         model: presetDef.defaultModel,
         displayName: presetDef.displayName,
         requiresApiKey: presetDef.requiresApiKey,
+        connectionStatus: 'unknown',
       });
     }
   }, [updateProvider]);
@@ -160,7 +161,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                   id="provider-base-url"
                   type="url"
                   value={settings.provider.baseUrl}
-                  onChange={(e) => updateProvider({ baseUrl: e.target.value })}
+                  onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })}
                   placeholder="https://api.example.com/v1"
                   className="font-mono"
                 />
@@ -176,7 +177,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                   id="provider-api-key"
                   type="password"
                   value={settings.provider.apiKey}
-                  onChange={(e) => updateProvider({ apiKey: e.target.value })}
+                  onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })}
                   placeholder={PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset)?.placeholder ?? 'sk-...'}
                   className="font-mono"
                 />
@@ -192,7 +193,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                   id="provider-model"
                   type="text"
                   value={settings.provider.model}
-                  onChange={(e) => updateProvider({ model: e.target.value })}
+                  onChange={(e) => updateProvider({ model: e.target.value, connectionStatus: 'unknown' })}
                   placeholder="model-name"
                   className="font-mono"
                 />
@@ -203,7 +204,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                       {testResult.models.slice(0, 12).map((m) => (
                         <button
                           key={m}
-                          onClick={() => updateProvider({ model: m })}
+                          onClick={() => updateProvider({ model: m, connectionStatus: 'unknown' })}
                           className={`text-xs px-2 py-0.5 rounded font-mono transition-colors cursor-pointer ${
                             settings.provider.model === m
                               ? 'bg-blue-600 text-white'

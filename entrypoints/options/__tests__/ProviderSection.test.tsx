@@ -72,4 +72,27 @@ describe('ProviderSection readiness banner', () => {
 
     expect(onOpenSetup).toHaveBeenCalledOnce();
   });
+
+  it('marks connection as untested when provider fields change', () => {
+    mockState = {
+      ...mockState,
+      provider: {
+        ...mockState.provider,
+        baseUrl: 'http://localhost:11434/v1',
+        model: 'gemma3:4b',
+        connectionStatus: 'success',
+      },
+    };
+
+    renderSection();
+
+    fireEvent.change(screen.getByLabelText(/base url/i), {
+      target: { value: 'http://localhost:11435/v1' },
+    });
+
+    expect(updateProvider).toHaveBeenCalledWith({
+      baseUrl: 'http://localhost:11435/v1',
+      connectionStatus: 'unknown',
+    });
+  });
 });
