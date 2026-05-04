@@ -4,7 +4,7 @@
  */
 
 import type { ExtensionSettings, SiteRule } from '@/types/config';
-import { DEFAULT_SETTINGS } from '@/types/config';
+import { DEFAULT_SETTINGS, CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
 import { encryptApiKey, decryptApiKey } from './crypto';
 import { deepMerge } from './utils';
@@ -35,10 +35,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.siteRules = BUILT_IN_RULES.map((r) => ({ ...r }));
     }
 
-    // Migrate: inject default globalExcludeSelectors for existing users
-    if (!stored.globalExcludeSelectors) {
-      merged.globalExcludeSelectors = ['pre', 'code', '.code-block'];
-    }
+    // Migrate: inject critical globalExcludeSelectors for existing users
+    const storedExcludes = stored.globalExcludeSelectors || [];
+    const mergedExcludes = new Set([...storedExcludes, ...CRITICAL_GLOBAL_EXCLUDES]);
+    merged.globalExcludeSelectors = Array.from(mergedExcludes);
 
     // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
     merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);
