@@ -239,7 +239,6 @@ export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
 
 export const CRITICAL_GLOBAL_EXCLUDES = [
   'pre',
-  'code',
   '.code-block',
   '[contenteditable="true"]',
   'textarea',
@@ -247,10 +246,7 @@ export const CRITICAL_GLOBAL_EXCLUDES = [
   '[translate="no"]',
   '.notranslate',
   'script',
-  'style',
-  'kbd',
-  '.mathjax',
-  '.katex'
+  'style'
 ];
 
 /** Default settings */

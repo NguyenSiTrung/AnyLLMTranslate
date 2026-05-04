@@ -36,7 +36,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     }
 
     // Migrate: inject critical globalExcludeSelectors for existing users
-    const storedExcludes = stored.globalExcludeSelectors || [];
+    // Remove deprecated inline element excludes that break sentence structure
+    const deprecatedExcludes = new Set(['code', 'kbd', '.mathjax', '.katex']);
+    const storedExcludes = (stored.globalExcludeSelectors || []).filter(s => !deprecatedExcludes.has(s));
+    
     const mergedExcludes = new Set([...storedExcludes, ...CRITICAL_GLOBAL_EXCLUDES]);
     merged.globalExcludeSelectors = Array.from(mergedExcludes);
 

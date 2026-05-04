@@ -37,4 +37,25 @@ describe('loadSettings migration', () => {
       expect(settings.globalExcludeSelectors).toContain(selector);
     });
   });
+
+  it('removes deprecated inline selectors during migration', async () => {
+    mockGet.mockResolvedValue({
+      [STORAGE_KEYS.SETTINGS]: {
+        globalExcludeSelectors: ['code', '.my-custom-rule', 'kbd', '.mathjax', '.katex'],
+        provider: { apiKey: 'test' }
+      }
+    });
+
+    vi.mock('../crypto', () => ({
+      decryptApiKey: vi.fn().mockResolvedValue('test'),
+      encryptApiKey: vi.fn()
+    }));
+
+    const settings = await loadSettings();
+    expect(settings.globalExcludeSelectors).toContain('.my-custom-rule');
+    expect(settings.globalExcludeSelectors).not.toContain('code');
+    expect(settings.globalExcludeSelectors).not.toContain('kbd');
+    expect(settings.globalExcludeSelectors).not.toContain('.mathjax');
+    expect(settings.globalExcludeSelectors).not.toContain('.katex');
+  });
 });
