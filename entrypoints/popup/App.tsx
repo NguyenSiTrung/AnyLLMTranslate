@@ -264,7 +264,6 @@ function CategoryPicker({
   showSaveAsRule,
   onSaveAsRule,
   activeHostname,
-  categoryOptions,
 }: {
   currentValue: string;
   isCustomEntry: boolean;
@@ -276,7 +275,6 @@ function CategoryPicker({
   showSaveAsRule: boolean;
   onSaveAsRule: () => void;
   activeHostname: string | null;
-  categoryOptions: { value: string; label: string }[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -715,12 +713,6 @@ export default function App() {
   const effectiveCategoryDisplay = categoryInfo?.effective;
   const showSaveAsRule = Boolean(categoryInfo?.override && activeHostname);
 
-  const categoryOptions = [
-    { value: '__auto__', label: `Auto${effectiveCategoryDisplay && !categoryInfo?.override ? ` (${effectiveCategoryDisplay})` : ''}` },
-    ...PREDEFINED_CATEGORIES.map(c => ({ value: c, label: c })),
-    { value: '__custom__', label: 'Custom...' },
-  ];
-
   return (
     <div className="w-[340px] min-h-[480px] bg-zinc-950 text-zinc-100 font-sans selection:bg-blue-500/30 relative shadow-2xl flex flex-col">
       {/* Enhanced decorative background */}
@@ -938,7 +930,6 @@ export default function App() {
             showSaveAsRule={showSaveAsRule}
             onSaveAsRule={handleSaveAsRule}
             activeHostname={activeHostname}
-            categoryOptions={categoryOptions}
           />
         )}
 
