@@ -153,7 +153,9 @@ export async function detectLLMCategoryIfNeeded(
         pageContext.category = res.category;
         chrome.runtime.sendMessage({ action: 'setCategoryOverride', category: res.category }).catch(() => {});
       }
-    } catch {}
+    } catch {
+      return;
+    }
   } else {
     // async mode
     chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext }).then((res) => {

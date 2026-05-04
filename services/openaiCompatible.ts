@@ -3,7 +3,7 @@
  * Works with any `/v1/chat/completions` endpoint.
  */
 
-import type { ProviderConfig } from '@/types/config';
+import type { PageContext, ProviderConfig } from '@/types/config';
 import type {
   TranslationRequest,
   TranslationResult,
@@ -105,7 +105,7 @@ export class OpenAICompatibleService implements TranslationService {
     }
   }
 
-  async detectPageCategory(pageContext: import('@/types/config').PageContext): Promise<{ success: boolean; category?: string; error?: string }> {
+  async detectPageCategory(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }> {
     try {
       const categoryList = PREDEFINED_CATEGORIES.join('\n- ');
       const systemPrompt = `You are an AI that categorizes web pages.

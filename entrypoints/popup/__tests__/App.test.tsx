@@ -95,3 +95,34 @@ describe('popup provider recovery', () => {
     });
   });
 });
+
+describe('popup unsupported pages', () => {
+  it('shows disabled feedback instead of translate action on browser pages', async () => {
+    storedSettings = {
+      ...DEFAULT_SETTINGS,
+      provider: {
+        ...DEFAULT_SETTINGS.provider,
+        baseUrl: 'http://localhost:11434/v1',
+        model: 'gemma3:4b',
+        connectionStatus: 'success',
+      },
+      onboarding: { completed: true, skipped: false, lastStep: 'done' },
+    };
+    queryTabs.mockResolvedValue([{ id: 7, url: 'chrome://settings/' }]);
+
+    render(<App />);
+
+    expect(await screen.findByText(/this page can't be translated/i)).toBeInTheDocument();
+    expect(screen.getByText(/browser or extension pages don't allow translation/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /translate page/i })).not.toBeInTheDocument();
+  });
+
+  it('prioritizes unsupported-page feedback over provider setup recovery', async () => {
+    queryTabs.mockResolvedValue([{ id: 7, url: 'chrome://extensions/' }]);
+
+    render(<App />);
+
+    expect(await screen.findByText(/this page can't be translated/i)).toBeInTheDocument();
+    expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
+  });
+});

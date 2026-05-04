@@ -53,6 +53,42 @@ const SPACING = {
   lg: 'space-y-4',
 } as const;
 
+type UnsupportedPageInfo = {
+  title: string;
+  description: string;
+};
+
+function getUnsupportedPageInfo(tab?: chrome.tabs.Tab): UnsupportedPageInfo | null {
+  if (!tab?.id || !tab.url) {
+    return {
+      title: "This page can't be translated",
+      description: "Open a regular website to use page translation.",
+    };
+  }
+
+  try {
+    const url = new URL(tab.url);
+    const isWebPage = url.protocol === 'http:' || url.protocol === 'https:';
+    const isBrowserStore = url.hostname === 'chromewebstore.google.com'
+      || (url.hostname === 'chrome.google.com' && url.pathname.startsWith('/webstore'))
+      || url.hostname === 'microsoftedge.microsoft.com';
+
+    if (!isWebPage || isBrowserStore) {
+      return {
+        title: "This page can't be translated",
+        description: "Browser or extension pages don't allow translation. Open a regular website to translate.",
+      };
+    }
+  } catch {
+    return {
+      title: "This page can't be translated",
+      description: "Open a regular website to use page translation.",
+    };
+  }
+
+  return null;
+}
+
 function CustomSelect({
   id,
   value,
@@ -501,6 +537,7 @@ export default function App() {
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [unsupportedPage, setUnsupportedPage] = useState<UnsupportedPageInfo | null>(null);
 
   useEffect(() => {
     loadSettingsFromStorage();
@@ -564,6 +601,14 @@ export default function App() {
   async function queryTabStatus() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const unsupported = getUnsupportedPageInfo(tab);
+      setUnsupportedPage(unsupported);
+      if (unsupported) {
+        setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+        setIsTranslating(false);
+        return;
+      }
+
       if (tab?.id) {
         try {
           // Query the specific content script directly (the true source of state)
@@ -573,7 +618,7 @@ export default function App() {
             setIsTranslating(response.status === 'translating');
           }
         } catch {
-          // Content script not loaded or inaccessible tab (e.g. chrome://) -> defaults to idle
+          // Content script not loaded yet -> defaults to idle on otherwise supported pages
           setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
           setIsTranslating(false);
         }
@@ -712,6 +757,9 @@ export default function App() {
   const handleToggleTranslation = useCallback(async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const unsupported = getUnsupportedPageInfo(tab);
+      setUnsupportedPage(unsupported);
+      if (unsupported) return;
       if (!tab?.id) return;
 
       if (isTranslating || status.status === 'done') {
@@ -725,6 +773,12 @@ export default function App() {
       }
     } catch (error) {
       console.error('[AnyLLMTranslate] Toggle error:', error);
+      setIsTranslating(false);
+      setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+      setUnsupportedPage({
+        title: "This page can't be translated",
+        description: "The extension couldn't connect to this page. Refresh the tab or open a regular website.",
+      });
     }
   }, [isTranslating, status.status]);
 
@@ -742,7 +796,7 @@ export default function App() {
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
   const providerReadiness = getProviderReadiness(settings.provider);
   const providerRecoveryMessage = getProviderRecoveryMessage(providerReadiness);
-  const shouldShowProviderRecovery = !providerReadiness.canTranslate;
+  const shouldShowProviderRecovery = !providerReadiness.canTranslate && !unsupportedPage;
   const sourceLanguages = LANGUAGES;
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isActive = isTranslating || status.status === 'done';
@@ -915,6 +969,21 @@ export default function App() {
                   Test connection in setup guide
                 </button>
               )}
+            </div>
+          </div>
+        ) : unsupportedPage ? (
+          <div
+            role="status"
+            className="rounded-2xl border border-zinc-700/70 bg-zinc-900/80 p-4 shadow-lg shadow-black/10"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-800 text-zinc-400 border border-zinc-700/70">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-zinc-100">{unsupportedPage.title}</h3>
+                <p className="text-[11px] text-zinc-400 leading-relaxed mt-1">{unsupportedPage.description}</p>
+              </div>
             </div>
           </div>
         ) : (

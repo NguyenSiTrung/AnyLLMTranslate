@@ -11,7 +11,7 @@ global.chrome = {
       get: mockGet,
     },
   },
-} as any;
+} as unknown as typeof chrome;
 
 describe('loadSettings migration', () => {
   beforeEach(() => {
