@@ -3,8 +3,8 @@
  * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
-import { useState, useCallback, useRef } from 'react';
-import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle, PenLine, ArrowLeftRight } from 'lucide-react';
+import { useState, useCallback, useRef, useMemo } from 'react';
+import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle, PenLine, ArrowLeftRight, Search } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { GlossaryEntry } from '@/types/config';
 import {
@@ -32,7 +32,16 @@ export function DictionarySection() {
   const [mismatchedIds, setMismatchedIds] = useState<Set<string>>(new Set());
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { success: showSuccess, error: showError } = useToast();
+
+  const filteredGlossary = useMemo(() => {
+    if (!searchQuery.trim()) return glossary;
+    const q = searchQuery.toLowerCase();
+    return glossary.filter(
+      (e) => e.source.toLowerCase().includes(q) || e.target.toLowerCase().includes(q),
+    );
+  }, [glossary, searchQuery]);
 
   const clearMismatches = useCallback(() => setMismatchedIds(new Set()), []);
 
@@ -99,7 +108,7 @@ export function DictionarySection() {
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600/15 border border-emerald-500/20">
           <BookOpen className="w-4 h-4 text-emerald-400" />
         </div>
@@ -195,6 +204,23 @@ export function DictionarySection() {
               message="No dictionary entries. Add terms above or import from a file."
             />
           ) : (
+            <>
+              {/* M3: Search filter */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex-1">
+                  <Input
+                    id="dict-search"
+                    type="search"
+                    placeholder="Search entries..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    icon={<Search className="w-4 h-4" />}
+                  />
+                </div>
+                <span className="text-xs text-zinc-500 whitespace-nowrap">
+                  {filteredGlossary.length} of {glossary.length} {glossary.length === 1 ? 'entry' : 'entries'}
+                </span>
+              </div>
             <Card variant="bordered" className="p-0 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
@@ -205,7 +231,7 @@ export function DictionarySection() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {glossary.map((entry, idx) => (
+                  {filteredGlossary.map((entry, idx) => (
                     <tr
                       key={entry.id}
                       className="hover:bg-zinc-800/50 transition-colors animate-stagger"
@@ -274,6 +300,7 @@ export function DictionarySection() {
                 {glossary.length} {glossary.length === 1 ? 'entry' : 'entries'}
               </div>
             </Card>
+            </>
           )}
         </div>
 

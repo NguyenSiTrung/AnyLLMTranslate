@@ -64,7 +64,7 @@ export function GeneralSection() {
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header — no redundant card */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
           <SlidersHorizontal className="w-4 h-4 text-blue-400" />
         </div>

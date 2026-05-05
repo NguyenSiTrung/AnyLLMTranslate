@@ -151,7 +151,7 @@ export function AdvancedSection() {
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-600/15 border border-zinc-500/20">
           <Wrench className="w-4 h-4 text-zinc-400" />
         </div>

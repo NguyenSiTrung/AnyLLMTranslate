@@ -48,7 +48,7 @@ export function ThemesSection() {
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-pink-600/15 border border-pink-500/20">
           <Palette className="w-4 h-4 text-pink-400" />
         </div>
@@ -62,7 +62,7 @@ export function ThemesSection() {
         <ThemePreview />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {THEMES.map((theme, idx) => {
           const isActive = currentTheme === theme.id;
           return (
@@ -75,7 +75,7 @@ export function ThemesSection() {
                   ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30 animate-select-bounce scale-[1.01]'
                   : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50 hover:scale-[1.02] active:scale-[0.98]'
               }`}
-              style={{ '--stagger-delay': Math.min(idx + 1, 5) } as React.CSSProperties}
+              style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
             >
               {/* Active indicator */}
               {isActive && (

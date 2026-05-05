@@ -127,6 +127,26 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
           <div>
             <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider">Step {STEP_INDEX[step]} of 5</p>
             <h2 className="text-lg font-semibold text-zinc-100">Setup guide</h2>
+            {/* M5: Visual progress bar */}
+            <div className="flex items-center gap-1.5 mt-2">
+              {[1, 2, 3, 4, 5].map((s) => {
+                const current = STEP_INDEX[step];
+                const isCompleted = s < current;
+                const isCurrent = s === current;
+                return (
+                  <div
+                    key={s}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      isCompleted
+                        ? 'w-8 bg-blue-500'
+                        : isCurrent
+                          ? 'w-8 bg-blue-400 animate-pulse'
+                          : 'w-8 bg-zinc-700'
+                    }`}
+                  />
+                );
+              })}
+            </div>
           </div>
           {step !== 'welcome' && <Button variant="ghost" size="sm" onClick={handleSkip}>Skip for now</Button>}
         </div>

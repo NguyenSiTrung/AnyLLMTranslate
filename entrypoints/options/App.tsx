@@ -97,7 +97,10 @@ export default function App() {
   }, [isLoaded, settings.onboarding.completed, settings.onboarding.skipped]);
 
   useEffect(() => {
-    if (contentRef.current) contentRef.current.scrollTop = 0;
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+      contentRef.current.focus();
+    }
   }, [activeTab]);
 
   // Auto-save feedback: listen for store updates
@@ -226,6 +229,7 @@ export default function App() {
           id={`panel-${activeTab}`}
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
+          tabIndex={-1}
         >
           <div id="settings-content" className="settings-content-inner">
             <div key={activeTab} className="tab-content-enter">

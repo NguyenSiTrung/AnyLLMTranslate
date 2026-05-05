@@ -177,7 +177,7 @@ export function SubtitlesSection() {
   return (
     <div className="animate-fade-in-up">
       {/* Inline section header */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/80 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
+      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-600/15 border border-cyan-500/20">
           <SubtitlesIcon className="w-4 h-4 text-cyan-400" />
         </div>
@@ -253,6 +253,8 @@ export function SubtitlesSection() {
                 description="Show translated subtitles on video players."
               />
 
+              {/* M4: Disable appearance/behavior controls when subtitles are off */}
+              <div className={`${isDisabled ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-200`}>
               <div className="border-t border-zinc-800 pt-4">
                 <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-4">Appearance</p>
                 <div className="space-y-5">
@@ -336,6 +338,7 @@ export function SubtitlesSection() {
                     maxLabel="120s"
                   />
                 </div>
+              </div>
               </div>
             </div>
           </Card>
