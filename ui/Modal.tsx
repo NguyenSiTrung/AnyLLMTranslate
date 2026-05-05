@@ -1,6 +1,7 @@
 /**
  * Modal confirmation dialog component.
  * Traps focus and supports Escape key dismissal.
+ * L1: For danger variant, focuses Cancel button (safer default).
  */
 
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -30,6 +31,7 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
 
   // Focus trap & Escape key
   useEffect(() => {
@@ -55,10 +57,14 @@ export function Modal({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    // Focus cancel button (safer default for dangerous actions)
-    confirmRef.current?.focus();
+    // L1: For danger variant, focus Cancel (safer default); for info, focus Confirm
+    if (variant === 'danger') {
+      cancelRef.current?.focus();
+    } else {
+      confirmRef.current?.focus();
+    }
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onCancel]);
+  }, [onCancel, variant]);
 
   const IconComp = variant === 'danger' ? AlertTriangle : Info;
   const iconColor = variant === 'danger' ? 'text-red-400' : 'text-blue-400';
@@ -81,7 +87,7 @@ export function Modal({
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
-            <Button variant="ghost" size="sm" onClick={onCancel}>{cancelLabel}</Button>
+            <Button ref={cancelRef} variant="ghost" size="sm" onClick={onCancel}>{cancelLabel}</Button>
             <Button
               ref={confirmRef}
               variant={variant === 'danger' ? 'danger' : 'primary'}

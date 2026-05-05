@@ -243,20 +243,38 @@ export function DictionarySection() {
                             <input
                               value={editSource}
                               onChange={(e) => setEditSource(e.target.value)}
-                              onBlur={() => handleEditSave(entry.id)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleEditSave(entry.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleEditSave(entry.id);
+                                if (e.key === 'Escape') setEditingId(null);
+                              }}
                               autoFocus
                               className="w-full bg-zinc-800 border border-blue-500/50 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none"
                             />
                           </td>
                           <td className="px-4 py-1.5">
-                            <input
-                              value={editTarget}
-                              onChange={(e) => setEditTarget(e.target.value)}
-                              onBlur={() => handleEditSave(entry.id)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleEditSave(entry.id)}
-                              className="w-full bg-zinc-800 border border-blue-500/50 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none"
-                            />
+                            <div className="flex gap-1.5">
+                              <input
+                                value={editTarget}
+                                onChange={(e) => setEditTarget(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleEditSave(entry.id);
+                                  if (e.key === 'Escape') setEditingId(null);
+                                }}
+                                className="w-full bg-zinc-800 border border-blue-500/50 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none"
+                              />
+                              <button
+                                onClick={() => handleEditSave(entry.id)}
+                                className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[11px] text-white transition-colors whitespace-nowrap"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="px-2 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-[11px] text-zinc-300 transition-colors"
+                              >
+                                ✕
+                              </button>
+                            </div>
                           </td>
                         </>
                       ) : (

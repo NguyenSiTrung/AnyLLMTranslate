@@ -30,10 +30,11 @@ export function ShortcutsSection() {
         {/* Current Shortcuts */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
           <Card title="Active Shortcuts" icon={<KeyboardIcon className="w-3.5 h-3.5" />} variant="bordered" className="p-0 overflow-hidden">
-            <div className="divide-y divide-zinc-800">
+            <div className="divide-y divide-zinc-800" role="list" aria-label="Keyboard shortcuts">
               {DEFAULT_SHORTCUTS.map((shortcut, idx) => (
                 <div
                   key={shortcut.action}
+                  role="listitem"
                   className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-800/30 transition-colors animate-stagger"
                   style={{ '--stagger-delay': idx } as React.CSSProperties}
                 >
@@ -41,7 +42,10 @@ export function ShortcutsSection() {
                     <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
                     <p className="text-xs text-zinc-500 mt-0.5">{shortcut.description}</p>
                   </div>
-                  <kbd className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono shrink-0 transition-transform duration-150 hover:-translate-y-[2px] hover:shadow-md active:translate-y-[1px] motion-reduce:hover:translate-y-0">
+                  <kbd
+                    className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono shrink-0 transition-transform duration-150 hover:-translate-y-[2px] hover:shadow-md active:translate-y-[1px] motion-reduce:hover:translate-y-0"
+                    aria-label={`Shortcut: ${shortcut.shortcut}`}
+                  >
                     {shortcut.shortcut}
                   </kbd>
                 </div>
