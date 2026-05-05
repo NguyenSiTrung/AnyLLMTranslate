@@ -1074,7 +1074,7 @@ export default function App() {
                   <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800/50">
                     {([
                       { value: 'bilingual-below' as DisplayMode, label: 'Bilingual' },
-                      { value: 'translation-only' as DisplayMode, label: 'Replace' },
+                      { value: 'translation-only' as DisplayMode, label: 'Translation only' },
                     ]).map((opt) => (
                       <button
                         key={opt.value}

@@ -550,4 +550,58 @@ describe('content.ts', () => {
       expect(mutationMocks.stop).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('lifecycle session guards', () => {
+    it('disconnects existing viewport observer when startTranslation is called twice', async () => {
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        displayMode: 'bilingual-below',
+      });
+      vi.mocked(extractPieces).mockReturnValue([]);
+      const firstDisconnect = vi.fn();
+      const secondDisconnect = vi.fn();
+      vi.mocked(ViewportObserver)
+        .mockImplementationOnce(() => ({
+          observeAll: vi.fn(),
+          disconnect: firstDisconnect,
+        } as unknown as ViewportObserver))
+        .mockImplementationOnce(() => ({
+          observeAll: vi.fn(),
+          disconnect: secondDisconnect,
+        } as unknown as ViewportObserver));
+
+      await startTranslation();
+      await startTranslation();
+
+      // The first observer must have been torn down before the second
+      // session installs its replacement — otherwise duplicate observers
+      // would double-fire translation requests for the same paragraphs.
+      expect(firstDisconnect).toHaveBeenCalledTimes(1);
+      // Mutation watcher from first start must also have been stopped.
+      expect(mutationMocks.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops the previous mutation watcher before installing a new one on re-start', async () => {
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        displayMode: 'bilingual-below',
+      });
+      vi.mocked(extractPieces).mockReturnValue([]);
+      vi.mocked(ViewportObserver).mockImplementation(() => ({
+        observeAll: vi.fn(),
+        disconnect: vi.fn(),
+      } as unknown as ViewportObserver));
+
+      // Start fresh so module-level state is owned by this test.
+      stopTranslation();
+      mutationMocks.stop.mockClear();
+
+      await startTranslation();
+      await startTranslation();
+      await startTranslation();
+
+      // Each start past the first must tear down the prior watcher exactly once.
+      expect(mutationMocks.stop).toHaveBeenCalledTimes(2);
+    });
+  });
 });

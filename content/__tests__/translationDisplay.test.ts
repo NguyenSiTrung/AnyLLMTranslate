@@ -8,9 +8,11 @@ import {
   applyPosition,
   applyDarkMode,
   showLoadingPlaceholder,
+  showInlineLoadingPlaceholder,
   applyTranslation,
   applyInlineTranslation,
   setErrorState,
+  setInlineErrorState,
   clearErrorState,
   removeTranslation,
   removeAllTranslations,
@@ -477,6 +479,144 @@ describe('translationDisplay', () => {
     it('togglePageState cycles to dual when requested', () => {
       expect(togglePageState('bilingual-below')).toBe('dual');
       expect(togglePageState()).toBe('off');
+    });
+  });
+
+  describe('accessibility metadata', () => {
+    it('applies lang and dir on block translation when targetLanguage is provided', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('lang')).toBe('vi');
+      expect(el?.getAttribute('dir')).toBe('auto');
+    });
+
+    it('updates lang on placeholder when applyTranslation runs after showLoadingPlaceholder', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('lang')).toBe('vi');
+      expect(el?.getAttribute('dir')).toBe('auto');
+      // Loading-state aria attributes must be cleared once content is ready.
+      expect(el?.getAttribute('role')).toBeNull();
+      expect(el?.getAttribute('aria-label')).toBeNull();
+    });
+
+    it('exposes role=status and aria-label on block loading placeholder', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('role')).toBe('status');
+      expect(el?.getAttribute('aria-label')).toBe('Translating');
+    });
+
+    it('exposes role=alert on block error state', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      showLoadingPlaceholder(parent, 'piece-1');
+      setErrorState(parent, 'piece-1', 'Network down');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('role')).toBe('alert');
+    });
+
+    it('exposes role=status and aria-label on inline loading placeholder', () => {
+      const parent = document.createElement('span');
+      document.body.appendChild(parent);
+
+      showInlineLoadingPlaceholder(parent, 'piece-1');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('role')).toBe('status');
+      expect(el?.getAttribute('aria-label')).toBe('Translating');
+    });
+
+    it('exposes role=alert on inline error state', () => {
+      const parent = document.createElement('span');
+      document.body.appendChild(parent);
+
+      setInlineErrorState(parent, 'piece-1', 'Network down');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('role')).toBe('alert');
+    });
+
+    it('makes block translations keyboard-focusable when mask theme is active', () => {
+      applyTheme('mask');
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
+
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.getAttribute('tabindex')).toBe('0');
+    });
+
+    it('toggles tabindex on existing translations when theme switches to mask and back', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+
+      applyTheme('blockquote');
+      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
+      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(el?.hasAttribute('tabindex')).toBe(false);
+
+      applyTheme('mask');
+      expect(el?.getAttribute('tabindex')).toBe('0');
+
+      applyTheme('paper');
+      expect(el?.hasAttribute('tabindex')).toBe(false);
+    });
+  });
+
+  describe('translation-only inline visibility', () => {
+    it('creates a visible loading sibling clone when an inline placeholder is shown in translation-only mode', () => {
+      const parent = document.createElement('span');
+      document.body.appendChild(parent);
+      setPageState('translation-only');
+
+      showInlineLoadingPlaceholder(parent, 'piece-1');
+
+      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
+      expect(clone).not.toBeNull();
+      expect(clone?.classList.contains('anyllm-inline-bilingual-loading')).toBe(true);
+      expect(clone?.getAttribute('role')).toBe('status');
+      expect(clone?.getAttribute('aria-label')).toBe('Translating');
+    });
+
+    it('creates a visible error sibling clone for inline errors in translation-only mode', () => {
+      const parent = document.createElement('span');
+      document.body.appendChild(parent);
+      setPageState('translation-only');
+
+      setInlineErrorState(parent, 'piece-1', 'API down');
+
+      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
+      expect(clone).not.toBeNull();
+      expect(clone?.classList.contains('anyllm-inline-bilingual-error')).toBe(true);
+      expect(clone?.getAttribute('role')).toBe('alert');
+    });
+
+    it('removes inline loading clones when switching back to bilingual mode', () => {
+      const parent = document.createElement('span');
+      document.body.appendChild(parent);
+      setPageState('translation-only');
+      showInlineLoadingPlaceholder(parent, 'piece-1');
+
+      setPageState('dual');
+
+      expect(document.querySelector('[data-anyllm-inline-clone-for="piece-1"]')).toBeNull();
     });
   });
 });

@@ -40,7 +40,7 @@ const THEME_OPTIONS = [
 
 const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
   { value: 'bilingual-below', label: 'Bilingual' },
-  { value: 'translation-only', label: 'Translation Only' },
+  { value: 'translation-only', label: 'Translation only' },
 ];
 
 const POSITION_OPTIONS: { value: TranslationPosition; label: string }[] = [

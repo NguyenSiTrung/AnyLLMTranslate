@@ -330,6 +330,102 @@ describe('ThemePreview', () => {
     });
   });
 
+  describe('display mode and position fidelity', () => {
+    it('reflects translation-only displayMode as data-anyllm-state', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+        displayMode: 'translation-only',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const previewContainer = container.querySelector('.theme-preview-container');
+      expect(previewContainer).toHaveAttribute('data-anyllm-state', 'translation-only');
+    });
+
+    it('reflects bilingual-below displayMode as dual state', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+        displayMode: 'bilingual-below',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const previewContainer = container.querySelector('.theme-preview-container');
+      expect(previewContainer).toHaveAttribute('data-anyllm-state', 'dual');
+    });
+
+    it('renders translation BEFORE original when position is above', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+        displayMode: 'bilingual-below',
+        translationPosition: 'above',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const previewContainer = container.querySelector('.theme-preview-container');
+      expect(previewContainer).toHaveAttribute('data-anyllm-position', 'above');
+      const blockChildren = previewContainer?.querySelectorAll('[data-anyllm-role]') ?? [];
+      // First role should be the translation when position=above
+      expect(blockChildren[0]?.getAttribute('data-anyllm-role')).toBe('translation');
+    });
+
+    it('renders translation AFTER original when position is below', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+        displayMode: 'bilingual-below',
+        translationPosition: 'below',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const previewContainer = container.querySelector('.theme-preview-container');
+      expect(previewContainer).toHaveAttribute('data-anyllm-position', 'below');
+      const blockChildren = previewContainer?.querySelectorAll('[data-anyllm-role]') ?? [];
+      // First role should be the original when position=below (default)
+      expect(blockChildren[0]?.getAttribute('data-anyllm-role')).toBe('original');
+    });
+
+    it('includes a representative inline sample', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+        displayMode: 'bilingual-below',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const inlineSample = container.querySelector('[data-anyllm-preview-section="inline"]');
+      expect(inlineSample).not.toBeNull();
+      expect(inlineSample?.querySelector('.anyllm-inline-bilingual')).not.toBeNull();
+    });
+
+    it('includes loading and error state samples', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const statesSection = container.querySelector('[data-anyllm-preview-section="states"]');
+      expect(statesSection).not.toBeNull();
+      expect(statesSection?.querySelector('.anyllm-translate-loading')).not.toBeNull();
+      expect(statesSection?.querySelector('[data-anyllm-error]')).not.toBeNull();
+    });
+
+    it('translated block carries lang and dir attributes for accessibility', () => {
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+        theme: 'blockquote',
+      });
+
+      const { container } = render(<ThemePreview />);
+
+      const translation = container.querySelector('[data-anyllm-role="translation"]');
+      expect(translation).toHaveAttribute('lang');
+      expect(translation).toHaveAttribute('dir', 'auto');
+    });
+  });
+
   it('does not apply custom CSS variables for non-custom themes', () => {
     (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       theme: 'blockquote',

@@ -349,14 +349,29 @@ html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation::bef
   color: #555;
 }
 
-/* Side-by-side: stack vertically on narrow viewports */
-@media (max-width: 600px) {
+/* Side-by-side: stack vertically on narrow viewports.
+   Bumped from 600px to 800px so common 720px-wide article columns
+   (Medium, Substack, GitHub blob view, etc.) stack instead of clipping. */
+@media (max-width: 800px) {
   [data-anyllm-theme="side-by-side"] [data-anyllm-role="original"],
   [data-anyllm-theme="side-by-side"] .anyllm-translate-translation {
     display: block;
     width: 100%;
     margin-left: 0;
   }
+}
+
+/* Side-by-side fallback inside contained elements (li, td, th).
+   At 48% the columns rarely fit inside table cells / list items —
+   stack them vertically and remove the inline-block sizing so the
+   wrapper span and translation sibling render on their own line. */
+[data-anyllm-theme="side-by-side"] :is(li, td, th) [data-anyllm-role="original"],
+[data-anyllm-theme="side-by-side"] :is(li, td, th) .anyllm-translate-translation {
+  display: block;
+  width: auto;
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
 }
 
 @media (prefers-color-scheme: dark) {

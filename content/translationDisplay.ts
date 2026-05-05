@@ -10,9 +10,35 @@ import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomTheme
 const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
 const INLINE_CLONE_ATTR = 'data-anyllm-inline-clone-for';
 
+/** When the mask theme is active, translation elements need a focus
+ *  affordance so keyboard-only users can reveal the blurred text without
+ *  a mouse hover. CSS already styles `:focus`/`:focus-visible` for the
+ *  mask theme; this helper just makes the element programmatically
+ *  focusable. No-op for other themes. */
+function applyMaskA11yIfNeeded(el: HTMLElement): void {
+  if (document.documentElement.getAttribute('data-anyllm-theme') === 'mask') {
+    if (!el.hasAttribute('tabindex')) {
+      el.setAttribute('tabindex', '0');
+    }
+  }
+}
+
 /** Apply theme attribute to document root */
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute('data-anyllm-theme', theme);
+  // Sync tabindex on existing translations so the mask theme stays
+  // keyboard-accessible across theme switches in either direction.
+  const translations = document.querySelectorAll<HTMLElement>(`.anyllm-translate-translation`);
+  if (theme === 'mask') {
+    for (const el of translations) {
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    }
+  } else {
+    for (const el of translations) {
+      // Only remove if we set it (value '0' is the marker)
+      if (el.getAttribute('tabindex') === '0') el.removeAttribute('tabindex');
+    }
+  }
 }
 
 /** Apply custom CSS variables when custom theme is active */
@@ -176,19 +202,37 @@ function syncInlineTranslationOnlySiblings(): void {
 
   const inlineTranslations = document.querySelectorAll(`.anyllm-inline-bilingual[${DATA_ATTRS.PIECE_ID}]`);
   for (const inlineEl of inlineTranslations) {
-    if (inlineEl.classList.contains('anyllm-inline-bilingual-loading')) continue;
     const pieceId = inlineEl.getAttribute(DATA_ATTRS.PIECE_ID);
     const parent = inlineEl.parentElement;
     if (!pieceId || !parent) continue;
 
+    const isLoading = inlineEl.classList.contains('anyllm-inline-bilingual-loading');
+    const isError = inlineEl.classList.contains('anyllm-inline-bilingual-error');
+
     const clone = document.createElement('span');
     clone.setAttribute(INLINE_CLONE_ATTR, pieceId);
     clone.setAttribute(DATA_ATTRS.ROLE, 'translation');
-    clone.className = 'anyllm-inline-bilingual anyllm-inline-translation-only-clone';
-    clone.textContent = getInlineTranslationText(inlineEl);
-    const lang = inlineEl.getAttribute('lang');
-    if (lang) clone.setAttribute('lang', lang);
     clone.setAttribute('dir', 'auto');
+
+    if (isLoading) {
+      // Visible inline spinner sibling so loading remains visible even when
+      // the original short inline container is hidden in translation-only mode.
+      clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading anyllm-inline-translation-only-clone';
+      clone.setAttribute('role', 'status');
+      clone.setAttribute('aria-label', 'Translating');
+    } else if (isError) {
+      clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-error anyllm-inline-translation-only-clone';
+      clone.textContent = (inlineEl.textContent ?? '').trim() || ' (⚠ error)';
+      clone.setAttribute('role', 'alert');
+      const titleSrc = (inlineEl as HTMLElement).title;
+      if (titleSrc) (clone as HTMLElement).title = titleSrc;
+    } else {
+      clone.className = 'anyllm-inline-bilingual anyllm-inline-translation-only-clone';
+      clone.textContent = getInlineTranslationText(inlineEl);
+      const lang = inlineEl.getAttribute('lang');
+      if (lang) clone.setAttribute('lang', lang);
+    }
+
     const originalWrapper = inlineEl.closest(`[${ORIGINAL_WRAPPER_ATTR}]`);
     if (originalWrapper?.parentElement && needsContainedTranslation(originalWrapper.parentElement)) {
       originalWrapper.after(clone);
@@ -220,17 +264,22 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
   placeholder.setAttribute(DATA_ATTRS.ROLE, 'translation');
   placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   placeholder.className = 'anyllm-translate-translation anyllm-translate-loading';
+  // Accessible status: announce loading state to assistive tech.
+  placeholder.setAttribute('role', 'status');
+  placeholder.setAttribute('aria-label', 'Translating');
 
   insertTranslationElement(parentElement, placeholder);
 }
 
 /** Apply a single translation relative to its original paragraph.
  * If a loading placeholder already exists for this pieceId, updates it in-place
- * (swaps class, sets text) to avoid layout shift and duplicate elements. */
+ * (swaps class, sets text) to avoid layout shift and duplicate elements.
+ * @param targetLanguage — ISO code applied as `lang` for accessibility/screen-readers. */
 export function applyTranslation(
   parentElement: Element,
   pieceId: string,
   translatedText: string,
+  targetLanguage?: string,
 ): void {
   // Defensive: never mark <body> or <html> as original — that would hide the page
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') {
@@ -245,7 +294,12 @@ export function applyTranslation(
   if (existing) {
     // Update placeholder in-place: remove spinner class, set translated text
     existing.classList.remove('anyllm-translate-loading');
+    existing.removeAttribute('role');
+    existing.removeAttribute('aria-label');
     existing.textContent = translatedText;
+    if (targetLanguage) existing.setAttribute('lang', targetLanguage);
+    if (!existing.hasAttribute('dir')) existing.setAttribute('dir', 'auto');
+    applyMaskA11yIfNeeded(existing as HTMLElement);
     // Re-trigger fade-in animation by forcing reflow
     (existing as HTMLElement).style.animation = 'none';
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -261,6 +315,8 @@ export function applyTranslation(
   translationEl.className = 'anyllm-translate-translation';
   translationEl.textContent = translatedText;
   translationEl.setAttribute('dir', 'auto');
+  if (targetLanguage) translationEl.setAttribute('lang', targetLanguage);
+  applyMaskA11yIfNeeded(translationEl);
 
   insertTranslationElement(parentElement, translationEl);
 }
@@ -276,8 +332,16 @@ export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: st
   const placeholder = document.createElement('span');
   placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   placeholder.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading';
+  // Accessible status text — useful both for screen readers and as a
+  // hover tooltip on the inline spinner dot.
+  placeholder.setAttribute('role', 'status');
+  placeholder.setAttribute('aria-label', 'Translating');
 
   renderTarget.appendChild(placeholder);
+
+  // Ensure a visible sibling clone exists in translation-only mode where
+  // the original (hidden) container would otherwise hide the spinner too.
+  syncInlineTranslationOnlySiblings();
 }
 
 /** Format inline translation text — uses parentheses for most languages,
@@ -387,6 +451,8 @@ export function setInlineErrorState(
     existing.classList.remove('anyllm-inline-bilingual-loading');
     existing.classList.add('anyllm-inline-bilingual-error');
     existing.textContent = ' (⚠ error)';
+    existing.setAttribute('role', 'alert');
+    existing.removeAttribute('aria-label');
     (existing as HTMLElement).title = `Translation failed: ${errorMessage}. Click to retry.`;
 
     if (onRetry) {
@@ -395,6 +461,7 @@ export function setInlineErrorState(
         onRetry();
       }, { once: true });
     }
+    syncInlineTranslationOnlySiblings();
     return;
   }
 
@@ -403,6 +470,7 @@ export function setInlineErrorState(
   errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   errorEl.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-error';
   errorEl.textContent = ' (⚠ error)';
+  errorEl.setAttribute('role', 'alert');
   errorEl.title = `Translation failed: ${errorMessage}. Click to retry.`;
 
   if (onRetry) {
@@ -413,6 +481,7 @@ export function setInlineErrorState(
   }
 
   parentElement.appendChild(errorEl);
+  syncInlineTranslationOnlySiblings();
 }
 
 
@@ -438,6 +507,8 @@ export function setErrorState(
     existing.setAttribute('data-anyllm-error', '');
     existing.textContent = `⚠ Translation failed: ${errorMessage}`;
     existing.setAttribute('title', 'Click to retry');
+    existing.setAttribute('role', 'alert');
+    existing.removeAttribute('aria-label');
 
     if (onRetry) {
       existing.addEventListener('click', () => {
@@ -454,6 +525,7 @@ export function setErrorState(
   errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   errorEl.className = 'anyllm-translate-translation';
   errorEl.setAttribute('data-anyllm-error', '');
+  errorEl.setAttribute('role', 'alert');
   errorEl.textContent = `⚠ Translation failed: ${errorMessage}`;
   errorEl.title = 'Click to retry';
 

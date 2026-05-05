@@ -2,10 +2,10 @@
  * ThemePreview component - Shows live preview of translation themes.
  * Displays bilingual sample text with the selected theme applied.
  *
- * Improvements:
- * - More meaningful sample text (not "quick brown fox")
- * - Card title uses category-label style (inherits Card update)
- * - Eye icon kept for recognition
+ * Reflects the user's current displayMode (Bilingual vs Translation only)
+ * and translation position (above/below/side). Includes representative
+ * block paragraph, short inline phrase, loading, and error states so the
+ * preview matches how content actually renders on a page.
  */
 
 import { useState, useMemo } from 'react';
@@ -20,6 +20,8 @@ const SAMPLE_TEXT = {
     'Artificial intelligence is reshaping how we communicate across languages and cultures.',
   translation:
     'Trí tuệ nhân tạo đang định hình lại cách chúng ta giao tiếp giữa các ngôn ngữ và nền văn hóa.',
+  inlineOriginal: 'Settings',
+  inlineTranslation: 'Cài đặt',
 };
 
 export function ThemePreview() {
@@ -28,6 +30,8 @@ export function ThemePreview() {
 
   // Default to blockquote if theme is undefined or empty
   const theme = settings.theme || 'blockquote';
+  const position = settings.translationPosition ?? 'below';
+  const pageState = settings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
 
   // Compute custom theme inline styles for the preview container
   const customPreviewStyle = useMemo<React.CSSProperties>(() => {
@@ -44,6 +48,47 @@ export function ThemePreview() {
     } as React.CSSProperties;
   }, [theme, settings.customTheme]);
 
+  // Render block translation either above or below the original.
+  const block = (
+    <div className="space-y-2">
+      {position === 'above' ? (
+        <>
+          <div
+            data-anyllm-role="translation"
+            lang="vi"
+            dir="auto"
+            className="anyllm-translate-translation text-sm leading-relaxed"
+          >
+            {SAMPLE_TEXT.translation}
+          </div>
+          <div
+            data-anyllm-role="original"
+            className={`text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}
+          >
+            {SAMPLE_TEXT.original}
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            data-anyllm-role="original"
+            className={`text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}
+          >
+            {SAMPLE_TEXT.original}
+          </div>
+          <div
+            data-anyllm-role="translation"
+            lang="vi"
+            dir="auto"
+            className="anyllm-translate-translation text-sm leading-relaxed"
+          >
+            {SAMPLE_TEXT.translation}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <Card title="Theme Preview" icon={<Eye className="w-3.5 h-3.5" />} variant="bordered">
       {/* Light/Dark mode toggle */}
@@ -59,24 +104,42 @@ export function ThemePreview() {
       <div
         className={`theme-preview-container rounded-lg p-4 border border-zinc-700/40 transition-colors duration-200 ${isDarkMode ? 'anyllm-dark bg-zinc-950' : 'bg-white'}`}
         data-anyllm-theme={theme}
-        data-anyllm-state="dual"
+        data-anyllm-state={pageState}
+        data-anyllm-position={position}
         style={customPreviewStyle}
       >
-        <div className="space-y-2">
-          {/* Original text */}
-          <div
-            data-anyllm-role="original"
-            className={`text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}
-          >
-            {SAMPLE_TEXT.original}
-          </div>
-          {/* Translated text with theme applied */}
-          <div
+        {block}
+
+        {/* Short inline sample — UI labels, button text, etc. */}
+        <div
+          className={`mt-3 text-sm leading-relaxed ${isDarkMode ? 'text-zinc-300' : 'text-zinc-700'}`}
+          data-anyllm-preview-section="inline"
+        >
+          <span data-anyllm-role="original">{SAMPLE_TEXT.inlineOriginal}</span>
+          <span
+            className="anyllm-inline-bilingual"
+            lang="vi"
+            dir="auto"
             data-anyllm-role="translation"
-            className="anyllm-translate-translation text-sm leading-relaxed"
           >
-            {SAMPLE_TEXT.translation}
-          </div>
+            {pageState === 'translation-only' ? SAMPLE_TEXT.inlineTranslation : ` (${SAMPLE_TEXT.inlineTranslation})`}
+          </span>
+        </div>
+
+        {/* Loading + error sample states */}
+        <div className="mt-3 flex flex-col gap-1" data-anyllm-preview-section="states">
+          <span
+            className="anyllm-translate-translation anyllm-translate-loading text-sm"
+            role="status"
+            aria-label="Translating"
+          />
+          <span
+            className="anyllm-translate-translation text-sm"
+            data-anyllm-error=""
+            role="alert"
+          >
+            ⚠ Translation failed: example error
+          </span>
         </div>
       </div>
     </Card>

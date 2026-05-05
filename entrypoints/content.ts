@@ -36,6 +36,11 @@ let mutationWatcher: MutationWatcher | null = null;
 let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
 let activeRequests = 0;
+/** Monotonically increasing translation session id.
+ *  Bumped on startTranslation and stopTranslation so that in-flight
+ *  responses from previous sessions are recognized as stale and
+ *  silently dropped (no late DOM writes after restore / re-start). */
+let translationSession = 0;
 let _textSelectionCleanup: (() => void) | null = null;
 let _hoverTranslateCleanup: (() => void) | null = null;
 let _keyboardShortcutsCleanup: (() => void) | null = null;
@@ -74,6 +79,11 @@ function extractDynamicPieces(
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   if (pieces.length === 0) return;
+
+  // Capture session at request start; if the page is restored or
+  // re-translated before the response arrives, the session will have
+  // advanced and this response must be ignored to prevent stale DOM writes.
+  const requestSession = translationSession;
 
   // Show spinner placeholder for each piece immediately (before async call)
   // Short pieces get compact inline spinner, long pieces get block spinner
@@ -123,6 +133,14 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       pageContext,
     });
 
+    // Session guard: if the page has been restored or re-translated
+    // since this request was issued, drop the response without touching
+    // the DOM. This prevents the classic "ghost translation" race where
+    // a late LLM reply re-injects translations onto an already-restored page.
+    if (requestSession !== translationSession) {
+      return;
+    }
+
     if (response.success && response.results) {
       for (const result of response.results) {
         const piece = pieces.find((p) => p.id === result.id);
@@ -133,7 +151,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
           if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
             applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage);
           } else {
-            applyTranslation(piece.parentElement, piece.id, result.translatedText);
+            applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage);
           }
         }
       }
@@ -148,6 +166,10 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       }
     }
   } catch (err) {
+    if (requestSession !== translationSession) {
+      // Stale rejection — ignore.
+      return;
+    }
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
       if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
@@ -162,20 +184,34 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   }
 }
 
+/** Compute current popup-facing status. Treats lazy/off-screen
+ *  pending pieces as "still translating" so progress never reports
+ *  100% complete while observed pieces remain untranslated. */
+function computeStatus(): 'idle' | 'translating' | 'done' | 'error' {
+  const pageState = getPageState();
+  if (pageState === 'off') return 'idle';
+
+  const translatedCount = allPieces.filter((p) => p.isTranslated).length;
+  const hasUntranslated = translatedCount < allPieces.length;
+
+  // Active in-flight LLM call always means translating.
+  if (activeRequests > 0) return 'translating';
+
+  // No in-flight requests, but lazy pieces still pending observation/translation.
+  // The viewport observer (or mutation watcher for SPA pages) will pick them up
+  // as the user scrolls or new content arrives — surface this as "translating".
+  if (hasUntranslated) return 'translating';
+
+  return 'done';
+}
+
 /** Broadcast current status to popup */
 function sendStatusUpdate(): void {
-  const pageState = getPageState();
-  let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
-  
-  if (pageState !== 'off') {
-    status = activeRequests > 0 ? 'translating' : 'done';
-  }
-
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
     tabId: 0, // Tab ID is handled implicitly by the popup not filtering, or fallback
     status: {
-      status,
+      status: computeStatus(),
       translatedCount: allPieces.filter((p) => p.isTranslated).length,
       totalCount: allPieces.length,
     },
@@ -184,6 +220,25 @@ function sendStatusUpdate(): void {
 
 /** Start translation on the current page */
 export async function startTranslation(): Promise<void> {
+  // Bump the session id so any in-flight translations from a previous
+  // start/stop cycle are recognized as stale and dropped on response.
+  translationSession++;
+
+  // Tear down any existing viewport observer / mutation watcher from a
+  // prior start. Repeated startTranslation calls (e.g. via popup spam,
+  // SPA re-routes, or auto-translate firing twice) must not leak observers.
+  if (viewportObserver) {
+    viewportObserver.disconnect();
+    viewportObserver = null;
+  }
+  if (mutationWatcher) {
+    mutationWatcher.stop();
+    mutationWatcher = null;
+  }
+  // Reset accounting so progress reflects this session's pieces only.
+  allPieces = [];
+  activeRequests = 0;
+
   // Load settings to apply visual settings
   const settings = await loadSettings();
 
@@ -232,9 +287,6 @@ export async function startTranslation(): Promise<void> {
     viewportObserver.observeAll([...allPieces]);
   }
 
-  if (mutationWatcher) {
-    mutationWatcher.stop();
-  }
   mutationWatcher = new MutationWatcher((addedElements) => {
     if (!viewportObserver || getPageState() === 'off') return;
 
@@ -252,6 +304,10 @@ export async function startTranslation(): Promise<void> {
 
 /** Stop translation and restore the page */
 export function stopTranslation(): void {
+  // Bump session FIRST so any in-flight translation responses are
+  // dropped before they can reinsert text into the now-restored DOM.
+  translationSession++;
+
   // Clean up visual settings
   document.documentElement.removeAttribute('data-anyllm-theme');
   clearCustomTheme();
@@ -270,6 +326,7 @@ export function stopTranslation(): void {
   removeAllSectionTranslations();
   hideAutoTranslateNotification();
   allPieces = [];
+  activeRequests = 0;
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
   sendStatusUpdate(); // Broadcast idle state
@@ -407,13 +464,8 @@ function setupMessageListener(): void {
       })();
       return true; // async response
     } else if (message.action === 'getStatus') {
-      const pageState = getPageState();
-      let status: 'idle' | 'translating' | 'done' | 'error' = 'idle';
-      if (pageState !== 'off') {
-        status = activeRequests > 0 ? 'translating' : 'done';
-      }
       sendResponse({
-        status,
+        status: computeStatus(),
         translatedCount: allPieces.filter((p) => p.isTranslated).length,
         totalCount: allPieces.length,
       });
