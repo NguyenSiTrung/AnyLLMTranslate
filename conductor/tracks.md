@@ -37,10 +37,10 @@ This file tracks all major tracks for the project.
 - ✅ **Custom Theme Builder & Context-Aware Translation** (`theme-context_20260422`) — Archived 2026-04-22. [View](./conductor/archive/theme-context_20260422/)
 - ✅ **Two-Layer Page Category Override System** (`category-override_20260423`) — Archived 2026-04-23. [View](./conductor/archive/category-override_20260423/)
 - ✅ **LLM-based Page Category Detection** (`llm-category-detection_20260504`) — Archived 2026-05-04. [View](./conductor/archive/llm-category-detection_20260504/)
+- ✅ **Bilingual Display UI/UX Hardening** (`bilingual-display-ux_20260505`) — Archived 2026-05-05. [View](./conductor/archive/bilingual-display-ux_20260505/)
 
 ---
 
 ## Active Tracks
 
-## [x] Track: Bilingual Display UI/UX Hardening
-*Link: [./conductor/tracks/bilingual-display-ux_20260505/](./conductor/tracks/bilingual-display-ux_20260505/)*
+_No active tracks._

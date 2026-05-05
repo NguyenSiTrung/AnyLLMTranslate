@@ -296,6 +296,12 @@ Reusable patterns discovered during development. Read this before starting new w
 - `globalExcludeSelectors` defaults to `['pre', 'code', '.code-block']` — code blocks are excluded from translation universally. (from: incremental, 2026-05-04)
 - Inline edit form pattern for array settings: each entry is an editable row with delete button, plus an "Add" row at the bottom. Validate non-empty before insert. (from: incremental, 2026-05-04)
 
+## Bilingual Display & Session Guards (2026-05-05)
+- Monotonically-bumped session id (captured at request issue, re-checked at response) is the simplest way to drop stale async writes after a state reset — prevents translations from a previous session leaking into a restored page. (from: bilingual-display-ux_20260505, archived 2026-05-05)
+- When translation-only mode hides the original parent, any inline child (loading, error, translated text) is also hidden. Fix with a sibling-after-parent clone — not a CSS override on the hidden parent. (from: bilingual-display-ux_20260505, archived 2026-05-05)
+- A theme-aware DOM helper that runs on both element creation and theme-switch keeps a11y attributes (e.g. tabindex for mask theme) consistent without full re-render. (from: bilingual-display-ux_20260505, archived 2026-05-05)
+- Validator execution order: `tsc` → `eslint` → `vitest` → `wxt build` — cheapest checks fail fast first, catching type/lint/runtime/build issues independently. (from: bilingual-display-ux_20260505, archived 2026-05-05)
+
 ---
-Last refreshed: 2026-05-04T02:22:00+07:00
-Codebase health: 728 tests passing across 55 files, build 673KB, 30 tracks archived
+Last refreshed: 2026-05-05T23:51:00+07:00
+Codebase health: 786 tests passing across 60 files, build ~714KB, 31 tracks archived
