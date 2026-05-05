@@ -46,9 +46,12 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 ### UI & Settings
 - Popup UI (redesigned dropdown with permanent quick settings)
 - Options page (provider config, theme selection, site rules)
+- Setup wizard (5-step guided onboarding: welcome → provider → test → language → done)
+- Provider readiness system (`lib/providerReadiness.ts`) — state machine with recovery messages and error classification
 - Shared component library (12 reusable components: Button, Card, Input, Modal, Select, Slider, Toggle, Toast, Badge, EmptyState, FieldGroup, ToastProvider)
 - 15 built-in site rules for popular platforms (GitHub, StackOverflow, Reddit, Wikipedia, Medium, X/Twitter, HuggingFace, PyPI, npm, GitLab, Substack, YouTube)
-- Global default exclude selectors (pre, code, .code-block) — configurable, merged with per-site excludes
+- Global default exclude selectors — CRITICAL_GLOBAL_EXCLUDES (pre, .code-block, contenteditable, textarea, input, translate="no", .notranslate, script, style) force-merged at load time
+- Smart excludes — structural/navigation elements (nav, TOC, footer, breadcrumb, sidebar, pagination, infobox) auto-skipped when enabled
 - Side panel (reading view)
 - Text selection translate popup
 - Mouse hover translation
@@ -60,6 +63,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Request batching & deduplication
 - Custom glossary/term protection
 - Configurable system prompts
+- LLM response sanitization — strips `<think>` blocks and extracts JSON from markdown code fences or raw brace extraction
 
 ## Success Metrics
 
@@ -103,10 +107,15 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Codebase Audit Fixes — Hardening** (Archived 2026-05-03): Resolved 13 codebase audit issues: crash paths, memory leaks, TypeScript type errors, input validation, and security hardening. Semaphore correctness validated, XSS hardening, error boundary fixes.
 - **LLM-based Page Category Detection** (Archived 2026-05-04): Dual-mode (async/blocking) LLM pipeline for automatic page category identification. Async mode translates first with heuristic category, then upgrades context via LLM. Blocking mode waits for LLM category before translation. Gated behind `enableLLMPageCategoryDetection` toggle.
 - **Built-in Site Rules & Global Excludes** (2026-05-04, incremental): 15 built-in site rules for GitHub, StackOverflow, Reddit, Wikipedia, Medium, X/Twitter, HuggingFace, PyPI, npm, GitLab, Substack, YouTube — user rules take precedence. Global default exclude selectors (`pre`, `code`, `.code-block`) configurable in Advanced settings with inline edit form UX. `mergeExcludeSelectors()` deduplicates global + per-site excludes.
+- **CRITICAL_GLOBAL_EXCLUDES & Safety Layer** (2026-05-04, incremental): Force-merged safety exclude selectors (pre, .code-block, contenteditable, textarea, input, translate="no", .notranslate, script, style) — always present in `globalExcludeSelectors` regardless of user edits. `loadSettings()` performs `Set`-based union at load time. Reset-to-defaults button in UI.
+- **Smart Excludes — Structural Element Filtering** (2026-05-05, incremental): `SMART_EXCLUDE_SELECTORS` array (nav, TOC, footer, breadcrumb, sidebar, pagination, infobox) — auto-skips non-content structural elements. Gated behind `enableSmartExcludes` toggle (default: on).
+- **LLM Response Sanitization** (2026-05-04, incremental): `parseTranslationResponse()` strips `<think>...</think>` blocks from reasoning models (DeepSeek R1), extracts JSON from markdown code fences, and falls back to brace extraction.
+- **Bilingual Display UI/UX Hardening** (Archived 2026-05-05): Translation session guard with monotonic session IDs to drop stale async writes. Inline loading/error visibility in translation-only mode via sibling clones. ThemePreview fidelity with displayMode/translationPosition rendering. lang/dir attributes on translations. Mask theme keyboard accessibility (tabindex). Multi-piece viewport observer improvements. Safe DOM insertion with `insertBefore` parent validation.
+- **New-User Onboarding** (2026-05-05, incremental): 5-step setup wizard (welcome → provider → test → language → done) with `OnboardingState` persistence. Provider readiness state machine (`lib/providerReadiness.ts`) with 6 readiness reasons and actionable recovery messages. Provider recovery card in popup for not-configured/failed states. Options page surfaces readiness status in ProviderSection. Provider `connectionStatus` reset on edits.
 
 ### Current State
-- 728 tests passing across 55 files. Build passing (`wxt build` ✅, ~673 KB). 4 lint warnings (pre-existing, in 3 source files).
-- **No active tracks.** All 30 tracks completed and archived.
+- 786 tests passing across 60 files. Build passing (`wxt build` ✅, ~714 KB). 4 lint warnings (pre-existing, in 3 source files).
+- **No active tracks.** All 31 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

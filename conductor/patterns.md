@@ -302,6 +302,26 @@ Reusable patterns discovered during development. Read this before starting new w
 - A theme-aware DOM helper that runs on both element creation and theme-switch keeps a11y attributes (e.g. tabindex for mask theme) consistent without full re-render. (from: bilingual-display-ux_20260505, archived 2026-05-05)
 - Validator execution order: `tsc` → `eslint` → `vitest` → `wxt build` — cheapest checks fail fast first, catching type/lint/runtime/build issues independently. (from: bilingual-display-ux_20260505, archived 2026-05-05)
 
+## Safety Excludes & Force-Merge (2026-05-04)
+- `CRITICAL_GLOBAL_EXCLUDES` array (pre, .code-block, contenteditable, textarea, input, translate="no", .notranslate, script, style) is force-merged into `globalExcludeSelectors` at load time via `Set`-based union in `loadSettings()` — users cannot accidentally remove safety selectors. (from: incremental, 2026-05-04)
+- Inline tags (`code`, `kbd`, `var`, `samp`) were initially in CRITICAL_GLOBAL_EXCLUDES but removed — excluding them breaks sentence structure since they appear inline within paragraphs. (from: incremental, 2026-05-04)
+- UI provides a "Reset to defaults" button gated behind `isDefault` check — only appears when user has customized the exclude list. (from: incremental, 2026-05-04)
+
+## Smart Excludes (2026-05-05)
+- `SMART_EXCLUDE_SELECTORS` array (nav, TOC, footer, breadcrumb, sidebar, pagination, infobox) filters structural/navigation elements that aren't prose content — gated behind `enableSmartExcludes` toggle (default: on). (from: incremental, 2026-05-05)
+- Smart excludes are applied at DOM walk time, not in CSS — elements matching these selectors are simply skipped by the paragraph detector. (from: incremental, 2026-05-05)
+
+## LLM Response Sanitization (2026-05-04)
+- `parseTranslationResponse()` strips `<think>...</think>` blocks (DeepSeek R1 reasoning traces) before JSON parsing — uses regex `/<think>[\s\S]*?<\/think>/g`. (from: incremental, 2026-05-04)
+- Three-strategy JSON extraction: direct parse → markdown code fence extraction → outermost brace extraction. Each strategy catches failures silently and falls through. (from: incremental, 2026-05-04)
+
+## Onboarding & Provider Readiness (2026-05-05)
+- `OnboardingState` tracks wizard progress with `lastStep` field for resume support — persisted via `chrome.storage` alongside `ExtensionSettings`. (from: incremental, 2026-05-05)
+- Provider readiness is a pure function (`getProviderReadiness()`) returning a discriminated union with `status`, `reason`, `canTest`, `canTranslate` — no side effects, easy to test. (from: incremental, 2026-05-05)
+- `getConnectionErrorMessage()` classifies error strings by keyword matching (timeout, 401/403, 404/model, network) into actionable recovery messages — avoids exposing raw error strings to users. (from: incremental, 2026-05-05)
+- Provider `connectionStatus` must reset to `'unknown'` on any field edit (baseUrl, apiKey, model) — prevents stale "connected" badge after user changes credentials. (from: incremental, 2026-05-05)
+- Setup wizard uses a controlled dialog pattern with `ref` + `tabIndex={-1}` for focus management — dialog auto-focuses on step change via `useEffect`. (from: incremental, 2026-05-05)
+
 ---
-Last refreshed: 2026-05-05T23:51:00+07:00
+Last refreshed: 2026-05-05T23:57:00+07:00
 Codebase health: 786 tests passing across 60 files, build ~714KB, 31 tracks archived

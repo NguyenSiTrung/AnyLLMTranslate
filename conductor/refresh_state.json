@@ -1,30 +1,36 @@
 {
-  "lastRefresh": "2026-05-04T02:22:00+07:00",
+  "lastRefresh": "2026-05-05T23:57:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
     "product.md": [
-      "Added Built-in Site Rules & Global Excludes feature (2026-05-04)",
-      "Added LLM-based Page Category Detection feature (archived 2026-05-04)",
-      "Added 15 built-in site rules and global exclude selectors to Key Features",
-      "Updated success metrics: 50+ built-in rules → 15+ built-in rules",
-      "Updated current state: 728 tests, 673 KB build, 30 tracks"
+      "Added Bilingual Display UI/UX Hardening feature (archived 2026-05-05)",
+      "Added New-User Onboarding (setup wizard, provider readiness, recovery card)",
+      "Added CRITICAL_GLOBAL_EXCLUDES safety layer feature",
+      "Added Smart Excludes structural element filtering feature",
+      "Added LLM Response Sanitization (think tag handling, multi-strategy JSON extraction)",
+      "Updated UI & Settings with setup wizard, provider readiness, expanded global excludes, smart excludes",
+      "Updated Translation Engine with LLM response sanitization",
+      "Updated current state: 786 tests, 714 KB build, 31 tracks"
     ],
     "patterns.md": [
-      "Added LLM Category Detection section (3 patterns)",
-      "Added Built-in Site Rules & Global Excludes section (4 patterns)",
-      "Updated health footer: 728 tests, 673 KB, 30 tracks"
+      "Added Safety Excludes & Force-Merge section (3 patterns)",
+      "Added Smart Excludes section (2 patterns)",
+      "Added LLM Response Sanitization section (2 patterns)",
+      "Added Onboarding & Provider Readiness section (5 patterns)",
+      "Updated health footer: 786 tests, 714 KB, 31 tracks"
     ],
     "tech-stack.md": "No drift",
-    "workflow.md": "No drift"
+    "workflow.md": "No drift",
+    "tracks.md": "No drift (already current)"
   },
   "health": {
-    "tests": 728,
-    "testFiles": 55,
-    "buildSizeKB": 673,
+    "tests": 786,
+    "testFiles": 60,
+    "buildSizeKB": 714,
     "lintErrors": 4,
-    "lintNote": "Pre-existing in 3 source files (pageContext.ts, App.tsx, openaiCompatible.ts)",
-    "tracksArchived": 30,
+    "lintNote": "Pre-existing in 3 source files",
+    "tracksArchived": 31,
     "tracksActive": 0
   }
 }
