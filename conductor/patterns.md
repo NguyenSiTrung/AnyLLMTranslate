@@ -111,6 +111,10 @@ Reusable patterns discovered during development. Read this before starting new w
 - Shared UI library: ui/ at project root, not inside entrypoints — reusable across popup, options, and content. (from: phase5-settings-ux_20260410, archived 2026-04-10)
 - No barrel export: Import directly from @/ui/ComponentName to enable tree-shaking. (from: phase5-settings-ux_20260410, archived 2026-04-10)
 - forwardRef: Only Button uses forwardRef (needed by Modal focus trap). Other components don't need it. (from: phase5-settings-ux_20260410, archived 2026-04-10)
+- Destructive list actions use `pendingDeleteId` state + Modal confirmation pattern — never delete directly on click. (from: settings-ux-audit_20260506, archived 2026-05-06)
+- Danger variant Modals focus Cancel button (safer default); info variant focuses Confirm — use separate `cancelRef`. (from: settings-ux-audit_20260506, archived 2026-05-06)
+- Inline edit rows need explicit Save/Cancel buttons — `onBlur` auto-save conflicts with button clicks and loses edits. (from: settings-ux-audit_20260506, archived 2026-05-06)
+- Card variant semantics: `default` for pure display/stats, `bordered` for interactive/configurable containers. (from: settings-ux-audit_20260506, archived 2026-05-06)
 
 ## CSS Animations
 - CSS-only: All animations in animations.css, no runtime JS libraries. (from: phase5-settings-ux_20260410, archived 2026-04-10)

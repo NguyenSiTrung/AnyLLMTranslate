@@ -38,10 +38,10 @@ This file tracks all major tracks for the project.
 - ✅ **Two-Layer Page Category Override System** (`category-override_20260423`) — Archived 2026-04-23. [View](./conductor/archive/category-override_20260423/)
 - ✅ **LLM-based Page Category Detection** (`llm-category-detection_20260504`) — Archived 2026-05-04. [View](./conductor/archive/llm-category-detection_20260504/)
 - ✅ **Bilingual Display UI/UX Hardening** (`bilingual-display-ux_20260505`) — Archived 2026-05-05. [View](./conductor/archive/bilingual-display-ux_20260505/)
+- ✅ **Settings UI/UX Consistency & Polish** (`settings-ux-audit_20260506`) — Archived 2026-05-06. [View](./conductor/archive/settings-ux-audit_20260506/)
 
 ---
 
 ## Active Tracks
 
-## [x] Track: Settings UI/UX Consistency & Polish
-*Link: [./conductor/tracks/settings-ux-audit_20260506/](./conductor/tracks/settings-ux-audit_20260506/)*
+No active tracks.
