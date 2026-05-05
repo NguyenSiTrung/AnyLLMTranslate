@@ -42,4 +42,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*No active tracks.*
+## [ ] Track: Bilingual Display UI/UX Hardening
+*Link: [./conductor/tracks/bilingual-display-ux_20260505/](./conductor/tracks/bilingual-display-ux_20260505/)*
