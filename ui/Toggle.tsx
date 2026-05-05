@@ -16,7 +16,7 @@ export function Toggle({ checked, onChange, label, description, id, disabled = f
     <div className="flex items-center justify-between">
       <div>
         <p className="text-sm font-medium text-zinc-200">{label}</p>
-        {description && <p className="text-xs text-zinc-500">{description}</p>}
+        {description && <p className="text-xs text-zinc-500 mt-0.5">{description}</p>}
       </div>
       <button
         id={id}

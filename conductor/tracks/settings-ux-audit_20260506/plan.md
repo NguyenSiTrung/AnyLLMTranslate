@@ -3,54 +3,54 @@
 ## Phase 1: Critical Fixes
 <!-- execution: parallel -->
 
-- [ ] Task 1: Fix InlineTranslateSection — Header & Store Method (C1 + C2)
+- [x] Task 1: Fix InlineTranslateSection — Header & Store Method (C1 + C2)
   <!-- files: entrypoints/options/sections/InlineTranslateSection.tsx -->
-  - [ ] Add sticky section header with icon badge, title, subtitle (match pattern from other 9 sections)
-  - [ ] Add outer `animate-fade-in-up` wrapper with stagger support
-  - [ ] Change `updateSetting` to `updateSettings` (plural) to match all other sections
-  - [ ] Verify auto-save badge triggers correctly after changes
+  - [x] Add sticky section header with icon badge, title, subtitle (match pattern from other 9 sections)
+  - [x] Add outer `animate-fade-in-up` wrapper with stagger support
+  - [x] Change `updateSetting` to `updateSettings` (plural) to match all other sections
+  - [x] Verify auto-save badge triggers correctly after changes
 
-- [ ] Task 2: Fix SiteRulesSection — Delete Confirmation & Raw HTML (C3 + C4)
+- [x] Task 2: Fix SiteRulesSection — Delete Confirmation & Raw HTML (C3 + C4)
   <!-- files: entrypoints/options/sections/SiteRulesSection.tsx -->
-  - [ ] Add `pendingDeleteId` state and confirmation Modal (match DictionarySection pattern)
-  - [ ] Replace raw `<select>` in RuleEditForm category field with shared `Select` component
-  - [ ] Replace raw `<input>` in RuleEditForm custom category with shared `Input` component
-  - [ ] Verify delete flow: click delete → modal appears → confirm → rule removed
+  - [x] Add `pendingDeleteId` state and confirmation Modal (match DictionarySection pattern)
+  - [x] Replace raw `<select>` in RuleEditForm category field with shared `Select` component
+  - [x] Replace raw `<input>` in RuleEditForm custom category with shared `Input` component
+  - [x] Verify delete flow: click delete → modal appears → confirm → rule removed
 
-- [ ] Task: Conductor - Phase Verification 'Critical Fixes' (Protocol in workflow.md)
+- [x] Task: Conductor - Phase Verification 'Critical Fixes' (Protocol in workflow.md)
 
 ## Phase 2: Component & High Priority Fixes
 <!-- execution: parallel -->
 
-- [ ] Task 1: Remove Card Bordered Hover Lift (H3)
+- [x] Task 1: Remove Card Bordered Hover Lift (H3)
   <!-- files: ui/Card.tsx -->
-  - [ ] Remove `hover:-translate-y-[1px] hover:shadow-lg` from `bordered` variant
-  - [ ] Remove `motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none` (no longer needed)
-  - [ ] Keep `transition-all duration-200` for remaining transitions
+  - [x] Remove `hover:-translate-y-[1px] hover:shadow-lg` from `bordered` variant
+  - [x] Remove `motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none` (no longer needed)
+  - [x] Keep `transition-all duration-200` for remaining transitions
 
-- [ ] Task 2: Fix Toggle Description Spacing (H4)
+- [x] Task 2: Fix Toggle Description Spacing (H4)
   <!-- files: ui/Toggle.tsx -->
-  - [ ] Add `mt-0.5` to description `<p>` to match FieldGroup spacing convention
+  - [x] Add `mt-0.5` to description `<p>` to match FieldGroup spacing convention
 
-- [ ] Task 3: Fix SiteRulesSection — Raw Checkbox & Missing Card Title (H1 + H7)
+- [x] Task 3: Fix SiteRulesSection — Raw Checkbox & Missing Card Title (H1 + H7)
   <!-- files: entrypoints/options/sections/SiteRulesSection.tsx -->
-  - [ ] Replace raw `<input type="checkbox">` for Smart Excludes with shared `Toggle` component
-  - [ ] Add `title` and `icon` props to GlobalExcludesCard `<Card>` element
+  - [x] Replace raw `<input type="checkbox">` for Smart Excludes with shared `Toggle` component
+  - [x] Add `title` and `icon` props to GlobalExcludesCard `<Card>` element
 
-- [ ] Task 4: Fix AdvancedSection — Raw Select (H2)
+- [x] Task 4: Fix AdvancedSection — Raw Select (H2)
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
-  - [ ] Replace raw `<select>` for Detection Mode with shared `Select` component
+  - [x] Replace raw `<select>` for Detection Mode with shared `Select` component
 
-- [ ] Task 5: Fix Statistics Card Variants (H5)
+- [x] Task 5: Fix Statistics Card Variants (H5)
   <!-- files: entrypoints/options/sections/StatisticsSection.tsx -->
-  - [ ] Change 4 summary stat cards from `variant="bordered"` to `variant="default"`
+  - [x] Change 4 summary stat cards from `variant="bordered"` to `variant="default"`
 
-- [ ] Task 6: Fix Sidebar Icon Duplication (H6)
+- [x] Task 6: Fix Sidebar Icon Duplication (H6)
   <!-- files: entrypoints/options/App.tsx -->
-  - [ ] Change Inline tab icon from `Zap` to `TextCursorInput`
-  - [ ] Add `TextCursorInput` to lucide-react imports
+  - [x] Change Inline tab icon from `Zap` to `TextCursorInput`
+  - [x] Add `TextCursorInput` to lucide-react imports
 
-- [ ] Task: Conductor - Phase Verification 'Component & High Priority Fixes' (Protocol in workflow.md)
+- [x] Task: Conductor - Phase Verification 'Component & High Priority Fixes' (Protocol in workflow.md)
 
 ## Phase 3: Medium Polish
 <!-- execution: parallel -->

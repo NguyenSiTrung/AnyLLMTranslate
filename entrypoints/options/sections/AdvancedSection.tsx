@@ -13,6 +13,7 @@ import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
 import { Modal } from '@/ui/Modal';
 import { Input } from '@/ui/Input';
+import { Select } from '@/ui/Select';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { useToast } from '@/ui/ToastProvider';
 
@@ -303,15 +304,15 @@ export function AdvancedSection() {
               {settings.enableLLMPageCategoryDetection && (
                 <div className="pl-6 border-l-2 border-zinc-800 ml-2 animate-fade-in">
                   <FieldGroup label="Detection Mode" htmlFor="llm-category-mode-select">
-                    <select
+                    <Select
                       id="llm-category-mode-select"
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-700"
                       value={settings.llmCategoryDetectionMode}
                       onChange={(e) => updateSettings({ llmCategoryDetectionMode: e.target.value as 'async' | 'blocking' })}
-                    >
-                      <option value="async">Async (No delay, progressive context upgrade)</option>
-                      <option value="blocking">Blocking (Wait for exact context before first translation)</option>
-                    </select>
+                      options={[
+                        { value: 'async', label: 'Async (No delay, progressive context upgrade)' },
+                        { value: 'blocking', label: 'Blocking (Wait for exact context before first translation)' },
+                      ]}
+                    />
                   </FieldGroup>
                 </div>
               )}

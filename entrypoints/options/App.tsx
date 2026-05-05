@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Settings, Zap, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Languages, Check, BarChart3,
+  Languages, Check, BarChart3, TextCursorInput,
 } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
@@ -57,7 +57,7 @@ const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { id: 'statistics', label: 'Statistics', icon: BarChart3 },
       { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-      { id: 'inline', label: 'Inline', icon: Zap },
+      { id: 'inline', label: 'Inline', icon: TextCursorInput },
       { id: 'advanced', label: 'Advanced', icon: Wrench },
     ],
   },

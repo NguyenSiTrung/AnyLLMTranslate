@@ -66,7 +66,7 @@ export function StatisticsSection() {
         {/* Summary cards */}
         <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
           <div className="grid grid-cols-2 gap-4">
-            <Card variant="bordered">
+            <Card variant="default">
               <div className="flex items-center gap-2 mb-2">
                 <Activity className="w-4 h-4 text-blue-400" />
                 <span className="text-xs text-zinc-400">Total Characters</span>
@@ -76,7 +76,7 @@ export function StatisticsSection() {
               </p>
             </Card>
 
-            <Card variant="bordered">
+            <Card variant="default">
               <div className="flex items-center gap-2 mb-2">
                 <RefreshCw className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs text-zinc-400">API Calls</span>
@@ -86,7 +86,7 @@ export function StatisticsSection() {
               </p>
             </Card>
 
-            <Card variant="bordered">
+            <Card variant="default">
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 className="w-4 h-4 text-amber-400" />
                 <span className="text-xs text-zinc-400">Pages Translated</span>
@@ -96,7 +96,7 @@ export function StatisticsSection() {
               </p>
             </Card>
 
-            <Card variant="bordered">
+            <Card variant="default">
               <div className="flex items-center gap-2 mb-2">
                 <Subtitles className="w-4 h-4 text-purple-400" />
                 <span className="text-xs text-zinc-400">Subtitle Cues</span>

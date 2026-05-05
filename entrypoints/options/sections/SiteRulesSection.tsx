@@ -11,9 +11,12 @@ import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
+import { Select } from '@/ui/Select';
 import { Badge } from '@/ui/Badge';
+import { Toggle } from '@/ui/Toggle';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { EmptyState } from '@/ui/EmptyState';
+import { Modal } from '@/ui/Modal';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { DOMAIN_CATEGORY_MAP } from '@/content/utils/pageContext';
 
@@ -23,6 +26,7 @@ export function SiteRulesSection() {
   const [searchFilter, setSearchFilter] = useState('');
   const [editingRule, setEditingRule] = useState<SiteRule | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const filteredRules = siteRules.filter((r) =>
     r.hostname.toLowerCase().includes(searchFilter.toLowerCase()),
@@ -57,6 +61,10 @@ export function SiteRulesSection() {
   const handleDeleteRule = useCallback((id: string) => {
     updateSettings({ siteRules: siteRules.filter((r) => r.id !== id) });
   }, [siteRules, updateSettings]);
+
+  const pendingDeleteHostname = pendingDeleteId
+    ? siteRules.find((r) => r.id === pendingDeleteId)?.hostname ?? ''
+    : '';
 
   return (
     <div className="animate-fade-in-up">
@@ -153,7 +161,7 @@ export function SiteRulesSection() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteRule(rule.id)}
+                          onClick={() => setPendingDeleteId(rule.id)}
                           aria-label="Delete rule"
                           className="hover:text-red-400"
                         >
@@ -178,6 +186,19 @@ export function SiteRulesSection() {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Modal (C3) */}
+      {pendingDeleteId && (
+        <Modal
+          title="Delete Site Rule?"
+          message={`Are you sure you want to delete the rule for "${pendingDeleteHostname}"? This cannot be undone.`}
+          variant="danger"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          onConfirm={() => { handleDeleteRule(pendingDeleteId); setPendingDeleteId(null); }}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -225,25 +246,19 @@ function GlobalExcludesCard() {
     : [];
 
   return (
-    <Card variant="bordered">
-      {/* Smart Excludes Toggle */}
+    <Card title="Global Excludes" icon={<Shield className="w-3.5 h-3.5" />} variant="bordered">
+      {/* Smart Excludes Toggle (H1: using shared Toggle component) */}
       <FieldGroup
         label="Smart Excludes"
         description="Automatically skip navigation, sidebars, table of contents, infoboxes, and other structural elements. Short content gets compact inline translation instead of block display."
       >
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enableSmartExcludes ?? true}
-              onChange={(e) => updateSettings({ enableSmartExcludes: e.target.checked })}
-              className="accent-blue-500 w-4 h-4"
-              id="smart-excludes-toggle"
-            />
-            <span className="text-sm text-zinc-300">
-              {enableSmartExcludes !== false ? 'Enabled' : 'Disabled'}
-            </span>
-          </label>
+          <Toggle
+            id="smart-excludes-toggle"
+            checked={enableSmartExcludes ?? true}
+            onChange={(checked) => updateSettings({ enableSmartExcludes: checked })}
+            label="Smart Excludes"
+          />
           {enableSmartExcludes !== false && (
             <button
               onClick={() => setShowSmartList(!showSmartList)}
@@ -421,27 +436,26 @@ function RuleEditForm({ rule, onSave, onCancel }: {
           Never translate
         </label>
       </div>
+      {/* C4: Replace raw <select> with shared Select component */}
       <FieldGroup
         label="Page Category"
         description="Override auto-detected category for this hostname."
+        htmlFor="rule-edit-category-select"
       >
-        <select
+        <Select
+          id="rule-edit-category-select"
           value={form.categoryValue}
           onChange={(e) => setForm({ ...form, categoryValue: e.target.value })}
-          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        >
-          {categoryOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+          options={categoryOptions}
+        />
+        {/* C4: Replace raw <input> with shared Input component for custom category */}
         {form.categoryValue === '__custom__' && (
-          <input
+          <Input
             type="text"
             placeholder="Enter custom category..."
             value={form.customCategory}
             onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
-            maxLength={50}
-            className="mt-2 w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="mt-2"
           />
         )}
         {suggestedCategory && form.categoryValue === '__none__' && (
