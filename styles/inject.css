@@ -32,6 +32,10 @@ html[data-anyllm-state="dual"] [data-anyllm-role="translation"] {
   display: block;
 }
 
+html[data-anyllm-state="dual"] tr[data-anyllm-role="translation"] {
+  display: table-row;
+}
+
 html[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
   display: none !important;
 }
@@ -44,6 +48,10 @@ html[data-anyllm-state="translation-only"] [data-anyllm-role="translation"] {
   color: inherit !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+html[data-anyllm-state="translation-only"] tr[data-anyllm-role="translation"] {
+  display: table-row;
 }
 
 html[data-anyllm-state="off"] [data-anyllm-role="translation"],
@@ -694,6 +702,11 @@ html[data-anyllm-state="translation-only"] .anyllm-inline-bilingual {
   color: inherit !important;
   font-size: inherit !important;
   margin-left: 0 !important;
+}
+
+html[data-anyllm-state="translation-only"] .anyllm-inline-translation-only-clone {
+  display: inline !important;
+  opacity: 1 !important;
 }
 
 /* Hide inline bilingual when off */

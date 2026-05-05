@@ -7,6 +7,7 @@
 import type { TranslationPiece } from '@/types/translation';
 import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
+import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
@@ -31,6 +32,7 @@ import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 
 let viewportObserver: ViewportObserver | null = null;
+let mutationWatcher: MutationWatcher | null = null;
 let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
 let activeRequests = 0;
@@ -40,6 +42,34 @@ let _keyboardShortcutsCleanup: (() => void) | null = null;
 let _inlineTranslateCleanup: (() => void) | null = null;
 let _storageChangeListener: ((changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void) | null = null;
 let categoryOverride: string | undefined;
+
+function selectorAppliesToElementOrAncestor(element: Element, selector: string): boolean {
+  if (!selector) return false;
+  try {
+    return element.matches(selector) || element.closest(selector) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function extractDynamicPieces(
+  element: Element,
+  includeSelectors: string[] | undefined,
+  excludeSelectors: string[],
+): TranslationPiece[] {
+  if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, selector))) {
+    return [];
+  }
+
+  const rootIsIncluded = includeSelectors?.some((selector) =>
+    selectorAppliesToElementOrAncestor(element, selector),
+  ) ?? false;
+
+  return extractPieces(element, {
+    includeSelectors: rootIsIncluded ? undefined : includeSelectors,
+    excludeSelectors,
+  });
+}
 
 /** Send translation request to background and apply results */
 async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
@@ -188,8 +218,6 @@ export async function startTranslation(): Promise<void> {
     excludeSelectors: effectiveExcludes,
   });
 
-  if (allPieces.length === 0) return;
-
   // Set page state based on displayMode setting
   setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
 
@@ -200,7 +228,26 @@ export async function startTranslation(): Promise<void> {
   );
 
   // Observe all pieces
-  viewportObserver.observeAll(allPieces);
+  if (allPieces.length > 0) {
+    viewportObserver.observeAll([...allPieces]);
+  }
+
+  if (mutationWatcher) {
+    mutationWatcher.stop();
+  }
+  mutationWatcher = new MutationWatcher((addedElements) => {
+    if (!viewportObserver || getPageState() === 'off') return;
+
+    const newPieces = addedElements.flatMap((element) =>
+      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes),
+    );
+    if (newPieces.length === 0) return;
+
+    allPieces.push(...newPieces);
+    viewportObserver.observeAll(newPieces);
+    sendStatusUpdate();
+  });
+  mutationWatcher.start(document.body);
 }
 
 /** Stop translation and restore the page */
@@ -214,6 +261,10 @@ export function stopTranslation(): void {
   if (viewportObserver) {
     viewportObserver.disconnect();
     viewportObserver = null;
+  }
+  if (mutationWatcher) {
+    mutationWatcher.stop();
+    mutationWatcher = null;
   }
   removeAllTranslations();
   removeAllSectionTranslations();

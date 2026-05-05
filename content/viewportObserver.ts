@@ -10,7 +10,7 @@ export type OnVisibleCallback = (pieces: TranslationPiece[]) => void;
 
 export class ViewportObserver {
   private observer: IntersectionObserver;
-  private pieceMap: Map<Element, TranslationPiece> = new Map();
+  private pieceMap: Map<Element, TranslationPiece[]> = new Map();
   private pendingPieces: TranslationPiece[] = [];
   private batchTimer: ReturnType<typeof setTimeout> | null = null;
   private onVisible: OnVisibleCallback;
@@ -24,9 +24,10 @@ export class ViewportObserver {
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            const piece = this.pieceMap.get(entry.target);
-            if (piece && !piece.isTranslated) {
-              this.pendingPieces.push(piece);
+            const pieces = this.pieceMap.get(entry.target);
+            if (pieces) {
+              const untranslated = pieces.filter((piece) => !piece.isTranslated);
+              this.pendingPieces.push(...untranslated);
               this.observer.unobserve(entry.target);
               this.pieceMap.delete(entry.target);
             }
@@ -46,7 +47,15 @@ export class ViewportObserver {
     if (piece.isTranslated) return;
 
     const target = piece.parentElement;
-    this.pieceMap.set(target, piece);
+    const existing = this.pieceMap.get(target);
+    if (existing) {
+      if (!existing.includes(piece)) {
+        existing.push(piece);
+      }
+      return;
+    }
+
+    this.pieceMap.set(target, [piece]);
     this.observer.observe(target);
   }
 

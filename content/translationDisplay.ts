@@ -7,6 +7,9 @@ import { DATA_ATTRS } from '@/lib/constants';
 import type { PageState } from '@/lib/constants';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
 
+const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
+const INLINE_CLONE_ATTR = 'data-anyllm-inline-clone-for';
+
 /** Apply theme attribute to document root */
 export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute('data-anyllm-theme', theme);
@@ -54,6 +57,147 @@ export function applyDarkMode(mode: DarkMode): void {
   // 'auto' mode relies on CSS @media (prefers-color-scheme: dark) — no class needed
 }
 
+function isAbovePosition(): boolean {
+  return document.documentElement.getAttribute('data-anyllm-position') === 'above';
+}
+
+function needsContainedTranslation(parentElement: Element): boolean {
+  return parentElement.tagName === 'LI' || parentElement.tagName === 'TD' || parentElement.tagName === 'TH';
+}
+
+function markOriginalElement(parentElement: Element): void {
+  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+  parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
+}
+
+function ensureOriginalWrapper(parentElement: Element): HTMLElement {
+  const existing = parentElement.querySelector(`:scope > [${ORIGINAL_WRAPPER_ATTR}]`);
+  if (existing instanceof HTMLElement) {
+    return existing;
+  }
+
+  const wrapper = document.createElement('span');
+  wrapper.setAttribute(ORIGINAL_WRAPPER_ATTR, '');
+  wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
+  wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
+
+  while (parentElement.firstChild) {
+    wrapper.appendChild(parentElement.firstChild);
+  }
+  parentElement.appendChild(wrapper);
+
+  return wrapper;
+}
+
+function insertIntoContainedElement(parentElement: Element, translationEl: HTMLElement): void {
+  const wrapper = ensureOriginalWrapper(parentElement);
+  if (isAbovePosition()) {
+    parentElement.insertBefore(translationEl, wrapper);
+  } else {
+    parentElement.appendChild(translationEl);
+  }
+}
+
+function insertAsTableRow(parentElement: Element, translationEl: HTMLElement): void {
+  const row = document.createElement('tr');
+  row.setAttribute(DATA_ATTRS.ROLE, 'translation');
+  const cell = document.createElement('td');
+  const columnCount = Math.max(1, parentElement.children.length);
+  cell.colSpan = columnCount;
+  cell.appendChild(translationEl);
+  row.appendChild(cell);
+
+  if (isAbovePosition()) {
+    parentElement.before(row);
+  } else {
+    insertAfterTranslationGroup(parentElement, row);
+  }
+}
+
+function isTranslationNode(node: Node | null): node is Element {
+  return node instanceof Element && node.getAttribute(DATA_ATTRS.ROLE) === 'translation';
+}
+
+function insertAfterTranslationGroup(parentElement: Element, translationEl: HTMLElement): void {
+  let anchor: Element = parentElement;
+  while (isTranslationNode(anchor.nextSibling)) {
+    anchor = anchor.nextSibling;
+  }
+  anchor.after(translationEl);
+}
+
+function insertTranslationElement(parentElement: Element, translationEl: HTMLElement): void {
+  if (needsContainedTranslation(parentElement)) {
+    insertIntoContainedElement(parentElement, translationEl);
+    return;
+  }
+
+  if (parentElement.tagName === 'TR') {
+    insertAsTableRow(parentElement, translationEl);
+    return;
+  }
+
+  markOriginalElement(parentElement);
+  if (isAbovePosition()) {
+    parentElement.before(translationEl);
+  } else {
+    insertAfterTranslationGroup(parentElement, translationEl);
+  }
+}
+
+function getInlineRenderTarget(parentElement: Element): Element {
+  if (needsContainedTranslation(parentElement)) {
+    return ensureOriginalWrapper(parentElement);
+  }
+
+  markOriginalElement(parentElement);
+  return parentElement;
+}
+
+function removeInlineTranslationOnlyClones(): void {
+  const clones = document.querySelectorAll(`[${INLINE_CLONE_ATTR}]`);
+  for (const clone of clones) {
+    clone.remove();
+  }
+}
+
+function getInlineTranslationText(inlineEl: Element): string {
+  const title = (inlineEl as HTMLElement).title.trim();
+  if (title) return title;
+  return (inlineEl.textContent ?? '').trim().replace(/^\((.*)\)$/, '$1');
+}
+
+function syncInlineTranslationOnlySiblings(): void {
+  removeInlineTranslationOnlyClones();
+
+  if (getPageState() !== 'translation-only') {
+    return;
+  }
+
+  const inlineTranslations = document.querySelectorAll(`.anyllm-inline-bilingual[${DATA_ATTRS.PIECE_ID}]`);
+  for (const inlineEl of inlineTranslations) {
+    if (inlineEl.classList.contains('anyllm-inline-bilingual-loading')) continue;
+    const pieceId = inlineEl.getAttribute(DATA_ATTRS.PIECE_ID);
+    const parent = inlineEl.parentElement;
+    if (!pieceId || !parent) continue;
+
+    const clone = document.createElement('span');
+    clone.setAttribute(INLINE_CLONE_ATTR, pieceId);
+    clone.setAttribute(DATA_ATTRS.ROLE, 'translation');
+    clone.className = 'anyllm-inline-bilingual anyllm-inline-translation-only-clone';
+    clone.textContent = getInlineTranslationText(inlineEl);
+    const lang = inlineEl.getAttribute('lang');
+    if (lang) clone.setAttribute('lang', lang);
+    clone.setAttribute('dir', 'auto');
+    const originalWrapper = inlineEl.closest(`[${ORIGINAL_WRAPPER_ATTR}]`);
+    if (originalWrapper?.parentElement && needsContainedTranslation(originalWrapper.parentElement)) {
+      originalWrapper.after(clone);
+    } else {
+      parent.after(clone);
+    }
+  }
+}
+
 /** Show a loading spinner placeholder below parentElement, in the same slot as the eventual translation.
  * Idempotent: calling twice for the same pieceId does nothing. */
 export function showLoadingPlaceholder(parentElement: Element, pieceId: string): void {
@@ -67,8 +211,9 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
     return;
   }
 
-  // Mark original element
-  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+  if (!needsContainedTranslation(parentElement)) {
+    markOriginalElement(parentElement);
+  }
 
   // Create placeholder (spinner)
   const placeholder = document.createElement('span');
@@ -76,7 +221,7 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
   placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   placeholder.className = 'anyllm-translate-translation anyllm-translate-loading';
 
-  parentElement.after(placeholder);
+  insertTranslationElement(parentElement, placeholder);
 }
 
 /** Apply a single translation relative to its original paragraph.
@@ -92,9 +237,9 @@ export function applyTranslation(
     return;
   }
 
-  // Mark original element
-  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
-  parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
+  if (!needsContainedTranslation(parentElement)) {
+    markOriginalElement(parentElement);
+  }
 
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
@@ -115,8 +260,9 @@ export function applyTranslation(
   translationEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   translationEl.className = 'anyllm-translate-translation';
   translationEl.textContent = translatedText;
+  translationEl.setAttribute('dir', 'auto');
 
-  parentElement.after(translationEl);
+  insertTranslationElement(parentElement, translationEl);
 }
 
 /** Show a compact inline loading indicator inside parentElement for short pieces.
@@ -125,13 +271,13 @@ export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: st
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
   if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) return;
 
-  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+  const renderTarget = getInlineRenderTarget(parentElement);
 
   const placeholder = document.createElement('span');
   placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   placeholder.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading';
 
-  parentElement.appendChild(placeholder);
+  renderTarget.appendChild(placeholder);
 }
 
 /** Format inline translation text — uses parentheses for most languages,
@@ -188,8 +334,7 @@ export function applyInlineTranslation(
 ): void {
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
 
-  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
-  parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
+  const renderTarget = getInlineRenderTarget(parentElement);
 
   const translationOnly = isTranslationOnlyMode();
   const displayText = formatInlineText(translatedText, translationOnly);
@@ -209,6 +354,7 @@ export function applyInlineTranslation(
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     (existing as HTMLElement).offsetHeight;
     (existing as HTMLElement).style.animation = '';
+    syncInlineTranslationOnlySiblings();
     return;
   }
 
@@ -223,7 +369,8 @@ export function applyInlineTranslation(
   if (targetLanguage) inlineEl.setAttribute('lang', targetLanguage);
   inlineEl.title = translatedText;
 
-  parentElement.appendChild(inlineEl);
+  renderTarget.appendChild(inlineEl);
+  syncInlineTranslationOnlySiblings();
 }
 
 /** Set error state on an inline translation element */
@@ -317,7 +464,7 @@ export function setErrorState(
     }, { once: true });
   }
 
-  parentElement.after(errorEl);
+  insertTranslationElement(parentElement, errorEl);
 }
 
 /** Clear error state from an element */
@@ -358,11 +505,23 @@ export function removeAllTranslations(): void {
     el.remove();
   }
 
+  removeInlineTranslationOnlyClones();
+
   // Clean up original markers
   const originals = document.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
   for (const original of originals) {
     original.removeAttribute(DATA_ATTRS.ROLE);
     original.removeAttribute(DATA_ATTRS.TRANSLATED);
+  }
+
+  const wrappers = document.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`);
+  for (const wrapper of wrappers) {
+    const parent = wrapper.parentElement;
+    if (!parent) continue;
+    while (wrapper.firstChild) {
+      parent.insertBefore(wrapper.firstChild, wrapper);
+    }
+    wrapper.remove();
   }
 
   // Clean up loading/error states on original elements (legacy data-anyllm-loading)
@@ -382,6 +541,7 @@ export function removeAllTranslations(): void {
 /** Set the page translation state */
 export function setPageState(state: PageState): void {
   document.documentElement.setAttribute(DATA_ATTRS.STATE, state);
+  syncInlineTranslationOnlySiblings();
 }
 
 /** Get the current page translation state */

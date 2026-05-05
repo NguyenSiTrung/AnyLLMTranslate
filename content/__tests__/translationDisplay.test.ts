@@ -9,6 +9,7 @@ import {
   applyDarkMode,
   showLoadingPlaceholder,
   applyTranslation,
+  applyInlineTranslation,
   setErrorState,
   clearErrorState,
   removeTranslation,
@@ -194,6 +195,57 @@ describe('translationDisplay', () => {
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
       expect(document.body.innerHTML).toBe(before);
     });
+
+    it('inserts translations inside list items to preserve valid list DOM', () => {
+      const list = document.createElement('ul');
+      const item = document.createElement('li');
+      item.textContent = 'First item';
+      list.appendChild(item);
+      document.body.appendChild(list);
+
+      applyTranslation(item, 'piece-1', 'Mục đầu tiên');
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(translation?.parentElement).toBe(item);
+      expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
+    });
+
+    it('inserts translations inside table cells to avoid invalid table children', () => {
+      document.body.innerHTML = '<table><tbody><tr><td>Cell text</td></tr></tbody></table>';
+      const cell = document.querySelector('td') as HTMLTableCellElement;
+
+      applyTranslation(cell, 'piece-1', 'Ô văn bản');
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(translation?.parentElement).toBe(cell);
+      expect(document.querySelector('tr')?.children).toHaveLength(1);
+    });
+
+    it('inserts translations before the original when position is above', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Hello world';
+      document.body.appendChild(parent);
+      document.documentElement.setAttribute('data-anyllm-position', 'above');
+
+      applyTranslation(parent, 'piece-1', 'Xin chào thế giới');
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(translation?.nextSibling).toBe(parent);
+    });
+
+    it('preserves split-piece translation order below the original', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Long paragraph';
+      document.body.appendChild(parent);
+
+      applyTranslation(parent, 'piece-1', 'First translation');
+      applyTranslation(parent, 'piece-2', 'Second translation');
+
+      const orderedPieceIds = Array.from(document.body.children)
+        .map((child) => child.getAttribute('data-anyllm-piece-id'))
+        .filter(Boolean);
+      expect(orderedPieceIds).toEqual(['piece-1', 'piece-2']);
+    });
   });
 
   describe('showLoadingPlaceholder', () => {
@@ -234,6 +286,65 @@ describe('translationDisplay', () => {
       showLoadingPlaceholder(document.body, 'piece-body');
       expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
+    });
+
+    it('inserts above-position placeholders before the original', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+      document.documentElement.setAttribute('data-anyllm-position', 'above');
+
+      showLoadingPlaceholder(parent, 'piece-1');
+
+      const placeholder = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(placeholder?.nextSibling).toBe(parent);
+    });
+  });
+
+  describe('applyInlineTranslation', () => {
+    it('creates a visible sibling clone when switching inline translations to translation-only mode', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Short text';
+      document.body.appendChild(parent);
+      setPageState('dual');
+      applyInlineTranslation(parent, 'piece-1', 'Văn bản ngắn', 'vi');
+
+      setPageState('translation-only');
+
+      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
+      expect(clone).not.toBeNull();
+      expect(clone?.textContent).toBe('Văn bản ngắn');
+      expect(clone?.getAttribute('data-anyllm-role')).toBe('translation');
+      expect(clone?.previousSibling).toBe(parent);
+    });
+
+    it('removes inline translation-only clones when switching back to bilingual mode', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Short text';
+      document.body.appendChild(parent);
+      setPageState('dual');
+      applyInlineTranslation(parent, 'piece-1', 'Văn bản ngắn', 'vi');
+
+      setPageState('translation-only');
+      setPageState('dual');
+
+      expect(document.querySelector('[data-anyllm-inline-clone-for="piece-1"]')).toBeNull();
+    });
+
+    it('keeps inline translation-only clones inside list items', () => {
+      const list = document.createElement('ul');
+      const item = document.createElement('li');
+      item.textContent = 'Short item';
+      list.appendChild(item);
+      document.body.appendChild(list);
+      setPageState('dual');
+      applyInlineTranslation(item, 'piece-1', 'Mục ngắn', 'vi');
+
+      setPageState('translation-only');
+
+      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
+      expect(clone?.parentElement).toBe(item);
+      expect(item.getAttribute('data-anyllm-role')).not.toBe('original');
+      expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
     });
   });
 
