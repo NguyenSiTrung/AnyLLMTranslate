@@ -55,61 +55,62 @@
 ## Phase 3: Medium Polish
 <!-- execution: parallel -->
 
-- [ ] Task 1: Sticky Header Opacity & Stagger Standardization (M1 + M7 + L5)
+- [x] Task 1: Sticky Header Opacity & Stagger Standardization (M1 + M7 + L5)
   <!-- files: entrypoints/options/sections/GeneralSection.tsx, entrypoints/options/sections/ProviderSection.tsx, entrypoints/options/sections/ThemesSection.tsx, entrypoints/options/sections/SiteRulesSection.tsx, entrypoints/options/sections/DictionarySection.tsx, entrypoints/options/sections/SubtitlesSection.tsx, entrypoints/options/sections/ShortcutsSection.tsx, entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/sections/StatisticsSection.tsx, entrypoints/options/sections/InlineTranslateSection.tsx -->
-  - [ ] Update sticky header `bg-[#09090b]/80` to `bg-[#09090b]/95` across all sections
-  - [ ] Standardize stagger delay to `Math.min(idx, 5)` (not `idx + 1`) across all sections
-  - [ ] Verify consistent stagger cap of 5 in all list renders
+  - [x] Update sticky header `bg-[#09090b]/80` to `bg-[#09090b]/95` across all sections
+  - [x] Standardize stagger delay to `Math.min(idx, 5)` (not `idx + 1`) across all sections
+  - [x] Verify consistent stagger cap of 5 in all list renders
 
-- [ ] Task 2: Theme Grid Responsive Breakpoint (M2)
+- [x] Task 2: Theme Grid Responsive Breakpoint (M2)
   <!-- files: entrypoints/options/sections/ThemesSection.tsx -->
-  - [ ] Add `lg:grid-cols-4` to theme grid for wide screens
-  - [ ] Keep existing `grid-cols-2 md:grid-cols-3`
+  - [x] Add `lg:grid-cols-4` to theme grid for wide screens
+  - [x] Keep existing `grid-cols-2 md:grid-cols-3`
 
-- [ ] Task 3: Dictionary Search Filter (M3)
+- [x] Task 3: Dictionary Search Filter (M3)
   <!-- files: entrypoints/options/sections/DictionarySection.tsx -->
-  - [ ] Add search input above glossary table
-  - [ ] Filter entries by source or target text (case-insensitive)
-  - [ ] Show "X of Y entries" count
+  - [x] Add search input above glossary table
+  - [x] Filter entries by source or target text (case-insensitive)
+  - [x] Show "X of Y entries" count
 
-- [ ] Task 4: Subtitle Disabled Controls State (M4)
+- [x] Task 4: Subtitle Disabled Controls State (M4)
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
-  - [ ] Wrap appearance/behavior controls in a container
-  - [ ] Apply `opacity-50 pointer-events-none` when subtitles are disabled
-  - [ ] Follow established parent-gates-children pattern from patterns.md
+  - [x] Wrap appearance/behavior controls in a container
+  - [x] Apply `opacity-50 pointer-events-none` when subtitles are disabled
+  - [x] Follow established parent-gates-children pattern from patterns.md
 
-- [ ] Task 5: Setup Wizard Progress Bar (M5)
+- [x] Task 5: Setup Wizard Progress Bar (M5)
   <!-- files: entrypoints/options/SetupWizard.tsx -->
-  - [ ] Add visual progress bar (5 step dots or segmented bar) below "Step X of 5" text
-  - [ ] Highlight completed and current steps
-  - [ ] Use CSS transitions for step changes
+  - [x] Add visual progress bar (5 step dots or segmented bar) below "Step X of 5" text
+  - [x] Highlight completed and current steps
+  - [x] Use CSS transitions for step changes
 
-- [ ] Task 6: Keyboard Focus Management on Tab Switch (M6)
+- [x] Task 6: Keyboard Focus Management on Tab Switch (M6)
   <!-- files: entrypoints/options/App.tsx -->
-  - [ ] On sidebar tab change, move focus to the `<main>` content area
-  - [ ] Add `tabIndex={-1}` to `<main>` for programmatic focus
-  - [ ] Use `useRef` + `.focus()` on tab switch
+  - [x] On sidebar tab change, move focus to the `<main>` content area
+  - [x] Add `tabIndex={-1}` to `<main>` for programmatic focus
+  - [x] Use `useRef` + `.focus()` on tab switch
 
-- [ ] Task: Conductor - Phase Verification 'Medium Polish' (Protocol in workflow.md)
+- [x] Task: Conductor - Phase Verification 'Medium Polish' (Protocol in workflow.md)
 
 ## Phase 4: Low Priority Refinements
 <!-- execution: parallel -->
 
-- [ ] Task 1: Fix Modal Focus Target (L1)
+- [x] Task 1: Fix Modal Focus Target (L1)
   <!-- files: ui/Modal.tsx -->
-  - [ ] For danger variant: focus Cancel button instead of Confirm
-  - [ ] Create `cancelRef` using `useRef`, add to Cancel `<Button>`
-  - [ ] Conditionally focus `cancelRef` for danger, `confirmRef` for info
+  - [x] For danger variant: focus Cancel button instead of Confirm
+  - [x] Create `cancelRef` using `useRef`, add to Cancel `<Button>`
+  - [x] Conditionally focus `cancelRef` for danger, `confirmRef` for info
 
-- [ ] Task 2: Dictionary Inline Edit — Save/Cancel (L2)
+- [x] Task 2: Dictionary Inline Edit — Save/Cancel (L2)
   <!-- files: entrypoints/options/sections/DictionarySection.tsx -->
-  - [ ] Replace onBlur auto-save with explicit Save/Cancel button pair
-  - [ ] Save commits edit, Cancel reverts to original value
-  - [ ] Enter key triggers Save, Escape triggers Cancel
+  - [x] Replace onBlur auto-save with explicit Save/Cancel button pair
+  - [x] Save commits edit, Cancel reverts to original value
+  - [x] Enter key triggers Save, Escape triggers Cancel
 
-- [ ] Task 3: Select Empty State (L3)
-  <!-- files: ui/Select.tsx -->
-  - [ ] Handle empty `options` array gracefully
-  - [ ] Show disabled state with "No options available" placeholder
+- [x] Task 3: Shortcuts Accessibility (L3)
+  <!-- files: entrypoints/options/sections/ShortcutsSection.tsx -->
+  - [x] Add aria-labels to kbd elements for screen readers
+  - [x] Add role="list" and role="listitem" for accessibility
 
-- [ ] Task: Conductor - Phase Verification 'Low Priority Refinements' (Protocol in workflow.md)
+- [x] Task: Conductor - Phase Verification 'Low Priority Refinements' (Protocol in workflow.md)
+

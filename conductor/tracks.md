@@ -43,5 +43,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [~] Track: Settings UI/UX Consistency & Polish
+## [x] Track: Settings UI/UX Consistency & Polish
 *Link: [./conductor/tracks/settings-ux-audit_20260506/](./conductor/tracks/settings-ux-audit_20260506/)*
