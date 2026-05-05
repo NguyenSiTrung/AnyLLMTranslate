@@ -1006,11 +1006,13 @@ export default function App() {
                 <>
                   <Square className="w-4.5 h-4.5 text-zinc-300 fill-zinc-300" />
                   <span className="font-semibold text-sm text-zinc-100 tracking-wide">Restore Original</span>
+                  <kbd className="ml-1 text-[10px] font-mono bg-zinc-800/60 text-zinc-400 px-1.5 py-0.5 rounded border border-zinc-700/50">Alt+X</kbd>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4.5 h-4.5 text-white" />
                   <span className="font-semibold text-sm text-white tracking-wide">Translate Page</span>
+                  <kbd className="ml-1 text-[10px] font-mono bg-white/15 text-white/70 px-1.5 py-0.5 rounded border border-white/20">Alt+A</kbd>
                 </>
               )}
             </div>

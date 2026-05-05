@@ -172,7 +172,7 @@ export default function App() {
           <div className="sidebar-header">
             <Languages className="sidebar-brand-icon" />
             <span className="sidebar-brand-name">AnyLLMTranslate</span>
-            <span className="sidebar-version">v1.0.0</span>
+            <span className="sidebar-version">v{chrome.runtime.getManifest().version}</span>
           </div>
 
           {/* Grouped tab list */}
