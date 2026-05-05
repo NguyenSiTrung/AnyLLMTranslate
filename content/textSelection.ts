@@ -16,6 +16,7 @@ const TOOLTIP_CLASS = 'anyllm-selection-tooltip';
 let isEnabled = true;
 let currentTooltip: HTMLElement | null = null;
 let currentButton: HTMLElement | null = null;
+let suppressNextMouseUp = false;
 
 /** Build an SVG icon using createElementNS */
 function createSvgIcon(width: number, height: number, paths: string[]): SVGSVGElement {
@@ -189,11 +190,16 @@ function createTooltip(
 
   tooltip.appendChild(contentDiv);
 
-  // Position near selection (above or below)
-  const posY = y - 40 - 80 > 0 ? y - 40 - 80 : y + 20;
+  // Position near the visible selection. x/y are document coordinates because
+  // the tooltip is absolutely positioned in document space; viewport values are
+  // only used to decide whether there is enough visible room above.
+  const viewportX = x - window.scrollX;
+  const viewportY = y - window.scrollY;
+  const posX = Math.max(10, Math.min(viewportX - 100, window.innerWidth - 320)) + window.scrollX;
+  const posY = (viewportY - 40 - 80 > 0 ? viewportY - 40 - 80 : viewportY + 20) + window.scrollY;
 
-  tooltip.style.left = `${Math.max(10, Math.min(x - 100, window.innerWidth - 320))}px`;
-  tooltip.style.top = `${posY + window.scrollY}px`;
+  tooltip.style.left = `${posX}px`;
+  tooltip.style.top = `${posY}px`;
 
   document.body.appendChild(tooltip);
   currentTooltip = tooltip;
@@ -236,6 +242,10 @@ function removeTooltip(): void {
 /** Handle mouseup event for text selection */
 async function onMouseUp(event: MouseEvent): Promise<void> {
   if (!isEnabled) return;
+  if (suppressNextMouseUp) {
+    suppressNextMouseUp = false;
+    return;
+  }
 
   // Ignore clicks on our own UI elements
   const target = event.target as HTMLElement;
@@ -265,10 +275,15 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
 
   // Show translate button
   const btn = createTranslateButton(x, y);
+  let hasStartedTranslation = false;
 
-  btn.addEventListener('click', async (e) => {
+  const startTranslation = async (e: MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+
+    if (hasStartedTranslation) return;
+    hasStartedTranslation = true;
+    suppressNextMouseUp = true;
 
     // Remove button and show loading tooltip
     removeTranslateButton();
@@ -293,7 +308,10 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
       const errorMsg = error instanceof Error ? error.message : 'Translation failed';
       updateTooltipContent(`⚠ ${errorMsg}`);
     }
-  });
+  };
+
+  btn.addEventListener('mousedown', startTranslation);
+  btn.addEventListener('click', startTranslation);
 }
 
 /** Handle keydown for Escape to dismiss tooltip */
@@ -327,6 +345,7 @@ export function initTextSelection(): () => void {
     document.removeEventListener('mouseup', onMouseUp);
     document.removeEventListener('keydown', onKeyDown);
     document.removeEventListener('mousedown', onClickOutside);
+    suppressNextMouseUp = false;
     removeTooltip();
     removeTranslateButton();
   };
@@ -336,6 +355,7 @@ export function initTextSelection(): () => void {
 export function setTextSelectionEnabled(enabled: boolean): void {
   isEnabled = enabled;
   if (!enabled) {
+    suppressNextMouseUp = false;
     removeTooltip();
     removeTranslateButton();
   }

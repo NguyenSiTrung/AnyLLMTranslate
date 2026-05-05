@@ -4,6 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { loadSettings } from '@/lib/config';
+import { DEFAULT_SETTINGS } from '@/types/config';
 import {
   initTextSelection,
   setTextSelectionEnabled,
@@ -30,6 +32,13 @@ describe('content/textSelection', () => {
     document.body.innerHTML = '<p>Hello world paragraph for testing</p>';
     cleanup = null;
     setTextSelectionEnabled(true);
+    vi.mocked(loadSettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      sourceLanguage: 'auto',
+      targetLanguage: 'vi',
+      textSelectionEnabled: true,
+    });
+    vi.mocked(chrome.runtime.sendMessage).mockReset();
   });
 
   afterEach(() => {
@@ -203,6 +212,175 @@ describe('content/textSelection', () => {
       const btn = document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`);
       expect(btn?.getAttribute('role')).toBe('button');
       expect(btn?.getAttribute('aria-label')).toBe('Translate selection');
+    });
+
+    it('starts translating on mousedown so a canceled click is not a no-op', async () => {
+      cleanup = initTextSelection();
+
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+        success: true,
+        translatedText: 'Xin chào',
+      });
+
+      const mockRange = {
+        getBoundingClientRect: () => ({
+          top: 100, left: 100, width: 50, height: 20,
+          bottom: 120, right: 150, x: 100, y: 100,
+          toJSON: () => ({}),
+        }),
+      };
+
+      vi.spyOn(window, 'getSelection').mockReturnValue({
+        toString: () => 'Hello world',
+        rangeCount: 1,
+        getRangeAt: () => mockRange,
+      } as unknown as Selection);
+
+      const para = document.querySelector('p') as HTMLElement;
+      para.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: 125,
+        clientY: 110,
+        bubbles: true,
+      }));
+
+      const btn = await vi.waitFor(() => {
+        const el = document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`) as HTMLElement | null;
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+
+      btn.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: 125,
+        clientY: 80,
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      await vi.waitFor(() => {
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
+          action: 'translateSelection',
+          text: 'Hello world',
+          sourceLanguage: 'auto',
+          targetLanguage: 'vi',
+        });
+      });
+
+      expect(document.querySelector(`.${TOOLTIP_CLASS}`)).not.toBeNull();
+    });
+
+    it('does not recreate the translate button on mouseup after starting translation', async () => {
+      cleanup = initTextSelection();
+
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+        success: true,
+        translatedText: 'Xin chào',
+      });
+
+      const mockRange = {
+        getBoundingClientRect: () => ({
+          top: 100, left: 100, width: 50, height: 20,
+          bottom: 120, right: 150, x: 100, y: 100,
+          toJSON: () => ({}),
+        }),
+      };
+
+      vi.spyOn(window, 'getSelection').mockReturnValue({
+        toString: () => 'Hello world',
+        rangeCount: 1,
+        getRangeAt: () => mockRange,
+      } as unknown as Selection);
+
+      const para = document.querySelector('p') as HTMLElement;
+      para.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: 125,
+        clientY: 110,
+        bubbles: true,
+      }));
+
+      const btn = await vi.waitFor(() => {
+        const el = document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`) as HTMLElement | null;
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+
+      btn.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: 125,
+        clientY: 80,
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      para.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: 125,
+        clientY: 80,
+        bubbles: true,
+      }));
+
+      await vi.waitFor(() => {
+        expect(document.querySelector(`.${TOOLTIP_CLASS}`)).not.toBeNull();
+      });
+
+      expect(document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`)).toBeNull();
+    });
+
+    it('positions the tooltip near the visible selection when the page is scrolled', async () => {
+      cleanup = initTextSelection();
+
+      Object.defineProperty(window, 'scrollY', {
+        value: 1000,
+        configurable: true,
+      });
+      Object.defineProperty(window, 'innerHeight', {
+        value: 800,
+        configurable: true,
+      });
+
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+        success: true,
+        translatedText: 'Xin chào',
+      });
+
+      const mockRange = {
+        getBoundingClientRect: () => ({
+          top: 50, left: 100, width: 50, height: 20,
+          bottom: 70, right: 150, x: 100, y: 50,
+          toJSON: () => ({}),
+        }),
+      };
+
+      vi.spyOn(window, 'getSelection').mockReturnValue({
+        toString: () => 'Hello world',
+        rangeCount: 1,
+        getRangeAt: () => mockRange,
+      } as unknown as Selection);
+
+      const para = document.querySelector('p') as HTMLElement;
+      para.dispatchEvent(new MouseEvent('mouseup', {
+        clientX: 125,
+        clientY: 60,
+        bubbles: true,
+      }));
+
+      const btn = await vi.waitFor(() => {
+        const el = document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`) as HTMLElement | null;
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+
+      btn.dispatchEvent(new MouseEvent('mousedown', {
+        clientX: 125,
+        clientY: 20,
+        bubbles: true,
+        cancelable: true,
+      }));
+
+      const tooltip = await vi.waitFor(() => {
+        const el = document.querySelector(`.${TOOLTIP_CLASS}`) as HTMLElement | null;
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+
+      expect(tooltip.style.top).toBe('1070px');
     });
   });
 
