@@ -119,6 +119,155 @@ export function applyTranslation(
   parentElement.after(translationEl);
 }
 
+/** Show a compact inline loading indicator inside parentElement for short pieces.
+ *  Idempotent: calling twice for the same pieceId does nothing. */
+export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: string): void {
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
+  if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) return;
+
+  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+
+  const placeholder = document.createElement('span');
+  placeholder.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
+  placeholder.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading';
+
+  parentElement.appendChild(placeholder);
+}
+
+/** Format inline translation text — uses parentheses for most languages,
+ *  and appropriate brackets for CJK scripts. */
+function formatInlineText(translatedText: string, isTranslationOnly: boolean): string {
+  if (isTranslationOnly) {
+    // In translation-only mode, show just the translation (no brackets)
+    return translatedText;
+  }
+  return ` (${translatedText})`;
+}
+
+/** Check if current page state is translation-only */
+function isTranslationOnlyMode(): boolean {
+  return document.documentElement.getAttribute(DATA_ATTRS.STATE) === 'translation-only';
+}
+
+/** Detect if an element lives inside a width-constrained multi-column layout.
+ *  Walks up the DOM checking computed display for flex, grid, or table-cell.
+ *  This catches CSS-class-based layouts that attribute selectors miss. */
+function isConstrainedContainer(el: Element): boolean {
+  // Direct table cell check (fastest path)
+  if (el.tagName === 'TD' || el.tagName === 'TH') return true;
+  if (el.closest('table')) return true;
+
+  // Walk ancestors checking computed display
+  let parent = el.parentElement;
+  let depth = 0;
+  while (parent && parent !== document.body && depth < 8) {
+    const display = getComputedStyle(parent).display;
+    if (
+      display === 'flex' || display === 'inline-flex' ||
+      display === 'grid' || display === 'inline-grid' ||
+      display === 'table-cell' || display === 'table-row' ||
+      display === 'table'
+    ) {
+      return true;
+    }
+    parent = parent.parentElement;
+    depth++;
+  }
+  return false;
+}
+
+/** Apply a translation inline (parenthetical) for short content pieces.
+ *  Renders as " (translation)" inside the parent element, not as a block below.
+ *  Detects constrained containers (flex/grid/table) and uses block layout to prevent overlap.
+ *  @param targetLanguage — ISO code for `lang` attribute (accessibility) */
+export function applyInlineTranslation(
+  parentElement: Element,
+  pieceId: string,
+  translatedText: string,
+  targetLanguage?: string,
+): void {
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
+
+  parentElement.setAttribute(DATA_ATTRS.ROLE, 'original');
+  parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
+
+  const translationOnly = isTranslationOnlyMode();
+  const displayText = formatInlineText(translatedText, translationOnly);
+  const constrained = isConstrainedContainer(parentElement);
+
+  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  if (existing) {
+    // Update inline placeholder in-place
+    existing.classList.remove('anyllm-inline-bilingual-loading');
+    if (constrained) existing.classList.add('anyllm-inline-constrained');
+    existing.textContent = displayText;
+    // Accessibility: set lang for screen readers and title for hover tooltip
+    if (targetLanguage) existing.setAttribute('lang', targetLanguage);
+    (existing as HTMLElement).title = translatedText;
+    // Re-trigger animation
+    (existing as HTMLElement).style.animation = 'none';
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    (existing as HTMLElement).offsetHeight;
+    (existing as HTMLElement).style.animation = '';
+    return;
+  }
+
+  // No placeholder — create inline translation element
+  const inlineEl = document.createElement('span');
+  inlineEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
+  inlineEl.className = constrained
+    ? 'anyllm-inline-bilingual anyllm-inline-constrained'
+    : 'anyllm-inline-bilingual';
+  inlineEl.textContent = displayText;
+  // Accessibility: lang attribute for correct pronunciation, title for hover
+  if (targetLanguage) inlineEl.setAttribute('lang', targetLanguage);
+  inlineEl.title = translatedText;
+
+  parentElement.appendChild(inlineEl);
+}
+
+/** Set error state on an inline translation element */
+export function setInlineErrorState(
+  parentElement: Element,
+  pieceId: string,
+  errorMessage: string,
+  onRetry?: () => void,
+): void {
+  if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
+
+  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  if (existing) {
+    existing.classList.remove('anyllm-inline-bilingual-loading');
+    existing.classList.add('anyllm-inline-bilingual-error');
+    existing.textContent = ' (⚠ error)';
+    (existing as HTMLElement).title = `Translation failed: ${errorMessage}. Click to retry.`;
+
+    if (onRetry) {
+      existing.addEventListener('click', () => {
+        existing.remove();
+        onRetry();
+      }, { once: true });
+    }
+    return;
+  }
+
+  // Fallback — create error element
+  const errorEl = document.createElement('span');
+  errorEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
+  errorEl.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-error';
+  errorEl.textContent = ' (⚠ error)';
+  errorEl.title = `Translation failed: ${errorMessage}. Click to retry.`;
+
+  if (onRetry) {
+    errorEl.addEventListener('click', () => {
+      errorEl.remove();
+      onRetry();
+    }, { once: true });
+  }
+
+  parentElement.appendChild(errorEl);
+}
+
 
 
 /** Set error state — updates the placeholder element in-place if it exists. */
@@ -197,9 +346,15 @@ export function removeTranslation(pieceId: string): void {
 
 /** Remove all translations from the page */
 export function removeAllTranslations(): void {
-  // Remove all translation elements
+  // Remove all translation elements (block-level)
   const translations = document.querySelectorAll(`[${DATA_ATTRS.ROLE}="translation"]`);
   for (const el of translations) {
+    el.remove();
+  }
+
+  // Remove all inline bilingual elements (parenthetical style)
+  const inlineBilinguals = document.querySelectorAll('.anyllm-inline-bilingual');
+  for (const el of inlineBilinguals) {
     el.remove();
   }
 

@@ -184,8 +184,10 @@ export function SiteRulesSection() {
 
 function GlobalExcludesCard() {
   const globalExcludeSelectors = useSettingsStore((s) => s.globalExcludeSelectors);
+  const enableSmartExcludes = useSettingsStore((s) => s.enableSmartExcludes);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [inputValue, setInputValue] = useState('');
+  const [showSmartList, setShowSmartList] = useState(false);
 
   const handleAddSelector = () => {
     const trimmed = inputValue.trim();
@@ -214,61 +216,112 @@ function GlobalExcludesCard() {
     globalExcludeSelectors.length === CRITICAL_GLOBAL_EXCLUDES.length &&
     CRITICAL_GLOBAL_EXCLUDES.every((s) => globalExcludeSelectors.includes(s));
 
+  // Import SMART_EXCLUDE_SELECTORS for display
+  const smartSelectors = enableSmartExcludes
+    ? ['nav', '[role="navigation"]', '.toc', '#toc', '[role="directory"]',
+       '.navbox', '.catlinks', '.reflist', '.breadcrumb', '.breadcrumbs',
+       '.sidebar', '[role="complementary"]', '.pagination',
+       '.infobox', '.infobox_v2', '[aria-label="breadcrumb"]', '.table-of-contents']
+    : [];
+
   return (
     <Card variant="bordered">
+      {/* Smart Excludes Toggle */}
       <FieldGroup
-        label="Global Exclude Selectors"
-        description="These CSS selectors are excluded from translation on all sites. Per-site rules add to these defaults."
+        label="Smart Excludes"
+        description="Automatically skip navigation, sidebars, table of contents, infoboxes, and other structural elements. Short content gets compact inline translation instead of block display."
       >
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {globalExcludeSelectors.map((selector) => (
-            <span
-              key={selector}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300"
-            >
-              {selector}
-              <button
-                onClick={() => handleRemoveSelector(selector)}
-                className="ml-0.5 text-zinc-500 hover:text-red-400 transition-colors"
-                aria-label={`Remove ${selector}`}
-              >
-                ×
-              </button>
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableSmartExcludes ?? true}
+              onChange={(e) => updateSettings({ enableSmartExcludes: e.target.checked })}
+              className="accent-blue-500 w-4 h-4"
+              id="smart-excludes-toggle"
+            />
+            <span className="text-sm text-zinc-300">
+              {enableSmartExcludes !== false ? 'Enabled' : 'Disabled'}
             </span>
-          ))}
-          {globalExcludeSelectors.length === 0 && (
-            <span className="text-xs text-zinc-500 italic">No global excludes — all elements will be translated.</span>
+          </label>
+          {enableSmartExcludes !== false && (
+            <button
+              onClick={() => setShowSmartList(!showSmartList)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              {showSmartList ? 'Hide list' : `${smartSelectors.length} selectors`}
+            </button>
           )}
         </div>
-        <div className="flex gap-2">
-          <Input
-            id="global-exclude-input"
-            type="text"
-            placeholder="Add selector (e.g. .code-block)"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="font-mono flex-1"
-          />
-          <Button
-            id="add-global-exclude-btn"
-            variant="ghost"
-            size="sm"
-            onClick={handleAddSelector}
-            disabled={!inputValue.trim()}
-          >
-            Add
-          </Button>
-        </div>
-        {!isDefault && (
-          <button
-            onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
-            className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            Reset to defaults
-          </button>
+        {showSmartList && enableSmartExcludes !== false && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {smartSelectors.map((sel) => (
+              <span
+                key={sel}
+                className="px-1.5 py-0.5 rounded bg-zinc-800/50 border border-zinc-700/50 text-[11px] font-mono text-zinc-400"
+              >
+                {sel}
+              </span>
+            ))}
+          </div>
         )}
       </FieldGroup>
+
+      <div className="border-t border-zinc-800 mt-4 pt-4">
+        <FieldGroup
+          label="Global Exclude Selectors"
+          description="These CSS selectors are excluded from translation on all sites. Per-site rules add to these defaults."
+        >
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {globalExcludeSelectors.map((selector) => (
+              <span
+                key={selector}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300"
+              >
+                {selector}
+                <button
+                  onClick={() => handleRemoveSelector(selector)}
+                  className="ml-0.5 text-zinc-500 hover:text-red-400 transition-colors"
+                  aria-label={`Remove ${selector}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {globalExcludeSelectors.length === 0 && (
+              <span className="text-xs text-zinc-500 italic">No global excludes — all elements will be translated.</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              id="global-exclude-input"
+              type="text"
+              placeholder="Add selector (e.g. .code-block)"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="font-mono flex-1"
+            />
+            <Button
+              id="add-global-exclude-btn"
+              variant="ghost"
+              size="sm"
+              onClick={handleAddSelector}
+              disabled={!inputValue.trim()}
+            >
+              Add
+            </Button>
+          </div>
+          {!isDefault && (
+            <button
+              onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
+              className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Reset to defaults
+            </button>
+          )}
+        </FieldGroup>
+      </div>
     </Card>
   );
 }

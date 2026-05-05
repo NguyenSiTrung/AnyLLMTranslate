@@ -59,6 +59,7 @@ export function AdvancedSection() {
       hoverTranslateEnabled: settings.hoverTranslateEnabled,
       hoverDelay: settings.hoverDelay,
       inlineTranslate: settings.inlineTranslate,
+      enableSmartExcludes: settings.enableSmartExcludes,
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });

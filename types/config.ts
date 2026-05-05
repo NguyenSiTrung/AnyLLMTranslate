@@ -205,6 +205,8 @@ export interface ExtensionSettings {
   enableLLMPageCategoryDetection: boolean;
   /** Mode for LLM category detection */
   llmCategoryDetectionMode: 'async' | 'blocking';
+  /** Enable smart excludes — automatically skip structural/navigation elements from translation */
+  enableSmartExcludes: boolean;
 }
 
 /** Provider preset definitions */
@@ -268,6 +270,27 @@ export const CRITICAL_GLOBAL_EXCLUDES = [
   'style'
 ];
 
+/** Smart exclude selectors — structural/navigation elements excluded when enableSmartExcludes is on.
+ *  These prevent translating non-content chrome (navbars, TOC, footers, breadcrumbs, sidebars). */
+export const SMART_EXCLUDE_SELECTORS = [
+  // Navigation chrome
+  'nav', '[role="navigation"]',
+  // Table of contents
+  '.toc', '#toc', '[role="directory"]',
+  // Footers / metadata / references
+  '.navbox', '.catlinks', '.reflist',
+  '.breadcrumb', '.breadcrumbs',
+  // Sidebars
+  '.sidebar', '[role="complementary"]',
+  // Pagination
+  '.pagination',
+  // Infoboxes (data tables, not prose)
+  '.infobox', '.infobox_v2',
+  // Common UI patterns
+  '[aria-label="breadcrumb"]',
+  '.table-of-contents',
+];
+
 /** Default settings */
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   provider: {
@@ -306,6 +329,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableContextAwareTranslation: true,
   enableLLMPageCategoryDetection: false,
   llmCategoryDetectionMode: 'async',
+  enableSmartExcludes: true,
 };
 
 /** All available provider presets */

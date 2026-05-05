@@ -599,6 +599,109 @@ html.anyllm-dark [data-anyllm-theme="custom"] .anyllm-translate-translation {
   margin-left: 2%;
 }
 
+/* ===== Inline Bilingual — Parenthetical Style for Short Content ===== */
+
+/* Inline bilingual: appears as " (translation)" inside the parent element.
+   Uses a warm accent color (not pale gray) because color is the ONLY visual
+   differentiator for inline translations — no borders, backgrounds, or spacing.
+   Uses inline-block + max-width + ellipsis to prevent column overflow. */
+.anyllm-inline-bilingual {
+  display: inline;
+  color: #4b7399;
+  font-size: 0.9em;
+  font-weight: normal;
+  font-style: normal;
+  margin-left: 0.3em;
+  vertical-align: baseline;
+  opacity: 0;
+  animation: anyllmFadeIn 0.3s ease-out forwards;
+  transition: color 0.3s ease, opacity 0.3s ease;
+  /* Prevent inline translation from breaking layout */
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+@media (prefers-color-scheme: dark) {
+  .anyllm-inline-bilingual {
+    color: #7db4d8;
+  }
+}
+
+html.anyllm-dark .anyllm-inline-bilingual {
+  color: #7db4d8;
+}
+
+/* --- Constrained container mode (JS-detected via getComputedStyle) ---
+   Applied to inline translations inside flex, grid, or table layouts.
+   Renders as a compact block line below the original text to prevent
+   horizontal overflow into adjacent columns. Ellipsis + hover title
+   for long translations. */
+.anyllm-inline-bilingual.anyllm-inline-constrained {
+  display: block;
+  margin-left: 0;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Inline loading: compact dot spinner --- */
+.anyllm-inline-bilingual-loading {
+  display: inline-block;
+  min-width: 1em;
+  vertical-align: baseline;
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+.anyllm-inline-bilingual-loading::before {
+  content: '';
+  display: inline-block;
+  width: 0.65em;
+  height: 0.65em;
+  border: 1.5px solid transparent;
+  border-top-color: var(--anyllm-accent, #3b82f6);
+  border-right-color: var(--anyllm-accent, #3b82f6);
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: anyllmSpinnerRotate 0.7s linear infinite;
+  margin-left: 0.3em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anyllm-inline-bilingual-loading::before {
+    animation: none;
+    border-color: var(--anyllm-accent, #3b82f6);
+    opacity: 0.5;
+  }
+}
+
+/* --- Inline error state (Fix #7) --- */
+.anyllm-inline-bilingual-error {
+  color: #ef4444 !important;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.anyllm-inline-bilingual-error:hover {
+  opacity: 1;
+}
+
+/* --- Translation-only mode (Fix #3) ---
+   In translation-only mode, inline translations should REPLACE the original text visually.
+   We remove parentheses via CSS and show only the translation text prominently. */
+html[data-anyllm-state="translation-only"] .anyllm-inline-bilingual {
+  color: inherit !important;
+  font-size: inherit !important;
+  margin-left: 0 !important;
+}
+
+/* Hide inline bilingual when off */
+html[data-anyllm-state="off"] .anyllm-inline-bilingual,
+html:not([data-anyllm-state]) .anyllm-inline-bilingual {
+  display: none !important;
+}
+
 /* ===== Inline Translate — Pulsing Border ===== */
 
 .anyllm-inline-translating {

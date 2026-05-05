@@ -32,6 +32,10 @@ export const INLINE_ELEMENTS = new Set([
 /** Maximum characters per translation piece before splitting */
 export const MAX_PIECE_CHARS = 1000;
 
+/** Pieces at or below this character count use compact inline display (parenthetical)
+ *  instead of block-level themed display — prevents space explosion on short content */
+export const SHORT_PIECE_THRESHOLD = 80;
+
 /** IntersectionObserver root margin for pre-loading */
 export const VIEWPORT_MARGIN = '200px';
 

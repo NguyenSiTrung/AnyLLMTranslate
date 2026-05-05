@@ -141,5 +141,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableContextAwareTranslation: state.enableContextAwareTranslation,
     enableLLMPageCategoryDetection: state.enableLLMPageCategoryDetection,
     llmCategoryDetectionMode: state.llmCategoryDetectionMode,
+    enableSmartExcludes: state.enableSmartExcludes,
   };
 }

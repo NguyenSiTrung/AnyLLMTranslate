@@ -8,7 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
-import { applyTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, setErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
+import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
 import { startCoordinator } from '@/content/subtitleCoordinator';
@@ -20,6 +20,7 @@ import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
+import { SHORT_PIECE_THRESHOLD } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
@@ -45,8 +46,13 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   if (pieces.length === 0) return;
 
   // Show spinner placeholder for each piece immediately (before async call)
+  // Short pieces get compact inline spinner, long pieces get block spinner
   for (const piece of pieces) {
-    showLoadingPlaceholder(piece.parentElement, piece.id);
+    if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+      showInlineLoadingPlaceholder(piece.parentElement, piece.id);
+    } else {
+      showLoadingPlaceholder(piece.parentElement, piece.id);
+    }
   }
 
   const settings = await loadSettings();
@@ -93,19 +99,32 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
         if (piece) {
           piece.isTranslated = true;
           piece.translatedText = result.translatedText;
-          applyTranslation(piece.parentElement, piece.id, result.translatedText);
+          // Short pieces → inline parenthetical, long pieces → block themed display
+          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+            applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage);
+          } else {
+            applyTranslation(piece.parentElement, piece.id, result.translatedText);
+          }
         }
       }
     } else if (!response.success && response.error) {
       // Batch-level failure: mark all pieces as error
       for (const piece of pieces) {
-        setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+        if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+          setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+        } else {
+          setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+        }
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
-      setErrorState(piece.parentElement, piece.id, message);
+      if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+        setInlineErrorState(piece.parentElement, piece.id, message);
+      } else {
+        setErrorState(piece.parentElement, piece.id, message);
+      }
     }
   } finally {
     activeRequests = Math.max(0, activeRequests - 1);
@@ -151,8 +170,17 @@ export async function startTranslation(): Promise<void> {
   // Extract translatable pieces from the DOM, respecting site rules + global excludes
   const hostname = window.location.hostname;
   const matchingRule = findEffectiveRule(hostname, settings.siteRules);
+
+  // Merge smart excludes (structural elements) when enabled
+  let baseExcludes = settings.globalExcludeSelectors ?? [];
+  if (settings.enableSmartExcludes) {
+    const { SMART_EXCLUDE_SELECTORS } = await import('@/types/config');
+    const smartSet = new Set([...baseExcludes, ...SMART_EXCLUDE_SELECTORS]);
+    baseExcludes = Array.from(smartSet);
+  }
+
   const effectiveExcludes = mergeExcludeSelectors(
-    settings.globalExcludeSelectors ?? [],
+    baseExcludes,
     matchingRule?.excludeSelectors,
   );
   allPieces = extractPieces(document.body, {
