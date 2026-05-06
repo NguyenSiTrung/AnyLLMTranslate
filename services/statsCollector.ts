@@ -1,6 +1,6 @@
 import { DEFAULT_STATS, type TranslationStats } from '@/types/stats';
 
-const STORAGE_KEY = 'anyllm-translate-stats';
+export const STATS_STORAGE_KEY = 'anyllm-translate-stats';
 
 /** Promise chain to serialize all stats storage updates and prevent race conditions. */
 let updateChain: Promise<unknown> = Promise.resolve();
@@ -14,12 +14,14 @@ function chainUpdate<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 export async function getStats(): Promise<TranslationStats> {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  return result[STORAGE_KEY] ?? { ...DEFAULT_STATS };
+  const result = await chrome.storage.local.get(STATS_STORAGE_KEY);
+  return result[STATS_STORAGE_KEY] ?? { ...DEFAULT_STATS };
 }
 
 export async function resetStats(): Promise<void> {
-  await chrome.storage.local.remove(STORAGE_KEY);
+  return chainUpdate(async () => {
+    await chrome.storage.local.remove(STATS_STORAGE_KEY);
+  });
 }
 
 export async function incrementStats(
@@ -39,7 +41,7 @@ export async function incrementStats(
       totalSubtitlesCuesTranslated:
         current.totalSubtitlesCuesTranslated + (partial.totalSubtitlesCuesTranslated ?? 0),
     };
-    await chrome.storage.local.set({ [STORAGE_KEY]: updated });
+    await chrome.storage.local.set({ [STATS_STORAGE_KEY]: updated });
   });
 }
 
@@ -69,7 +71,7 @@ export async function recordDailyStats(
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     const pruned = daily.filter((d) => d.date >= cutoffStr);
     await chrome.storage.local.set({
-      [STORAGE_KEY]: { ...current, dailyStats: pruned },
+      [STATS_STORAGE_KEY]: { ...current, dailyStats: pruned },
     });
   });
 }

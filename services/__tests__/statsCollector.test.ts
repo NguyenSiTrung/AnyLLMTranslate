@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getStats, incrementStats, recordDailyStats, resetStats } from '@/services/statsCollector';
+import { getStats, incrementStats, recordDailyStats, resetStats, STATS_STORAGE_KEY } from '@/services/statsCollector';
 import { DEFAULT_STATS } from '@/types/stats';
 
 let mockStorage: Record<string, unknown> = {};
@@ -159,6 +159,37 @@ describe('statsCollector', () => {
       // Assert
       const stats = await getStats();
       expect(stats).toEqual(DEFAULT_STATS);
+    });
+
+    it('should serialize reset behind pending stat updates', async () => {
+      // Arrange
+      const setDeferred: Array<() => void> = [];
+      const setMock = chrome.storage.local.set as unknown as ReturnType<typeof vi.fn>;
+      setMock.mockImplementation((items: Record<string, unknown>) => new Promise<void>((resolve) => {
+        setDeferred.push(() => {
+          Object.assign(mockStorage, items);
+          resolve();
+        });
+      }));
+
+      const incrementPromise = incrementStats({ totalApiCalls: 1, totalCharactersTranslated: 100 });
+      const resetPromise = resetStats();
+
+      // chainUpdate schedules fn via .then(), so the set call happens on a
+      // later microtask. Spin until the deferred resolver is queued.
+      while (setDeferred.length === 0) {
+        await new Promise((r) => { setTimeout(r, 0); });
+      }
+
+      // Act — allow the pending increment write, then await reset.
+      setDeferred.shift()?.();
+      await incrementPromise;
+      await resetPromise;
+
+      // Assert
+      const stats = await getStats();
+      expect(stats).toEqual(DEFAULT_STATS);
+      expect(chrome.storage.local.remove).toHaveBeenCalledWith(STATS_STORAGE_KEY);
     });
   });
 });
