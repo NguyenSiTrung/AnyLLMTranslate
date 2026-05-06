@@ -84,9 +84,9 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('Translated Only')).toBeInTheDocument();
     });
 
-    it('renders Translation Timeout slider', () => {
+    it('does not render the unused Translation Timeout slider', () => {
       render(<SubtitlesSection />);
-      expect(screen.getByText(/Translation Timeout/)).toBeInTheDocument();
+      expect(screen.queryByText(/Translation Timeout/)).not.toBeInTheDocument();
     });
   });
 
@@ -149,9 +149,9 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('Language Discovery')).toBeInTheDocument();
     });
 
-    it('renders Preferred Subtitle Language select', () => {
+    it('renders Preferred source subtitle language select', () => {
       render(<SubtitlesSection />);
-      expect(screen.getByText('Preferred Subtitle Language')).toBeInTheDocument();
+      expect(screen.getByText('Preferred source subtitle language')).toBeInTheDocument();
     });
 
     it('renders Auto-Activate Subtitles toggle', () => {
@@ -161,8 +161,51 @@ describe('SubtitlesSection', () => {
 
     it('renders preferred language select with English selected by default', () => {
       render(<SubtitlesSection />);
-      const select = screen.getByLabelText('Preferred Subtitle Language') as HTMLSelectElement;
+      const select = screen.getByLabelText('Preferred source subtitle language') as HTMLSelectElement;
       expect(select.value).toBe('en');
+    });
+
+    it('disables language discovery controls when subtitles are disabled', () => {
+      mockState.subtitleSettings = { ...baseSubtitleSettings, enabled: false };
+
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') {
+          return selector(mockState);
+        }
+        return mockState;
+      });
+
+      render(<SubtitlesSection />);
+
+      expect(screen.getByLabelText('Preferred source subtitle language')).toBeDisabled();
+      expect(screen.getByRole('switch', { name: 'Auto-Activate Subtitles' })).toBeDisabled();
+    });
+  });
+
+  describe('disabled state accessibility', () => {
+    beforeEach(() => {
+      mockState.subtitleSettings = { ...baseSubtitleSettings, enabled: false };
+
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') {
+          return selector(mockState);
+        }
+        return mockState;
+      });
+    });
+
+    it('disables appearance segmented controls when subtitles are disabled', () => {
+      render(<SubtitlesSection />);
+
+      expect(screen.getByRole('radio', { name: 'Top' })).toBeDisabled();
+      expect(screen.getByRole('radio', { name: 'Serif' })).toBeDisabled();
+    });
+
+    it('disables appearance sliders when subtitles are disabled', () => {
+      render(<SubtitlesSection />);
+
+      expect(screen.getByLabelText(/Font Size/)).toBeDisabled();
+      expect(screen.getByLabelText(/Background Opacity/)).toBeDisabled();
     });
   });
 

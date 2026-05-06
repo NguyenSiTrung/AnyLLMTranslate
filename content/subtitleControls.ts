@@ -18,9 +18,9 @@ const STORAGE_KEY = 'anyllm-translate-subtitle-prefs';
 
 /** Default preferences */
 const DEFAULT_PREFS: OverlayConfig = {
-  fontSize: 20,
+  fontSize: 16,
   position: 'bottom',
-  backgroundOpacity: 0.75,
+  backgroundOpacity: 0.7,
   offsetX: 0,
   offsetY: 0,
   fontFamily: 'system',
@@ -72,9 +72,10 @@ export async function savePreferences(config: OverlayConfig): Promise<void> {
 /**
  * Initialize controls with saved preferences.
  */
-export async function initializeControls(): Promise<void> {
+export async function initializeControls(): Promise<OverlayConfig> {
   const prefs = await loadPreferences();
   updateConfig(prefs);
+  return prefs;
 }
 
 /**

@@ -19,6 +19,7 @@ interface SegmentedControlProps<T extends string> {
   label?: string; // aria-label for the group
   size?: 'sm' | 'md';
   id?: string;    // DOM id for testing and accessibility
+  disabled?: boolean;
 }
 
 export function SegmentedControl<T extends string>({
@@ -28,6 +29,7 @@ export function SegmentedControl<T extends string>({
   label,
   size = 'md',
   id,
+  disabled = false,
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
     sm: 'py-1 px-3 text-xs',
@@ -38,6 +40,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
+      aria-disabled={disabled}
       id={id}
       className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-900 border border-zinc-700/60 p-1 w-full"
     >
@@ -49,16 +52,17 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={`
               flex-1 flex items-center justify-center gap-1.5 rounded-md font-medium
-              transition-all duration-200 cursor-pointer
+              transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60
               ${sizeStyles[size]}
               ${
                 active
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-900/40'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 disabled:hover:text-zinc-400 disabled:hover:bg-transparent'
               }
             `}
           >

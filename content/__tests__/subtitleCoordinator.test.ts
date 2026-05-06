@@ -113,6 +113,8 @@ const MOCK_SETTINGS = {
     fontSize: 16,
     backgroundOpacity: 0.7,
     enabled: true,
+    preferredSubtitleLanguage: 'en',
+    autoActivateSubtitles: false,
   },
 };
 
@@ -304,8 +306,78 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
 
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
       MOCK_CUES,
-      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+      expect.objectContaining({
+        fontFamily: 'system-ui, sans-serif',
+        displayMode: 'bilingual',
+        fontSize: 16,
+        position: 'bottom',
+        backgroundOpacity: 0.7,
+      }),
     );
+  });
+
+  it('maps all subtitle appearance settings into the runtime overlay config', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        fontFamily: 'serif',
+        displayMode: 'translation-only',
+        fontSize: 28,
+        position: 'top',
+        backgroundOpacity: 0.35,
+      },
+    });
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(
+      {
+        url: 'https://youtube.com/timedtext',
+        body: '<transcript>...</transcript>',
+        contentType: 'application/json',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-appearance',
+    );
+
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.objectContaining({
+        fontFamily: 'Georgia, serif',
+        displayMode: 'translation-only',
+        fontSize: 28,
+        position: 'top',
+        backgroundOpacity: 0.35,
+      }),
+    );
+  });
+
+  it('passes original subtitle content through and skips translation when subtitles are disabled', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: false,
+      },
+    });
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>original</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-disabled');
+
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-disabled',
+      vttContent: payload.body,
+    });
+    expect(mockHandler.transformResponse).not.toHaveBeenCalled();
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
   it('silently skips when cues.length === 0 — no background call made', async () => {
@@ -556,9 +628,37 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
 
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
       MOCK_TRANSLATED_CUES,
-      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+      expect.objectContaining({
+        fontFamily: 'system-ui, sans-serif',
+        displayMode: 'bilingual',
+        fontSize: 16,
+        position: 'bottom',
+        backgroundOpacity: 0.7,
+      }),
     );
     expect(mockInitializeOverlay).not.toHaveBeenCalledWith(MOCK_CUES, expect.anything());
+  });
+
+  it('does not force overlay mode when subtitle settings are disabled', async () => {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: false,
+      },
+    });
+
+    const { forceOverlayMode, resetCoordinatorState, isInOverlayMode } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
+
+    const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
+    await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
+
+    expect(isInOverlayMode()).toBe(false);
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
   it('gracefully falls back to original cues when translation rejects', async () => {

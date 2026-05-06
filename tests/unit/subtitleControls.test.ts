@@ -82,9 +82,9 @@ describe('content/subtitleControls', () => {
   describe('loadPreferences', () => {
     it('returns default preferences when storage is empty', async () => {
       const prefs = await loadPreferences();
-      expect(prefs.fontSize).toBe(20);
+      expect(prefs.fontSize).toBe(16);
       expect(prefs.position).toBe('bottom');
-      expect(prefs.backgroundOpacity).toBe(0.75);
+      expect(prefs.backgroundOpacity).toBe(0.7);
       expect(prefs.offsetX).toBe(0);
       expect(prefs.offsetY).toBe(0);
     });
@@ -114,14 +114,14 @@ describe('content/subtitleControls', () => {
       const prefs = await loadPreferences();
       expect(prefs.fontSize).toBe(28);
       expect(prefs.position).toBe('bottom'); // Default
-      expect(prefs.backgroundOpacity).toBe(0.75); // Default
+      expect(prefs.backgroundOpacity).toBe(0.7); // Default
     });
 
     it('returns defaults on storage error', async () => {
       vi.mocked(chrome.storage.local.get).mockRejectedValue(new Error('Storage error'));
 
       const prefs = await loadPreferences();
-      expect(prefs.fontSize).toBe(20);
+      expect(prefs.fontSize).toBe(16);
       expect(prefs.position).toBe('bottom');
     });
   });
@@ -223,7 +223,7 @@ describe('content/subtitleControls', () => {
       await resetPreferences();
 
       const prefs = await loadPreferences();
-      expect(prefs.fontSize).toBe(20);
+      expect(prefs.fontSize).toBe(16);
       expect(prefs.position).toBe('bottom');
     });
   });

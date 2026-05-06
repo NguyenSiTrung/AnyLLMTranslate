@@ -71,7 +71,7 @@ describe('AdvancedSection - Cache Configuration', () => {
   it('renders Cache Configuration card with three input fields', () => {
     render(<AdvancedSection />);
 
-    expect(screen.getByText('Cache Management')).toBeInTheDocument();
+    expect(screen.getByText('Performance & Caching')).toBeInTheDocument();
     expect(screen.getByLabelText('Cache TTL (days)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Cache Size (MB)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Batch Characters')).toBeInTheDocument();

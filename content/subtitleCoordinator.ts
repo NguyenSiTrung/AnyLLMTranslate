@@ -18,7 +18,8 @@ import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
-import type { PageContext } from '@/types/config';
+import type { PageContext, SubtitleSettings } from '@/types/config';
+import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
 import { findMatchingRule } from '@/lib/siteRules';
 
@@ -50,6 +51,41 @@ const state: CoordinatorState = {
   videoIsPlaying: false,
   categoryOverride: undefined,
 };
+
+function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
+  const fontFamilyMap: Record<SubtitleSettings['fontFamily'], string> = {
+    serif: 'Georgia, serif',
+    monospace: 'monospace',
+    system: 'system-ui, sans-serif',
+  };
+  return fontFamilyMap[fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
+}
+
+function buildSubtitleOverlayConfig(
+  subtitleSettings: SubtitleSettings,
+  savedPrefs?: Partial<OverlayConfig>,
+): Partial<OverlayConfig> {
+  return {
+    fontSize: subtitleSettings.fontSize,
+    position: subtitleSettings.position,
+    backgroundOpacity: subtitleSettings.backgroundOpacity,
+    fontFamily: resolveSubtitleFontFamily(subtitleSettings.fontFamily),
+    displayMode: subtitleSettings.displayMode,
+    offsetX: savedPrefs?.offsetX ?? 0,
+    offsetY: savedPrefs?.offsetY ?? 0,
+  };
+}
+
+function cleanupActiveOverlay(): void {
+  if (state.dragCleanup) {
+    state.dragCleanup();
+    state.dragCleanup = null;
+  }
+  if (state.isOverlayMode) {
+    cleanupOverlay();
+    state.isOverlayMode = false;
+  }
+}
 
 /**
  * Build resolved page context for subtitle translation.
@@ -96,33 +132,29 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
   }
 
   try {
+    const settings = await loadSettings();
+    if (!settings.subtitleSettings.enabled) {
+      cleanupActiveOverlay();
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
+
     const handler = getHandlerByPlatform(platform);
     if (!handler) return;
 
     const cues = handler.transformResponse(body, contentType, url);
     if (cues.length === 0) return;
 
-
-    const settings = await loadSettings();
-
     // Immediately activate overlay fallback to handle progressive chunks
     if (!state.isOverlayMode) {
       console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
       state.isOverlayMode = true;
       
-      await initializeControls();
-      
-      const subtitleCfg = settings.subtitleSettings;
-      const fontFamilyMap: Record<string, string> = {
-        serif: 'Georgia, serif',
-        monospace: 'monospace',
-        system: 'system-ui, sans-serif',
-      };
-      const fontFamily = fontFamilyMap[subtitleCfg?.fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
-      const displayMode = subtitleCfg?.displayMode ?? 'bilingual';
+      const savedPrefs = await initializeControls();
+      const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
       // Initialize with original cues so they show immediately
-      initializeOverlay(cues, { fontFamily, displayMode });
+      initializeOverlay(cues, overlayConfig);
 
       // Attach drag-to-reposition on the subtitle text container
       const textContainer = getOverlayTextContainer();
@@ -179,8 +211,11 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 async function activateOverlayMode(subtitleUrl: string, content?: string): Promise<void> {
   if (state.isOverlayMode) return;
 
-  state.isOverlayMode = true;
-  console.log('AnyLLMTranslate: Activating overlay fallback mode');
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) {
+    cleanupActiveOverlay();
+    return;
+  }
 
   // Fetch subtitle content if not provided
   let subtitleContent = content;
@@ -200,8 +235,8 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     return;
   }
 
-  // Load settings before try so they're available for overlay init regardless
-  const settings = await loadSettings();
+  state.isOverlayMode = true;
+  console.log('AnyLLMTranslate: Activating overlay fallback mode');
 
   // FR-5: Translate cues before handing to overlay
   let cuesToDisplay = cues;
@@ -233,19 +268,10 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   }
 
   // Initialize overlay with controls
-  await initializeControls();
+  const savedPrefs = await initializeControls();
+  const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
-  // Reuse settings already loaded above
-  const subtitleCfg = settings.subtitleSettings;
-  const fontFamilyMap: Record<string, string> = {
-    serif: 'Georgia, serif',
-    monospace: 'monospace',
-    system: 'system-ui, sans-serif',
-  };
-  const fontFamily = fontFamilyMap[subtitleCfg?.fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
-  const displayMode = subtitleCfg?.displayMode ?? 'bilingual';
-
-  initializeOverlay(cuesToDisplay, { fontFamily, displayMode });
+  initializeOverlay(cuesToDisplay, overlayConfig);
 
   // Attach drag-to-reposition on the subtitle text container
   const textContainer = getOverlayTextContainer();
@@ -639,7 +665,7 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
   const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
-  if (autoActivate && preferredLang && !state.isOverlayMode) {
+  if (settings.subtitleSettings?.enabled && autoActivate && preferredLang && !state.isOverlayMode) {
     const preferred = state.availableTracks.find((t) => t.language === preferredLang);
     if (preferred?.url) {
       console.log('AnyLLMTranslate: Auto-activating preferred subtitle track on play', preferredLang);

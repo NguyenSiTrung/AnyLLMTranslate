@@ -1,6 +1,6 @@
 /**
  * Subtitles Settings Section — position, font size, opacity, font family,
- * display mode, translation timeout, preferred language, and auto-activate controls.
+ * display mode, preferred source language, and auto-activate controls.
  * Includes an animated mini video player preview reactive to all settings.
  */
 
@@ -58,6 +58,24 @@ function scalePreviewFontSize(fontSize: number): number {
   return Math.max(10, Math.min(Math.round(fontSize * 0.65), 18));
 }
 
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = () => setPrefersReducedMotion(media.matches);
+    handleChange();
+    media.addEventListener?.('change', handleChange);
+    return () => media.removeEventListener?.('change', handleChange);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
 /** Animated cue that smoothly cycles through sample phrases */
 function AnimatedCue({
   fontSize,
@@ -76,6 +94,7 @@ function AnimatedCue({
 }) {
   const [cueIndex, setCueIndex] = useState(0);
   const [phase, setPhase] = useState<'visible' | 'fading'>('visible');
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const advanceCue = useCallback(() => {
     setPhase('fading');
@@ -87,13 +106,16 @@ function AnimatedCue({
   }, []);
 
   useEffect(() => {
-    if (disabled) return;
+    if (disabled || prefersReducedMotion) return;
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     const interval = setInterval(() => {
-      const fadeTimer = advanceCue();
-      return () => clearTimeout(fadeTimer);
+      fadeTimer = advanceCue();
     }, 3500);
-    return () => clearInterval(interval);
-  }, [disabled, advanceCue]);
+    return () => {
+      clearInterval(interval);
+      if (fadeTimer) clearTimeout(fadeTimer);
+    };
+  }, [disabled, prefersReducedMotion, advanceCue]);
 
   const previewFontSize = scalePreviewFontSize(fontSize);
   const resolvedFont = resolveFontFamily(fontFamily);
@@ -142,13 +164,15 @@ function AnimatedCue({
 /** Fake progress bar that slowly animates to simulate video playback */
 function ProgressBar() {
   const [progress, setProgress] = useState(35);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
     const id = setInterval(() => {
       setProgress((p) => (p >= 85 ? 35 : p + 0.3));
     }, 100);
     return () => clearInterval(id);
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/5">
@@ -193,6 +217,7 @@ export function SubtitlesSection() {
               className={`relative rounded-lg overflow-hidden transition-all duration-300 ${
                 isDisabled ? 'opacity-50 grayscale pointer-events-none' : ''
               }`}
+              aria-hidden="true"
               style={{
                 height: '170px',
                 background: 'linear-gradient(135deg, #0f1117 0%, #1a1d26 50%, #111318 100%)',
@@ -265,6 +290,7 @@ export function SubtitlesSection() {
                       options={POSITION_OPTIONS}
                       value={subtitleSettings.position}
                       onChange={(val) => handleUpdate({ position: val })}
+                      disabled={isDisabled}
                     />
                   </FieldGroup>
 
@@ -277,6 +303,7 @@ export function SubtitlesSection() {
                       options={FONT_FAMILY_OPTIONS}
                       value={subtitleSettings.fontFamily}
                       onChange={(val) => handleUpdate({ fontFamily: val })}
+                      disabled={isDisabled}
                     />
                   </FieldGroup>
 
@@ -291,6 +318,7 @@ export function SubtitlesSection() {
                     formatValue={(v) => `${v}px`}
                     minLabel="10px"
                     maxLabel="32px"
+                    disabled={isDisabled}
                   />
 
                   <Slider
@@ -304,6 +332,7 @@ export function SubtitlesSection() {
                     formatValue={(v) => `${Math.round(v * 100)}%`}
                     minLabel="0%"
                     maxLabel="100%"
+                    disabled={isDisabled}
                   />
                 </div>
               </div>
@@ -320,21 +349,9 @@ export function SubtitlesSection() {
                       options={DISPLAY_MODE_OPTIONS}
                       value={subtitleSettings.displayMode}
                       onChange={(val) => handleUpdate({ displayMode: val })}
+                      disabled={isDisabled}
                     />
                   </FieldGroup>
-
-                  <Slider
-                    id="subtitle-timeout"
-                    label="Translation Timeout"
-                    value={subtitleSettings.translationTimeout}
-                    min={10}
-                    max={120}
-                    step={5}
-                    onChange={(v) => handleUpdate({ translationTimeout: v })}
-                    formatValue={(v) => `${v}s`}
-                    minLabel="10s"
-                    maxLabel="120s"
-                  />
                 </div>
               </div>
               </div>
@@ -347,15 +364,16 @@ export function SubtitlesSection() {
           <Card title="Language Discovery" icon={<Languages className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup
-                label="Preferred Subtitle Language"
-                description="The extension will auto-detect this language when available on video platforms like YouTube and Udemy."
-                hint="Select the language you most commonly want subtitles translated from."
+                label="Preferred source subtitle language"
+                description="Choose the subtitle track language to auto-select before translating to your target language."
+                hint="Used when platforms like YouTube, Udemy, or Coursera expose multiple subtitle tracks."
                 htmlFor="subtitle-preferred-language"
               >
                 <Select
                   id="subtitle-preferred-language"
                   value={subtitleSettings.preferredSubtitleLanguage}
                   onChange={(e) => handleUpdate({ preferredSubtitleLanguage: e.target.value })}
+                  disabled={isDisabled}
                   options={preferredLanguages.map((lang) => ({
                     value: lang.code,
                     label: `${lang.nativeName} (${lang.name})`,
@@ -369,6 +387,7 @@ export function SubtitlesSection() {
                 onChange={(checked) => handleUpdate({ autoActivateSubtitles: checked })}
                 label="Auto-Activate Subtitles"
                 description="Automatically fetch and translate subtitles when the preferred language is detected on a video page, without needing to manually enable captions."
+                disabled={isDisabled}
               />
             </div>
           </Card>
