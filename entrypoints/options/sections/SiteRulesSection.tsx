@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag, ChevronDown, Sparkles, Filter, X } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
 import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
@@ -80,28 +80,37 @@ export function SiteRulesSection() {
       </div>
 
       <div className="space-y-4">
-        {/* Global Exclude Selectors */}
-        <GlobalExcludesCard />
+        {/* Smart Excludes Card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+          <SmartExcludesCard />
+        </div>
+
+        {/* Custom Exclude Selectors Card */}
+        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+          <CustomExcludesCard />
+        </div>
 
         {/* Search & Add */}
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <Input
-              id="site-rules-search"
-              type="search"
-              placeholder="Search by hostname..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              icon={<Globe className="w-4 h-4" />}
-            />
+        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <Input
+                id="site-rules-search"
+                type="search"
+                placeholder="Search by hostname..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                icon={<Globe className="w-4 h-4" />}
+              />
+            </div>
+            <Button
+              id="add-site-rule-btn"
+              onClick={handleAddRule}
+              icon={<Plus className="w-4 h-4" />}
+            >
+              Add Rule
+            </Button>
           </div>
-          <Button
-            id="add-site-rule-btn"
-            onClick={handleAddRule}
-            icon={<Plus className="w-4 h-4" />}
-          >
-            Add Rule
-          </Button>
         </div>
 
         {/* Edit Form — top position only for new rules */}
@@ -114,77 +123,79 @@ export function SiteRulesSection() {
         )}
 
         {/* Rules List */}
-        {filteredRules.length === 0 ? (
-          <EmptyState
-            icon={<Globe className="w-8 h-8" />}
-            message={siteRules.length === 0
-              ? 'No site rules configured. Add a rule to customize translation behavior per site.'
-              : 'No rules match your search.'}
-            actionLabel={siteRules.length === 0 ? 'Add First Rule' : undefined}
-            onAction={siteRules.length === 0 ? handleAddRule : undefined}
-          />
-        ) : (
-          <Card variant="bordered" className="p-0 overflow-hidden">
-            <div className="divide-y divide-zinc-800">
-              {filteredRules.map((rule, idx) => (
-                <div key={rule.id}>
-                  <div
-                    className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors animate-stagger"
-                    style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
-                  >
-                    <div className="flex items-center gap-3">
-                      {rule.alwaysTranslate ? (
-                        <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : rule.neverTranslate ? (
-                        <ShieldOff className="w-4 h-4 text-red-400 shrink-0" />
-                      ) : (
-                        <div className="w-4 h-4 shrink-0" />
-                      )}
-                      <div>
-                        <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
-                        {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
-                        {rule.category && <Badge variant="info" className="ml-2"><Tag className="w-3 h-3 inline mr-1" />{rule.category}</Badge>}
-                        {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors.length} include</Badge>}
-                        {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
+        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
+          {filteredRules.length === 0 ? (
+            <EmptyState
+              icon={<Globe className="w-8 h-8" />}
+              message={siteRules.length === 0
+                ? 'No site rules configured. Add a rule to customize translation behavior per site.'
+                : 'No rules match your search.'}
+              actionLabel={siteRules.length === 0 ? 'Add First Rule' : undefined}
+              onAction={siteRules.length === 0 ? handleAddRule : undefined}
+            />
+          ) : (
+            <Card variant="bordered" className="p-0 overflow-hidden">
+              <div className="divide-y divide-zinc-800">
+                {filteredRules.map((rule, idx) => (
+                  <div key={rule.id}>
+                    <div
+                      className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors animate-stagger"
+                      style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
+                    >
+                      <div className="flex items-center gap-3">
+                        {rule.alwaysTranslate ? (
+                          <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : rule.neverTranslate ? (
+                          <ShieldOff className="w-4 h-4 text-red-400 shrink-0" />
+                        ) : (
+                          <div className="w-4 h-4 shrink-0" />
+                        )}
+                        <div>
+                          <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
+                          {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
+                          {rule.category && <Badge variant="info" className="ml-2"><Tag className="w-3 h-3 inline mr-1" />{rule.category}</Badge>}
+                          {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors.length} include</Badge>}
+                          {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingRule(rule)}
-                        aria-label="Edit rule"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      {!rule.builtIn && (
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setPendingDeleteId(rule.id)}
-                          aria-label="Delete rule"
-                          className="hover:text-red-400"
+                          onClick={() => setEditingRule(rule)}
+                          aria-label="Edit rule"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
-                      )}
+                        {!rule.builtIn && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setPendingDeleteId(rule.id)}
+                            aria-label="Delete rule"
+                            className="hover:text-red-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
+                    {/* Inline edit form — renders below the rule being edited */}
+                    {editingRule?.id === rule.id && !isAdding && (
+                      <div className="px-4 py-3 bg-zinc-900/40 border-t border-zinc-800/50 animate-fade-in-up">
+                        <RuleEditForm
+                          rule={editingRule}
+                          onSave={handleSaveRule}
+                          onCancel={() => { setEditingRule(null); setIsAdding(false); }}
+                        />
+                      </div>
+                    )}
                   </div>
-                  {/* Inline edit form — renders below the rule being edited */}
-                  {editingRule?.id === rule.id && !isAdding && (
-                    <div className="px-4 py-3 bg-zinc-900/40 border-t border-zinc-800/50 animate-fade-in-up">
-                      <RuleEditForm
-                        rule={editingRule}
-                        onSave={handleSaveRule}
-                        onCancel={() => { setEditingRule(null); setIsAdding(false); }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* Delete Confirmation Modal (C3) */}
@@ -203,12 +214,123 @@ export function SiteRulesSection() {
   );
 }
 
-function GlobalExcludesCard() {
-  const globalExcludeSelectors = useSettingsStore((s) => s.globalExcludeSelectors);
+/* ── Smart Excludes ─────────────────────────────────────────── */
+
+/** Categorized smart selectors for visual grouping */
+const SMART_SELECTOR_GROUPS = [
+  {
+    label: 'Navigation',
+    color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    selectors: ['nav', '[role="navigation"]', '.breadcrumb', '.breadcrumbs', '[aria-label="breadcrumb"]', '.pagination'],
+  },
+  {
+    label: 'Sidebars & Panels',
+    color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    selectors: ['.sidebar', '[role="complementary"]', '.infobox', '.infobox_v2'],
+  },
+  {
+    label: 'Table of Contents',
+    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    selectors: ['.toc', '#toc', '[role="directory"]', '.table-of-contents'],
+  },
+  {
+    label: 'Wiki & References',
+    color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+    selectors: ['.navbox', '.catlinks', '.reflist'],
+  },
+];
+
+function SmartExcludesCard() {
   const enableSmartExcludes = useSettingsStore((s) => s.enableSmartExcludes);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const [expanded, setExpanded] = useState(false);
+
+  const isEnabled = enableSmartExcludes !== false;
+  const totalSelectors = SMART_SELECTOR_GROUPS.reduce((sum, g) => sum + g.selectors.length, 0);
+
+  return (
+    <Card variant="bordered">
+      {/* Header row with icon + title + toggle */}
+      <div className="flex items-start gap-3">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/15 to-orange-500/10 border border-amber-500/20 shrink-0 mt-0.5">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-200">Smart Excludes</h3>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                Automatically skip navigation, sidebars, table of contents, and other structural elements.
+              </p>
+            </div>
+            <button
+              id="smart-excludes-toggle"
+              type="button"
+              role="switch"
+              aria-checked={isEnabled}
+              aria-label="Smart Excludes"
+              onClick={() => updateSettings({ enableSmartExcludes: !isEnabled })}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 ${
+                isEnabled ? 'bg-blue-600' : 'bg-zinc-700'
+              }`}
+            >
+              <div
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                  isEnabled ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Expandable selector list */}
+          {isEnabled && (
+            <div className="mt-3">
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 transition-colors group"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+                <span>{totalSelectors} selectors active</span>
+                <span className="text-zinc-600 group-hover:text-zinc-500">
+                  — {expanded ? 'hide' : 'show details'}
+                </span>
+              </button>
+
+              {expanded && (
+                <div className="mt-3 space-y-3 animate-fade-in-up">
+                  {SMART_SELECTOR_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1.5">
+                        {group.label}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.selectors.map((sel) => (
+                          <span
+                            key={sel}
+                            className={`px-2 py-0.5 rounded-md border text-[11px] font-mono ${group.color}`}
+                          >
+                            {sel}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── Custom Exclude Selectors ───────────────────────────────── */
+
+function CustomExcludesCard() {
+  const globalExcludeSelectors = useSettingsStore((s) => s.globalExcludeSelectors);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [inputValue, setInputValue] = useState('');
-  const [showSmartList, setShowSmartList] = useState(false);
 
   const handleAddSelector = () => {
     const trimmed = inputValue.trim();
@@ -237,81 +359,56 @@ function GlobalExcludesCard() {
     globalExcludeSelectors.length === CRITICAL_GLOBAL_EXCLUDES.length &&
     CRITICAL_GLOBAL_EXCLUDES.every((s) => globalExcludeSelectors.includes(s));
 
-  // Import SMART_EXCLUDE_SELECTORS for display
-  const smartSelectors = enableSmartExcludes
-    ? ['nav', '[role="navigation"]', '.toc', '#toc', '[role="directory"]',
-       '.navbox', '.catlinks', '.reflist', '.breadcrumb', '.breadcrumbs',
-       '.sidebar', '[role="complementary"]', '.pagination',
-       '.infobox', '.infobox_v2', '[aria-label="breadcrumb"]', '.table-of-contents']
-    : [];
-
   return (
-    <Card title="Global Excludes" icon={<Shield className="w-3.5 h-3.5" />} variant="bordered">
-      {/* Smart Excludes Toggle (H1: using shared Toggle component) */}
-      <FieldGroup
-        label="Smart Excludes"
-        description="Automatically skip navigation, sidebars, table of contents, infoboxes, and other structural elements. Short content gets compact inline translation instead of block display."
-      >
-        <div className="flex items-center justify-between">
-          <Toggle
-            id="smart-excludes-toggle"
-            checked={enableSmartExcludes ?? true}
-            onChange={(checked) => updateSettings({ enableSmartExcludes: checked })}
-            label="Smart Excludes"
-          />
-          {enableSmartExcludes !== false && (
-            <button
-              onClick={() => setShowSmartList(!showSmartList)}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              {showSmartList ? 'Hide list' : `${smartSelectors.length} selectors`}
-            </button>
-          )}
+    <Card variant="bordered">
+      <div className="flex items-start gap-3">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500/15 to-cyan-500/10 border border-teal-500/20 shrink-0 mt-0.5">
+          <Filter className="w-4 h-4 text-teal-400" />
         </div>
-        {showSmartList && enableSmartExcludes !== false && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {smartSelectors.map((sel) => (
-              <span
-                key={sel}
-                className="px-1.5 py-0.5 rounded bg-zinc-800/50 border border-zinc-700/50 text-[11px] font-mono text-zinc-400"
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <h3 className="text-sm font-semibold text-zinc-200">Global Exclude Selectors</h3>
+            {!isDefault && (
+              <button
+                onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
+                className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors shrink-0"
               >
-                {sel}
-              </span>
-            ))}
+                Reset to defaults
+              </button>
+            )}
           </div>
-        )}
-      </FieldGroup>
+          <p className="text-xs text-zinc-500 leading-relaxed mb-3">
+            CSS selectors excluded from translation on all sites. Per-site rules add to these defaults.
+          </p>
 
-      <div className="border-t border-zinc-800 mt-4 pt-4">
-        <FieldGroup
-          label="Global Exclude Selectors"
-          description="These CSS selectors are excluded from translation on all sites. Per-site rules add to these defaults."
-        >
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          {/* Selector chips */}
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {globalExcludeSelectors.map((selector) => (
               <span
                 key={selector}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 transition-colors group"
               >
                 {selector}
                 <button
                   onClick={() => handleRemoveSelector(selector)}
-                  className="ml-0.5 text-zinc-500 hover:text-red-400 transition-colors"
+                  className="ml-0.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                   aria-label={`Remove ${selector}`}
                 >
-                  ×
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
             {globalExcludeSelectors.length === 0 && (
-              <span className="text-xs text-zinc-500 italic">No global excludes — all elements will be translated.</span>
+              <span className="text-xs text-zinc-600 italic py-1">No global excludes — all elements will be translated.</span>
             )}
           </div>
+
+          {/* Add selector input */}
           <div className="flex gap-2">
             <Input
               id="global-exclude-input"
               type="text"
-              placeholder="Add selector (e.g. .code-block)"
+              placeholder="Add CSS selector (e.g. .code-block, #footer)"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -319,27 +416,22 @@ function GlobalExcludesCard() {
             />
             <Button
               id="add-global-exclude-btn"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               onClick={handleAddSelector}
               disabled={!inputValue.trim()}
+              icon={<Plus className="w-3.5 h-3.5" />}
             >
               Add
             </Button>
           </div>
-          {!isDefault && (
-            <button
-              onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
-              className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Reset to defaults
-            </button>
-          )}
-        </FieldGroup>
+        </div>
       </div>
     </Card>
   );
 }
+
+/* ── Rule Edit Form ─────────────────────────────────────────── */
 
 function RuleEditForm({ rule, onSave, onCancel }: {
   rule: SiteRule;
