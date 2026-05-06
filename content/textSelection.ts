@@ -17,6 +17,10 @@ let isEnabled = true;
 let currentTooltip: HTMLElement | null = null;
 let currentButton: HTMLElement | null = null;
 let suppressNextMouseUp = false;
+/** Monotonically increasing session id — bumped on every new selection
+ *  translation so that stale LLM responses from a previous request
+ *  are silently dropped instead of overwriting the current tooltip. */
+let selectionSession = 0;
 
 /** Build an SVG icon using createElementNS */
 function createSvgIcon(width: number, height: number, paths: string[]): SVGSVGElement {
@@ -287,6 +291,8 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
 
     // Remove button and show loading tooltip
     removeTranslateButton();
+    selectionSession++;
+    const requestSession = selectionSession;
     createTooltip('', x, y, true);
 
     try {
@@ -299,12 +305,17 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
         targetLanguage: settings.targetLanguage,
       });
 
+      // Stale guard: a newer selection translation was started while
+      // this one was in-flight — drop the response silently.
+      if (requestSession !== selectionSession) return;
+
       if (response?.success && response.translatedText) {
         updateTooltipContent(response.translatedText);
       } else {
         updateTooltipContent(`⚠ ${response?.error ?? 'Translation failed'}`);
       }
     } catch (error) {
+      if (requestSession !== selectionSession) return;
       const errorMsg = error instanceof Error ? error.message : 'Translation failed';
       updateTooltipContent(`⚠ ${errorMsg}`);
     }
@@ -388,6 +399,8 @@ export async function translateSelectedTextViaContextMenu(text: string): Promise
 
   // Remove any existing button/tooltip and show loading
   removeTranslateButton();
+  selectionSession++;
+  const requestSession = selectionSession;
   createTooltip('', x, y, true);
 
   try {
@@ -400,12 +413,16 @@ export async function translateSelectedTextViaContextMenu(text: string): Promise
       targetLanguage: settings.targetLanguage,
     });
 
+    // Stale guard: another selection translation superseded this one.
+    if (requestSession !== selectionSession) return;
+
     if (response?.success && response.translatedText) {
       updateTooltipContent(response.translatedText);
     } else {
       updateTooltipContent(`⚠ ${response?.error ?? 'Translation failed'}`);
     }
   } catch (error) {
+    if (requestSession !== selectionSession) return;
     const errorMsg = error instanceof Error ? error.message : 'Translation failed';
     updateTooltipContent(`⚠ ${errorMsg}`);
   }

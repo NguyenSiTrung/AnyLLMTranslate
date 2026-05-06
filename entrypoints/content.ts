@@ -336,12 +336,6 @@ export function stopTranslation(): void {
     coordinatorCleanup();
     coordinatorCleanup = null;
   }
-
-  // Cleanup storage change listener
-  if (_storageChangeListener) {
-    chrome.storage.onChanged.removeListener(_storageChangeListener);
-    _storageChangeListener = null;
-  }
 }
 
 /** Toggle translation on/off */
