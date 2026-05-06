@@ -1,6 +1,7 @@
 import type { DailyStat } from '@/types/stats';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DISPLAY_WINDOW_DAYS = 30;
 
 export interface DisplayDailyStat extends DailyStat {
   label: string;
@@ -8,7 +9,7 @@ export interface DisplayDailyStat extends DailyStat {
 }
 
 export interface CacheEfficiency {
-  total: number;
+  totalOps: number;
   hitRate: number | null;
 }
 
@@ -21,6 +22,9 @@ function utcStartOfDay(date: Date): number {
 }
 
 function parseDateKey(dateKey: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    throw new Error(`Invalid dateKey format: expected YYYY-MM-DD, got "${dateKey}"`);
+  }
   return new Date(`${dateKey}T12:00:00Z`);
 }
 
@@ -49,8 +53,8 @@ export function buildLast30Days(
   const byDate = new Map(dailyStats.map((day) => [day.date, day]));
   const end = utcStartOfDay(now);
 
-  return Array.from({ length: 30 }, (_, index) => {
-    const date = dateKeyFromUtcTime(end - (29 - index) * DAY_MS);
+  return Array.from({ length: DISPLAY_WINDOW_DAYS }, (_, index) => {
+    const date = dateKeyFromUtcTime(end - (DISPLAY_WINDOW_DAYS - 1 - index) * DAY_MS);
     const stored = byDate.get(date);
 
     return {
@@ -69,9 +73,12 @@ export function hasDailyActivity(days: DailyStat[]): boolean {
 }
 
 export function getCacheEfficiency(hits: number, misses: number): CacheEfficiency {
-  const total = hits + misses;
+  if (hits < 0 || misses < 0) {
+    return { totalOps: 0, hitRate: null };
+  }
+  const totalOps = hits + misses;
   return {
-    total,
-    hitRate: total > 0 ? Math.round((hits / total) * 100) : null,
+    totalOps,
+    hitRate: totalOps > 0 ? Math.round((hits / totalOps) * 100) : null,
   };
 }
