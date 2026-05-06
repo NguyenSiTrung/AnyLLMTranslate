@@ -59,6 +59,29 @@ html:not([data-anyllm-state]) [data-anyllm-role="translation"] {
   display: none !important;
 }
 
+/* ===== Theme Preview Container (Options Page) =====
+   The ThemePreview component mirrors the html-level attributes on a
+   .theme-preview-container div. Duplicate the state rules so the preview
+   honours display-mode without requiring attributes on <html>. */
+
+.theme-preview-container[data-anyllm-state="dual"] [data-anyllm-role="translation"] {
+  display: block !important;
+}
+
+.theme-preview-container[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
+  display: none !important;
+}
+
+.theme-preview-container[data-anyllm-state="translation-only"] [data-anyllm-role="translation"] {
+  display: block !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 /* ===== Loading & Error States ===== */
 
 /* Per-paragraph spinner — pure CSS border-trick, no SVG, no JS loops */
@@ -728,6 +751,12 @@ html[data-anyllm-state="translation-only"] .anyllm-inline-translation-only-clone
 html[data-anyllm-state="off"] .anyllm-inline-bilingual,
 html:not([data-anyllm-state]) .anyllm-inline-bilingual {
   display: none !important;
+}
+
+/* Override for ThemePreview container */
+.theme-preview-container[data-anyllm-state="dual"] .anyllm-inline-bilingual,
+.theme-preview-container[data-anyllm-state="translation-only"] .anyllm-inline-bilingual {
+  display: inline !important;
 }
 
 /* ===== Inline Translate — Pulsing Border ===== */
