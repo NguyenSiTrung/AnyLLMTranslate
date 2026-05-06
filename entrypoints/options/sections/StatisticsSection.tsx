@@ -86,10 +86,11 @@ function DailyActivityChart({ days }: DailyActivityChartProps) {
               style={{ height: '100%' }}
               role="listitem"
             >
-              <button
-                type="button"
+              <div
+                role="img"
+                tabIndex={0}
                 aria-label={label}
-                className="absolute bottom-0 left-0 right-0 rounded-t bg-blue-500 transition-all duration-200 group-hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+                className="absolute bottom-0 left-0 right-0 rounded-t bg-blue-500 transition-all duration-200 group-hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 cursor-default"
                 style={{ height: `${height}%` }}
               />
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block group-focus-within:block z-10">

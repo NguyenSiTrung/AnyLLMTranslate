@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { StatisticsSection } from '../StatisticsSection';
 import { getStats, resetStats, STATS_STORAGE_KEY } from '@/services/statsCollector';
 import { DEFAULT_STATS, type TranslationStats } from '@/types/stats';
@@ -87,12 +87,14 @@ describe('StatisticsSection', () => {
     render(<StatisticsSection />);
     expect(await screen.findByText('12,345')).toBeInTheDocument();
 
-    storageListener?.({
-      [STATS_STORAGE_KEY]: {
-        oldValue: populatedStats,
-        newValue: { ...populatedStats, totalApiCalls: 99 },
-      },
-    }, 'local');
+    await act(async () => {
+      storageListener?.({
+        [STATS_STORAGE_KEY]: {
+          oldValue: populatedStats,
+          newValue: { ...populatedStats, totalApiCalls: 99 },
+        },
+      }, 'local');
+    });
 
     expect(await screen.findByText('99')).toBeInTheDocument();
   });
