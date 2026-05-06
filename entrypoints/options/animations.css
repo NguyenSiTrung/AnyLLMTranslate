@@ -129,7 +129,7 @@
 /* Stagger animation utility — set --stagger-delay via inline style */
 .animate-stagger {
   animation: fadeInUp 200ms ease-out backwards;
-  animation-delay: calc(var(--stagger-delay, 0) * 30ms);
+  animation-delay: calc(var(--stagger-delay, 0) * 50ms);
 }
 
 /* Sidebar indicator */

@@ -18,6 +18,7 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
   label?: string; // aria-label for the group
   size?: 'sm' | 'md';
+  id?: string;    // DOM id for testing and accessibility
 }
 
 export function SegmentedControl<T extends string>({
@@ -26,6 +27,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   label,
   size = 'md',
+  id,
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
     sm: 'py-1 px-3 text-xs',
@@ -36,6 +38,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
+      id={id}
       className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-900 border border-zinc-700/60 p-1 w-full"
     >
       {options.map((opt) => {

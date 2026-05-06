@@ -127,19 +127,22 @@ export function ThemePreview() {
         </div>
 
         {/* Loading + error sample states */}
-        <div className="mt-3 flex flex-col gap-1" data-anyllm-preview-section="states">
-          <span
-            className="anyllm-translate-translation anyllm-translate-loading text-sm"
-            role="status"
-            aria-label="Translating"
-          />
-          <span
-            className="anyllm-translate-translation text-sm"
-            data-anyllm-error=""
-            role="alert"
-          >
-            ⚠ Translation failed: example error
-          </span>
+        <div className="mt-3" data-anyllm-preview-section="states">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Sample states:</p>
+          <div className="flex flex-col gap-1">
+            <span
+              className="anyllm-translate-translation anyllm-translate-loading text-sm"
+              role="status"
+              aria-label="Translating"
+            />
+            <span
+              className="anyllm-translate-translation text-sm"
+              data-anyllm-error=""
+              role="alert"
+            >
+              ⚠ Translation failed: example error
+            </span>
+          </div>
         </div>
       </div>
     </Card>
