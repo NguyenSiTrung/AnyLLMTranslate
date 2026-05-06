@@ -4,6 +4,8 @@
  */
 
 import { Keyboard as KeyboardIcon, ExternalLink } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { Card } from '@/ui/Card';
 
 const DEFAULT_SHORTCUTS = [
@@ -15,20 +17,16 @@ const DEFAULT_SHORTCUTS = [
 export function ShortcutsSection() {
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-600/15 border border-orange-500/20">
-          <KeyboardIcon className="w-4 h-4 text-orange-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Keyboard Shortcuts</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">View and customize keyboard shortcuts for AnyLLMTranslate.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Keyboard Shortcuts"
+        description="View and customize keyboard shortcuts for AnyLLMTranslate."
+        icon={<KeyboardIcon className="w-4 h-4" />}
+        accentColor="orange"
+      />
 
       <div className="space-y-4">
         {/* Current Shortcuts */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <Card title="Active Shortcuts" icon={<KeyboardIcon className="w-3.5 h-3.5" />} variant="bordered" className="p-0 overflow-hidden">
             <div className="divide-y divide-zinc-800" role="list" aria-label="Keyboard shortcuts">
               {DEFAULT_SHORTCUTS.map((shortcut, idx) => (
@@ -36,7 +34,7 @@ export function ShortcutsSection() {
                   key={shortcut.action}
                   role="listitem"
                   className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-800/30 transition-colors animate-stagger"
-                  style={{ '--stagger-delay': idx } as React.CSSProperties}
+                  style={stagger(idx)}
                 >
                   <div>
                     <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
@@ -55,7 +53,7 @@ export function ShortcutsSection() {
         </div>
 
         {/* Chrome Shortcuts Link */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <Card title="Customize Shortcuts" icon={<ExternalLink className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex items-start gap-3">
               <KeyboardIcon className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />

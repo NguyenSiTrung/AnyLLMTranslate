@@ -6,6 +6,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Subtitles as SubtitlesIcon, Play, Languages } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
 import { FieldGroup } from '@/ui/FieldGroup';
@@ -176,20 +178,16 @@ export function SubtitlesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-600/15 border border-cyan-500/20">
-          <SubtitlesIcon className="w-4 h-4 text-cyan-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Subtitle Settings</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Configure how translated subtitles appear on video players.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Subtitle Settings"
+        description="Configure how translated subtitles appear on video players."
+        icon={<SubtitlesIcon className="w-4 h-4" />}
+        accentColor="cyan"
+      />
 
       <div className="space-y-4">
         {/* Preview card — placed first so users see live changes while adjusting controls */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <Card title="Preview" variant="bordered">
             <div
               className={`relative rounded-lg overflow-hidden transition-all duration-300 ${
@@ -242,7 +240,7 @@ export function SubtitlesSection() {
         </div>
 
         {/* Controls card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <Card variant="bordered">
             <div className="space-y-5">
               <Toggle
@@ -345,7 +343,7 @@ export function SubtitlesSection() {
         </div>
 
         {/* Language Discovery card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(2)}>
           <Card title="Language Discovery" icon={<Languages className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup

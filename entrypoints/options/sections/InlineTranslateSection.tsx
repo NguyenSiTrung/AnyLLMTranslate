@@ -4,6 +4,8 @@
  */
 
 import { TextCursorInput } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
@@ -40,19 +42,15 @@ export function InlineTranslateSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-600/15 border border-amber-500/20">
-          <TextCursorInput className="w-4 h-4 text-amber-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Inline Translation</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Translate text in input fields with a quick key gesture.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Inline Translation"
+        description="Translate text in input fields with a quick key gesture."
+        icon={<TextCursorInput className="w-4 h-4" />}
+        accentColor="amber"
+      />
 
       <div className="space-y-4">
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <Card
             title="Configuration"
             icon={<TextCursorInput className="w-3.5 h-3.5" />}
@@ -136,7 +134,7 @@ export function InlineTranslateSection() {
         </div>
 
         {/* Usage Hints */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <Card title="How It Works" variant="bordered">
             <div className="space-y-2 text-xs text-zinc-400">
               <p>

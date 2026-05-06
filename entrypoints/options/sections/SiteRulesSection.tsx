@@ -5,6 +5,8 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag, ChevronDown, Sparkles, Filter, X, RotateCcw } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
 import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
@@ -72,30 +74,26 @@ export function SiteRulesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-teal-600/15 border border-teal-500/20">
-          <Globe className="w-4 h-4 text-teal-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Site Rules</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Configure per-site translation behavior.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Site Rules"
+        description="Configure per-site translation behavior."
+        icon={<Globe className="w-4 h-4" />}
+        accentColor="teal"
+      />
 
       <div className="space-y-4">
         {/* Smart Excludes Card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <SmartExcludesCard />
         </div>
 
         {/* Custom Exclude Selectors Card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <CustomExcludesCard />
         </div>
 
         {/* Search & Add */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(2)}>
           <div className="flex gap-3">
             <div className="flex-1">
               <Input
@@ -127,7 +125,7 @@ export function SiteRulesSection() {
         )}
 
         {/* Rules List */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(3)}>
           {filteredRules.length === 0 ? (
             <EmptyState
               icon={<Globe className="w-8 h-8" />}
@@ -144,7 +142,7 @@ export function SiteRulesSection() {
                   <div key={rule.id}>
                     <div
                       className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
-                      style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
+                      style={stagger(Math.min(idx, 5))}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {rule.alwaysTranslate ? (

@@ -6,6 +6,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Upload, Trash2, HardDrive, Wrench, Database } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { Card } from '@/ui/Card';
@@ -150,20 +152,16 @@ export function AdvancedSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-600/15 border border-zinc-500/20">
-          <Wrench className="w-4 h-4 text-zinc-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Advanced</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Cache management, data portability, and debugging tools.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Advanced"
+        description="Cache management, data portability, and debugging tools."
+        icon={<Wrench className="w-4 h-4" />}
+        accentColor="zinc"
+      />
 
       <div className="space-y-4">
         {/* Cache Management (merged: stats + configuration + clear) */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <Card title="Cache Management" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
             <div className="grid grid-cols-3 gap-3 mb-5">
               <div className="bg-zinc-900 rounded-lg p-3 text-center">
@@ -243,7 +241,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Data & Developer Tools (merged: export/import + debug) */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <Card title="Data & Developer Tools" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-3 mb-5">
               <Button
@@ -321,7 +319,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Reset */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(2)}>
           <Button
             id="reset-all-settings-btn"
             variant="danger"

@@ -6,6 +6,8 @@
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { ThemeName } from '@/types/config';
 import { Check, Palette } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { ThemePreview } from '../ThemePreview';
 import { CustomThemeEditor } from '../CustomThemeEditor';
 
@@ -47,18 +49,14 @@ export function ThemesSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — consistent with GeneralSection */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-pink-600/15 border border-pink-500/20">
-          <Palette className="w-4 h-4 text-pink-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Display Themes</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Choose how translated text appears on web pages.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Display Themes"
+        description="Choose how translated text appears on web pages."
+        icon={<Palette className="w-4 h-4" />}
+        accentColor="pink"
+      />
 
-      <div className="mb-4 animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+      <div className="mb-4 animate-stagger" style={stagger(0)}>
         <ThemePreview />
       </div>
 
@@ -75,7 +73,7 @@ export function ThemesSection() {
                   ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/30 animate-select-bounce scale-[1.01]'
                   : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50 hover:scale-[1.02] active:scale-[0.98]'
               }`}
-              style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
+              style={stagger(Math.min(idx, 5))}
             >
               {/* Active indicator */}
               {isActive && (

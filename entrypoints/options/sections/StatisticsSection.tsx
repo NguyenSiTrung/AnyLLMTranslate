@@ -5,6 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { BarChart3, Activity, Database, Subtitles, RefreshCw, Trash2 } from 'lucide-react';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { getStats, resetStats } from '@/services/statsCollector';
 import { DEFAULT_STATS, type TranslationStats } from '@/types/stats';
 import { Card } from '@/ui/Card';
@@ -51,20 +53,16 @@ export function StatisticsSection() {
 
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <BarChart3 className="w-4 h-4 text-blue-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">Statistics</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Translation usage and performance metrics.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="Statistics"
+        description="Translation usage and performance metrics."
+        icon={<BarChart3 className="w-4 h-4" />}
+        accentColor="blue"
+      />
 
       <div className="space-y-4">
         {/* Summary cards */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <div className="grid grid-cols-2 gap-4">
             <Card variant="default">
               <div className="flex items-center gap-2 mb-2">
@@ -109,7 +107,7 @@ export function StatisticsSection() {
         </div>
 
         {/* Cache Efficiency */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(1)}>
           <Card title="Cache Efficiency" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex items-center gap-6">
               {/* Progress ring */}
@@ -152,7 +150,7 @@ export function StatisticsSection() {
         </div>
 
         {/* Daily Chart (last 30 days) */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(2)}>
           <Card title="Daily Activity (Last 30 Days)" icon={<Activity className="w-3.5 h-3.5" />} variant="bordered">
             {dailyStats.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-sm text-zinc-500">
@@ -198,7 +196,7 @@ export function StatisticsSection() {
         </div>
 
         {/* Reset */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(3)}>
           <Card variant="bordered">
             <div className="flex items-center justify-between">
               <div>
