@@ -129,10 +129,28 @@ html:not([data-anyllm-state]) [data-anyllm-role="translation"] {
   cursor: pointer;
   opacity: 0.8;
   animation: anyllmFadeIn 0.3s ease-out forwards !important;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.anyllm-translate-translation[data-anyllm-error]::after {
+  content: ' ↻ retry';
+  font-size: 0.9em;
+  opacity: 0.6;
+  margin-left: 0.4em;
+  transition: opacity 0.2s ease;
 }
 
 .anyllm-translate-translation[data-anyllm-error]:hover {
   opacity: 1;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.anyllm-translate-translation[data-anyllm-error]:hover::after {
+  opacity: 1;
+}
+
+.anyllm-translate-translation[data-anyllm-error]:active {
+  opacity: 0.7;
 }
 
 /* ============================================
@@ -728,9 +746,15 @@ html.anyllm-dark .anyllm-inline-bilingual {
   color: #ef4444 !important;
   cursor: pointer;
   opacity: 0.85;
+  transition: opacity 0.2s ease;
 }
 .anyllm-inline-bilingual-error:hover {
   opacity: 1;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+.anyllm-inline-bilingual-error:active {
+  opacity: 0.6;
 }
 
 /* --- Translation-only mode (Fix #3) ---

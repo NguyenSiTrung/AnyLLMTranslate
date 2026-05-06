@@ -5,7 +5,7 @@
 
 import type { TranslationPiece } from '@/types/translation';
 import { extractPieces } from '@/content/domWalker';
-import { applyTranslation, applyTheme, applyPosition, applyDarkMode, setPageState, showLoadingPlaceholder, setErrorState } from '@/content/translationDisplay';
+import { applyTranslation, applyTheme, applyPosition, applyDarkMode, setPageState, showLoadingPlaceholder, setErrorState, clearErrorState } from '@/content/translationDisplay';
 import { loadSettings } from '@/lib/config';
 import { findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { DATA_ATTRS } from '@/lib/constants';
@@ -16,6 +16,36 @@ interface TranslatedSection {
 }
 
 const translatedSections: TranslatedSection[] = [];
+
+/** Retry a single failed piece — shows loading, re-sends to background, applies result or re-shows error */
+async function retryPiece(piece: TranslationPiece, settings: Awaited<ReturnType<typeof loadSettings>>): Promise<void> {
+  clearErrorState(piece.parentElement, piece.id);
+  showLoadingPlaceholder(piece.parentElement, piece.id);
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'translate',
+      pieces: [{ id: piece.id, text: piece.text }],
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+    });
+
+    if (response.success && response.results?.length > 0) {
+      piece.isTranslated = true;
+      piece.translatedText = response.results[0].translatedText;
+      applyTranslation(piece.parentElement, piece.id, response.results[0].translatedText);
+    } else {
+      setErrorState(piece.parentElement, piece.id, response.error ?? 'Retry failed', () => {
+        retryPiece(piece, settings);
+      });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Retry failed';
+    setErrorState(piece.parentElement, piece.id, message, () => {
+      retryPiece(piece, settings);
+    });
+  }
+}
 
 export async function translateSection(element: Element): Promise<void> {
   const settings = await loadSettings();
@@ -66,13 +96,17 @@ export async function translateSection(element: Element): Promise<void> {
       }
     } else if (!response.success && response.error) {
       for (const piece of pieces) {
-        setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+        setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', () => {
+          retryPiece(piece, settings);
+        });
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
-      setErrorState(piece.parentElement, piece.id, message);
+      setErrorState(piece.parentElement, piece.id, message, () => {
+        retryPiece(piece, settings);
+      });
     }
   }
 }

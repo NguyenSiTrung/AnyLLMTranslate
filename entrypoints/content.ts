@@ -156,12 +156,13 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
         }
       }
     } else if (!response.success && response.error) {
-      // Batch-level failure: mark all pieces as error
+      // Batch-level failure: mark all pieces as error with retry
       for (const piece of pieces) {
+        const retryPiece = () => translatePieces([piece]);
         if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
-          setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+          setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
         } else {
-          setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error');
+          setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
         }
       }
     }
@@ -172,10 +173,11 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
+      const retryPiece = () => translatePieces([piece]);
       if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
-        setInlineErrorState(piece.parentElement, piece.id, message);
+        setInlineErrorState(piece.parentElement, piece.id, message, retryPiece);
       } else {
-        setErrorState(piece.parentElement, piece.id, message);
+        setErrorState(piece.parentElement, piece.id, message, retryPiece);
       }
     }
   } finally {
