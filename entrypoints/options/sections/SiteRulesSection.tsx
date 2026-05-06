@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag, ChevronDown, Sparkles, Filter, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Shield, ShieldOff, Globe, Tag, ChevronDown, Sparkles, Filter, X, RotateCcw } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { SiteRule } from '@/types/config';
 import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
@@ -14,11 +14,15 @@ import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 import { Badge } from '@/ui/Badge';
 import { Toggle } from '@/ui/Toggle';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { EmptyState } from '@/ui/EmptyState';
 import { Modal } from '@/ui/Modal';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { DOMAIN_CATEGORY_MAP } from '@/content/utils/pageContext';
+
+/* ── Translation Mode type for SegmentedControl ─────────────── */
+type TranslateMode = 'default' | 'always' | 'never';
 
 export function SiteRulesSection() {
   const siteRules = useSettingsStore((s) => s.siteRules);
@@ -139,26 +143,24 @@ export function SiteRulesSection() {
                 {filteredRules.map((rule, idx) => (
                   <div key={rule.id}>
                     <div
-                      className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors animate-stagger"
+                      className="flex items-center justify-between px-4 py-3 hover:bg-zinc-800/30 transition-colors"
                       style={{ '--stagger-delay': Math.min(idx, 5) } as React.CSSProperties}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         {rule.alwaysTranslate ? (
                           <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
                         ) : rule.neverTranslate ? (
                           <ShieldOff className="w-4 h-4 text-red-400 shrink-0" />
                         ) : (
-                          <div className="w-4 h-4 shrink-0" />
+                          <Globe className="w-4 h-4 text-zinc-600 shrink-0" />
                         )}
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-sm text-zinc-200 font-mono">{rule.hostname}</span>
-                          {rule.builtIn && <Badge variant="info" className="ml-2">Built-in</Badge>}
-                          {rule.category && <Badge variant="info" className="ml-2"><Tag className="w-3 h-3 inline mr-1" />{rule.category}</Badge>}
-                          {(rule.includeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.includeSelectors.length} include</Badge>}
-                          {(rule.excludeSelectors?.length ?? 0) > 0 && <Badge variant="info" className="ml-2">{rule.excludeSelectors.length} exclude</Badge>}
+                          {rule.builtIn && <Badge variant="warning" className="ml-2">Built-in</Badge>}
+                          {rule.category && <Badge variant="success" className="ml-2"><Tag className="w-3 h-3 inline mr-1" />{rule.category}</Badge>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -250,37 +252,19 @@ function SmartExcludesCard() {
 
   return (
     <Card variant="bordered">
-      {/* Header row with icon + title + toggle */}
+      {/* Header row with icon + title + toggle — uses shared Toggle */}
       <div className="flex items-start gap-3">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500/15 to-orange-500/10 border border-amber-500/20 shrink-0 mt-0.5">
           <Sparkles className="w-4 h-4 text-amber-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-200">Smart Excludes</h3>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                Automatically skip navigation, sidebars, table of contents, and other structural elements.
-              </p>
-            </div>
-            <button
-              id="smart-excludes-toggle"
-              type="button"
-              role="switch"
-              aria-checked={isEnabled}
-              aria-label="Smart Excludes"
-              onClick={() => updateSettings({ enableSmartExcludes: !isEnabled })}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 ${
-                isEnabled ? 'bg-blue-600' : 'bg-zinc-700'
-              }`}
-            >
-              <div
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                  isEnabled ? 'translate-x-5' : ''
-                }`}
-              />
-            </button>
-          </div>
+          <Toggle
+            id="smart-excludes-toggle"
+            checked={isEnabled}
+            onChange={(checked) => updateSettings({ enableSmartExcludes: checked })}
+            label="Smart Excludes"
+            description="Automatically skip navigation, sidebars, table of contents, and other structural elements."
+          />
 
           {/* Expandable selector list */}
           {isEnabled && (
@@ -371,8 +355,9 @@ function CustomExcludesCard() {
             {!isDefault && (
               <button
                 onClick={() => updateSettings({ globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES] })}
-                className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors shrink-0"
+                className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition-colors shrink-0"
               >
+                <RotateCcw className="w-3 h-3" />
                 Reset to defaults
               </button>
             )}
@@ -381,7 +366,7 @@ function CustomExcludesCard() {
             CSS selectors excluded from translation on all sites. Per-site rules add to these defaults.
           </p>
 
-          {/* Selector chips */}
+          {/* Selector chips — remove button always visible for touch accessibility */}
           <div className="flex flex-wrap gap-1.5 mb-3">
             {globalExcludeSelectors.map((selector) => (
               <span
@@ -391,15 +376,16 @@ function CustomExcludesCard() {
                 {selector}
                 <button
                   onClick={() => handleRemoveSelector(selector)}
-                  className="ml-0.5 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                  className="ml-0.5 text-zinc-600 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
                   aria-label={`Remove ${selector}`}
+                  tabIndex={0}
                 >
                   <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
             {globalExcludeSelectors.length === 0 && (
-              <span className="text-xs text-zinc-600 italic py-1">No global excludes — all elements will be translated.</span>
+              <span className="text-xs text-zinc-600 italic py-1">No custom excludes — only Smart Excludes (if enabled) are applied.</span>
             )}
           </div>
 
@@ -431,6 +417,80 @@ function CustomExcludesCard() {
   );
 }
 
+/* ── Selector Chips Input ──────────────────────────────────── */
+
+/** Reusable chip-based input for managing lists of CSS selectors */
+function SelectorChipsInput({ selectors, onChange, placeholder, id }: {
+  selectors: string[];
+  onChange: (selectors: string[]) => void;
+  placeholder: string;
+  id?: string;
+}) {
+  const [inputValue, setInputValue] = useState('');
+
+  const handleAdd = () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed || selectors.includes(trimmed)) {
+      setInputValue('');
+      return;
+    }
+    onChange([...selectors, trimmed]);
+    setInputValue('');
+  };
+
+  const handleRemove = (selector: string) => {
+    onChange(selectors.filter((s) => s !== selector));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAdd();
+    }
+    // Backspace on empty input removes last chip
+    if (e.key === 'Backspace' && !inputValue && selectors.length > 0) {
+      onChange(selectors.slice(0, -1));
+    }
+  };
+
+  return (
+    <div>
+      {/* Existing chips */}
+      {selectors.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selectors.map((selector) => (
+            <span
+              key={selector}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 transition-colors group"
+            >
+              {selector}
+              <button
+                onClick={() => handleRemove(selector)}
+                className="ml-0.5 text-zinc-600 hover:text-red-400 transition-colors opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={`Remove ${selector}`}
+                tabIndex={0}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {/* Input */}
+      <Input
+        id={id}
+        type="text"
+        placeholder={selectors.length === 0 ? placeholder : 'Add another...'}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="font-mono"
+      />
+      <p className="text-[10px] text-zinc-600 mt-1">Press Enter or comma to add</p>
+    </div>
+  );
+}
+
 /* ── Rule Edit Form ─────────────────────────────────────────── */
 
 function RuleEditForm({ rule, onSave, onCancel }: {
@@ -440,11 +500,18 @@ function RuleEditForm({ rule, onSave, onCancel }: {
 }) {
   const [form, setForm] = useState({
     ...rule,
-    includeSelectorText: rule.includeSelectors?.join(', ') ?? '',
-    excludeSelectorText: rule.excludeSelectors?.join(', ') ?? '',
+    includeSelectors: [...(rule.includeSelectors ?? [])],
+    excludeSelectors: [...(rule.excludeSelectors ?? [])],
     categoryValue: rule.category ?? '__none__',
     customCategory: '',
   });
+
+  /* Derive translate mode from boolean flags */
+  const translateMode: TranslateMode = form.alwaysTranslate
+    ? 'always'
+    : form.neverTranslate
+      ? 'never'
+      : 'default';
 
   const suggestedCategory = useMemo(() => {
     if (!form.hostname) return undefined;
@@ -458,6 +525,14 @@ function RuleEditForm({ rule, onSave, onCancel }: {
     { value: '__custom__', label: 'Custom...' },
   ];
 
+  const handleTranslateModeChange = (mode: TranslateMode) => {
+    setForm({
+      ...form,
+      alwaysTranslate: mode === 'always',
+      neverTranslate: mode === 'never',
+    });
+  };
+
   const handleSave = () => {
     const resolvedCategory = form.categoryValue === '__none__'
       ? undefined
@@ -465,70 +540,82 @@ function RuleEditForm({ rule, onSave, onCancel }: {
         ? form.customCategory.trim().slice(0, 50) || undefined
         : form.categoryValue;
 
-    const parsedRule = {
-      ...form,
+    const cleanRule: SiteRule = {
+      id: form.id,
+      hostname: form.hostname,
+      includeSelectors: form.includeSelectors,
+      excludeSelectors: form.excludeSelectors,
+      alwaysTranslate: form.alwaysTranslate,
+      neverTranslate: form.neverTranslate,
+      builtIn: form.builtIn,
       category: resolvedCategory,
-      includeSelectors: form.includeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
-      excludeSelectors: form.excludeSelectorText.split(',').map(s => s.trim()).filter(Boolean),
     };
-    const { includeSelectorText: _inc, excludeSelectorText: _exc, categoryValue: _cv, customCategory: _cc, ...cleanRule } = parsedRule;
-    onSave(cleanRule as SiteRule);
+    onSave(cleanRule);
   };
 
   return (
-    <Card variant="bordered" className="space-y-3 border-zinc-700">
-      <Input
-        type="text"
-        placeholder="*.example.com"
-        value={form.hostname}
-        onChange={(e) => setForm({ ...form, hostname: e.target.value })}
-        className="font-mono"
-      />
+    <Card variant="bordered" className="space-y-4 border-zinc-700">
+      {/* Hostname — now with FieldGroup label */}
+      <FieldGroup
+        label="Hostname"
+        description="Wildcard patterns supported (e.g. *.example.com)"
+        htmlFor="rule-edit-hostname"
+      >
+        <Input
+          id="rule-edit-hostname"
+          type="text"
+          placeholder="*.example.com"
+          value={form.hostname}
+          onChange={(e) => setForm({ ...form, hostname: e.target.value })}
+          className="font-mono"
+        />
+      </FieldGroup>
+
+      {/* Include Selectors — chip-based input */}
       <FieldGroup
         label="Include Selectors"
-        description="Comma-separated CSS selectors to translate."
+        description="CSS selectors to translate on this site."
       >
-        <Input
-          type="text"
+        <SelectorChipsInput
+          id="rule-edit-include-selectors"
+          selectors={form.includeSelectors}
+          onChange={(includeSelectors) => setForm({ ...form, includeSelectors })}
           placeholder=".content, article, main"
-          value={form.includeSelectorText}
-          onChange={(e) => setForm({ ...form, includeSelectorText: e.target.value })}
-          className="font-mono"
         />
       </FieldGroup>
+
+      {/* Exclude Selectors — chip-based input */}
       <FieldGroup
         label="Exclude Selectors"
-        description="Comma-separated CSS selectors to skip."
+        description="CSS selectors to skip on this site."
       >
-        <Input
-          type="text"
+        <SelectorChipsInput
+          id="rule-edit-exclude-selectors"
+          selectors={form.excludeSelectors}
+          onChange={(excludeSelectors) => setForm({ ...form, excludeSelectors })}
           placeholder=".nav, .sidebar, footer"
-          value={form.excludeSelectorText}
-          onChange={(e) => setForm({ ...form, excludeSelectorText: e.target.value })}
-          className="font-mono"
         />
       </FieldGroup>
-      <div className="flex gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-300">
-          <input
-            type="checkbox"
-            checked={form.alwaysTranslate}
-            onChange={(e) => setForm({ ...form, alwaysTranslate: e.target.checked, neverTranslate: false })}
-            className="accent-blue-500"
-          />
-          Always translate
-        </label>
-        <label className="flex items-center gap-2 text-sm text-zinc-300">
-          <input
-            type="checkbox"
-            checked={form.neverTranslate}
-            onChange={(e) => setForm({ ...form, neverTranslate: e.target.checked, alwaysTranslate: false })}
-            className="accent-blue-500"
-          />
-          Never translate
-        </label>
-      </div>
-      {/* C4: Replace raw <select> with shared Select component */}
+
+      {/* Translation Mode — SegmentedControl replaces raw checkboxes */}
+      <FieldGroup
+        label="Translation Mode"
+        description="Control how this site is handled during translation."
+      >
+        <SegmentedControl
+          options={[
+            { value: 'default' as TranslateMode, label: 'Default' },
+            { value: 'always' as TranslateMode, label: 'Always Translate', icon: <Shield className="w-3 h-3" /> },
+            { value: 'never' as TranslateMode, label: 'Never Translate', icon: <ShieldOff className="w-3 h-3" /> },
+          ]}
+          value={translateMode}
+          onChange={handleTranslateModeChange}
+          label="Translation mode"
+          size="sm"
+        />
+      </FieldGroup>
+
+      {/* Page Category */}
       <FieldGroup
         label="Page Category"
         description="Override auto-detected category for this hostname."
@@ -540,7 +627,6 @@ function RuleEditForm({ rule, onSave, onCancel }: {
           onChange={(e) => setForm({ ...form, categoryValue: e.target.value })}
           options={categoryOptions}
         />
-        {/* C4: Replace raw <input> with shared Input component for custom category */}
         {form.categoryValue === '__custom__' && (
           <Input
             type="text"
@@ -553,13 +639,15 @@ function RuleEditForm({ rule, onSave, onCancel }: {
         {suggestedCategory && form.categoryValue === '__none__' && (
           <button
             onClick={() => setForm({ ...form, categoryValue: suggestedCategory })}
-            className="mt-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-xs text-blue-400 hover:bg-blue-500/15 hover:text-blue-300 transition-colors"
           >
+            <Sparkles className="w-3 h-3" />
             Suggested: {suggestedCategory}
           </button>
         )}
       </FieldGroup>
-      <div className="flex gap-2 justify-end">
+
+      <div className="flex gap-2 justify-end pt-1">
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
         <Button size="sm" disabled={!form.hostname} onClick={handleSave}>Save</Button>
       </div>
