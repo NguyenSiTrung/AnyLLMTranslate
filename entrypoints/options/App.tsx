@@ -142,7 +142,7 @@ export default function App() {
 
   const renderSection = () => {
     switch (activeTab) {
-      case 'general': return <GeneralSection />;
+      case 'general': return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;
       case 'provider': return <ProviderSection onOpenSetup={() => setShowSetupWizard(true)} />;
       case 'themes': return <ThemesSection />;
       case 'site-rules': return <SiteRulesSection />;
@@ -152,7 +152,7 @@ export default function App() {
       case 'shortcuts': return <ShortcutsSection />;
       case 'inline': return <InlineTranslateSection />;
       case 'advanced': return <AdvancedSection />;
-      default: return <GeneralSection />;
+      default: return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;
     }
   };
 

@@ -1,22 +1,23 @@
 /**
- * General Settings Section — target language, display mode, theme, position, dark mode.
+ * General Settings Section — target language, display mode, theme, position, host page mode.
  *
- * Refactored UI/UX improvements:
- * - Removed redundant header Card; uses inline SectionHeader pattern
- * - Display Mode / Translation Position / Dark Mode use SegmentedControl (radio group)
- * - ThemePreview sits at same card level (no card-in-card nesting)
- * - Cards have stagger entrance animation
- * - Language FieldGroups include search hint
+ * Refactored layout:
+ * - 2 cards only: Language + Display & Appearance (merged)
+ * - ThemePreview removed (lives in Themes tab)
+ * - "Dark Mode" renamed to "Host Page Mode"
+ * - Translation Position disabled in translation-only mode
+ * - Uses SectionHeader component
  */
 
-import { Globe, SlidersHorizontal, Monitor, Paintbrush } from 'lucide-react';
+import { Globe, SlidersHorizontal, Monitor } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Select } from '@/ui/Select';
 import { Card } from '@/ui/Card';
 import { SegmentedControl } from '@/ui/SegmentedControl';
-import { ThemePreview } from '../ThemePreview';
+import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
 
 const THEME_OPTIONS = [
@@ -49,40 +50,41 @@ const POSITION_OPTIONS: { value: TranslationPosition; label: string }[] = [
   { value: 'side', label: 'Side' },
 ];
 
-const DARK_MODE_OPTIONS: { value: DarkMode; label: string }[] = [
+const HOST_PAGE_MODE_OPTIONS: { value: DarkMode; label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ];
 
-export function GeneralSection() {
+interface GeneralSectionProps {
+  onNavigateToThemes?: () => void;
+}
+
+export function GeneralSection({ onNavigateToThemes }: GeneralSectionProps) {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const sourceLanguages = LANGUAGES;
 
+  const isTranslationOnly = settings.displayMode === 'translation-only';
+
   return (
     <div className="animate-fade-in-up">
-      {/* Inline section header — no redundant card */}
-      <div className="sticky top-0 z-10 backdrop-blur-md bg-[#09090b]/95 pt-4 pb-4 mb-3 -mt-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/20">
-          <SlidersHorizontal className="w-4 h-4 text-blue-400" />
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100 leading-tight">General</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Language, display, and appearance preferences.</p>
-        </div>
-      </div>
+      <SectionHeader
+        title="General"
+        description="Language, display, and appearance preferences."
+        icon={<SlidersHorizontal className="w-4 h-4" />}
+        accentColor="blue"
+      />
 
       <div className="space-y-4">
         {/* Language card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '0' } as React.CSSProperties}>
+        <div className="animate-stagger" style={stagger(0)}>
           <Card title="Language" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup
                 label="Source Language"
                 description="The language of pages you want to translate from."
-                hint="Type the first few letters to jump to a language."
                 htmlFor="general-source-language"
               >
                 <Select
@@ -91,7 +93,9 @@ export function GeneralSection() {
                   onChange={(e) => updateSettings({ sourceLanguage: e.target.value })}
                   options={sourceLanguages.map((lang) => ({
                     value: lang.code,
-                    label: `${lang.nativeName} (${lang.name})`,
+                    label: lang.code === 'auto'
+                      ? `🌐 ${lang.nativeName} (${lang.name})`
+                      : `${lang.nativeName} (${lang.name})`,
                   }))}
                 />
               </FieldGroup>
@@ -99,7 +103,6 @@ export function GeneralSection() {
               <FieldGroup
                 label="Target Language"
                 description="The language to translate into."
-                hint="Type the first few letters to jump to a language."
                 htmlFor="general-target-language"
               >
                 <Select
@@ -116,15 +119,16 @@ export function GeneralSection() {
           </Card>
         </div>
 
-        {/* Display card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '1' } as React.CSSProperties}>
-          <Card title="Display" icon={<Monitor className="w-3.5 h-3.5" />} variant="bordered">
+        {/* Display & Appearance card (merged) */}
+        <div className="animate-stagger" style={stagger(1)}>
+          <Card title="Display & Appearance" icon={<Monitor className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup
                 label="Display Mode"
                 description="How translations appear on the page."
               >
                 <SegmentedControl
+                  id="general-display-mode"
                   label="Display Mode"
                   options={DISPLAY_MODE_OPTIONS}
                   value={settings.displayMode}
@@ -143,39 +147,46 @@ export function GeneralSection() {
                   onChange={(e) => updateSettings({ theme: e.target.value as ThemeName })}
                   options={THEME_OPTIONS}
                 />
+                {onNavigateToThemes && (
+                  <button
+                    onClick={onNavigateToThemes}
+                    className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Preview all themes →
+                  </button>
+                )}
               </FieldGroup>
-            </div>
-          </Card>
-        </div>
 
-        {/* Theme Preview — at same card level, not nested */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '2' } as React.CSSProperties}>
-          <ThemePreview />
-        </div>
+              {/* Separator between display and appearance groups */}
+              <div className="border-t border-zinc-800" />
 
-        {/* Appearance card */}
-        <div className="animate-stagger" style={{ '--stagger-delay': '3' } as React.CSSProperties}>
-          <Card title="Appearance" icon={<Paintbrush className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-5">
-              <FieldGroup
-                label="Translation Position"
-                description="Where the translation appears relative to the original text."
+              {/* Translation Position — disabled in translation-only mode */}
+              <div
+                className={`transition-opacity duration-200 ${isTranslationOnly ? 'opacity-40 pointer-events-none' : ''}`}
               >
-                <SegmentedControl
+                <FieldGroup
                   label="Translation Position"
-                  options={POSITION_OPTIONS}
-                  value={settings.translationPosition}
-                  onChange={(val) => updateSettings({ translationPosition: val })}
-                />
-              </FieldGroup>
+                  description="Where the translation appears relative to the original text."
+                  hint={isTranslationOnly ? 'Position only applies in Bilingual mode.' : undefined}
+                >
+                  <SegmentedControl
+                    id="general-translation-position"
+                    label="Translation Position"
+                    options={POSITION_OPTIONS}
+                    value={settings.translationPosition}
+                    onChange={(val) => updateSettings({ translationPosition: val })}
+                  />
+                </FieldGroup>
+              </div>
 
               <FieldGroup
-                label="Dark Mode"
-                description="Control the appearance of translated text on host pages."
+                label="Host Page Mode"
+                description="Match how translations render on the page. Auto detects the site's theme."
               >
                 <SegmentedControl
-                  label="Dark Mode"
-                  options={DARK_MODE_OPTIONS}
+                  id="general-host-page-mode"
+                  label="Host Page Mode"
+                  options={HOST_PAGE_MODE_OPTIONS}
                   value={settings.darkMode}
                   onChange={(val) => updateSettings({ darkMode: val })}
                 />
