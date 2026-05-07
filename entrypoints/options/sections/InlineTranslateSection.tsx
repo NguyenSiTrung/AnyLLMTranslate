@@ -148,6 +148,7 @@ export function InlineTranslateSection() {
                 <li>Works in text inputs, search boxes, textareas, and rich text editors</li>
                 <li>Translated text replaces the original — use <kbd className="px-1 py-0.5 bg-zinc-800/60 border border-zinc-700/50 rounded text-zinc-400 font-mono text-[10px]">Ctrl+Z</kbd> to undo</li>
                 <li>Password fields and code editors are automatically excluded</li>
+                <li>Does not work on browser internal pages (e.g. New Tab) or the Web Store due to browser security restrictions</li>
               </ul>
             </div>
           </Card>
