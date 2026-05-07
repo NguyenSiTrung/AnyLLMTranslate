@@ -62,9 +62,12 @@ describe('eviction scheduling (FR-3)', () => {
   it('calls evictCache once on service worker startup', async () => {
     // Act
     await scheduleEviction();
+    // Wait for the loadSettings().then(evictCache) chain to resolve
+    await new Promise((r) => setTimeout(r, 0));
 
-    // Assert
+    // Assert — called with default settings values (maxCacheSizeMB=100, cacheTTLDays=30)
     expect(evictCache).toHaveBeenCalledTimes(1);
+    expect(evictCache).toHaveBeenCalledWith(100, 30);
   });
 
   it('registers chrome.alarms.create with correct daily schedule', async () => {
@@ -86,9 +89,12 @@ describe('eviction scheduling (FR-3)', () => {
     for (const listener of alarmListeners) {
       listener(cached_evict_alarm);
     }
+    // Wait for the loadSettings().then(evictCache) chain to resolve
+    await new Promise((r) => setTimeout(r, 0));
 
-    // Assert
+    // Assert — called with default settings values
     expect(evictCache).toHaveBeenCalled();
+    expect(evictCache).toHaveBeenCalledWith(100, 30);
   });
 
   it('does NOT call evictCache for unrelated alarm names', async () => {

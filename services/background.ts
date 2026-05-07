@@ -16,7 +16,7 @@ import { loadSettings, onSettingsChange } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import { validateProviderConfig } from '@/services/base';
-import { getCachedTranslation, cacheTranslation, evictCache } from '@/services/cacheManager';
+import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 
@@ -140,6 +140,7 @@ async function handleTranslate(
         piece.text,
         message.sourceLanguage,
         message.targetLanguage,
+        settings.cacheTTLDays,
       );
       if (cached !== null) {
         cachedResults.push({ id: piece.id, translatedText: cached });
@@ -274,7 +275,7 @@ async function handleTranslateSubtitle(
       
       for (let i = 0; i < chunkCues.length; i++) {
         const cue = chunkCues[i];
-        const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage);
+        const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage, subtitleSettings.cacheTTLDays);
         if (cached) {
           chunkResult[i] = {
             ...cue,
@@ -482,17 +483,18 @@ async function handleTranslateSelection(
 ): Promise<{ success: boolean; translatedText?: string; error?: string }> {
   try {
     // FR-2: Check cache before calling LLM
+    const selectionSettings = await loadSettings();
     const cached = await getCachedTranslation(
       message.text,
       message.sourceLanguage,
       message.targetLanguage,
+      selectionSettings.cacheTTLDays,
     );
     if (cached !== null) {
       return { success: true, translatedText: cached };
     }
 
     const service = await initService();
-    const selectionSettings = await loadSettings();
     const selectionGlossary = formatGlossary(selectionSettings.glossary ?? []);
     const texts = new Map<string, string>();
     texts.set('selection', message.text);
@@ -633,6 +635,8 @@ export function handleMessage(
     }
     case 'DETECT_PAGE_CATEGORY_LLM':
       return handleDetectPageCategoryLLM(message);
+    case 'CLEAR_CACHE':
+      return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
     default:
       return undefined;
   }
@@ -650,10 +654,12 @@ export function initSettingsListener(): () => void {
  * Called on service worker startup (fire-and-forget, non-blocking).
  */
 export async function scheduleEviction(): Promise<void> {
-  // Run immediately on startup
-  evictCache().catch(() => {
-    // Silently fail — eviction is best-effort
-  });
+  // Run immediately on startup with user-configured limits
+  loadSettings()
+    .then((s) => evictCache(s.maxCacheSizeMB, s.cacheTTLDays))
+    .catch(() => {
+      // Silently fail — eviction is best-effort
+    });
 
   // Schedule daily eviction via chrome.alarms (persists across SW restarts)
   chrome.alarms.create('cache-evict', { periodInMinutes: 1440 });
@@ -666,9 +672,11 @@ export async function scheduleEviction(): Promise<void> {
 export function initEvictionSchedule(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'cache-evict') {
-      evictCache().catch(() => {
-        // Silently fail — eviction is best-effort
-      });
+      loadSettings()
+        .then((s) => evictCache(s.maxCacheSizeMB, s.cacheTTLDays))
+        .catch(() => {
+          // Silently fail — eviction is best-effort
+        });
     }
   });
 }

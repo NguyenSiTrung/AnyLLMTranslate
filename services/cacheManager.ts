@@ -71,8 +71,9 @@ export async function getCachedTranslation(
 
     if (!entry) return null;
 
-    // Check TTL expiry
-    const ttlMs = ttlDays * 24 * 60 * 60 * 1000;
+    // Check TTL expiry (clamp ttlDays to minimum 1 to prevent accidental cache disable)
+    const safeTtlDays = Math.max(1, ttlDays);
+    const ttlMs = safeTtlDays * 24 * 60 * 60 * 1000;
     if (Date.now() - entry.cachedAt > ttlMs) {
       await del(key, getStore());
       return null;
@@ -125,7 +126,8 @@ export async function evictCache(
 ): Promise<number> {
   try {
     const allEntries = await entries<string, CacheEntry>(getStore());
-    const ttlMs = ttlDays * 24 * 60 * 60 * 1000;
+    const safeTtlDays = Math.max(1, ttlDays);
+    const ttlMs = safeTtlDays * 24 * 60 * 60 * 1000;
     const now = Date.now();
     let evicted = 0;
 
@@ -140,8 +142,9 @@ export async function evictCache(
       }
     }
 
-    // Phase 2: LRU eviction if still over size
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    // Phase 2: LRU eviction if still over size (clamp to minimum 10 MB)
+    const safeMaxSizeMB = Math.max(10, maxSizeMB);
+    const maxSizeBytes = safeMaxSizeMB * 1024 * 1024;
     let totalSize = validEntries.reduce((sum, [, e]) => sum + (e.sizeBytes ?? 0), 0);
 
     if (totalSize > maxSizeBytes) {
@@ -164,13 +167,16 @@ export async function evictCache(
 
 /** Clear the entire cache */
 export async function clearCache(): Promise<void> {
-  try {
-    const allKeys = await keys(getStore());
-    for (const key of allKeys) {
-      await del(key, getStore());
-    }
-  } catch {
-    // Silently fail
+  // Cancel any pending LRU flush to prevent re-writing deleted entries
+  if (lruFlushTimer !== null) {
+    clearTimeout(lruFlushTimer);
+    lruFlushTimer = null;
+  }
+  pendingLruUpdates.clear();
+
+  const allKeys = await keys(getStore());
+  for (const key of allKeys) {
+    await del(key, getStore());
   }
 }
 

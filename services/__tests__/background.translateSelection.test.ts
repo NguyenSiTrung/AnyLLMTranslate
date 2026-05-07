@@ -88,7 +88,7 @@ describe('handleTranslateSelection — cache read (FR-2)', () => {
     const result = await handleMessage(translateSelectionMsg(), fakeSender);
 
     // Assert
-    expect(getCachedTranslation).toHaveBeenCalledWith('Hello', 'en', 'vi');
+    expect(getCachedTranslation).toHaveBeenCalledWith('Hello', 'en', 'vi', 30);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true, translatedText: 'Xin chào (cached)' });
   });
@@ -102,7 +102,7 @@ describe('handleTranslateSelection — cache read (FR-2)', () => {
     const result = await handleMessage(translateSelectionMsg(), fakeSender);
 
     // Assert
-    expect(getCachedTranslation).toHaveBeenCalledWith('Hello', 'en', 'vi');
+    expect(getCachedTranslation).toHaveBeenCalledWith('Hello', 'en', 'vi', 30);
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
     expect(fetchMock).toHaveBeenCalled();
     expect(result).toEqual({ success: true, translatedText: 'Xin chào' });

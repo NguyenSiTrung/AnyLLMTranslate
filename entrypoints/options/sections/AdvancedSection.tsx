@@ -89,14 +89,13 @@ export function AdvancedSection() {
     setShowClearCacheModal(false);
     setClearStatus('clearing');
     try {
-      const dbs = await indexedDB.databases();
-      for (const db of dbs) {
-        if (db.name?.includes('anyllm-translate')) {
-          indexedDB.deleteDatabase(db.name);
-        }
+      const response = await chrome.runtime.sendMessage({ action: 'CLEAR_CACHE' });
+      if (response?.success) {
+        setClearStatus('done');
+        showSuccess('Translation cache cleared');
+      } else {
+        throw new Error('Clear cache failed');
       }
-      setClearStatus('done');
-      showSuccess('Translation cache cleared');
       setTimeout(() => setClearStatus('idle'), 2000);
     } catch {
       setClearStatus('idle');

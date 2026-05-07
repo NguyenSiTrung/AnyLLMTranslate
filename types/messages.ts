@@ -38,7 +38,8 @@ export type MessageAction =
   | 'setCategoryOverride'
   | 'getCategoryOverride'
   | 'getPageCategory'
-  | 'DETECT_PAGE_CATEGORY_LLM';
+  | 'DETECT_PAGE_CATEGORY_LLM'
+  | 'CLEAR_CACHE';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -150,6 +151,11 @@ export interface DetectPageCategoryLlmMessage {
   pageContext: PageContext;
 }
 
+/** Clear cache request from options page → background */
+export interface ClearCacheMessage {
+  action: 'CLEAR_CACHE';
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -170,7 +176,8 @@ export type ExtensionMessage =
   | SetCategoryOverrideMessage
   | GetCategoryOverrideMessage
   | GetPageCategoryMessage
-  | DetectPageCategoryLlmMessage;
+  | DetectPageCategoryLlmMessage
+  | ClearCacheMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {
