@@ -4,12 +4,13 @@
  * and highlighting any entries that were not honoured by the LLM.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Languages, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { checkGlossaryMismatches } from '@/lib/glossary';
 import type { GlossaryEntry } from '@/types/config';
 import { Button } from '@/ui/Button';
+import { Card } from '@/ui/Card';
 
 interface GlossaryTranslatePreviewProps {
   /** Callback to notify parent which entry IDs are mismatched */
@@ -64,13 +65,19 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
     }
   }, [inputText, sourceLanguage, targetLanguage, glossary, onMismatchUpdate]);
 
+  // Memoize mismatch results to avoid redundant recalculation in render
+  const mismatches = useMemo(
+    () => (hasRun && outputText ? checkGlossaryMismatches(glossary, inputText, outputText) : []),
+    [glossary, inputText, outputText, hasRun],
+  );
+
   return (
-    <div className="mt-6 border border-zinc-800 rounded-lg overflow-hidden">
+    <Card variant="bordered" className="mt-6 p-0 overflow-hidden">
       {/* Collapsible header */}
       <button
         id="glossary-preview-toggle"
         onClick={() => setIsOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors text-left cursor-pointer"
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2">
@@ -87,7 +94,7 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
 
       {/* Panel body */}
       {isOpen && (
-        <div className="p-4 bg-zinc-950 space-y-3 animate-fade-in-up">
+        <div className="p-4 border-t border-white/5 space-y-3 animate-fade-in-up">
           <textarea
             id="glossary-preview-input"
             value={inputText}
@@ -101,8 +108,9 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
               }
             }}
             placeholder="Type a sentence containing your glossary terms…"
+            aria-label="Preview input text"
             rows={3}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 resize-none transition-colors"
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-none transition-colors"
           />
 
           <Button
@@ -126,14 +134,14 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
           {outputText && (
             <div className="space-y-1">
               <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Translation Result</p>
-              <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200">
+              <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200">
                 {outputText}
               </div>
 
               {/* Mismatch summary */}
               {hasRun && (
                 <div className="flex items-center gap-1.5 text-xs mt-1">
-                  {checkGlossaryMismatches(glossary, inputText, outputText).length === 0 ? (
+                  {mismatches.length === 0 ? (
                     <>
                       <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
                       <span className="text-emerald-400">All glossary terms honoured</span>
@@ -142,7 +150,7 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
                     <>
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                       <span className="text-amber-400">
-                        {checkGlossaryMismatches(glossary, inputText, outputText).length} term(s) not found in output — rows marked ⚠️ above
+                        {mismatches.length} term(s) not found in output — rows marked ⚠️ above
                       </span>
                     </>
                   )}
@@ -152,6 +160,6 @@ export function GlossaryTranslatePreview({ onMismatchUpdate }: GlossaryTranslate
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -104,11 +104,14 @@ describe('exportGlossaryCSV', () => {
 });
 
 describe('exportGlossaryJSON', () => {
-  it('exports as formatted JSON', () => {
+  it('exports as formatted JSON without id fields', () => {
     const json = exportGlossaryJSON(sampleEntries);
     const parsed = JSON.parse(json);
     expect(parsed).toHaveLength(3);
     expect(parsed[0].source).toBe('React');
+    expect(parsed[0].target).toBe('React');
+    // Internal id should be stripped from export
+    expect(parsed[0]).not.toHaveProperty('id');
   });
 });
 
@@ -128,17 +131,20 @@ describe('parseGlossaryJSON', () => {
     expect(() => parseGlossaryJSON('[{"source": "hello"}]')).toThrow('must have source and target');
   });
 
-  it('generates IDs if missing', () => {
+  it('generates fresh UUIDs for entries', () => {
     const json = '[{"source": "hello", "target": "xin chào"}]';
     const result = parseGlossaryJSON(json);
     expect(result[0].id).toBeTruthy();
-    expect(result[0].id).toContain('json-');
+    // UUID v4 format: 8-4-4-4-12 hex chars
+    expect(result[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
-  it('preserves existing IDs', () => {
+  it('always generates fresh IDs even when JSON has existing IDs', () => {
     const json = '[{"id": "custom-id", "source": "hello", "target": "xin chào"}]';
     const result = parseGlossaryJSON(json);
-    expect(result[0].id).toBe('custom-id');
+    // Fresh UUID is always generated, original id is not preserved
+    expect(result[0].id).not.toBe('custom-id');
+    expect(result[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 });
 

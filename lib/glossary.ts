@@ -44,7 +44,7 @@ export function parseGlossaryCSV(csv: string): GlossaryEntry[] {
     const parts = splitCSVLine(line);
     if (parts.length >= 2) {
       entries.push({
-        id: `csv-${Date.now()}-${i}`,
+        id: crypto.randomUUID(),
         source: parts[0].trim(),
         target: parts[1].trim(),
       });
@@ -61,9 +61,10 @@ export function exportGlossaryCSV(entries: GlossaryEntry[]): string {
   return [header, ...lines].join('\n');
 }
 
-/** Export glossary entries as JSON string */
+/** Export glossary entries as JSON string (strips internal id field) */
 export function exportGlossaryJSON(entries: GlossaryEntry[]): string {
-  return JSON.stringify(entries, null, 2);
+  const exported = entries.map(({ source, target }) => ({ source, target }));
+  return JSON.stringify(exported, null, 2);
 }
 
 /** Parse JSON string into GlossaryEntry objects */
@@ -78,7 +79,7 @@ export function parseGlossaryJSON(json: string): GlossaryEntry[] {
       throw new Error(`Invalid entry at index ${i}: must have source and target strings`);
     }
     return {
-      id: typeof entry.id === 'string' ? entry.id : `json-${Date.now()}-${i}`,
+      id: crypto.randomUUID(),
       source: entry.source,
       target: entry.target,
     };

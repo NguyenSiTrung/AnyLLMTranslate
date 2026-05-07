@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle, PenLine, ArrowLeftRight, Search } from 'lucide-react';
+import { Plus, Trash2, FileJson, FileText, Upload, BookOpen, AlertTriangle, PenLine, ArrowLeftRight, Search, Check, X } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -50,7 +50,7 @@ export function DictionarySection() {
   const handleAdd = useCallback(() => {
     if (!newSource.trim() || !newTarget.trim()) return;
     const entry: GlossaryEntry = {
-      id: `entry-${Date.now()}`,
+      id: crypto.randomUUID(),
       source: newSource.trim(),
       target: newTarget.trim(),
     };
@@ -125,6 +125,7 @@ export function DictionarySection() {
                 id="dict-source"
                 type="text"
                 placeholder="Source term"
+                aria-label="Source term"
                 value={newSource}
                 onChange={(e) => setNewSource(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -133,6 +134,7 @@ export function DictionarySection() {
                 id="dict-target"
                 type="text"
                 placeholder="Translation"
+                aria-label="Translation"
                 value={newTarget}
                 onChange={(e) => setNewTarget(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -202,43 +204,40 @@ export function DictionarySection() {
               message="No dictionary entries. Add terms above or import from a file."
             />
           ) : (
-            <>
-              {/* M3: Search filter */}
-              <div className="flex items-center gap-2 mb-2">
+            <Card variant="bordered" className="p-0 overflow-hidden">
+              {/* Search filter — inside card header */}
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900/40 border-b border-zinc-800">
                 <div className="flex-1">
                   <Input
                     id="dict-search"
                     type="search"
                     placeholder="Search entries..."
+                    aria-label="Search dictionary entries"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     icon={<Search className="w-4 h-4" />}
                   />
                 </div>
-                <span className="text-xs text-zinc-500 whitespace-nowrap">
-                  {filteredGlossary.length} of {glossary.length} {glossary.length === 1 ? 'entry' : 'entries'}
-                </span>
               </div>
-            <Card variant="bordered" className="p-0 overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" aria-label="Custom dictionary entries">
                 <thead>
                   <tr className="bg-zinc-900/80">
                     <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Source</th>
                     <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Translation</th>
-                    <th className="w-10" />
+                    <th className="w-20" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {filteredGlossary.map((entry, idx) => (
+                  {filteredGlossary.map((entry) => (
                     <tr
                       key={entry.id}
-                      className="hover:bg-zinc-800/50 transition-colors animate-stagger"
-                      style={stagger(Math.min(idx, 5))}
+                      className="group hover:bg-zinc-800/50 transition-colors"
                     >
                       {editingId === entry.id ? (
                         <>
                           <td className="px-4 py-1.5">
-                            <input
+                            <Input
+                              type="text"
                               value={editSource}
                               onChange={(e) => setEditSource(e.target.value)}
                               onKeyDown={(e) => {
@@ -246,32 +245,37 @@ export function DictionarySection() {
                                 if (e.key === 'Escape') setEditingId(null);
                               }}
                               autoFocus
-                              className="w-full bg-zinc-800 border border-blue-500/50 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none"
+                              aria-label="Edit source term"
                             />
                           </td>
                           <td className="px-4 py-1.5">
-                            <div className="flex gap-1.5">
-                              <input
-                                value={editTarget}
-                                onChange={(e) => setEditTarget(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleEditSave(entry.id);
-                                  if (e.key === 'Escape') setEditingId(null);
-                                }}
-                                className="w-full bg-zinc-800 border border-blue-500/50 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none"
-                              />
-                              <button
+                            <Input
+                              type="text"
+                              value={editTarget}
+                              onChange={(e) => setEditTarget(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleEditSave(entry.id);
+                                if (e.key === 'Escape') setEditingId(null);
+                              }}
+                              aria-label="Edit translation"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => handleEditSave(entry.id)}
-                                className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-500 text-[11px] text-white transition-colors whitespace-nowrap"
-                              >
-                                Save
-                              </button>
-                              <button
+                                icon={<Check className="w-3.5 h-3.5" />}
+                                aria-label="Save edit"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => setEditingId(null)}
-                                className="px-2 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-[11px] text-zinc-300 transition-colors"
-                              >
-                                ✕
-                              </button>
+                                icon={<X className="w-3.5 h-3.5" />}
+                                aria-label="Cancel edit"
+                              />
                             </div>
                           </td>
                         </>
@@ -295,28 +299,32 @@ export function DictionarySection() {
                             className="px-4 py-2.5 text-zinc-300 cursor-pointer hover:text-blue-400 transition-colors"
                             onClick={() => handleEditStart(entry)}
                           >
-                            {entry.target}
+                            <span className="flex items-center gap-1.5">
+                              {entry.target}
+                              <PenLine className="w-3 h-3 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </span>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <button
+                              onClick={() => setPendingDeleteId(entry.id)}
+                              className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                              aria-label={`Delete ${entry.source}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </td>
                         </>
                       )}
-                      <td className="px-2 py-2.5">
-                        <button
-                          onClick={() => setPendingDeleteId(entry.id)}
-                          className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
-                          aria-label={`Delete ${entry.source}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="px-4 py-2.5 bg-zinc-900/60 text-xs text-zinc-500 border-t border-zinc-800">
-                {glossary.length} {glossary.length === 1 ? 'entry' : 'entries'}
+                {searchQuery.trim()
+                  ? `Showing ${filteredGlossary.length} of ${glossary.length} ${glossary.length === 1 ? 'entry' : 'entries'}`
+                  : `${glossary.length} ${glossary.length === 1 ? 'entry' : 'entries'}`}
               </div>
             </Card>
-            </>
           )}
         </div>
 
