@@ -385,17 +385,32 @@ async function testTranslationLangflow(config: ProviderConfig): Promise<Connecti
     }
 
     const json = await response.json();
-    const responsePath = config.responseTextPath?.trim() || 'outputs[0].outputs[0].results.text.text';
 
-    // Resolve response text using configurable path
-    const segments = responsePath.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
-    let current: unknown = json;
-    for (const segment of segments) {
-      if (current == null || typeof current !== 'object') { current = undefined; break; }
-      current = (current as Record<string, unknown>)[segment];
+    // Try configured path first, then common fallbacks (matches langflowService.ts logic)
+    const configuredPath = config.responseTextPath?.trim() || '';
+    const FALLBACK_PATHS = [
+      'outputs[0].outputs[0].results.text.text',
+      'outputs[0].outputs[0].results.message.text',
+      'output.text',
+    ];
+    const candidates = configuredPath
+      ? [configuredPath, ...FALLBACK_PATHS.filter((p) => p !== configuredPath)]
+      : FALLBACK_PATHS;
+
+    // Resolve response text using configurable path with fallbacks
+    let content = '';
+    for (const path of candidates) {
+      const segments = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+      let current: unknown = json;
+      for (const segment of segments) {
+        if (current == null || typeof current !== 'object') { current = undefined; break; }
+        current = (current as Record<string, unknown>)[segment];
+      }
+      if (current != null) {
+        content = typeof current === 'string' ? current : String(current);
+        break;
+      }
     }
-
-    const content = typeof current === 'string' ? current : '';
 
     return {
       name: 'translation',

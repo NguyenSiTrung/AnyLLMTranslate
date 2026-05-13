@@ -38,6 +38,29 @@ function resolveJsonPath(obj: unknown, path: string): unknown {
   return current;
 }
 
+/**
+ * Produce a human-readable summary of a JSON structure up to `depth` levels.
+ * Example: `{ outputs: [{ outputs: [{ results: {…} }] }] }` → helps users find the right path.
+ */
+function describeStructure(obj: unknown, depth: number): string {
+  if (depth <= 0 || obj == null) return typeof obj === 'object' ? '{…}' : String(typeof obj);
+
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '[]';
+    return `[${describeStructure(obj[0], depth - 1)}, …(${obj.length})]`;
+  }
+
+  if (typeof obj === 'object') {
+    const keys = Object.keys(obj as Record<string, unknown>);
+    if (keys.length === 0) return '{}';
+    const entries = keys.map((k) => `${k}: ${describeStructure((obj as Record<string, unknown>)[k], depth - 1)}`);
+    return `{ ${entries.join(', ')} }`;
+  }
+
+  if (typeof obj === 'string') return obj.length > 40 ? `"${obj.slice(0, 40)}…"` : `"${obj}"`;
+  return String(obj);
+}
+
 export class LangflowService implements TranslationService {
   private config: ProviderConfig;
 
@@ -246,16 +269,49 @@ Rules:
 
       const responseJson = await response.json();
 
-      // Extract text using configurable response path
-      const responsePath = this.config.responseTextPath?.trim()
-        || 'outputs[0].outputs[0].results.text.text';
+      // Extract text using configurable response path with fallback alternatives
+      const configuredPath = this.config.responseTextPath?.trim() || '';
+      const FALLBACK_PATHS = [
+        'outputs[0].outputs[0].results.text.text',   // Langflow >= 1.x (plural)
+        'outputs[0].outputs[0].results.message.text', // Langflow message variant
+        'output.text',                                // Langflow simple output
+      ];
 
-      const extractedText = resolveJsonPath(responseJson, responsePath);
+      // Build candidate list: user-configured path first, then fallbacks
+      const candidates = configuredPath
+        ? [configuredPath, ...FALLBACK_PATHS.filter((p) => p !== configuredPath)]
+        : FALLBACK_PATHS;
+
+      console.log('AnyLLMTranslate [Langflow]: Raw response structure', {
+        topKeys: Object.keys(responseJson),
+        candidates,
+        preview: JSON.stringify(responseJson).slice(0, 500),
+      });
+
+      let extractedText: unknown;
+      let matchedPath: string | undefined;
+
+      for (const candidate of candidates) {
+        extractedText = resolveJsonPath(responseJson, candidate);
+        if (extractedText != null) {
+          matchedPath = candidate;
+          break;
+        }
+      }
 
       if (extractedText == null) {
+        // Build a structural hint showing 3 levels deep
+        const structHint = describeStructure(responseJson, 3);
         throw new Error(
-          `Could not extract response text at path "${responsePath}". ` +
-          `Response keys: ${JSON.stringify(Object.keys(responseJson))}`,
+          `Could not extract response text. Tried paths: ${JSON.stringify(candidates)}. ` +
+          `Response structure: ${structHint}`,
+        );
+      }
+
+      if (matchedPath && matchedPath !== configuredPath && configuredPath) {
+        console.warn(
+          `AnyLLMTranslate [Langflow]: Configured path "${configuredPath}" failed, ` +
+          `but fallback "${matchedPath}" succeeded. Consider updating your Response Text Path setting.`,
         );
       }
 
