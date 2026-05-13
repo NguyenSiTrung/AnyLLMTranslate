@@ -92,7 +92,10 @@ export class LangflowService implements TranslationService {
 
       const responseText = await this.sendToLangflow(systemPrompt, userPrompt);
 
-      console.log('AnyLLMTranslate [Langflow]: LLM Response', { responseText });
+      console.log('AnyLLMTranslate [Langflow]: LLM Response', {
+        responseText: responseText.slice(0, 500),
+        length: responseText.length,
+      });
 
       if (!responseText.trim()) {
         return {
@@ -103,12 +106,44 @@ export class LangflowService implements TranslationService {
       }
 
       const expectedIds = Array.from(request.texts.keys());
-      const translations = parseTranslationResponse(responseText, expectedIds);
 
-      return {
-        success: true,
-        translations,
-      };
+      // Try structured JSON parse first (standard LLM JSON response)
+      try {
+        const translations = parseTranslationResponse(responseText, expectedIds);
+        return { success: true, translations };
+      } catch (jsonError) {
+        // Langflow flows often return plain text instead of JSON.
+        // Fall back to treating the entire response as the translation.
+        console.warn(
+          'AnyLLMTranslate [Langflow]: JSON parse failed, falling back to plain-text mode.',
+          jsonError instanceof Error ? jsonError.message : jsonError,
+        );
+
+        const translations = new Map<string, string>();
+
+        if (expectedIds.length === 1) {
+          // Single text: use entire response as the translation
+          translations.set(expectedIds[0], responseText.trim());
+        } else {
+          // Multiple texts: try line-based mapping (one translation per line)
+          const lines = responseText.trim().split('\n').filter((l) => l.trim());
+          for (let i = 0; i < expectedIds.length; i++) {
+            if (i < lines.length) {
+              translations.set(expectedIds[i], lines[i].trim());
+            }
+          }
+
+          if (translations.size === 0) {
+            return {
+              success: false,
+              translations: new Map(),
+              error: 'Langflow returned plain text but could not map to expected translation IDs',
+            };
+          }
+        }
+
+        return { success: true, translations };
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown translation error';
       return {
