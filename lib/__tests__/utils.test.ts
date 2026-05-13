@@ -13,14 +13,14 @@ describe('deepMerge', () => {
 
   it('deep-merges nested objects without losing sibling keys', () => {
     const target = {
-      provider: { preset: 'ollama', model: 'gemma3:4b', apiKey: '' },
+      provider: { preset: 'custom', model: 'gemma3:4b', apiKey: '' },
       theme: 'blockquote',
     };
     const source = {
       provider: { model: 'llama3' },
     };
     const result = deepMerge(target, source);
-    expect(result.provider).toEqual({ preset: 'ollama', model: 'llama3', apiKey: '' });
+    expect(result.provider).toEqual({ preset: 'custom', model: 'llama3', apiKey: '' });
     expect(result.theme).toBe('blockquote');
   });
 

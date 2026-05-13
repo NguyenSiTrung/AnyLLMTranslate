@@ -6,6 +6,8 @@ export type ProviderReadinessReason =
   | 'missing-base-url'
   | 'missing-model'
   | 'missing-api-key'
+  | 'missing-endpoint-url'
+  | 'missing-component-id'
   | 'needs-test'
   | 'connected'
   | 'connection-failed';
@@ -24,6 +26,62 @@ export interface RecoveryMessage {
 }
 
 export function getProviderReadiness(provider: ProviderConfig): ProviderReadiness {
+  // Langflow-specific readiness checks
+  if (provider.preset === 'langflow') {
+    if (!provider.endpointUrl?.trim()) {
+      return {
+        status: 'not-configured',
+        reason: 'missing-endpoint-url',
+        canTest: false,
+        canTranslate: false,
+      };
+    }
+
+    if (!provider.apiKey?.trim()) {
+      return {
+        status: 'not-configured',
+        reason: 'missing-api-key',
+        canTest: false,
+        canTranslate: false,
+      };
+    }
+
+    if (!provider.componentId?.trim()) {
+      return {
+        status: 'not-configured',
+        reason: 'missing-component-id',
+        canTest: false,
+        canTranslate: false,
+      };
+    }
+
+    if (provider.connectionStatus === 'success') {
+      return {
+        status: 'connected',
+        reason: 'connected',
+        canTest: true,
+        canTranslate: true,
+      };
+    }
+
+    if (provider.connectionStatus === 'error') {
+      return {
+        status: 'failed',
+        reason: 'connection-failed',
+        canTest: true,
+        canTranslate: false,
+      };
+    }
+
+    return {
+      status: 'untested',
+      reason: 'needs-test',
+      canTest: true,
+      canTranslate: false,
+    };
+  }
+
+  // OpenAI-compatible readiness checks (custom, legacy ollama)
   if (!provider.baseUrl.trim()) {
     return {
       status: 'not-configured',
@@ -96,6 +154,18 @@ export function getProviderRecoveryMessage(readiness: ProviderReadiness): Recove
         title: 'Provider not ready',
         description: 'This provider requires an API key before it can translate pages.',
         action: 'Enter your API key',
+      };
+    case 'missing-endpoint-url':
+      return {
+        title: 'Provider not ready',
+        description: 'Add the Langflow endpoint URL for your flow before translating.',
+        action: 'Enter your Langflow endpoint URL',
+      };
+    case 'missing-component-id':
+      return {
+        title: 'Provider not ready',
+        description: 'Add the Langflow component ID to identify which LLM component to use.',
+        action: 'Enter your Component ID',
       };
     case 'needs-test':
       return {

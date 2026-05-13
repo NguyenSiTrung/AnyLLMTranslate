@@ -57,7 +57,7 @@ describe('config types', () => {
 
   describe('ProviderPreset', () => {
     it('supports 2 preset options', () => {
-      const presets: ProviderPreset[] = ['ollama', 'custom'];
+      const presets: ProviderPreset[] = ['custom', 'langflow'];
       expect(presets).toHaveLength(2);
     });
   });
@@ -216,9 +216,14 @@ describe('config types', () => {
       expect(PROVIDER_PRESETS).toHaveLength(2);
     });
 
-    it('includes ollama as first preset', () => {
-      expect(PROVIDER_PRESETS[0].preset).toBe('ollama');
+    it('includes custom as first preset', () => {
+      expect(PROVIDER_PRESETS[0].preset).toBe('custom');
       expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
+    });
+
+    it('includes langflow as second preset', () => {
+      expect(PROVIDER_PRESETS[1].preset).toBe('langflow');
+      expect(PROVIDER_PRESETS[1].requiresApiKey).toBe(true);
     });
 
     it('all presets have required fields', () => {

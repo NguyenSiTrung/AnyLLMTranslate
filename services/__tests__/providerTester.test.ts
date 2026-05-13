@@ -8,7 +8,7 @@ import type { ProviderConfig } from '@/types/config';
 import type { ConnectionTestProgress } from '@/services/providerTester';
 
 const mockConfig: ProviderConfig = {
-  preset: 'ollama',
+  preset: 'custom',
   baseUrl: 'http://localhost:11434/v1',
   apiKey: '',
   model: 'gemma3:4b',

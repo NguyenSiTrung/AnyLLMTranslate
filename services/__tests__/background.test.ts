@@ -99,7 +99,7 @@ describe('services/background', () => {
       // Store settings with glossary entries
       mockStorage['anyllm-translate-settings'] = {
         provider: {
-          preset: 'ollama',
+          preset: 'custom',
           baseUrl: 'http://localhost:11434/v1',
           apiKey: '',
           model: 'gemma3:4b',
@@ -138,7 +138,7 @@ describe('services/background', () => {
     it('omits glossaryBlock when settings have empty glossary', async () => {
       mockStorage['anyllm-translate-settings'] = {
         provider: {
-          preset: 'ollama',
+          preset: 'custom',
           baseUrl: 'http://localhost:11434/v1',
           apiKey: '',
           model: 'gemma3:4b',

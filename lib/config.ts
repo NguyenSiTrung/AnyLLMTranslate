@@ -46,6 +46,11 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
     merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);
 
+    // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
+    if ((merged.provider.preset as string) === 'ollama') {
+      merged.provider.preset = 'custom';
+    }
+
     return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };

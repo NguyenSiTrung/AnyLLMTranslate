@@ -4,9 +4,9 @@
  */
 
 /** Provider preset identifiers */
-export type ProviderPreset = 'ollama' | 'custom';
+export type ProviderPreset = 'custom' | 'langflow';
 
-/** Provider configuration for OpenAI-compatible APIs */
+/** Provider configuration for OpenAI-compatible APIs and Langflow */
 export interface ProviderConfig {
   preset: ProviderPreset;
   baseUrl: string;
@@ -22,6 +22,12 @@ export interface ProviderConfig {
   requestTimeoutMs?: number;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
+  /** Langflow: Full API endpoint URL (e.g. https://server/api/v1/run/flow) */
+  endpointUrl?: string;
+  /** Langflow: Component ID for the LLM component */
+  componentId?: string;
+  /** Langflow: JSONPath for extracting response text (default: outputs[0].outputs[0].results.text.text) */
+  responseTextPath?: string;
 }
 
 /** Onboarding flow state for first-run setup */
@@ -213,10 +219,15 @@ export interface ExtensionSettings {
 export interface ProviderPresetDefinition {
   preset: ProviderPreset;
   displayName: string;
-  baseUrl: string;
-  defaultModel: string;
+  description?: string;
+  baseUrl?: string;
+  defaultModel?: string;
   requiresApiKey: boolean;
   placeholder?: string;
+  /** Default endpoint URL for Langflow presets */
+  defaultEndpointUrl?: string;
+  /** Default response text path for Langflow presets */
+  defaultResponseTextPath?: string;
 }
 
 /** Default subtitle settings */
@@ -335,17 +346,19 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
 /** All available provider presets */
 export const PROVIDER_PRESETS: ProviderPresetDefinition[] = [
   {
-    preset: 'ollama',
-    displayName: 'Ollama',
-    baseUrl: 'http://localhost:11434/v1',
-    defaultModel: 'gemma3:4b',
-    requiresApiKey: false,
-  },
-  {
     preset: 'custom',
-    displayName: 'Custom',
+    displayName: 'Custom (OpenAI Compatible)',
+    description: 'Any OpenAI-compatible API endpoint (Ollama, vLLM, LiteLLM, etc.)',
     baseUrl: '',
     defaultModel: '',
     requiresApiKey: false,
+  },
+  {
+    preset: 'langflow',
+    displayName: 'Langflow',
+    description: 'Connect to Langflow-based LLM endpoints',
+    requiresApiKey: true,
+    defaultEndpointUrl: '',
+    defaultResponseTextPath: 'outputs[0].outputs[0].results.text.text',
   },
 ];

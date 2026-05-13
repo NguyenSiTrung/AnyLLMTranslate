@@ -15,6 +15,8 @@ import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
+import { LangflowService } from '@/services/langflowService';
+import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
@@ -59,7 +61,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 const translatedTabSessions = new Set<number>();
 
 /** Active translation service instance */
-let translationService: OpenAICompatibleService | null = null;
+let translationService: (TranslationService & { updateConfig(config: import('@/types/config').ProviderConfig): void }) | null = null;
 
 /** Rate-limiting semaphore: max 3 concurrent, queue up to 10 */
 interface SemaphoreState {
@@ -100,15 +102,25 @@ function releaseSemaphore(): void {
   }
 }
 
+/** Track current preset to detect when service type must change */
+let activePreset: string | null = null;
+
 /** Initialize or re-create translation service from settings */
-async function initService(): Promise<OpenAICompatibleService> {
+async function initService(): Promise<TranslationService & { updateConfig(config: import('@/types/config').ProviderConfig): void }> {
   const settings = await loadSettings();
   const config = settings.provider;
 
-  if (translationService) {
+  // Re-create if preset changed (e.g., switching between custom ↔ langflow)
+  if (translationService && activePreset === config.preset) {
     translationService.updateConfig(config);
   } else {
-    translationService = new OpenAICompatibleService(config);
+    // Route by preset: Langflow gets its own service, everything else is OpenAI-compatible
+    if (config.preset === 'langflow') {
+      translationService = new LangflowService(config);
+    } else {
+      translationService = new OpenAICompatibleService(config);
+    }
+    activePreset = config.preset;
   }
 
   return translationService;

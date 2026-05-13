@@ -15,6 +15,7 @@ function provider(partial: Partial<ProviderConfig>): ProviderConfig {
 }
 
 describe('getProviderReadiness', () => {
+  // --- OpenAI-compatible (custom) preset tests ---
   it('classifies missing base URL as not-configured', () => {
     const result = getProviderReadiness(provider({ baseUrl: '', model: 'gpt-4o-mini' }));
 
@@ -79,6 +80,88 @@ describe('getProviderReadiness', () => {
     expect(result.canTest).toBe(true);
     expect(result.canTranslate).toBe(false);
   });
+
+  // --- Langflow preset tests ---
+  it('classifies Langflow with missing endpointUrl as not-configured', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: '',
+      apiKey: 'test-key',
+      componentId: 'model-1',
+    }));
+
+    expect(result.status).toBe('not-configured');
+    expect(result.reason).toBe('missing-endpoint-url');
+    expect(result.canTest).toBe(false);
+  });
+
+  it('classifies Langflow with missing API key as not-configured', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: '',
+      componentId: 'model-1',
+    }));
+
+    expect(result.status).toBe('not-configured');
+    expect(result.reason).toBe('missing-api-key');
+    expect(result.canTest).toBe(false);
+  });
+
+  it('classifies Langflow with missing componentId as not-configured', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: 'test-key',
+      componentId: '',
+    }));
+
+    expect(result.status).toBe('not-configured');
+    expect(result.reason).toBe('missing-component-id');
+    expect(result.canTest).toBe(false);
+  });
+
+  it('classifies complete Langflow config as untested when not tested', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: 'test-key',
+      componentId: 'model-1',
+      connectionStatus: 'unknown',
+    }));
+
+    expect(result.status).toBe('untested');
+    expect(result.reason).toBe('needs-test');
+    expect(result.canTest).toBe(true);
+  });
+
+  it('classifies Langflow with successful connection as connected', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: 'test-key',
+      componentId: 'model-1',
+      connectionStatus: 'success',
+    }));
+
+    expect(result.status).toBe('connected');
+    expect(result.canTranslate).toBe(true);
+  });
+
+  it('classifies Langflow with failed connection as failed but testable', () => {
+    const result = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: 'test-key',
+      componentId: 'model-1',
+      connectionStatus: 'error',
+    }));
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toBe('connection-failed');
+    expect(result.canTest).toBe(true);
+    expect(result.canTranslate).toBe(false);
+  });
 });
 
 describe('provider recovery messages', () => {
@@ -93,6 +176,30 @@ describe('provider recovery messages', () => {
     expect(getProviderRecoveryMessage(readiness).title).toBe('Provider not ready');
     expect(getProviderRecoveryMessage(readiness).description).toContain('API key');
     expect(getProviderRecoveryMessage(readiness).action).toBe('Enter your API key');
+  });
+
+  it('explains missing Langflow endpoint URL', () => {
+    const readiness = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: '',
+    }));
+
+    expect(getProviderRecoveryMessage(readiness).title).toBe('Provider not ready');
+    expect(getProviderRecoveryMessage(readiness).description).toContain('Langflow endpoint URL');
+    expect(getProviderRecoveryMessage(readiness).action).toContain('Langflow');
+  });
+
+  it('explains missing Langflow component ID', () => {
+    const readiness = getProviderReadiness(provider({
+      preset: 'langflow',
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      apiKey: 'test-key',
+      componentId: '',
+    }));
+
+    expect(getProviderRecoveryMessage(readiness).title).toBe('Provider not ready');
+    expect(getProviderRecoveryMessage(readiness).description).toContain('component ID');
+    expect(getProviderRecoveryMessage(readiness).action).toContain('Component ID');
   });
 
   it('maps timeout errors to retry guidance', () => {

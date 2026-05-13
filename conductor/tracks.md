@@ -44,5 +44,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [ ] Track: Custom Endpoint Provider — Langflow Support
+## [~] Track: Custom Endpoint Provider — Langflow Support
 *Link: [./conductor/tracks/langflow-provider_20260513/](./conductor/tracks/langflow-provider_20260513/)*

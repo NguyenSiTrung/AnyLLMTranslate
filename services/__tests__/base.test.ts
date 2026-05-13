@@ -217,11 +217,65 @@ describe('validateProviderConfig', () => {
     expect(result.valid).toBe(false);
   });
 
-  it('accepts valid config', () => {
+  it('accepts valid custom config', () => {
     const result = validateProviderConfig({
-      preset: 'ollama', baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'gemma3:4b',
-      temperature: 0.3, maxTokens: 100, displayName: 'Ollama', requiresApiKey: false,
+      preset: 'custom', baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'gemma3:4b',
+      temperature: 0.3, maxTokens: 100, displayName: 'Custom', requiresApiKey: false,
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  // --- Langflow preset validation ---
+  it('accepts valid Langflow config (endpointUrl + apiKey)', () => {
+    const result = validateProviderConfig({
+      preset: 'langflow', baseUrl: '', apiKey: 'lf-key-123', model: '',
+      temperature: 0.3, maxTokens: 100, displayName: 'Langflow', requiresApiKey: true,
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      componentId: 'model-1',
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects Langflow config with missing endpointUrl', () => {
+    const result = validateProviderConfig({
+      preset: 'langflow', baseUrl: '', apiKey: 'lf-key-123', model: '',
+      temperature: 0.3, maxTokens: 100, displayName: 'Langflow', requiresApiKey: true,
+      endpointUrl: '',
+      componentId: 'model-1',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Endpoint URL');
+  });
+
+  it('rejects Langflow config with invalid endpointUrl format', () => {
+    const result = validateProviderConfig({
+      preset: 'langflow', baseUrl: '', apiKey: 'lf-key-123', model: '',
+      temperature: 0.3, maxTokens: 100, displayName: 'Langflow', requiresApiKey: true,
+      endpointUrl: 'not-a-url',
+      componentId: 'model-1',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Endpoint URL');
+  });
+
+  it('rejects Langflow config with missing apiKey', () => {
+    const result = validateProviderConfig({
+      preset: 'langflow', baseUrl: '', apiKey: '', model: '',
+      temperature: 0.3, maxTokens: 100, displayName: 'Langflow', requiresApiKey: true,
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
+      componentId: 'model-1',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('API key');
+  });
+
+  it('does not require model for Langflow preset', () => {
+    const result = validateProviderConfig({
+      preset: 'langflow', baseUrl: '', apiKey: 'key', model: '',
+      temperature: 0.3, maxTokens: 100, displayName: 'Langflow', requiresApiKey: true,
+      endpointUrl: 'https://langflow.example.com/api/v1/run/flow',
     });
     expect(result.valid).toBe(true);
   });
 });
+

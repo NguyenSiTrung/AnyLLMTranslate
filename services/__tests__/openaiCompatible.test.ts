@@ -3,7 +3,7 @@ import { OpenAICompatibleService } from '../openaiCompatible';
 import type { ProviderConfig } from '../../types/config';
 
 const mockConfig: ProviderConfig = {
-  preset: 'ollama',
+  preset: 'custom',
   baseUrl: 'http://localhost:11434/v1',
   apiKey: '',
   model: 'gemma3:4b',
