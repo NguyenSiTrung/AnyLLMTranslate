@@ -40,9 +40,8 @@ This file tracks all major tracks for the project.
 - ✅ **Bilingual Display UI/UX Hardening** (`bilingual-display-ux_20260505`) — Archived 2026-05-05. [View](./conductor/archive/bilingual-display-ux_20260505/)
 - ✅ **Settings UI/UX Consistency & Polish** (`settings-ux-audit_20260506`) — Archived 2026-05-06. [View](./conductor/archive/settings-ux-audit_20260506/)
 
+- ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
+
 ---
 
 ## Active Tracks
-
-## [~] Track: Custom Endpoint Provider — Langflow Support
-*Link: [./conductor/tracks/langflow-provider_20260513/](./conductor/tracks/langflow-provider_20260513/)*
