@@ -15,6 +15,7 @@ import { registerSubtitleHandlers, getAllPatterns, getMetadataPatternsForCurrent
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
+import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 
 export default defineContentScript({
@@ -26,10 +27,11 @@ export default defineContentScript({
 
     // Register platform handlers
     registerSubtitleHandlers([
-      new YouTubeHandler(),
-      new UdemyHandler(),
-      new CourseraHandler(),
-    ]);
+       new YouTubeHandler(),
+       new UdemyHandler(),
+       new CourseraHandler(),
+       new LinkedInHandler(),
+     ]);
 
     const registry = new InterceptorRegistry();
     const bridge = createBridgeSender();

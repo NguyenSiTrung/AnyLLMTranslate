@@ -27,6 +27,7 @@ import { translateSection, removeAllSectionTranslations } from '@/content/sectio
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
+import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -484,6 +485,7 @@ export default defineContentScript({
       new YouTubeHandler(),
       new UdemyHandler(),
       new CourseraHandler(),
+      new LinkedInHandler(),
     ]);
 
     setupMessageListener();
