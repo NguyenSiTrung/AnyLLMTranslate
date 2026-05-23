@@ -536,6 +536,9 @@ function isOnWatchPage(): boolean {
   if (hostname.includes('coursera.org')) {
     return pathname.includes('/lecture/');
   }
+  if (hostname.includes('linkedin.com')) {
+    return pathname.startsWith('/learning/');
+  }
 
   // Unknown platform — do not auto-activate on generic video elements
   return false;
