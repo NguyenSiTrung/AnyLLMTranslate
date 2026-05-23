@@ -33,3 +33,8 @@ __pycache__
 
 # Antigravity CLI
 .antigravitycli/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

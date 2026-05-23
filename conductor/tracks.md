@@ -45,3 +45,4 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+- [ ] **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) - *High Priority* [View](./conductor/tracks/linkedin-subtitles_20260523/)
