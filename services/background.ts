@@ -463,6 +463,8 @@ const SUBTITLE_ALLOWLIST = [
   /aiv-cdn\.net/,
   /cloudfront\.net/,
   /akamaized\.net/,
+  /linkedin\.com/,
+  /licdn\.com/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
