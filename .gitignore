@@ -30,3 +30,6 @@ __pycache__
 
 # Worktrees
 .worktrees/
+
+# Antigravity CLI
+.antigravitycli/
