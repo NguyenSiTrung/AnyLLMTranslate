@@ -14,7 +14,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB. (from: phase1-foundation_20260409, archived 2026-04-09)
 - Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events). (from: progressive-chunking_20260417, archived 2026-04-17)
 - Per-tab session tracking via `Set<number>` for counters like `totalPagesTranslated` — cleared on `restore` action to avoid double-counting. (from: ux-power-features_20260422, archived 2026-04-22)
-- WXT build produces ~744KB total for chrome-mv3 output (grew from ~346KB after settings overhaul, subtitles, UI library, and Langflow support). (from: phase1-foundation_20260409, updated 2026-05-23)
+- WXT build produces ~688KB total for chrome-mv3 output (grew from ~346KB after Phase 5 settings overhaul, subtitle features, UI library, and advanced features). (from: phase1-foundation_20260409, updated 2026-04-28)
 
 ## Gotchas
 - WXT `init` refuses to run in non-empty directories — init in temp dir, then copy. (from: phase1-foundation_20260409, archived 2026-04-09)
@@ -326,12 +326,6 @@ Reusable patterns discovered during development. Read this before starting new w
 - Provider `connectionStatus` must reset to `'unknown'` on any field edit (baseUrl, apiKey, model) — prevents stale "connected" badge after user changes credentials. (from: incremental, 2026-05-05)
 - Setup wizard uses a controlled dialog pattern with `ref` + `tabIndex={-1}` for focus management — dialog auto-focuses on step change via `useEffect`. (from: incremental, 2026-05-05)
 
-## Custom Endpoints & Langflow Support (2026-05-13)
-- **Provider-agnostic interface:** Consolidate custom endpoint types by defining a standard `TranslationService` interface (`translate()`, `testConnection()`, `detectPageCategory?()`). The factory function `initService()` in `background.ts` instantiates the correct service implementation based on the `preset` value, allowing seamless addition of new providers without affecting core translation pipeline logic. (from: langflow-provider_20260513, archived 2026-05-13)
-- **JSONPath dynamic extraction:** Dynamic or flow-based APIs (like Langflow) return highly nested, non-standard JSON responses. Implement a dot-bracket notation JSONPath resolver (`resolveJsonPath`) to extract translation text dynamically from user-customizable paths (e.g. `outputs[0].outputs[0].results.text.text`) rather than hardcoding the response structure. (from: langflow-provider_20260513, archived 2026-05-13)
-- **Plain-text fallbacks for translation:** If JSON parsing fails (common when flows or reasoning models return plain text instead of JSON), implement a fallback that maps the entire response text directly to a single expected piece ID, or splits by newline to map line-by-line to multiple expected piece IDs. (from: langflow-provider_20260513, archived 2026-05-13)
-- **Conditional UI Rendering for presets:** Redesign settings forms to conditionally render inputs based on the selected preset (e.g., Endpoint URL, Component ID, and Response Text Path for Langflow vs. Base URL and Model for OpenAI-compatible) to keep the configuration UI clean and relevant. (from: langflow-provider_20260513, archived 2026-05-13)
-
 ---
-Last refreshed: 2026-05-23T19:42:00+07:00
-Codebase health: 849 tests passing across 63 files, build ~744KB, 33 tracks archived
+Last refreshed: 2026-05-05T23:57:00+07:00
+Codebase health: 786 tests passing across 60 files, build ~714KB, 31 tracks archived

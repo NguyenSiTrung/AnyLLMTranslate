@@ -1,36 +1,30 @@
 {
-  "lastRefresh": "2026-05-05T23:57:00+07:00",
+  "lastRefresh": "2026-05-23T19:42:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
     "product.md": [
-      "Added Bilingual Display UI/UX Hardening feature (archived 2026-05-05)",
-      "Added New-User Onboarding (setup wizard, provider readiness, recovery card)",
-      "Added CRITICAL_GLOBAL_EXCLUDES safety layer feature",
-      "Added Smart Excludes structural element filtering feature",
-      "Added LLM Response Sanitization (think tag handling, multi-strategy JSON extraction)",
-      "Updated UI & Settings with setup wizard, provider readiness, expanded global excludes, smart excludes",
-      "Updated Translation Engine with LLM response sanitization",
-      "Updated current state: 786 tests, 714 KB build, 31 tracks"
+      "Added Custom Endpoint Provider — Langflow Support feature details (archived 2026-05-13)",
+      "Updated Universal LLM Backend with Langflow support",
+      "Updated Translation Engine with Langflow support",
+      "Updated current state: 849 tests, 744 KB build, 33 tracks"
     ],
     "patterns.md": [
-      "Added Safety Excludes & Force-Merge section (3 patterns)",
-      "Added Smart Excludes section (2 patterns)",
-      "Added LLM Response Sanitization section (2 patterns)",
-      "Added Onboarding & Provider Readiness section (5 patterns)",
-      "Updated health footer: 786 tests, 714 KB, 31 tracks"
+      "Added Custom Endpoints & Langflow Support section (4 patterns)",
+      "Updated WXT build size pattern to ~744KB",
+      "Updated health footer: 849 tests, 744 KB, 33 tracks"
     ],
     "tech-stack.md": "No drift",
     "workflow.md": "No drift",
     "tracks.md": "No drift (already current)"
   },
   "health": {
-    "tests": 786,
-    "testFiles": 60,
-    "buildSizeKB": 714,
-    "lintErrors": 4,
-    "lintNote": "Pre-existing in 3 source files",
-    "tracksArchived": 31,
+    "tests": 849,
+    "testFiles": 63,
+    "buildSizeKB": 744,
+    "lintErrors": 2,
+    "lintNote": "Pre-existing in services/background.ts type imports",
+    "tracksArchived": 33,
     "tracksActive": 0
   }
 }
