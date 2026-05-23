@@ -21,6 +21,7 @@ import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
+import type { ProviderConfig } from '@/types/config';
 
 /** Priority queue state for active translation sessions */
 interface TranslationSession {
@@ -61,7 +62,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 const translatedTabSessions = new Set<number>();
 
 /** Active translation service instance */
-let translationService: (TranslationService & { updateConfig(config: import('@/types/config').ProviderConfig): void }) | null = null;
+let translationService: (TranslationService & { updateConfig(config: ProviderConfig): void }) | null = null;
 
 /** Rate-limiting semaphore: max 3 concurrent, queue up to 10 */
 interface SemaphoreState {
@@ -106,7 +107,7 @@ function releaseSemaphore(): void {
 let activePreset: string | null = null;
 
 /** Initialize or re-create translation service from settings */
-async function initService(): Promise<TranslationService & { updateConfig(config: import('@/types/config').ProviderConfig): void }> {
+async function initService(): Promise<TranslationService & { updateConfig(config: ProviderConfig): void }> {
   const settings = await loadSettings();
   const config = settings.provider;
 

@@ -8,7 +8,6 @@ import {
   clearPendingRequest,
 } from '@/content/subtitleCoordinator';
 import { resetOverlayState } from '@/content/subtitleOverlay';
-import { loadSettings } from '@/lib/config';
 import type { SubtitleCue } from '@/types/subtitle';
 import * as messageBridge from '@/content/messageBridge';
 import * as subtitleOverlay from '@/content/subtitleOverlay';
