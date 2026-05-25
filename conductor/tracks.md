@@ -41,8 +41,9 @@ This file tracks all major tracks for the project.
 - ✅ **Settings UI/UX Consistency & Polish** (`settings-ux-audit_20260506`) — Archived 2026-05-06. [View](./conductor/archive/settings-ux-audit_20260506/)
 
 - ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
+- ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
 
 ---
 
 ## Active Tracks
-- [x] **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) - *High Priority* [View](./conductor/tracks/linkedin-subtitles_20260523/)
+
