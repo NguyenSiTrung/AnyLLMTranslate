@@ -1,30 +1,27 @@
 {
-  "lastRefresh": "2026-05-23T19:42:00+07:00",
+  "lastRefresh": "2026-05-25T12:16:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
     "product.md": [
-      "Added Custom Endpoint Provider — Langflow Support feature details (archived 2026-05-13)",
-      "Updated Universal LLM Backend with Langflow support",
-      "Updated Translation Engine with Langflow support",
-      "Updated current state: 849 tests, 744 KB build, 33 tracks"
+      "Added LinkedIn Learning to subtitle platform list (target users, value props, key features)",
+      "Added LinkedIn Learning Subtitle Support track details to Implementation Status",
+      "Updated current state: 858 tests, 64 files, ~745 KB build, 0 lint errors, 34 tracks"
     ],
     "patterns.md": [
-      "Added Custom Endpoints & Langflow Support section (4 patterns)",
-      "Updated WXT build size pattern to ~744KB",
-      "Updated health footer: 849 tests, 744 KB, 33 tracks"
+      "Added 5 new patterns from linkedin-subtitles_20260523 track (dual-world registration, CDN allowlist, MutationObserver test tick, storage mock key, top-level type imports)",
+      "Updated health footer: 858 tests, 64 files, ~745KB, 0 lint errors, 34 tracks"
     ],
     "tech-stack.md": "No drift",
     "workflow.md": "No drift",
     "tracks.md": "No drift (already current)"
   },
   "health": {
-    "tests": 849,
-    "testFiles": 63,
-    "buildSizeKB": 744,
-    "lintErrors": 2,
-    "lintNote": "Pre-existing in services/background.ts type imports",
-    "tracksArchived": 33,
+    "tests": 858,
+    "testFiles": 64,
+    "buildSizeKB": 745,
+    "lintErrors": 0,
+    "tracksArchived": 34,
     "tracksActive": 0
   }
 }

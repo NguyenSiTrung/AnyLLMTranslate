@@ -14,15 +14,15 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 - **Language learners** who want bilingual reading to improve comprehension
 - **International professionals** reading foreign-language articles, documentation, and reports
-- **Online course students** on platforms like Udemy, Coursera, and YouTube who need subtitle translation
+- **Online course students** on platforms like Udemy, Coursera, YouTube, and LinkedIn Learning who need subtitle translation
 - **Privacy-conscious users** who prefer self-hosted or local LLM backends (Ollama, LM Studio, vLLM)
 - **Developers/power users** who want full control over their translation pipeline
 
 ## Core Value Propositions
 
 1. **Bilingual Side-by-Side Display** — Translated text appears below/beside original paragraphs with minimal layout disruption, supporting 15+ visual themes
-2. **Video Subtitle Translation** — Real-time bilingual subtitles on Udemy, Coursera, YouTube, and Netflix via XHR/fetch interception
-3. **Universal LLM Backend (BYOK)** — Connect to any OpenAI-compatible API: OpenAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, Gemini, Claude via proxy
+2. **Video Subtitle Translation** — Real-time bilingual subtitles on Udemy, Coursera, YouTube, Netflix, and LinkedIn Learning via XHR/fetch interception
+3. **Universal LLM Backend (BYOK)** — Connect to any OpenAI-compatible API (OpenAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, Gemini, Claude via proxy) and Langflow (non-OpenAI custom endpoint)
 4. **Premium Display UX** — Multiple translation themes (underline, highlight, bubble, mask, fade-in), dark mode, loading/error states
 5. **Smart DOM Translation** — Viewport-based lazy translation, SPA support via MutationObserver, intelligent paragraph detection
 
@@ -37,7 +37,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### Video Subtitle Translation
 - XHR/Fetch interception via MAIN world script injection
-- Platform handlers: YouTube, Udemy, Coursera, Netflix
+- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning
 - WebVTT parser and bilingual builder
 - Custom subtitle overlay (fallback renderer)
 - Drag-and-drop subtitle repositioning with session persistence
@@ -59,7 +59,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Context menu integration
 
 ### Translation Engine
-- Single universal OpenAI-compatible provider
+- Universal translation provider supporting OpenAI-compatible and Langflow endpoints
 - Request batching & deduplication
 - Custom glossary/term protection
 - Configurable system prompts
@@ -112,10 +112,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **LLM Response Sanitization** (2026-05-04, incremental): `parseTranslationResponse()` strips `<think>...</think>` blocks from reasoning models (DeepSeek R1), extracts JSON from markdown code fences, and falls back to brace extraction.
 - **Bilingual Display UI/UX Hardening** (Archived 2026-05-05): Translation session guard with monotonic session IDs to drop stale async writes. Inline loading/error visibility in translation-only mode via sibling clones. ThemePreview fidelity with displayMode/translationPosition rendering. lang/dir attributes on translations. Mask theme keyboard accessibility (tabindex). Multi-piece viewport observer improvements. Safe DOM insertion with `insertBefore` parent validation.
 - **New-User Onboarding** (2026-05-05, incremental): 5-step setup wizard (welcome → provider → test → language → done) with `OnboardingState` persistence. Provider readiness state machine (`lib/providerReadiness.ts`) with 6 readiness reasons and actionable recovery messages. Provider recovery card in popup for not-configured/failed states. Options page surfaces readiness status in ProviderSection. Provider `connectionStatus` reset on edits.
+- **Custom Endpoint Provider — Langflow Support** (Archived 2026-05-13): Add support for non-OpenAI-compatible APIs by introducing a dedicated Langflow provider preset. Created a provider-agnostic `TranslationService` interface. Removed redundant `ollama` preset and updated existing configurations to use `'custom'`. Redesigned Option page UI to conditionally render fields based on provider preset (Endpoint URL, API Key, Component ID, Response Text Path JSONPath resolver). Added robust response parsing with fallback text extraction and type checking. Added 42 tests for Langflow service and UI components.
 
 ### Current State
-- 786 tests passing across 60 files. Build passing (`wxt build` ✅, ~714 KB). 4 lint warnings (pre-existing, in 3 source files).
-- **No active tracks.** All 31 tracks completed and archived.
+- 858 tests passing across 64 files. Build passing (`wxt build` ✅, ~745 KB). 0 lint errors.
+- **No active tracks.** All 34 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

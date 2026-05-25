@@ -14,14 +14,14 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 - **Language learners** who want bilingual reading to improve comprehension
 - **International professionals** reading foreign-language articles, documentation, and reports
-- **Online course students** on platforms like Udemy, Coursera, and YouTube who need subtitle translation
+- **Online course students** on platforms like Udemy, Coursera, YouTube, and LinkedIn Learning who need subtitle translation
 - **Privacy-conscious users** who prefer self-hosted or local LLM backends (Ollama, LM Studio, vLLM)
 - **Developers/power users** who want full control over their translation pipeline
 
 ## Core Value Propositions
 
 1. **Bilingual Side-by-Side Display** — Translated text appears below/beside original paragraphs with minimal layout disruption, supporting 15+ visual themes
-2. **Video Subtitle Translation** — Real-time bilingual subtitles on Udemy, Coursera, YouTube, and Netflix via XHR/fetch interception
+2. **Video Subtitle Translation** — Real-time bilingual subtitles on Udemy, Coursera, YouTube, Netflix, and LinkedIn Learning via XHR/fetch interception
 3. **Universal LLM Backend (BYOK)** — Connect to any OpenAI-compatible API (OpenAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, Gemini, Claude via proxy) and Langflow (non-OpenAI custom endpoint)
 4. **Premium Display UX** — Multiple translation themes (underline, highlight, bubble, mask, fade-in), dark mode, loading/error states
 5. **Smart DOM Translation** — Viewport-based lazy translation, SPA support via MutationObserver, intelligent paragraph detection
@@ -37,7 +37,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### Video Subtitle Translation
 - XHR/Fetch interception via MAIN world script injection
-- Platform handlers: YouTube, Udemy, Coursera, Netflix
+- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning
 - WebVTT parser and bilingual builder
 - Custom subtitle overlay (fallback renderer)
 - Drag-and-drop subtitle repositioning with session persistence
@@ -115,8 +115,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Custom Endpoint Provider — Langflow Support** (Archived 2026-05-13): Add support for non-OpenAI-compatible APIs by introducing a dedicated Langflow provider preset. Created a provider-agnostic `TranslationService` interface. Removed redundant `ollama` preset and updated existing configurations to use `'custom'`. Redesigned Option page UI to conditionally render fields based on provider preset (Endpoint URL, API Key, Component ID, Response Text Path JSONPath resolver). Added robust response parsing with fallback text extraction and type checking. Added 42 tests for Langflow service and UI components.
 
 ### Current State
-- 849 tests passing across 63 files. Build passing (`wxt build` ✅, ~744 KB). 2 lint errors (pre-existing in 1 source file).
-- **No active tracks.** All 33 tracks completed and archived.
+- 858 tests passing across 64 files. Build passing (`wxt build` ✅, ~745 KB). 0 lint errors.
+- **No active tracks.** All 34 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

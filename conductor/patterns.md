@@ -24,6 +24,9 @@ Reusable patterns discovered during development. Read this before starting new w
 ## Testing
 - Vitest `@/` alias needs `resolve.alias` in vitest.config.ts (tsconfig paths are not auto-resolved by Vite). (from: phase1-foundation_20260409, archived 2026-04-09)
 - Always ensure `loadSettings` mocks in unit tests include all properties used by the implementation (including nested objects like `inlineTranslate`), otherwise tests may fail in try/catch blocks or during property access. (from: inline-translate_20260418, archived 2026-04-18)
+- DOM-dependent tests using MutationObserver or event listeners in Vitest/jsdom require an async event loop tick (e.g., `await Promise.resolve()`) to allow handlers to register before asserting results. (from: linkedin-subtitles_20260523, archived 2026-05-25)
+- Storage mocks in tests need settings nested under the correct key (`anyllm-translate-settings` rather than direct keys) to avoid fallback default values. (from: linkedin-subtitles_20260523, archived 2026-05-25)
+- Prefer explicit top-level type imports over inline `import(...)` type annotations to avoid TypeScript/ESLint warnings about forbidden inline imports. (from: linkedin-subtitles_20260523, archived 2026-05-25)
 
 ## Subtitle & Interception
 - WXT MAIN world injection uses `world: 'MAIN'` and `run_at: 'document_start'` in wxt.config.ts for XHR/fetch access. (from: phase2-subtitles_20260409, archived 2026-04-09)
@@ -37,6 +40,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - BOM marker (\uFEFF) handling in subtitle parsers — strip before parsing. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - Format detection heuristics: WEBVTT header, sequence number pattern, comma vs period in timing. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - CORS bypass for subtitle fetching: direct fetch first, fallback to chrome.runtime.sendMessage via background worker. (from: phase2-subtitles_20260409, archived 2026-04-09)
+- Subtitle handlers must be registered in both the isolated world script (coordination/UI) and the MAIN world script (XHR/fetch interception) — missing either registration breaks the pipeline. (from: linkedin-subtitles_20260523, archived 2026-05-25)
+- Background service worker's `SUBTITLE_ALLOWLIST` must include CDN domains (e.g. `licdn.com` for LinkedIn) to permit CORS-bypass subtitle downloads via the MAIN world scripts. (from: linkedin-subtitles_20260523, archived 2026-05-25)
 
 ## Type System
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)
@@ -333,5 +338,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Conditional UI Rendering for presets:** Redesign settings forms to conditionally render inputs based on the selected preset (e.g., Endpoint URL, Component ID, and Response Text Path for Langflow vs. Base URL and Model for OpenAI-compatible) to keep the configuration UI clean and relevant. (from: langflow-provider_20260513, archived 2026-05-13)
 
 ---
-Last refreshed: 2026-05-23T19:42:00+07:00
-Codebase health: 849 tests passing across 63 files, build ~744KB, 33 tracks archived
+Last refreshed: 2026-05-25T12:16:00+07:00
+Codebase health: 858 tests passing across 64 files, build ~745KB, 0 lint errors, 34 tracks archived
