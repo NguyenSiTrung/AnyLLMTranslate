@@ -9,6 +9,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 ## ✨ Features
 
 ### 🔤 Web Page Translation
+
 - **Full-page bilingual translation** — original + translated text displayed together
 - **Smart DOM walker** — TreeWalker-based extraction groups text into semantic pieces at block boundaries, splitting long texts at sentence boundaries
 - **Lazy viewport loading** — `IntersectionObserver` with 200px pre-load margin; batches pieces every 100ms
@@ -21,6 +22,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Auto-translate** — per-site automatic translation on page load via hostname matching with wildcard support; dismissible notification bar
 
 ### 🎬 Video Subtitle Translation
+
 - **Platform-specific handlers** with extensible registry pattern
   - **YouTube**: Supports `/api/timedtext` endpoint with srv3 XML and JSON3 formats
   - **Udemy**: Handles VTT from `udemycdn.com` with sprite metadata filtering
@@ -40,6 +42,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Preferred subtitle language** with auto-activation when matching tracks are available
 
 ### 🖱️ Interactive Translation
+
 - **Text selection translate** — select any text, click the floating translate button; results appear in a tooltip with copy & close actions
 - **Mouse hover translate** — hover over paragraph-level elements; configurable 200–500ms delay, element-level cache
 - **Inline translate** — rapid key-gesture translation in editable fields (default: triple-space); includes native undo support, pulsing border feedback, and floating toast notifications; works with Google Search, ChatGPT, and other input fields via window-level capture phase listener
@@ -48,6 +51,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Context menu integration** — right-click → Translate Page / Translate Selection / Translate Section / Translate Subtitles
 
 ### ⚙️ Settings & Advanced
+
 - **Any OpenAI-compatible API** — OpenAI, Ollama, LM Studio, Groq, Together AI, Gemini, etc.
 - **Provider presets** — Ollama (local, no key required) and Custom
 - **Connection tester** — sends a round-trip ping and reports latency
@@ -76,17 +80,20 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 ### Installation (Developer Mode)
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/NguyenSiTrung/AnyLLMTranslate.git
    cd AnyLLMTranslate
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Build the extension:
+
    ```bash
    npm run build
    ```
@@ -115,35 +122,35 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Extension framework | **WXT** v0.20.20 (Manifest V3) |
-| Build output | **~640 KB** (639.79 kB) |
-| UI | **React 19** + **TypeScript 5.9** (14-component shared UI library) |
-| Styling | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes) |
-| State management | **Zustand v5** with `chrome.storage.local` sync |
-| Translation cache | **IndexedDB** via `idb-keyval` |
-| Encryption | **AES-GCM** (Web Crypto API) for API key storage |
-| Icons | **Lucide React** |
-| Testing | **Vitest** + `@testing-library/react` + `jsdom` (697 tests, 55 files) |
-| Linting | ESLint + `typescript-eslint` + Prettier |
-| Service worker | Rate limiting (max 3 concurrent), keep-alive alarm, session tracking |
+| Layer               | Technology                                                            |
+| ------------------- | --------------------------------------------------------------------- |
+| Extension framework | **WXT** v0.20.20 (Manifest V3)                                        |
+| Build output        | **~640 KB** (639.79 kB)                                               |
+| UI                  | **React 19** + **TypeScript 5.9** (14-component shared UI library)    |
+| Styling             | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes)   |
+| State management    | **Zustand v5** with `chrome.storage.local` sync                       |
+| Translation cache   | **IndexedDB** via `idb-keyval`                                        |
+| Encryption          | **AES-GCM** (Web Crypto API) for API key storage                      |
+| Icons               | **Lucide React**                                                      |
+| Testing             | **Vitest** + `@testing-library/react` + `jsdom` (697 tests, 55 files) |
+| Linting             | ESLint + `typescript-eslint` + Prettier                               |
+| Service worker      | Rate limiting (max 3 concurrent), keep-alive alarm, session tracking  |
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server (Chrome, hot reload) |
-| `npm run dev:firefox` | Start development server (Firefox) |
-| `npm run build` | Production build → `.output/chrome-mv3` |
-| `npm run build:firefox` | Production build → `.output/firefox-mv2` |
-| `npm test` | Run all tests |
-| `npm run test:watch` | Vitest watch mode |
-| `npm run test:coverage` | Coverage report |
-| `npm run lint` | ESLint check |
-| `npm run lint:fix` | ESLint auto-fix |
-| `npm run format` | Prettier format |
-| `npm run zip` | Create distributable ZIP for Chrome Web Store |
+| Command                 | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `npm run dev`           | Start development server (Chrome, hot reload) |
+| `npm run dev:firefox`   | Start development server (Firefox)            |
+| `npm run build`         | Production build → `.output/chrome-mv3`       |
+| `npm run build:firefox` | Production build → `.output/firefox-mv2`      |
+| `npm test`              | Run all tests                                 |
+| `npm run test:watch`    | Vitest watch mode                             |
+| `npm run test:coverage` | Coverage report                               |
+| `npm run lint`          | ESLint check                                  |
+| `npm run lint:fix`      | ESLint auto-fix                               |
+| `npm run format`        | Prettier format                               |
+| `npm run zip`           | Create distributable ZIP for Chrome Web Store |
 
 ### Project Structure
 
@@ -249,16 +256,16 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 
 ## ⌨️ Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| **Alt+A** | Translate current page |
-| **Alt+S** | Translate video subtitles |
-| **Alt+Z** | Toggle translation display (show/hide) |
-| **Alt+X** | Restore original page (remove translations) |
-| **Alt+H** | Toggle hover translate (page-level) |
-| **Alt+D** | Toggle text selection translate (page-level) |
-| **Alt+Q** | Translate selected section |
-| **Escape** | Dismiss translation tooltip |
+| Shortcut   | Action                                       |
+| ---------- | -------------------------------------------- |
+| **Alt+A**  | Translate current page                       |
+| **Alt+S**  | Translate video subtitles                    |
+| **Alt+Z**  | Toggle translation display (show/hide)       |
+| **Alt+X**  | Restore original page (remove translations)  |
+| **Alt+H**  | Toggle hover translate (page-level)          |
+| **Alt+D**  | Toggle text selection translate (page-level) |
+| **Alt+Q**  | Translate selected section                   |
+| **Escape** | Dismiss translation tooltip                  |
 
 > Global shortcuts (Alt+A/S/Z/X) can be reconfigured at `chrome://extensions/shortcuts`
 
@@ -268,25 +275,25 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 
 AnyLLMTranslate includes **16 built-in themes + 1 custom theme** that apply via CSS data-attributes on `<html>`:
 
-| Theme | Key = `data-anyllm-theme` |
-|-------|--------------------------:|
-| Dividing Line | `dividing-line` |
-| Blockquote | `blockquote` *(default)* |
-| Paper | `paper` |
-| Underline | `underline` |
-| Dashed Underline | `dashed-underline` |
-| Highlight | `highlight` |
-| Wavy Underline | `wavy-underline` |
-| Bubble | `bubble` |
-| Side by Side | `side-by-side` |
-| Mask | `mask` |
-| Fade In | `fade-in` |
-| Italic | `italic` |
-| Dotted Border | `dotted-border` |
-| Shadow Card | `shadow-card` |
-| Minimal | `minimal` |
-| Gradient Accent | `gradient-accent` |
-| **Custom** | `custom` |
+| Theme            | Key = `data-anyllm-theme` |
+| ---------------- | ------------------------: |
+| Dividing Line    |           `dividing-line` |
+| Blockquote       |  `blockquote` _(default)_ |
+| Paper            |                   `paper` |
+| Underline        |               `underline` |
+| Dashed Underline |        `dashed-underline` |
+| Highlight        |               `highlight` |
+| Wavy Underline   |          `wavy-underline` |
+| Bubble           |                  `bubble` |
+| Side by Side     |            `side-by-side` |
+| Mask             |                    `mask` |
+| Fade In          |                 `fade-in` |
+| Italic           |                  `italic` |
+| Dotted Border    |           `dotted-border` |
+| Shadow Card      |             `shadow-card` |
+| Minimal          |                 `minimal` |
+| Gradient Accent  |         `gradient-accent` |
+| **Custom**       |                  `custom` |
 
 All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class).
 
@@ -299,13 +306,16 @@ The **Custom** theme allows user-defined styling via the theme editor in Options
 The extension uses a modular, extensible subtitle handler system:
 
 ### Handler Interface
+
 All platform handlers implement the `SubtitleHandler` interface:
+
 - `platform`: Unique identifier (e.g., `'youtube'`, `'udemy'`, `'coursera'`)
 - `detect()`: Returns `true` if the handler applies to the current page
 - `getPatterns()`: Returns URL patterns for interception with optional language extractors
 - `transformResponse()`: Transforms raw subtitle content into normalized `SubtitleCue[]`
 
 ### Handler Registry
+
 - Centralized registration system for platform handlers
 - Auto-detects current platform by hostname
 - Aggregates URL patterns for XHR/Fetch interceptors
@@ -314,6 +324,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 ### Supported Platforms
 
 #### YouTube
+
 - **Endpoint**: `/api/timedtext`
 - **Formats**: srv3 XML (default), JSON3
 - **Detection**: `youtube.com` hostname
@@ -321,6 +332,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 - **Parser**: Custom XML DOM parser + JSON3 event parser
 
 #### Udemy
+
 - **Endpoint**: `*.udemycdn.com/*.vtt`
 - **Format**: Standard WebVTT
 - **Detection**: `udemy.com` hostname
@@ -328,6 +340,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 - **Special**: Filters sprite metadata cues (image file references with `#xywh=` coordinates) using length heuristic (>100 chars)
 
 #### Coursera
+
 - **Endpoints**: `coursera.org/*subtitle`, `coursera.org/*.vtt`
 - **Format**: Standard WebVTT
 - **Detection**: `coursera.org` hostname
@@ -336,6 +349,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 ### Dual-Mode Architecture
 
 **Interception Mode** (primary):
+
 - MAIN world script intercepts XHR/Fetch requests at `document_start`
 - Platform handler transforms response to `SubtitleCue[]`
 - Coordinator translates cues via background service
@@ -343,6 +357,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 - Native player displays translated subtitles
 
 **Overlay Fallback** (backup):
+
 - Auto-activates if interception times out (30s default for local LLMs)
 - Fetches subtitle content via background worker (CORS bypass)
 - Parses, translates, and renders in custom overlay
@@ -374,6 +389,7 @@ npm run test:coverage # Coverage report
 ```
 
 Coverage areas:
+
 - DOM walker piece extraction and chunking
 - Viewport observer lazy batching
 - Translation display injection and cleanup
