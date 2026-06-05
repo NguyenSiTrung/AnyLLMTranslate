@@ -5,6 +5,7 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
+import { deduplicateAncestors } from '@/lib/domUtils';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
 
 let pieceCounter = 0;
@@ -130,13 +131,7 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
     if (includeRoots.size === 0) return [];
 
     // Deduplicate: keep only outermost elements
-    const elements = [...includeRoots];
-    const outermost: Element[] = [];
-    for (const el of elements) {
-      if (!elements.some((other) => other !== el && other.contains(el))) {
-        outermost.push(el);
-      }
-    }
+    const outermost = deduplicateAncestors([...includeRoots]);
 
     const allPieces: TranslationPiece[] = [];
     for (const el of outermost) {

@@ -21,6 +21,9 @@ export function parseWebVTT(vtt: string): SubtitleCue[] {
   // Strip BOM if present
   let content = vtt.replace(/^\uFEFF/, '');
 
+  // Normalize line endings (same as SRT parser)
+  content = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
   // Remove VTT header (everything before first blank line after WEBVTT)
   const headerEndIndex = content.indexOf('\n\n');
   if (headerEndIndex === -1) return [];

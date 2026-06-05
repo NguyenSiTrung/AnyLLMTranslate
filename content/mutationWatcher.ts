@@ -4,6 +4,7 @@
  */
 
 import { MUTATION_DEBOUNCE_MS, DATA_ATTRS, SKIP_ELEMENTS, BLOCK_ELEMENTS } from '@/lib/constants';
+import { deduplicateAncestors } from '@/lib/domUtils';
 
 export type OnMutationCallback = (addedElements: Element[]) => void;
 
@@ -119,17 +120,6 @@ export class MutationWatcher {
   }
 
   private deduplicateElements(elements: Element[]): Element[] {
-    const unique: Element[] = [];
-
-    for (const el of elements) {
-      const isChildOfAnother = elements.some(
-        (other) => other !== el && other.contains(el),
-      );
-      if (!isChildOfAnother) {
-        unique.push(el);
-      }
-    }
-
-    return unique;
+    return deduplicateAncestors(elements);
   }
 }

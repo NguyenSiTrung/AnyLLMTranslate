@@ -4,6 +4,7 @@
  */
 
 import { DATA_ATTRS } from '@/lib/constants';
+import { scheduleDomWrite } from '@/lib/performance';
 import type { PageState } from '@/lib/constants';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
 
@@ -193,6 +194,10 @@ function getInlineTranslationText(inlineEl: Element): string {
   return (inlineEl.textContent ?? '').trim().replace(/^\((.*)\)$/, '$1');
 }
 
+function debouncedSyncInlineSiblings(): void {
+  scheduleDomWrite(syncInlineTranslationOnlySiblings);
+}
+
 function syncInlineTranslationOnlySiblings(): void {
   removeInlineTranslationOnlyClones();
 
@@ -362,10 +367,21 @@ function isTranslationOnlyMode(): boolean {
 /** Detect if an element lives inside a width-constrained multi-column layout.
  *  Walks up the DOM checking computed display for flex, grid, or table-cell.
  *  This catches CSS-class-based layouts that attribute selectors miss. */
+const constrainedCache = new WeakMap<Element, boolean>();
+
 function isConstrainedContainer(el: Element): boolean {
+  const cached = constrainedCache.get(el);
+  if (cached !== undefined) return cached;
+
   // Direct table cell check (fastest path)
-  if (el.tagName === 'TD' || el.tagName === 'TH') return true;
-  if (el.closest('table')) return true;
+  if (el.tagName === 'TD' || el.tagName === 'TH') {
+    constrainedCache.set(el, true);
+    return true;
+  }
+  if (el.closest('table')) {
+    constrainedCache.set(el, true);
+    return true;
+  }
 
   // Walk ancestors checking computed display
   let parent = el.parentElement;
@@ -378,11 +394,13 @@ function isConstrainedContainer(el: Element): boolean {
       display === 'table-cell' || display === 'table-row' ||
       display === 'table'
     ) {
+      constrainedCache.set(el, true);
       return true;
     }
     parent = parent.parentElement;
     depth++;
   }
+  constrainedCache.set(el, false);
   return false;
 }
 
@@ -418,7 +436,7 @@ export function applyInlineTranslation(
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     (existing as HTMLElement).offsetHeight;
     (existing as HTMLElement).style.animation = '';
-    syncInlineTranslationOnlySiblings();
+    debouncedSyncInlineSiblings();
     return;
   }
 
@@ -434,7 +452,7 @@ export function applyInlineTranslation(
   inlineEl.title = translatedText;
 
   renderTarget.appendChild(inlineEl);
-  syncInlineTranslationOnlySiblings();
+  debouncedSyncInlineSiblings();
 }
 
 /** Set error state on an inline translation element */

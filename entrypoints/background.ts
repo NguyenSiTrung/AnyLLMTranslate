@@ -53,7 +53,12 @@ export default defineBackground(() => {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const result = handleMessage(message, sender);
     if (result) {
-      result.then(sendResponse);
+      result
+        .then(sendResponse)
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          sendResponse({ success: false, error: message });
+        });
       return true; // Keep the message channel open for async response
     }
     return false;

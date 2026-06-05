@@ -20,7 +20,7 @@ let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 let currentHoverTarget: Element | null = null;
 
 /** Cache of already-translated elements (element → translatedText) */
-const hoverCache = new Map<Element, string>();
+let hoverCache = new WeakMap<Element, string>();
 
 /** Generate a unique piece ID for hover translations */
 function generateHoverId(element: Element): string {
@@ -179,7 +179,7 @@ export function isHoverTranslateEnabled(): boolean {
 
 /** Clear hover translation cache */
 export function clearHoverCache(): void {
-  hoverCache.clear();
+  hoverCache = new WeakMap<Element, string>();
 }
 
-export { HOVER_TARGETS, hoverCache };
+export { HOVER_TARGETS };
