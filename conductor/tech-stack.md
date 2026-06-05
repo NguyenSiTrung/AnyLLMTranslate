@@ -11,6 +11,7 @@
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
 | **WXT** | 0.20.20 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
+| **@wxt-dev/module-react** | 1.x | WXT React integration module for React entrypoints |
 | **Vite** | 6.x | Bundled with WXT — fast builds, HMR, ESBuild-powered |
 | **pnpm** | 9.x | Fast, disk-efficient package manager |
 
@@ -53,6 +54,8 @@
 | Technology | Version | Usage |
 |-----------|---------|-------|
 | **Vitest** | 3.x | Unit tests for DOM walker, translation engine, parsers |
+| **@vitest/coverage-v8** | 3.x | V8-based code coverage provider for Vitest |
+| **jsdom** | 29.x | DOM environment for unit tests (Vitest environment) |
 | **Playwright** | - | E2E testing with Chrome extension loading |
 | **Testing Library** | latest | React component tests |
 
@@ -62,6 +65,24 @@
 |-----------|---------|-------|
 | **ESLint** | 10.x | Flat config with TypeScript rules |
 | **Prettier** | 3.x | Code formatting |
+
+## Developer Scripts
+
+| Script | Command | Purpose |
+|--------|---------|----------|
+| `dev` | `wxt` | Start dev server with hot reload |
+| `dev:firefox` | `wxt -b firefox` | Dev server for Firefox |
+| `build` | `wxt build` | Production build for Chrome MV3 |
+| `build:firefox` | `wxt build -b firefox` | Production build for Firefox |
+| `zip` | `wxt zip` | Package for Chrome Web Store |
+| `zip:firefox` | `wxt zip -b firefox` | Package for Firefox Add-ons |
+| `compile` | `tsc --noEmit` | Type-check without emitting |
+| `test` | `vitest run` | Run test suite once |
+| `test:watch` | `vitest` | Run tests in watch mode |
+| `test:coverage` | `vitest run --coverage` | Run tests with V8 coverage report |
+| `lint` | `eslint .` | Check for lint errors |
+| `lint:fix` | `eslint . --fix` | Auto-fix lint errors |
+| `format` | `prettier --write '**/*.{ts,tsx,css,json,md}'` | Format all source files |
 
 ## CI/CD
 

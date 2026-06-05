@@ -1,20 +1,17 @@
 {
-  "lastRefresh": "2026-05-25T12:16:00+07:00",
+  "lastRefresh": "2026-06-05T15:30:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
-    "product.md": [
-      "Added LinkedIn Learning to subtitle platform list (target users, value props, key features)",
-      "Added LinkedIn Learning Subtitle Support track details to Implementation Status",
-      "Updated current state: 858 tests, 64 files, ~745 KB build, 0 lint errors, 34 tracks"
+    "product.md": "No drift",
+    "patterns.md": "No drift",
+    "tech-stack.md": [
+      "Added @wxt-dev/module-react to Build & Tooling section",
+      "Added @vitest/coverage-v8 and jsdom to Testing section",
+      "Added Developer Scripts section documenting all 14 npm scripts"
     ],
-    "patterns.md": [
-      "Added 5 new patterns from linkedin-subtitles_20260523 track (dual-world registration, CDN allowlist, MutationObserver test tick, storage mock key, top-level type imports)",
-      "Updated health footer: 858 tests, 64 files, ~745KB, 0 lint errors, 34 tracks"
-    ],
-    "tech-stack.md": "No drift",
     "workflow.md": "No drift",
-    "tracks.md": "No drift (already current)"
+    "tracks.md": "No drift"
   },
   "health": {
     "tests": 858,

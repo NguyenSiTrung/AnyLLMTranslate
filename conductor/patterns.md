@@ -338,5 +338,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Conditional UI Rendering for presets:** Redesign settings forms to conditionally render inputs based on the selected preset (e.g., Endpoint URL, Component ID, and Response Text Path for Langflow vs. Base URL and Model for OpenAI-compatible) to keep the configuration UI clean and relevant. (from: langflow-provider_20260513, archived 2026-05-13)
 
 ---
-Last refreshed: 2026-05-25T12:16:00+07:00
+Last refreshed: 2026-06-05T15:30:00+07:00
 Codebase health: 858 tests passing across 64 files, build ~745KB, 0 lint errors, 34 tracks archived
