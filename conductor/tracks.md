@@ -42,15 +42,11 @@ This file tracks all major tracks for the project.
 
 - ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
 - ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
+- ✅ **Deep Analysis Hardening & Improvements** (`deep-analysis-hardening_20260611`) — Archived 2026-06-11. [View](./conductor/archive/deep-analysis-hardening_20260611/)
 
 ---
 
 ## Active Tracks
 
----
 
-## [x] Track: Deep Analysis Hardening & Improvements
-*Link: [./conductor/tracks/deep-analysis-hardening_20260611/](./conductor/tracks/deep-analysis-hardening_20260611/)*
-
-**Status (2026-06-11):** Complete — all phases including the originally-deferred Phase 1.2 (per-install salt + recoverable decrypt) and Phase 2 (interceptor lifecycle idempotency, deterministic semaphore timeout, subtitle session cleanup) implemented. 899 tests passing across 67 files, 0 lint errors, tsc clean, build ~749KB.
 
