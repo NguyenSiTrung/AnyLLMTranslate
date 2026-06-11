@@ -46,9 +46,9 @@
   <!-- depends: task3 -->
   - Reworked the semaphore queue to hold `SemaphoreWaiter` objects with a `settled` flag. Timeouts now remove the correct waiter; `releaseSemaphore()` skips settled waiters and transfers the slot to the next live waiter (active count unchanged) or decrements when none remain. Fixes the prior bug where a timed-out waiter's wrapper stayed queued and a release leaked an active slot.
 
-- [ ] Task 5: Clean up active subtitle sessions on restore/navigation
+- [x] Task 5: Clean up active subtitle sessions on restore/navigation
   <!-- files: services/background.ts, content/subtitleCoordinator.ts, services/__tests__/background.*.test.ts, tests/unit/subtitleCoordinator.test.ts -->
-  - **Deferred to follow-up.**
+  - Added `stopSubtitleSession(tabId)` (drains queue, removes session, clears keep-alive alarm). Wired into the `restore` handler, a new `CANCEL_SUBTITLE_SESSION` message, and a `chrome.tabs.onRemoved` listener (`initSubtitleSessionCleanup`). The coordinator now sends `CANCEL_SUBTITLE_SESSION` on SPA navigation. 5 new background tests.
 
 ## Phase 3: Parsing, Ordering, and Memory Improvements
 <!-- execution: parallel -->

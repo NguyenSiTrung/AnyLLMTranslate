@@ -353,6 +353,24 @@ export function clearPendingRequest(requestId: string): void {
 }
 
 /**
+ * Best-effort notification to the background to cancel this tab's subtitle
+ * translation session. Guarded so it is a no-op when chrome messaging is
+ * unavailable (e.g. some test contexts).
+ */
+function cancelBackgroundSubtitleSession(): void {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+      const result = chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' });
+      if (result && typeof (result as Promise<unknown>).catch === 'function') {
+        (result as Promise<unknown>).catch(() => { /* popup/SW may be unavailable */ });
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
  * Hook into SPA navigation events to reset state when the user navigates away
  * from a watch page (e.g. YouTube home → /watch or /watch → home).
  * Returns a cleanup function.
@@ -365,6 +383,9 @@ function startSpaNavigationWatcher(): () => void {
     if (currentUrl !== lastUrl) {
       lastUrl = currentUrl;
       console.log('AnyLLMTranslate: SPA navigation detected, resetting coordinator state');
+      // Tell the background to abandon any in-progress subtitle session for this
+      // tab so it stops translating cues for the page we just left.
+      cancelBackgroundSubtitleSession();
       resetCoordinatorState();
     }
   };

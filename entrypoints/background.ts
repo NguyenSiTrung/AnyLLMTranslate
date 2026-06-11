@@ -3,7 +3,7 @@
  * Wires up the message router, settings listener, keyboard commands, and context menus.
  */
 
-import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule } from '@/services/background';
+import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule, initSubtitleSessionCleanup } from '@/services/background';
 import { initTabCleanup } from '@/services/categoryStore';
 import { warmDebugCache } from '@/services/debugLog';
 
@@ -78,6 +78,9 @@ export default defineBackground(() => {
 
   // Initialize tab-scoped category override cleanup
   initTabCleanup();
+
+  // Tear down subtitle sessions + page-translation tracking when tabs close
+  initSubtitleSessionCleanup();
 
   // Set up context menus on install
   chrome.runtime.onInstalled.addListener(() => {

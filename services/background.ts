@@ -50,6 +50,32 @@ function clearKeepaliveAlarm(): void {
   }
 }
 
+/**
+ * Stop an active progressive subtitle session for a tab.
+ * Drains the queue so the background loop exits, removes the session, and
+ * clears the keep-alive alarm when no sessions remain. Safe to call when no
+ * session exists. Called on restore, explicit cancel, and tab removal.
+ */
+function stopSubtitleSession(tabId: number): void {
+  const session = activeSessions.get(tabId);
+  if (session) {
+    session.queue.length = 0; // running loop exits on its next iteration
+    activeSessions.delete(tabId);
+  }
+  clearKeepaliveAlarm();
+}
+
+/**
+ * Register tab-removal cleanup so closing a tab tears down its subtitle session
+ * and page-translation session tracking. Call once at service worker startup.
+ */
+export function initSubtitleSessionCleanup(): void {
+  chrome.tabs.onRemoved.addListener((tabId: number) => {
+    stopSubtitleSession(tabId);
+    translatedTabSessions.delete(tabId);
+  });
+}
+
 // Alarm listener — existence of alarm keeps SW alive
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === KEEPALIVE_ALARM) {
@@ -134,6 +160,18 @@ function __resetSemaphoreForTest(): void {
 /** Inspect semaphore state. Exported for tests. */
 function __getSemaphoreStateForTest(): { active: number; queued: number } {
   return { active: semaphore.active, queued: semaphore.queue.length };
+}
+
+/** Seed an active subtitle session. Exported for tests. */
+function __seedSubtitleSessionForTest(tabId: number): { queue: number[] } {
+  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {} };
+  activeSessions.set(tabId, session);
+  return session;
+}
+
+/** Count active subtitle sessions. Exported for tests. */
+function __getActiveSessionCountForTest(): number {
+  return activeSessions.size;
 }
 
 /** Track current preset to detect when service type must change */
@@ -642,9 +680,19 @@ export function handleMessage(
     case 'translateSelection':
       return handleTranslateSelection(message);
     case 'restore': {
-      // Clear page translation session tracking for this tab
-      const restoreTabId = _sender.tab?.id;
-      if (restoreTabId) translatedTabSessions.delete(restoreTabId);
+      // Clear page translation session tracking and stop any active subtitle
+      // session for this tab so progressive chunk work and the keep-alive alarm
+      // do not outlive the restore.
+      const restoreTabId = message.tabId ?? _sender.tab?.id;
+      if (restoreTabId) {
+        translatedTabSessions.delete(restoreTabId);
+        stopSubtitleSession(restoreTabId);
+      }
+      return undefined;
+    }
+    case 'CANCEL_SUBTITLE_SESSION': {
+      const cancelTabId = message.tabId ?? _sender.tab?.id;
+      if (cancelTabId) stopSubtitleSession(cancelTabId);
       return undefined;
     }
     case 'statusUpdate':
@@ -739,4 +787,6 @@ export {
   releaseSemaphore,
   __resetSemaphoreForTest,
   __getSemaphoreStateForTest,
+  __seedSubtitleSessionForTest,
+  __getActiveSessionCountForTest,
 };

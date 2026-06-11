@@ -31,6 +31,7 @@ export type MessageAction =
   | 'statusUpdate'
   | 'SUBTITLE_CHUNK_TRANSLATED'
   | 'PRIORITIZE_SUBTITLE_CHUNK'
+  | 'CANCEL_SUBTITLE_SESSION'
   | 'SUBTITLE_TRACKS_AVAILABLE'
   | 'SELECT_SUBTITLE_TRACK'
   | 'GET_AVAILABLE_TRACKS'
@@ -121,6 +122,12 @@ export interface PrioritizeSubtitleChunkMessage {
   cueIndex: number;
 }
 
+/** Cancel an in-progress subtitle translation session (Content → Background) */
+export interface CancelSubtitleSessionMessage {
+  action: 'CANCEL_SUBTITLE_SESSION';
+  tabId?: number;
+}
+
 /** Union type for all messages */
 /** Flush LRU cache updates on page unload */
 export interface FlushLruMessage {
@@ -169,6 +176,7 @@ export type ExtensionMessage =
   | StatusUpdateMessage
   | SubtitleChunkTranslatedMessage
   | PrioritizeSubtitleChunkMessage
+  | CancelSubtitleSessionMessage
   | SubtitleTracksAvailableMessage
   | SelectSubtitleTrackMessage
   | GetAvailableTracksMessage
