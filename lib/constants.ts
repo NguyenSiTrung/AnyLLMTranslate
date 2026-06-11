@@ -63,4 +63,6 @@ export const STORAGE_KEYS = {
   CACHE_DB: 'anyllm-translate-cache',
   CACHE_STORE: 'translations',
   CONNECTION_STATUS: 'anyllm-connection-status',
+  /** Per-install random salt for API key encryption key derivation */
+  ENC_SALT: 'anyllm-translate-enc-salt',
 } as const;

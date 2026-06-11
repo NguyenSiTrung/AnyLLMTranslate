@@ -7,10 +7,10 @@
   <!-- files: lib/__tests__/crypto.test.ts, lib/__tests__/configMigration.test.ts -->
   - Existing tests already cover the base cases. Deferred to follow-up — see learnings.md.
 
-- [ ] Task 2: Implement stronger API key encryption and recoverable decrypt failure handling
+- [x] Task 2: Implement stronger API key encryption and recoverable decrypt failure handling
   <!-- files: lib/crypto.ts, lib/config.ts, types/config.ts, lib/providerReadiness.ts -->
   <!-- depends: task1 -->
-  - **Deferred to follow-up track** — crypto path touches all settings; high blast radius.
+  - Per-install random salt (`STORAGE_KEYS.ENC_SALT`) now derives the AES-GCM key; legacy static-salt `enc:` values still decrypt via fallback and migrate on next save. New `decryptApiKeyResult()` distinguishes plaintext / decrypted / undecryptable; `loadSettings()` blanks the key (recoverable not-configured state) when an encrypted value cannot be decrypted. 6 new tests.
 
 - [x] Task 3: Add origin-validation tests for subtitle bridge responses
   <!-- files: tests/unit/fetchInterceptor.test.ts, tests/unit/xhrInterceptor.test.ts -->

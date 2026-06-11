@@ -6,7 +6,7 @@
 import type { ExtensionSettings, SiteRule } from '@/types/config';
 import { DEFAULT_SETTINGS, CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
-import { encryptApiKey, decryptApiKey } from './crypto';
+import { encryptApiKey, decryptApiKeyResult } from './crypto';
 import { deepMerge } from './utils';
 import { BUILT_IN_RULES } from './siteRules';
 
@@ -43,8 +43,15 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     const mergedExcludes = new Set([...storedExcludes, ...CRITICAL_GLOBAL_EXCLUDES]);
     merged.globalExcludeSelectors = Array.from(mergedExcludes);
 
-    // Decrypt API key at rest (backward compat: returns plaintext if not encrypted)
-    merged.provider.apiKey = await decryptApiKey(merged.provider.apiKey);
+    // Decrypt API key at rest (backward compat: returns plaintext if not encrypted).
+    // If an encrypted value cannot be decrypted (e.g. changed extension ID or a
+    // corrupted/rotated salt), blank the key so the provider surfaces a
+    // recoverable not-configured state instead of using ciphertext as the key.
+    const decrypted = await decryptApiKeyResult(merged.provider.apiKey);
+    merged.provider.apiKey = decrypted.ok ? decrypted.value : '';
+    if (decrypted.encrypted && !decrypted.ok) {
+      merged.provider.connectionStatus = 'unknown';
+    }
 
     // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
     if ((merged.provider.preset as string) === 'ollama') {
