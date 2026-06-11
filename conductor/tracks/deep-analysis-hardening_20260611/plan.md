@@ -70,10 +70,10 @@
 <!-- execution: sequential -->
 
 - [x] Task 1: Run full validators
-  - [x] Run `npm run compile`.
-  - [x] Run `npm run lint`.
-  - [x] Run `npm test` (876 tests, all passing).
-  - [x] Run `npm run build` (WXT build OK, ~746KB).
+  - [x] Run `npm run compile` (tsc clean).
+  - [x] Run `npm run lint` (0 errors).
+  - [x] Run `npm test` (899 tests across 67 files, all passing — +23 from deferred follow-up).
+  - [x] Run `npm run build` (WXT build OK, ~749KB).
 
 - [x] Task 2: Manual verification checklist
   - [x] Provider settings load/save with empty, plaintext, and encrypted API key states — existing tests cover; no regression.

@@ -59,16 +59,36 @@ Patterns, gotchas, and context discovered during implementation.
 - `TranslationPiece.originalHTML` was captured in `domWalker.ts` but read by nothing in the entire codebase. Restore is handled via `[data-anyllm-translated]`/`[data-anyllm-role="original"]` markers + `removeAllTranslations()` walking the DOM. The capture was true dead code. Remove from type, from producer, and from all test fixtures (5 fixtures across `entrypoints/__tests__/content.test.ts`).
 - `textNodes` is similarly captured-but-unread, but the cost-benefit of removing it is much lower and the field is referenced by callers in case of future restore strategies — leave it as-is and document the finding.
 
-### Out-of-scope items (deliberately deferred)
+### Deferred items — now IMPLEMENTED (follow-up session 2026-06-11)
 
-- Phase 1.1-1.2 (per-install salt, recoverable decrypt failure) — touches the crypto path used by all settings; high blast radius, deferred to a focused follow-up track.
-- Phase 2 (interceptor lifecycle idempotency, semaphore determinism, restore-navigates-subtitle-cleanup) — solid work, but each item is its own focused refactor. Defer to a follow-up to keep this track small.
-- These remain in the plan.md for the next hardening iteration.
+The items below were originally deferred, then implemented in the same track on user request.
+
+#### Per-install salt + recoverable decrypt (Phase 1.2)
+
+- The AES-GCM key now derives from `chrome.runtime.id` + a per-install random 16-byte salt persisted under `STORAGE_KEYS.ENC_SALT`. Cache the salt in a module variable to avoid a storage read on every encrypt/decrypt; fall back to the legacy `STATIC_SALT` when `chrome.storage` is unavailable (tests). (lib/crypto.ts)
+- Keep the `enc:` prefix unchanged. On decrypt, try the per-install salt first, then the static salt — AES-GCM's auth tag makes a wrong-salt attempt throw, so try-both is safe and lets legacy `enc:` values keep decrypting. They migrate to the per-install salt on the next `saveSettings()`. This avoided changing the prefix (which would have broken the existing `/^enc:/` round-trip assertion).
+- New `decryptApiKeyResult()` returns `{ value, ok, encrypted }`. `loadSettings()` uses it to blank the key (recoverable not-configured state) when an encrypted value can't be decrypted, instead of using ciphertext as the key. `decryptApiKey()` stays as a thin wrapper (returns raw on failure) for backward compat with its existing test.
+- Gotcha: `configMigration.test.ts` mocks `../crypto` — when `config.ts` switched from `decryptApiKey` to `decryptApiKeyResult`, the mock had to export the new name or `loadSettings` crashed on `undefined`.
+
+#### Interceptor lifecycle idempotency (Phase 2.1-2.2)
+
+- The real bug: `XhrInterceptor.disable()` reset `window.XMLHttpRequest` but never restored the patched `prototype.open/addEventListener/send`. A disable→enable cycle then captured the already-patched method as the "original" and double-wrapped, firing `bridge.send` twice. Fix: capture the originals into instance fields at `enable()` and restore them in `disable()`.
+- `FetchInterceptor.disable()` restored `originalFetch` unconditionally, which would clobber any patch installed on top. Now it only restores when `window.fetch === this.patchedFetch`.
+- `originalFetch` is captured as `window.fetch.bind(window)` at module load — so after disable, `window.fetch` is the *bound* original, NOT identity-equal to the test's `mockFetch`. Assert behavior (delegates to mock) rather than identity.
+
+#### Semaphore queue timeout determinism (Phase 2.3-2.4)
+
+- The original queue stored resolve *wrapper* closures, but the timeout tried `queue.indexOf(resolve)` on the bare resolve (never in the queue) — so a timed-out waiter's wrapper stayed queued. A later `releaseSemaphore()` shifted that dead wrapper and called it without decrementing `active`, leaking a slot until concurrency wedged at the cap.
+- Fix: queue holds `SemaphoreWaiter { grant, settled }` objects. Timeout marks `settled` + removes the exact waiter; `releaseSemaphore()` skips settled waiters and transfers the slot to the next live waiter (active unchanged) or decrements when none remain. Exported `__resetSemaphoreForTest` / `__getSemaphoreStateForTest` for deterministic tests.
+
+#### Subtitle session cleanup on restore/navigation (Phase 2.5)
+
+- `activeSessions: Map<tabId, session>` + keep-alive alarm outlived `restore` and SPA navigation. Added `stopSubtitleSession(tabId)` that drains `session.queue` (the running async loop exits on its next `while` check), deletes the session, and clears the alarm.
+- Wired into: the `restore` handler, a new `CANCEL_SUBTITLE_SESSION` message, and `chrome.tabs.onRemoved` (`initSubtitleSessionCleanup`, registered in the background entrypoint). The coordinator sends `CANCEL_SUBTITLE_SESSION` from the SPA navigation handler (guarded best-effort send) — deliberately NOT from `resetCoordinatorState()` since that runs in many tests' `beforeEach`.
 
 ### Test count delta
 
-- Before: 858 tests across 64 files
-- After: 876 tests across 65 files (+18 net)
-- New tests: 6 (debugLog) + 5 (glossary header variants) + 4 (parser ordering) + 2 (interceptor origin) + 1 (domWalker no-originalHTML)
-- Updated fixtures: 5 (content.test.ts — originalHTML removed)
-- Updated helper: 1 (xhrInterceptor.test.ts fireTranslatedMessage now sets origin)
+- Initial baseline: 858 tests / 64 files.
+- After first pass (origin, debug-log, parser, originalHTML): 876 tests / 65 files.
+- After deferred follow-up: 899 tests / 67 files (+23): 6 crypto/migration + 5 fetch/XHR lifecycle + 6 semaphore + 5 subtitle-session + 1 config blank-on-decrypt-failure.
+- Validators: tsc clean, eslint 0 errors, build ~749KB.

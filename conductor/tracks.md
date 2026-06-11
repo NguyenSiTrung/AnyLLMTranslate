@@ -49,9 +49,8 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [~] Track: Deep Analysis Hardening & Improvements
+## [x] Track: Deep Analysis Hardening & Improvements
 *Link: [./conductor/tracks/deep-analysis-hardening_20260611/](./conductor/tracks/deep-analysis-hardening_20260611/)*
 
-**Status (2026-06-11):** Phases 1.5, 1.3-1.4, 3.1-3.2, 3.3 complete (876 tests passing, 0 lint errors, build OK).
-Phase 1.1-1.2 (per-install salt) and Phase 2 (lifecycle/semaphore/subtitle-restore cleanup) deferred to a focused follow-up — see `learnings.md` for rationale.
+**Status (2026-06-11):** Complete — all phases including the originally-deferred Phase 1.2 (per-install salt + recoverable decrypt) and Phase 2 (interceptor lifecycle idempotency, deterministic semaphore timeout, subtitle session cleanup) implemented. 899 tests passing across 67 files, 0 lint errors, tsc clean, build ~749KB.
 
