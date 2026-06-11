@@ -351,5 +351,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Mock factories must export the new symbol name:** When `config.ts` switches from `decryptApiKey` to `decryptApiKeyResult`, any test that mocks `../crypto` must update its mock to export the new name or `loadSettings` crashes on `undefined`. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
 
 ---
-Last refreshed: 2026-06-11T17:11:00+07:00
-Codebase health: 899 tests passing across 67 files, build ~749KB, 0 lint errors, 35 tracks archived
+Last refreshed: 2026-06-11T17:21:00+07:00
+Codebase health: 899 tests passing across 67 files, build ~750KB, 0 lint errors, 35 tracks archived

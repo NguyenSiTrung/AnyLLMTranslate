@@ -1,24 +1,23 @@
 {
-  "lastRefresh": "2026-06-05T15:30:00+07:00",
+  "lastRefresh": "2026-06-11T17:21:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
-    "product.md": "No drift",
-    "patterns.md": "No drift",
-    "tech-stack.md": [
-      "Added @wxt-dev/module-react to Build & Tooling section",
-      "Added @vitest/coverage-v8 and jsdom to Testing section",
-      "Added Developer Scripts section documenting all 14 npm scripts"
+    "product.md": [
+      "Added Deep Analysis Hardening & Improvements to completed list",
+      "Updated Current State: 899 tests, 67 files, ~750 KB, 35 tracks"
     ],
+    "patterns.md": "Updated health footer stats (750KB, timestamp)",
+    "tech-stack.md": "No drift",
     "workflow.md": "No drift",
     "tracks.md": "No drift"
   },
   "health": {
-    "tests": 858,
-    "testFiles": 64,
-    "buildSizeKB": 745,
+    "tests": 899,
+    "testFiles": 67,
+    "buildSizeKB": 750,
     "lintErrors": 0,
-    "tracksArchived": 34,
+    "tracksArchived": 35,
     "tracksActive": 0
   }
 }
