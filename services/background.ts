@@ -66,13 +66,20 @@ const translatedTabSessions = new Set<number>();
 let translationService: (TranslationService & { updateConfig(config: ProviderConfig): void }) | null = null;
 
 /** Rate-limiting semaphore: max 3 concurrent, queue up to 10 */
+interface SemaphoreWaiter {
+  /** Hand the active slot to this waiter (resolves its acquire promise). */
+  grant: () => void;
+  /** True once this waiter has been resolved or rejected. */
+  settled: boolean;
+}
 interface SemaphoreState {
   active: number;
-  queue: Array<() => void>;
+  queue: SemaphoreWaiter[];
 }
 const semaphore: SemaphoreState = { active: 0, queue: [] };
 const MAX_CONCURRENT = 3;
 const MAX_QUEUE = 10;
+const QUEUE_TIMEOUT_MS = 30000;
 
 async function acquireSemaphore(): Promise<void> {
   if (semaphore.active < MAX_CONCURRENT) {
@@ -82,26 +89,51 @@ async function acquireSemaphore(): Promise<void> {
   if (semaphore.queue.length >= MAX_QUEUE) {
     throw new Error('Too many translation requests — please try again later');
   }
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
+    const waiter: SemaphoreWaiter = { settled: false, grant: () => {} };
+
     const timeout = setTimeout(() => {
-      const idx = semaphore.queue.indexOf(resolve);
+      if (waiter.settled) return;
+      waiter.settled = true;
+      const idx = semaphore.queue.indexOf(waiter);
       if (idx !== -1) semaphore.queue.splice(idx, 1);
       reject(new Error('Translation request timed out waiting in queue'));
-    }, 30000);
-    semaphore.queue.push(() => {
+    }, QUEUE_TIMEOUT_MS);
+
+    waiter.grant = () => {
+      if (waiter.settled) return;
+      waiter.settled = true;
       clearTimeout(timeout);
       resolve();
-    });
+    };
+
+    semaphore.queue.push(waiter);
   });
 }
 
 function releaseSemaphore(): void {
-  if (semaphore.queue.length > 0) {
+  // Hand the slot to the next live waiter, skipping any that already timed out
+  // (those are marked settled and may still linger if removal raced a release).
+  while (semaphore.queue.length > 0) {
     const next = semaphore.queue.shift();
-    if (next) next();
-  } else {
-    semaphore.active = Math.max(0, semaphore.active - 1);
+    if (next && !next.settled) {
+      next.grant(); // slot transfers to the waiter; active count is unchanged
+      return;
+    }
   }
+  semaphore.active = Math.max(0, semaphore.active - 1);
+}
+
+/** Reset semaphore state. Exported for tests. */
+function __resetSemaphoreForTest(): void {
+  for (const waiter of semaphore.queue) waiter.settled = true;
+  semaphore.active = 0;
+  semaphore.queue = [];
+}
+
+/** Inspect semaphore state. Exported for tests. */
+function __getSemaphoreStateForTest(): { active: number; queued: number } {
+  return { active: semaphore.active, queued: semaphore.queue.length };
 }
 
 /** Track current preset to detect when service type must change */
@@ -701,4 +733,10 @@ export function initEvictionSchedule(): void {
 }
 
 /** Export for testing */
-export { initService };
+export {
+  initService,
+  acquireSemaphore,
+  releaseSemaphore,
+  __resetSemaphoreForTest,
+  __getSemaphoreStateForTest,
+};

@@ -37,14 +37,14 @@
   <!-- depends: task1 -->
   - XHR interceptor now captures and restores `prototype.open/addEventListener/send` on disable (prevents double-wrap on re-enable). Fetch interceptor only restores when its own patch is still active (no foreign-patch clobber). Added `pagehide` teardown in the inject entrypoint.
 
-- [ ] Task 3: Add tests for semaphore queue timeout and slot handoff
+- [x] Task 3: Add tests for semaphore queue timeout and slot handoff
   <!-- files: services/__tests__/background.translate.test.ts, services/__tests__/background.semaphore.test.ts -->
-  - **Deferred to follow-up.**
+  - New `background.semaphore.test.ts` (6 tests): admission, queueing, slot handoff, queue-full rejection, no slot leak on timeout, and live-waiter-served-after-timeout.
 
-- [ ] Task 4: Make semaphore queue timeout behavior deterministic
+- [x] Task 4: Make semaphore queue timeout behavior deterministic
   <!-- files: services/background.ts -->
   <!-- depends: task3 -->
-  - **Deferred to follow-up.**
+  - Reworked the semaphore queue to hold `SemaphoreWaiter` objects with a `settled` flag. Timeouts now remove the correct waiter; `releaseSemaphore()` skips settled waiters and transfers the slot to the next live waiter (active count unchanged) or decrements when none remain. Fixes the prior bug where a timed-out waiter's wrapper stayed queued and a release leaked an active slot.
 
 - [ ] Task 5: Clean up active subtitle sessions on restore/navigation
   <!-- files: services/background.ts, content/subtitleCoordinator.ts, services/__tests__/background.*.test.ts, tests/unit/subtitleCoordinator.test.ts -->
