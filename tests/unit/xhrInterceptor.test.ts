@@ -221,6 +221,34 @@ describe('XhrInterceptor', () => {
     });
   });
 
+  describe('lifecycle robustness', () => {
+    it('does not double-patch across enable/disable/enable cycles', () => {
+      // Re-enabling after disable must not wrap the prototype methods twice,
+      // which would fire interception (and bridge.send) multiple times.
+      interceptor.enable();
+      interceptor.disable();
+      interceptor.enable();
+
+      const xhr = new XMLHttpRequest();
+      xhr.onload = vi.fn();
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      xhr.send();
+
+      simulateXhrComplete(xhr);
+
+      expect(bridge.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('restores prototype.send to a non-intercepting function after disable', () => {
+      interceptor.enable();
+      const patchedSend = XMLHttpRequest.prototype.send;
+      interceptor.disable();
+
+      // After disable the prototype.send must no longer be the patched version.
+      expect(XMLHttpRequest.prototype.send).not.toBe(patchedSend);
+    });
+  });
+
   describe('non-subtitle requests', () => {
     it('passes through non-matching requests without interception', () => {
       interceptor.enable();

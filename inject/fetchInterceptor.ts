@@ -13,6 +13,8 @@ const originalFetch = window.fetch.bind(window);
 
 export class FetchInterceptor {
   private enabled = false;
+  /** Reference to the patched fetch so disable() only restores our own patch. */
+  private patchedFetch: typeof window.fetch | null = null;
 
   constructor(
     private registry: InterceptorRegistry,
@@ -26,7 +28,7 @@ export class FetchInterceptor {
     const registry = this.registry;
     const bridge = this.bridge;
 
-    window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const patchedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
       // Check for metadata match first (non-blocking, read-only)
@@ -109,11 +111,19 @@ export class FetchInterceptor {
         window.addEventListener('message', translatedHandler);
       });
     };
+
+    this.patchedFetch = patchedFetch;
+    window.fetch = patchedFetch;
   }
 
   disable(): void {
     if (!this.enabled) return;
-    window.fetch = originalFetch;
+    // Only restore if our patch is still the active fetch — avoids clobbering
+    // a different patch installed on top of ours.
+    if (this.patchedFetch && window.fetch === this.patchedFetch) {
+      window.fetch = originalFetch;
+    }
+    this.patchedFetch = null;
     this.enabled = false;
   }
 }

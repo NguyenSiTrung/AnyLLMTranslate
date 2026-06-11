@@ -90,6 +90,49 @@ describe('FetchInterceptor', () => {
     });
   });
 
+  describe('lifecycle robustness', () => {
+    it('restores a passthrough fetch on disable', async () => {
+      interceptor.enable();
+      const patched = window.fetch;
+      expect(patched).not.toBe(mockFetch);
+
+      interceptor.disable();
+
+      // Restored fetch is the (bound) original — distinct from the patch and
+      // delegates straight to the underlying mock.
+      expect(window.fetch).not.toBe(patched);
+      mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
+      await window.fetch('https://example.com/x');
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('is idempotent across repeated enable/disable cycles', async () => {
+      interceptor.enable();
+      interceptor.disable();
+      interceptor.enable();
+
+      const normalResponse = new Response('OK', { status: 200 });
+      mockFetch.mockResolvedValue(normalResponse);
+
+      await window.fetch('https://example.com/api/data');
+
+      // A single layer of patching → exactly one underlying fetch call.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not clobber a foreign fetch patch on disable', () => {
+      interceptor.enable();
+      const foreignFetch = vi.fn() as unknown as typeof window.fetch;
+      window.fetch = foreignFetch;
+
+      interceptor.disable();
+
+      expect(window.fetch).toBe(foreignFetch);
+      // Restore for afterAll teardown
+      window.fetch = mockFetch as unknown as typeof window.fetch;
+    });
+  });
+
   describe('non-matching requests', () => {
     it('passes through non-subtitle requests without interception', async () => {
       const normalResponse = new Response('OK', { status: 200 });

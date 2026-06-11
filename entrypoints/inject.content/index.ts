@@ -48,6 +48,13 @@ export default defineContentScript({
     xhrInterceptor.enable();
     fetchInterceptor.enable();
 
+    // Tear down interceptors on page unload so prototype patches are restored
+    // and do not linger on bfcache restore or fast SPA teardown.
+    window.addEventListener('pagehide', () => {
+      xhrInterceptor.disable();
+      fetchInterceptor.disable();
+    }, { once: true });
+
     console.log('[AnyLLMTranslate] XHR/Fetch interceptors enabled');
 
     // Start HTML5 TextTrack discovery (universal fallback)

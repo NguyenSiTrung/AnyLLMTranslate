@@ -28,14 +28,14 @@
 ## Phase 2: Runtime Reliability and State Cleanup
 <!-- execution: parallel -->
 
-- [ ] Task 1: Add tests for interceptor lifecycle idempotency
+- [x] Task 1: Add tests for interceptor lifecycle idempotency
   <!-- files: tests/unit/fetchInterceptor.test.ts, tests/unit/xhrInterceptor.test.ts -->
-  - **Deferred to follow-up** — see learnings.md.
+  - 3 fetch lifecycle tests (restore passthrough, idempotent enable/disable, no foreign-patch clobber) + 2 XHR lifecycle tests (no double-patch, prototype.send restored).
 
-- [ ] Task 2: Improve interceptor lifecycle robustness
+- [x] Task 2: Improve interceptor lifecycle robustness
   <!-- files: inject/fetchInterceptor.ts, inject/xhrInterceptor.ts, entrypoints/inject.content/index.ts -->
   <!-- depends: task1 -->
-  - **Deferred to follow-up.**
+  - XHR interceptor now captures and restores `prototype.open/addEventListener/send` on disable (prevents double-wrap on re-enable). Fetch interceptor only restores when its own patch is still active (no foreign-patch clobber). Added `pagehide` teardown in the inject entrypoint.
 
 - [ ] Task 3: Add tests for semaphore queue timeout and slot handoff
   <!-- files: services/__tests__/background.translate.test.ts, services/__tests__/background.semaphore.test.ts -->

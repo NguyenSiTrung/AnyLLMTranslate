@@ -18,6 +18,10 @@ const OriginalXHR = window.XMLHttpRequest;
 
 export class XhrInterceptor {
   private enabled = false;
+  /** Original prototype methods captured at enable time, restored on disable. */
+  private originalOpen: typeof OriginalXHR.prototype.open | null = null;
+  private originalAddEventListenerRef: typeof OriginalXHR.prototype.addEventListener | null = null;
+  private originalSendRef: typeof OriginalXHR.prototype.send | null = null;
 
   constructor(
     private registry: InterceptorRegistry,
@@ -33,6 +37,7 @@ export class XhrInterceptor {
 
     // Patch XMLHttpRequest.prototype.open
     const originalOpen = OriginalXHR.prototype.open;
+    this.originalOpen = originalOpen;
     OriginalXHR.prototype.open = function (method: string, url: string | URL, ...args: unknown[]) {
       const urlString = typeof url === 'string' ? url : url.toString();
 
@@ -57,6 +62,7 @@ export class XhrInterceptor {
 
     // Patch XMLHttpRequest.prototype.addEventListener to capture load/readystatechange handlers
     const originalAddEventListener = OriginalXHR.prototype.addEventListener;
+    this.originalAddEventListenerRef = originalAddEventListener;
     OriginalXHR.prototype.addEventListener = function (
       type: string,
       listener: EventListenerOrEventListenerObject,
@@ -83,6 +89,7 @@ export class XhrInterceptor {
 
     // Patch XMLHttpRequest.prototype.send
     const originalSend = OriginalXHR.prototype.send;
+    this.originalSendRef = originalSend;
     OriginalXHR.prototype.send = function (_body?: Document | XMLHttpRequestBodyInit | null) {
       const xhr = this as XMLHttpRequest & {
         __anyllmTranslateMatch?: UrlMatch;
@@ -211,6 +218,16 @@ export class XhrInterceptor {
 
   disable(): void {
     if (!this.enabled) return;
+    // Restore the patched prototype methods so re-enabling does not double-wrap
+    // (capturing an already-patched method as the "original").
+    if (this.originalOpen) OriginalXHR.prototype.open = this.originalOpen;
+    if (this.originalAddEventListenerRef) {
+      OriginalXHR.prototype.addEventListener = this.originalAddEventListenerRef;
+    }
+    if (this.originalSendRef) OriginalXHR.prototype.send = this.originalSendRef;
+    this.originalOpen = null;
+    this.originalAddEventListenerRef = null;
+    this.originalSendRef = null;
     window.XMLHttpRequest = OriginalXHR;
     this.enabled = false;
   }
