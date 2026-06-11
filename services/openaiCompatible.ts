@@ -13,6 +13,7 @@ import type {
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { isDebugLoggingEnabled } from './debugLog';
 
 export class OpenAICompatibleService implements TranslationService {
   private config: ProviderConfig;
@@ -47,12 +48,16 @@ export class OpenAICompatibleService implements TranslationService {
         response_format: { type: 'json_object' },
       };
 
-      console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
+      if (isDebugLoggingEnabled()) {
+        console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
+      }
 
       const response = await this.fetchCompletion(completionRequest);
       const responseText = response.choices[0]?.message?.content ?? '';
 
-      console.log('AnyLLMTranslate: LLM Response', { responseText });
+      if (isDebugLoggingEnabled()) {
+        console.log('AnyLLMTranslate: LLM Response', { responseText });
+      }
 
       if (!responseText.trim()) {
         return {

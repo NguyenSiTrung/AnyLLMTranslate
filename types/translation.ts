@@ -12,8 +12,6 @@ export interface TranslationPiece {
   parentElement: Element;
   /** Text nodes that make up this piece */
   textNodes: Text[];
-  /** Original HTML content (for restore) */
-  originalHTML: string;
   /** Extracted text content for translation */
   text: string;
   /** Whether this piece has been translated */

@@ -12,6 +12,7 @@ import type {
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { isDebugLoggingEnabled } from './debugLog';
 
 /** Langflow request body (non-OpenAI format) */
 interface LangflowRequestBody {
@@ -83,19 +84,23 @@ export class LangflowService implements TranslationService {
       );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
-      console.log('AnyLLMTranslate [Langflow]: LLM Request', {
-        endpointUrl: this.config.endpointUrl,
-        componentId: this.config.componentId,
-        systemPrompt,
-        userPrompt,
-      });
+      if (isDebugLoggingEnabled()) {
+        console.log('AnyLLMTranslate [Langflow]: LLM Request', {
+          endpointUrl: this.config.endpointUrl,
+          componentId: this.config.componentId,
+          systemPrompt,
+          userPrompt,
+        });
+      }
 
       const responseText = await this.sendToLangflow(systemPrompt, userPrompt);
 
-      console.log('AnyLLMTranslate [Langflow]: LLM Response', {
-        responseText: responseText.slice(0, 500),
-        length: responseText.length,
-      });
+      if (isDebugLoggingEnabled()) {
+        console.log('AnyLLMTranslate [Langflow]: LLM Response', {
+          responseText: responseText.slice(0, 500),
+          length: responseText.length,
+        });
+      }
 
       if (!responseText.trim()) {
         return {
@@ -343,7 +348,7 @@ Rules:
         );
       }
 
-      if (matchedPath && matchedPath !== configuredPath && configuredPath) {
+      if (matchedPath && matchedPath !== configuredPath && configuredPath && isDebugLoggingEnabled()) {
         console.warn(
           `AnyLLMTranslate [Langflow]: Configured path "${configuredPath}" failed, ` +
           `but fallback "${matchedPath}" succeeded. Consider updating your Response Text Path setting.`,

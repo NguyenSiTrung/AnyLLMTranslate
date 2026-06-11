@@ -190,6 +190,47 @@ describe('parseTranslationResponse', () => {
   it('throws on invalid JSON', () => {
     expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
   });
+
+  it('preserves expected ID order regardless of response key order (Phase 3.2)', () => {
+    // LLM may return keys in any order — the result Map must follow expectedIds.
+    const response = JSON.stringify({
+      translations: {
+        'id-3': 'three',
+        'id-1': 'one',
+        'id-2': 'two',
+      },
+    });
+    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
+    expect([...result.keys()]).toEqual(['id-1', 'id-2', 'id-3']);
+  });
+
+  it('skips missing IDs while keeping the rest in expected order', () => {
+    const response = JSON.stringify({
+      translations: {
+        'id-2': 'two',
+        'id-3': 'three',
+      },
+    });
+    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
+    expect([...result.keys()]).toEqual(['id-2', 'id-3']);
+    expect(result.get('id-2')).toBe('two');
+    expect(result.get('id-3')).toBe('three');
+  });
+
+  it('ignores non-string values for an expected ID', () => {
+    const response = JSON.stringify({
+      translations: {
+        'id-1': 'one',
+        'id-2': null,
+        'id-3': 42,
+      },
+    });
+    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
+    expect(result.has('id-1')).toBe(true);
+    expect(result.has('id-2')).toBe(false);
+    expect(result.has('id-3')).toBe(false);
+    expect([...result.keys()]).toEqual(['id-1']);
+  });
 });
 
 describe('validateProviderConfig', () => {

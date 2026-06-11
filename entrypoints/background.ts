@@ -5,6 +5,7 @@
 
 import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule } from '@/services/background';
 import { initTabCleanup } from '@/services/categoryStore';
+import { warmDebugCache } from '@/services/debugLog';
 
 /** Send message to the active tab's content script */
 async function sendToActiveTab(message: Record<string, unknown>): Promise<void> {
@@ -66,6 +67,10 @@ export default defineBackground(() => {
 
   // Re-create service when settings change
   initSettingsListener();
+
+  // Warm the debug log cache so LLM logs respect the user's debugMode setting
+  // at startup rather than the first call (which would be a few seconds in).
+  warmDebugCache().catch(() => { /* best-effort */ });
 
   // FR-3: Schedule daily cache eviction via chrome.alarms
   initEvictionSchedule();

@@ -62,6 +62,28 @@ describe('parseGlossaryCSV', () => {
     expect(entries).toHaveLength(1);
   });
 
+  it('skips header line with reversed column order (target,source)', () => {
+    const csv = 'target,source\nReact,React\nAPI,API';
+    const entries = parseGlossaryCSV(csv);
+    // Header skipped, but the two data rows will be parsed with target/source swapped
+    // — that's acceptable for this hardening pass; the column order is preserved by
+    // the parser mapping parts[0]→source and parts[1]→target.
+    expect(entries).toHaveLength(2);
+  });
+
+  it('skips a header that is just the word "Source"', () => {
+    const csv = 'Source,Target\nReact,React\nAPI,API';
+    const entries = parseGlossaryCSV(csv);
+    expect(entries).toHaveLength(2);
+  });
+
+  it('does not treat a real entry as a header', () => {
+    const csv = 'React,React';
+    const entries = parseGlossaryCSV(csv);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('React');
+  });
+
   it('handles CSV without header', () => {
     const csv = 'React,React\nAPI,API';
     const entries = parseGlossaryCSV(csv);

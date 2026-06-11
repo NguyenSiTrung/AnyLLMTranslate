@@ -195,6 +195,25 @@ describe('OpenAICompatibleService', () => {
       const body = JSON.parse(fetchCall[1]?.body as string) as { messages: Array<{ role: string; content: string }> };
       expect(body.messages[0].content).toContain('Custom prompt for Vietnamese (vi)');
     });
+
+    it('does not log LLM request/response by default (privacy: no prompt text in console)', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { p1: 'Xin chào' } }));
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      // No log line may contain the prompt or response text
+      for (const call of logSpy.mock.calls) {
+        const flat = call.map((c) => (typeof c === 'string' ? c : JSON.stringify(c))).join(' ');
+        expect(flat).not.toContain('Hello');
+        expect(flat).not.toContain('Xin chào');
+      }
+    });
   });
 
   describe('testConnection', () => {

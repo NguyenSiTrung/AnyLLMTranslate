@@ -173,7 +173,9 @@ export class XhrInterceptor {
         };
 
         // Listen for translation result
+        const expectedOrigin = window.location.origin;
         const translatedHandler = (event: MessageEvent) => {
+          if (event.origin !== expectedOrigin) return;
           if (event.data?.channel !== 'anyllm-translate') return;
           if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
           if (event.data?.requestId !== requestId) return;

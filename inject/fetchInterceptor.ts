@@ -80,6 +80,8 @@ export class FetchInterceptor {
 
       // Wait for translated response and return it
       return new Promise((resolve) => {
+        const expectedOrigin = window.location.origin;
+
         const timeout = setTimeout(() => {
           window.removeEventListener('message', translatedHandler);
           // Translation timed out — return original response
@@ -87,6 +89,7 @@ export class FetchInterceptor {
         }, 30000);
 
         const translatedHandler = (event: MessageEvent) => {
+          if (event.origin !== expectedOrigin) return;
           if (event.data?.channel !== 'anyllm-translate') return;
           if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
           if (event.data?.requestId !== requestId) return;

@@ -72,6 +72,8 @@ describe('XhrInterceptor', () => {
         requestId,
         payload: { vttContent },
       },
+      // Phase 1.4: origin validation — tests must simulate same-origin
+      origin: window.location.origin,
     } as MessageEvent;
     for (const listener of [...messageListeners]) {
       listener(event);
@@ -226,6 +228,71 @@ describe('XhrInterceptor', () => {
       xhr.open('GET', 'https://example.com/api/users');
       expect(() => xhr.send()).not.toThrow();
       expect(bridge.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('origin validation (Phase 1.4)', () => {
+    it('ignores translated messages from foreign origins', () => {
+      interceptor.enable();
+      const xhr = new XMLHttpRequest();
+      const onloadHandler = vi.fn();
+      xhr.onload = onloadHandler;
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      xhr.send();
+
+      simulateXhrComplete(xhr);
+
+      const listenersBefore = messageListeners.length;
+      expect(listenersBefore).toBeGreaterThan(0);
+
+      const forgedEvent = {
+        data: {
+          channel: 'anyllm-translate',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'req-123',
+          payload: { vttContent: 'WEBVTT\nforged' },
+        },
+        origin: 'https://evil.example.com',
+      } as MessageEvent;
+      for (const listener of [...messageListeners]) {
+        listener(forgedEvent);
+      }
+
+      // Foreign-origin message must be ignored — handler is still registered
+      // and the user-supplied onload was not fired.
+      expect(messageListeners.length).toBe(listenersBefore);
+      expect(onloadHandler).not.toHaveBeenCalled();
+    });
+
+    it('accepts translated messages from same origin', () => {
+      interceptor.enable();
+      const xhr = new XMLHttpRequest();
+      const onloadHandler = vi.fn();
+      xhr.onload = onloadHandler;
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      xhr.send();
+
+      simulateXhrComplete(xhr);
+
+      const listenersBefore = messageListeners.length;
+
+      // Genuine message from same origin with correct requestId
+      const genuineEvent = {
+        data: {
+          channel: 'anyllm-translate',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'req-123',
+          payload: { vttContent: 'WEBVTT\nreal' },
+        },
+        origin: window.location.origin,
+      } as MessageEvent;
+      for (const listener of [...messageListeners]) {
+        listener(genuineEvent);
+      }
+
+      // Same-origin message accepted — handler removed, onload fired
+      expect(messageListeners.length).toBeLessThan(listenersBefore);
+      expect(onloadHandler).toHaveBeenCalled();
     });
   });
 });

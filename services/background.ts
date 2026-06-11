@@ -21,6 +21,7 @@ import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
+import { invalidateDebugCache } from '@/services/debugLog';
 import type { ProviderConfig } from '@/types/config';
 
 /** Priority queue state for active translation sessions */
@@ -661,6 +662,9 @@ export function handleMessage(
 export function initSettingsListener(): () => void {
   return onSettingsChange(() => {
     initService();
+    // Invalidate debug log cache so subsequent LLM calls observe the new
+    // debugMode value without waiting for the 5s TTL to expire.
+    invalidateDebugCache();
   });
 }
 

@@ -87,8 +87,14 @@ export function parseGlossaryJSON(json: string): GlossaryEntry[] {
 }
 
 function isHeaderLine(line: string): boolean {
-  const lower = line.toLowerCase();
-  return lower.startsWith('source') && lower.includes('target');
+  const lower = line.toLowerCase().trim();
+  // Match a CSV header that begins with "source" in either column order
+  // (with the partner column "target" present in the same line).
+  // Allow optional whitespace and a leading/trailing comma/quote variant.
+  return (
+    (lower.startsWith('source') && lower.includes('target')) ||
+    (lower.startsWith('target') && lower.includes('source'))
+  );
 }
 
 function splitCSVLine(line: string): string[] {

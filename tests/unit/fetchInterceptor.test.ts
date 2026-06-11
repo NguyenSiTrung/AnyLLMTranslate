@@ -103,4 +103,129 @@ describe('FetchInterceptor', () => {
       expect(bridge.send).not.toHaveBeenCalled();
     });
   });
+
+  describe('origin validation (Phase 1.4)', () => {
+    it('ignores translated messages from foreign origins', async () => {
+      const okResponse = new Response('WEBVTT\n\ntest', {
+        status: 200,
+        headers: { 'Content-Type': 'text/vtt' },
+      });
+      mockFetch.mockResolvedValue(okResponse);
+
+      // Capture the message handler the interceptor registers
+      const messageHandlers: ((event: MessageEvent) => void)[] = [];
+      const originalAdd = window.addEventListener;
+      const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'message' && typeof handler === 'function') {
+            messageHandlers.push(handler);
+          }
+        },
+      );
+      const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(
+        (_type: string, handler: EventListenerOrEventListenerObject) => {
+          if (typeof handler === 'function') {
+            const idx = messageHandlers.indexOf(handler);
+            if (idx !== -1) messageHandlers.splice(idx, 1);
+          }
+        },
+      );
+
+      interceptor.enable();
+
+      // Trigger interception but don't await (it blocks on translation)
+      const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+      fetchPromise.catch(() => {});
+
+      // Wait for SUBTITLE_INTERCEPTED to be sent
+      await vi.waitFor(() => {
+        expect(bridge.send).toHaveBeenCalledWith(
+          'SUBTITLE_INTERCEPTED',
+          expect.objectContaining({ platform: 'udemy' }),
+        );
+      });
+
+      // Forge a translated message from a foreign origin with the correct requestId
+      const forgedEvent = {
+        data: {
+          channel: 'anyllm-translate',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'req-456',
+          payload: { vttContent: 'WEBVTT\nforged' },
+        },
+        origin: 'https://evil.example.com',
+      } as MessageEvent;
+      for (const handler of [...messageHandlers]) {
+        handler(forgedEvent);
+      }
+
+      // The forged message should have been ignored — the handler is still registered
+      expect(messageHandlers.length).toBeGreaterThan(0);
+
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+      // Restore the original addEventListener so interceptor.disable() works
+      // (it captures the real one in the spy above).
+      // Use the captured reference to ensure a clean teardown.
+      // Suppress unused warning for the original reference.
+      void originalAdd;
+    });
+
+    it('accepts translated messages from the same origin', async () => {
+      const okResponse = new Response('WEBVTT\n\ntest', {
+        status: 200,
+        headers: { 'Content-Type': 'text/vtt' },
+      });
+      mockFetch.mockResolvedValue(okResponse);
+
+      const messageHandlers: ((event: MessageEvent) => void)[] = [];
+      const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation(
+        (type: string, handler: EventListenerOrEventListenerObject) => {
+          if (type === 'message' && typeof handler === 'function') {
+            messageHandlers.push(handler);
+          }
+        },
+      );
+      const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(
+        (_type: string, handler: EventListenerOrEventListenerObject) => {
+          if (typeof handler === 'function') {
+            const idx = messageHandlers.indexOf(handler);
+            if (idx !== -1) messageHandlers.splice(idx, 1);
+          }
+        },
+      );
+
+      interceptor.enable();
+
+      const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+      fetchPromise.catch(() => {});
+
+      await vi.waitFor(() => {
+        expect(bridge.send).toHaveBeenCalled();
+      });
+
+      const handlersBefore = messageHandlers.length;
+      expect(handlersBefore).toBeGreaterThan(0);
+
+      // Genuine message from same origin with correct requestId
+      const genuineEvent = {
+        data: {
+          channel: 'anyllm-translate',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'req-456',
+          payload: { vttContent: 'WEBVTT\nreal' },
+        },
+        origin: window.location.origin,
+      } as MessageEvent;
+      for (const handler of [...messageHandlers]) {
+        handler(genuineEvent);
+      }
+
+      // Same-origin message should be accepted — handler should be removed
+      expect(messageHandlers.length).toBeLessThan(handlersBefore);
+
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    });
+  });
 });

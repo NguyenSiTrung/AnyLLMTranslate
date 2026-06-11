@@ -200,5 +200,16 @@ describe('content/domWalker', () => {
       expect(pieces.length).toBe(1);
       expect(pieces[0].text).toBe('Keep');
     });
+
+    it('no longer captures originalHTML on pieces (Phase 3.3 audit — dead field removed)', () => {
+      document.body.innerHTML = '<p>Hello</p>';
+      const pieces = extractPieces(document.body);
+
+      expect(pieces.length).toBe(1);
+      // Type-level: TranslationPiece no longer has originalHTML — we assert the field
+      // is absent via a cast to a structural shape.
+      const piece = pieces[0] as unknown as { originalHTML?: string };
+      expect(piece.originalHTML).toBeUndefined();
+    });
   });
 });

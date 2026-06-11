@@ -117,7 +117,6 @@ describe('content.ts', () => {
         text: 'Hello',
         parentElement: document.createElement('p'),
         textNodes: [],
-        originalHTML: 'Hello',
         isTranslated: false,
       };
 
@@ -140,7 +139,7 @@ describe('content.ts', () => {
         displayMode: 'bilingual-below',
       });
       const mockPiece: TranslationPiece = {
-        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], originalHTML: 'Hello', isTranslated: false,
+        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], isTranslated: false,
       };
       vi.mocked(extractPieces).mockReturnValue([mockPiece]);
       vi.mocked(ViewportObserver).mockImplementation(() => ({
@@ -158,7 +157,7 @@ describe('content.ts', () => {
         displayMode: 'translation-only',
       });
       const mockPiece: TranslationPiece = {
-        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], originalHTML: 'Hello', isTranslated: false,
+        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], isTranslated: false,
       };
       vi.mocked(extractPieces).mockReturnValue([mockPiece]);
       vi.mocked(ViewportObserver).mockImplementation(() => ({
@@ -185,7 +184,6 @@ describe('content.ts', () => {
         text: 'Initial content',
         parentElement: initialParent,
         textNodes: [],
-        originalHTML: 'Initial content',
         isTranslated: false,
       };
       const dynamicPiece: TranslationPiece = {
@@ -193,7 +191,6 @@ describe('content.ts', () => {
         text: 'Dynamic content',
         parentElement: dynamicParent,
         textNodes: [],
-        originalHTML: 'Dynamic content',
         isTranslated: false,
       };
       const observeAll = vi.fn();
@@ -228,7 +225,6 @@ describe('content.ts', () => {
         text: 'Late content',
         parentElement: dynamicParent,
         textNodes: [],
-        originalHTML: 'Late content',
         isTranslated: false,
       };
       const observeAll = vi.fn();
@@ -271,7 +267,6 @@ describe('content.ts', () => {
         text: 'Article content',
         parentElement: dynamicArticle,
         textNodes: [],
-        originalHTML: 'Article content',
         isTranslated: false,
       };
       const observeAll = vi.fn();
@@ -536,7 +531,7 @@ describe('content.ts', () => {
         displayMode: 'bilingual-below',
       });
       const mockPiece: TranslationPiece = {
-        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], originalHTML: 'Hello', isTranslated: false,
+        id: 'piece-1', text: 'Hello', parentElement: document.createElement('p'), textNodes: [], isTranslated: false,
       };
       vi.mocked(extractPieces).mockReturnValue([mockPiece]);
       vi.mocked(ViewportObserver).mockImplementation(() => ({

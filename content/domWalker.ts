@@ -203,7 +203,6 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
           id: generatePieceId(),
           parentElement: anchorElement,
           textNodes: [...currentTextNodes],
-          originalHTML: anchorElement.innerHTML,
           text: part,
           isTranslated: false,
         });
@@ -213,7 +212,6 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
         id: generatePieceId(),
         parentElement: anchorElement,
         textNodes: [...currentTextNodes],
-        originalHTML: anchorElement.innerHTML,
         text: trimmed,
         isTranslated: false,
       });
