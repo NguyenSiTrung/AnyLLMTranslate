@@ -48,5 +48,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
+- [ ] **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Critical. [View](./conductor/tracks/subtitle-reliability-hardening_20260612/)
 
 
