@@ -46,7 +46,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 ### PDF Translation
 - Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
 - Progressive IntersectionObserver-based translation (viewport-only, no token storms)
-- Synchronized bidirectional scrolling between original and translated panes
+- Synchronized bidirectional scrolling between original and translated panes (direct 1-to-1 scroll mirroring when page heights are matched)
+- Symmetrical layout widths (constrained and centered to match original page dimensions)
+- Persistent header translation progress indicator (keeps indicator visible and avoids container height mismatches)
 - Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders)
 - PDF paragraph grouping heuristic (y-coordinate line grouping → gap-based paragraph merging)
 - Heading detection by page-level median font height
@@ -128,10 +130,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Subtitle Handling Reliability and Hardening** (Archived 2026-06-12): Risk-prioritized hardening of the video subtitle pipeline. Added per-session identity (`subtitleSessionCounter` / `activeSubtitleSessionId`) for progressive chunks to reject stale translation requests, enforced interceptor always-respond behavior (calling `sendTranslatedSubtitle` with original content on early return) to prevent native subtitle hangs, confirmed overlay initialization before blanking native subtitles, restored MAIN-world interceptors on BFCache `pageshow` restore, hardened background subtitle fetch URL validation (SSRF mitigation), wired manual subtitle translation content-side handler (`startSubtitleTranslation`), fixed playback watcher event listener leaks, and improved HTML5 TextTrack discovery rescan behavior using `loadedmetadata` event listeners. 18 new unit tests added.
 - **PDF Translation Support** (Archived 2026-06-12): Built-in PDF.js viewer with side-by-side layout (original canvas left, translated text right). Progressive IntersectionObserver-based translation, synchronized bidirectional scrolling, PDF paragraph grouping heuristic, heading detection by median font height, in-memory + IndexedDB caching, batch translation with `maxBatchChars` splitting. 20 files across components, hooks, and lib. 9 new tests added.
 - **PDF Viewer Performance Overhaul** (Archived 2026-06-12): Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders), progressive page proxy streaming in batches of 3, `createSemaphore()` factory for isolated concurrency (PDF max 2 vs page/subtitle max 3), bidirectional scroll sync with `isUpdatingRef` guard, observer root fix (scroll pane not content wrapper), duplicate translation elimination. 30 new tests added (947 total).
+- **PDF Layout and Scroll Synchronization** (Archived 2026-06-12): Constrained translation slot widths symmetrically to match original page dimensions, moved the translation progress indicator pill into the persistent header, and simplified scroll synchronization to perform direct 1-to-1 mirroring when page heights match.
 
 ### Current State
 - 947 tests passing across 74 files. Build passing (`wxt build` ✅, ~2.56 MB). 0 lint errors.
-- **No active tracks.** All 38 tracks completed and archived.
+- **No active tracks.** All 39 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
