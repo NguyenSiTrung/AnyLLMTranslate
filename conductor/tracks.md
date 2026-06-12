@@ -52,7 +52,9 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
+(none)
+
 ---
 
-## [~] Track: PDF Viewer Performance Overhaul
+## ✅ Track: PDF Viewer Performance Overhaul (Complete)
 *Link: [./conductor/tracks/pdf-perf-overhaul_20260612/](./conductor/tracks/pdf-perf-overhaul_20260612/)*
