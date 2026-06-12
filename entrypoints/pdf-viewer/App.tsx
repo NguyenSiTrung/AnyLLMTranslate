@@ -3,13 +3,14 @@
  *
  * Architecture:
  * 1. `usePdfDocument` — loads the PDF via the bundled worker.
- * 2. `PdfCanvasRenderer` — left pane: renders each page to a canvas.
- * 3. `usePdfPageTranslations` — extracts + translates text on viewport visibility.
- * 4. `PdfTranslationPane` — right pane: shows loading / error / translated text.
- * 5. `useSynchronizedScroll` — mirrors the left pane's scroll on the right.
+ * 2. `useVisiblePages` — tracks which pages are in the viewport (+buffer).
+ * 3. `PdfCanvasRenderer` — left pane: renders only visible pages to canvas.
+ * 4. `usePdfPageTranslations` — extracts + translates text on viewport visibility.
+ * 5. `PdfTranslationPane` — right pane: shows loading / error / translated text.
+ * 6. `useSynchronizedScroll` — mirrors the left pane's scroll on the right.
  */
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Loader2, AlertCircle, FileWarning } from 'lucide-react';
 import { ViewerLayout } from './components/ViewerLayout';
 import { PdfCanvasRenderer } from './components/PdfCanvasRenderer';
@@ -17,6 +18,7 @@ import { PdfTranslationPane } from './components/PdfTranslationPane';
 import { FilePermissionGuide } from './components/FilePermissionGuide';
 import { usePdfDocument } from './hooks/usePdfDocument';
 import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
+import { useVisiblePages } from './hooks/useVisiblePages';
 
 
 /** Extract a PDF URL from the `?file=` query parameter */
@@ -41,6 +43,7 @@ function isFileScheme(url: string): boolean {
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
+  const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setPdfUrl(getPdfUrlFromQuery());
@@ -65,13 +68,53 @@ export default function App(): ReactElement {
     }
   })() : 'document.pdf';
 
+  // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport
+  const { visiblePages } = useVisiblePages({
+    totalPages: pages.length,
+    containerRef: leftContainerRef,
+  });
+
+  // Pre-compute page dimensions for placeholder sizing (cheap — no text extraction)
+  const pageDimensions = useMemo(() => {
+    const dims = new Map<number, { width: number; height: number }>();
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const viewport = page.getViewport({ scale: 1 });
+      // Scale to fit 720px width (matching PdfCanvasRenderer default)
+      const scale = 720 / viewport.width;
+      dims.set(i + 1, {
+        width: Math.floor(viewport.width * scale),
+        height: Math.floor(viewport.height * scale),
+      });
+    }
+    return dims;
+  }, [pages]);
+
   // Fully-loaded state: render the bilingual viewer directly
   if (loadState === 'loaded' && pdfUrl) {
     const leftPane = (
       <>
-        {pages.map((page, idx) => (
-          <PdfCanvasRenderer key={`canvas-${idx + 1}`} page={page} pageNumber={idx + 1} />
-        ))}
+        {pages.map((page, idx) => {
+          const pageNumber = idx + 1;
+          const dims = pageDimensions.get(pageNumber);
+          if (visiblePages.has(pageNumber)) {
+            return (
+              <PdfCanvasRenderer key={`canvas-${pageNumber}`} page={page} pageNumber={pageNumber} />
+            );
+          }
+          // Lightweight placeholder for off-screen pages
+          return (
+            <div
+              key={`placeholder-${pageNumber}`}
+              className="pdf-viewer-page"
+              data-page-number={pageNumber}
+              style={{
+                width: dims ? `${dims.width}px` : '720px',
+                height: dims ? `${dims.height}px` : '960px',
+              }}
+            />
+          );
+        })}
       </>
     );
     const rightPane = (
@@ -99,6 +142,7 @@ export default function App(): ReactElement {
         subtitle={fileName}
         banner={<FilePermissionGuide visible={isFile} />}
         left={leftPane}
+        leftPaneRef={leftContainerRef}
         right={
           <div ref={rightContainerRef} style={{ padding: '16px' }}>
             <div className="pdf-viewer-progress-pill">

@@ -9,7 +9,7 @@
  * canvas stack.
  */
 
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useRef, type RefObject } from 'react';
 import { useSynchronizedScroll } from '../hooks/useSynchronizedScroll';
 
 export interface ViewerLayoutProps {
@@ -23,6 +23,8 @@ export interface ViewerLayoutProps {
   left: ReactNode;
   /** Right pane content (translated text). */
   right: ReactNode;
+  /** Optional external ref to the left scroll container (for canvas virtualization). */
+  leftPaneRef?: RefObject<HTMLDivElement | null>;
 }
 
 export function ViewerLayout({
@@ -31,9 +33,12 @@ export function ViewerLayout({
   banner,
   left,
   right,
+  leftPaneRef,
 }: ViewerLayoutProps): React.ReactElement {
-  const leftRef = useRef<HTMLDivElement | null>(null);
+  const internalLeftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
+  // Use the external ref for scroll sync if provided, otherwise the internal one
+  const leftRef = leftPaneRef ?? internalLeftRef;
   useSynchronizedScroll({ leftRef, rightRef });
 
   return (
