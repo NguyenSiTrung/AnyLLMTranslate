@@ -373,7 +373,10 @@ Reusable patterns discovered during development. Read this before starting new w
 - **`createSemaphore()` factory for isolated concurrency:** Extract semaphore logic into a factory to enable multiple independent semaphores (e.g., PDF max 2 concurrent vs page/subtitle max 3). Prevents resource starvation across workloads. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
 - **Bidirectional scroll sync with `isUpdatingRef` guard:** Both panes listen for scroll events and mirror to the other. Use `scrollTo({ behavior: 'instant' })` to avoid CSS `scroll-behavior: smooth` interference. The `isUpdatingRef` + `requestAnimationFrame` clear prevents feedback loops. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
 - **`renderHook` stable prop references:** Creating array/object literals like `[{} as X]` inside a `renderHook` callback creates a new reference on every render, destabilizing effect deps. Hoist stable references outside the callback. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **Placeholder `minHeight` for viewport lazy-loading**: To prevent concurrent API request storms when lazy-loading translated content based on page visibility (IntersectionObserver), placeholder slots must have a `minHeight` matching the source document pages. Symmetrical width constraint (`width: widthStyle`) and centering (`margin: 0 auto`) should also match. (from: pdf-layout-scroll-sync_20260612, 2026-06-12)
+- **Header placement for progress/state widgets**: Move progress indicators, stats, or global state widgets out of scrolling containers and place them in a sticky/persistent header on the right. This maintains visual symmetry, ensures constant visibility, and eliminates scrollable height mismatches that disrupt 1-to-1 scroll synchronization. (from: pdf-layout-scroll-sync_20260612, 2026-06-12)
+- **1-to-1 scroll synchronization**: Direct 1-to-1 scroll mirroring (`target.scrollTop = source.scrollTop`) is preferred when page scroll heights are matched. Proportional interpolation should only be used as a fallback when container heights differ. (from: pdf-layout-scroll-sync_20260612, 2026-06-12)
 
 ---
-Last refreshed: 2026-06-12T17:54:00+07:00
+Last refreshed: 2026-06-12T18:35:00+07:00
 Codebase health: 947 tests passing across 74 files, build ~2.56MB, 0 lint errors, 38 tracks archived
