@@ -49,4 +49,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_(No active tracks)_
+### [ ] Track: PDF Translation Support
+*Link: [./conductor/tracks/pdf-translation_20260612/](./conductor/tracks/pdf-translation_20260612/)*
