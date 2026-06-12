@@ -367,6 +367,13 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Heading detection by page-level median font height:** Compute median `TextItem.height` across all items on a page; paragraphs whose average height is >= 1.4x median are flagged `isHeading`. Survives mixed pages with body and heading text without per-document thresholds. (from: pdf-translation_20260612, archived 2026-06-12)
 - **Chunk translation requests before `chrome.runtime.sendMessage`:** The background `translate` handler forwards each message payload as one provider call. Callers must split uncached paragraphs by `settings.maxBatchChars` and send batches sequentially, matching the page translation's smaller visible-content batches. Prevents provider request storms. (from: pdf-translation_20260612, archived 2026-06-12)
 
+- **`useRef` to stabilize `useEffect` deps:** When a state value changes frequently but only needs to be read (not trigger effect re-runs), sync it to a ref via a separate `useEffect` and remove the state from the main effect's dependency array. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **Progressive page proxy streaming:** Set `loadState: 'loaded'` as soon as the PDF document is parsed (before any page proxies are fetched), then stream proxies in small batches (e.g. 3). The pages array uses `PDFPageProxy | null` to represent pending proxies. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **Canvas virtualization via `useVisiblePages` hook:** Use a separate `IntersectionObserver` on page placeholders with a configurable buffer (default: 2 pages) to track which canvases should be mounted. Off-screen pages use lightweight placeholder divs sized to `page.getViewport()` dimensions. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **`createSemaphore()` factory for isolated concurrency:** Extract semaphore logic into a factory to enable multiple independent semaphores (e.g., PDF max 2 concurrent vs page/subtitle max 3). Prevents resource starvation across workloads. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **Bidirectional scroll sync with `isUpdatingRef` guard:** Both panes listen for scroll events and mirror to the other. Use `scrollTo({ behavior: 'instant' })` to avoid CSS `scroll-behavior: smooth` interference. The `isUpdatingRef` + `requestAnimationFrame` clear prevents feedback loops. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+- **`renderHook` stable prop references:** Creating array/object literals like `[{} as X]` inside a `renderHook` callback creates a new reference on every render, destabilizing effect deps. Hoist stable references outside the callback. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
+
 ---
-Last refreshed: 2026-06-12T15:36:00+07:00
-Codebase health: 917 tests passing across 69 files, build ~753KB, 0 lint errors, 36 tracks archived
+Last refreshed: 2026-06-12T17:49:00+07:00
+Codebase health: 947 tests passing across 74 files, build ~2.56MB, 0 lint errors, 37 tracks archived

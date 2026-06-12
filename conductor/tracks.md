@@ -48,13 +48,9 @@ This file tracks all major tracks for the project.
 ---
 
 ## Archived Tracks
-- **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
+- ✅ **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
+- ✅ **PDF Viewer Performance Overhaul** (`pdf-perf-overhaul_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-perf-overhaul_20260612/)
 
 ## Active Tracks
 
 (none)
-
----
-
-## ✅ Track: PDF Viewer Performance Overhaul (Complete)
-*Link: [./conductor/tracks/pdf-perf-overhaul_20260612/](./conductor/tracks/pdf-perf-overhaul_20260612/)*
