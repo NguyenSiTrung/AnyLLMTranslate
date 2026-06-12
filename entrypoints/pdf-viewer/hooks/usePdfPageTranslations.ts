@@ -118,6 +118,7 @@ export function usePdfPageTranslations({
     if (pdfPages.length === 0) return;
     const container = containerRef.current;
     if (!container) return;
+    const scrollRoot = container.closest('[data-pane="right"]') as HTMLElement | null;
 
     // Each page should have a slot in the right pane — observe them
     const slots: Element[] = Array.from(container.querySelectorAll('[data-page-slot]'));
@@ -135,6 +136,9 @@ export function usePdfPageTranslations({
           const existing = pages.get(pageNumber);
           if (existing && (existing.state === 'translated' || existing.state === 'translating')) continue;
 
+          inFlightRef.current.add(pageNumber);
+          observer.unobserve(entry.target);
+
           // Check in-memory cache first
           void (async () => {
             const settings = await loadSettings();
@@ -150,10 +154,10 @@ export function usePdfPageTranslations({
                 next.set(pageNumber, { paragraphs: cached, state: 'translated' });
                 return next;
               });
+              inFlightRef.current.delete(pageNumber);
               return;
             }
 
-            inFlightRef.current.add(pageNumber);
             const page = pdfPages[pageNumber - 1];
             if (!page) {
               inFlightRef.current.delete(pageNumber);
@@ -164,7 +168,7 @@ export function usePdfPageTranslations({
           })();
         }
       },
-      { root: container, rootMargin, threshold: 0.01 },
+      { root: scrollRoot ?? container.parentElement ?? container, rootMargin, threshold: 0.01 },
     );
 
     for (const slot of slots) {

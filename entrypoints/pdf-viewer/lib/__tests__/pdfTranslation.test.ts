@@ -5,15 +5,45 @@
  * so the `clearMemoryCache()` call in `beforeEach` is essential.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { ExtensionSettings } from '@/types/config';
+import { DEFAULT_SETTINGS } from '@/types/config';
 import {
   getMemoryCachedPage,
   setMemoryCachedPage,
   clearMemoryCache,
+  translateParagraphs,
 } from '../pdfTranslation';
+import { loadSettings } from '@/lib/config';
+import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
+
+vi.mock('@/lib/config', () => ({
+  loadSettings: vi.fn(),
+}));
+
+vi.mock('@/services/cacheManager', () => ({
+  getCachedTranslation: vi.fn(),
+  cacheTranslation: vi.fn(),
+}));
 
 beforeEach(() => {
+  vi.clearAllMocks();
   clearMemoryCache();
+  vi.mocked(loadSettings).mockResolvedValue({
+    ...DEFAULT_SETTINGS,
+    sourceLanguage: 'en',
+    targetLanguage: 'vi',
+    maxBatchChars: 16,
+  } as ExtensionSettings);
+  vi.mocked(getCachedTranslation).mockResolvedValue(null);
+  vi.mocked(cacheTranslation).mockResolvedValue(undefined);
+  vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+    const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+    return {
+      success: true,
+      results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+    };
+  });
 });
 
 describe('pdfTranslation memory cache', () => {
@@ -68,5 +98,28 @@ describe('pdfTranslation memory cache', () => {
     clearMemoryCache();
     expect(getMemoryCachedPage('https://example.com/a.pdf', 1, 'en', 'vi')).toBeNull();
     expect(getMemoryCachedPage('https://example.com/b.pdf', 1, 'en', 'vi')).toBeNull();
+  });
+
+  it('splits uncached paragraphs into maxBatchChars-limited runtime messages', async () => {
+    const results = await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'aaaaaaaa', fontSize: 12, isHeading: false } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'bbbbbbbb', fontSize: 12, isHeading: false } },
+        { pageNumber: 1, paragraph: { id: '1-2', text: 'cccccccc', fontSize: 12, isHeading: false } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
+    const messages = vi.mocked(chrome.runtime.sendMessage).mock.calls.map(([message]) => message as unknown as { pieces: Array<{ id: string; text: string }> });
+    expect(messages.map((message) => message.pieces.map(({ id }) => id))).toEqual([
+      ['1-0', '1-1'],
+      ['1-2'],
+    ]);
+    for (const message of messages) {
+      const chars = message.pieces.reduce((sum, piece) => sum + piece.text.length, 0);
+      expect(chars).toBeLessThanOrEqual(16);
+    }
+    expect(results.map(({ id }) => id)).toEqual(['1-0', '1-1', '1-2']);
   });
 });

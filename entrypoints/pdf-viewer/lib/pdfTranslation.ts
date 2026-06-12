@@ -36,6 +36,65 @@ function cacheKeyFor(url: string, sourceLanguage: string, targetLanguage: string
   return `pdf:${url}::${sourceLanguage}→${targetLanguage}`;
 }
 
+function splitIntoBatches<T extends { paragraph: PdfParagraph }>(
+  items: T[],
+  maxBatchChars: number,
+): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let currentChars = 0;
+  const limit = Math.max(1, maxBatchChars);
+
+  for (const item of items) {
+    const length = item.paragraph.text.length;
+    if (current.length > 0 && currentChars + length > limit) {
+      batches.push(current);
+      current = [];
+      currentChars = 0;
+    }
+    current.push(item);
+    currentChars += length;
+  }
+
+  if (current.length > 0) {
+    batches.push(current);
+  }
+
+  return batches;
+}
+
+async function sendTranslationBatch(
+  batch: Array<{ pageNumber: number; paragraph: PdfParagraph }>,
+  pdfUrl: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<TranslationResultItem[]> {
+  const pieces = batch.map(({ paragraph }) => ({ id: paragraph.id, text: paragraph.text }));
+  const message: ExtensionMessage = {
+    action: 'translate',
+    pieces,
+    sourceLanguage,
+    targetLanguage,
+    pageContext: {
+      title: pdfUrl,
+      description: 'PDF document translation',
+      domain: 'pdf',
+      category: 'document',
+    },
+  };
+
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response || typeof response !== 'object') {
+    throw new Error('No response from background service worker');
+  }
+  const result = response as { success: boolean; results?: TranslationResultItem[]; error?: string };
+  if (!result.success) {
+    throw new Error(result.error ?? 'Translation failed');
+  }
+
+  return result.results ?? [];
+}
+
 /** Single batched LLM request for one or more pages of the document. */
 export async function translateParagraphs(
   paragraphs: Array<{ pageNumber: number; paragraph: PdfParagraph }>,
@@ -68,40 +127,32 @@ export async function translateParagraphs(
     return cached;
   }
 
-  // Build the translate message — same shape content scripts use
-  const pieces = uncached.map(({ paragraph }) => ({ id: paragraph.id, text: paragraph.text }));
-  const message: ExtensionMessage = {
-    action: 'translate',
-    pieces,
-    sourceLanguage,
-    targetLanguage,
-    pageContext: {
-      title: pdfUrl,
-      description: 'PDF document translation',
-      domain: 'pdf',
-      category: 'document',
-    },
-  };
-
-  const response = await chrome.runtime.sendMessage(message);
-  if (!response || typeof response !== 'object') {
-    throw new Error('No response from background service worker');
-  }
-  const result = response as { success: boolean; results?: TranslationResultItem[]; error?: string };
-  if (!result.success) {
-    throw new Error(result.error ?? 'Translation failed');
+  const batches = splitIntoBatches(uncached, settings.maxBatchChars);
+  const fresh: TranslationResultItem[] = [];
+  for (const batch of batches) {
+    fresh.push(...await sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage));
   }
 
   // Write-through cache for fresh results so subsequent visits are instant
-  const fresh = result.results ?? [];
+  const sourceById = new Map(uncached.map((item) => [item.paragraph.id, item.paragraph.text]));
   for (const { id, translatedText } of fresh) {
-    const source = uncached.find(({ paragraph }) => paragraph.id === id);
+    const source = sourceById.get(id);
     if (source) {
-      await cacheTranslation(source.paragraph.text, translatedText, sourceLanguage, targetLanguage);
+      await cacheTranslation(source, translatedText, sourceLanguage, targetLanguage);
     }
   }
 
-  return [...cached, ...fresh];
+  const translations = new Map<string, string>();
+  for (const result of [...cached, ...fresh]) {
+    translations.set(result.id, result.translatedText);
+  }
+  return paragraphs
+    .map(({ paragraph }) => {
+      if (!translations.has(paragraph.id)) return null;
+      const translatedText = translations.get(paragraph.id);
+      return { id: paragraph.id, translatedText: translatedText ?? '' };
+    })
+    .filter((result): result is TranslationResultItem => result !== null);
 }
 
 /** In-memory cache so re-translation of the same page is instant.
