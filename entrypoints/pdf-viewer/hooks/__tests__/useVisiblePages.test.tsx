@@ -62,15 +62,19 @@ function simulateIntersection(
   entries: Array<{ pageNumber: number; isIntersecting: boolean }>,
 ): void {
   if (!observerCallback) throw new Error('Observer not initialized');
-  const fakeEntries = entries.map(({ pageNumber, isIntersecting }) => ({
-    target: document.querySelector(`[data-page-number="${pageNumber}"]`)!,
-    isIntersecting,
-    boundingClientRect: {} as DOMRectReadOnly,
-    intersectionRatio: isIntersecting ? 1 : 0,
-    intersectionRect: {} as DOMRectReadOnly,
-    rootBounds: null,
-    time: Date.now(),
-  }));
+  const fakeEntries = entries.map(({ pageNumber, isIntersecting }) => {
+    const target = document.querySelector(`[data-page-number="${pageNumber}"]`);
+    if (!target) throw new Error(`Element for page ${pageNumber} not found`);
+    return {
+      target,
+      isIntersecting,
+      boundingClientRect: {} as DOMRectReadOnly,
+      intersectionRatio: isIntersecting ? 1 : 0,
+      intersectionRect: {} as DOMRectReadOnly,
+      rootBounds: null,
+      time: Date.now(),
+    };
+  });
   observerCallback(fakeEntries);
 }
 
