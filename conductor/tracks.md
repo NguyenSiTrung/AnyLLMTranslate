@@ -52,4 +52,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-(None)
+- ⏳ **PDF Layout Preservation** (`pdf-layout-preservation_20260612`) — Active since 2026-06-12. [View](./conductor/tracks/pdf-layout-preservation_20260612/)

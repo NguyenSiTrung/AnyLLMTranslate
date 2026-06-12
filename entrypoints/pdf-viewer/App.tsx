@@ -42,6 +42,7 @@ function isFileScheme(url: string): boolean {
 
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('original');
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -127,6 +128,8 @@ export default function App(): ReactElement {
           const dims = pageDimensions.get(pageNumber);
           const widthStyle = dims ? `${dims.width}px` : '720px';
           const heightStyle = dims ? `${dims.height}px` : '960px';
+          const page = pages[idx] ?? null;
+          const isVisible = visiblePages.has(pageNumber);
           return (
             <div
               key={`translation-${pageNumber}`}
@@ -139,6 +142,10 @@ export default function App(): ReactElement {
                 page={translation}
                 paragraphCount={0}
                 onRetry={retryPage}
+                layoutMode={layoutMode}
+                pdfPage={page}
+                visible={isVisible}
+                dims={dims}
               />
             </div>
           );
@@ -158,8 +165,26 @@ export default function App(): ReactElement {
           </div>
         }
         headerExtra={
-          <div className="pdf-viewer-progress-pill">
-            {translatedCount} / {totalCount} pages translated
+          <div className="pdf-viewer-header-controls">
+            <div className="pdf-viewer-toggle-group">
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${layoutMode === 'original' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => setLayoutMode('original')}
+              >
+                Layout
+              </button>
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${layoutMode === 'text' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => setLayoutMode('text')}
+              >
+                Text
+              </button>
+            </div>
+            <div className="pdf-viewer-progress-pill">
+              {translatedCount} / {totalCount} pages translated
+            </div>
           </div>
         }
       />

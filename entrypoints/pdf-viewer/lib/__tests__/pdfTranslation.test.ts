@@ -102,9 +102,9 @@ describe('pdfTranslation memory cache', () => {
   it('splits uncached paragraphs into maxBatchChars-limited runtime messages', async () => {
     const results = await translateParagraphs(
       [
-        { pageNumber: 1, paragraph: { id: '1-0', text: 'aaaaaaaa', fontSize: 12, isHeading: false } },
-        { pageNumber: 1, paragraph: { id: '1-1', text: 'bbbbbbbb', fontSize: 12, isHeading: false } },
-        { pageNumber: 1, paragraph: { id: '1-2', text: 'cccccccc', fontSize: 12, isHeading: false } },
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'aaaaaaaa', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'bbbbbbbb', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-2', text: 'cccccccc', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
       ],
       'https://example.com/a.pdf',
     );
@@ -125,7 +125,7 @@ describe('pdfTranslation memory cache', () => {
   it('does not perform viewer-side IndexedDB cache lookup (background handles it)', async () => {
     await translateParagraphs(
       [
-        { pageNumber: 1, paragraph: { id: '1-0', text: 'hello', fontSize: 12, isHeading: false } },
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'hello', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
       ],
       'https://example.com/a.pdf',
     );

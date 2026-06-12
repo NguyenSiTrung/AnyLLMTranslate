@@ -19,7 +19,7 @@ import {
   getMemoryCachedPage,
   setMemoryCachedPage,
 } from '../lib/pdfTranslation';
-import { extractPageText } from '../lib/pdfTextExtraction';
+import { extractPageText, type PdfParagraph } from '../lib/pdfTextExtraction';
 import { loadSettings } from '@/lib/config';
 
 export interface UsePdfPageTranslationsOptions {
@@ -62,7 +62,7 @@ async function translatePage(
     if (paragraphs.length === 0) {
       setPages((prev) => {
         const next = new Map(prev);
-        next.set(pageNumber, { paragraphs: new Map(), state: 'translated' });
+        next.set(pageNumber, { paragraphs: new Map(), originalParagraphs: [], state: 'translated' });
         return next;
       });
       return;
@@ -77,7 +77,11 @@ async function translatePage(
     }
     setPages((prev) => {
       const next = new Map(prev);
-      next.set(pageNumber, { paragraphs: paragraphMap, state: 'translated' });
+      next.set(pageNumber, {
+        paragraphs: paragraphMap,
+        originalParagraphs: paragraphs,
+        state: 'translated',
+      });
       return next;
     });
     const settings = await loadSettings();
@@ -151,9 +155,23 @@ export function usePdfPageTranslations({
               settings.targetLanguage,
             );
             if (cached) {
+              const page = pdfPages[pageNumber - 1];
+              let originalParagraphs: PdfParagraph[] = [];
+              if (page) {
+                try {
+                  const res = await extractPageText(page, pageNumber);
+                  originalParagraphs = res.paragraphs;
+                } catch {
+                  // Fallback when extraction fails
+                }
+              }
               setPages((prev) => {
                 const next = new Map(prev);
-                next.set(pageNumber, { paragraphs: cached, state: 'translated' });
+                next.set(pageNumber, {
+                  paragraphs: cached,
+                  originalParagraphs,
+                  state: 'translated',
+                });
                 return next;
               });
               inFlightRef.current.delete(pageNumber);

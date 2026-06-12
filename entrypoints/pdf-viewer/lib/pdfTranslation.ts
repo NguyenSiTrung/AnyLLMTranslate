@@ -23,6 +23,8 @@ export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'erro
 export interface PageTranslations {
   /** Map of paragraph id → translated text. */
   paragraphs: Map<string, string>;
+  /** Original extracted paragraphs with their coordinate positions. */
+  originalParagraphs?: PdfParagraph[];
   /** Aggregate state of the page translation. */
   state: PageTranslationState;
   /** Error message if state === 'error'. */

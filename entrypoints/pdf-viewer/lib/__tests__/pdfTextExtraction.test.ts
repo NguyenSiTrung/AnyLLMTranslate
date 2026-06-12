@@ -129,4 +129,27 @@ describe('pdfTextExtraction', () => {
     expect(result.paragraphs[0].text).toBe('First line');
     expect(result.paragraphs[1].text).toBe('Second line');
   });
+
+  it('calculates correct coordinate bounding boxes for paragraphs', async () => {
+    // A single paragraph made of two adjacent lines:
+    // Line 1: x=100, y=700, height=12, width=50 -> xEnd=150, yTop=712
+    // Line 2: x=110, y=685, height=12, width=60 -> xEnd=170, yTop=697
+    // Grouped paragraph should have:
+    // xMin = 100
+    // xMax = 170
+    // yMin = 685
+    // yMax = 712 (700 + 12)
+    // Thus: x=100, y=712, width=70, height=27 (712 - 685)
+    const page = fakePage([
+      item('Line one', 100, 700, 12, 50),
+      item('Line two', 110, 685, 12, 60),
+    ]);
+    const result = await extractPageText(page, 1);
+    expect(result.paragraphs).toHaveLength(1);
+    const p = result.paragraphs[0];
+    expect(p.x).toBe(100);
+    expect(p.y).toBe(712);
+    expect(p.width).toBe(70);
+    expect(p.height).toBe(27);
+  });
 });

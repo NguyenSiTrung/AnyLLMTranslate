@@ -27,6 +27,14 @@ export interface PdfParagraph {
   fontSize: number;
   /** True if the paragraph appears to be a heading (large font). */
   isHeading: boolean;
+  /** X coordinate (left-most) in PDF space. */
+  x: number;
+  /** Y coordinate (top-most) in PDF space. */
+  y: number;
+  /** Width in PDF space. */
+  width: number;
+  /** Height in PDF space. */
+  height: number;
 }
 
 /** Result of extracting text from one page. */
@@ -102,7 +110,16 @@ function groupLinesIntoParagraphs(
   const headingThreshold = medianHeight * 1.4;
 
   const paragraphs: PdfParagraph[] = [];
-  let current: { text: string; totalHeight: number; samples: number; startIndex: number } | null = null;
+  let current: {
+    text: string;
+    totalHeight: number;
+    samples: number;
+    startIndex: number;
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  } | null = null;
   let lastY: number | null = null;
 
   const flush = (): void => {
@@ -115,6 +132,10 @@ function groupLinesIntoParagraphs(
         text,
         fontSize: avgHeight,
         isHeading: avgHeight >= headingThreshold,
+        x: current.xMin,
+        y: current.yMax,
+        width: current.xMax - current.xMin,
+        height: current.yMax - current.yMin,
       });
     }
     current = null;
@@ -127,7 +148,16 @@ function groupLinesIntoParagraphs(
     if (!lineText) continue;
 
     if (current === null) {
-      current = { text: lineText, totalHeight: line.height, samples: 1, startIndex: i };
+      current = {
+        text: lineText,
+        totalHeight: line.height,
+        samples: 1,
+        startIndex: i,
+        xMin: line.x,
+        xMax: line.xEnd,
+        yMin: line.y,
+        yMax: line.y + line.height,
+      };
       lastY = line.y;
       continue;
     }
@@ -138,7 +168,16 @@ function groupLinesIntoParagraphs(
 
     if (paraBreakGap) {
       flush();
-      current = { text: lineText, totalHeight: line.height, samples: 1, startIndex: i };
+      current = {
+        text: lineText,
+        totalHeight: line.height,
+        samples: 1,
+        startIndex: i,
+        xMin: line.x,
+        xMax: line.xEnd,
+        yMin: line.y,
+        yMax: line.y + line.height,
+      };
       lastY = line.y;
     } else {
       if (!sameLineGap) {
@@ -153,6 +192,10 @@ function groupLinesIntoParagraphs(
         current.totalHeight += line.height;
         current.samples += 1;
       }
+      current.xMin = Math.min(current.xMin, line.x);
+      current.xMax = Math.max(current.xMax, line.xEnd);
+      current.yMin = Math.min(current.yMin, line.y);
+      current.yMax = Math.max(current.yMax, line.y + line.height);
       lastY = line.y;
     }
   }
