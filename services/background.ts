@@ -28,8 +28,10 @@ import type { ProviderConfig } from '@/types/config';
 interface TranslationSession {
   queue: number[];
   setPriority: (cueIndex: number, chunkSize: number) => void;
+  sessionId: number;
 }
 const activeSessions = new Map<number, TranslationSession>();
+let subtitleSessionCounter = 0;
 
 /** Keep-alive alarm name for MV3 service worker */
 const KEEPALIVE_ALARM = 'sw-keepalive';
@@ -163,8 +165,9 @@ function __getSemaphoreStateForTest(): { active: number; queued: number } {
 }
 
 /** Seed an active subtitle session. Exported for tests. */
-function __seedSubtitleSessionForTest(tabId: number): { queue: number[] } {
-  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {} };
+function __seedSubtitleSessionForTest(tabId: number): { queue: number[]; sessionId: number } {
+  const sid = ++subtitleSessionCounter;
+  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {}, sessionId: sid };
   activeSessions.set(tabId, session);
   return session;
 }
@@ -335,7 +338,8 @@ async function handleTestConnection(): Promise<{ success: boolean; error?: strin
 async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
   sender?: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number }> {
+  const sessionId = ++subtitleSessionCounter;
   await acquireSemaphore();
   try {
     const service = await initService();
@@ -468,7 +472,8 @@ async function handleTranslateSubtitle(
             queue.splice(idx, 1);
             queue.unshift(chunkStart);
           }
-        }
+        },
+        sessionId,
       };
 
       activeSessions.set(tabId, session);
@@ -491,7 +496,8 @@ async function handleTranslateSubtitle(
                  // Send the FULL updated array to tab
                  chrome.tabs.sendMessage(tabId, {
                     action: 'SUBTITLE_CHUNK_TRANSLATED',
-                    cues: translatedCues
+                    cues: translatedCues,
+                    sessionId: session.sessionId,
                  });
                }
             } catch (error) {
@@ -508,7 +514,7 @@ async function handleTranslateSubtitle(
       totalSubtitlesCuesTranslated: cues.length,
     }).catch(() => {});
 
-    return { success: true, cues: translatedCues };
+    return { success: true, cues: translatedCues, sessionId };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
     return { success: false, error: errorMsg };
@@ -517,30 +523,53 @@ async function handleTranslateSubtitle(
   }
 }
 
-/** Allowed subtitle domains for CORS bypass */
+/** Allowed subtitle domains for CORS bypass (hostname suffix matching) */
 const SUBTITLE_ALLOWLIST = [
-  /youtube\.com/,
-  /googlevideo\.com/,
-  /youtu\.be/,
-  /udemycdn\.com/,
-  /udemy\.com/,
-  /coursera\.org/,
-  /coursera-user-content\.net/,
-  /vimeo\.com/,
-  /vimeocdn\.com/,
-  /netflix\.com/,
-  /nflxvideo\.net/,
-  /amazon\.com/,
-  /primevideo\.com/,
-  /aiv-cdn\.net/,
-  /cloudfront\.net/,
-  /akamaized\.net/,
-  /linkedin\.com/,
-  /licdn\.com/,
+  /(?:^|\.)youtube\.com$/,
+  /(?:^|\.)googlevideo\.com$/,
+  /(?:^|\.)youtu\.be$/,
+  /(?:^|\.)udemycdn\.com$/,
+  /(?:^|\.)udemy\.com$/,
+  /(?:^|\.)coursera\.org$/,
+  /(?:^|\.)coursera-user-content\.net$/,
+  /(?:^|\.)vimeo\.com$/,
+  /(?:^|\.)vimeocdn\.com$/,
+  /(?:^|\.)netflix\.com$/,
+  /(?:^|\.)nflxvideo\.net$/,
+  /(?:^|\.)amazon\.com$/,
+  /(?:^|\.)primevideo\.com$/,
+  /(?:^|\.)aiv-cdn\.net$/,
+  /(?:^|\.)cloudfront\.net$/,
+  /(?:^|\.)akamaized\.net$/,
+  /(?:^|\.)linkedin\.com$/,
+  /(?:^|\.)licdn\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
-  return SUBTITLE_ALLOWLIST.some((pattern) => pattern.test(url));
+  try {
+    const parsed = new URL(url);
+    // Block non-HTTP(S) protocols
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return false;
+    }
+    // Block private/loopback/link-local hosts
+    const host = parsed.hostname;
+    if (
+      host === 'localhost' ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host === '0.0.0.0' ||
+      host === '[::1]' ||
+      host.startsWith('169.254.')
+    ) {
+      return false;
+    }
+    // Match against allowlist using hostname suffix matching
+    return SUBTITLE_ALLOWLIST.some((pattern) => pattern.test(host));
+  } catch {
+    return false; // Invalid URL
+  }
 }
 
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
@@ -733,6 +762,21 @@ export function handleMessage(
       return handleDetectPageCategoryLLM(message);
     case 'CLEAR_CACHE':
       return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
+    case 'OPEN_PDF_VIEWER': {
+      // Validate the URL before forwarding to the viewer — file:// links and
+      // HTTP(S) links both supported, everything else rejected.
+      try {
+        const parsed = new URL(message.url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {
+          return Promise.resolve({ success: false, error: 'Unsupported protocol' });
+        }
+      } catch {
+        return Promise.resolve({ success: false, error: 'Invalid URL' });
+      }
+      const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(message.url)}`);
+      chrome.tabs.create({ url: viewerUrl });
+      return Promise.resolve({ success: true });
+    }
     default:
       return undefined;
   }
@@ -780,6 +824,20 @@ export function initEvictionSchedule(): void {
   });
 }
 
+/** Get current subtitle session counter value. Exported for tests. */
+function __getSubtitleSessionCounterForTest(): number {
+  return subtitleSessionCounter;
+}
+
+/** Reset subtitle session counter to 0 and clear all active sessions. Exported for tests. */
+function __resetSubtitleSessionCounterForTest(): void {
+  subtitleSessionCounter = 0;
+  for (const session of activeSessions.values()) {
+    session.queue.length = 0;
+  }
+  activeSessions.clear();
+}
+
 /** Export for testing */
 export {
   initService,
@@ -789,4 +847,6 @@ export {
   __getSemaphoreStateForTest,
   __seedSubtitleSessionForTest,
   __getActiveSessionCountForTest,
+  __getSubtitleSessionCounterForTest,
+  __resetSubtitleSessionCounterForTest,
 };

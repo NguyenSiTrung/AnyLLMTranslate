@@ -1,23 +1,23 @@
 {
-  "lastRefresh": "2026-06-11T17:21:00+07:00",
+  "lastRefresh": "2026-06-12T15:37:00+07:00",
   "refreshedBy": "conductor-refresh",
   "scope": "all",
   "changes": {
     "product.md": [
-      "Added Deep Analysis Hardening & Improvements to completed list",
-      "Updated Current State: 899 tests, 67 files, ~750 KB, 35 tracks"
+      "Added Subtitle Handling Reliability and Hardening to completed list",
+      "Updated Current State: 917 tests, 69 files, ~753 KB, 36 tracks"
     ],
-    "patterns.md": "Updated health footer stats (750KB, timestamp)",
+    "patterns.md": "Updated health footer stats (753KB, timestamp)",
     "tech-stack.md": "No drift",
     "workflow.md": "No drift",
     "tracks.md": "No drift"
   },
   "health": {
-    "tests": 899,
-    "testFiles": 67,
-    "buildSizeKB": 750,
+    "tests": 917,
+    "testFiles": 69,
+    "buildSizeKB": 753,
     "lintErrors": 0,
-    "tracksArchived": 35,
+    "tracksArchived": 36,
     "tracksActive": 0
   }
 }

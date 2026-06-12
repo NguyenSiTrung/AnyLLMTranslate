@@ -52,6 +52,15 @@ function scanVideoTracks(video: HTMLVideoElement, bridge: MessageBridgeSender): 
   }
 }
 
+/** Videos that have a loadedmetadata listener attached */
+const metadataListenedVideos = new WeakSet<HTMLVideoElement>();
+
+/**
+ * Store cleanup handlers for event listeners attached to video elements.
+ * Maps video → list of { target, event, handler } for removal on teardown.
+ */
+const videoCleanupHandlers: Array<{ target: EventTarget; event: string; handler: EventListener }> = [];
+
 /** Attach track listeners to a video element */
 function watchVideo(video: HTMLVideoElement, bridge: MessageBridgeSender): void {
   if (reportedVideos.has(video)) return;
@@ -63,9 +72,21 @@ function watchVideo(video: HTMLVideoElement, bridge: MessageBridgeSender): void 
   }
 
   // Listen for future track additions
-  video.textTracks.addEventListener('addtrack', () => {
+  const addTrackHandler = () => {
     scanVideoTracks(video, bridge);
-  });
+  };
+  video.textTracks.addEventListener('addtrack', addTrackHandler);
+  videoCleanupHandlers.push({ target: video.textTracks, event: 'addtrack', handler: addTrackHandler });
+
+  // Re-scan when metadata becomes available — tracks may not exist until then
+  if (!metadataListenedVideos.has(video)) {
+    metadataListenedVideos.add(video);
+    const metadataHandler = () => {
+      scanVideoTracks(video, bridge);
+    };
+    video.addEventListener('loadedmetadata', metadataHandler);
+    videoCleanupHandlers.push({ target: video, event: 'loadedmetadata', handler: metadataHandler });
+  }
 }
 
 /**
@@ -132,6 +153,11 @@ export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void
 
   return () => {
     observer.disconnect();
+    // Remove all video event listeners
+    for (const { target, event, handler } of videoCleanupHandlers) {
+      target.removeEventListener(event, handler);
+    }
+    videoCleanupHandlers.length = 0;
   };
 }
 

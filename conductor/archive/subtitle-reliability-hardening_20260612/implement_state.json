@@ -1,0 +1,66 @@
+{
+  "trackId": "subtitle-reliability-hardening_20260612",
+  "currentPhase": 6,
+  "currentTask": 4,
+  "phases": {
+    "1": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done"
+      }
+    },
+    "2": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done"
+      }
+    },
+    "3": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done",
+        "5": "done"
+      }
+    },
+    "4": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done",
+        "5": "done"
+      }
+    },
+    "5": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done",
+        "5": "done",
+        "6": "done",
+        "7": "done"
+      }
+    },
+    "6": {
+      "status": "done",
+      "tasks": {
+        "1": "done",
+        "2": "done",
+        "3": "done",
+        "4": "done"
+      }
+    }
+  }
+}

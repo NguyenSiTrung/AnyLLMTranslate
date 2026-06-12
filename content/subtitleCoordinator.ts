@@ -38,18 +38,21 @@ interface CoordinatorState {
   videoIsPlaying: boolean;
   /** Temporary tab-scoped category override from popup */
   categoryOverride: string | undefined;
+  /** Active subtitle session ID — stale chunks with different IDs are dropped */
+  activeSubtitleSessionId: number | null;
 }
 
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
-  interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
+  interceptTimeout: 30000, // Reserved for future use — interceptors manage their own timeouts
   dragCleanup: null,
   availableTracks: [],
   navigationEpoch: 0,
   discoverDebounceTimer: null,
   videoIsPlaying: false,
   categoryOverride: undefined,
+  activeSubtitleSessionId: null,
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -140,10 +143,16 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     }
 
     const handler = getHandlerByPlatform(platform);
-    if (!handler) return;
+    if (!handler) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
 
     const cues = handler.transformResponse(body, contentType, url);
-    if (cues.length === 0) return;
+    if (cues.length === 0) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
 
     // Immediately activate overlay fallback to handle progressive chunks
     if (!state.isOverlayMode) {
@@ -184,13 +193,18 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
       hideSubtitleToast();
       showSubtitleToast('Subtitle translation failed.');
       return;
+    }
+
+    // Track the active session so stale chunks from older sessions are dropped
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
     }
 
     // The first chunk comes back immediately in response.cues
@@ -251,10 +265,13 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (response?.success && response.cues) {
       cuesToDisplay = response.cues;
+      if (response.sessionId !== undefined) {
+        state.activeSubtitleSessionId = response.sessionId;
+      }
       hideSubtitleToast();
       showSubtitleToast('Overlay mapped successfully!');
     } else {
@@ -443,6 +460,19 @@ export function startCoordinator(): () => void {
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED' && msg.cues) {
+      // Drop stale chunks from old subtitle sessions
+      const chunkSessionId = (message as { sessionId?: number }).sessionId;
+      if (
+        state.activeSubtitleSessionId !== null &&
+        chunkSessionId !== undefined &&
+        chunkSessionId !== state.activeSubtitleSessionId
+      ) {
+        console.log('AnyLLMTranslate: Dropping stale subtitle chunk', {
+          expected: state.activeSubtitleSessionId,
+          received: chunkSessionId,
+        });
+        return;
+      }
       updateTranslatedCues(msg.cues);
     }
     // Handle popup requesting subtitle track selection
@@ -522,6 +552,7 @@ export function resetCoordinatorState(): void {
   state.navigationEpoch++;
   state.videoIsPlaying = false;
   state.categoryOverride = undefined;
+  state.activeSubtitleSessionId = null;
   if (state.discoverDebounceTimer !== null) {
     clearTimeout(state.discoverDebounceTimer);
     state.discoverDebounceTimer = null;
@@ -712,26 +743,31 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
  */
 function startVideoPlaybackWatcher(): () => void {
   const watchedVideos = new WeakSet<HTMLVideoElement>();
+  /** Store references to remove listeners on cleanup */
+  const listenerMap = new Map<HTMLVideoElement, { play: () => void; pause: () => void }>();
 
   const attachPlayListener = (video: HTMLVideoElement) => {
     if (watchedVideos.has(video)) return;
     watchedVideos.add(video);
 
-    video.addEventListener('play', () => {
-      if (state.videoIsPlaying) return; // already handled
+    const playHandler = () => {
+      if (state.videoIsPlaying) return;
       state.videoIsPlaying = true;
       console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
       const epoch = state.navigationEpoch;
       tryAutoActivate(epoch).catch((err) => {
         console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
       });
-    });
+    };
 
-    // Reset flag when the video stops so re-play re-triggers correctly
-    video.addEventListener('pause', () => {
+    const pauseHandler = () => {
       // Don't reset here — a brief pause shouldn't lose the "playing" state.
       // Only SPA navigation (resetCoordinatorState) should clear it.
-    });
+    };
+
+    video.addEventListener('play', playHandler);
+    video.addEventListener('pause', pauseHandler);
+    listenerMap.set(video, { play: playHandler, pause: pauseHandler });
   };
 
   const scanForVideos = () => {
@@ -754,6 +790,12 @@ function startVideoPlaybackWatcher(): () => void {
 
   return () => {
     observer.disconnect();
+    // Remove all play/pause listeners on cleanup
+    for (const [video, handlers] of listenerMap) {
+      video.removeEventListener('play', handlers.play);
+      video.removeEventListener('pause', handlers.pause);
+    }
+    listenerMap.clear();
   };
 }
 

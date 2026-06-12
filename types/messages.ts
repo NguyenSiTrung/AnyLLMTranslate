@@ -40,7 +40,8 @@ export type MessageAction =
   | 'getCategoryOverride'
   | 'getPageCategory'
   | 'DETECT_PAGE_CATEGORY_LLM'
-  | 'CLEAR_CACHE';
+  | 'CLEAR_CACHE'
+  | 'OPEN_PDF_VIEWER';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -163,6 +164,12 @@ export interface ClearCacheMessage {
   action: 'CLEAR_CACHE';
 }
 
+/** Open the bundled PDF viewer for a given URL (Popup → Background). */
+export interface OpenPdfViewerMessage {
+  action: 'OPEN_PDF_VIEWER';
+  url: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -185,7 +192,8 @@ export type ExtensionMessage =
   | GetCategoryOverrideMessage
   | GetPageCategoryMessage
   | DetectPageCategoryLlmMessage
-  | ClearCacheMessage;
+  | ClearCacheMessage
+  | OpenPdfViewerMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

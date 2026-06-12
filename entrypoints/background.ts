@@ -7,6 +7,12 @@ import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSche
 import { initTabCleanup } from '@/services/categoryStore';
 import { warmDebugCache } from '@/services/debugLog';
 
+/** Open the bundled PDF viewer for a given PDF URL. */
+function openPdfViewer(url: string): void {
+  const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(url)}`);
+  chrome.tabs.create({ url: viewerUrl });
+}
+
 /** Send message to the active tab's content script */
 async function sendToActiveTab(message: Record<string, unknown>): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -45,6 +51,16 @@ function setupContextMenus(): void {
         '*://*.udemy.com/*',
         '*://*.coursera.org/*',
       ],
+    });
+
+    // PDF translator — shown for any link/page that resolves to a .pdf URL.
+    // `link` covers clicking a download link, `page` covers opening a tab on a
+    // bare .pdf URL where the browser renders its built-in PDF viewer.
+    chrome.contextMenus.create({
+      id: 'open-pdf-translator',
+      title: 'Open in PDF Translator',
+      contexts: ['link', 'page'],
+      targetUrlPatterns: ['*://*/*.pdf', '*://*/*.pdf?*', 'file://*/*.pdf', 'file://*/*.pdf?*'],
     });
   });
 }
@@ -108,6 +124,14 @@ export default defineBackground(() => {
       case 'translate-subtitles':
         sendToActiveTab({ action: 'startSubtitleTranslation' });
         break;
+      case 'open-pdf-translator': {
+        // Prefer the link URL when the user right-clicked a link, otherwise
+        // fall back to the page's own URL (e.g. a tab that landed on a bare
+        // .pdf URL that the browser renders natively).
+        const pdfUrl = info.linkUrl || info.pageUrl;
+        if (pdfUrl) openPdfViewer(pdfUrl);
+        break;
+      }
     }
   });
 

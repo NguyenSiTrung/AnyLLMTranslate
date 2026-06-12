@@ -43,11 +43,13 @@ This file tracks all major tracks for the project.
 - ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
 - ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
 - ✅ **Deep Analysis Hardening & Improvements** (`deep-analysis-hardening_20260611`) — Archived 2026-06-11. [View](./conductor/archive/deep-analysis-hardening_20260611/)
+- ✅ **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Archived 2026-06-12. [View](./conductor/archive/subtitle-reliability-hardening_20260612/)
 
 ---
 
+## Archived Tracks
+- **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
+
 ## Active Tracks
 
-- [ ] **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Critical. [View](./conductor/tracks/subtitle-reliability-hardening_20260612/)
-
-
+_No active tracks._
