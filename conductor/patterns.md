@@ -353,3 +353,12 @@ Reusable patterns discovered during development. Read this before starting new w
 ---
 Last refreshed: 2026-06-11T17:21:00+07:00
 Codebase health: 899 tests passing across 67 files, build ~750KB, 0 lint errors, 35 tracks archived
+
+## Subtitle Reliability Hardening (2026-06-12)
+- **Session identity for stale chunk rejection:** Use a monotonic `subtitleSessionCounter` in background + `activeSubtitleSessionId` in coordinator to reject chunks from superseded sessions — prevents race conditions when users navigate between videos. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+- **Interceptor always-respond rule:** Every early-return path in `handleIntercepted()` must call `sendTranslatedSubtitle()` with original content — otherwise MAIN-world interceptors hang indefinitely waiting for a response. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+- **URL allow-list hostname validation:** Parse URL → validate protocol (HTTP/S only) → block private IPs/localhost → match hostname-only with end-anchored regex — prevents SSRF via domain-in-path/query attacks. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+- **BFCache interceptor lifecycle:** Use `pagehide` (always) to disable interceptors and `pageshow` (with `event.persisted`) to re-enable — prevents stale monkey-patches after BFCache restore. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+- **Listener cleanup via Map references:** Store `addEventListener` handler references in a `Map<Element, {event: handler}>` alongside `WeakSet` deduplication — enables proper `removeEventListener` on coordinator teardown. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+- **loadedmetadata re-scan for TextTrack discovery:** Attach `loadedmetadata` listeners to candidate videos so textTracks are re-scanned when metadata becomes available — handles cases where tracks aren't populated at initial scan time. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
+
