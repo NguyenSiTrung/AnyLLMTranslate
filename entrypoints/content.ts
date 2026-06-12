@@ -532,6 +532,10 @@ export default defineContentScript({
       flushLruUpdates().catch(() => {});
       chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
       chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
+      if (coordinatorCleanup) {
+        coordinatorCleanup();
+        coordinatorCleanup = null;
+      }
     });
     console.log('[AnyLLMTranslate] Content script loaded');
   },
