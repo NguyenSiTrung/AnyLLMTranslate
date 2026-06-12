@@ -47,7 +47,9 @@ This file tracks all major tracks for the project.
 
 ---
 
+## Archived Tracks
+- **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
+
 ## Active Tracks
 
-### [ ] Track: PDF Translation Support
-*Link: [./conductor/tracks/pdf-translation_20260612/](./conductor/tracks/pdf-translation_20260612/)*
+_No active tracks._
