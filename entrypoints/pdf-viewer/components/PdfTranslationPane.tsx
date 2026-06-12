@@ -148,10 +148,14 @@ function OriginalLayoutOverlay({
 
         const originalLen = para.text.length;
         const translatedLen = translatedText.length;
+        const isSingleLine = para.height <= para.fontSize * 1.5;
+
+        // Apply a safety margin for font size scaling, particularly on single-line text blocks
         const lengthRatio = translatedLen > 0 ? originalLen / translatedLen : 1;
-        const scaleFactor = Math.max(0.4, Math.min(1.0, lengthRatio));
+        const safetyMargin = isSingleLine ? 0.82 : 0.95;
+        const scaleFactor = Math.max(0.4, Math.min(1.0, lengthRatio * safetyMargin));
         const originalFontSizeCss = para.fontSize * viewport.scale;
-        const computedFontSize = Math.max(8, originalFontSizeCss * scaleFactor);
+        const computedFontSize = Math.max(7.5, originalFontSizeCss * scaleFactor);
 
         return (
           <div
@@ -164,18 +168,7 @@ function OriginalLayoutOverlay({
               width: `${widthCss}px`,
               height: `${heightCss}px`,
               fontSize: `${computedFontSize}px`,
-              lineHeight: '1.25',
-              background: '#ffffff',
-              color: '#1a1a1a',
-              padding: '1px 2px',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              pointerEvents: 'auto',
-              borderRadius: '2px',
-              border: '1px solid rgba(0, 0, 0, 0.05)',
+              whiteSpace: isSingleLine ? 'nowrap' : 'normal',
             }}
             title={para.text}
           >
