@@ -175,6 +175,13 @@ html, body, #root {
   font-style: italic;
 }
 
+.pdf-viewer-page-translation--idle {
+  color: #52525b;
+  font-style: italic;
+  border-style: dashed;
+  background: rgba(39, 39, 42, 0.2);
+}
+
 .pdf-viewer-page-translation--error {
   border-color: #7f1d1d;
   color: #fca5a5;

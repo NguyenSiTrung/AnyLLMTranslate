@@ -89,13 +89,26 @@ function TranslatedParagraphs({ page }: { page: PageTranslations }): React.React
   );
 }
 
+function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
+  return (
+    <div className="pdf-viewer-page-translation pdf-viewer-page-translation--idle">
+      <p className="pdf-viewer-translation-paragraph">
+        Page {pageNumber} — Scroll to translate
+      </p>
+    </div>
+  );
+}
+
 export function PdfTranslationPane({
   pageNumber,
   page,
   paragraphCount,
   onRetry,
 }: PdfTranslationPaneProps): React.ReactElement {
-  if (page.state === 'translating' || page.state === 'idle') {
+  if (page.state === 'idle') {
+    return <IdleState pageNumber={pageNumber} />;
+  }
+  if (page.state === 'translating') {
     return <LoadingSkeleton count={paragraphCount} />;
   }
   if (page.state === 'error') {
