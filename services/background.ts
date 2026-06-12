@@ -523,30 +523,53 @@ async function handleTranslateSubtitle(
   }
 }
 
-/** Allowed subtitle domains for CORS bypass */
+/** Allowed subtitle domains for CORS bypass (hostname suffix matching) */
 const SUBTITLE_ALLOWLIST = [
-  /youtube\.com/,
-  /googlevideo\.com/,
-  /youtu\.be/,
-  /udemycdn\.com/,
-  /udemy\.com/,
-  /coursera\.org/,
-  /coursera-user-content\.net/,
-  /vimeo\.com/,
-  /vimeocdn\.com/,
-  /netflix\.com/,
-  /nflxvideo\.net/,
-  /amazon\.com/,
-  /primevideo\.com/,
-  /aiv-cdn\.net/,
-  /cloudfront\.net/,
-  /akamaized\.net/,
-  /linkedin\.com/,
-  /licdn\.com/,
+  /(?:^|\.)youtube\.com$/,
+  /(?:^|\.)googlevideo\.com$/,
+  /(?:^|\.)youtu\.be$/,
+  /(?:^|\.)udemycdn\.com$/,
+  /(?:^|\.)udemy\.com$/,
+  /(?:^|\.)coursera\.org$/,
+  /(?:^|\.)coursera-user-content\.net$/,
+  /(?:^|\.)vimeo\.com$/,
+  /(?:^|\.)vimeocdn\.com$/,
+  /(?:^|\.)netflix\.com$/,
+  /(?:^|\.)nflxvideo\.net$/,
+  /(?:^|\.)amazon\.com$/,
+  /(?:^|\.)primevideo\.com$/,
+  /(?:^|\.)aiv-cdn\.net$/,
+  /(?:^|\.)cloudfront\.net$/,
+  /(?:^|\.)akamaized\.net$/,
+  /(?:^|\.)linkedin\.com$/,
+  /(?:^|\.)licdn\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
-  return SUBTITLE_ALLOWLIST.some((pattern) => pattern.test(url));
+  try {
+    const parsed = new URL(url);
+    // Block non-HTTP(S) protocols
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return false;
+    }
+    // Block private/loopback/link-local hosts
+    const host = parsed.hostname;
+    if (
+      host === 'localhost' ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host === '0.0.0.0' ||
+      host === '[::1]' ||
+      host.startsWith('169.254.')
+    ) {
+      return false;
+    }
+    // Match against allowlist using hostname suffix matching
+    return SUBTITLE_ALLOWLIST.some((pattern) => pattern.test(host));
+  } catch {
+    return false; // Invalid URL
+  }
 }
 
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
