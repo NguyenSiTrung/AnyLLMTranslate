@@ -762,6 +762,21 @@ export function handleMessage(
       return handleDetectPageCategoryLLM(message);
     case 'CLEAR_CACHE':
       return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
+    case 'OPEN_PDF_VIEWER': {
+      // Validate the URL before forwarding to the viewer — file:// links and
+      // HTTP(S) links both supported, everything else rejected.
+      try {
+        const parsed = new URL(message.url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {
+          return Promise.resolve({ success: false, error: 'Unsupported protocol' });
+        }
+      } catch {
+        return Promise.resolve({ success: false, error: 'Invalid URL' });
+      }
+      const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(message.url)}`);
+      chrome.tabs.create({ url: viewerUrl });
+      return Promise.resolve({ success: true });
+    }
     default:
       return undefined;
   }

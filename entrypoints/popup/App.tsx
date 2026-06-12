@@ -538,6 +538,9 @@ export default function App() {
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [unsupportedPage, setUnsupportedPage] = useState<UnsupportedPageInfo | null>(null);
+  const [activeTabUrl, setActiveTabUrl] = useState<string | null>(null);
+  const [pdfUrlInput, setPdfUrlInput] = useState('');
+  const [pdfInputOpen, setPdfInputOpen] = useState(false);
 
   useEffect(() => {
     loadSettingsFromStorage();
@@ -547,6 +550,7 @@ export default function App() {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.url) {
+          setActiveTabUrl(tab.url);
           try {
             const url = new URL(tab.url);
             if (url.protocol === 'http:' || url.protocol === 'https:') {
@@ -789,6 +793,22 @@ export default function App() {
     });
   }, []);
 
+  /** Open the pdf-viewer in a new tab for the given URL. */
+  const openPdfTranslator = useCallback((url: string) => {
+    if (!url) return;
+    // Send through the background service worker so URL validation lives in one
+    // place (and so future "open in side panel" features can reuse the same path).
+    chrome.runtime
+      .sendMessage({ action: 'OPEN_PDF_VIEWER', url })
+      .catch((err: unknown) => {
+        console.error('[AnyLLMTranslate] Failed to open PDF viewer:', err);
+        // Fallback: build the URL directly so the action still works if the
+        // service worker is asleep and refuses the message.
+        const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(url)}`);
+        chrome.tabs.create({ url: viewerUrl });
+      });
+  }, []);
+
   const statusConfig = STATUS_CONFIG[status.status];
   const connectionStatus = settings.provider.connectionStatus ?? 'unknown';
   const connectionStatusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
@@ -801,6 +821,10 @@ export default function App() {
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isActive = isTranslating || status.status === 'done';
   const progressPercent = status.totalCount > 0 ? Math.round((status.translatedCount / status.totalCount) * 100) : 0;
+
+  // Active tab is a PDF when the URL ends in .pdf (case-insensitive) — the
+  // browser's built-in PDF viewer shows plain .pdf URLs without a host page.
+  const activeTabIsPdf = Boolean(activeTabUrl && /\.pdf(?:\?|#|$)/i.test(activeTabUrl));
 
   const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enableLLMPageCategoryDetection && activeHostname;
   const currentCategoryValue = categoryInfo?.override ?? categoryInfo?.siteRule ?? '__auto__';
@@ -1018,6 +1042,61 @@ export default function App() {
             </div>
           </button>
         )}
+
+        {/* PDF Translator — auto-detects PDF tabs and offers an input fallback. */}
+        <div className="bg-zinc-900/70 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-3 shadow-lg shadow-black/20">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+              <span className={TYPOGRAPHY.body}>PDF Translator</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (activeTabIsPdf && activeTabUrl) {
+                  openPdfTranslator(activeTabUrl);
+                } else {
+                  setPdfInputOpen((open) => !open);
+                }
+              }}
+              className="text-[11px] font-medium text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded-lg hover:bg-zinc-800/80"
+            >
+              {activeTabIsPdf ? 'Open current PDF' : pdfInputOpen ? 'Cancel' : 'Open URL…'}
+            </button>
+          </div>
+          {pdfInputOpen && !activeTabIsPdf && (
+            <div className="mt-2 flex gap-2">
+              <input
+                type="url"
+                value={pdfUrlInput}
+                onChange={(e) => setPdfUrlInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && pdfUrlInput.trim()) {
+                    openPdfTranslator(pdfUrlInput.trim());
+                    setPdfUrlInput('');
+                    setPdfInputOpen(false);
+                  }
+                }}
+                placeholder="https://example.com/file.pdf"
+                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 placeholder:text-zinc-600"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (pdfUrlInput.trim()) {
+                    openPdfTranslator(pdfUrlInput.trim());
+                    setPdfUrlInput('');
+                    setPdfInputOpen(false);
+                  }
+                }}
+                disabled={!pdfUrlInput.trim()}
+                className="text-[11px] font-medium bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Open
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Site Rule Toggle */}
         {activeHostname && (
