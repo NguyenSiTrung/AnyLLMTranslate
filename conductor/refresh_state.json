@@ -1,23 +1,23 @@
 {
-  "lastRefresh": "2026-06-12T15:37:00+07:00",
-  "refreshedBy": "conductor-refresh",
+  "lastRefresh": "2026-06-12T17:54:00+07:00",
   "scope": "all",
-  "changes": {
-    "product.md": [
-      "Added Subtitle Handling Reliability and Hardening to completed list",
-      "Updated Current State: 917 tests, 69 files, ~753 KB, 36 tracks"
-    ],
-    "patterns.md": "Updated health footer stats (753KB, timestamp)",
-    "tech-stack.md": "No drift",
-    "workflow.md": "No drift",
-    "tracks.md": "No drift"
-  },
-  "health": {
-    "tests": 917,
-    "testFiles": 69,
-    "buildSizeKB": 753,
+  "changes": [
+    "product.md: Added PDF Translation to Key Features section",
+    "product.md: Added PDF Translation Support and PDF Viewer Performance Overhaul to Implementation Status",
+    "product.md: Updated Current State metrics (947 tests / 74 files / 2.56 MB / 38 tracks)",
+    "product.md: Removed 'PDF translation' from Out of Scope",
+    "tech-stack.md: Added pdfjs-dist 4.x dependency",
+    "tech-stack.md: Added 'Why a bundled PDF.js viewer?' architecture decision",
+    "tracks.md: Consolidated duplicate 'Archived Tracks' headers into single section",
+    "patterns.md: Updated last-refreshed timestamp and track count (37→38)",
+    "beads: Closed 13 stale open tasks (7 c5y perf-overhaul children + 6 0la PDF translation children + epic)"
+  ],
+  "codebaseHealth": {
+    "tests": 947,
+    "testFiles": 74,
+    "buildSize": "2.56 MB",
     "lintErrors": 0,
-    "tracksArchived": 36,
-    "tracksActive": 0
+    "archivedTracks": 38,
+    "activeTracks": 0
   }
 }

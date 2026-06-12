@@ -43,6 +43,17 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Drag-and-drop subtitle repositioning with session persistence
 - Proactive subtitle track discovery (HTML5 TextTrack + platform handlers)
 
+### PDF Translation
+- Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
+- Progressive IntersectionObserver-based translation (viewport-only, no token storms)
+- Synchronized bidirectional scrolling between original and translated panes
+- Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders)
+- PDF paragraph grouping heuristic (y-coordinate line grouping → gap-based paragraph merging)
+- Heading detection by page-level median font height
+- In-memory Map cache layered on IndexedDB-backed cache for instant re-translate on scroll back
+- Progressive page proxy streaming (batched loading, `PDFPageProxy | null` pending slots)
+- Isolated `createSemaphore()` factory (PDF max 2 concurrent vs page/subtitle max 3)
+
 ### UI & Settings
 - Popup UI (redesigned dropdown with permanent quick settings)
 - Options page (provider config, theme selection, site rules)
@@ -115,14 +126,15 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Custom Endpoint Provider — Langflow Support** (Archived 2026-05-13): Add support for non-OpenAI-compatible APIs by introducing a dedicated Langflow provider preset. Created a provider-agnostic `TranslationService` interface. Removed redundant `ollama` preset and updated existing configurations to use `'custom'`. Redesigned Option page UI to conditionally render fields based on provider preset (Endpoint URL, API Key, Component ID, Response Text Path JSONPath resolver). Added robust response parsing with fallback text extraction and type checking. Added 42 tests for Langflow service and UI components.
 - **Deep Analysis Hardening & Improvements** (Archived 2026-06-11): Debug-mode gated logging with TTL cache (`services/debugLog.ts`), origin validation in MAIN-world postMessage handlers, per-install AES-GCM encryption salt with try-both migration, recoverable decrypt results, idempotent XHR/fetch interceptor patching with teardown, deterministic semaphore queue with SemaphoreWaiter records, subtitle session teardown on restore/navigation/tab-close, dead-code audit (removed `originalHTML`/`textNodes` captures), glossary CSV header order flexibility. 41 new tests added.
 - **Subtitle Handling Reliability and Hardening** (Archived 2026-06-12): Risk-prioritized hardening of the video subtitle pipeline. Added per-session identity (`subtitleSessionCounter` / `activeSubtitleSessionId`) for progressive chunks to reject stale translation requests, enforced interceptor always-respond behavior (calling `sendTranslatedSubtitle` with original content on early return) to prevent native subtitle hangs, confirmed overlay initialization before blanking native subtitles, restored MAIN-world interceptors on BFCache `pageshow` restore, hardened background subtitle fetch URL validation (SSRF mitigation), wired manual subtitle translation content-side handler (`startSubtitleTranslation`), fixed playback watcher event listener leaks, and improved HTML5 TextTrack discovery rescan behavior using `loadedmetadata` event listeners. 18 new unit tests added.
+- **PDF Translation Support** (Archived 2026-06-12): Built-in PDF.js viewer with side-by-side layout (original canvas left, translated text right). Progressive IntersectionObserver-based translation, synchronized bidirectional scrolling, PDF paragraph grouping heuristic, heading detection by median font height, in-memory + IndexedDB caching, batch translation with `maxBatchChars` splitting. 20 files across components, hooks, and lib. 9 new tests added.
+- **PDF Viewer Performance Overhaul** (Archived 2026-06-12): Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders), progressive page proxy streaming in batches of 3, `createSemaphore()` factory for isolated concurrency (PDF max 2 vs page/subtitle max 3), bidirectional scroll sync with `isUpdatingRef` guard, observer root fix (scroll pane not content wrapper), duplicate translation elimination. 30 new tests added (947 total).
 
 ### Current State
-- 917 tests passing across 69 files. Build passing (`wxt build` ✅, ~753 KB). 0 lint errors.
-- **No active tracks.** All 36 tracks completed and archived.
+- 947 tests passing across 74 files. Build passing (`wxt build` ✅, ~2.56 MB). 0 lint errors.
+- **No active tracks.** All 38 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
 - Built-in translation API (users must BYOK)
 - Mobile browser support
-- PDF translation
 - Browser extensions other than Chrome (Firefox, Safari)

@@ -375,5 +375,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - **`renderHook` stable prop references:** Creating array/object literals like `[{} as X]` inside a `renderHook` callback creates a new reference on every render, destabilizing effect deps. Hoist stable references outside the callback. (from: pdf-perf-overhaul_20260612, archived 2026-06-12)
 
 ---
-Last refreshed: 2026-06-12T17:49:00+07:00
-Codebase health: 947 tests passing across 74 files, build ~2.56MB, 0 lint errors, 37 tracks archived
+Last refreshed: 2026-06-12T17:54:00+07:00
+Codebase health: 947 tests passing across 74 files, build ~2.56MB, 0 lint errors, 38 tracks archived

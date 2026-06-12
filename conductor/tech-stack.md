@@ -23,6 +23,7 @@
 | **Tailwind CSS** | 4.x | Utility-first styling for extension UI components |
 | **Lucide React** | latest | Consistent, lightweight icon set |
 | **Zustand** | 5.x | Lightweight reactive state management, synced with chrome.storage |
+| **pdfjs-dist** | 4.x | PDF.js library for built-in PDF viewer — canvas rendering, text extraction, page proxy streaming |
 
 ## Extension APIs
 
@@ -112,3 +113,9 @@
 - No shadow DOM complexity
 - Theme switching is instant (CSS variable update)
 - 15+ themes achievable with variable swapping
+
+### Why a bundled PDF.js viewer?
+- Chrome's built-in PDF viewer runs in a sandboxed plugin — content scripts cannot access the rendered DOM
+- Bundling `pdfjs-dist` (~1.38 MB worker) inside the extension gives full control over page rendering, text extraction, and translation overlay
+- The viewer is an unlisted WXT page (`entrypoints/pdf-viewer/`) that opens via redirect or popup action
+- Side-by-side layout (canvas left, translated text right) avoids injecting into the original PDF rendering pipeline
