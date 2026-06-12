@@ -1,9 +1,16 @@
 /**
- * usePdfDocument — loads a PDF URL into PDF.js and tracks page-by-page readiness.
+ * usePdfDocument — loads a PDF URL into PDF.js and progressively streams
+ * page proxies.
  *
- * Returns the loaded `PDFDocumentProxy`, a list of `PDFPageProxy` objects (one
- * per page, requested eagerly so canvas rendering can begin), and load-state
- * flags for the UI to render progress and error states.
+ * Instead of blocking on all pages before showing the viewer, this hook:
+ * 1. Downloads the PDF binary.
+ * 2. Once the document is parsed, sets `loadState: 'loaded'` and returns
+ *    `numPages` immediately so the UI can render placeholders.
+ * 3. Fetches page proxies in small batches (default: 3 at a time),
+ *    updating `pages` incrementally as they become available.
+ *
+ * This allows PdfCanvasRenderer and the virtualization hook to start
+ * rendering the first visible pages without waiting for every page proxy.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -12,13 +19,18 @@ import { loadPdfDocument } from '../lib/pdfLoader';
 
 export type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
+/** Number of page proxies to fetch per batch during progressive loading. */
+const PAGES_PER_BATCH = 3;
+
 export interface UsePdfDocumentResult {
   /** Loading state of the document. */
   loadState: LoadState;
   /** Loaded document, or `null` while loading / on error. */
   document: PDFDocumentProxy | null;
-  /** Pages of the document (filled eagerly on load). */
-  pages: PDFPageProxy[];
+  /** Pages of the document (filled progressively — may have `null` gaps). */
+  pages: Array<PDFPageProxy | null>;
+  /** Total number of pages in the document (available once loaded). */
+  numPages: number;
   /** Bytes loaded (0..total) while the document is downloading. */
   bytesLoaded: number;
   /** Total bytes of the PDF, once known. */
@@ -31,7 +43,8 @@ export interface UsePdfDocumentResult {
 export function usePdfDocument(url: string | null): UsePdfDocumentResult {
   const [loadState, setLoadState] = useState<LoadState>('idle');
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
-  const [pages, setPages] = useState<PDFPageProxy[]>([]);
+  const [pages, setPages] = useState<Array<PDFPageProxy | null>>([]);
+  const [numPages, setNumPages] = useState(0);
   const [bytesLoaded, setBytesLoaded] = useState(0);
   const [bytesTotal, setBytesTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +55,7 @@ export function usePdfDocument(url: string | null): UsePdfDocumentResult {
     setLoadState('idle');
     setDocument(null);
     setPages([]);
+    setNumPages(0);
     setBytesLoaded(0);
     setBytesTotal(0);
     setError(null);
@@ -67,24 +81,40 @@ export function usePdfDocument(url: string | null): UsePdfDocumentResult {
           return;
         }
         setDocument(doc);
-        // Eagerly fetch all pages so the renderer can begin canvas work
-        const fetched: PDFPageProxy[] = [];
-        for (let i = 1; i <= doc.numPages; i++) {
+        setNumPages(doc.numPages);
+
+        // Initialize the pages array with null placeholders
+        const initialPages: Array<PDFPageProxy | null> = new Array(doc.numPages).fill(null);
+        setPages(initialPages);
+
+        // Set loaded immediately so the UI can render placeholders
+        setLoadState('loaded');
+
+        // Progressively fetch page proxies in batches
+        for (let i = 0; i < doc.numPages; i += PAGES_PER_BATCH) {
+          if (cancelledRef.current) return;
+
+          const batchEnd = Math.min(i + PAGES_PER_BATCH, doc.numPages);
+          const batchPromises: Promise<PDFPageProxy>[] = [];
+          for (let j = i; j < batchEnd; j++) {
+            batchPromises.push(doc.getPage(j + 1)); // 1-indexed
+          }
+
+          const batchPages = await Promise.all(batchPromises);
           if (cancelledRef.current) {
-            await Promise.all(fetched.map((p) => p.cleanup()));
-            await doc.destroy();
+            await Promise.all(batchPages.map((p) => p.cleanup()));
             return;
           }
-          const page = await doc.getPage(i);
-          fetched.push(page);
+
+          // Update pages array with the newly fetched proxies
+          setPages((prev) => {
+            const next = [...prev];
+            for (let j = 0; j < batchPages.length; j++) {
+              next[i + j] = batchPages[j];
+            }
+            return next;
+          });
         }
-        if (cancelledRef.current) {
-          await Promise.all(fetched.map((p) => p.cleanup()));
-          await doc.destroy();
-          return;
-        }
-        setPages(fetched);
-        setLoadState('loaded');
       })
       .catch((err: unknown) => {
         if (cancelledRef.current) return;
@@ -107,5 +137,5 @@ export function usePdfDocument(url: string | null): UsePdfDocumentResult {
     };
   }, [document]);
 
-  return { loadState, document, pages, bytesLoaded, bytesTotal, error };
+  return { loadState, document, pages, numPages, bytesLoaded, bytesTotal, error };
 }

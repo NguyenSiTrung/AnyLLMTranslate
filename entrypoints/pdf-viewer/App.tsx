@@ -49,9 +49,16 @@ export default function App(): ReactElement {
     setPdfUrl(getPdfUrlFromQuery());
   }, []);
 
-  const { loadState, pages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl);
+  const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl);
+
+  // Filter to non-null pages for the translation hook (which needs actual PDFPageProxy)
+  const loadedPages = useMemo(
+    () => pages.filter((p): p is NonNullable<typeof p> => p !== null),
+    [pages],
+  );
+
   const { pages: translations, translatedCount, totalCount, retryPage } = usePdfPageTranslations({
-    pages,
+    pages: loadedPages,
     pdfUrl: pdfUrl ?? '',
     containerRef: rightContainerRef,
   });
@@ -70,7 +77,7 @@ export default function App(): ReactElement {
 
   // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport
   const { visiblePages } = useVisiblePages({
-    totalPages: pages.length,
+    totalPages: numPages,
     containerRef: leftContainerRef,
   });
 
@@ -79,6 +86,7 @@ export default function App(): ReactElement {
     const dims = new Map<number, { width: number; height: number }>();
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
+      if (!page) continue; // Skip pages not yet fetched
       const viewport = page.getViewport({ scale: 1 });
       // Scale to fit 720px width (matching PdfCanvasRenderer default)
       const scale = 720 / viewport.width;
@@ -94,15 +102,16 @@ export default function App(): ReactElement {
   if (loadState === 'loaded' && pdfUrl) {
     const leftPane = (
       <>
-        {pages.map((page, idx) => {
+        {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
+          const page = pages[idx] ?? null;
           const dims = pageDimensions.get(pageNumber);
-          if (visiblePages.has(pageNumber)) {
+          if (page && visiblePages.has(pageNumber)) {
             return (
               <PdfCanvasRenderer key={`canvas-${pageNumber}`} page={page} pageNumber={pageNumber} />
             );
           }
-          // Lightweight placeholder for off-screen pages
+          // Lightweight placeholder for off-screen or not-yet-loaded pages
           return (
             <div
               key={`placeholder-${pageNumber}`}
@@ -119,16 +128,15 @@ export default function App(): ReactElement {
     );
     const rightPane = (
       <>
-        {pages.map((_, idx) => {
+        {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
           const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
-          const count = 0;
           return (
             <div key={`translation-${pageNumber}`} data-page-slot={pageNumber}>
               <PdfTranslationPane
                 pageNumber={pageNumber}
                 page={translation}
-                paragraphCount={count}
+                paragraphCount={0}
                 onRetry={retryPage}
               />
             </div>

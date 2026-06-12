@@ -93,7 +93,7 @@ const translatedTabSessions = new Set<number>();
 /** Active translation service instance */
 let translationService: (TranslationService & { updateConfig(config: ProviderConfig): void }) | null = null;
 
-/** Rate-limiting semaphore: max 3 concurrent, queue up to 10 */
+/** Rate-limiting semaphore factory */
 interface SemaphoreWaiter {
   /** Hand the active slot to this waiter (resolves its acquire promise). */
   grant: () => void;
@@ -104,64 +104,92 @@ interface SemaphoreState {
   active: number;
   queue: SemaphoreWaiter[];
 }
-const semaphore: SemaphoreState = { active: 0, queue: [] };
+interface Semaphore {
+  acquire: () => Promise<void>;
+  release: () => void;
+  __state: SemaphoreState;
+}
+
+function createSemaphore(maxConcurrent: number, maxQueue: number, timeoutMs: number): Semaphore {
+  const state: SemaphoreState = { active: 0, queue: [] };
+
+  async function acquire(): Promise<void> {
+    if (state.active < maxConcurrent) {
+      state.active++;
+      return;
+    }
+    if (state.queue.length >= maxQueue) {
+      throw new Error('Too many translation requests — please try again later');
+    }
+    return new Promise<void>((resolve, reject) => {
+      const waiter: SemaphoreWaiter = { settled: false, grant: () => {} };
+
+      const timeout = setTimeout(() => {
+        if (waiter.settled) return;
+        waiter.settled = true;
+        const idx = state.queue.indexOf(waiter);
+        if (idx !== -1) state.queue.splice(idx, 1);
+        reject(new Error('Translation request timed out waiting in queue'));
+      }, timeoutMs);
+
+      waiter.grant = () => {
+        if (waiter.settled) return;
+        waiter.settled = true;
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      state.queue.push(waiter);
+    });
+  }
+
+  function release(): void {
+    while (state.queue.length > 0) {
+      const next = state.queue.shift();
+      if (next && !next.settled) {
+        next.grant();
+        return;
+      }
+    }
+    state.active = Math.max(0, state.active - 1);
+  }
+
+  return { acquire, release, __state: state };
+}
+
+/** Default semaphore for page & subtitle translations: max 3 concurrent, queue 10 */
 const MAX_CONCURRENT = 3;
 const MAX_QUEUE = 10;
 const QUEUE_TIMEOUT_MS = 30000;
+const semaphore = createSemaphore(MAX_CONCURRENT, MAX_QUEUE, QUEUE_TIMEOUT_MS);
+const acquireSemaphore = semaphore.acquire;
+const releaseSemaphore = semaphore.release;
 
-async function acquireSemaphore(): Promise<void> {
-  if (semaphore.active < MAX_CONCURRENT) {
-    semaphore.active++;
-    return;
-  }
-  if (semaphore.queue.length >= MAX_QUEUE) {
-    throw new Error('Too many translation requests — please try again later');
-  }
-  return new Promise<void>((resolve, reject) => {
-    const waiter: SemaphoreWaiter = { settled: false, grant: () => {} };
-
-    const timeout = setTimeout(() => {
-      if (waiter.settled) return;
-      waiter.settled = true;
-      const idx = semaphore.queue.indexOf(waiter);
-      if (idx !== -1) semaphore.queue.splice(idx, 1);
-      reject(new Error('Translation request timed out waiting in queue'));
-    }, QUEUE_TIMEOUT_MS);
-
-    waiter.grant = () => {
-      if (waiter.settled) return;
-      waiter.settled = true;
-      clearTimeout(timeout);
-      resolve();
-    };
-
-    semaphore.queue.push(waiter);
-  });
-}
-
-function releaseSemaphore(): void {
-  // Hand the slot to the next live waiter, skipping any that already timed out
-  // (those are marked settled and may still linger if removal raced a release).
-  while (semaphore.queue.length > 0) {
-    const next = semaphore.queue.shift();
-    if (next && !next.settled) {
-      next.grant(); // slot transfers to the waiter; active count is unchanged
-      return;
-    }
-  }
-  semaphore.active = Math.max(0, semaphore.active - 1);
-}
+/** Dedicated PDF semaphore: max 2 concurrent, queue 6 — isolated from page/subtitle */
+const PDF_MAX_CONCURRENT = 2;
+const PDF_MAX_QUEUE = 6;
+const pdfSemaphore = createSemaphore(PDF_MAX_CONCURRENT, PDF_MAX_QUEUE, QUEUE_TIMEOUT_MS);
+const acquirePdfSemaphore = pdfSemaphore.acquire;
+const releasePdfSemaphore = pdfSemaphore.release;
 
 /** Reset semaphore state. Exported for tests. */
 function __resetSemaphoreForTest(): void {
-  for (const waiter of semaphore.queue) waiter.settled = true;
-  semaphore.active = 0;
-  semaphore.queue = [];
+  for (const waiter of semaphore.__state.queue) waiter.settled = true;
+  semaphore.__state.active = 0;
+  semaphore.__state.queue = [];
+  for (const waiter of pdfSemaphore.__state.queue) waiter.settled = true;
+  pdfSemaphore.__state.active = 0;
+  pdfSemaphore.__state.queue = [];
 }
 
 /** Inspect semaphore state. Exported for tests. */
 function __getSemaphoreStateForTest(): { active: number; queued: number } {
-  return { active: semaphore.active, queued: semaphore.queue.length };
+  return { active: semaphore.__state.active, queued: semaphore.__state.queue.length };
+}
+
+/** Inspect PDF semaphore state. Exported for tests. */
+function __getPdfSemaphoreStateForTest(): { active: number; queued: number } {
+  return { active: pdfSemaphore.__state.active, queued: pdfSemaphore.__state.queue.length };
 }
 
 /** Seed an active subtitle session. Exported for tests. */
@@ -201,12 +229,17 @@ async function initService(): Promise<TranslationService & { updateConfig(config
   return translationService;
 }
 
-/** Handle translate message */
 async function handleTranslate(
   message: ExtensionMessage & { action: 'translate' },
   sender?: chrome.runtime.MessageSender,
 ): Promise<TranslationResultMessage> {
-  await acquireSemaphore();
+  // Route PDF translations through a dedicated semaphore so they don't
+  // compete with regular page/subtitle translations for the same slots.
+  const isPdf = message.pageContext?.domain === 'pdf';
+  const acquire = isPdf ? acquirePdfSemaphore : acquireSemaphore;
+  const release = isPdf ? releasePdfSemaphore : releaseSemaphore;
+
+  await acquire();
   try {
     // Track page translation (once per tab session)
     const tabId = sender?.tab?.id;
@@ -310,7 +343,7 @@ async function handleTranslate(
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: errorMsg };
   } finally {
-    releaseSemaphore();
+    release();
   }
 }
 
@@ -843,10 +876,15 @@ export {
   initService,
   acquireSemaphore,
   releaseSemaphore,
+  acquirePdfSemaphore,
+  releasePdfSemaphore,
   __resetSemaphoreForTest,
   __getSemaphoreStateForTest,
+  __getPdfSemaphoreStateForTest,
   __seedSubtitleSessionForTest,
   __getActiveSessionCountForTest,
   __getSubtitleSessionCounterForTest,
   __resetSubtitleSessionCounterForTest,
+  MAX_CONCURRENT,
+  PDF_MAX_CONCURRENT,
 };

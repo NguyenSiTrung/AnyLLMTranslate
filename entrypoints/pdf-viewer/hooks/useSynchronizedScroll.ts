@@ -1,25 +1,21 @@
 /**
- * useSynchronizedScroll — Mirror scroll offsets between two scrollable panes.
+ * useSynchronizedScroll — Bidirectional scroll sync between two scrollable panes.
  *
- * Why a custom hook (instead of just `scrollTop = other.scrollTop` on each event)?
- * - We need an update-source guard so a programmatic scroll from mirroring does
- *   not retrigger the other pane's listener (which would otherwise cause
- *   feedback loops and jitter).
- * - We proportionally scale `scrollTop` when the two panes have different
- *   scroll heights, so the *visual* position lines up page-for-page.
- * - We use the same pattern in extension UI elsewhere (e.g. subtitle handlers),
- *   so this stays consistent with existing scroll-sync code.
+ * Mirrors scroll offsets proportionally so both panes show the same fraction of
+ * their content. Uses an update-source guard + requestAnimationFrame to prevent
+ * feedback loops when one pane's programmatic scroll triggers the other's listener.
+ *
+ * Uses `scrollTo({ behavior: 'instant' })` for programmatic sync to avoid
+ * interference from CSS `scroll-behavior: smooth`.
  */
 
 import { useEffect, useRef, type RefObject } from 'react';
 
 export interface UseSynchronizedScrollOptions {
-  /** Ref to the source pane's scroll container. */
+  /** Ref to the left pane's scroll container. */
   leftRef: RefObject<HTMLElement | null>;
-  /** Ref to the target pane's scroll container. */
+  /** Ref to the right pane's scroll container. */
   rightRef: RefObject<HTMLElement | null>;
-  /** Optional: which pane initiates sync. Defaults to `'left'`. */
-  source?: 'left' | 'right';
 }
 
 /**
@@ -38,10 +34,10 @@ function mirrorScrollTop(source: HTMLElement, target: HTMLElement): number {
 export function useSynchronizedScroll({
   leftRef,
   rightRef,
-  source = 'left',
 }: UseSynchronizedScrollOptions): void {
-  // Tracks which element is currently being scrolled to, to avoid feedback loops
-  const updateSourceRef = useRef<'left' | 'right' | null>(null);
+  // Tracks which element is currently being programmatically scrolled,
+  // preventing feedback loops where pane A scrolls pane B which re-scrolls pane A.
+  const isUpdatingRef = useRef(false);
 
   useEffect(() => {
     const left = leftRef.current;
@@ -49,30 +45,30 @@ export function useSynchronizedScroll({
     if (!left || !right) return;
 
     const syncFromLeft = (): void => {
-      if (updateSourceRef.current === 'left') return;
-      updateSourceRef.current = 'left';
-      right.scrollTop = mirrorScrollTop(left, right);
-      // Defer clearing the guard so the right-pane scroll event (if any) is ignored
-      window.requestAnimationFrame(() => {
-        updateSourceRef.current = null;
+      if (isUpdatingRef.current) return;
+      isUpdatingRef.current = true;
+      right.scrollTo({ top: mirrorScrollTop(left, right), behavior: 'instant' });
+      requestAnimationFrame(() => {
+        isUpdatingRef.current = false;
       });
     };
 
     const syncFromRight = (): void => {
-      if (updateSourceRef.current === 'right') return;
-      updateSourceRef.current = 'right';
-      left.scrollTop = mirrorScrollTop(right, left);
-      window.requestAnimationFrame(() => {
-        updateSourceRef.current = null;
+      if (isUpdatingRef.current) return;
+      isUpdatingRef.current = true;
+      left.scrollTo({ top: mirrorScrollTop(right, left), behavior: 'instant' });
+      requestAnimationFrame(() => {
+        isUpdatingRef.current = false;
       });
     };
 
-    const sourceElement = source === 'left' ? left : right;
-    const handler = source === 'left' ? syncFromLeft : syncFromRight;
-    sourceElement.addEventListener('scroll', handler, { passive: true });
+    // Bidirectional: both panes listen for scroll events
+    left.addEventListener('scroll', syncFromLeft, { passive: true });
+    right.addEventListener('scroll', syncFromRight, { passive: true });
 
     return () => {
-      sourceElement.removeEventListener('scroll', handler);
+      left.removeEventListener('scroll', syncFromLeft);
+      right.removeEventListener('scroll', syncFromRight);
     };
-  }, [leftRef, rightRef, source]);
+  }, [leftRef, rightRef]);
 }
