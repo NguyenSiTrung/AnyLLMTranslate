@@ -46,9 +46,10 @@ This file tracks all major tracks for the project.
 - ✅ **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Archived 2026-06-12. [View](./conductor/archive/subtitle-reliability-hardening_20260612/)
 - ✅ **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
 - ✅ **PDF Viewer Performance Overhaul** (`pdf-perf-overhaul_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-perf-overhaul_20260612/)
+- ✅ **PDF Layout and Scroll Synchronization** (`pdf-layout-scroll-sync_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-layout-scroll-sync_20260612/)
 
 ---
 
 ## Active Tracks
 
-- [x] **PDF Layout and Scroll Synchronization** (`pdf-layout-scroll-sync_20260612`) — *High priority*. [View](./conductor/tracks/pdf-layout-scroll-sync_20260612/)
+(None)
