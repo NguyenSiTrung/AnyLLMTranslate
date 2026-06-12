@@ -349,11 +349,6 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Audit-then-remove dead captured fields:** When `TranslationPiece.originalHTML` is captured by the producer but read by nothing in the codebase, the audit must cover type, producer, and all test fixtures (5 in this case). Restore flows that look like they need the capture often use DOM markers (`data-anyllm-translated` / `data-anyllm-role="original"`) + a `removeAllTranslations()` walker instead. `textNodes` is also captured-but-unread but the cost-benefit of removing is low and callers may want it for future restore strategies — keep with a comment. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
 - **Glossary CSV header detection: accept either column order:** User-exported CSVs (Google Sheets, etc.) sometimes put `target,source` instead of `source,target`. Loosen `isHeaderLine` to match either order and accept the column-swap data loss on the rare bad-header row rather than treating it as data and producing a confusing entry. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
 - **Mock factories must export the new symbol name:** When `config.ts` switches from `decryptApiKey` to `decryptApiKeyResult`, any test that mocks `../crypto` must update its mock to export the new name or `loadSettings` crashes on `undefined`. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
-
----
-Last refreshed: 2026-06-11T17:21:00+07:00
-Codebase health: 899 tests passing across 67 files, build ~750KB, 0 lint errors, 35 tracks archived
-
 ## Subtitle Reliability Hardening (2026-06-12)
 - **Session identity for stale chunk rejection:** Use a monotonic `subtitleSessionCounter` in background + `activeSubtitleSessionId` in coordinator to reject chunks from superseded sessions — prevents race conditions when users navigate between videos. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
 - **Interceptor always-respond rule:** Every early-return path in `handleIntercepted()` must call `sendTranslatedSubtitle()` with original content — otherwise MAIN-world interceptors hang indefinitely waiting for a response. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
@@ -362,3 +357,6 @@ Codebase health: 899 tests passing across 67 files, build ~750KB, 0 lint errors,
 - **Listener cleanup via Map references:** Store `addEventListener` handler references in a `Map<Element, {event: handler}>` alongside `WeakSet` deduplication — enables proper `removeEventListener` on coordinator teardown. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
 - **loadedmetadata re-scan for TextTrack discovery:** Attach `loadedmetadata` listeners to candidate videos so textTracks are re-scanned when metadata becomes available — handles cases where tracks aren't populated at initial scan time. (from: subtitle-reliability-hardening_20260612, archived 2026-06-12)
 
+---
+Last refreshed: 2026-06-12T15:36:00+07:00
+Codebase health: 917 tests passing across 69 files, build ~753KB, 0 lint errors, 36 tracks archived

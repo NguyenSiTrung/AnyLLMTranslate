@@ -1,7 +1,7 @@
 {
   "track_id": "subtitle-reliability-hardening_20260612",
   "type": "bug",
-  "status": "new",
+  "status": "done",
   "priority": "critical",
   "depends_on": [],
   "estimated_hours": null,
