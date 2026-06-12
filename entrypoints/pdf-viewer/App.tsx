@@ -125,13 +125,14 @@ export default function App(): ReactElement {
           const pageNumber = idx + 1;
           const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
           const dims = pageDimensions.get(pageNumber);
+          const widthStyle = dims ? `${dims.width}px` : '720px';
           const heightStyle = dims ? `${dims.height}px` : '960px';
           return (
             <div
               key={`translation-${pageNumber}`}
               data-page-slot={pageNumber}
               className="pdf-viewer-page"
-              style={{ minHeight: heightStyle }}
+              style={{ width: widthStyle, minHeight: heightStyle }}
             >
               <PdfTranslationPane
                 pageNumber={pageNumber}
@@ -152,11 +153,13 @@ export default function App(): ReactElement {
         left={leftPane}
         leftPaneRef={leftContainerRef}
         right={
-          <div ref={rightContainerRef} style={{ padding: '16px' }}>
-            <div className="pdf-viewer-progress-pill">
-              {translatedCount} / {totalCount} pages translated
-            </div>
+          <div ref={rightContainerRef}>
             {rightPane}
+          </div>
+        }
+        headerExtra={
+          <div className="pdf-viewer-progress-pill">
+            {translatedCount} / {totalCount} pages translated
           </div>
         }
       />
@@ -211,8 +214,10 @@ export default function App(): ReactElement {
   return (
     <div className="pdf-viewer-root">
       <header className="pdf-viewer-header">
-        <h1>PDF Translator</h1>
-        {pdfUrl && <p className="pdf-viewer-subtitle">{fileName}</p>}
+        <div className="pdf-viewer-header-left">
+          <h1>PDF Translator</h1>
+          {pdfUrl && <p className="pdf-viewer-subtitle">{fileName}</p>}
+        </div>
       </header>
       <main className="pdf-viewer-main pdf-viewer-main--single">
         {body}

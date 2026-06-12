@@ -17,3 +17,17 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-12 18:35] - Phase 2 & 3 Completion: Symmetrical Widths, Progress Pill, and Scroll Sync
+- **Implemented:**
+  - Constrained translation slots width dynamically to match original pages (`width: widthStyle`) and centered them.
+  - Moved progress indicator pill from scrolling container to persistent header using the new `headerExtra` prop in `ViewerLayout`.
+  - Simplified `useSynchronizedScroll` to scroll 1-to-1 if scroll heights are matched.
+- **Files changed:**
+  - `entrypoints/pdf-viewer/App.tsx`
+  - `entrypoints/pdf-viewer/components/ViewerLayout.tsx`
+  - `entrypoints/pdf-viewer/style.css`
+  - `entrypoints/pdf-viewer/hooks/useSynchronizedScroll.ts`
+- **Learnings:**
+  - Gotchas: When aligning layout symmetrically, elements styled with `display: flex; flex-direction: column;` will default to 100% width of the parent flex container if width is not explicitly specified. Setting the width constraints on the outer wrapper matches the dimensions perfectly.
+  - Patterns: Placing progress states or page indicators in a sticky/persistent header on the right prevents scroll heights from mismatching between left and right scroll containers, which dramatically simplifies scroll synchronization logic.

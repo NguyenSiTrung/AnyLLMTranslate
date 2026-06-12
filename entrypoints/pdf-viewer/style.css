@@ -39,6 +39,14 @@ html, body, #root {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pdf-viewer-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .pdf-viewer-header h1 {
@@ -306,7 +314,6 @@ html, body, #root {
 
 .pdf-viewer-progress-pill {
   display: inline-block;
-  margin-bottom: 16px;
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
@@ -315,6 +322,7 @@ html, body, #root {
   border: 1px solid #27272a;
   border-radius: 999px;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .pdf-viewer-banner {

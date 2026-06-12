@@ -25,6 +25,8 @@ export interface ViewerLayoutProps {
   right: ReactNode;
   /** Optional external ref to the left scroll container (for canvas virtualization). */
   leftPaneRef?: RefObject<HTMLDivElement | null>;
+  /** Optional extra content to place on the right side of the header. */
+  headerExtra?: ReactNode;
 }
 
 export function ViewerLayout({
@@ -34,6 +36,7 @@ export function ViewerLayout({
   left,
   right,
   leftPaneRef,
+  headerExtra,
 }: ViewerLayoutProps): React.ReactElement {
   const internalLeftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -44,8 +47,11 @@ export function ViewerLayout({
   return (
     <div className="pdf-viewer-root">
       <header className="pdf-viewer-header">
-        <h1>{title}</h1>
-        {subtitle && <p className="pdf-viewer-subtitle">{subtitle}</p>}
+        <div className="pdf-viewer-header-left">
+          <h1>{title}</h1>
+          {subtitle && <p className="pdf-viewer-subtitle">{subtitle}</p>}
+        </div>
+        {headerExtra && <div className="pdf-viewer-header-right">{headerExtra}</div>}
       </header>
       {banner && <div className="pdf-viewer-banner-wrap">{banner}</div>}
       <main className="pdf-viewer-main">

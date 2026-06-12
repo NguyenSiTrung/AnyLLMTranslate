@@ -25,6 +25,9 @@ export interface UseSynchronizedScrollOptions {
  * same *fraction* of content is shown in both panes.
  */
 function mirrorScrollTop(source: HTMLElement, target: HTMLElement): number {
+  if (source.scrollHeight === target.scrollHeight) {
+    return source.scrollTop;
+  }
   const sourceMax = source.scrollHeight - source.clientHeight;
   const targetMax = target.scrollHeight - target.clientHeight;
   if (sourceMax <= 0 || targetMax <= 0) return source.scrollTop;
