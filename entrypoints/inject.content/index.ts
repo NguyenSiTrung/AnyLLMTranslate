@@ -48,12 +48,27 @@ export default defineContentScript({
     xhrInterceptor.enable();
     fetchInterceptor.enable();
 
-    // Tear down interceptors on page unload so prototype patches are restored
-    // and do not linger on bfcache restore or fast SPA teardown.
-    window.addEventListener('pagehide', () => {
+    // Handle BFCache lifecycle: disable interceptors when page goes into BFCache,
+    // re-enable when it's restored. Non-persisted pagehide means the page is
+    // truly unloading, so we also disable to restore prototypes.
+    window.addEventListener('pagehide', (event: PageTransitionEvent) => {
       xhrInterceptor.disable();
       fetchInterceptor.disable();
-    }, { once: true });
+      if (!event.persisted) {
+        // True unload — no further action needed
+        return;
+      }
+      // BFCache freeze — interceptors will be re-enabled on pageshow
+    });
+
+    window.addEventListener('pageshow', (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        // Restored from BFCache — re-enable interceptors
+        xhrInterceptor.enable();
+        fetchInterceptor.enable();
+        console.log('[AnyLLMTranslate] Interceptors re-enabled after BFCache restore');
+      }
+    });
 
     console.log('[AnyLLMTranslate] XHR/Fetch interceptors enabled');
 

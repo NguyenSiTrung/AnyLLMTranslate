@@ -332,13 +332,10 @@ export function stopTranslation(): void {
   activeRequests = 0;
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
+  try {
+    chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
+  } catch { /* best-effort */ }
   sendStatusUpdate(); // Broadcast idle state
-
-  // Cleanup subtitle coordinator
-  if (coordinatorCleanup) {
-    coordinatorCleanup();
-    coordinatorCleanup = null;
-  }
 }
 
 /** Toggle translation on/off */
@@ -460,6 +457,22 @@ function setupMessageListener(): void {
         });
       })();
       return true; // async response
+    } else if (message.action === 'startSubtitleTranslation') {
+      // Manual subtitle activation — select preferred track from coordinator
+      import('@/content/subtitleCoordinator').then(({ selectSubtitleTrack, getAvailableTracks }) => {
+        const tracks = getAvailableTracks();
+        if (tracks.length > 0) {
+          // Try to find preferred language track, fall back to first available
+          loadSettings().then((settings) => {
+            const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
+            const preferred = tracks.find((t) => t.language === preferredLang);
+            const trackToSelect = preferred || tracks[0];
+            if (trackToSelect?.url) {
+              selectSubtitleTrack(trackToSelect.language);
+            }
+          });
+        }
+      });
     } else if (message.action === 'getStatus') {
       sendResponse({
         status: computeStatus(),
@@ -518,6 +531,7 @@ export default defineContentScript({
     window.addEventListener('beforeunload', () => {
       flushLruUpdates().catch(() => {});
       chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
+      chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
     });
     console.log('[AnyLLMTranslate] Content script loaded');
   },

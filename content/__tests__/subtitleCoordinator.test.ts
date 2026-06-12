@@ -380,13 +380,14 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
-  it('silently skips when cues.length === 0 — no background call made', async () => {
+  it('passes original content through when cues.length === 0 — no background call made', async () => {
     mockHandler.transformResponse.mockReturnValue([]);
 
+    const body = 'WEBVTT\n\n';
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://udemy.com/sprite-en.vtt',
-        body: 'WEBVTT\n\n',
+        body,
         contentType: 'text/vtt',
         platform: 'udemy',
         originalLanguage: '',
@@ -395,16 +396,20 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
 
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
-    expect(mockSendTranslatedSubtitle).not.toHaveBeenCalled();
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-006',
+      vttContent: body,
+    });
   });
 
-  it('returns early when getHandlerByPlatform returns null', async () => {
+  it('passes original content through when getHandlerByPlatform returns null', async () => {
     mockGetHandlerByPlatform.mockReturnValue(null);
 
+    const body = '...';
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://netflix.com/subtitles',
-        body: '...',
+        body,
         contentType: 'text/vtt',
         platform: 'netflix',
         originalLanguage: '',
@@ -413,7 +418,10 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
 
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
-    expect(mockSendTranslatedSubtitle).not.toHaveBeenCalled();
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-007',
+      vttContent: body,
+    });
   });
 
   it('logs warning and does NOT call updateTranslatedCues on translation error', async () => {
