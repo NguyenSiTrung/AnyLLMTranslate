@@ -45,7 +45,7 @@ interface CoordinatorState {
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
-  interceptTimeout: 30000, // Default; overridden by loadSettings() on each interception
+  interceptTimeout: 30000, // Reserved for future use — interceptors manage their own timeouts
   dragCleanup: null,
   availableTracks: [],
   navigationEpoch: 0,
@@ -143,10 +143,16 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     }
 
     const handler = getHandlerByPlatform(platform);
-    if (!handler) return;
+    if (!handler) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
 
     const cues = handler.transformResponse(body, contentType, url);
-    if (cues.length === 0) return;
+    if (cues.length === 0) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
 
     // Immediately activate overlay fallback to handle progressive chunks
     if (!state.isOverlayMode) {
@@ -737,26 +743,31 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
  */
 function startVideoPlaybackWatcher(): () => void {
   const watchedVideos = new WeakSet<HTMLVideoElement>();
+  /** Store references to remove listeners on cleanup */
+  const listenerMap = new Map<HTMLVideoElement, { play: () => void; pause: () => void }>();
 
   const attachPlayListener = (video: HTMLVideoElement) => {
     if (watchedVideos.has(video)) return;
     watchedVideos.add(video);
 
-    video.addEventListener('play', () => {
-      if (state.videoIsPlaying) return; // already handled
+    const playHandler = () => {
+      if (state.videoIsPlaying) return;
       state.videoIsPlaying = true;
       console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
       const epoch = state.navigationEpoch;
       tryAutoActivate(epoch).catch((err) => {
         console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
       });
-    });
+    };
 
-    // Reset flag when the video stops so re-play re-triggers correctly
-    video.addEventListener('pause', () => {
+    const pauseHandler = () => {
       // Don't reset here — a brief pause shouldn't lose the "playing" state.
       // Only SPA navigation (resetCoordinatorState) should clear it.
-    });
+    };
+
+    video.addEventListener('play', playHandler);
+    video.addEventListener('pause', pauseHandler);
+    listenerMap.set(video, { play: playHandler, pause: pauseHandler });
   };
 
   const scanForVideos = () => {
@@ -779,6 +790,12 @@ function startVideoPlaybackWatcher(): () => void {
 
   return () => {
     observer.disconnect();
+    // Remove all play/pause listeners on cleanup
+    for (const [video, handlers] of listenerMap) {
+      video.removeEventListener('play', handlers.play);
+      video.removeEventListener('pause', handlers.pause);
+    }
+    listenerMap.clear();
   };
 }
 
