@@ -105,6 +105,8 @@ export function usePdfPageTranslations({
   rootMargin = '200px 0px',
 }: UsePdfPageTranslationsOptions): UsePdfPageTranslationsResult {
   const [pages, setPages] = useState<Map<number, PageTranslations>>(new Map());
+  const pagesRef = useRef(pages);
+  useEffect(() => { pagesRef.current = pages; }, [pages]);
   // Stable per-page translator references so retry triggers re-extract the same page
   const inFlightRef = useRef<Set<number>>(new Set());
 
@@ -133,7 +135,7 @@ export function usePdfPageTranslations({
           if (inFlightRef.current.has(pageNumber)) continue;
 
           // Already in a terminal state? Skip — no need to re-translate
-          const existing = pages.get(pageNumber);
+          const existing = pagesRef.current.get(pageNumber);
           if (existing && (existing.state === 'translated' || existing.state === 'translating')) continue;
 
           inFlightRef.current.add(pageNumber);
@@ -178,7 +180,7 @@ export function usePdfPageTranslations({
     return () => {
       observer.disconnect();
     };
-  }, [pdfPages, pdfUrl, containerRef, rootMargin, pages]);
+  }, [pdfPages, pdfUrl, containerRef, rootMargin]);
 
   const translatedCount = Array.from(pages.values()).filter((p) => p.state === 'translated').length;
 

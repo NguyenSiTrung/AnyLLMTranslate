@@ -15,7 +15,7 @@
 
 import type { ExtensionMessage, TranslationResultItem } from '@/types/messages';
 import { loadSettings } from '@/lib/config';
-import { getCachedTranslation, cacheTranslation } from '@/services/cacheManager';
+import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
@@ -106,54 +106,27 @@ export async function translateParagraphs(
   const sourceLanguage = settings.sourceLanguage;
   const targetLanguage = settings.targetLanguage;
 
-  // Cache check first
-  const cached: TranslationResultItem[] = [];
-  const uncached: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
-  for (const item of paragraphs) {
-    const cachedText = await getCachedTranslation(
-      item.paragraph.text,
-      sourceLanguage,
-      targetLanguage,
-      settings.cacheTTLDays,
-    );
-    if (cachedText !== null) {
-      cached.push({ id: item.paragraph.id, translatedText: cachedText });
-    } else {
-      uncached.push({ pageNumber: item.pageNumber, paragraph: item.paragraph });
-    }
-  }
-
-  if (uncached.length === 0) {
-    return cached;
-  }
-
-  const batches = splitIntoBatches(uncached, settings.maxBatchChars);
-  const fresh: TranslationResultItem[] = [];
-  for (const batch of batches) {
-    fresh.push(...await sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage));
-  }
+  const batches = splitIntoBatches(paragraphs, settings.maxBatchChars);
+  const batchResults = await Promise.all(
+    batches.map((batch) => sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage)),
+  );
+  const results = batchResults.flat();
 
   // Write-through cache for fresh results so subsequent visits are instant
-  const sourceById = new Map(uncached.map((item) => [item.paragraph.id, item.paragraph.text]));
-  for (const { id, translatedText } of fresh) {
+  const sourceById = new Map(paragraphs.map((item) => [item.paragraph.id, item.paragraph.text]));
+  for (const { id, translatedText } of results) {
     const source = sourceById.get(id);
     if (source) {
       await cacheTranslation(source, translatedText, sourceLanguage, targetLanguage);
     }
   }
 
-  const translations = new Map<string, string>();
-  for (const result of [...cached, ...fresh]) {
-    translations.set(result.id, result.translatedText);
-  }
-  return paragraphs
-    .map(({ paragraph }) => {
-      if (!translations.has(paragraph.id)) return null;
-      const translatedText = translations.get(paragraph.id);
-      return { id: paragraph.id, translatedText: translatedText ?? '' };
-    })
-    .filter((result): result is TranslationResultItem => result !== null);
+  return results;
 }
+
+/** Maximum number of document entries kept in the in-memory cache.
+ *  When exceeded, the oldest entry (FIFO by insertion order) is evicted. */
+export const MAX_CACHED_DOCUMENTS = 10;
 
 /** In-memory cache so re-translation of the same page is instant.
  *  Key: `cacheKeyFor(pdfUrl, source, target)` -> map of `page-N` -> paragraph translations. */
@@ -186,6 +159,13 @@ export function setMemoryCachedPage(
   if (!doc) {
     doc = new Map<string, Map<string, string>>();
     memoryCache.set(key, doc);
+    // Evict oldest document if over limit
+    if (memoryCache.size > MAX_CACHED_DOCUMENTS) {
+      const oldest = memoryCache.keys().next().value;
+      if (oldest !== undefined) {
+        memoryCache.delete(oldest);
+      }
+    }
   }
   doc.set(`page-${pageNumber}`, new Map(paragraphs));
 }

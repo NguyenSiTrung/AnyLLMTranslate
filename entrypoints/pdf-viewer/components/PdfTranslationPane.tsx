@@ -101,7 +101,7 @@ export function PdfTranslationPane({
   if (page.state === 'error') {
     return <ErrorState pageNumber={pageNumber} error={page.error} onRetry={onRetry} />;
   }
-  if (paragraphCount === 0) {
+  if (page.state === 'translated' && page.paragraphs.size === 0) {
     return <EmptyState pageNumber={pageNumber} />;
   }
   return (

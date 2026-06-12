@@ -17,7 +17,7 @@ import { PdfTranslationPane } from './components/PdfTranslationPane';
 import { FilePermissionGuide } from './components/FilePermissionGuide';
 import { usePdfDocument } from './hooks/usePdfDocument';
 import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
-import { extractAllPagesText } from './lib/pdfTextExtraction';
+
 
 /** Extract a PDF URL from the `?file=` query parameter */
 function getPdfUrlFromQuery(): string | null {
@@ -53,26 +53,7 @@ export default function App(): ReactElement {
     containerRef: rightContainerRef,
   });
 
-  // We also need per-page paragraph counts to size the loading skeletons.
-  // Compute these lazily via a memo-style state — extraction is cheap (PDF.js
-  // already parses the text once) and we can reuse it for the right pane.
-  const [paragraphCounts, setParagraphCounts] = useState<Map<number, number>>(new Map());
-  useEffect(() => {
-    if (loadState !== 'loaded' || pages.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      const extracted = await extractAllPagesText(pages);
-      if (cancelled) return;
-      const counts = new Map<number, number>();
-      for (const { pageNumber, paragraphs } of extracted) {
-        counts.set(pageNumber, paragraphs.length);
-      }
-      setParagraphCounts(counts);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadState, pages]);
+
 
   const isFile = pdfUrl ? isFileScheme(pdfUrl) : false;
   const fileName = pdfUrl ? (() => {
@@ -98,7 +79,7 @@ export default function App(): ReactElement {
         {pages.map((_, idx) => {
           const pageNumber = idx + 1;
           const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
-          const count = paragraphCounts.get(pageNumber) ?? 0;
+          const count = 0;
           return (
             <div key={`translation-${pageNumber}`} data-page-slot={pageNumber}>
               <PdfTranslationPane
