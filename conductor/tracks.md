@@ -51,4 +51,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-(none)
+- [ ] **PDF Layout and Scroll Synchronization** (`pdf-layout-scroll-sync_20260612`) — *High priority*. [View](./conductor/tracks/pdf-layout-scroll-sync_20260612/)

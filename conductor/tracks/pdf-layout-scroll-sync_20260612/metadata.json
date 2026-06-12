@@ -1,0 +1,23 @@
+{
+  "track_id": "pdf-layout-scroll-sync_20260612",
+  "type": "bug",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": 3,
+  "created_at": "2026-06-12T11:26:00Z",
+  "updated_at": "2026-06-12T11:26:00Z",
+  "description": "Fix PDF translation layout and scroll sync issues, including request spamming on mount, symmetrical layout width, progress pill positioning, and smooth 1-to-1 scroll sync.",
+  "beads_epic": "beads_AnyLLMTranslate-i96",
+  "beads_tasks": {
+    "phase1": "beads_AnyLLMTranslate-i96.1",
+    "phase1_task1": "beads_AnyLLMTranslate-i96.1.1",
+    "phase1_task2": "beads_AnyLLMTranslate-i96.1.2",
+    "phase2": "beads_AnyLLMTranslate-i96.2",
+    "phase2_task1": "beads_AnyLLMTranslate-i96.2.1",
+    "phase2_task2": "beads_AnyLLMTranslate-i96.2.2",
+    "phase3": "beads_AnyLLMTranslate-i96.3",
+    "phase3_task1": "beads_AnyLLMTranslate-i96.3.1",
+    "phase3_task2": "beads_AnyLLMTranslate-i96.3.2"
+  }
+}
