@@ -38,6 +38,8 @@ interface CoordinatorState {
   videoIsPlaying: boolean;
   /** Temporary tab-scoped category override from popup */
   categoryOverride: string | undefined;
+  /** Active subtitle session ID — stale chunks with different IDs are dropped */
+  activeSubtitleSessionId: number | null;
 }
 
 const state: CoordinatorState = {
@@ -50,6 +52,7 @@ const state: CoordinatorState = {
   discoverDebounceTimer: null,
   videoIsPlaying: false,
   categoryOverride: undefined,
+  activeSubtitleSessionId: null,
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -184,13 +187,18 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
       hideSubtitleToast();
       showSubtitleToast('Subtitle translation failed.');
       return;
+    }
+
+    // Track the active session so stale chunks from older sessions are dropped
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
     }
 
     // The first chunk comes back immediately in response.cues
@@ -251,10 +259,13 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (response?.success && response.cues) {
       cuesToDisplay = response.cues;
+      if (response.sessionId !== undefined) {
+        state.activeSubtitleSessionId = response.sessionId;
+      }
       hideSubtitleToast();
       showSubtitleToast('Overlay mapped successfully!');
     } else {
@@ -443,6 +454,19 @@ export function startCoordinator(): () => void {
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED' && msg.cues) {
+      // Drop stale chunks from old subtitle sessions
+      const chunkSessionId = (message as { sessionId?: number }).sessionId;
+      if (
+        state.activeSubtitleSessionId !== null &&
+        chunkSessionId !== undefined &&
+        chunkSessionId !== state.activeSubtitleSessionId
+      ) {
+        console.log('AnyLLMTranslate: Dropping stale subtitle chunk', {
+          expected: state.activeSubtitleSessionId,
+          received: chunkSessionId,
+        });
+        return;
+      }
       updateTranslatedCues(msg.cues);
     }
     // Handle popup requesting subtitle track selection
@@ -522,6 +546,7 @@ export function resetCoordinatorState(): void {
   state.navigationEpoch++;
   state.videoIsPlaying = false;
   state.categoryOverride = undefined;
+  state.activeSubtitleSessionId = null;
   if (state.discoverDebounceTimer !== null) {
     clearTimeout(state.discoverDebounceTimer);
     state.discoverDebounceTimer = null;

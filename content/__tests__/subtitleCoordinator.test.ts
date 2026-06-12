@@ -733,3 +733,149 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     );
   });
 });
+
+// ============================================================================
+// Phase 1: Stale subtitle chunk rejection
+// ============================================================================
+
+describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
+  let extensionMessageHandler: (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: () => void,
+  ) => void;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    vi.resetModules();
+
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockOnMessage.mockReturnValue(() => {});
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+
+    // Return sessionId in translateSubtitle response
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES, sessionId: 42 }),
+        onMessage: {
+          addListener: vi.fn((handler: (...args: unknown[]) => void) => {
+            extensionMessageHandler = handler as typeof extensionMessageHandler;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('stores activeSubtitleSessionId after successful interception', async () => {
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-session-1');
+
+    // Verify updateCues was called with the translated cues (session accepted)
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('rejects SUBTITLE_CHUNK_TRANSLATED with stale sessionId', async () => {
+    // First, trigger an interception to establish session 42
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-stale-1');
+
+    // Clear mock to isolate the chunk test
+    mockUpdateCues.mockClear();
+
+    // Simulate a stale chunk arriving with old sessionId (41 instead of 42)
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_TRANSLATED', cues: MOCK_TRANSLATED_CUES, sessionId: 41 },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    // Stale chunk should be dropped — updateCues NOT called
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('accepts SUBTITLE_CHUNK_TRANSLATED with matching sessionId', async () => {
+    // Establish session 42
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-match-1');
+
+    mockUpdateCues.mockClear();
+
+    // Simulate a chunk with matching sessionId
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_TRANSLATED', cues: MOCK_TRANSLATED_CUES, sessionId: 42 },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    // Matching chunk should be accepted — updateCues called
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('accepts chunks when no session has been established yet (backward compat)', async () => {
+    // Establish overlay mode via interception, but mock the response WITHOUT sessionId
+    // to simulate a legacy background that doesn't send sessionId yet
+    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      success: true,
+      cues: MOCK_TRANSLATED_CUES,
+      // no sessionId — simulates legacy background
+    });
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-compat-1');
+
+    // Now overlay mode is active but activeSubtitleSessionId is null
+    mockUpdateCues.mockClear();
+
+    // Legacy chunks without sessionId should still be accepted
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_TRANSLATED', cues: MOCK_TRANSLATED_CUES },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
+});

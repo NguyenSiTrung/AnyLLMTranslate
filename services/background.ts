@@ -28,8 +28,10 @@ import type { ProviderConfig } from '@/types/config';
 interface TranslationSession {
   queue: number[];
   setPriority: (cueIndex: number, chunkSize: number) => void;
+  sessionId: number;
 }
 const activeSessions = new Map<number, TranslationSession>();
+let subtitleSessionCounter = 0;
 
 /** Keep-alive alarm name for MV3 service worker */
 const KEEPALIVE_ALARM = 'sw-keepalive';
@@ -163,8 +165,9 @@ function __getSemaphoreStateForTest(): { active: number; queued: number } {
 }
 
 /** Seed an active subtitle session. Exported for tests. */
-function __seedSubtitleSessionForTest(tabId: number): { queue: number[] } {
-  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {} };
+function __seedSubtitleSessionForTest(tabId: number): { queue: number[]; sessionId: number } {
+  const sid = ++subtitleSessionCounter;
+  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {}, sessionId: sid };
   activeSessions.set(tabId, session);
   return session;
 }
@@ -335,7 +338,8 @@ async function handleTestConnection(): Promise<{ success: boolean; error?: strin
 async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
   sender?: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number }> {
+  const sessionId = ++subtitleSessionCounter;
   await acquireSemaphore();
   try {
     const service = await initService();
@@ -468,7 +472,8 @@ async function handleTranslateSubtitle(
             queue.splice(idx, 1);
             queue.unshift(chunkStart);
           }
-        }
+        },
+        sessionId,
       };
 
       activeSessions.set(tabId, session);
@@ -491,7 +496,8 @@ async function handleTranslateSubtitle(
                  // Send the FULL updated array to tab
                  chrome.tabs.sendMessage(tabId, {
                     action: 'SUBTITLE_CHUNK_TRANSLATED',
-                    cues: translatedCues
+                    cues: translatedCues,
+                    sessionId: session.sessionId,
                  });
                }
             } catch (error) {
@@ -508,7 +514,7 @@ async function handleTranslateSubtitle(
       totalSubtitlesCuesTranslated: cues.length,
     }).catch(() => {});
 
-    return { success: true, cues: translatedCues };
+    return { success: true, cues: translatedCues, sessionId };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
     return { success: false, error: errorMsg };
@@ -780,6 +786,20 @@ export function initEvictionSchedule(): void {
   });
 }
 
+/** Get current subtitle session counter value. Exported for tests. */
+function __getSubtitleSessionCounterForTest(): number {
+  return subtitleSessionCounter;
+}
+
+/** Reset subtitle session counter to 0 and clear all active sessions. Exported for tests. */
+function __resetSubtitleSessionCounterForTest(): void {
+  subtitleSessionCounter = 0;
+  for (const session of activeSessions.values()) {
+    session.queue.length = 0;
+  }
+  activeSessions.clear();
+}
+
 /** Export for testing */
 export {
   initService,
@@ -789,4 +809,6 @@ export {
   __getSemaphoreStateForTest,
   __seedSubtitleSessionForTest,
   __getActiveSessionCountForTest,
+  __getSubtitleSessionCounterForTest,
+  __resetSubtitleSessionCounterForTest,
 };
