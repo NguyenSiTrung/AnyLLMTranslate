@@ -124,8 +124,15 @@ export default function App(): ReactElement {
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
           const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
+          const dims = pageDimensions.get(pageNumber);
+          const heightStyle = dims ? `${dims.height}px` : '960px';
           return (
-            <div key={`translation-${pageNumber}`} data-page-slot={pageNumber}>
+            <div
+              key={`translation-${pageNumber}`}
+              data-page-slot={pageNumber}
+              className="pdf-viewer-page"
+              style={{ minHeight: heightStyle }}
+            >
               <PdfTranslationPane
                 pageNumber={pageNumber}
                 page={translation}
