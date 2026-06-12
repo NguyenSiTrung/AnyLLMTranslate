@@ -14,6 +14,10 @@ export interface PdfCanvasRendererProps {
   page: PDFPageProxy | null;
   /** 1-indexed page number — used to key the canvas so React reuses elements. */
   pageNumber: number;
+  /** Whether the page is currently visible/near viewport. */
+  visible: boolean;
+  /** Pre-computed dimensions for placeholder/canvas container. */
+  dims?: { width: number; height: number };
   /** Optional fixed render width in CSS pixels. Defaults to 720. */
   maxWidth?: number;
   /** Optional fixed device pixel ratio. Defaults to window.devicePixelRatio. */
@@ -35,6 +39,8 @@ function computeScale(page: PDFPageProxy, maxWidth: number, dpr: number): number
 export function PdfCanvasRenderer({
   page,
   pageNumber,
+  visible,
+  dims,
   maxWidth = 720,
   devicePixelRatio,
   onRendered,
@@ -45,7 +51,7 @@ export function PdfCanvasRenderer({
   const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
-    if (!page) return;
+    if (!page || !visible) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -87,22 +93,29 @@ export function PdfCanvasRenderer({
     return () => {
       renderTask.cancel();
     };
-  }, [page, pageNumber, maxWidth, devicePixelRatio, onRendered, onError]);
+  }, [page, visible, pageNumber, maxWidth, devicePixelRatio, onRendered, onError]);
+
+  const widthStyle = dims ? `${dims.width}px` : '720px';
+  const heightStyle = dims ? `${dims.height}px` : '960px';
 
   return (
-    <div className="pdf-viewer-page" data-page-number={pageNumber}>
+    <div
+      className="pdf-viewer-page"
+      data-page-number={pageNumber}
+      style={{ width: widthStyle, height: heightStyle }}
+    >
       {error ? (
         <div className="pdf-viewer-page-translation pdf-viewer-page-translation--error">
           Failed to render page {pageNumber}: {error}
         </div>
-      ) : (
+      ) : visible && page ? (
         <canvas
           ref={canvasRef}
           className="pdf-viewer-page-canvas"
           data-rendered={rendered}
           aria-label={`PDF page ${pageNumber}`}
         />
-      )}
+      ) : null}
     </div>
   );
 }

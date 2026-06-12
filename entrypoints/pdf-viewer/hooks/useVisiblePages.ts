@@ -94,7 +94,7 @@ export function useVisiblePages({
     return () => {
       observer.disconnect();
     };
-  }, [totalPages, containerRef, buffer, rootMargin]);
+  }, [totalPages, containerRef, containerRef.current, buffer, rootMargin]);
 
   return { visiblePages };
 }

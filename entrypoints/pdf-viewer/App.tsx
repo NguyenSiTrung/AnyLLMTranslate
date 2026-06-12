@@ -106,21 +106,14 @@ export default function App(): ReactElement {
           const pageNumber = idx + 1;
           const page = pages[idx] ?? null;
           const dims = pageDimensions.get(pageNumber);
-          if (page && visiblePages.has(pageNumber)) {
-            return (
-              <PdfCanvasRenderer key={`canvas-${pageNumber}`} page={page} pageNumber={pageNumber} />
-            );
-          }
-          // Lightweight placeholder for off-screen or not-yet-loaded pages
+          const isVisible = visiblePages.has(pageNumber);
           return (
-            <div
-              key={`placeholder-${pageNumber}`}
-              className="pdf-viewer-page"
-              data-page-number={pageNumber}
-              style={{
-                width: dims ? `${dims.width}px` : '720px',
-                height: dims ? `${dims.height}px` : '960px',
-              }}
+            <PdfCanvasRenderer
+              key={`page-${pageNumber}`}
+              page={page}
+              pageNumber={pageNumber}
+              visible={isVisible}
+              dims={dims}
             />
           );
         })}
