@@ -5,6 +5,7 @@ This file tracks all major tracks for the project.
 ---
 
 ## Archived Tracks
+
 - ✅ **Codebase Audit Fixes — Hardening** (`audit-fixes_20260503`) — Archived 2026-05-03. [View](./conductor/archive/audit-fixes_20260503/)
 - ✅ **Subtitle Context-Aware & Category Override Integration** (`subtitle-context-aware_20260428`) — Archived 2026-04-28. [View](./conductor/archive/subtitle-context-aware_20260428/)
 - ✅ **AnyLLMTranslate Phase 1 — Foundation** (`phase1-foundation_20260409`) — Archived 2026-04-09. [View](./conductor/archive/phase1-foundation_20260409/)
@@ -53,3 +54,4 @@ This file tracks all major tracks for the project.
 ## Active Tracks
 
 - ⏳ **PDF Layout Preservation** (`pdf-layout-preservation_20260612`) — Active since 2026-06-12. [View](./conductor/tracks/pdf-layout-preservation_20260612/)
+- ⏳ **PDF Translation UX Improvements** (`pdf-translation-ux_20260615`) — New since 2026-06-15. [View](./conductor/tracks/pdf-translation-ux_20260615/)
