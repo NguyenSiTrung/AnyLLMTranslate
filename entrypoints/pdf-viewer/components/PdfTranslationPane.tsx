@@ -283,6 +283,7 @@ export function PdfTranslationPane({
           pageNumber={pageNumber}
           visible={visible ?? false}
           dims={dims}
+          enableTextLayer={false}
         />
         {page.state === 'idle' && (
           <OriginalLayoutStatusOverlay pageNumber={pageNumber} state="idle" dims={dims} />

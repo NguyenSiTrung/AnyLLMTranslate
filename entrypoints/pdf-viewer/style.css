@@ -148,6 +148,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
   margin: 0 auto 24px;
   max-width: 100%;
 }
@@ -162,6 +163,31 @@ html, body, #root {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
   max-width: 100%;
   height: auto;
+}
+
+.pdf-viewer-text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  user-select: text;
+  pointer-events: auto;
+  transform-origin: 0 0;
+}
+
+.pdf-viewer-text-layer span,
+.pdf-viewer-text-layer br {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.pdf-viewer-text-layer ::selection {
+  background: rgba(59, 130, 246, 0.35);
 }
 
 .pdf-viewer-page-translation {

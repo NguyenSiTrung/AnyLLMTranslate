@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import type { PDFPageProxy } from 'pdfjs-dist';
+import { TextLayer, type PDFPageProxy } from 'pdfjs-dist';
 
 export interface PdfCanvasRendererProps {
   /** The PDF page to render. When `null`, the renderer waits. */
@@ -22,6 +22,8 @@ export interface PdfCanvasRendererProps {
   maxWidth?: number;
   /** Optional fixed device pixel ratio. Defaults to window.devicePixelRatio. */
   devicePixelRatio?: number;
+  /** Whether to render a selectable text layer over the canvas. Defaults to true. */
+  enableTextLayer?: boolean;
   /** Fired once the canvas finishes rendering for this page. */
   onRendered?: (pageNumber: number) => void;
   /** Fired on render error. */
@@ -43,10 +45,12 @@ export function PdfCanvasRenderer({
   dims,
   maxWidth = 720,
   devicePixelRatio,
+  enableTextLayer = true,
   onRendered,
   onError,
 }: PdfCanvasRendererProps): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
 
@@ -54,10 +58,12 @@ export function PdfCanvasRenderer({
     if (!page || !visible) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const textLayerDiv = enableTextLayer ? textLayerRef.current : null;
 
     const dpr = devicePixelRatio ?? window.devicePixelRatio ?? 1;
     const scale = computeScale(page, maxWidth, dpr);
     const viewport = page.getViewport({ scale });
+    const textViewport = page.getViewport({ scale: scale / dpr });
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -72,10 +78,37 @@ export function PdfCanvasRenderer({
     canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
     canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
 
+    if (textLayerDiv) {
+      textLayerDiv.style.width = `${Math.floor(textViewport.width)}px`;
+      textLayerDiv.style.height = `${Math.floor(textViewport.height)}px`;
+      textLayerDiv.style.setProperty('--scale-factor', String(textViewport.scale ?? scale / dpr));
+      textLayerDiv.replaceChildren();
+    }
+
     setError(null);
     setRendered(false);
 
     const renderTask = page.render({ canvasContext: ctx, viewport, intent: 'display' });
+    let cancelled = false;
+    let textLayer: TextLayer | null = null;
+
+    if (textLayerDiv) {
+      void page
+        .getTextContent()
+        .then((textContent) => {
+          if (cancelled) return;
+          textLayer = new TextLayer({
+            textContentSource: textContent,
+            container: textLayerDiv,
+            viewport: textViewport,
+          });
+          return textLayer.render();
+        })
+        .catch((textLayerErr: unknown) => {
+          if (cancelled) return;
+          if (textLayerErr instanceof Error && textLayerErr.message.includes('cancelled')) return;
+        });
+    }
 
     renderTask.promise
       .then(() => {
@@ -91,9 +124,11 @@ export function PdfCanvasRenderer({
       });
 
     return () => {
+      cancelled = true;
       renderTask.cancel();
+      textLayer?.cancel();
     };
-  }, [page, visible, pageNumber, maxWidth, devicePixelRatio, onRendered, onError]);
+  }, [page, visible, pageNumber, maxWidth, devicePixelRatio, enableTextLayer, onRendered, onError]);
 
   const widthStyle = dims ? `${dims.width}px` : '720px';
   const heightStyle = dims ? `${dims.height}px` : '960px';
@@ -109,12 +144,21 @@ export function PdfCanvasRenderer({
           Failed to render page {pageNumber}: {error}
         </div>
       ) : visible && page ? (
-        <canvas
-          ref={canvasRef}
-          className="pdf-viewer-page-canvas"
-          data-rendered={rendered}
-          aria-label={`PDF page ${pageNumber}`}
-        />
+        <>
+          <canvas
+            ref={canvasRef}
+            className="pdf-viewer-page-canvas"
+            data-rendered={rendered}
+            aria-label={`PDF page ${pageNumber}`}
+          />
+          {enableTextLayer && (
+            <div
+              ref={textLayerRef}
+              className="pdf-viewer-text-layer textLayer"
+              aria-label={`Selectable text for PDF page ${pageNumber}`}
+            />
+          )}
+        </>
       ) : null}
     </div>
   );
