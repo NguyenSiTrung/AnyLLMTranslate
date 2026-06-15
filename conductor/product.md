@@ -133,8 +133,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **PDF Layout and Scroll Synchronization** (Archived 2026-06-12): Constrained translation slot widths symmetrically to match original page dimensions, moved the translation progress indicator pill into the persistent header, and simplified scroll synchronization to perform direct 1-to-1 mirroring when page heights match.
 
 ### Current State
-- 947 tests passing across 74 files. Build passing (`wxt build` ✅, ~2.56 MB). 0 lint errors.
-- **No active tracks.** All 39 tracks completed and archived.
+- 958 tests passing across 76 files. Build passing (`wxt build` ✅, ~2.6 MB). 0 lint errors.
+- **No active tracks.** All 41 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

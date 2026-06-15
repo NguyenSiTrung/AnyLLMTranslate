@@ -382,5 +382,5 @@ Reusable patterns discovered during development. Read this before starting new w
 - **PDF viewer scoped styling**: Keep PDF viewer-specific styles (layout overlays, popovers, clipping badges) inside `entrypoints/pdf-viewer/style.css` to avoid polluting extension-wide or host-page CSS. (from: pdf-translation-ux_20260615, archived 2026-06-15)
 
 ---
-Last refreshed: 2026-06-15T15:30:00+07:00
-Codebase health: 958 tests passing across 76 files, build ~2.57MB, 0 lint errors, 40 tracks archived, 0 active tracks
+Last refreshed: 2026-06-15T18:05:00+07:00
+Codebase health: 958 tests passing across 76 files, build ~2.6MB, 0 lint errors, 41 tracks archived, 0 active tracks

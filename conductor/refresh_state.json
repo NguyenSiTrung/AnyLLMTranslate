@@ -1,23 +1,18 @@
 {
-  "lastRefresh": "2026-06-12T17:54:00+07:00",
+  "lastRefresh": "2026-06-15T18:05:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Added PDF Translation to Key Features section",
-    "product.md: Added PDF Translation Support and PDF Viewer Performance Overhaul to Implementation Status",
-    "product.md: Updated Current State metrics (947 tests / 74 files / 2.56 MB / 38 tracks)",
-    "product.md: Removed 'PDF translation' from Out of Scope",
-    "tech-stack.md: Added pdfjs-dist 4.x dependency",
-    "tech-stack.md: Added 'Why a bundled PDF.js viewer?' architecture decision",
-    "tracks.md: Consolidated duplicate 'Archived Tracks' headers into single section",
-    "patterns.md: Updated last-refreshed timestamp and track count (37→38)",
-    "beads: Closed 13 stale open tasks (7 c5y perf-overhaul children + 6 0la PDF translation children + epic)"
+    "product.md: Updated Current State metrics (958 tests / 76 files / 2.6 MB / 41 tracks)",
+    "product.md: Updated 'No active tracks' line (39 → 41 archived)",
+    "patterns.md: Updated last-refreshed timestamp and track count (40 → 41)",
+    "beads: Closed 20 stale open tasks (e34 epic + 4 children + 13 grandchildren + i96.3.2 from archived tracks pdf-translation-ux_20260615 and pdf-layout-scroll-sync_20260612)"
   ],
   "codebaseHealth": {
-    "tests": 947,
-    "testFiles": 74,
-    "buildSize": "2.56 MB",
+    "tests": 958,
+    "testFiles": 76,
+    "buildSize": "2.6 MB",
     "lintErrors": 0,
-    "archivedTracks": 38,
+    "archivedTracks": 41,
     "activeTracks": 0
   }
 }
