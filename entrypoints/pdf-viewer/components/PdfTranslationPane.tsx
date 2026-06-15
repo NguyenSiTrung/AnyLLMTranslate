@@ -4,8 +4,10 @@
  */
 
 import type { PageTranslations } from '../lib/pdfTranslation';
+import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
+import { useEffect, useRef, useState } from 'react';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -16,7 +18,7 @@ export interface PdfTranslationPaneProps {
   paragraphCount: number;
   /** Fired when the user clicks "Retry translation" on an error. */
   onRetry?: (pageNumber: number) => void;
-  /** Current layout mode: 'original' overlay or 'text' flow. */
+  /** Current layout mode: 'original' overlay (visual reference) or 'text' flow (default reading). */
   layoutMode?: 'original' | 'text';
   /** PDF page proxy for rendering canvas background. */
   pdfPage?: PDFPageProxy | null;
@@ -109,6 +111,112 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
   );
 }
 
+/** Estimate whether the translated text likely overflows its original box. */
+function isLikelyClipped(
+  translatedText: string,
+  widthCss: number,
+  heightCss: number,
+  fontSizeCss: number,
+): boolean {
+  if (widthCss <= 0 || heightCss <= 0 || fontSizeCss <= 0) return false;
+  // Approximate average character width as 60% of font size; line height 1.25em
+  const avgCharWidth = fontSizeCss * 0.6;
+  const lineHeight = fontSizeCss * 1.25;
+  const charsPerLine = Math.max(1, Math.floor(widthCss / avgCharWidth));
+  const estimatedLines = Math.ceil(translatedText.length / charsPerLine);
+  const estimatedHeight = estimatedLines * lineHeight;
+  // Treat as clipped when the estimated rendered height exceeds the box by >20%
+  return estimatedHeight > heightCss * 1.2;
+}
+
+function LayoutParagraphBox({
+  para,
+  translatedText,
+  viewport,
+  activeId,
+  onActivate,
+}: {
+  para: PdfParagraph;
+  translatedText: string;
+  viewport: { scale: number; convertToViewportPoint: (x: number, y: number) => [number, number] | number[] };
+  activeId: string | null;
+  onActivate: (id: string) => void;
+}): React.ReactElement {
+  const [left, top] = viewport.convertToViewportPoint(para.x, para.y);
+  const widthCss = para.width * viewport.scale;
+  const heightCss = para.height * viewport.scale;
+
+  const originalLen = para.text.length;
+  const translatedLen = translatedText.length;
+  const isSingleLine = para.height <= para.fontSize * 1.5;
+
+  // Apply a safety margin for font size scaling, particularly on single-line text blocks
+  const lengthRatio = translatedLen > 0 ? originalLen / translatedLen : 1;
+  const safetyMargin = isSingleLine ? 0.82 : 0.95;
+  const scaleFactor = Math.max(0.4, Math.min(1.0, lengthRatio * safetyMargin));
+  const originalFontSizeCss = para.fontSize * viewport.scale;
+  const computedFontSize = Math.max(7.5, originalFontSizeCss * scaleFactor);
+
+  const clipped = isLikelyClipped(translatedText, widthCss, heightCss, computedFontSize);
+  const isOpen = activeId === para.id;
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  const handleClick = (): void => {
+    if (!clipped) return;
+    onActivate(para.id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    if (!clipped) return;
+    onActivate(para.id);
+  };
+
+  return (
+    <div
+      ref={boxRef}
+      key={para.id}
+      role="button"
+      tabIndex={clipped ? 0 : -1}
+      aria-label={clipped ? 'Translation clipped. Press Enter to read full text.' : undefined}
+      aria-expanded={isOpen}
+      className={`pdf-viewer-layout-para-box ${clipped ? 'pdf-viewer-layout-para-box--clipped' : ''}`}
+      style={{
+        position: 'absolute',
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${widthCss}px`,
+        height: `${heightCss}px`,
+        fontSize: `${computedFontSize}px`,
+        whiteSpace: isSingleLine ? 'nowrap' : 'normal',
+      }}
+      title={para.text}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+    >
+      <div style={{ width: '100%', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+        {translatedText}
+      </div>
+      {clipped && !isOpen && (
+        <span className="pdf-viewer-layout-clipped-badge" aria-hidden="true">
+          ···
+        </span>
+      )}
+      {isOpen && (
+        <div
+          className="pdf-viewer-layout-popover"
+          role="dialog"
+          aria-label="Full translation"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="pdf-viewer-layout-popover-text">{translatedText}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OriginalLayoutOverlay({
   page,
   pdfPage,
@@ -125,9 +233,33 @@ function OriginalLayoutOverlay({
   const viewport = pdfPage.getViewport({ scale });
 
   const originalParagraphs = page.originalParagraphs ?? [];
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const handleEscape = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setActiveId(null);
+      }
+    };
+    const handleClickOutside = (e: MouseEvent): void => {
+      const target = e.target as Node;
+      if (popoverRef.current && !popoverRef.current.contains(target)) {
+        setActiveId(null);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeId]);
 
   return (
     <div
+      ref={popoverRef}
       className="pdf-viewer-overlay-container"
       style={{
         position: 'absolute',
@@ -142,40 +274,15 @@ function OriginalLayoutOverlay({
         const translatedText = page.paragraphs.get(para.id);
         if (!translatedText) return null;
 
-        const [left, top] = viewport.convertToViewportPoint(para.x, para.y);
-        const widthCss = para.width * viewport.scale;
-        const heightCss = para.height * viewport.scale;
-
-        const originalLen = para.text.length;
-        const translatedLen = translatedText.length;
-        const isSingleLine = para.height <= para.fontSize * 1.5;
-
-        // Apply a safety margin for font size scaling, particularly on single-line text blocks
-        const lengthRatio = translatedLen > 0 ? originalLen / translatedLen : 1;
-        const safetyMargin = isSingleLine ? 0.82 : 0.95;
-        const scaleFactor = Math.max(0.4, Math.min(1.0, lengthRatio * safetyMargin));
-        const originalFontSizeCss = para.fontSize * viewport.scale;
-        const computedFontSize = Math.max(7.5, originalFontSizeCss * scaleFactor);
-
         return (
-          <div
+          <LayoutParagraphBox
             key={para.id}
-            className="pdf-viewer-layout-para-box"
-            style={{
-              position: 'absolute',
-              left: `${left}px`,
-              top: `${top}px`,
-              width: `${widthCss}px`,
-              height: `${heightCss}px`,
-              fontSize: `${computedFontSize}px`,
-              whiteSpace: isSingleLine ? 'nowrap' : 'normal',
-            }}
-            title={para.text}
-          >
-            <div style={{ width: '100%', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-              {translatedText}
-            </div>
-          </div>
+            para={para}
+            translatedText={translatedText}
+            viewport={viewport}
+            activeId={activeId}
+            onActivate={setActiveId}
+          />
         );
       })}
     </div>
@@ -267,7 +374,7 @@ export function PdfTranslationPane({
   page,
   paragraphCount,
   onRetry,
-  layoutMode = 'original',
+  layoutMode = 'text',
   pdfPage,
   visible,
   dims,

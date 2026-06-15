@@ -42,7 +42,7 @@ function isFileScheme(url: string): boolean {
 
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('original');
+  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('text');
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -166,11 +166,13 @@ export default function App(): ReactElement {
         }
         headerExtra={
           <div className="pdf-viewer-header-controls">
-            <div className="pdf-viewer-toggle-group">
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation view mode">
               <button
                 type="button"
                 className={`pdf-viewer-toggle-btn ${layoutMode === 'original' ? 'pdf-viewer-toggle-btn--active' : ''}`}
                 onClick={() => setLayoutMode('original')}
+                aria-pressed={layoutMode === 'original'}
+                title="Preserves the original PDF visual structure. Longer translations may be clipped."
               >
                 Layout
               </button>
@@ -178,6 +180,8 @@ export default function App(): ReactElement {
                 type="button"
                 className={`pdf-viewer-toggle-btn ${layoutMode === 'text' ? 'pdf-viewer-toggle-btn--active' : ''}`}
                 onClick={() => setLayoutMode('text')}
+                aria-pressed={layoutMode === 'text'}
+                title="Recommended for reading: translated text flows naturally."
               >
                 Text
               </button>

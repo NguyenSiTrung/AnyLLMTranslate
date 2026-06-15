@@ -41,15 +41,15 @@ This track improves the PDF translation reading experience for target languages 
 
 ## Acceptance Criteria
 
-- [ ] The PDF viewer opens with the right translation pane in `Text` mode by default.
-- [ ] Users can still switch to `Layout` mode from the header toggle.
-- [ ] Layout mode no longer requires hover to access full translated content.
-- [ ] Clipped or likely clipped layout blocks expose a visible full-text affordance.
-- [ ] Full translation popovers work with mouse, keyboard, and touch.
-- [ ] `Escape` dismisses an open layout translation popover.
-- [ ] Existing PDF virtualization and synchronized scrolling behavior remain intact.
-- [ ] Relevant unit/component tests cover default mode and layout full-text access behavior.
-- [ ] Project validators pass: tests, lint, and typecheck.
+- [x] The PDF viewer opens with the right translation pane in `Text` mode by default.
+- [x] Users can still switch to `Layout` mode from the header toggle.
+- [x] Layout mode no longer requires hover to access full translated content.
+- [x] Clipped or likely clipped layout blocks expose a visible full-text affordance.
+- [x] Full translation popovers work with mouse, keyboard, and touch.
+- [x] `Escape` dismisses an open layout translation popover.
+- [x] Existing PDF virtualization and synchronized scrolling behavior remain intact.
+- [x] Relevant unit/component tests cover default mode and layout full-text access behavior.
+- [x] Project validators pass: tests, lint, and typecheck.
 
 ## Out of Scope
 
