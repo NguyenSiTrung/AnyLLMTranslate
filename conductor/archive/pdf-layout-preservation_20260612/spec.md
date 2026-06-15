@@ -32,8 +32,8 @@ This track implements the ability to render translated PDF text within its origi
      - For states other than `'translated'` (e.g., `'translating'`, `'error'`), render a floating overlay pill or card on top of the canvas to display the status and action buttons (e.g., retry).
 
 ## Acceptance Criteria
-- [ ] Users can toggle layout mode between `Layout` and `Text` via a toggle pill in the header.
-- [ ] In `Layout` mode, the right pane renders the canvas background showing all original images/tables.
-- [ ] Original text is successfully hidden/masked under the white absolute translation boxes.
-- [ ] Translated text displays at the correct positions with appropriate font-size scaling.
-- [ ] All 900+ tests pass, including new tests for text extraction coordinates.
+- [x] Users can toggle layout mode between `Layout` and `Text` via a toggle pill in the header.
+- [x] In `Layout` mode, the right pane renders the canvas background showing all original images/tables.
+- [x] Original text is successfully hidden/masked under the white absolute translation boxes.
+- [x] Translated text displays at the correct positions with appropriate font-size scaling.
+- [x] All 900+ tests pass, including new tests for text extraction coordinates.

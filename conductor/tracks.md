@@ -48,10 +48,11 @@ This file tracks all major tracks for the project.
 - ✅ **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
 - ✅ **PDF Viewer Performance Overhaul** (`pdf-perf-overhaul_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-perf-overhaul_20260612/)
 - ✅ **PDF Layout and Scroll Synchronization** (`pdf-layout-scroll-sync_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-layout-scroll-sync_20260612/)
+- ✅ **PDF Layout Preservation** (`pdf-layout-preservation_20260612`) — Archived 2026-06-15. [View](./conductor/archive/pdf-layout-preservation_20260612/)
+- ✅ **PDF Translation UX Improvements** (`pdf-translation-ux_20260615`) — Archived 2026-06-15. [View](./conductor/archive/pdf-translation-ux_20260615/)
 
 ---
 
 ## Active Tracks
 
-- ⏳ **PDF Layout Preservation** (`pdf-layout-preservation_20260612`) — Active since 2026-06-12. [View](./conductor/tracks/pdf-layout-preservation_20260612/)
-- ⏳ **PDF Translation UX Improvements** (`pdf-translation-ux_20260615`) — New since 2026-06-15. [View](./conductor/tracks/pdf-translation-ux_20260615/)
+_No active tracks._
