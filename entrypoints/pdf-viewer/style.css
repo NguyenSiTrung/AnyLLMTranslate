@@ -428,6 +428,12 @@ html, body, #root {
 /* Layout Overlay — translated text boxes positioned over the original canvas */
 .pdf-viewer-layout-pane {
   position: relative;
+  background: #ffffff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.pdf-viewer-layout-pane .pdf-viewer-page-canvas {
+  box-shadow: none;
 }
 
 .pdf-viewer-layout-para-mask {
