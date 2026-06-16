@@ -26,7 +26,7 @@ export interface PdfTranslationPaneProps {
   paragraphCount: number;
   /** Fired when the user clicks "Retry translation" on an error. */
   onRetry?: (pageNumber: number) => void;
-  /** Current layout mode: 'original' overlay (visual reference) or 'text' flow (default reading). */
+  /** Current layout mode: 'original' overlay (default, visual reference) or 'text' flow (plain reading). */
   layoutMode?: 'original' | 'text';
   /** PDF page proxy for rendering the canvas background + box geometry. */
   pdfPage?: PDFPageProxy | null;

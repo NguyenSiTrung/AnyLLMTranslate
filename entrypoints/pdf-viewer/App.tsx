@@ -42,7 +42,7 @@ function isFileScheme(url: string): boolean {
 
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('text');
+  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('original');
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
