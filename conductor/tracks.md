@@ -56,4 +56,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_No active tracks. All 42 tracks completed and archived._ [Spec](./conductor/tracks/pdf-elastic-overlay_20260616/spec.md) · [Plan](./conductor/tracks/pdf-elastic-overlay_20260616/plan.md) · [Learnings](./conductor/tracks/pdf-elastic-overlay_20260616/learnings.md)
+_No active tracks. All 42 tracks completed and archived._
