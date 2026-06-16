@@ -207,6 +207,29 @@ describe('PdfTranslationPane layout overlay rendering', () => {
     ]);
   });
 
+  it('shifts subsequent boxes down when a translation is longer than the original', async () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        ['1-0', 'Đây là một đoạn văn bản dịch dài hơn nhiều so với bản gốc.'],
+        ['1-1', 'Second box.'],
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Short.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'Second.', fontSize: 12, isHeading: false, x: 50, y: 100, width: 100, height: 14 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+    const boxes = getLayoutBoxes();
+    expect(boxes.length).toBe(2);
+    // First box stays at its original position.
+    expect(boxes[0].style.top).toBe('50px');
+    // Second box is pushed below the first box's estimated bottom rather than
+    // overlapping at its original 100px position.
+    expect(parseInt(boxes[1].style.top, 10)).toBeGreaterThan(100);
+  });
+
   it('renders no clipped badge, popover, or clipped modifier', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();

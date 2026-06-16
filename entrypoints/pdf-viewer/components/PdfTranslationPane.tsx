@@ -135,7 +135,8 @@ function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): n
   const lineHeight = fontSizePx * 1.45;
   const charsPerLine = Math.max(1, Math.floor(effectiveWidth / avgCharWidth));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  return lines * lineHeight;
+  // Account for vertical padding (1px * 2) + border (1px * 2) in the overlay box.
+  return lines * lineHeight + 4;
 }
 
 /** Compute the absolute placement + sizing for one overlay box. */
@@ -189,7 +190,10 @@ function LayoutOverlayBox({
 /**
  * Layout overlay — renders the original page canvas (images/tables/blocks
  * visible) with translated text boxes overlaid at their original positions.
- * The container grows to fit the tallest box so pages never collide.
+ * Boxes keep their original horizontal placement and reading order, but each
+ * box is pushed downward if the previous translation would overlap it, so
+ * long translations never collide. The container grows to fit the reflowed
+ * content so the next page is pushed down instead of overlapping.
  */
 function LayoutOverlay({
   page,
@@ -207,28 +211,44 @@ function LayoutOverlay({
   const viewport = pdfPage.getViewport({ scale });
   const originalParagraphs = page.originalParagraphs ?? [];
 
-  // Compute every box's geometry and the slot height needed to avoid collisions.
+  // Compute every box's geometry and estimated height for reflow.
   const boxes = originalParagraphs
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
-      return { para, translatedText, ...geom };
+      const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
+      return { para, translatedText, ...geom, estHeight };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
-  let maxBottom = dims.height;
+  // Ensure reflow follows visual reading order even if the input order drifts.
+  boxes.sort((a, b) => {
+    const dy = a.top - b.top;
+    if (Math.abs(dy) > 2) return dy;
+    return a.left - b.left;
+  });
+
+  // Reflow vertically: keep original x/width, but shift each box down if the
+  // previous one would overlap it. This prevents long translations from covering
+  // the next paragraph while preserving the original horizontal structure.
+  const BOX_GAP = 4;
+  const reflowedBoxes: Array<NonNullable<typeof boxes[number]>> = [];
+  let cursorBottom = 0;
   for (const b of boxes) {
-    const estHeight = estimateBoxHeight(b.translatedText, b.width, b.fontSize);
-    maxBottom = Math.max(maxBottom, b.top + estHeight);
+    const top = Math.max(b.top, cursorBottom + BOX_GAP);
+    reflowedBoxes.push({ ...b, top });
+    cursorBottom = top + b.estHeight;
   }
+
+  const maxBottom = Math.max(dims.height, cursorBottom);
   // Only the overflow beyond the original canvas needs reserved space; the
   // canvas itself is in-flow and already occupies `dims.height`.
   const overflowHeight = Math.max(0, maxBottom - dims.height) + 16;
 
   return (
     <>
-      {boxes.map((b) => (
+      {reflowedBoxes.map((b) => (
         <LayoutOverlayBox
           key={b.para.id}
           para={b.para}
