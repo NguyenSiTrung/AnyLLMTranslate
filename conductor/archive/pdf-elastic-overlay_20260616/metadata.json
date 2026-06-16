@@ -1,12 +1,12 @@
 {
   "track_id": "pdf-elastic-overlay_20260616",
   "type": "feature",
-  "status": "new",
+  "status": "archived",
   "priority": "medium",
   "depends_on": ["pdf-translation-ux_20260615"],
   "estimated_hours": 12,
   "created_at": "2026-06-16T10:17:06Z",
-  "updated_at": "2026-06-16T10:17:06Z",
+  "updated_at": "2026-06-16T18:10:00+07:00",
   "description": "Replace the current rigid 1:1 bounding-box Layout mode with an Elastic Overlay mode where translated paragraphs preserve their original horizontal position and reading order but use natural height, eliminating clipping, micro-fonts, and hover-popover friction.",
   "beads_epic": "beads_AnyLLMTranslate-1y7",
   "beads_tasks": {}

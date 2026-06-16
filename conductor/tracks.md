@@ -50,9 +50,10 @@ This file tracks all major tracks for the project.
 - ✅ **PDF Layout and Scroll Synchronization** (`pdf-layout-scroll-sync_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-layout-scroll-sync_20260612/)
 - ✅ **PDF Layout Preservation** (`pdf-layout-preservation_20260612`) — Archived 2026-06-15. [View](./conductor/archive/pdf-layout-preservation_20260612/)
 - ✅ **PDF Translation UX Improvements** (`pdf-translation-ux_20260615`) — Archived 2026-06-15. [View](./conductor/archive/pdf-translation-ux_20260615/)
+- ✅ **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — Archived 2026-06-16. [View](./conductor/archive/pdf-elastic-overlay_20260616/)
 
 ---
 
 ## Active Tracks
 
-- **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — Completed. Replaces rigid 1:1 bounding-box Layout mode with elastic reflowable overlay; page-block scroll sync. [Spec](./conductor/tracks/pdf-elastic-overlay_20260616/spec.md) · [Plan](./conductor/tracks/pdf-elastic-overlay_20260616/plan.md) · [Learnings](./conductor/tracks/pdf-elastic-overlay_20260616/learnings.md)
+_No active tracks. All 42 tracks completed and archived._ [Spec](./conductor/tracks/pdf-elastic-overlay_20260616/spec.md) · [Plan](./conductor/tracks/pdf-elastic-overlay_20260616/plan.md) · [Learnings](./conductor/tracks/pdf-elastic-overlay_20260616/learnings.md)

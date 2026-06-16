@@ -1,5 +1,11 @@
 # Spec: PDF Elastic Overlay Layout Mode
 
+> **Last Revised: 2026-06-16 (Revision 1)** — Layout mode preserves the original
+> page canvas (images/tables/blocks) with translated boxes overlaid via absolute
+> positioning at `height: auto`, masking only the original text. See
+> `revisions.md`. (The original draft below assumed a pure-flow overlay with no
+> canvas; that was rejected in Revision 1.)
+
 ## Overview
 
 The current PDF `Layout` mode forces translated text into the exact bounding boxes of the original PDF paragraphs. Because translations are frequently longer than the source (especially into languages like Vietnamese, German, or Spanish), this produces clipped text, micro-fonts, and a hover/popover interaction that users must repeat for nearly every paragraph. This track replaces that rigid overlay with an **Elastic Overlay** that preserves the original page's horizontal structure and reading order while letting translated paragraphs grow vertically.
