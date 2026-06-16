@@ -1,13 +1,17 @@
 /**
  * PdfTranslationPane — Renders the right pane (translated text) for a single
  * page, including loading skeletons, error states, and a retry button.
+ *
+ * Layout modes:
+ * - 'text' (default): translated paragraphs in a simple vertical reading flow.
+ * - 'original' (elastic overlay): translated paragraphs preserve their original
+ *   horizontal position/width and reading order, but grow to natural height
+ *   (no clipping, micro-fonts, or popovers).
  */
 
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
-import { PdfCanvasRenderer } from './PdfCanvasRenderer';
-import { useEffect, useRef, useState } from 'react';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -18,15 +22,22 @@ export interface PdfTranslationPaneProps {
   paragraphCount: number;
   /** Fired when the user clicks "Retry translation" on an error. */
   onRetry?: (pageNumber: number) => void;
-  /** Current layout mode: 'original' overlay (visual reference) or 'text' flow (default reading). */
+  /** Current layout mode: 'original' elastic overlay (visual reference) or 'text' flow (default reading). */
   layoutMode?: 'original' | 'text';
-  /** PDF page proxy for rendering canvas background. */
+  /** PDF page proxy for computing elastic paragraph geometry. */
   pdfPage?: PDFPageProxy | null;
   /** Whether the page is currently visible near the viewport. */
   visible?: boolean;
   /** Pre-computed dimensions for layout overlay. */
   dims?: { width: number; height: number };
 }
+
+/** Minimum readable font size (px) for elastic overlay text. */
+const MIN_FONT_SIZE_PX = 12;
+/** Maximum font size (px) cap so headings don't become absurdly large. */
+const MAX_FONT_SIZE_PX = 32;
+/** Minimum width (px) for an elastic paragraph box. */
+const MIN_PARA_WIDTH_PX = 80;
 
 function LoadingSkeleton({ count }: { count: number }): React.ReactElement {
   // Clamp to 1-6 lines so the skeleton never looks empty or absurd
@@ -111,113 +122,52 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
   );
 }
 
-/** Estimate whether the translated text likely overflows its original box. */
-function isLikelyClipped(
-  translatedText: string,
-  widthCss: number,
-  heightCss: number,
-  fontSizeCss: number,
-): boolean {
-  if (widthCss <= 0 || heightCss <= 0 || fontSizeCss <= 0) return false;
-  // Approximate average character width as 60% of font size; line height 1.25em
-  const avgCharWidth = fontSizeCss * 0.6;
-  const lineHeight = fontSizeCss * 1.25;
-  const charsPerLine = Math.max(1, Math.floor(widthCss / avgCharWidth));
-  const estimatedLines = Math.ceil(translatedText.length / charsPerLine);
-  const estimatedHeight = estimatedLines * lineHeight;
-  // Treat as clipped when the estimated rendered height exceeds the box by >20%
-  return estimatedHeight > heightCss * 1.2;
-}
-
-function LayoutParagraphBox({
+/**
+ * Elastic paragraph box — preserves the original horizontal position and width
+ * but grows to natural height. Rendered in normal document flow so subsequent
+ * paragraphs push down instead of overlapping.
+ */
+function ElasticParagraph({
   para,
   translatedText,
-  viewport,
-  activeId,
-  onActivate,
+  scale,
+  pageWidth,
 }: {
   para: PdfParagraph;
   translatedText: string;
-  viewport: { scale: number; convertToViewportPoint: (x: number, y: number) => [number, number] | number[] };
-  activeId: string | null;
-  onActivate: (id: string) => void;
+  scale: number;
+  pageWidth: number;
 }): React.ReactElement {
-  const [left, top] = viewport.convertToViewportPoint(para.x, para.y);
-  const widthCss = para.width * viewport.scale;
-  const heightCss = para.height * viewport.scale;
-
-  const originalLen = para.text.length;
-  const translatedLen = translatedText.length;
-  const isSingleLine = para.height <= para.fontSize * 1.5;
-
-  // Apply a safety margin for font size scaling, particularly on single-line text blocks
-  const lengthRatio = translatedLen > 0 ? originalLen / translatedLen : 1;
-  const safetyMargin = isSingleLine ? 0.82 : 0.95;
-  const scaleFactor = Math.max(0.4, Math.min(1.0, lengthRatio * safetyMargin));
-  const originalFontSizeCss = para.fontSize * viewport.scale;
-  const computedFontSize = Math.max(7.5, originalFontSizeCss * scaleFactor);
-
-  const clipped = isLikelyClipped(translatedText, widthCss, heightCss, computedFontSize);
-  const isOpen = activeId === para.id;
-  const boxRef = useRef<HTMLDivElement | null>(null);
-
-  const handleClick = (): void => {
-    if (!clipped) return;
-    onActivate(para.id);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    e.preventDefault();
-    if (!clipped) return;
-    onActivate(para.id);
-  };
+  const leftCss = para.x * scale;
+  // Constrain the width so it never overflows the page slot, while keeping a
+  // readable minimum so very narrow source boxes don't squeeze the text.
+  const maxAvail = Math.max(MIN_PARA_WIDTH_PX, pageWidth - leftCss - 8);
+  const widthCss = Math.min(Math.max(para.width * scale, MIN_PARA_WIDTH_PX), maxAvail);
+  const fontSizeCss = Math.min(
+    Math.max(para.fontSize * scale, MIN_FONT_SIZE_PX),
+    MAX_FONT_SIZE_PX,
+  );
 
   return (
     <div
-      ref={boxRef}
-      key={para.id}
-      role="button"
-      tabIndex={clipped ? 0 : -1}
-      aria-label={clipped ? 'Translation clipped. Press Enter to read full text.' : undefined}
-      aria-expanded={isOpen}
-      className={`pdf-viewer-layout-para-box ${clipped ? 'pdf-viewer-layout-para-box--clipped' : ''}`}
+      className={`pdf-viewer-elastic-para${para.isHeading ? ' pdf-viewer-elastic-para--heading' : ''}`}
       style={{
-        position: 'absolute',
-        left: `${left}px`,
-        top: `${top}px`,
+        marginLeft: `${leftCss}px`,
         width: `${widthCss}px`,
-        height: `${heightCss}px`,
-        fontSize: `${computedFontSize}px`,
-        whiteSpace: isSingleLine ? 'nowrap' : 'normal',
+        fontSize: `${fontSizeCss}px`,
       }}
-      title={para.text}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
     >
-      <div style={{ width: '100%', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-        {translatedText}
-      </div>
-      {clipped && !isOpen && (
-        <span className="pdf-viewer-layout-clipped-badge" aria-hidden="true">
-          ···
-        </span>
-      )}
-      {isOpen && (
-        <div
-          className="pdf-viewer-layout-popover"
-          role="dialog"
-          aria-label="Full translation"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <p className="pdf-viewer-layout-popover-text">{translatedText}</p>
-        </div>
-      )}
+      {translatedText}
     </div>
   );
 }
 
-function OriginalLayoutOverlay({
+/**
+ * Elastic overlay page — a white "page" sized to the original page width that
+ * stacks translated paragraph boxes vertically. Masks the original page area
+ * with an opaque white background and renders dark, readable text.
+ */
+function ElasticLayoutPane({
   page,
   pdfPage,
   dims,
@@ -229,59 +179,22 @@ function OriginalLayoutOverlay({
   if (!pdfPage || !dims) return <></>;
 
   const baseViewport = pdfPage.getViewport({ scale: 1 });
-  const scale = 720 / baseViewport.width; // 720 is the default maxWidth in PdfCanvasRenderer
-  const viewport = pdfPage.getViewport({ scale });
-
+  // 720 is the default maxWidth used by PdfCanvasRenderer (left pane).
+  const scale = 720 / baseViewport.width;
   const originalParagraphs = page.originalParagraphs ?? [];
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!activeId) return;
-    const handleEscape = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setActiveId(null);
-      }
-    };
-    const handleClickOutside = (e: MouseEvent): void => {
-      const target = e.target as Node;
-      if (popoverRef.current && !popoverRef.current.contains(target)) {
-        setActiveId(null);
-      }
-    };
-    document.addEventListener('keydown', handleEscape);
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeId]);
 
   return (
-    <div
-      ref={popoverRef}
-      className="pdf-viewer-overlay-container"
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: `${dims.width}px`,
-        height: `${dims.height}px`,
-        pointerEvents: 'none',
-      }}
-    >
+    <div className="pdf-viewer-elastic-page" style={{ width: `${dims.width}px` }}>
       {originalParagraphs.map((para) => {
         const translatedText = page.paragraphs.get(para.id);
         if (!translatedText) return null;
-
         return (
-          <LayoutParagraphBox
+          <ElasticParagraph
             key={para.id}
             para={para}
             translatedText={translatedText}
-            viewport={viewport}
-            activeId={activeId}
-            onActivate={setActiveId}
+            scale={scale}
+            pageWidth={dims.width}
           />
         );
       })}
@@ -289,7 +202,8 @@ function OriginalLayoutOverlay({
   );
 }
 
-function OriginalLayoutStatusOverlay({
+/** Centered status box for non-translated elastic states (idle/loading/error/empty). */
+function ElasticStatusOverlay({
   pageNumber,
   state,
   error,
@@ -304,60 +218,31 @@ function OriginalLayoutStatusOverlay({
 }): React.ReactElement {
   return (
     <div
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: dims ? `${dims.width}px` : '100%',
-        height: dims ? `${dims.height}px` : '100%',
-        background: 'rgba(9, 9, 11, 0.5)',
-        backdropFilter: 'blur(1.5px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-        pointerEvents: 'auto',
-      }}
+      className="pdf-viewer-elastic-status"
+      style={{ minHeight: dims ? `${dims.height}px` : 'auto' }}
     >
-      <div
-        style={{
-          background: '#18181b',
-          border: '1px solid #27272a',
-          borderRadius: '8px',
-          padding: '16px 24px',
-          maxWidth: '80%',
-          textAlign: 'center',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-        }}
-      >
+      <div className="pdf-viewer-elastic-status-card">
         {state === 'idle' && (
-          <p style={{ margin: 0, fontSize: '13px', color: '#a1a1aa' }}>
-            Page {pageNumber} — Scroll to translate
-          </p>
+          <p>Page {pageNumber} — Scroll to translate</p>
         )}
         {state === 'translating' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="pdf-viewer-spinner" aria-hidden="true" style={{ margin: 0 }} />
-            <span style={{ fontSize: '13px', color: '#e4e4e7' }}>Translating page {pageNumber}...</span>
+          <div className="pdf-viewer-elastic-status-row">
+            <span className="pdf-viewer-spinner" aria-hidden="true" />
+            <span>Translating page {pageNumber}...</span>
           </div>
         )}
         {state === 'empty' && (
-          <p style={{ margin: 0, fontSize: '13px', color: '#a1a1aa' }}>
-            No extractable text on page {pageNumber} (may be a scanned image).
-          </p>
+          <p>No extractable text on page {pageNumber} (may be a scanned image).</p>
         )}
         {state === 'error' && (
           <div>
-            <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 'bold', color: '#fca5a5' }}>
-              Translation failed
-            </p>
-            {error && <p style={{ margin: '0 0 12px', fontSize: '11px', color: '#fca5a5' }}>{error}</p>}
+            <p className="pdf-viewer-elastic-status-error">Translation failed</p>
+            {error && <p className="pdf-viewer-elastic-status-detail">{error}</p>}
             {onRetry && (
               <button
                 type="button"
                 onClick={() => onRetry(pageNumber)}
                 className="pdf-viewer-retry-button"
-                style={{ marginTop: 0 }}
               >
                 Retry
               </button>
@@ -376,45 +261,33 @@ export function PdfTranslationPane({
   onRetry,
   layoutMode = 'text',
   pdfPage,
-  visible,
   dims,
 }: PdfTranslationPaneProps): React.ReactElement {
   if (layoutMode === 'original') {
     const isTranslated = page.state === 'translated';
     const isEmpty = isTranslated && page.paragraphs.size === 0;
 
-    return (
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-        <PdfCanvasRenderer
-          page={pdfPage ?? null}
+    if (!isTranslated || isEmpty) {
+      const status: 'idle' | 'translating' | 'error' | 'empty' =
+        page.state === 'error'
+          ? 'error'
+          : page.state === 'translating'
+            ? 'translating'
+            : isEmpty
+              ? 'empty'
+              : 'idle';
+      return (
+        <ElasticStatusOverlay
           pageNumber={pageNumber}
-          visible={visible ?? false}
+          state={status}
+          error={page.error}
+          onRetry={onRetry}
           dims={dims}
-          enableTextLayer={false}
         />
-        {page.state === 'idle' && (
-          <OriginalLayoutStatusOverlay pageNumber={pageNumber} state="idle" dims={dims} />
-        )}
-        {page.state === 'translating' && (
-          <OriginalLayoutStatusOverlay pageNumber={pageNumber} state="translating" dims={dims} />
-        )}
-        {page.state === 'error' && (
-          <OriginalLayoutStatusOverlay
-            pageNumber={pageNumber}
-            state="error"
-            error={page.error}
-            onRetry={onRetry}
-            dims={dims}
-          />
-        )}
-        {isTranslated && isEmpty && (
-          <OriginalLayoutStatusOverlay pageNumber={pageNumber} state="empty" dims={dims} />
-        )}
-        {isTranslated && !isEmpty && (
-          <OriginalLayoutOverlay page={page} pdfPage={pdfPage ?? null} dims={dims} />
-        )}
-      </div>
-    );
+      );
+    }
+
+    return <ElasticLayoutPane page={page} pdfPage={pdfPage ?? null} dims={dims} />;
   }
 
   // Fallback to text mode

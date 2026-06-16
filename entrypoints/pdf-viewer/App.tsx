@@ -128,6 +128,9 @@ export default function App(): ReactElement {
           const dims = pageDimensions.get(pageNumber);
           const widthStyle = dims ? `${dims.width}px` : '720px';
           const heightStyle = dims ? `${dims.height}px` : '960px';
+          // Elastic overlay ('original') grows to natural height; text mode keeps
+          // the original page min-height so slots align with the left pane.
+          const isElastic = layoutMode === 'original';
           const page = pages[idx] ?? null;
           const isVisible = visiblePages.has(pageNumber);
           return (
@@ -135,7 +138,7 @@ export default function App(): ReactElement {
               key={`translation-${pageNumber}`}
               data-page-slot={pageNumber}
               className="pdf-viewer-page"
-              style={{ width: widthStyle, minHeight: heightStyle }}
+              style={{ width: widthStyle, ...(isElastic ? {} : { minHeight: heightStyle }) }}
             >
               <PdfTranslationPane
                 pageNumber={pageNumber}
@@ -172,7 +175,7 @@ export default function App(): ReactElement {
                 className={`pdf-viewer-toggle-btn ${layoutMode === 'original' ? 'pdf-viewer-toggle-btn--active' : ''}`}
                 onClick={() => setLayoutMode('original')}
                 aria-pressed={layoutMode === 'original'}
-                title="Preserves the original PDF visual structure. Longer translations may be clipped."
+                title="Layout (visual reference): translated text keeps the original page's horizontal structure and reading order, reflowing vertically. Best for matching translated text to the original layout."
               >
                 Layout
               </button>
@@ -181,7 +184,7 @@ export default function App(): ReactElement {
                 className={`pdf-viewer-toggle-btn ${layoutMode === 'text' ? 'pdf-viewer-toggle-btn--active' : ''}`}
                 onClick={() => setLayoutMode('text')}
                 aria-pressed={layoutMode === 'text'}
-                title="Recommended for reading: translated text flows naturally."
+                title="Text (recommended): translated text flows as plain paragraphs. Best for reading."
               >
                 Text
               </button>

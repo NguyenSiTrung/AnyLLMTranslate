@@ -160,3 +160,139 @@ describe('useSynchronizedScroll', () => {
     expect(leftScrollToMock.mock.calls.length).toBe(callCountBefore);
   });
 });
+
+describe('useSynchronizedScroll page-block sync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Append page block children to a container, mocking geometry so that
+   *  `collectPageBlocks` resolves each block to its absolute content offset. */
+  function appendPages(
+    container: HTMLElement,
+    pages: Array<{ number: number; top: number; height: number }>,
+    attr: 'data-page-number' | 'data-page-slot',
+  ): void {
+    for (const p of pages) {
+      const el = document.createElement('div');
+      el.setAttribute(attr, String(p.number));
+      container.appendChild(el);
+      el.getBoundingClientRect = () =>
+        ({
+          top: p.top - container.scrollTop,
+          height: p.height,
+          bottom: p.top - container.scrollTop + p.height,
+          left: 0,
+          right: 0,
+          width: 720,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+    container.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        height: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        width: 720,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  it('interpolates within the matching page when right pane is taller', () => {
+    // Left: 2 pages, each 1000px tall. Right: 2 pages, each 2000px tall.
+    appendPages(leftEl, [
+      { number: 1, top: 0, height: 1000 },
+      { number: 2, top: 1000, height: 1000 },
+    ], 'data-page-number');
+    appendPages(rightEl, [
+      { number: 1, top: 0, height: 2000 },
+      { number: 1, top: 2000, height: 2000 },
+    ], 'data-page-slot');
+
+    renderHook(() => {
+      const leftRef = useRef<HTMLDivElement | null>(leftEl);
+      const rightRef = useRef<HTMLDivElement | null>(rightEl);
+      useSynchronizedScroll({ leftRef, rightRef });
+    });
+
+    // Scroll left to the middle of page 1 (500/1000 = 50%).
+    act(() => {
+      leftEl.scrollTop = 500;
+      leftEl.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    // Right page 1 is 2000px → 50% = 1000px.
+    expect(rightEl.scrollTop).toBe(1000);
+  });
+
+  it('aligns at page boundaries even when heights differ', () => {
+    // Left: page boundaries at 0 and 1000. Right: page boundaries at 0 and 2000.
+    appendPages(leftEl, [
+      { number: 1, top: 0, height: 1000 },
+      { number: 2, top: 1000, height: 1000 },
+    ], 'data-page-number');
+    appendPages(rightEl, [
+      { number: 1, top: 0, height: 2000 },
+      { number: 2, top: 2000, height: 2000 },
+    ], 'data-page-slot');
+
+    renderHook(() => {
+      const leftRef = useRef<HTMLDivElement | null>(leftEl);
+      const rightRef = useRef<HTMLDivElement | null>(rightEl);
+      useSynchronizedScroll({ leftRef, rightRef });
+    });
+
+    // Scroll left to the start of page 2 → right should start page 2 (2000px).
+    act(() => {
+      leftEl.scrollTop = 1000;
+      leftEl.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(rightEl.scrollTop).toBe(2000);
+  });
+
+  it('keeps panes in sync while scrolling deep into a later page', () => {
+    // Left: 3 short pages (300px each). Right: 3 tall pages (900px each).
+    appendPages(leftEl, [
+      { number: 1, top: 0, height: 300 },
+      { number: 2, top: 300, height: 300 },
+      { number: 3, top: 600, height: 300 },
+    ], 'data-page-number');
+    appendPages(rightEl, [
+      { number: 1, top: 0, height: 900 },
+      { number: 2, top: 900, height: 900 },
+      { number: 3, top: 1800, height: 900 },
+    ], 'data-page-slot');
+
+    renderHook(() => {
+      const leftRef = useRef<HTMLDivElement | null>(leftEl);
+      const rightRef = useRef<HTMLDivElement | null>(rightEl);
+      useSynchronizedScroll({ leftRef, rightRef });
+    });
+
+    // Scroll left to 1/3 into page 3: page 3 starts at 600, height 300 → 750 = 50%.
+    act(() => {
+      leftEl.scrollTop = 750;
+      leftEl.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    // Right page 3 starts at 1800, height 900 → 50% = 2250.
+    expect(rightEl.scrollTop).toBe(2250);
+  });
+});

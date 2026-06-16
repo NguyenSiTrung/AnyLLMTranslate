@@ -55,4 +55,4 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — New. Replaces rigid 1:1 bounding-box Layout mode with elastic reflowable overlay. [Spec](./conductor/tracks/pdf-elastic-overlay_20260616/spec.md) · [Plan](./conductor/tracks/pdf-elastic-overlay_20260616/plan.md) · [Learnings](./conductor/tracks/pdf-elastic-overlay_20260616/learnings.md)
+- **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — Completed. Replaces rigid 1:1 bounding-box Layout mode with elastic reflowable overlay; page-block scroll sync. [Spec](./conductor/tracks/pdf-elastic-overlay_20260616/spec.md) · [Plan](./conductor/tracks/pdf-elastic-overlay_20260616/plan.md) · [Learnings](./conductor/tracks/pdf-elastic-overlay_20260616/learnings.md)

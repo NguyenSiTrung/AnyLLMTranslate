@@ -1,51 +1,20 @@
 /**
- * Tests for PdfTranslationPane layout UX improvements.
+ * Tests for PdfTranslationPane elastic overlay + text mode rendering.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfTranslationPane } from '../PdfTranslationPane';
 import type { PageTranslations } from '../../lib/pdfTranslation';
 
-const textLayerState = vi.hoisted(() => ({
-  renderCount: 0,
-  cancelCount: 0,
-}));
-
-vi.mock('pdfjs-dist', () => ({
-  TextLayer: class MockTextLayer {
-    textContentSource: { items: Array<{ str: string }> };
-    container: HTMLElement;
-
-    constructor({
-      textContentSource,
-      container,
-    }: {
-      textContentSource: { items: Array<{ str: string }> };
-      container: HTMLElement;
-    }) {
-      this.textContentSource = textContentSource;
-      this.container = container;
-    }
-
-    async render() {
-      textLayerState.renderCount += 1;
-      for (const item of this.textContentSource.items) {
-        const span = globalThis.document.createElement('span');
-        span.textContent = item.str;
-        this.container.appendChild(span);
-      }
-    }
-
-    cancel() {
-      textLayerState.cancelCount += 1;
-    }
-  },
-}));
-
-function createPageMock(): PDFPageProxy {
-  const viewport = { width: 720, height: 960, scale: 1, convertToViewportPoint: vi.fn((x: number, y: number) => [x, y]) };
+function createPageMock(viewportWidth = 720): PDFPageProxy {
+  const viewport = {
+    width: viewportWidth,
+    height: 960,
+    scale: 1,
+    convertToViewportPoint: vi.fn((x: number, y: number) => [x, y]),
+  };
   return {
     getViewport: vi.fn((args) => (args && args.scale ? { ...viewport, scale: args.scale } : viewport)),
     getTextContent: vi.fn(async () => ({ items: [], styles: {} })),
@@ -65,7 +34,7 @@ async function renderLayout(page: PageTranslations, pdfPage: PDFPageProxy, dims 
       dims={dims}
     />,
   );
-  await waitFor(() => expect(document.querySelector('.pdf-viewer-layout-para-box')).not.toBeNull());
+  await waitFor(() => expect(document.querySelector('.pdf-viewer-elastic-para')).not.toBeNull());
   return view;
 }
 
@@ -88,10 +57,12 @@ function makeTranslatedPage(): PageTranslations {
   };
 }
 
+function getElasticParas(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.pdf-viewer-elastic-para'));
+}
+
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D);
-  textLayerState.renderCount = 0;
-  textLayerState.cancelCount = 0;
 });
 
 afterEach(() => {
@@ -106,93 +77,181 @@ describe('PdfTranslationPane default mode', () => {
     };
     render(<PdfTranslationPane pageNumber={1} page={page} paragraphCount={1} />);
     expect(screen.getByText('Bản dịch')).toBeInTheDocument();
-    expect(document.querySelector('.pdf-viewer-layout-para-box')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-elastic-para')).toBeNull();
   });
 
-  it('switches to layout mode when requested', async () => {
+  it('does not render a canvas in elastic layout mode', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    expect(document.querySelector('.pdf-viewer-layout-para-box')).not.toBeNull();
+    // Elastic overlay replaces the original canvas entirely
+    expect(document.querySelector('.pdf-viewer-page-canvas')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-elastic-page')).not.toBeNull();
   });
 });
 
-describe('PdfTranslationPane layout full-text interaction', () => {
-  it('opens full-translation popover on click', async () => {
+describe('PdfTranslationPane elastic layout rendering', () => {
+  it('renders translated paragraphs in elastic boxes', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const box = document.querySelector('.pdf-viewer-layout-para-box') as HTMLElement;
-    expect(box).not.toBeNull();
-    fireEvent.click(box);
-    const popover = document.querySelector('.pdf-viewer-layout-popover') as HTMLElement;
-    expect(popover).not.toBeNull();
-    expect(popover.textContent).toContain('Dịch dài hơn bản gốc rất nhiều.');
+    const paras = getElasticParas();
+    expect(paras.length).toBe(1);
+    expect(paras[0].textContent).toContain('Dịch dài hơn bản gốc rất nhiều.');
   });
 
-  it('focusable layout box opens popover with Enter key', async () => {
+  it('uses natural height (no fixed height) so text is never clipped', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const box = document.querySelector('.pdf-viewer-layout-para-box') as HTMLElement;
-    box.focus();
-    fireEvent.keyDown(box, { key: 'Enter' });
-    expect(document.querySelector('.pdf-viewer-layout-popover')).not.toBeNull();
+    const para = getElasticParas()[0];
+    expect(para.style.height).toBe('');
+    // overflow hidden (the clipping mechanism) is gone
+    expect(para.style.overflow).toBe('');
   });
 
-  it('dismisses popover with Escape key', async () => {
+  it('applies a readable minimum font size for tiny source fonts', async () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([['1-0', 'Translated.']]),
+      originalParagraphs: [
+        { id: '1-0', text: 'tiny', fontSize: 5, isHeading: false, x: 40, y: 40, width: 100, height: 6 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+    const para = getElasticParas()[0];
+    // 5 PDF units * scale(1) = 5px, floored to 12px
+    expect(para.style.fontSize).toBe('12px');
+  });
+
+  it('preserves heading styling for headings', async () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([['1-0', 'Tiêu đề']]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Heading', fontSize: 22, isHeading: true, x: 40, y: 40, width: 200, height: 26 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+    const para = getElasticParas()[0];
+    expect(para.className).toContain('pdf-viewer-elastic-para--heading');
+    expect(para.style.fontSize).toBe('22px');
+  });
+
+  it('preserves horizontal position via margin and keeps page width', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const box = document.querySelector('.pdf-viewer-layout-para-box') as HTMLElement;
-    fireEvent.click(box);
-    expect(document.querySelector('.pdf-viewer-layout-popover')).not.toBeNull();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(document.querySelector('.pdf-viewer-layout-popover')).toBeNull();
+    const para = getElasticParas()[0];
+    // x=50, scale=1 → marginLeft 50px; width=120 → 120px
+    expect(para.style.marginLeft).toBe('50px');
+    expect(para.style.width).toBe('120px');
   });
 
-  it('only keeps one popover open at a time', async () => {
+  it('preserves reading order across multiple paragraphs', async () => {
     const page: PageTranslations = {
       state: 'translated',
       paragraphs: new Map([
-        ['1-0', 'First translation is longer.'],
-        ['1-1', 'Second translation is also longer than original text here.'],
+        ['1-0', 'First translation.'],
+        ['1-1', 'Second translation.'],
+        ['1-2', 'Third translation.'],
       ]),
       originalParagraphs: [
-        { id: '1-0', text: 'First.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 60, height: 14 },
-        { id: '1-1', text: 'Second.', fontSize: 12, isHeading: false, x: 50, y: 100, width: 70, height: 14 },
+        { id: '1-0', text: 'First.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'Second.', fontSize: 12, isHeading: false, x: 50, y: 100, width: 100, height: 14 },
+        { id: '1-2', text: 'Third.', fontSize: 12, isHeading: false, x: 50, y: 150, width: 100, height: 14 },
       ],
     };
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const boxes = document.querySelectorAll('.pdf-viewer-layout-para-box');
-    expect(boxes.length).toBe(2);
-    fireEvent.click(boxes[0] as HTMLElement);
-    expect(document.querySelectorAll('.pdf-viewer-layout-popover').length).toBe(1);
-    fireEvent.click(boxes[1] as HTMLElement);
-    expect(document.querySelectorAll('.pdf-viewer-layout-popover').length).toBe(1);
+    const paras = getElasticParas();
+    expect(paras.map((p) => p.textContent)).toEqual([
+      'First translation.',
+      'Second translation.',
+      'Third translation.',
+    ]);
   });
-});
 
-describe('PdfTranslationPane clipping affordance', () => {
-  it('marks blocks with expanded translations as clipped', async () => {
+  it('renders no clipped badge, popover, or hover-scale affordance', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const box = document.querySelector('.pdf-viewer-layout-para-box--clipped') as HTMLElement;
-    expect(box).not.toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-para-box')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-clipped-badge')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-popover')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-para-box--clipped')).toBeNull();
+  });
+});
+
+describe('PdfTranslationPane elastic states', () => {
+  it('shows scroll-to-translate status when idle', () => {
+    const page: PageTranslations = { state: 'idle', paragraphs: new Map() };
+    render(
+      <PdfTranslationPane
+        pageNumber={2}
+        page={page}
+        paragraphCount={0}
+        layoutMode="original"
+        pdfPage={createPageMock()}
+        dims={{ width: 720, height: 960 }}
+      />,
+    );
+    expect(screen.getByText(/Page 2 — Scroll to translate/)).toBeInTheDocument();
+    expect(document.querySelector('.pdf-viewer-elastic-para')).toBeNull();
   });
 
-  it('does not mark short translations as clipped', async () => {
+  it('shows translating status', () => {
+    const page: PageTranslations = { state: 'translating', paragraphs: new Map() };
+    render(
+      <PdfTranslationPane
+        pageNumber={2}
+        page={page}
+        paragraphCount={1}
+        layoutMode="original"
+        pdfPage={createPageMock()}
+        dims={{ width: 720, height: 960 }}
+      />,
+    );
+    expect(screen.getByText(/Translating page 2/)).toBeInTheDocument();
+  });
+
+  it('shows error status with retry button', async () => {
     const page: PageTranslations = {
-      state: 'translated',
-      paragraphs: new Map([['1-0', 'Ok']]),
-      originalParagraphs: [
-        { id: '1-0', text: 'Ok', fontSize: 12, isHeading: false, x: 50, y: 50, width: 80, height: 14 },
-      ],
+      state: 'error',
+      paragraphs: new Map(),
+      error: 'boom',
     };
-    const pdfPage = createPageMock();
-    await renderLayout(page, pdfPage);
-    expect(document.querySelector('.pdf-viewer-layout-para-box--clipped')).toBeNull();
+    const onRetry = vi.fn();
+    render(
+      <PdfTranslationPane
+        pageNumber={2}
+        page={page}
+        paragraphCount={1}
+        layoutMode="original"
+        pdfPage={createPageMock()}
+        dims={{ width: 720, height: 960 }}
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.getByText('Translation failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Retry'));
+    expect(onRetry).toHaveBeenCalledWith(2);
+  });
+
+  it('shows empty status for scanned pages', () => {
+    const page: PageTranslations = { state: 'translated', paragraphs: new Map() };
+    render(
+      <PdfTranslationPane
+        pageNumber={2}
+        page={page}
+        paragraphCount={0}
+        layoutMode="original"
+        pdfPage={createPageMock()}
+        dims={{ width: 720, height: 960 }}
+      />,
+    );
+    expect(screen.getByText(/No extractable text on page 2/)).toBeInTheDocument();
   });
 });
