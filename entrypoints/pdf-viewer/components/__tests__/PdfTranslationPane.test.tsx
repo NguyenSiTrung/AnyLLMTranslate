@@ -1,12 +1,45 @@
 /**
- * Tests for PdfTranslationPane elastic overlay + text mode rendering.
+ * Tests for PdfTranslationPane layout overlay (canvas + translated boxes) and text mode.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfTranslationPane } from '../PdfTranslationPane';
 import type { PageTranslations } from '../../lib/pdfTranslation';
+
+const textLayerState = vi.hoisted(() => ({
+  renderCount: 0,
+  cancelCount: 0,
+}));
+
+vi.mock('pdfjs-dist', () => ({
+  TextLayer: class MockTextLayer {
+    textContentSource: { items: Array<{ str: string }> };
+    container: HTMLElement;
+    constructor({
+      textContentSource,
+      container,
+    }: {
+      textContentSource: { items: Array<{ str: string }> };
+      container: HTMLElement;
+    }) {
+      this.textContentSource = textContentSource;
+      this.container = container;
+    }
+    async render() {
+      textLayerState.renderCount += 1;
+      for (const item of this.textContentSource.items) {
+        const span = globalThis.document.createElement('span');
+        span.textContent = item.str;
+        this.container.appendChild(span);
+      }
+    }
+    cancel() {
+      textLayerState.cancelCount += 1;
+    }
+  },
+}));
 
 function createPageMock(viewportWidth = 720): PDFPageProxy {
   const viewport = {
@@ -34,7 +67,7 @@ async function renderLayout(page: PageTranslations, pdfPage: PDFPageProxy, dims 
       dims={dims}
     />,
   );
-  await waitFor(() => expect(document.querySelector('.pdf-viewer-elastic-para')).not.toBeNull());
+  await waitFor(() => expect(document.querySelector('.pdf-viewer-layout-para-box')).not.toBeNull());
   return view;
 }
 
@@ -57,12 +90,14 @@ function makeTranslatedPage(): PageTranslations {
   };
 }
 
-function getElasticParas(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('.pdf-viewer-elastic-para'));
+function getLayoutBoxes(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.pdf-viewer-layout-para-box'));
 }
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D);
+  textLayerState.renderCount = 0;
+  textLayerState.cancelCount = 0;
 });
 
 afterEach(() => {
@@ -77,37 +112,35 @@ describe('PdfTranslationPane default mode', () => {
     };
     render(<PdfTranslationPane pageNumber={1} page={page} paragraphCount={1} />);
     expect(screen.getByText('Bản dịch')).toBeInTheDocument();
-    expect(document.querySelector('.pdf-viewer-elastic-para')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-para-box')).toBeNull();
   });
 
-  it('does not render a canvas in elastic layout mode', async () => {
+  it('renders the original page canvas in layout mode', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    // Elastic overlay replaces the original canvas entirely
-    expect(document.querySelector('.pdf-viewer-page-canvas')).toBeNull();
-    expect(document.querySelector('.pdf-viewer-elastic-page')).not.toBeNull();
+    // Canvas (images/tables/blocks) is preserved in layout mode
+    expect(document.querySelector('.pdf-viewer-page-canvas')).not.toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-para-box')).not.toBeNull();
   });
 });
 
-describe('PdfTranslationPane elastic layout rendering', () => {
-  it('renders translated paragraphs in elastic boxes', async () => {
+describe('PdfTranslationPane layout overlay rendering', () => {
+  it('renders translated text boxes overlaid on the canvas', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const paras = getElasticParas();
-    expect(paras.length).toBe(1);
-    expect(paras[0].textContent).toContain('Dịch dài hơn bản gốc rất nhiều.');
+    const boxes = getLayoutBoxes();
+    expect(boxes.length).toBe(1);
+    expect(boxes[0].textContent).toContain('Dịch dài hơn bản gốc rất nhiều.');
   });
 
   it('uses natural height (no fixed height) so text is never clipped', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const para = getElasticParas()[0];
-    expect(para.style.height).toBe('');
-    // overflow hidden (the clipping mechanism) is gone
-    expect(para.style.overflow).toBe('');
+    const box = getLayoutBoxes()[0];
+    expect(box.style.height).toBe('');
   });
 
   it('applies a readable minimum font size for tiny source fonts', async () => {
@@ -120,9 +153,8 @@ describe('PdfTranslationPane elastic layout rendering', () => {
     };
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const para = getElasticParas()[0];
-    // 5 PDF units * scale(1) = 5px, floored to 12px
-    expect(para.style.fontSize).toBe('12px');
+    const box = getLayoutBoxes()[0];
+    expect(box.style.fontSize).toBe('12px');
   });
 
   it('preserves heading styling for headings', async () => {
@@ -135,19 +167,20 @@ describe('PdfTranslationPane elastic layout rendering', () => {
     };
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const para = getElasticParas()[0];
-    expect(para.className).toContain('pdf-viewer-elastic-para--heading');
-    expect(para.style.fontSize).toBe('22px');
+    const box = getLayoutBoxes()[0];
+    expect(box.className).toContain('pdf-viewer-layout-para-box--heading');
+    expect(box.style.fontSize).toBe('22px');
   });
 
-  it('preserves horizontal position via margin and keeps page width', async () => {
+  it('positions boxes at the original paragraph coordinates', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const para = getElasticParas()[0];
-    // x=50, scale=1 → marginLeft 50px; width=120 → 120px
-    expect(para.style.marginLeft).toBe('50px');
-    expect(para.style.width).toBe('120px');
+    const box = getLayoutBoxes()[0];
+    // x=50, y=50, scale=1 → left/top 50px; width=120 → 120px
+    expect(box.style.left).toBe('50px');
+    expect(box.style.top).toBe('50px');
+    expect(box.style.width).toBe('120px');
   });
 
   it('preserves reading order across multiple paragraphs', async () => {
@@ -166,27 +199,26 @@ describe('PdfTranslationPane elastic layout rendering', () => {
     };
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    const paras = getElasticParas();
-    expect(paras.map((p) => p.textContent)).toEqual([
+    const boxes = getLayoutBoxes();
+    expect(boxes.map((b) => b.textContent)).toEqual([
       'First translation.',
       'Second translation.',
       'Third translation.',
     ]);
   });
 
-  it('renders no clipped badge, popover, or hover-scale affordance', async () => {
+  it('renders no clipped badge, popover, or clipped modifier', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
-    expect(document.querySelector('.pdf-viewer-layout-para-box')).toBeNull();
     expect(document.querySelector('.pdf-viewer-layout-clipped-badge')).toBeNull();
     expect(document.querySelector('.pdf-viewer-layout-popover')).toBeNull();
     expect(document.querySelector('.pdf-viewer-layout-para-box--clipped')).toBeNull();
   });
 });
 
-describe('PdfTranslationPane elastic states', () => {
-  it('shows scroll-to-translate status when idle', () => {
+describe('PdfTranslationPane layout states', () => {
+  it('shows scroll-to-translate status over the canvas when idle', () => {
     const page: PageTranslations = { state: 'idle', paragraphs: new Map() };
     render(
       <PdfTranslationPane
@@ -195,14 +227,15 @@ describe('PdfTranslationPane elastic states', () => {
         paragraphCount={0}
         layoutMode="original"
         pdfPage={createPageMock()}
+        visible
         dims={{ width: 720, height: 960 }}
       />,
     );
     expect(screen.getByText(/Page 2 — Scroll to translate/)).toBeInTheDocument();
-    expect(document.querySelector('.pdf-viewer-elastic-para')).toBeNull();
+    expect(document.querySelector('.pdf-viewer-layout-para-box')).toBeNull();
   });
 
-  it('shows translating status', () => {
+  it('shows translating status over the canvas', () => {
     const page: PageTranslations = { state: 'translating', paragraphs: new Map() };
     render(
       <PdfTranslationPane
@@ -211,13 +244,14 @@ describe('PdfTranslationPane elastic states', () => {
         paragraphCount={1}
         layoutMode="original"
         pdfPage={createPageMock()}
+        visible
         dims={{ width: 720, height: 960 }}
       />,
     );
     expect(screen.getByText(/Translating page 2/)).toBeInTheDocument();
   });
 
-  it('shows error status with retry button', async () => {
+  it('shows error status with retry button over the canvas', async () => {
     const page: PageTranslations = {
       state: 'error',
       paragraphs: new Map(),
@@ -231,6 +265,7 @@ describe('PdfTranslationPane elastic states', () => {
         paragraphCount={1}
         layoutMode="original"
         pdfPage={createPageMock()}
+        visible
         dims={{ width: 720, height: 960 }}
         onRetry={onRetry}
       />,
@@ -240,7 +275,7 @@ describe('PdfTranslationPane elastic states', () => {
     expect(onRetry).toHaveBeenCalledWith(2);
   });
 
-  it('shows empty status for scanned pages', () => {
+  it('shows empty status for scanned pages over the canvas', () => {
     const page: PageTranslations = { state: 'translated', paragraphs: new Map() };
     render(
       <PdfTranslationPane
@@ -249,6 +284,7 @@ describe('PdfTranslationPane elastic states', () => {
         paragraphCount={0}
         layoutMode="original"
         pdfPage={createPageMock()}
+        visible
         dims={{ width: 720, height: 960 }}
       />,
     );

@@ -425,50 +425,43 @@ html, body, #root {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-/* Elastic Overlay — reflowable white page with dark, readable text */
-.pdf-viewer-elastic-page {
-  background: #ffffff;
-  color: #1a1a1a;
-  border-radius: 2px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
-  padding: 18px 16px;
-  box-sizing: border-box;
-  min-height: 120px;
-  margin: 0 auto;
+/* Layout Overlay — translated text boxes positioned over the original canvas */
+.pdf-viewer-layout-pane {
+  position: relative;
 }
 
-.pdf-viewer-elastic-para {
-  display: block;
-  position: relative;
-  height: auto;
-  margin: 0 0 10px;
+.pdf-viewer-layout-para-box {
   line-height: 1.45;
+  background: #ffffff;
   color: #1a1a1a;
+  padding: 1px 3px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: normal;
+  z-index: 2;
 }
 
-.pdf-viewer-elastic-para:last-child {
-  margin-bottom: 0;
-}
-
-.pdf-viewer-elastic-para--heading {
+.pdf-viewer-layout-para-box--heading {
   font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 12px;
 }
 
-.pdf-viewer-elastic-status {
+.pdf-viewer-layout-status {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 24px 16px;
+  background: rgba(9, 9, 11, 0.5);
+  backdrop-filter: blur(1.5px);
+  padding: 16px;
   box-sizing: border-box;
 }
 
-.pdf-viewer-elastic-status-card {
+.pdf-viewer-layout-status-card {
   background: #18181b;
   border: 1px solid #27272a;
   border-radius: 8px;
@@ -480,11 +473,11 @@ html, body, #root {
   font-size: 13px;
 }
 
-.pdf-viewer-elastic-status-card p {
+.pdf-viewer-layout-status-card p {
   margin: 0;
 }
 
-.pdf-viewer-elastic-status-row {
+.pdf-viewer-layout-status-row {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -492,13 +485,13 @@ html, body, #root {
   color: #e4e4e7;
 }
 
-.pdf-viewer-elastic-status-error {
+.pdf-viewer-layout-status-error {
   margin: 0 0 8px;
   font-weight: bold;
   color: #fca5a5;
 }
 
-.pdf-viewer-elastic-status-detail {
+.pdf-viewer-layout-status-detail {
   margin: 0 0 12px;
   font-size: 11px;
   color: #fca5a5;

@@ -4,14 +4,18 @@
  *
  * Layout modes:
  * - 'text' (default): translated paragraphs in a simple vertical reading flow.
- * - 'original' (elastic overlay): translated paragraphs preserve their original
- *   horizontal position/width and reading order, but grow to natural height
- *   (no clipping, micro-fonts, or popovers).
+ * - 'original' (layout reference): the original page canvas (images, tables,
+ *   blocks) is rendered with translated text boxes overlaid at their original
+ *   positions. Boxes use natural height (no clipping/micro-fonts/popovers) and
+ *   mask only the original text via an opaque white background; images/tables
+ *   in uncovered areas stay visible. The page slot grows so long translations
+ *   never collide with the next page.
  */
 
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
+import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -22,9 +26,9 @@ export interface PdfTranslationPaneProps {
   paragraphCount: number;
   /** Fired when the user clicks "Retry translation" on an error. */
   onRetry?: (pageNumber: number) => void;
-  /** Current layout mode: 'original' elastic overlay (visual reference) or 'text' flow (default reading). */
+  /** Current layout mode: 'original' overlay (visual reference) or 'text' flow (default reading). */
   layoutMode?: 'original' | 'text';
-  /** PDF page proxy for computing elastic paragraph geometry. */
+  /** PDF page proxy for rendering the canvas background + box geometry. */
   pdfPage?: PDFPageProxy | null;
   /** Whether the page is currently visible near the viewport. */
   visible?: boolean;
@@ -32,12 +36,12 @@ export interface PdfTranslationPaneProps {
   dims?: { width: number; height: number };
 }
 
-/** Minimum readable font size (px) for elastic overlay text. */
+/** Minimum readable font size (px) for overlay text. */
 const MIN_FONT_SIZE_PX = 12;
 /** Maximum font size (px) cap so headings don't become absurdly large. */
 const MAX_FONT_SIZE_PX = 32;
-/** Minimum width (px) for an elastic paragraph box. */
-const MIN_PARA_WIDTH_PX = 80;
+/** Default render width (px) used by PdfCanvasRenderer. */
+const RENDER_WIDTH_PX = 720;
 
 function LoadingSkeleton({ count }: { count: number }): React.ReactElement {
   // Clamp to 1-6 lines so the skeleton never looks empty or absurd
@@ -122,39 +126,59 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
   );
 }
 
-/**
- * Elastic paragraph box — preserves the original horizontal position and width
- * but grows to natural height. Rendered in normal document flow so subsequent
- * paragraphs push down instead of overlapping.
- */
-function ElasticParagraph({
+type Viewport = ReturnType<PDFPageProxy['getViewport']>;
+
+/** Estimate the rendered height (px) of a translated box for slot sizing. */
+function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): number {
+  const effectiveWidth = Math.max(widthPx - 6, 10);
+  const avgCharWidth = fontSizePx * 0.55;
+  const lineHeight = fontSizePx * 1.45;
+  const charsPerLine = Math.max(1, Math.floor(effectiveWidth / avgCharWidth));
+  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+  return lines * lineHeight;
+}
+
+/** Compute the absolute placement + sizing for one overlay box. */
+function computeBoxGeometry(
+  para: PdfParagraph,
+  viewport: Viewport,
+  pageWidth: number,
+): { left: number; top: number; width: number; fontSize: number } {
+  const [left, top] = viewport.convertToViewportPoint(para.x, para.y);
+  const maxAvail = Math.max(40, pageWidth - left - 4);
+  const width = Math.min(Math.max(para.width * viewport.scale, 40), maxAvail);
+  const fontSize = Math.min(
+    Math.max(para.fontSize * viewport.scale, MIN_FONT_SIZE_PX),
+    MAX_FONT_SIZE_PX,
+  );
+  return { left, top, width, fontSize };
+}
+
+/** One translated box positioned over the original canvas. Grows to natural height. */
+function LayoutOverlayBox({
   para,
   translatedText,
-  scale,
-  pageWidth,
+  left,
+  top,
+  width,
+  fontSize,
 }: {
   para: PdfParagraph;
   translatedText: string;
-  scale: number;
-  pageWidth: number;
+  left: number;
+  top: number;
+  width: number;
+  fontSize: number;
 }): React.ReactElement {
-  const leftCss = para.x * scale;
-  // Constrain the width so it never overflows the page slot, while keeping a
-  // readable minimum so very narrow source boxes don't squeeze the text.
-  const maxAvail = Math.max(MIN_PARA_WIDTH_PX, pageWidth - leftCss - 8);
-  const widthCss = Math.min(Math.max(para.width * scale, MIN_PARA_WIDTH_PX), maxAvail);
-  const fontSizeCss = Math.min(
-    Math.max(para.fontSize * scale, MIN_FONT_SIZE_PX),
-    MAX_FONT_SIZE_PX,
-  );
-
   return (
     <div
-      className={`pdf-viewer-elastic-para${para.isHeading ? ' pdf-viewer-elastic-para--heading' : ''}`}
+      className={`pdf-viewer-layout-para-box${para.isHeading ? ' pdf-viewer-layout-para-box--heading' : ''}`}
       style={{
-        marginLeft: `${leftCss}px`,
-        width: `${widthCss}px`,
-        fontSize: `${fontSizeCss}px`,
+        position: 'absolute',
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        fontSize: `${fontSize}px`,
       }}
     >
       {translatedText}
@@ -163,11 +187,11 @@ function ElasticParagraph({
 }
 
 /**
- * Elastic overlay page — a white "page" sized to the original page width that
- * stacks translated paragraph boxes vertically. Masks the original page area
- * with an opaque white background and renders dark, readable text.
+ * Layout overlay — renders the original page canvas (images/tables/blocks
+ * visible) with translated text boxes overlaid at their original positions.
+ * The container grows to fit the tallest box so pages never collide.
  */
-function ElasticLayoutPane({
+function LayoutOverlay({
   page,
   pdfPage,
   dims,
@@ -179,54 +203,67 @@ function ElasticLayoutPane({
   if (!pdfPage || !dims) return <></>;
 
   const baseViewport = pdfPage.getViewport({ scale: 1 });
-  // 720 is the default maxWidth used by PdfCanvasRenderer (left pane).
-  const scale = 720 / baseViewport.width;
+  const scale = RENDER_WIDTH_PX / baseViewport.width;
+  const viewport = pdfPage.getViewport({ scale });
   const originalParagraphs = page.originalParagraphs ?? [];
 
+  // Compute every box's geometry and the slot height needed to avoid collisions.
+  const boxes = originalParagraphs
+    .map((para) => {
+      const translatedText = page.paragraphs.get(para.id);
+      if (!translatedText) return null;
+      const geom = computeBoxGeometry(para, viewport, dims.width);
+      return { para, translatedText, ...geom };
+    })
+    .filter((b): b is NonNullable<typeof b> => b !== null);
+
+  let maxBottom = dims.height;
+  for (const b of boxes) {
+    const estHeight = estimateBoxHeight(b.translatedText, b.width, b.fontSize);
+    maxBottom = Math.max(maxBottom, b.top + estHeight);
+  }
+  // Only the overflow beyond the original canvas needs reserved space; the
+  // canvas itself is in-flow and already occupies `dims.height`.
+  const overflowHeight = Math.max(0, maxBottom - dims.height) + 16;
+
   return (
-    <div className="pdf-viewer-elastic-page" style={{ width: `${dims.width}px` }}>
-      {originalParagraphs.map((para) => {
-        const translatedText = page.paragraphs.get(para.id);
-        if (!translatedText) return null;
-        return (
-          <ElasticParagraph
-            key={para.id}
-            para={para}
-            translatedText={translatedText}
-            scale={scale}
-            pageWidth={dims.width}
-          />
-        );
-      })}
-    </div>
+    <>
+      {boxes.map((b) => (
+        <LayoutOverlayBox
+          key={b.para.id}
+          para={b.para}
+          translatedText={b.translatedText}
+          left={b.left}
+          top={b.top}
+          width={b.width}
+          fontSize={b.fontSize}
+        />
+      ))}
+      {/* Spacer reserves vertical space so the auto-height absolute boxes that
+          extend beyond the canvas push the next page down instead of colliding. */}
+      <div style={{ position: 'relative', width: '100%', height: `${overflowHeight}px` }} aria-hidden="true" />
+    </>
   );
 }
 
-/** Centered status box for non-translated elastic states (idle/loading/error/empty). */
-function ElasticStatusOverlay({
+/** Centered status box overlaid on the canvas for non-translated states. */
+function LayoutStatusOverlay({
   pageNumber,
   state,
   error,
   onRetry,
-  dims,
 }: {
   pageNumber: number;
   state: 'idle' | 'translating' | 'error' | 'empty';
   error?: string;
   onRetry?: (pageNumber: number) => void;
-  dims?: { width: number; height: number };
 }): React.ReactElement {
   return (
-    <div
-      className="pdf-viewer-elastic-status"
-      style={{ minHeight: dims ? `${dims.height}px` : 'auto' }}
-    >
-      <div className="pdf-viewer-elastic-status-card">
-        {state === 'idle' && (
-          <p>Page {pageNumber} — Scroll to translate</p>
-        )}
+    <div className="pdf-viewer-layout-status">
+      <div className="pdf-viewer-layout-status-card">
+        {state === 'idle' && <p>Page {pageNumber} — Scroll to translate</p>}
         {state === 'translating' && (
-          <div className="pdf-viewer-elastic-status-row">
+          <div className="pdf-viewer-layout-status-row">
             <span className="pdf-viewer-spinner" aria-hidden="true" />
             <span>Translating page {pageNumber}...</span>
           </div>
@@ -236,8 +273,8 @@ function ElasticStatusOverlay({
         )}
         {state === 'error' && (
           <div>
-            <p className="pdf-viewer-elastic-status-error">Translation failed</p>
-            {error && <p className="pdf-viewer-elastic-status-detail">{error}</p>}
+            <p className="pdf-viewer-layout-status-error">Translation failed</p>
+            {error && <p className="pdf-viewer-layout-status-detail">{error}</p>}
             {onRetry && (
               <button
                 type="button"
@@ -261,33 +298,48 @@ export function PdfTranslationPane({
   onRetry,
   layoutMode = 'text',
   pdfPage,
+  visible,
   dims,
 }: PdfTranslationPaneProps): React.ReactElement {
   if (layoutMode === 'original') {
     const isTranslated = page.state === 'translated';
     const isEmpty = isTranslated && page.paragraphs.size === 0;
 
-    if (!isTranslated || isEmpty) {
-      const status: 'idle' | 'translating' | 'error' | 'empty' =
-        page.state === 'error'
-          ? 'error'
-          : page.state === 'translating'
-            ? 'translating'
-            : isEmpty
-              ? 'empty'
-              : 'idle';
-      return (
-        <ElasticStatusOverlay
-          pageNumber={pageNumber}
-          state={status}
-          error={page.error}
-          onRetry={onRetry}
-          dims={dims}
-        />
-      );
-    }
+    const status: 'idle' | 'translating' | 'error' | 'empty' | null = !isTranslated
+      ? page.state === 'error'
+        ? 'error'
+        : page.state === 'translating'
+          ? 'translating'
+          : 'idle'
+      : isEmpty
+        ? 'empty'
+        : null;
 
-    return <ElasticLayoutPane page={page} pdfPage={pdfPage ?? null} dims={dims} />;
+    return (
+      <div
+        className="pdf-viewer-layout-pane"
+        style={{ position: 'relative', width: '100%', minHeight: dims ? `${dims.height}px` : undefined }}
+      >
+        <PdfCanvasRenderer
+          page={pdfPage ?? null}
+          pageNumber={pageNumber}
+          visible={visible ?? false}
+          dims={dims}
+          enableTextLayer={false}
+        />
+        {status && (
+          <LayoutStatusOverlay
+            pageNumber={pageNumber}
+            state={status}
+            error={page.error}
+            onRetry={onRetry}
+          />
+        )}
+        {isTranslated && !isEmpty && (
+          <LayoutOverlay page={page} pdfPage={pdfPage ?? null} dims={dims} />
+        )}
+      </div>
+    );
   }
 
   // Fallback to text mode
