@@ -1,18 +1,19 @@
 {
-  "lastRefresh": "2026-06-15T18:05:00+07:00",
+  "lastRefresh": "2026-06-16T18:15:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Updated Current State metrics (958 tests / 76 files / 2.6 MB / 41 tracks)",
-    "product.md: Updated 'No active tracks' line (39 → 41 archived)",
-    "patterns.md: Updated last-refreshed timestamp and track count (40 → 41)",
-    "beads: Closed 20 stale open tasks (e34 epic + 4 children + 13 grandchildren + i96.3.2 from archived tracks pdf-translation-ux_20260615 and pdf-layout-scroll-sync_20260612)"
+    "product.md: Updated Current State metrics (958 → 966 tests, 41 → 42 tracks)",
+    "product.md: Added PDF Elastic Overlay Layout Mode to Implementation Status",
+    "product.md: Updated PDF Translation section (two right-pane modes: Layout elastic overlay + Text default)",
+    "patterns.md: Already updated during track archival (6 new elastic overlay patterns + superseded 2 old patterns)",
+    "beads: Closed beads_AnyLLMTranslate-1y7 (PDF Elastic Overlay epic)"
   ],
   "codebaseHealth": {
-    "tests": 958,
+    "tests": 966,
     "testFiles": 76,
     "buildSize": "2.6 MB",
     "lintErrors": 0,
-    "archivedTracks": 41,
+    "archivedTracks": 42,
     "activeTracks": 0
   }
 }
