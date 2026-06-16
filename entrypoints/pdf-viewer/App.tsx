@@ -127,10 +127,6 @@ export default function App(): ReactElement {
           const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
           const dims = pageDimensions.get(pageNumber);
           const widthStyle = dims ? `${dims.width}px` : '720px';
-          const heightStyle = dims ? `${dims.height}px` : '960px';
-          // Elastic overlay ('original') grows to natural height; text mode keeps
-          // the original page min-height so slots align with the left pane.
-          const isElastic = layoutMode === 'original';
           const page = pages[idx] ?? null;
           const isVisible = visiblePages.has(pageNumber);
           return (
@@ -138,7 +134,7 @@ export default function App(): ReactElement {
               key={`translation-${pageNumber}`}
               data-page-slot={pageNumber}
               className="pdf-viewer-page"
-              style={{ width: widthStyle, ...(isElastic ? {} : { minHeight: heightStyle }) }}
+              style={{ width: widthStyle }}
             >
               <PdfTranslationPane
                 pageNumber={pageNumber}

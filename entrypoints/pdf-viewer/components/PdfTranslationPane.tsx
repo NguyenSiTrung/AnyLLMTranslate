@@ -131,12 +131,13 @@ type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 /** Estimate the rendered height (px) of a translated box for slot sizing. */
 function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): number {
   const effectiveWidth = Math.max(widthPx - 6, 10);
-  const avgCharWidth = fontSizePx * 0.55;
+  // Using a safer multiplier for average character width to avoid underestimation (especially for Vietnamese).
+  const avgCharWidth = fontSizePx * 0.42;
   const lineHeight = fontSizePx * 1.45;
   const charsPerLine = Math.max(1, Math.floor(effectiveWidth / avgCharWidth));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  // Account for vertical padding (1px * 2) + border (1px * 2) in the overlay box.
-  return lines * lineHeight + 4;
+  // Account for vertical padding (1px * 2) + border (1px * 2) + safety buffer for word wrap.
+  return lines * lineHeight + lineHeight * 0.5 + 4;
 }
 
 /** Compute the absolute placement + sizing for one overlay box. */
@@ -218,7 +219,8 @@ function LayoutOverlay({
       if (!translatedText) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
-      return { para, translatedText, ...geom, estHeight };
+      const origHeight = para.height * viewport.scale;
+      return { para, translatedText, ...geom, estHeight, origHeight };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -248,6 +250,22 @@ function LayoutOverlay({
 
   return (
     <>
+      {/* Render opaque white masks at the original paragraph coordinates to completely
+          cover and hide the original English text on the canvas background. */}
+      {boxes.map((b) => (
+        <div
+          key={`mask-${b.para.id}`}
+          className="pdf-viewer-layout-para-mask"
+          style={{
+            position: 'absolute',
+            left: `${b.left - 1}px`,
+            top: `${b.top - 1}px`,
+            width: `${b.width + 2}px`,
+            height: `${b.origHeight + 2}px`,
+          }}
+        />
+      ))}
+      {/* Render the reflowed translated boxes on top of the masks. */}
       {reflowedBoxes.map((b) => (
         <LayoutOverlayBox
           key={b.para.id}

@@ -430,6 +430,13 @@ html, body, #root {
   position: relative;
 }
 
+.pdf-viewer-layout-para-mask {
+  position: absolute;
+  background: #ffffff;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .pdf-viewer-layout-para-box {
   line-height: 1.45;
   background: #ffffff;

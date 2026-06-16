@@ -172,7 +172,7 @@ describe('PdfTranslationPane layout overlay rendering', () => {
     expect(box.style.fontSize).toBe('22px');
   });
 
-  it('positions boxes at the original paragraph coordinates', async () => {
+  it('positions boxes and masks at the original paragraph coordinates', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
     await renderLayout(page, pdfPage);
@@ -181,6 +181,16 @@ describe('PdfTranslationPane layout overlay rendering', () => {
     expect(box.style.left).toBe('50px');
     expect(box.style.top).toBe('50px');
     expect(box.style.width).toBe('120px');
+
+    const mask = document.querySelector<HTMLElement>('.pdf-viewer-layout-para-mask');
+    expect(mask).not.toBeNull();
+    if (mask) {
+      // width=120+2=122, height=14+2=16; left=50-1=49, top=50-1=49
+      expect(mask.style.left).toBe('49px');
+      expect(mask.style.top).toBe('49px');
+      expect(mask.style.width).toBe('122px');
+      expect(mask.style.height).toBe('16px');
+    }
   });
 
   it('preserves reading order across multiple paragraphs', async () => {
