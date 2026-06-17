@@ -16,6 +16,7 @@ import type { PDFPageProxy } from 'pdfjs-dist';
 // from the package root. Importing via the deep path is the only stable way to
 // reach it in pdfjs-dist v4+.
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+import { isMathLine } from './pdfContentDetect';
 
 /** A single extracted paragraph (one LLM translation unit). */
 export interface PdfParagraph {
@@ -164,7 +165,14 @@ function groupLinesIntoParagraphs(
 
     const verticalGap = (lastY ?? line.y) - line.y; // top-to-bottom is decreasing y
     const sameLineGap = verticalGap <= 0;
-    const paraBreakGap = verticalGap > LINE_GAP_FACTOR * current.totalHeight / current.samples;
+
+    // Math-aware paragraph splitting: do not group standalone math lines with other lines
+    const isCurrentMath = isMathLine(current.text);
+    const isLineMath = isMathLine(lineText);
+    const paraBreakGap =
+      verticalGap > (LINE_GAP_FACTOR * current.totalHeight) / current.samples ||
+      isCurrentMath ||
+      isLineMath;
 
     if (paraBreakGap) {
       flush();

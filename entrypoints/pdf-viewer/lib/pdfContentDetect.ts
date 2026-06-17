@@ -166,3 +166,56 @@ export function classifyMathParagraph(text: string): ParagraphKind {
 
   return 'prose';
 }
+
+/**
+ * Determine if a single physical line is a standalone/block math formula.
+ *
+ * A line is standalone math if it contains math markers/symbols and has
+ * very few English-like prose words. This avoids separating normal prose
+ * lines that merely contain a short inline formula.
+ */
+export function isMathLine(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === '') return false;
+
+  // 1. Block-level LaTeX delimiters — always block math
+  for (const pattern of LATEX_BLOCK_PATTERNS) {
+    if (pattern.test(trimmed)) return true;
+  }
+
+  // 2. Must contain at least one math marker or symbol
+  const hasMathSymbol =
+    hasStrongMathMarker(trimmed) ||
+    /\\\[|\\\]|\$\$|\\begin\{|\\end\{|\\\(|\\\)|\\|\$/.test(trimmed) ||
+    /[+−\-*/=<>≤≥~≈±∑∏∫√^_%|#]/.test(trimmed);
+  if (!hasMathSymbol) return false;
+
+  // 3. Check character composition: letters vs non-letters
+  const totalChars = trimmed.replace(/\s/g, '').length;
+  if (totalChars === 0) return false;
+
+  const letterCount = (trimmed.match(/[a-zA-Z]/g) || []).length;
+  const letterRatio = letterCount / totalChars;
+
+  // If the line consists mostly of non-letters (ratio of letters < 0.6)
+  if (letterRatio < 0.6) {
+    return true;
+  }
+
+  // Alternatively, count English-like prose words.
+  const outside = stripLatexBlocks(trimmed);
+  const words = outside.split(/\s+/).filter((word) => {
+    const cleanWord = word.replace(/[^a-zA-Z]/g, '');
+    // Ignore short words (variables) and words that look like math formatting commands
+    if (cleanWord.length < 4) return false;
+    if (/^(mathbf|mathrm|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak)$/i.test(cleanWord)) return false;
+    return true;
+  });
+
+  // If there are 2 or fewer prose words, it is a math line
+  if (words.length <= 2) {
+    return true;
+  }
+
+  return false;
+}

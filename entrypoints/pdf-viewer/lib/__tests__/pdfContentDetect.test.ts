@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { classifyMathParagraph } from '../pdfContentDetect';
+import { classifyMathParagraph, isMathLine } from '../pdfContentDetect';
 
 describe('pdfContentDetect.classifyMathParagraph', () => {
   describe('LaTeX block delimiters', () => {
@@ -72,5 +72,25 @@ describe('pdfContentDetect.classifyMathParagraph', () => {
     it('classifies whitespace-only string as prose', () => {
       expect(classifyMathParagraph('   \n  ')).toBe('prose');
     });
+  });
+});
+
+describe('pdfContentDetect.isMathLine', () => {
+  it('identifies LaTeX block equations as math lines', () => {
+    expect(isMathLine('\\[ \\sum x_i \\]')).toBe(true);
+    expect(isMathLine('$$\\alpha = \\beta$$')).toBe(true);
+  });
+
+  it('identifies pure/display Unicode math lines as math lines', () => {
+    expect(isMathLine('ptcfg = pc + γ(pc - pu), γ > 1, (1)')).toBe(true);
+    expect(isMathLine('f(x) = x^2 + 2x + 1')).toBe(true);
+    expect(isMathLine('L(θ) = Σi ℓ(yi, ŷi)')).toBe(true);
+    expect(isMathLine('MSEtoken(j) = ||Knative[:, j] - Knative[:, j]||²₂')).toBe(true);
+  });
+
+  it('does NOT identify normal prose sentences with inline math as math lines', () => {
+    expect(isMathLine('where γ modulates the guidance strength, revealing different attention sparsity.')).toBe(false);
+    expect(isMathLine('The loss is minimized using gradient descent.')).toBe(false);
+    expect(isMathLine('Section 3.2: Margin Columns as Semantic Anchors')).toBe(false);
   });
 });
