@@ -10,6 +10,8 @@ import type {
   TranslateSelectionMessage,
   FetchSubtitleMessage,
   DetectPageCategoryLlmMessage,
+  ClassifyPdfParagraphsMessage,
+  ClassifyPdfParagraphsResult,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
@@ -698,6 +700,21 @@ async function handleDetectPageCategoryLLM(
   }
 }
 
+/** Handle CLASSIFY_PDF_PARAGRAPHS message */
+async function handleClassifyPdfParagraphs(
+  message: ClassifyPdfParagraphsMessage,
+): Promise<ClassifyPdfParagraphsResult> {
+  try {
+    const service = await initService();
+    if (!service.classifyPdfParagraphs) {
+      return { success: false, error: 'Provider does not support paragraph classification' };
+    }
+    return await service.classifyPdfParagraphs(message.paragraphs);
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 /** Update extension badge based on status */
 function handleStatusUpdate(
   message: { status: { status: string } },
@@ -793,6 +810,8 @@ export function handleMessage(
     }
     case 'DETECT_PAGE_CATEGORY_LLM':
       return handleDetectPageCategoryLLM(message);
+    case 'CLASSIFY_PDF_PARAGRAPHS':
+      return handleClassifyPdfParagraphs(message);
     case 'CLEAR_CACHE':
       return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
     case 'OPEN_PDF_VIEWER': {

@@ -13,10 +13,11 @@
  *   redundant LLM calls when the user scrolls back and forth.
  */
 
-import type { ExtensionMessage, TranslationResultItem } from '@/types/messages';
+import type { ExtensionMessage, TranslationResultItem, ClassifyPdfParagraphsResult } from '@/types/messages';
 import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
+import { classifyMathParagraph } from './pdfContentDetect';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
 
@@ -97,6 +98,31 @@ async function sendTranslationBatch(
   return result.results ?? [];
 }
 
+/**
+ * Send non-math paragraphs to the background LLM classifier and return the
+ * prose/figure labels. Returns null on any failure so the caller can
+ * fail-open (treat everything as prose).
+ */
+async function classifyParagraphs(
+  paragraphs: Array<{ id: string; text: string }>,
+): Promise<Record<string, 'prose' | 'figure'> | null> {
+  if (paragraphs.length === 0) return {};
+  const message: ExtensionMessage = {
+    action: 'CLASSIFY_PDF_PARAGRAPHS',
+    paragraphs,
+  };
+  try {
+    const response = await chrome.runtime.sendMessage(message);
+    const result = response as ClassifyPdfParagraphsResult;
+    if (!result || !result.success || !result.labels) {
+      return null;
+    }
+    return result.labels;
+  } catch {
+    return null;
+  }
+}
+
 /** Single batched LLM request for one or more pages of the document. */
 export async function translateParagraphs(
   paragraphs: Array<{ pageNumber: number; paragraph: PdfParagraph }>,
@@ -108,14 +134,61 @@ export async function translateParagraphs(
   const sourceLanguage = settings.sourceLanguage;
   const targetLanguage = settings.targetLanguage;
 
-  const batches = splitIntoBatches(paragraphs, settings.maxBatchChars);
+  // 1. Rule-based math split (deterministic, free, immune to network failure).
+  const mathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
+  const restItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
+  for (const item of paragraphs) {
+    if (classifyMathParagraph(item.paragraph.text) === 'math') {
+      mathItems.push(item);
+    } else {
+      restItems.push(item);
+    }
+  }
+
+  // 2. LLM classification of the remaining paragraphs into prose vs figure.
+  //    Failure → null → fail-open: translate everything in `restItems`.
+  const labels = await classifyParagraphs(
+    restItems.map((item) => ({ id: item.paragraph.id, text: item.paragraph.text })),
+  );
+
+  // Warn (but still fail-open to prose) when the classifier omits some ids —
+  // matches the project's existing pattern in parseTranslationResponse.
+  if (labels) {
+    const missingIds = restItems
+      .map((item) => item.paragraph.id)
+      .filter((id) => labels[id] === undefined);
+    if (missingIds.length > 0) {
+      console.warn('AnyLLMTranslate: Missing paragraph ids in classification response', missingIds);
+    }
+  }
+
+  const proseItems = restItems.filter((item) => labels?.[item.paragraph.id] !== 'figure');
+
+  // 3. Translate only the prose subset via the existing batched path.
+  const batches = splitIntoBatches(proseItems, settings.maxBatchChars);
   const batchResults = await Promise.all(
     batches.map((batch) => sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage)),
   );
-  const results = batchResults.flat();
+  const translatedResults = batchResults.flat();
 
-  // Write-through cache for fresh results so subsequent visits are instant
-  const sourceById = new Map(paragraphs.map((item) => [item.paragraph.id, item.paragraph.text]));
+  // 4. Merge: prose → LLM output; figure & math → original source text.
+  const results: TranslationResultItem[] = [...translatedResults];
+  const sourceById = new Map<string, string>();
+  for (const { paragraph } of proseItems) {
+    sourceById.set(paragraph.id, paragraph.text);
+  }
+  for (const { paragraph } of restItems) {
+    if (labels?.[paragraph.id] === 'figure') {
+      results.push({ id: paragraph.id, translatedText: paragraph.text });
+      sourceById.set(paragraph.id, paragraph.text);
+    }
+  }
+  for (const { paragraph } of mathItems) {
+    results.push({ id: paragraph.id, translatedText: paragraph.text });
+    sourceById.set(paragraph.id, paragraph.text);
+  }
+
+  // 5. Write-through cache for every result (including the source→source ones).
   for (const { id, translatedText } of results) {
     const source = sourceById.get(id);
     if (source) {

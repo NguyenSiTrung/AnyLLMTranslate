@@ -40,6 +40,7 @@ export type MessageAction =
   | 'getCategoryOverride'
   | 'getPageCategory'
   | 'DETECT_PAGE_CATEGORY_LLM'
+  | 'CLASSIFY_PDF_PARAGRAPHS'
   | 'CLEAR_CACHE'
   | 'OPEN_PDF_VIEWER';
 
@@ -159,6 +160,22 @@ export interface DetectPageCategoryLlmMessage {
   pageContext: PageContext;
 }
 
+/** A label assigned to a paragraph by the LLM figure/table classifier. */
+export type PdfParagraphLabel = 'prose' | 'figure';
+
+/** Classify PDF paragraphs as prose vs figure/table (Content → Background). */
+export interface ClassifyPdfParagraphsMessage {
+  action: 'CLASSIFY_PDF_PARAGRAPHS';
+  paragraphs: Array<{ id: string; text: string }>;
+}
+
+/** Response shape for CLASSIFY_PDF_PARAGRAPHS. */
+export interface ClassifyPdfParagraphsResult {
+  success: boolean;
+  labels?: Record<string, PdfParagraphLabel>;
+  error?: string;
+}
+
 /** Clear cache request from options page → background */
 export interface ClearCacheMessage {
   action: 'CLEAR_CACHE';
@@ -192,6 +209,7 @@ export type ExtensionMessage =
   | GetCategoryOverrideMessage
   | GetPageCategoryMessage
   | DetectPageCategoryLlmMessage
+  | ClassifyPdfParagraphsMessage
   | ClearCacheMessage
   | OpenPdfViewerMessage;
 

@@ -11,6 +11,7 @@ import type {
 } from '@/types/translation';
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
+import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/messages';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
 
@@ -211,6 +212,58 @@ Rules:
       return { success: true, category: parsed.category };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    }
+  }
+
+  async classifyPdfParagraphs(
+    paragraphs: Array<{ id: string; text: string }>,
+  ): Promise<ClassifyPdfParagraphsResult> {
+    if (paragraphs.length === 0) {
+      return { success: true, labels: {} };
+    }
+    try {
+      const systemPrompt = `You classify paragraphs extracted from a PDF page.
+For each paragraph id, return exactly one label:
+- "prose": normal sentences or paragraphs of running text that should be translated.
+- "figure": chart axis labels, legend entries, table cell text, diagram annotations, isolated numbers, single-word labels, or any short fragment that is part of a figure, chart, or table and is NOT a full sentence of prose.
+
+Rules:
+- When in doubt between prose and figure, prefer "prose" (it is safer to translate than to skip real prose).
+- Mathematical formulas will already have been filtered out by the caller — do not return "math".
+- Respond ONLY with valid JSON in this format: {"labels": {"id1": "prose", "id2": "figure"}}`;
+
+      const userPrompt = `Classify each of the following paragraphs. Respond with the JSON object only.\n\n${JSON.stringify(
+        Object.fromEntries(paragraphs.map((p) => [p.id, p.text])),
+        null,
+        2,
+      )}`;
+
+      const responseText = await this.sendToLangflow(systemPrompt, userPrompt);
+      if (!responseText.trim()) {
+        return { success: false, error: 'Empty response from Langflow' };
+      }
+
+      let parsed: { labels?: Record<string, string> };
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+        if (jsonMatch?.[1]) {
+          parsed = JSON.parse(jsonMatch[1]);
+        } else {
+          return { success: false, error: 'Failed to parse classification response' };
+        }
+      }
+
+      const rawLabels = parsed.labels ?? {};
+      const labels: Record<string, PdfParagraphLabel> = {};
+      for (const [id, rawLabel] of Object.entries(rawLabels)) {
+        labels[id] = rawLabel === 'figure' ? 'figure' : 'prose';
+      }
+      return { success: true, labels };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Classification failed';
       return { success: false, error: message };
     }
   }
