@@ -12,6 +12,7 @@
  *   never collide with the next page.
  */
 
+import { forwardRef, useLayoutEffect, useRef, useState } from 'react';
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -128,15 +129,23 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
 
 type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 
-/** Estimate the rendered height (px) of a translated box for slot sizing. */
+/**
+ * Conservative lower-bound estimate of a translated box's rendered height.
+ *
+ * Used as a floor under the live DOM measurement: in a real browser we prefer
+ * the actual `getBoundingClientRect().height` (which accounts for tall stacking
+ * diacritics like Vietnamese `ệ`, `ỗ` and for CJK). The estimate only kicks in
+ * when layout is unavailable (jsdom tests, hidden containers) so the reflow
+ * never silently under-flows there either.
+ */
 function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): number {
   const effectiveWidth = Math.max(widthPx - 6, 10);
-  // Using a safer multiplier for average character width to avoid underestimation (especially for Vietnamese).
-  const avgCharWidth = fontSizePx * 0.42;
+  // Generous avg char width so we err toward *more* lines (taller boxes),
+  // which is the safe direction for collision avoidance.
+  const avgCharWidth = fontSizePx * 0.5;
   const lineHeight = fontSizePx * 1.45;
   const charsPerLine = Math.max(1, Math.floor(effectiveWidth / avgCharWidth));
   const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  // Account for vertical padding (1px * 2) + border (1px * 2) + safety buffer for word wrap.
   return lines * lineHeight + lineHeight * 0.5 + 4;
 }
 
@@ -157,23 +166,20 @@ function computeBoxGeometry(
 }
 
 /** One translated box positioned over the original canvas. Grows to natural height. */
-function LayoutOverlayBox({
-  para,
-  translatedText,
-  left,
-  top,
-  width,
-  fontSize,
-}: {
-  para: PdfParagraph;
-  translatedText: string;
-  left: number;
-  top: number;
-  width: number;
-  fontSize: number;
-}): React.ReactElement {
+const LayoutOverlayBox = forwardRef<
+  HTMLDivElement,
+  {
+    para: PdfParagraph;
+    translatedText: string;
+    left: number;
+    top: number;
+    width: number;
+    fontSize: number;
+  }
+>(function LayoutOverlayBox({ para, translatedText, left, top, width, fontSize }, ref) {
   return (
     <div
+      ref={ref}
       className={`pdf-viewer-layout-para-box${para.isHeading ? ' pdf-viewer-layout-para-box--heading' : ''}`}
       style={{
         position: 'absolute',
@@ -186,15 +192,22 @@ function LayoutOverlayBox({
       {translatedText}
     </div>
   );
-}
+});
 
 /**
  * Layout overlay — renders the original page canvas (images/tables/blocks
  * visible) with translated text boxes overlaid at their original positions.
- * Boxes keep their original horizontal placement and reading order, but each
- * box is pushed downward if the previous translation would overlap it, so
- * long translations never collide. The container grows to fit the reflowed
- * content so the next page is pushed down instead of overlapping.
+ *
+ * Reflow strategy: render boxes at their original `top`, then in a
+ * `useLayoutEffect` measure each rendered box's actual height (via
+ * `getBoundingClientRect`) and shift any box down so it never overlaps the
+ * one above. Measuring the real DOM — instead of guessing line counts from
+ * an `avgCharWidth` heuristic — is what keeps scripts with tall stacking
+ * diacritics (Vietnamese `ệ`, `ỗ`, `ầ`, …) and CJK from colliding.
+ *
+ * The container's reserved height is derived from the largest measured
+ * bottom so auto-height boxes that extend past the canvas push the next
+ * page down instead of overlapping it.
  */
 function LayoutOverlay({
   page,
@@ -212,15 +225,18 @@ function LayoutOverlay({
   const viewport = pdfPage.getViewport({ scale });
   const originalParagraphs = page.originalParagraphs ?? [];
 
-  // Compute every box's geometry and estimated height for reflow.
+  // Pre-compute static geometry. `top` is the ORIGINAL position here; the
+  // effect below may override it after measuring the rendered boxes.
   const boxes = originalParagraphs
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
-      const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
       const origHeight = para.height * viewport.scale;
-      return { para, translatedText, ...geom, estHeight, origHeight };
+      // Conservative floor: only used when the live measurement is unavailable
+      // (e.g. jsdom has no layout). In a real browser the measured height wins.
+      const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
+      return { para, translatedText, origHeight, estHeight, ...geom };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -231,22 +247,61 @@ function LayoutOverlay({
     return a.left - b.left;
   });
 
-  // Reflow vertically: keep original x/width, but shift each box down if the
-  // previous one would overlap it. This prevents long translations from covering
-  // the next paragraph while preserving the original horizontal structure.
-  const BOX_GAP = 4;
-  const reflowedBoxes: Array<NonNullable<typeof boxes[number]>> = [];
-  let cursorBottom = 0;
-  for (const b of boxes) {
-    const top = Math.max(b.top, cursorBottom + BOX_GAP);
-    reflowedBoxes.push({ ...b, top });
-    cursorBottom = top + b.estHeight;
-  }
+  // tops[i] = the `top` CSS px for boxes[i]. Initialized to the original `top`,
+  // then corrected after measuring real DOM heights.
+  const [tops, setTops] = useState<number[]>(() => boxes.map((b) => b.top));
+  const boxRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [containerHeight, setContainerHeight] = useState<number>(dims.height);
+  // Last containerHeight we committed; tracked in a ref so the effect can diff
+  // against it without depending on the state value (which would re-trigger it).
+  const lastContainerHeightRef = useRef<number>(dims.height);
 
-  const maxBottom = Math.max(dims.height, cursorBottom);
-  // Only the overflow beyond the original canvas needs reserved space; the
-  // canvas itself is in-flow and already occupies `dims.height`.
-  const overflowHeight = Math.max(0, maxBottom - dims.height) + 16;
+  // Re-run the reflow only when the set of translated texts or the page height
+  // changes. Using a derived key (instead of the `boxes` array, which is a new
+  // reference every render) avoids an infinite measure → setTops → measure loop.
+  const translationsKey = boxes.map((b) => b.translatedText).join('\u0001');
+
+  useLayoutEffect(() => {
+    if (boxes.length === 0) {
+      if (lastContainerHeightRef.current !== dims.height) {
+        lastContainerHeightRef.current = dims.height;
+        setContainerHeight(dims.height);
+      }
+      return;
+    }
+
+    // First pass: place each box at the larger of its original `top` or the
+    // bottom of the previous box (so we measure against the final position).
+    const nextTops: number[] = new Array(boxes.length);
+    const BOX_GAP = 4;
+    let cursorBottom = 0;
+    let maxBottom = dims.height;
+
+    for (let i = 0; i < boxes.length; i++) {
+      const desiredTop = Math.max(boxes[i].top, cursorBottom + BOX_GAP);
+      nextTops[i] = desiredTop;
+
+      // Prefer the real, measured height of the rendered box. Fall back to the
+      // conservative estimate when layout is unavailable (e.g. jsdom) — never go
+      // below the estimate, since under-estimating is what causes overlaps.
+      const el = boxRefs.current[i];
+      const measured = el ? el.getBoundingClientRect().height : 0;
+      const h = Math.max(measured, boxes[i].estHeight);
+      cursorBottom = desiredTop + h;
+      if (cursorBottom > maxBottom) maxBottom = cursorBottom;
+    }
+
+    const prevTops = tops;
+    const topsChanged = nextTops.some((t, i) => Math.abs(t - (prevTops[i] ?? t)) > 0.5);
+    if (topsChanged) setTops(nextTops);
+
+    // Reserve a small buffer so box borders/descenders never kiss the next page.
+    const nextContainerHeight = maxBottom + 16;
+    if (Math.abs(nextContainerHeight - lastContainerHeightRef.current) > 0.5) {
+      lastContainerHeightRef.current = nextContainerHeight;
+      setContainerHeight(nextContainerHeight);
+    }
+  }, [translationsKey, dims.height, boxes.length]);
 
   return (
     <>
@@ -265,21 +320,24 @@ function LayoutOverlay({
           }}
         />
       ))}
-      {/* Render the reflowed translated boxes on top of the masks. */}
-      {reflowedBoxes.map((b) => (
+      {/* Render the translated boxes at the (measure-corrected) tops. */}
+      {boxes.map((b, i) => (
         <LayoutOverlayBox
           key={b.para.id}
+          ref={(el) => {
+            boxRefs.current[i] = el;
+          }}
           para={b.para}
           translatedText={b.translatedText}
           left={b.left}
-          top={b.top}
+          top={tops[i] ?? b.top}
           width={b.width}
           fontSize={b.fontSize}
         />
       ))}
       {/* Spacer reserves vertical space so the auto-height absolute boxes that
           extend beyond the canvas push the next page down instead of colliding. */}
-      <div style={{ position: 'relative', width: '100%', height: `${overflowHeight}px` }} aria-hidden="true" />
+      <div style={{ position: 'relative', width: '100%', height: `${Math.max(0, containerHeight - dims.height)}px` }} aria-hidden="true" />
     </>
   );
 }

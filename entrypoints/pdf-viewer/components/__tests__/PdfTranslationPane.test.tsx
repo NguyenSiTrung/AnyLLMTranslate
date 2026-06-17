@@ -240,6 +240,51 @@ describe('PdfTranslationPane layout overlay rendering', () => {
     expect(parseInt(boxes[1].style.top, 10)).toBeGreaterThan(100);
   });
 
+  it('reflows from measured DOM heights so headings never overlap the paragraph above (regression for Giới Thiệu overlap)', async () => {
+    // Reproduces the screenshot bug: a long abstract paragraph whose measured
+    // height exceeds the conservative estimate, followed by a heading at its
+    // original y. The heading must be pushed below the paragraph's real bottom.
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        ['1-0', 'TÓM TẮT — một đoạn tóm tắt dài bằng tiếng Việt với nhiều dấu phụ.'],
+        ['1-1', 'Giới Thiệu'],
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Abstract.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'Intro', fontSize: 22, isHeading: true, x: 50, y: 100, width: 100, height: 26 },
+      ],
+    };
+
+    // Stub getBoundingClientRect on the layout boxes so the reflow uses a tall,
+    // measured height (200px) that exceeds the estimate — the scenario where a
+    // pure estimate-based reflow would under-flow and overlap.
+    const realGetBCR = Element.prototype.getBoundingClientRect;
+    const bcrSpy = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList?.contains('pdf-viewer-layout-para-box')) {
+          return { ...realGetBCR.call(this), height: 200, width: 100, top: 0, left: 0, bottom: 200, right: 100, x: 0, y: 0, toJSON: () => ({}) };
+        }
+        return realGetBCR.call(this);
+      });
+
+    try {
+      const pdfPage = createPageMock();
+      await renderLayout(page, pdfPage);
+      const boxes = getLayoutBoxes();
+      expect(boxes.length).toBe(2);
+      // First paragraph sits at its original 50px.
+      expect(boxes[0].style.top).toBe('50px');
+      // Heading must be pushed below 50 + measured 200 + gap(4) = 254px,
+      // NOT left at its original 100px (which would overlap the abstract).
+      expect(parseInt(boxes[1].style.top, 10)).toBeGreaterThanOrEqual(254);
+      bcrSpy.mockRestore();
+    } finally {
+      bcrSpy.mockRestore();
+    }
+  });
+
   it('renders no clipped badge, popover, or clipped modifier', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();
