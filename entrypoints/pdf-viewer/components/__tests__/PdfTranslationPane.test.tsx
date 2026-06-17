@@ -285,6 +285,31 @@ describe('PdfTranslationPane layout overlay rendering', () => {
     }
   });
 
+  it('does NOT render masks or boxes for untranslated (verbatim) paragraphs', async () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        ['1-0', 'Translated text.'],
+        ['1-1', 'Untranslated verbatim text.'], // translatedText === original text
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Original text.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'Untranslated verbatim text.', fontSize: 12, isHeading: false, x: 50, y: 100, width: 100, height: 14 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+
+    const boxes = getLayoutBoxes();
+    // Only '1-0' is translated, so only 1 box should render
+    expect(boxes.length).toBe(1);
+    expect(boxes[0].textContent).toBe('Translated text.');
+
+    const masks = Array.from(document.querySelectorAll<HTMLElement>('.pdf-viewer-layout-para-mask'));
+    // Only 1 mask should render for the translated paragraph
+    expect(masks.length).toBe(1);
+  });
+
   it('renders no clipped badge, popover, or clipped modifier', async () => {
     const page = makeTranslatedPage();
     const pdfPage = createPageMock();

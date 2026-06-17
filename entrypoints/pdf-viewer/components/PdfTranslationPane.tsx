@@ -231,6 +231,11 @@ function LayoutOverlay({
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
+      // Skip overlay rendering if the text is kept verbatim/untranslated
+      // (e.g. math formulas, figures, or hidden OCR metadata). Since it is
+      // already in the background canvas, rendering it again causes redundant
+      // white boxes and text overlaps.
+      if (translatedText.trim() === para.text.trim()) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = para.height * viewport.scale;
       // Conservative floor: only used when the live measurement is unavailable
