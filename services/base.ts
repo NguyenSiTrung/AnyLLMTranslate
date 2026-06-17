@@ -5,6 +5,7 @@
 
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
 import type { ProviderConfig, PageContext } from '@/types/config';
+import type { ClassifyPdfParagraphsResult } from '@/types/messages';
 import { getLanguageName } from '@/lib/languages';
 
 /** Abstract base for all translation services */
@@ -17,6 +18,11 @@ export interface TranslationService {
 
   /** Detect the page category using LLM */
   detectPageCategory?(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }>;
+
+  /** Classify PDF paragraphs as prose vs figure/table content */
+  classifyPdfParagraphs?(
+    paragraphs: Array<{ id: string; text: string }>,
+  ): Promise<ClassifyPdfParagraphsResult>;
 }
 
 /** Default system prompt template with injectable variables */
