@@ -33,6 +33,7 @@ Rules:
 - Preserve ALL HTML tags, attributes, and structure exactly as they are.
 - Do NOT translate code, URLs, email addresses, or proper nouns unless appropriate.
 - If the text is already in the target language, return it unchanged.
+- If the text contains mathematical formulas, equations, or notation (LaTeX like \\(x^2\\), Unicode like x², or symbol expressions), translate only the surrounding prose and preserve the mathematical content EXACTLY as written. Do NOT translate variable names, operators, or symbols.
 - Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "translated text 1", "id2": "translated text 2"}}
 - The keys in "translations" must exactly match the input keys.
 {{glossary}}`;

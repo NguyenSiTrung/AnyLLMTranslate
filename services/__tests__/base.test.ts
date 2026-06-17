@@ -28,6 +28,11 @@ describe('DEFAULT_SYSTEM_PROMPT_TEMPLATE', () => {
   it('contains translations key instruction', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('translations');
   });
+
+  it('instructs the model to preserve inline math/notation', () => {
+    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('mathematical');
+    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('preserve');
+  });
 });
 
 describe('buildSystemPrompt', () => {
