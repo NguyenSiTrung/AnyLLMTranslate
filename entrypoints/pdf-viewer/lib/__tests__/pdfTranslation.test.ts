@@ -37,6 +37,16 @@ beforeEach(() => {
   } as ExtensionSettings);
   vi.mocked(cacheTranslation).mockResolvedValue(undefined);
   vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+    const action = (message as { action: string }).action;
+    if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+      // Default: classify everything as prose. Individual tests override this.
+      const pieces = (message as { paragraphs: Array<{ id: string }> }).paragraphs;
+      return {
+        success: true,
+        labels: Object.fromEntries(pieces.map(({ id }) => [id, 'prose'])),
+      };
+    }
+    // translate
     const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
     return {
       success: true,
@@ -109,13 +119,17 @@ describe('pdfTranslation memory cache', () => {
       'https://example.com/a.pdf',
     );
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2);
-    const messages = vi.mocked(chrome.runtime.sendMessage).mock.calls.map(([message]) => message as unknown as { pieces: Array<{ id: string; text: string }> });
-    expect(messages.map((message) => message.pieces.map(({ id }) => id))).toEqual([
+    // Only the 'translate' calls count toward batching; the coordinator also
+    // issues one CLASSIFY_PDF_PARAGRAPHS call before translating.
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string; pieces: Array<{ id: string; text: string }> })
+      .filter((message) => message.action === 'translate');
+    expect(translateMessages).toHaveLength(2);
+    expect(translateMessages.map((message) => message.pieces.map(({ id }) => id))).toEqual([
       ['1-0', '1-1'],
       ['1-2'],
     ]);
-    for (const message of messages) {
+    for (const message of translateMessages) {
       const chars = message.pieces.reduce((sum, piece) => sum + piece.text.length, 0);
       expect(chars).toBeLessThanOrEqual(16);
     }
@@ -134,7 +148,13 @@ describe('pdfTranslation memory cache', () => {
     // The mock factory only defines cacheTranslation — if getCachedTranslation were
     // still imported by pdfTranslation.ts, Vitest would throw at module load time.
     expect(cacheTranslation).toHaveBeenCalled();
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1);
+    // The coordinator issues one CLASSIFY_PDF_PARAGRAPHS call plus one 'translate'
+    // call. Assert specifically that exactly one translate call happened (the
+    // intent of this test is the cache-lookup invariant, not the call count).
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string })
+      .filter((message) => message.action === 'translate');
+    expect(translateMessages).toHaveLength(1);
   });
 
   it(`evicts the oldest document when cache exceeds MAX_CACHED_DOCUMENTS (${MAX_CACHED_DOCUMENTS})`, () => {
@@ -161,5 +181,165 @@ describe('pdfTranslation memory cache', () => {
 
     // The new entry should be present
     expect(getMemoryCachedPage('https://example.com/doc-new.pdf', 1, 'en', 'vi')?.get('p')).toBe('new');
+  });
+
+  it('keeps math paragraphs verbatim and does not send them to the translator', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        const pieces = (message as { paragraphs: Array<{ id: string }> }).paragraphs;
+        return {
+          success: true,
+          labels: Object.fromEntries(pieces.map(({ id }) => [id, 'prose'])),
+        };
+      }
+      const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        // Pure math — should be kept verbatim, never sent to translator
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'f(x) = x² + 2x + 1', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        // Prose — should be translated
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'This is a normal sentence about the model.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    // Math paragraph: translatedText equals its original source text
+    const mathResult = results.find((r) => r.id === '1-0');
+    expect(mathResult?.translatedText).toBe('f(x) = x² + 2x + 1');
+
+    // Prose paragraph: translated normally
+    const proseResult = results.find((r) => r.id === '1-1');
+    expect(proseResult?.translatedText).toBe('translated-1-1');
+
+    // The translator must NOT have received the math paragraph. Inspect every
+    // sendMessage call whose action is 'translate' and collect their piece ids.
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+    const translateCalls = calls.filter(
+      ([msg]) => (msg as unknown as { action: string }).action === 'translate',
+    );
+    const translatedIds = translateCalls.flatMap(([msg]) =>
+      (msg as unknown as { pieces: Array<{ id: string }> }).pieces.map((p) => p.id),
+    );
+    expect(translatedIds).not.toContain('1-0');
+    expect(translatedIds).toContain('1-1');
+  });
+
+  it('keeps figure-labeled paragraphs verbatim', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        // Mark the short label as a figure axis label
+        return { success: true, labels: { '1-0': 'figure', '1-1': 'prose' } };
+      }
+      const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'Accuracy', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'The model achieves high accuracy.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    expect(results.find((r) => r.id === '1-0')?.translatedText).toBe('Accuracy');
+    expect(results.find((r) => r.id === '1-1')?.translatedText).toBe('translated-1-1');
+  });
+
+  it('fail-opens to translating all non-math when classification fails', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        return { success: false, error: 'network down' };
+      }
+      const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        // Math still protected by rules, even though LLM is down
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'f(x) = x²', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'Normal prose sentence here.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    // Math: rule-based protection intact
+    expect(results.find((r) => r.id === '1-0')?.translatedText).toBe('f(x) = x²');
+    // Prose: translated despite classification failure (fail-open)
+    expect(results.find((r) => r.id === '1-1')?.translatedText).toBe('translated-1-1');
+  });
+
+  it('defaults to prose when the classifier omits an id', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        // Classifier returns labels for only one of two paragraphs
+        return { success: true, labels: { '1-0': 'prose' } };
+      }
+      const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'First paragraph of prose.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'Second paragraph of prose.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    // Missing label → defaults to prose → translated
+    expect(results.find((r) => r.id === '1-1')?.translatedText).toBe('translated-1-1');
+  });
+
+  it('skips the classification call entirely when all paragraphs are math', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        throw new Error('classification should not have been called');
+      }
+      const pieces = (message as { pieces: Array<{ id: string }> }).pieces;
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({ id, translatedText: `translated-${id}` })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: { id: '1-0', text: 'f(x) = x²', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+        { pageNumber: 1, paragraph: { id: '1-1', text: 'α + β = γ', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    // Both kept verbatim
+    expect(results.find((r) => r.id === '1-0')?.translatedText).toBe('f(x) = x²');
+    expect(results.find((r) => r.id === '1-1')?.translatedText).toBe('α + β = γ');
+
+    // No classification call was made
+    const classifyCalls = vi.mocked(chrome.runtime.sendMessage).mock.calls.filter(
+      ([msg]) => (msg as unknown as { action: string }).action === 'CLASSIFY_PDF_PARAGRAPHS',
+    );
+    expect(classifyCalls).toHaveLength(0);
   });
 });
