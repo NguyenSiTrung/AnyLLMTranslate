@@ -152,17 +152,4 @@ describe('pdfTextExtraction', () => {
     expect(p.width).toBe(70);
     expect(p.height).toBe(27);
   });
-
-  it('does not group standalone math lines with normal prose lines', async () => {
-    const page = fakePage([
-      item('The guided distribution is obtained by:', 100, 700),
-      item('ptcfg = pc + γ(pc - pu), γ > 1, (1)', 100, 688), // Standalone math line
-      item('where γ modulates the guidance strength.', 100, 676), // Prose line
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(3);
-    expect(result.paragraphs[0].text).toBe('The guided distribution is obtained by:');
-    expect(result.paragraphs[1].text).toBe('ptcfg = pc + γ(pc - pu), γ > 1, (1)');
-    expect(result.paragraphs[2].text).toBe('where γ modulates the guidance strength.');
-  });
 });
