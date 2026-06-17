@@ -224,6 +224,13 @@ export interface TranslationResultMessage {
 export interface TranslationResultItem {
   id: string;
   translatedText: string;
+  /**
+   * Content kind of the paragraph: `'math'`/`'figure'` were kept verbatim
+   * (never sent to the translator); `'prose'` was translated. Omitted on
+   * legacy results from the generic `translate` path so existing callers
+   * that don't set it keep working.
+   */
+  kind?: 'prose' | 'math' | 'figure';
 }
 
 /** Tab translation status */

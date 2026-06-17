@@ -224,24 +224,77 @@ function LayoutOverlay({
   const scale = RENDER_WIDTH_PX / baseViewport.width;
   const viewport = pdfPage.getViewport({ scale });
   const originalParagraphs = page.originalParagraphs ?? [];
+  const kinds = page.paragraphKinds;
 
   // Pre-compute static geometry. `top` is the ORIGINAL position here; the
   // effect below may override it after measuring the rendered boxes.
+  //
+  // Each paragraph becomes one of three render kinds:
+  //  - 'prose': translated; renders a white mask + LayoutOverlayBox at its
+  //    (measure-corrected) top. Height from live DOM measurement.
+  //  - 'math' | 'figure': kept verbatim and visible on the background canvas.
+  //    Rendered as a TRANSPARENT SPACER reserving the original height, with no
+  //    white mask (so the canvas formula/figure stays visible). The spacer is
+  //    counted in the reflow so adjacent prose boxes never collapse over the
+  //    reserved slot — this is what fixes the "math pushed to the same level
+  //    as surrounding prose" bug.
+  //  - 'skip': legacy fallback when paragraphKinds is absent (older cached
+  //    pages). Verbatim text is dropped entirely (preserves fdef86b: hidden OCR
+  //    metadata / untranslated English must stay masked, not turned into a
+  //    spacer). Only prose with non-verbatim text renders a box.
   const boxes = originalParagraphs
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
-      // Skip overlay rendering if the text is kept verbatim/untranslated
-      // (e.g. math formulas, figures, or hidden OCR metadata). Since it is
-      // already in the background canvas, rendering it again causes redundant
-      // white boxes and text overlaps.
-      if (translatedText.trim() === para.text.trim()) return null;
+      const kind = kinds?.get(para.id);
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = para.height * viewport.scale;
-      // Conservative floor: only used when the live measurement is unavailable
-      // (e.g. jsdom has no layout). In a real browser the measured height wins.
+
+      if (kind === 'math' || kind === 'figure') {
+        // Reserve the original footprint as a transparent spacer. estHeight
+        // is the authoritative height (spacers have no live box to measure).
+        return {
+          para,
+          translatedText,
+          renderKind: kind,
+          isSpacer: true,
+          origHeight,
+          estHeight: origHeight,
+          ...geom,
+        };
+      }
+
+      if (kind === 'prose') {
+        // Prose: render the box + mask ONLY when the LLM actually translated
+        // it. Verbatim prose (LLM returned the source unchanged) is dropped,
+        // matching the pre-existing fdef86b behavior — the English shows on
+        // the canvas as before. (Prose-that-wasn't-translated is an LLM-quality
+        // concern, out of scope for the math/figure layout fix.) No spacer.
+        if (translatedText.trim() === para.text.trim()) return null;
+        const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
+        return {
+          para,
+          translatedText,
+          renderKind: 'prose',
+          isSpacer: false,
+          origHeight,
+          estHeight,
+          ...geom,
+        };
+      }
+
+      // Legacy path (no kind): drop verbatim, render non-verbatim prose.
+      if (translatedText.trim() === para.text.trim()) return null;
       const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
-      return { para, translatedText, origHeight, estHeight, ...geom };
+      return {
+        para,
+        translatedText,
+        renderKind: 'prose',
+        isSpacer: false,
+        origHeight,
+        estHeight,
+        ...geom,
+      };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -261,10 +314,15 @@ function LayoutOverlay({
   // against it without depending on the state value (which would re-trigger it).
   const lastContainerHeightRef = useRef<number>(dims.height);
 
-  // Re-run the reflow only when the set of translated texts or the page height
-  // changes. Using a derived key (instead of the `boxes` array, which is a new
-  // reference every render) avoids an infinite measure → setTops → measure loop.
-  const translationsKey = boxes.map((b) => b.translatedText).join('\u0001');
+  // Re-run the reflow only when the set of translated texts/kinds or the page
+  // height changes. Using a derived key (instead of the `boxes` array, which is
+  // a new reference every render) avoids an infinite measure → setTops →
+  // measure loop. The key includes each box's render kind + id so adding /
+  // removing a math/figure spacer (no translated text of its own) still
+  // re-runs the reflow.
+  const translationsKey = boxes
+    .map((b) => `${b.para.id}:${b.renderKind}:${b.translatedText}`)
+    .join('\u0001');
 
   useLayoutEffect(() => {
     if (boxes.length === 0) {
@@ -286,12 +344,19 @@ function LayoutOverlay({
       const desiredTop = Math.max(boxes[i].top, cursorBottom + BOX_GAP);
       nextTops[i] = desiredTop;
 
-      // Prefer the real, measured height of the rendered box. Fall back to the
-      // conservative estimate when layout is unavailable (e.g. jsdom) — never go
-      // below the estimate, since under-estimating is what causes overlaps.
-      const el = boxRefs.current[i];
-      const measured = el ? el.getBoundingClientRect().height : 0;
-      const h = Math.max(measured, boxes[i].estHeight);
+      // Spacers reserve a fixed origHeight (no live box to measure). Prose
+      // boxes prefer the real, measured height of the rendered box, falling
+      // back to the conservative estimate when layout is unavailable (e.g.
+      // jsdom) — never go below the estimate, since under-estimating causes
+      // overlaps.
+      let h: number;
+      if (boxes[i].isSpacer) {
+        h = boxes[i].origHeight;
+      } else {
+        const el = boxRefs.current[i];
+        const measured = el ? el.getBoundingClientRect().height : 0;
+        h = Math.max(measured, boxes[i].estHeight);
+      }
       cursorBottom = desiredTop + h;
       if (cursorBottom > maxBottom) maxBottom = cursorBottom;
     }
@@ -308,11 +373,16 @@ function LayoutOverlay({
     }
   }, [translationsKey, dims.height, boxes.length]);
 
+  // Prose boxes only — these get the opaque white mask that hides the original
+  // English text on the canvas background. Math/figure spacers are NOT masked
+  // so the canvas formula/figure stays visible.
+  const proseBoxes = boxes.filter((b) => !b.isSpacer);
+
   return (
     <>
       {/* Render opaque white masks at the original paragraph coordinates to completely
           cover and hide the original English text on the canvas background. */}
-      {boxes.map((b) => (
+      {proseBoxes.map((b) => (
         <div
           key={`mask-${b.para.id}`}
           className="pdf-viewer-layout-para-mask"
@@ -325,21 +395,38 @@ function LayoutOverlay({
           }}
         />
       ))}
-      {/* Render the translated boxes at the (measure-corrected) tops. */}
-      {boxes.map((b, i) => (
-        <LayoutOverlayBox
-          key={b.para.id}
-          ref={(el) => {
-            boxRefs.current[i] = el;
-          }}
-          para={b.para}
-          translatedText={b.translatedText}
-          left={b.left}
-          top={tops[i] ?? b.top}
-          width={b.width}
-          fontSize={b.fontSize}
-        />
-      ))}
+      {/* Render the translated prose boxes at the (measure-corrected) tops.
+          Math/figure spacers render as transparent divs reserving origHeight
+          (visibility hidden so the canvas-painted content shows through). */}
+      {boxes.map((b, i) =>
+        b.isSpacer ? (
+          <div
+            key={`spacer-${b.para.id}`}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: `${b.left}px`,
+              top: `${tops[i] ?? b.top}px`,
+              width: `${b.width}px`,
+              height: `${b.origHeight}px`,
+              visibility: 'hidden',
+            }}
+          />
+        ) : (
+          <LayoutOverlayBox
+            key={b.para.id}
+            ref={(el) => {
+              boxRefs.current[i] = el;
+            }}
+            para={b.para}
+            translatedText={b.translatedText}
+            left={b.left}
+            top={tops[i] ?? b.top}
+            width={b.width}
+            fontSize={b.fontSize}
+          />
+        ),
+      )}
       {/* Spacer reserves vertical space so the auto-height absolute boxes that
           extend beyond the canvas push the next page down instead of colliding. */}
       <div style={{ position: 'relative', width: '100%', height: `${Math.max(0, containerHeight - dims.height)}px` }} aria-hidden="true" />
