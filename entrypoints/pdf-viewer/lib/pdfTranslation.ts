@@ -151,6 +151,17 @@ export async function translateParagraphs(
     restItems.map((item) => ({ id: item.paragraph.id, text: item.paragraph.text })),
   );
 
+  // Warn (but still fail-open to prose) when the classifier omits some ids —
+  // matches the project's existing pattern in parseTranslationResponse.
+  if (labels) {
+    const missingIds = restItems
+      .map((item) => item.paragraph.id)
+      .filter((id) => labels[id] === undefined);
+    if (missingIds.length > 0) {
+      console.warn('AnyLLMTranslate: Missing paragraph ids in classification response', missingIds);
+    }
+  }
+
   const proseItems = restItems.filter((item) => labels?.[item.paragraph.id] !== 'figure');
 
   // 3. Translate only the prose subset via the existing batched path.
