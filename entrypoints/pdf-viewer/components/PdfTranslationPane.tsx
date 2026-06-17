@@ -231,17 +231,14 @@ function LayoutOverlay({
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
-      // Skip overlay rendering if the text is kept verbatim/untranslated
-      // (e.g. math formulas, figures, or hidden OCR metadata). Since it is
-      // already in the background canvas, rendering it again causes redundant
-      // white boxes and text overlaps.
-      if (translatedText.trim() === para.text.trim()) return null;
+      const isSkipped = translatedText.trim() === para.text.trim();
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = para.height * viewport.scale;
-      // Conservative floor: only used when the live measurement is unavailable
-      // (e.g. jsdom has no layout). In a real browser the measured height wins.
-      const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
-      return { para, translatedText, origHeight, estHeight, ...geom };
+      // For skipped boxes, preserve original height exactly so space is reserved
+      const estHeight = isSkipped
+        ? origHeight
+        : estimateBoxHeight(translatedText, geom.width, geom.fontSize);
+      return { para, translatedText, origHeight, estHeight, isSkipped, ...geom };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -311,35 +308,58 @@ function LayoutOverlay({
   return (
     <>
       {/* Render opaque white masks at the original paragraph coordinates to completely
-          cover and hide the original English text on the canvas background. */}
-      {boxes.map((b) => (
-        <div
-          key={`mask-${b.para.id}`}
-          className="pdf-viewer-layout-para-mask"
-          style={{
-            position: 'absolute',
-            left: `${b.left - 1}px`,
-            top: `${b.top - 1}px`,
-            width: `${b.width + 2}px`,
-            height: `${b.origHeight + 2}px`,
-          }}
-        />
-      ))}
-      {/* Render the translated boxes at the (measure-corrected) tops. */}
-      {boxes.map((b, i) => (
-        <LayoutOverlayBox
-          key={b.para.id}
-          ref={(el) => {
-            boxRefs.current[i] = el;
-          }}
-          para={b.para}
-          translatedText={b.translatedText}
-          left={b.left}
-          top={tops[i] ?? b.top}
-          width={b.width}
-          fontSize={b.fontSize}
-        />
-      ))}
+          cover and hide the original English text on the canvas background.
+          Only render for non-skipped (translated) paragraphs. */}
+      {boxes
+        .filter((b) => !b.isSkipped)
+        .map((b) => (
+          <div
+            key={`mask-${b.para.id}`}
+            className="pdf-viewer-layout-para-mask"
+            style={{
+              position: 'absolute',
+              left: `${b.left - 1}px`,
+              top: `${b.top - 1}px`,
+              width: `${b.width + 2}px`,
+              height: `${b.origHeight + 2}px`,
+            }}
+          />
+        ))}
+      {/* Render the translated boxes or transparent spacers at the (measure-corrected) tops. */}
+      {boxes.map((b, i) => {
+        if (b.isSkipped) {
+          return (
+            <div
+              key={b.para.id}
+              ref={(el) => {
+                boxRefs.current[i] = el;
+              }}
+              style={{
+                position: 'absolute',
+                left: `${b.left}px`,
+                top: `${tops[i] ?? b.top}px`,
+                width: `${b.width}px`,
+                height: `${b.origHeight}px`,
+                visibility: 'hidden',
+              }}
+            />
+          );
+        }
+        return (
+          <LayoutOverlayBox
+            key={b.para.id}
+            ref={(el) => {
+              boxRefs.current[i] = el;
+            }}
+            para={b.para}
+            translatedText={b.translatedText}
+            left={b.left}
+            top={tops[i] ?? b.top}
+            width={b.width}
+            fontSize={b.fontSize}
+          />
+        );
+      })}
       {/* Spacer reserves vertical space so the auto-height absolute boxes that
           extend beyond the canvas push the next page down instead of colliding. */}
       <div style={{ position: 'relative', width: '100%', height: `${Math.max(0, containerHeight - dims.height)}px` }} aria-hidden="true" />
