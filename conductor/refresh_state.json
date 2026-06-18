@@ -1,19 +1,26 @@
 {
-  "lastRefresh": "2026-06-16T18:15:00+07:00",
+  "lastRefresh": "2026-06-18T19:02:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Updated Current State metrics (958 → 966 tests, 41 → 42 tracks)",
-    "product.md: Added PDF Elastic Overlay Layout Mode to Implementation Status",
-    "product.md: Updated PDF Translation section (two right-pane modes: Layout elastic overlay + Text default)",
-    "patterns.md: Already updated during track archival (6 new elastic overlay patterns + superseded 2 old patterns)",
-    "beads: Closed beads_AnyLLMTranslate-1y7 (PDF Elastic Overlay epic)"
+    "product.md: Added 3 incremental PDF features merged to master since 2026-06-16 — Math/Figure Skipping (feat/pdf-skip-math-figures), Heading Truncation & Rotated Text Fixes (8b1552a), Split/Translation-only View Toggle (feat/pdf-translation-only-view)",
+    "product.md: Expanded PDF Translation feature section with view modes, sub-modes, and math/figure skipping details",
+    "product.md: Updated Current State metrics (966 → 1004 tests, 76 → 80 files, 2.6 → 2.58 MB)",
+    "patterns.md: Added new 'PDF Content Classification & Layout' section (6 patterns: rule-vs-LLM split, classification-in-orchestration-seam, kind end-to-end propagation, orthogonal view-mode types, useVisiblePages container-ref switch, null-ref scroll-sync guards)",
+    "patterns.md: Updated Last refreshed footer with current codebase health metrics",
+    "tracks.md: Added note about pdf-bilingual-inline_20260618 (Strategy B) being SHELVED — never merged to master, branch pruned",
+    "beads: Closed orphaned beads_AnyLLMTranslate-d67.1.1 (was IN_PROGRESS under CLOSED epic); updated epic d67 with SHELVED note",
+    "branches: Deleted stranded/merged local + remote branches (feat/pdf-bilingual-inline_20260618, feat/subtitle-reliability-hardening_20260612); only master remains",
+    "product.md.bak / patterns.md.bak: backups created before edits"
   ],
   "codebaseHealth": {
-    "tests": 966,
-    "testFiles": 76,
-    "buildSize": "2.6 MB",
+    "tests": 1004,
+    "testFiles": 80,
+    "buildSize": "2.58 MB",
     "lintErrors": 0,
     "archivedTracks": 42,
     "activeTracks": 0
+  },
+  "shelvedWork": {
+    "pdf-bilingual-inline_20260618": "Strategy B (PDF Bilingual Inline) — Beads epic d67 was marked CLOSED but never merged to master. Branch pruned. Treated as SHELVED, not shipped. Revisit requires re-evaluating spec against current master PDF viewer."
   }
 }

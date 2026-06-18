@@ -45,8 +45,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### PDF Translation
 - Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
+- Two right-pane modes: **Layout** (elastic overlay preserving original canvas with auto-height translated boxes) and **Text** (default reading mode, vertical flow)
 - Progressive IntersectionObserver-based translation (viewport-only, no token storms)
-- Synchronized bidirectional scrolling between original and translated panes (direct 1-to-1 scroll mirroring when page heights are matched)
+- Synchronized bidirectional scrolling between original and translated panes (page-block interpolation in Layout mode, ratio-based in Text mode)
 - Symmetrical layout widths (constrained and centered to match original page dimensions)
 - Persistent header translation progress indicator (keeps indicator visible and avoids container height mismatches)
 - Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders)
@@ -131,10 +132,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **PDF Translation Support** (Archived 2026-06-12): Built-in PDF.js viewer with side-by-side layout (original canvas left, translated text right). Progressive IntersectionObserver-based translation, synchronized bidirectional scrolling, PDF paragraph grouping heuristic, heading detection by median font height, in-memory + IndexedDB caching, batch translation with `maxBatchChars` splitting. 20 files across components, hooks, and lib. 9 new tests added.
 - **PDF Viewer Performance Overhaul** (Archived 2026-06-12): Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders), progressive page proxy streaming in batches of 3, `createSemaphore()` factory for isolated concurrency (PDF max 2 vs page/subtitle max 3), bidirectional scroll sync with `isUpdatingRef` guard, observer root fix (scroll pane not content wrapper), duplicate translation elimination. 30 new tests added (947 total).
 - **PDF Layout and Scroll Synchronization** (Archived 2026-06-12): Constrained translation slot widths symmetrically to match original page dimensions, moved the translation progress indicator pill into the persistent header, and simplified scroll synchronization to perform direct 1-to-1 mirroring when page heights match.
+- **PDF Elastic Overlay Layout Mode** (Archived 2026-06-16): Replaced rigid 1:1 bounding-box Layout mode with an Elastic Overlay that preserves the original page canvas (images/tables/blocks) while overlaying translated text boxes at their original positions with `height: auto` (no clipping, micro-fonts, or popovers). White background masks only original text; uncovered canvas areas stay visible. Added overflow spacer to reserve vertical space when translations exceed canvas height, and page-block interpolation scroll sync (aligns at page boundaries, interpolates within each page).
 
 ### Current State
-- 958 tests passing across 76 files. Build passing (`wxt build` ✅, ~2.6 MB). 0 lint errors.
-- **No active tracks.** All 41 tracks completed and archived.
+- 966 tests passing across 76 files. Build passing (`wxt build` ✅, ~2.6 MB). 0 lint errors.
+- **No active tracks.** All 42 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
