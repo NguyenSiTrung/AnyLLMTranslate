@@ -10,6 +10,7 @@
  */
 
 import { type ReactNode, useRef, type RefObject } from 'react';
+import type { PdfViewMode } from '@/lib/constants';
 import { useSynchronizedScroll } from '../hooks/useSynchronizedScroll';
 
 export interface ViewerLayoutProps {
@@ -27,6 +28,8 @@ export interface ViewerLayoutProps {
   leftPaneRef?: RefObject<HTMLDivElement | null>;
   /** Optional extra content to place on the right side of the header. */
   headerExtra?: ReactNode;
+  /** Whether to render the split (two-pane) layout or translation-only (single column). Defaults to 'split'. */
+  viewMode?: PdfViewMode;
 }
 
 export function ViewerLayout({
@@ -37,6 +40,7 @@ export function ViewerLayout({
   right,
   leftPaneRef,
   headerExtra,
+  viewMode = 'split',
 }: ViewerLayoutProps): React.ReactElement {
   const internalLeftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -54,20 +58,31 @@ export function ViewerLayout({
         {headerExtra && <div className="pdf-viewer-header-right">{headerExtra}</div>}
       </header>
       {banner && <div className="pdf-viewer-banner-wrap">{banner}</div>}
-      <main className="pdf-viewer-main">
-        <section className="pdf-viewer-pane pdf-viewer-pane--left">
-          <div className="pdf-viewer-pane-label">Original</div>
-          <div ref={leftRef} className="pdf-viewer-pages pdf-viewer-pages--left" data-pane="left">
-            {left}
-          </div>
-        </section>
-        <section className="pdf-viewer-pane pdf-viewer-pane--right">
-          <div className="pdf-viewer-pane-label">Translation</div>
-          <div ref={rightRef} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
-            {right}
-          </div>
-        </section>
-      </main>
+      {viewMode === 'translation-only' ? (
+        <main className="pdf-viewer-main pdf-viewer-main--single">
+          <section className="pdf-viewer-pane pdf-viewer-pane--right">
+            <div className="pdf-viewer-pane-label">Translation</div>
+            <div ref={rightRef} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
+              {right}
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="pdf-viewer-main">
+          <section className="pdf-viewer-pane pdf-viewer-pane--left">
+            <div className="pdf-viewer-pane-label">Original</div>
+            <div ref={leftRef} className="pdf-viewer-pages pdf-viewer-pages--left" data-pane="left">
+              {left}
+            </div>
+          </section>
+          <section className="pdf-viewer-pane pdf-viewer-pane--right">
+            <div className="pdf-viewer-pane-label">Translation</div>
+            <div ref={rightRef} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
+              {right}
+            </div>
+          </section>
+        </main>
+      )}
     </div>
   );
 }
