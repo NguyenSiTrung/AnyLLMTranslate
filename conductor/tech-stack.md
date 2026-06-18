@@ -24,6 +24,8 @@
 | **Lucide React** | latest | Consistent, lightweight icon set |
 | **Zustand** | 5.x | Lightweight reactive state management, synced with chrome.storage |
 | **pdfjs-dist** | 4.x | PDF.js library for built-in PDF viewer — canvas rendering, text extraction, page proxy streaming |
+| **pdf-lib** | 1.x | PDF generation library for creating translated PDF exports — page embedding, text overlay, rectangle masking |
+| **@pdf-lib/fontkit** | 1.x | Font embedding addon for pdf-lib — enables custom TTF font embedding (Noto Sans) for Unicode text in generated PDFs |
 
 ## Extension APIs
 
