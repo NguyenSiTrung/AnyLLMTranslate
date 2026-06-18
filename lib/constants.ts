@@ -57,6 +57,9 @@ export const DATA_ATTRS = {
 /** Translation page states */
 export type PageState = 'dual' | 'translation-only' | 'off';
 
+/** PDF viewer view-mode preference: split (original + translation panes) vs translation-only. */
+export type PdfViewMode = 'split' | 'translation-only';
+
 /** Extension storage keys */
 export const STORAGE_KEYS = {
   SETTINGS: 'anyllm-translate-settings',
@@ -65,4 +68,6 @@ export const STORAGE_KEYS = {
   CONNECTION_STATUS: 'anyllm-connection-status',
   /** Per-install random salt for API key encryption key derivation */
   ENC_SALT: 'anyllm-translate-enc-salt',
+  /** PDF viewer view-mode preference: 'split' (default) | 'translation-only' */
+  PDF_VIEW_MODE: 'anyllm-pdf-view-mode',
 } as const;
