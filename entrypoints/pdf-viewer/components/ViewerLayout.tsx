@@ -9,7 +9,7 @@
  * canvas stack.
  */
 
-import { type ReactNode, useRef, type RefObject } from 'react';
+import { type ReactNode, useState, type RefObject, type RefCallback } from 'react';
 import type { PdfViewMode } from '@/lib/constants';
 import { useSynchronizedScroll } from '../hooks/useSynchronizedScroll';
 
@@ -42,11 +42,27 @@ export function ViewerLayout({
   headerExtra,
   viewMode = 'split',
 }: ViewerLayoutProps): React.ReactElement {
-  const internalLeftRef = useRef<HTMLDivElement | null>(null);
-  const rightRef = useRef<HTMLDivElement | null>(null);
-  // Use the external ref for scroll sync if provided, otherwise the internal one
-  const leftRef = leftPaneRef ?? internalLeftRef;
-  useSynchronizedScroll({ leftRef, rightRef });
+  // Track the pane elements in STATE via callback refs. Unlike ref objects,
+  // state updates trigger re-render, so useSynchronizedScroll's effect re-runs
+  // (detaching stale listeners, attaching fresh ones) when a pane element
+  // mounts/unmounts — e.g. Split → Translation → Split. A plain ref would miss
+  // the remount because ref mutations don't cause re-render.
+  const [leftEl, setLeftEl] = useState<HTMLDivElement | null>(null);
+  const [rightEl, setRightEl] = useState<HTMLDivElement | null>(null);
+
+  // Merge the external leftPaneRef (used by App's useVisiblePages) with the
+  // internal state-setting callback ref. The external ref is read-only here.
+  const externalLeftRef = leftPaneRef ?? null;
+  const leftRefCallback: RefCallback<HTMLDivElement> = (el) => {
+    setLeftEl(el);
+    if (externalLeftRef) {
+      (externalLeftRef as { current: HTMLDivElement | null }).current = el;
+    }
+  };
+  const rightRefCallback: RefCallback<HTMLDivElement> = (el) => {
+    setRightEl(el);
+  };
+  useSynchronizedScroll({ leftEl, rightEl });
 
   return (
     <div className="pdf-viewer-root">
@@ -62,7 +78,7 @@ export function ViewerLayout({
         <main className="pdf-viewer-main pdf-viewer-main--single">
           <section className="pdf-viewer-pane pdf-viewer-pane--right">
             <div className="pdf-viewer-pane-label">Translation</div>
-            <div ref={rightRef} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
+            <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
               {right}
             </div>
           </section>
@@ -71,13 +87,13 @@ export function ViewerLayout({
         <main className="pdf-viewer-main">
           <section className="pdf-viewer-pane pdf-viewer-pane--left">
             <div className="pdf-viewer-pane-label">Original</div>
-            <div ref={leftRef} className="pdf-viewer-pages pdf-viewer-pages--left" data-pane="left">
+            <div ref={leftRefCallback} className="pdf-viewer-pages pdf-viewer-pages--left" data-pane="left">
               {left}
             </div>
           </section>
           <section className="pdf-viewer-pane pdf-viewer-pane--right">
             <div className="pdf-viewer-pane-label">Translation</div>
-            <div ref={rightRef} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
+            <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
               {right}
             </div>
           </section>
