@@ -91,6 +91,11 @@ export default function App(): ReactElement {
   // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport
   // In translation-only mode there is no left pane; observe the right pane so
   // overlay canvases (Layout sub-mode) still mount/unmount near the viewport.
+  // This works because useVisiblePages selects [data-page-number], and
+  // PdfCanvasRenderer tags its container with that attribute in BOTH panes
+  // (left originals and right overlay backgrounds). In translation-only +
+  // Text mode there are no such elements; useVisiblePages returns early and
+  // lazy translation is driven by usePdfPageTranslations' own observer.
   const visibilityContainerRef = viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
   const { visiblePages } = useVisiblePages({
     totalPages: numPages,
