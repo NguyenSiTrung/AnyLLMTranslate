@@ -15,13 +15,13 @@
  * `scrollTo({ behavior: 'instant' })` to ignore CSS `scroll-behavior: smooth`.
  */
 
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface UseSynchronizedScrollOptions {
-  /** Ref to the left pane's scroll container. */
-  leftRef: RefObject<HTMLElement | null>;
-  /** Ref to the right pane's scroll container. */
-  rightRef: RefObject<HTMLElement | null>;
+  /** The left pane's scroll container element (or null when unmounted). */
+  leftEl: HTMLElement | null;
+  /** The right pane's scroll container element (or null when unmounted). */
+  rightEl: HTMLElement | null;
 }
 
 interface PageBlock {
@@ -118,22 +118,20 @@ export function mirrorScrollTop(source: HTMLElement, target: HTMLElement): numbe
 }
 
 export function useSynchronizedScroll({
-  leftRef,
-  rightRef,
+  leftEl,
+  rightEl,
 }: UseSynchronizedScrollOptions): void {
   // Tracks which element is currently being programmatically scrolled,
-  // preventing feedback loops where pane A scrolls pane B which re-scrolls pane A.
+  // preventing feedback loops where pane A scrolls pane B which re-scrolls A.
   const isUpdatingRef = useRef(false);
 
   useEffect(() => {
-    const left = leftRef.current;
-    const right = rightRef.current;
-    if (!left || !right) return;
+    if (!leftEl || !rightEl) return;
 
     const syncFromLeft = (): void => {
       if (isUpdatingRef.current) return;
       isUpdatingRef.current = true;
-      right.scrollTo({ top: mirrorScrollTop(left, right), behavior: 'instant' });
+      rightEl.scrollTo({ top: mirrorScrollTop(leftEl, rightEl), behavior: 'instant' });
       requestAnimationFrame(() => {
         isUpdatingRef.current = false;
       });
@@ -142,19 +140,22 @@ export function useSynchronizedScroll({
     const syncFromRight = (): void => {
       if (isUpdatingRef.current) return;
       isUpdatingRef.current = true;
-      left.scrollTo({ top: mirrorScrollTop(right, left), behavior: 'instant' });
+      leftEl.scrollTo({ top: mirrorScrollTop(rightEl, leftEl), behavior: 'instant' });
       requestAnimationFrame(() => {
         isUpdatingRef.current = false;
       });
     };
 
     // Bidirectional: both panes listen for scroll events
-    left.addEventListener('scroll', syncFromLeft, { passive: true });
-    right.addEventListener('scroll', syncFromRight, { passive: true });
+    leftEl.addEventListener('scroll', syncFromLeft, { passive: true });
+    rightEl.addEventListener('scroll', syncFromRight, { passive: true });
 
     return () => {
-      left.removeEventListener('scroll', syncFromLeft);
-      right.removeEventListener('scroll', syncFromRight);
+      leftEl.removeEventListener('scroll', syncFromLeft);
+      rightEl.removeEventListener('scroll', syncFromRight);
+      // Reset the guard so a torn-down effect (e.g. pane unmount mid-sync)
+      // never leaves it stuck true, which would silence all future syncing.
+      isUpdatingRef.current = false;
     };
-  }, [leftRef, rightRef]);
+  }, [leftEl, rightEl]);
 }

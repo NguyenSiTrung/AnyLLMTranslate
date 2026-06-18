@@ -12,6 +12,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Loader2, AlertCircle, FileWarning } from 'lucide-react';
+import type { PdfViewMode } from '@/lib/constants';
+import { loadPdfViewMode, savePdfViewMode } from './lib/pdfViewMode';
 import { ViewerLayout } from './components/ViewerLayout';
 import { PdfCanvasRenderer } from './components/PdfCanvasRenderer';
 import { PdfTranslationPane } from './components/PdfTranslationPane';
@@ -43,12 +45,22 @@ function isFileScheme(url: string): boolean {
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('original');
+  const [viewMode, setViewMode] = useState<PdfViewMode>('split');
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setPdfUrl(getPdfUrlFromQuery());
   }, []);
+
+  useEffect(() => {
+    void loadPdfViewMode().then((mode) => setViewMode(mode));
+  }, []);
+
+  const handleViewModeChange = (mode: PdfViewMode): void => {
+    setViewMode(mode);
+    void savePdfViewMode(mode);
+  };
 
   const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl);
 
@@ -77,9 +89,17 @@ export default function App(): ReactElement {
   })() : 'document.pdf';
 
   // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport
+  // In translation-only mode there is no left pane; observe the right pane so
+  // overlay canvases (Layout sub-mode) still mount/unmount near the viewport.
+  // This works because useVisiblePages selects [data-page-number], and
+  // PdfCanvasRenderer tags its container with that attribute in BOTH panes
+  // (left originals and right overlay backgrounds). In translation-only +
+  // Text mode there are no such elements; useVisiblePages returns early and
+  // lazy translation is driven by usePdfPageTranslations' own observer.
+  const visibilityContainerRef = viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
   const { visiblePages } = useVisiblePages({
     totalPages: numPages,
-    containerRef: leftContainerRef,
+    containerRef: visibilityContainerRef,
   });
 
   // Pre-compute page dimensions for placeholder sizing (cheap — no text extraction)
@@ -101,7 +121,7 @@ export default function App(): ReactElement {
 
   // Fully-loaded state: render the bilingual viewer directly
   if (loadState === 'loaded' && pdfUrl) {
-    const leftPane = (
+    const leftPane = viewMode === 'translation-only' ? null : (
       <>
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
@@ -155,6 +175,7 @@ export default function App(): ReactElement {
       <ViewerLayout
         title="PDF Translator"
         subtitle={fileName}
+        viewMode={viewMode}
         banner={<FilePermissionGuide visible={isFile} />}
         left={leftPane}
         leftPaneRef={leftContainerRef}
@@ -165,7 +186,27 @@ export default function App(): ReactElement {
         }
         headerExtra={
           <div className="pdf-viewer-header-controls">
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation view mode">
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split vs translation only)">
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${viewMode === 'split' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => handleViewModeChange('split')}
+                aria-pressed={viewMode === 'split'}
+                title="Split: show the original PDF on the left and the translation on the right, scroll-synced."
+              >
+                Split
+              </button>
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${viewMode === 'translation-only' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => handleViewModeChange('translation-only')}
+                aria-pressed={viewMode === 'translation-only'}
+                title="Translation only: hide the original PDF pane and show the translation full-width."
+              >
+                Translation
+              </button>
+            </div>
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation layout mode">
               <button
                 type="button"
                 className={`pdf-viewer-toggle-btn ${layoutMode === 'original' ? 'pdf-viewer-toggle-btn--active' : ''}`}

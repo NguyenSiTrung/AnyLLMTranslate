@@ -12,7 +12,6 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useRef } from 'react';
 import { useSynchronizedScroll } from '../useSynchronizedScroll';
 
 let leftEl: HTMLDivElement;
@@ -58,9 +57,7 @@ describe('useSynchronizedScroll', () => {
 
   it('mirrors the left pane scroll to the right pane', () => {
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl: leftEl, rightEl: rightEl });
     });
 
     act(() => {
@@ -77,9 +74,7 @@ describe('useSynchronizedScroll', () => {
 
   it('mirrors the right pane scroll to the left pane (bidirectional)', () => {
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl: leftEl, rightEl: rightEl });
     });
 
     act(() => {
@@ -98,9 +93,7 @@ describe('useSynchronizedScroll', () => {
     Object.defineProperty(rightEl, 'scrollHeight', { configurable: true, value: 1000 });
 
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl: leftEl, rightEl: rightEl });
     });
 
     act(() => {
@@ -117,9 +110,7 @@ describe('useSynchronizedScroll', () => {
 
   it('uses scrollTo with behavior: instant for programmatic sync', () => {
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl: leftEl, rightEl: rightEl });
     });
 
     act(() => {
@@ -135,9 +126,7 @@ describe('useSynchronizedScroll', () => {
 
   it('does not cause feedback loops during bidirectional sync', () => {
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl: leftEl, rightEl: rightEl });
     });
 
     // Scroll left → right should sync
@@ -158,6 +147,58 @@ describe('useSynchronizedScroll', () => {
 
     // The left pane's scrollTo should NOT have been called again (guard blocks it)
     expect(leftScrollToMock.mock.calls.length).toBe(callCountBefore);
+  });
+
+  it('re-attaches scroll listeners after the left pane element changes (remount)', () => {
+    // Simulate Split → Translation → Split: the left <section> unmounts (element
+    // becomes null) then a NEW left <section> mounts (element becomes a new
+    // value). The hook's effect depends on the element VALUES, so it must
+    // re-run on each transition and re-attach listeners to the new element.
+    const firstLeftEl = leftEl;
+    const newLeftEl = document.createElement('div');
+    document.body.appendChild(newLeftEl);
+    Object.defineProperty(newLeftEl, 'clientHeight', { configurable: true, value: 200 });
+    Object.defineProperty(newLeftEl, 'scrollHeight', { configurable: true, value: 1000 });
+    newLeftEl.scrollTo = vi.fn(({ top }: ScrollToOptions) => {
+      if (top !== undefined) newLeftEl.scrollTop = top;
+    }) as unknown as typeof newLeftEl.scrollTo;
+
+    // State machine the hook observes: firstLeftEl → null → newLeftEl.
+    let currentLeftEl: HTMLDivElement | null = firstLeftEl;
+    const { rerender } = renderHook(() => {
+      useSynchronizedScroll({ leftEl: currentLeftEl, rightEl: rightEl });
+    });
+
+    // Initial sync works.
+    act(() => {
+      firstLeftEl.scrollTop = 100;
+      firstLeftEl.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(rightEl.scrollTop).toBe(100);
+
+    // Left pane unmounts (Translation-only mode): element → null
+    currentLeftEl = null;
+    rerender();
+
+    // New left pane mounts (back to Split): element → new element
+    currentLeftEl = newLeftEl;
+    rerender();
+
+    // Reset right scroll position to verify the NEW left drives it.
+    rightEl.scrollTop = 0;
+
+    act(() => {
+      newLeftEl.scrollTop = 250;
+      newLeftEl.dispatchEvent(new Event('scroll'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    // If listeners re-attached, right mirrors the new left's scrollTop.
+    expect(rightEl.scrollTop).toBe(250);
   });
 });
 
@@ -220,9 +261,7 @@ describe('useSynchronizedScroll page-block sync', () => {
     ], 'data-page-slot');
 
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl, rightEl });
     });
 
     // Scroll left to the middle of page 1 (500/1000 = 50%).
@@ -249,9 +288,7 @@ describe('useSynchronizedScroll page-block sync', () => {
     ], 'data-page-slot');
 
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl, rightEl });
     });
 
     // Scroll left to the start of page 2 → right should start page 2 (2000px).
@@ -279,9 +316,7 @@ describe('useSynchronizedScroll page-block sync', () => {
     ], 'data-page-slot');
 
     renderHook(() => {
-      const leftRef = useRef<HTMLDivElement | null>(leftEl);
-      const rightRef = useRef<HTMLDivElement | null>(rightEl);
-      useSynchronizedScroll({ leftRef, rightRef });
+      useSynchronizedScroll({ leftEl, rightEl });
     });
 
     // Scroll left to 1/3 into page 3: page 3 starts at 600, height 300 → 750 = 50%.
