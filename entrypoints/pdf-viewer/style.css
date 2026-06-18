@@ -510,4 +510,170 @@ html, body, #root {
   color: #fca5a5;
 }
 
+/* Download Button */
+.pdf-download-btn-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #e4e4e7;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
 
+.pdf-download-btn-header:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #f4f4f5;
+}
+
+.pdf-download-btn-header:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Download Progress Modal */
+.pdf-download-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  animation: pdf-download-fade-in 200ms ease-out;
+}
+
+@keyframes pdf-download-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pdf-download-modal {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 14px;
+  padding: 28px 32px;
+  min-width: 360px;
+  max-width: 480px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  animation: pdf-download-slide-up 200ms ease-out;
+}
+
+@keyframes pdf-download-slide-up {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.pdf-download-modal-header {
+  margin-bottom: 16px;
+}
+
+.pdf-download-modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+
+.pdf-download-modal-title--error {
+  color: #fca5a5;
+}
+
+.pdf-download-modal-title--success {
+  color: #86efac;
+}
+
+.pdf-download-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pdf-download-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #27272a;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pdf-download-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 3px;
+  transition: width 200ms ease-out;
+}
+
+.pdf-download-progress-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a1a1aa;
+  min-width: 36px;
+  text-align: right;
+}
+
+.pdf-download-modal-message {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #a1a1aa;
+  line-height: 1.5;
+}
+
+.pdf-download-modal-error {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.1);
+  border: 1px solid rgba(127, 29, 29, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  line-height: 1.4;
+}
+
+.pdf-download-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pdf-download-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  border: 1px solid transparent;
+}
+
+.pdf-download-btn--primary {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+
+.pdf-download-btn--primary:hover {
+  background: #2563eb;
+}
+
+.pdf-download-btn--secondary,
+.pdf-download-btn--cancel {
+  background: rgba(39, 39, 42, 0.6);
+  color: #a1a1aa;
+  border-color: #27272a;
+}
+
+.pdf-download-btn--secondary:hover,
+.pdf-download-btn--cancel:hover {
+  background: rgba(39, 39, 42, 0.9);
+  color: #e4e4e7;
+}

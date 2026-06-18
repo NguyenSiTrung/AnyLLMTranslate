@@ -52,11 +52,10 @@ This file tracks all major tracks for the project.
 - ✅ **PDF Translation UX Improvements** (`pdf-translation-ux_20260615`) — Archived 2026-06-15. [View](./conductor/archive/pdf-translation-ux_20260615/)
 - ✅ **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — Archived 2026-06-16. [View](./conductor/archive/pdf-elastic-overlay_20260616/)
 
+- ✅ **PDF Translation Download** (`pdf-download_20260618`) — Archived 2026-06-18. [View](./conductor/archive/pdf-download_20260618/)
+
 ---
 
 ## Active Tracks
 
-## [ ] Track: PDF Translation Download — Export translated PDF for both Split and Translation-only modes
-*Link: [./conductor/tracks/pdf-download_20260618/](./conductor/tracks/pdf-download_20260618/)*
-
-> **Note (refresh 2026-06-18):** PDF Bilingual Inline Mode (Strategy B, `pdf-bilingual-inline_20260618`) was tracked in Beads as epic `d67` and marked CLOSED, but its implementation never merged to master and was not archived. The stranded `feat/pdf-bilingual-inline_20260618` branch has been pruned; the epic is treated as **SHELVED** (not shipped). Three incremental PDF features that *did* reach master since the last refresh are recorded in `product.md` Implementation Status: math/figure skipping, heading-truncation/rotated-text fixes, and the Split/Translation-only view toggle.
+*No active tracks.*

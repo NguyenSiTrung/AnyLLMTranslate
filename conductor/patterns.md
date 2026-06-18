@@ -397,6 +397,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Mocking `getBoundingClientRect` for scroll/sync tests in jsdom:** jsdom returns zeros for layout rects. To test geometry-based logic, mock each element's `getBoundingClientRect` to return `top: absoluteOffset - container.scrollTop` and the container's rect to `top: 0`, so the `+ scrollTop` in an offset formula cancels back to the absolute offset. (from: pdf-elastic-overlay_20260616, archived 2026-06-16)
 - **When the spec/plan and a revisions.md disagree, revisions.md wins:** Always check for a `revisions.md` in the track folder before implementing against the original spec.md — an earlier session may have logged an authoritative design change. Implementing the superseded spec literally wastes a full cycle. (from: pdf-elastic-overlay_20260616, archived 2026-06-16)
 
+## PDF Download (2026-06-18)
+- **`pdf-lib` fontBytes optional with dynamic `@pdf-lib/fontkit` import** — falls back to Helvetica when no custom font is provided, avoiding WASM bundling when unused. Use dynamic `import('@pdf-lib/fontkit')` to keep the main bundle lean. (from: pdf-download_20260618, archived 2026-06-18)
+- **`pdf-lib` `embedPdf()` requires pages with Content streams** — `doc.addPage()` creates pages without a Contents stream; draw at least one element (even invisible) before embedding in tests. (from: pdf-download_20260618, archived 2026-06-18)
+- **Font caching via `idb-keyval` with versioned key** — cache key `'pdf-font:noto-sans:v1'` allows cache-busting on font version changes. Handle both `Uint8Array` and `ArrayBuffer` from IndexedDB. (from: pdf-download_20260618, archived 2026-06-18)
+- **`vi.stubGlobal()` returns previous value, not the spy** — create `vi.fn()` separately and pass to `stubGlobal` to assert on the mock. (from: pdf-download_20260618, archived 2026-06-18)
+- **3-stage download pipeline with AbortController** — translate-all → font fetch → PDF generation, each stage independently cancellable via shared `AbortSignal`. Check `signal.aborted` before each stage. (from: pdf-download_20260618, archived 2026-06-18)
+- **Per-page error isolation in batch translation** — catch per-page errors and continue with remaining pages rather than aborting the entire batch. Record failures in `failedPages[]` + `errors Map` for caller decision. (from: pdf-download_20260618, archived 2026-06-18)
+
 ---
-Last refreshed: 2026-06-18T19:02:00+07:00
-Codebase health: 1004 tests passing across 80 files, build ~2.58MB, 0 lint errors, 42 tracks archived, 0 active tracks
+Last refreshed: 2026-06-18T22:35:00+07:00
+Codebase health: 1047 tests passing across 85 files, build ~2.58MB, 0 lint errors, 43 tracks archived, 0 active tracks
