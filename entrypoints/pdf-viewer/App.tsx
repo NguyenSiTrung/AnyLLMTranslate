@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Loader2, AlertCircle, FileWarning } from 'lucide-react';
+import { Loader2, AlertCircle, FileWarning, Download } from 'lucide-react';
 import type { PdfViewMode } from '@/lib/constants';
 import { loadPdfViewMode, savePdfViewMode } from './lib/pdfViewMode';
 import { ViewerLayout } from './components/ViewerLayout';
@@ -21,6 +21,8 @@ import { FilePermissionGuide } from './components/FilePermissionGuide';
 import { usePdfDocument } from './hooks/usePdfDocument';
 import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
 import { useVisiblePages } from './hooks/useVisiblePages';
+import { usePdfDownload } from './hooks/usePdfDownload';
+import { DownloadProgressModal } from './components/DownloadProgressModal';
 
 
 /** Extract a PDF URL from the `?file=` query parameter */
@@ -76,6 +78,19 @@ export default function App(): ReactElement {
     containerRef: rightContainerRef,
   });
 
+  const {
+    startDownload,
+    cancel: cancelDownload,
+    stage: downloadStage,
+    progress: downloadProgress,
+    message: downloadMessage,
+    error: downloadError,
+    isDownloading,
+  } = usePdfDownload({
+    pdfUrl: pdfUrl ?? '',
+    pages: loadedPages,
+    translations,
+  });
 
 
   const isFile = pdfUrl ? isFileScheme(pdfUrl) : false;
@@ -171,7 +186,7 @@ export default function App(): ReactElement {
         })}
       </>
     );
-    return (
+    return (<>
       <ViewerLayout
         title="PDF Translator"
         subtitle={fileName}
@@ -229,10 +244,30 @@ export default function App(): ReactElement {
             <div className="pdf-viewer-progress-pill">
               {translatedCount} / {totalCount} pages translated
             </div>
+            <button
+              type="button"
+              className="pdf-download-btn-header"
+              onClick={startDownload}
+              disabled={translatedCount === 0 || isDownloading}
+              title="Download Translated PDF"
+            >
+              <Download size={14} />
+              Download
+            </button>
           </div>
         }
       />
-    );
+      {isDownloading && (
+        <DownloadProgressModal
+          stage={downloadStage}
+          progress={downloadProgress}
+          message={downloadMessage}
+          error={downloadError}
+          onCancel={cancelDownload}
+          onRetry={startDownload}
+        />
+      )}
+    </>);
   }
 
   // Non-loaded states render in a single centered column
