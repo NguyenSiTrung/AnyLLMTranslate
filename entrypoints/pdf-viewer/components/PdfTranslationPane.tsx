@@ -157,7 +157,14 @@ function computeBoxGeometry(
 ): { left: number; top: number; width: number; fontSize: number } {
   const [left, top] = viewport.convertToViewportPoint(para.x, para.y);
   const maxAvail = Math.max(40, pageWidth - left - 4);
-  const width = Math.min(Math.max(para.width * viewport.scale, 40), maxAvail);
+  // For headings, use the full available width from left edge to right margin.
+  // Headings like "1 INTRODUCTION" have a narrow original width in PDF space,
+  // but their translated text can be much longer and would be truncated if
+  // constrained to the original paragraph width.
+  const baseWidth = para.isHeading
+    ? maxAvail
+    : Math.max(para.width * viewport.scale, 40);
+  const width = Math.min(baseWidth, maxAvail);
   const fontSize = Math.min(
     Math.max(para.fontSize * viewport.scale, MIN_FONT_SIZE_PX),
     MAX_FONT_SIZE_PX,

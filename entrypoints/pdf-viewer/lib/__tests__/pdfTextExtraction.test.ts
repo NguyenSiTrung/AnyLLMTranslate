@@ -152,4 +152,24 @@ describe('pdfTextExtraction', () => {
     expect(p.width).toBe(70);
     expect(p.height).toBe(27);
   });
+
+  it('filters out rotated/vertical text items (e.g. arXiv sidebar)', async () => {
+    // Rotated text (90° CCW) has transform [0, 1, -1, 0, x, y] — a=0, b=1, c=-1, d=0
+    const rotatedItem: TextItem = {
+      str: 'arXiv:2510.18716v1',
+      dir: 'ltr',
+      width: 100,
+      height: 8,
+      transform: [0, 1, -1, 0, 20, 400],
+      fontName: 'g_d0_f1',
+      hasEOL: false,
+    };
+    const page = fakePage([
+      item('Normal text', 100, 700),
+      rotatedItem,
+    ]);
+    const result = await extractPageText(page, 1);
+    expect(result.paragraphs).toHaveLength(1);
+    expect(result.paragraphs[0].text).toBe('Normal text');
+  });
 });

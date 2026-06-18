@@ -210,10 +210,22 @@ function groupLinesIntoParagraphs(
  */
 export async function extractPageText(page: PDFPageProxy, pageNumber: number): Promise<PdfPageText> {
   const content = await page.getTextContent();
-  // Filter out non-text items and empty strings
+  // Filter out non-text items, empty strings, and rotated/vertical text.
+  // Rotated text (e.g. arXiv sidebar "arXiv:2510..." running vertically) has
+  // non-zero b/c values in its transform matrix [a, b, c, d, e, f]. Including
+  // it produces overlay boxes at wrong coordinates that mask headings and
+  // other horizontal content.
   const items = content.items.filter(
-    (item): item is TextItem =>
-      'str' in item && typeof (item as TextItem).str === 'string' && (item as TextItem).str.trim().length > 0,
+    (item): item is TextItem => {
+      if (!('str' in item)) return false;
+      const ti = item as TextItem;
+      if (typeof ti.str !== 'string' || ti.str.trim().length === 0) return false;
+      // Reject rotated text: for horizontal text a≠0, d≠0 and b≈0, c≈0.
+      // Rotated text has significant b or c components.
+      const [a, b, c, d] = ti.transform;
+      const isRotated = (Math.abs(b) > 0.1 || Math.abs(c) > 0.1) && (Math.abs(a) < 0.1 || Math.abs(d) < 0.1);
+      return !isRotated;
+    },
   );
   const lines = groupIntoLines(items);
   const paragraphs = groupLinesIntoParagraphs(lines, pageNumber);
