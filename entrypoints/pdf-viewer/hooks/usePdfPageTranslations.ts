@@ -72,16 +72,13 @@ async function translatePage(
       pdfUrl,
     );
     const paragraphMap = new Map<string, string>();
-    const paragraphKinds = new Map<string, 'prose' | 'math' | 'figure'>();
-    for (const { id, translatedText, kind } of results) {
+    for (const { id, translatedText } of results) {
       paragraphMap.set(id, translatedText);
-      if (kind) paragraphKinds.set(id, kind);
     }
     setPages((prev) => {
       const next = new Map(prev);
       next.set(pageNumber, {
         paragraphs: paragraphMap,
-        paragraphKinds,
         originalParagraphs: paragraphs,
         state: 'translated',
       });

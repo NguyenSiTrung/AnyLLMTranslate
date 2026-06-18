@@ -24,14 +24,6 @@ export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'erro
 export interface PageTranslations {
   /** Map of paragraph id → translated text. */
   paragraphs: Map<string, string>;
-  /**
-   * Map of paragraph id → content kind (`'prose'` | `'math'` | `'figure'`).
-   * Set by `translateParagraphs` so the renderer can reserve layout space for
-   * kept-visible blocks (math/figures) without re-deriving kind from text
-   * equality. Absent for legacy cached pages — the renderer then falls back
-   * to the text-equality predicate (verbatim → dropped, never a spacer).
-   */
-  paragraphKinds?: Map<string, 'prose' | 'math' | 'figure'>;
   /** Original extracted paragraphs with their coordinate positions. */
   originalParagraphs?: PdfParagraph[];
   /** Aggregate state of the page translation. */
@@ -177,12 +169,9 @@ export async function translateParagraphs(
   const batchResults = await Promise.all(
     batches.map((batch) => sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage)),
   );
-  const translatedResults = batchResults.flat().map((r) => ({ ...r, kind: 'prose' as const }));
+  const translatedResults = batchResults.flat();
 
-  // 4. Merge: prose → LLM output (kind 'prose'); figure & math → verbatim source
-  //    text (kind 'figure'/'math'). Propagating the kind lets the renderer
-  //    reserve layout space for kept-visible blocks without guessing from
-  //    text equality — see PdfTranslationPane LayoutOverlay.
+  // 4. Merge: prose → LLM output; figure & math → original source text.
   const results: TranslationResultItem[] = [...translatedResults];
   const sourceById = new Map<string, string>();
   for (const { paragraph } of proseItems) {
@@ -190,12 +179,12 @@ export async function translateParagraphs(
   }
   for (const { paragraph } of restItems) {
     if (labels?.[paragraph.id] === 'figure') {
-      results.push({ id: paragraph.id, translatedText: paragraph.text, kind: 'figure' });
+      results.push({ id: paragraph.id, translatedText: paragraph.text });
       sourceById.set(paragraph.id, paragraph.text);
     }
   }
   for (const { paragraph } of mathItems) {
-    results.push({ id: paragraph.id, translatedText: paragraph.text, kind: 'math' });
+    results.push({ id: paragraph.id, translatedText: paragraph.text });
     sourceById.set(paragraph.id, paragraph.text);
   }
 
