@@ -1,0 +1,29 @@
+{
+  "track_id": "pdf-download_20260618",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-06-18T15:10:30Z",
+  "updated_at": "2026-06-18T15:14:30Z",
+  "description": "PDF Translation Download — Export translated PDF for both Split and Translation-only modes",
+  "beads_epic": "AnyLLMTranslate-a8m",
+  "beads_tasks": {
+    "phase1": "AnyLLMTranslate-a8m.1",
+    "phase1_task1": "AnyLLMTranslate-a8m.1.1",
+    "phase1_task2": "AnyLLMTranslate-a8m.1.2",
+    "phase2": "AnyLLMTranslate-a8m.2",
+    "phase2_task1": "AnyLLMTranslate-a8m.2.1",
+    "phase2_task2": "AnyLLMTranslate-a8m.2.2",
+    "phase3": "AnyLLMTranslate-a8m.3",
+    "phase3_task1": "AnyLLMTranslate-a8m.3.1",
+    "phase3_task2": "AnyLLMTranslate-a8m.3.2",
+    "phase4": "AnyLLMTranslate-a8m.4",
+    "phase4_task1": "AnyLLMTranslate-a8m.4.1",
+    "phase4_task2": "AnyLLMTranslate-a8m.4.2",
+    "phase4_task3": "AnyLLMTranslate-a8m.4.3",
+    "phase4_task4": "AnyLLMTranslate-a8m.4.4",
+    "phase4_task5": "AnyLLMTranslate-a8m.4.5"
+  }
+}
