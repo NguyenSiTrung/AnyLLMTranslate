@@ -110,9 +110,13 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     // Broadcast translating status immediately
     sendStatusUpdate();
 
-    // Extract page context for context-aware translation (only when enabled)
+    // Extract page context for context-aware translation (only when enabled).
+    // Pass enableContextAwareTranslation (not the LLM toggle) so the cheap
+    // heuristic domain-map detection runs whenever context-aware translation is
+    // on, regardless of whether LLM-based detection is enabled. The expensive
+    // LLM detection is gated separately via triggerAutoCategoryDetection.
     const pageContext = settings.enableContextAwareTranslation
-      ? extractPageContext(document, settings.enableLLMPageCategoryDetection)
+      ? extractPageContext(document, settings.enableContextAwareTranslation)
       : undefined;
 
     // Persist heuristic category in the singleton if not yet cached
@@ -470,8 +474,10 @@ export function setupMessageListener(): void {
         // Singleton holds LLM-detected or heuristic results
         let detected = getAutoDetectedCategory();
 
-        // If nothing cached yet, run heuristic detection and persist the result
-        if (!detected && catSettings.enableLLMPageCategoryDetection) {
+        // If nothing cached yet, run heuristic detection and persist the result.
+        // The cheap heuristic (domain map + meta/og) runs whenever context-aware
+        // translation is on; it does NOT require the LLM-detection toggle.
+        if (!detected && catSettings.enableContextAwareTranslation) {
           const heuristic = extractPageContext(document, true).category;
           if (heuristic) {
             setAutoDetectedCategory(heuristic);

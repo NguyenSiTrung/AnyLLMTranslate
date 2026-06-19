@@ -134,7 +134,11 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
   const settings = await loadSettings();
   if (!settings.enableContextAwareTranslation) return undefined;
 
-  const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
+  // Pass enableContextAwareTranslation (not the LLM toggle) so the cheap
+  // heuristic domain-map detection runs whenever context-aware translation is
+  // on, regardless of whether LLM-based detection is enabled. The expensive
+  // LLM detection is gated separately via triggerAutoCategoryDetection below.
+  const pageContext = extractPageContext(document, settings.enableContextAwareTranslation);
 
   // Delegate detection to the shared helper, which guards on disabled detection /
   // existing override / existing autoDetected / in-flight, then writes the result

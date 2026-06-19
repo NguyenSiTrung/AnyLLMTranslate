@@ -35,6 +35,7 @@ const catMocks = vi.hoisted(() => ({
   extractPageContext: vi.fn<(...args: never[]) => { title: string; description: string; domain: string; category?: string }>()
     .mockReturnValue({ title: '', description: '', domain: 'example.com' }),
   getAutoDetectedCategory: vi.fn<(...args: never[]) => string | undefined>().mockReturnValue(undefined),
+  setAutoDetectedCategory: vi.fn<(category: string | undefined) => void>(),
 }));
 vi.mock('@/content/utils/pageContext', () => ({
   extractPageContext: (...args: never[]) => catMocks.extractPageContext(...args),
@@ -46,7 +47,7 @@ vi.mock('@/content/utils/pageContext', () => ({
 
 vi.mock('@/content/categoryState', () => ({
   getAutoDetectedCategory: (...args: never[]) => catMocks.getAutoDetectedCategory(...args),
-  setAutoDetectedCategory: vi.fn(),
+  setAutoDetectedCategory: (category: string | undefined) => catMocks.setAutoDetectedCategory(category),
   buildCategoryInfo: vi.fn(() => ({ autoDetected: undefined, siteRule: undefined, override: undefined, effective: undefined })),
   broadcastCategoryInfo: vi.fn(),
   isCategoryDetectionInFlight: vi.fn(() => false),
@@ -707,6 +708,36 @@ describe('content.ts', () => {
       listener({ action: 'getPageCategory' }, {}, () => {});
       await new Promise((r) => setTimeout(r, 0));
 
+      expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
+    });
+
+    it('runs heuristic detection (extractPageContext with truthy flag) when LLM detection is OFF but context-aware translation is ON', async () => {
+      // This is the regression guard for the heuristic/LLM decoupling: the cheap
+      // domain-map heuristic must run regardless of the LLM-detection toggle, so
+      // predefined sites (e.g. max.com -> Streaming Entertainment) surface their
+      // category in the popup even with LLM detection off.
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        enableContextAwareTranslation: true,
+        enableLLMPageCategoryDetection: false,
+        llmCategoryDetectionMode: 'async',
+        siteRules: [],
+      } as ExtensionSettings);
+      catMocks.getAutoDetectedCategory.mockReturnValue(undefined);
+      catMocks.extractPageContext.mockReturnValue({ title: '', description: '', domain: 'max.com', category: 'Streaming Entertainment' });
+      catMocks.setAutoDetectedCategory.mockClear();
+      catMocks.triggerAutoCategoryDetection.mockClear();
+      const listener = captureListener();
+
+      listener({ action: 'getPageCategory' }, {}, () => {});
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Heuristic ran: extractPageContext was called with a truthy enable flag.
+      expect(catMocks.extractPageContext).toHaveBeenCalledWith(expect.anything(), true);
+      // The heuristic category is persisted into the shared singleton so the
+      // popup (which reads autoDetected via buildCategoryInfo) can display it.
+      expect(catMocks.setAutoDetectedCategory).toHaveBeenCalledWith('Streaming Entertainment');
+      // The expensive LLM kick-off stays gated on enableLLMPageCategoryDetection.
       expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
     });
   });

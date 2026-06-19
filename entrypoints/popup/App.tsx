@@ -825,7 +825,12 @@ export default function App() {
   // browser's built-in PDF viewer shows plain .pdf URLs without a host page.
   const activeTabIsPdf = Boolean(activeTabUrl && /\.pdf(?:\?|#|$)/i.test(activeTabUrl));
 
-  const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enableLLMPageCategoryDetection && activeHostname;
+  // Show the category dropdown whenever context-aware translation is on, even
+  // when LLM-based detection is off: the cheap heuristic domain-map detection
+  // still resolves categories for predefined sites (e.g. max.com → Streaming
+  // Entertainment) and should be surfaced in the popup. The LLM toggle remains
+  // a separate control for opting into the more accurate LLM-based detection.
+  const showCategoryDropdown = settings.enableContextAwareTranslation && activeHostname;
   const currentCategoryValue = categoryInfo?.override ?? categoryInfo?.siteRule ?? '__auto__';
   const isCustomEntry = currentCategoryValue !== '__auto__' && !PREDEFINED_CATEGORIES.includes(currentCategoryValue as typeof PREDEFINED_CATEGORIES[number]);
   const detectedCategoryDisplay = categoryInfo?.autoDetected;
