@@ -21,6 +21,7 @@ import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, S
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
+import { setAutoDetectedCategory, broadcastCategoryInfo } from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 
@@ -135,7 +136,16 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
 
   const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
 
-  await detectLLMCategoryIfNeeded(pageContext, settings, state.categoryOverride);
+  await detectLLMCategoryIfNeeded(
+    pageContext,
+    settings,
+    state.categoryOverride,
+    undefined,
+    (cat) => {
+      setAutoDetectedCategory(cat);
+      broadcastCategoryInfo(settings, state.categoryOverride);
+    },
+  );
 
   // If a tab-level category exists, it overrides the auto-detected one.
   // Note: pageContext.category will be empty if extractPageContext found no generic info and
