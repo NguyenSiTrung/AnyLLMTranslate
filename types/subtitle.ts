@@ -35,7 +35,8 @@ export type BridgeMessageType =
   | 'SUBTITLE_TRANSLATED'
   | 'SUBTITLE_METADATA'
   | 'SUBTITLE_ERROR'
-  | 'SUBTITLE_TRACKS_DISCOVERED';
+  | 'SUBTITLE_TRACKS_DISCOVERED'
+  | 'SUBTITLE_DOM_CUES';
 
 /** postMessage payload between worlds */
 export interface BridgeMessage<T = unknown> {
@@ -81,12 +82,30 @@ export interface SubtitleTracksDiscoveredPayload {
   platform: string;
   videoId?: string;
 }
+/** Payload for SUBTITLE_DOM_CUES messages (DOM-scraped cues from MAIN world) */
+export interface SubtitleDomCuesPayload {
+  cues: SubtitleCue[];
+  platform: string;   // e.g. 'hbomax'
+  language: string;   // active source language ('' if unknown)
+  videoId?: string;
+}
 
 /** Platform subtitle URL pattern definition */
 export interface SubtitleUrlPattern {
   platform: string;
   pattern: RegExp;
   languageExtractor?: (url: URL) => string;
+}
+/** Contract for DOM-scraped cue sources (platforms like Max with no VTT URL) */
+export interface DomCueSource {
+  /** Selector for the element whose textContent = current cue text */
+  cueSelector: string;
+  /** Selector for the native caption window/overlay to hide while active */
+  captionWindowSelector: string;
+  /** Selector for a stable ancestor to observe (survives cue node replacement by React) */
+  observeRootSelector: string;
+  /** Extract the active track's language from the DOM ('' if unknown/off) */
+  readActiveLanguage(): string;
 }
 
 /** Supported subtitle formats */
