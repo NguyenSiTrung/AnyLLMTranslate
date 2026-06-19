@@ -3,7 +3,7 @@
  * Platform handlers implement this interface and register via the registry.
  */
 
-import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack, DomCueSource } from '@/types/subtitle';
 
 /** Abstract interface that all platform handlers must implement */
 export interface SubtitleHandler {
@@ -24,6 +24,10 @@ export interface SubtitleHandler {
 
   /** Extract available subtitle tracks from a metadata API response (optional) */
   extractAvailableTracks?(body: string, contentType: string, url: string): AvailableSubtitleTrack[];
+
+  /** For DOM-sourced platforms (e.g. Max): return cue-scraping contract.
+   *  Platforms that intercept URLs return undefined. */
+  getDomCueSource?(): DomCueSource;
 }
 
 /** Handler registry — auto-detects platform by hostname and routes to the right handler */
