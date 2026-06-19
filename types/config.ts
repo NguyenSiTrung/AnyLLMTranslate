@@ -130,6 +130,8 @@ export interface SubtitleSettings {
   preferredSubtitleLanguage: string;
   /** Auto-activate subtitles when preferred language is available */
   autoActivateSubtitles: boolean;
+  /** Platform identifiers disabled by the user (opt-out model; empty = all enabled) */
+  disabledSubtitleSites: string[];
 }
 
 /** Custom theme user-defined configuration */
@@ -247,6 +249,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   translationTimeout: 30,
   preferredSubtitleLanguage: 'en',
   autoActivateSubtitles: false,
+  disabledSubtitleSites: [],
 };
 
 /** Default inline translate settings */
