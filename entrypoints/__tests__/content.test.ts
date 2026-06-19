@@ -31,20 +31,21 @@ vi.mock('@/content/hoverTranslate');
 vi.mock('@/content/keyboardShortcuts');
 
 const catMocks = vi.hoisted(() => ({
-  triggerAutoCategoryDetection: vi.fn().mockResolvedValue(undefined),
-  extractPageContext: vi.fn(() => ({ title: '', description: '', domain: 'example.com' })),
-  getAutoDetectedCategory: vi.fn(() => undefined),
+  triggerAutoCategoryDetection: vi.fn<(...args: never[]) => Promise<void>>().mockResolvedValue(undefined),
+  extractPageContext: vi.fn<(...args: never[]) => { title: string; description: string; domain: string; category?: string }>()
+    .mockReturnValue({ title: '', description: '', domain: 'example.com' }),
+  getAutoDetectedCategory: vi.fn<(...args: never[]) => string | undefined>().mockReturnValue(undefined),
 }));
 vi.mock('@/content/utils/pageContext', () => ({
-  extractPageContext: (...args: unknown[]) => catMocks.extractPageContext(...args),
+  extractPageContext: (...args: never[]) => catMocks.extractPageContext(...args),
   resolveCategory: vi.fn(),
   detectLLMCategoryIfNeeded: vi.fn(),
-  triggerAutoCategoryDetection: (...args: unknown[]) => catMocks.triggerAutoCategoryDetection(...args),
+  triggerAutoCategoryDetection: (...args: never[]) => catMocks.triggerAutoCategoryDetection(...args),
   DOMAIN_CATEGORY_MAP: {},
 }));
 
 vi.mock('@/content/categoryState', () => ({
-  getAutoDetectedCategory: (...args: unknown[]) => catMocks.getAutoDetectedCategory(...args),
+  getAutoDetectedCategory: (...args: never[]) => catMocks.getAutoDetectedCategory(...args),
   setAutoDetectedCategory: vi.fn(),
   buildCategoryInfo: vi.fn(() => ({ autoDetected: undefined, siteRule: undefined, override: undefined, effective: undefined })),
   broadcastCategoryInfo: vi.fn(),
@@ -625,7 +626,7 @@ describe('content.ts', () => {
   describe('getPageCategory lazy detection', () => {
     type Listener = (msg: { action: string; category?: string }, sender: unknown, sendResponse: (r: unknown) => void) => boolean | undefined;
 
-    function captureListener(): Listener | null {
+    function captureListener(): Listener {
       let captured: Listener | null = null;
       const addListener = vi.fn((l: Listener) => { captured = l; });
       global.chrome = {
@@ -635,6 +636,7 @@ describe('content.ts', () => {
         },
       } as unknown as typeof chrome;
       setupMessageListener();
+      if (!captured) throw new Error('setupMessageListener did not register an onMessage listener');
       return captured;
     }
 
@@ -653,10 +655,9 @@ describe('content.ts', () => {
 
     it('fires triggerAutoCategoryDetection when singleton is empty and detection is enabled', async () => {
       const listener = captureListener();
-      expect(listener).not.toBeNull();
 
       await new Promise<void>((resolve) => {
-        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+        listener({ action: 'getPageCategory' }, {}, () => resolve());
       });
       // flush microtasks so the async IIFE reaches the trigger call
       await new Promise((r) => setTimeout(r, 0));
@@ -669,7 +670,7 @@ describe('content.ts', () => {
       const listener = captureListener();
 
       await new Promise<void>((resolve) => {
-        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+        listener({ action: 'getPageCategory' }, {}, () => resolve());
       });
       await new Promise((r) => setTimeout(r, 0));
 
@@ -681,7 +682,7 @@ describe('content.ts', () => {
       const listener = captureListener();
 
       await new Promise<void>((resolve) => {
-        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+        listener({ action: 'getPageCategory' }, {}, () => resolve());
       });
       await new Promise((r) => setTimeout(r, 0));
 

@@ -990,7 +990,10 @@ describe('auto-detected category from shared state', () => {
 });
 
 describe('subtitleCoordinator – proactive category detection', () => {
-  let categoryStateMod: typeof import('@/content/categoryState') | null = null;
+  let categoryStateMod: {
+    setAutoDetectedCategory: (category: string | undefined) => void;
+    _resetCategoryState: () => void;
+  } | null = null;
 
   beforeEach(async () => {
     // Fake timers make the 1500ms proactive debounce deterministic and prevent
