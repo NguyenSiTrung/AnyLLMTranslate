@@ -333,7 +333,7 @@ const CATEGORY_GROUPS: { label: string; items: string[] }[] = [
 function CategoryPicker({
   currentValue,
   isCustomEntry,
-  effectiveCategory,
+  detectedCategory,
   customCategoryInput,
   onCategoryChange,
   onCustomInputChange,
@@ -344,7 +344,7 @@ function CategoryPicker({
 }: {
   currentValue: string;
   isCustomEntry: boolean;
-  effectiveCategory?: string;
+  detectedCategory?: string;
   customCategoryInput: string;
   onCategoryChange: (value: string) => void;
   onCustomInputChange: (value: string) => void;
@@ -369,10 +369,8 @@ function CategoryPicker({
   }, []);
 
   const displayLabel = currentValue === '__auto__'
-    ? `Auto${effectiveCategory ? ` · ${effectiveCategory}` : ''}`
-    : isCustomEntry
-      ? currentValue
-      : currentValue;
+    ? `Auto${detectedCategory ? ` (${detectedCategory})` : ''}`
+    : currentValue;
 
   const filteredGroups = CATEGORY_GROUPS.map(group => ({
     ...group,
@@ -435,10 +433,9 @@ function CategoryPicker({
                   }`}
                 >
                   <Sparkles className="w-3 h-3 shrink-0 opacity-70" />
-                  <span className="truncate">Auto Detect</span>
-                  {effectiveCategory && currentValue === '__auto__' && (
-                    <span className="ml-auto text-[10px] text-zinc-500 truncate max-w-[100px]">{effectiveCategory}</span>
-                  )}
+                  <span className="truncate">
+                    Auto Detect{detectedCategory && currentValue === '__auto__' ? ` (${detectedCategory})` : ''}
+                  </span>
                   {currentValue === '__auto__' && <CheckCircle2 className="w-3 h-3 shrink-0 text-blue-400 ml-auto" />}
                 </button>
               </div>
@@ -585,6 +582,8 @@ export default function App() {
       if (message.action === 'statusUpdate') {
         setStatus(message.status);
         setIsTranslating(message.status.status === 'translating');
+      } else if (message.action === 'pageCategoryUpdate') {
+        setCategoryInfo(message.categoryInfo);
       }
     };
     chrome.runtime.onMessage.addListener(messageListener);
@@ -829,7 +828,7 @@ export default function App() {
   const showCategoryDropdown = settings.enableContextAwareTranslation && settings.enableLLMPageCategoryDetection && activeHostname;
   const currentCategoryValue = categoryInfo?.override ?? categoryInfo?.siteRule ?? '__auto__';
   const isCustomEntry = currentCategoryValue !== '__auto__' && !PREDEFINED_CATEGORIES.includes(currentCategoryValue as typeof PREDEFINED_CATEGORIES[number]);
-  const effectiveCategoryDisplay = categoryInfo?.effective;
+  const detectedCategoryDisplay = categoryInfo?.autoDetected;
   const showSaveAsRule = Boolean(categoryInfo?.override && activeHostname);
 
   return (
@@ -1113,7 +1112,7 @@ export default function App() {
           <CategoryPicker
             currentValue={currentCategoryValue}
             isCustomEntry={isCustomEntry}
-            effectiveCategory={effectiveCategoryDisplay}
+            detectedCategory={detectedCategoryDisplay}
             customCategoryInput={customCategoryInput}
             onCategoryChange={handleCategoryChange}
             onCustomInputChange={setCustomCategoryInput}
