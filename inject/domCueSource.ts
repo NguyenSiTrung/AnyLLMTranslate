@@ -67,7 +67,17 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   const sampleCue = (video: HTMLVideoElement) => {
     const cueEl = document.querySelector<HTMLElement>(domSource.cueSelector);
     const text = cueEl?.textContent?.trim() ?? '';
-    if (!text || text === lastText) return;
+    // Text disappeared (cue gap) — close any open cue.
+    if (!text) {
+      if (openCue) {
+        openCue.endTime = video.currentTime;
+        openCue = null;
+        lastText = '';
+        emit(domSource.readActiveLanguage(), extractVideoId());
+      }
+      return;
+    }
+    if (text === lastText) return;
 
     const t = video.currentTime;
     // Close previous open cue at the new cue's start time.
@@ -76,7 +86,9 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
       openCue = null;
     }
 
-    const cue: SubtitleCue = { startTime: t, endTime: t, text };
+    // Use a far-future endTime for the open (current) cue so the overlay's
+    // findActiveCue() can match it. The next cue will close this one precisely.
+    const cue: SubtitleCue = { startTime: t, endTime: t + 86400, text };
     cues.push(cue);
     openCue = cue;
     lastText = text;
