@@ -849,6 +849,54 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
 }
 
 /**
+ * DOM-platform activation attempt (Max). Auto-activates on play ONLY if:
+ *   1. Max's caption overlay is present and visible (captions on in Max)
+ *   2. Active Max track language matches preferredSubtitleLanguage (or preferred is 'auto')
+ * Returns { activated, reason } for testability.
+ */
+export async function tryAutoActivateForDom(): Promise<{ activated: boolean; reason: string }> {
+  if (state.isOverlayMode) return { activated: false, reason: 'already active' };
+  if (!isOnWatchPage()) return { activated: false, reason: 'not a watch page' };
+
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (!handler || !domSource) return { activated: false, reason: 'no DOM cue source' };
+
+  const epochAtStart = state.navigationEpoch;
+  const settings = await loadSettings();
+  // Stale — user navigated away during the await.
+  if (state.navigationEpoch !== epochAtStart) {
+    return { activated: false, reason: 'stale (SPA navigation)' };
+  }
+  if (!settings.subtitleSettings.enabled || !settings.subtitleSettings.autoActivateSubtitles) {
+    return { activated: false, reason: 'auto-activate disabled' };
+  }
+
+  // Precondition: Max's caption overlay must be present and visible.
+  const overlay = document.querySelector<HTMLElement>(domSource.captionWindowSelector);
+  if (!overlay || getComputedStyle(overlay).visibility === 'hidden') {
+    showSubtitleToast('Enable subtitles in Max to enable translation (Alt+S to retry).');
+    return { activated: false, reason: 'captions off in Max' };
+  }
+
+  const activeLang = domSource.readActiveLanguage();
+  if (!activeLang) {
+    showSubtitleToast('Enable subtitles in Max to enable translation (Alt+S to retry).');
+    return { activated: false, reason: 'captions off in Max' };
+  }
+
+  const preferred = settings.subtitleSettings.preferredSubtitleLanguage;
+  if (preferred && preferred !== 'auto' && activeLang !== preferred) {
+    return { activated: false, reason: `active language ${activeLang} != preferred ${preferred}` };
+  }
+
+  // Defer to the DOM cue flow — actual activation happens when first cues arrive.
+  // Mark videoIsPlaying so handleDomCues can proceed.
+  state.videoIsPlaying = true;
+  return { activated: true, reason: `activated for ${activeLang}` };
+}
+
+/**
  * Watch for the user pressing play on any video element.
  * This is the single trigger for auto-activate — we never activate on
  * discovery alone to avoid unnecessary LLM calls for unplayed videos.
@@ -874,6 +922,14 @@ function startVideoPlaybackWatcher(): () => void {
       state.videoIsPlaying = true;
       console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
       const epoch = state.navigationEpoch;
+      // DOM-sourced platforms (Max) use a different activation path.
+      const currentHandler = detectCurrentHandler();
+      if (currentHandler?.getDomCueSource) {
+        tryAutoActivateForDom().catch((err) => {
+          console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
+        });
+        return;
+      }
       tryAutoActivate(epoch).catch((err) => {
         console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
       });

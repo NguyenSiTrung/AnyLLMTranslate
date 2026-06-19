@@ -65,7 +65,7 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
 
     const domMsg = sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES');
     expect(domMsg).toBeDefined();
-    const payload = domMsg!.payload as { cues: SubtitleCue[]; platform: string; language: string };
+    const payload = (domMsg ?? { payload: { cues: [], platform: '', language: '' } }).payload as { cues: SubtitleCue[]; platform: string; language: string };
     expect(payload.platform).toBe('hbomax');
     expect(payload.language).toBe('en');
     expect(payload.cues.length).toBeGreaterThanOrEqual(1);
@@ -86,8 +86,9 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     cueEl.textContent = 'Second';
     await flushObservers();
 
-    const domMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop()!;
-    const cues = (domMsg.payload as { cues: SubtitleCue[] }).cues;
+    const domMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    expect(domMsg).toBeDefined();
+    const cues = ((domMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
     expect(cues).toHaveLength(2);
     expect(cues[0].startTime).toBe(10);
     expect(cues[0].endTime).toBe(15);
@@ -133,11 +134,12 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     video.dispatchEvent(new Event('pause'));
     await flushObservers();
 
-    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop()!;
-    const cues = (lastMsg.payload as { cues: SubtitleCue[] }).cues;
+    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    expect(lastMsg).toBeDefined();
+    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
     const open = cues.find((c) => c.text === 'Open cue');
     expect(open).toBeDefined();
-    expect(open!.endTime).toBe(24);
+    expect((open ?? { endTime: -1 }).endTime).toBe(24);
 
     cleanup();
   });
