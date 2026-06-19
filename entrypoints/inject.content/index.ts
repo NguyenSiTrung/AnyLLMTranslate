@@ -16,6 +16,9 @@ import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
+import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
+import { startDomCueSource } from '@/inject/domCueSource';
+import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 
 export default defineContentScript({
@@ -31,6 +34,7 @@ export default defineContentScript({
        new UdemyHandler(),
        new CourseraHandler(),
        new LinkedInHandler(),
+       new HboMaxHandler(),
      ]);
 
     const registry = new InterceptorRegistry();
@@ -83,6 +87,18 @@ export default defineContentScript({
     }
 
     console.log('[AnyLLMTranslate] TextTrack discovery started');
+
+    // Start DOM cue source for platforms that render captions into the DOM (e.g. Max)
+    const currentHandler = detectCurrentHandler();
+    if (currentHandler?.getDomCueSource) {
+      const startDom = () => startDomCueSource(currentHandler, bridge);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startDom);
+      } else {
+        startDom();
+      }
+      console.log('[AnyLLMTranslate] DOM cue source started for', currentHandler.platform);
+    }
   },
 });
 

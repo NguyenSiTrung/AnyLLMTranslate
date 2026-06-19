@@ -28,6 +28,7 @@ import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
+import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -499,6 +500,7 @@ export default defineContentScript({
       new UdemyHandler(),
       new CourseraHandler(),
       new LinkedInHandler(),
+      new HboMaxHandler(),
     ]);
 
     setupMessageListener();
