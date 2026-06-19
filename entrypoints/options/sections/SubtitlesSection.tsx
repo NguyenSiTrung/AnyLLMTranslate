@@ -5,7 +5,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Subtitles as SubtitlesIcon, Play, Languages } from 'lucide-react';
+import { Subtitles as SubtitlesIcon, Play, Languages, Globe } from 'lucide-react';
+import { SUPPORTED_SUBTITLE_SITES } from '@/lib/subtitleSites';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -418,6 +419,38 @@ export function SubtitlesSection() {
                 description="Automatically fetch and translate subtitles when the preferred language is detected on a video page, without needing to manually enable captions."
                 disabled={isDisabled}
               />
+            </div>
+          </Card>
+        </div>
+
+        {/* Supported Sites card */}
+        <div className="animate-stagger" style={stagger(3)}>
+          <Card title="Supported Sites" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
+            <div className={`${isDisabled ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-200`}>
+              <div className="divide-y divide-zinc-800/50">
+                {SUPPORTED_SUBTITLE_SITES.map((site) => {
+                  const disabled = (subtitleSettings.disabledSubtitleSites ?? []).includes(site.platform);
+                  return (
+                    <div key={site.platform} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+                      <div>
+                        <div className="text-sm text-zinc-200">{site.name}</div>
+                        <div className="text-xs text-zinc-500">{site.methodHint}</div>
+                      </div>
+                      <Toggle
+                        id={`subtitle-site-${site.platform}`}
+                        checked={!disabled}
+                        onChange={(checked) => {
+                          const current = subtitleSettings.disabledSubtitleSites ?? [];
+                          const updated = checked
+                            ? current.filter((p) => p !== site.platform)
+                            : [...current, site.platform];
+                          handleUpdate({ disabledSubtitleSites: updated });
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </Card>
         </div>

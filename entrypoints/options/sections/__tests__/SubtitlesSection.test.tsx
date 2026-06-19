@@ -236,5 +236,70 @@ describe('SubtitlesSection', () => {
       const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
       expect(state.subtitleSettings.autoActivateSubtitles).toBe(false);
     });
+
+    it('default disabledSubtitleSites is empty array', () => {
+      const state = { subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS } };
+      expect(state.subtitleSettings.disabledSubtitleSites).toEqual([]);
+    });
+  });
+
+  describe('supported sites card', () => {
+    it('renders the Supported Sites card', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Supported Sites')).toBeInTheDocument();
+    });
+
+    it('renders all 5 platform names', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('YouTube')).toBeInTheDocument();
+      expect(screen.getByText('Udemy')).toBeInTheDocument();
+      expect(screen.getByText('Coursera')).toBeInTheDocument();
+      expect(screen.getByText('LinkedIn Learning')).toBeInTheDocument();
+      expect(screen.getByText('HBO Max')).toBeInTheDocument();
+    });
+
+    it('renders method hints for each platform', () => {
+      render(<SubtitlesSection />);
+      const xhrHints = screen.getAllByText('XHR interception');
+      expect(xhrHints).toHaveLength(3); // youtube, udemy, coursera
+      expect(screen.getByText('Fetch interception')).toBeInTheDocument();
+      expect(screen.getByText('DOM cue scraping')).toBeInTheDocument();
+    });
+
+    it('renders all 5 site toggles checked by default (empty disabled list)', () => {
+      render(<SubtitlesSection />);
+      const youtubeToggle = document.getElementById('subtitle-site-youtube') as HTMLInputElement;
+      const udemyToggle = document.getElementById('subtitle-site-udemy') as HTMLInputElement;
+      const courseraToggle = document.getElementById('subtitle-site-coursera') as HTMLInputElement;
+      const linkedinToggle = document.getElementById('subtitle-site-linkedin') as HTMLInputElement;
+      const hbomaxToggle = document.getElementById('subtitle-site-hbomax') as HTMLInputElement;
+
+      expect(youtubeToggle).toBeInTheDocument();
+      expect(udemyToggle).toBeInTheDocument();
+      expect(courseraToggle).toBeInTheDocument();
+      expect(linkedinToggle).toBeInTheDocument();
+      expect(hbomaxToggle).toBeInTheDocument();
+    });
+
+    it('shows unchecked toggle for a disabled site', () => {
+      mockState.subtitleSettings = {
+        ...baseSubtitleSettings,
+        disabledSubtitleSites: ['youtube'],
+      };
+
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') {
+          return selector(mockState);
+        }
+        return mockState;
+      });
+
+      render(<SubtitlesSection />);
+      const youtubeToggle = document.getElementById('subtitle-site-youtube') as HTMLInputElement;
+      expect(youtubeToggle.checked).toBe(false);
+
+      const udemyToggle = document.getElementById('subtitle-site-udemy') as HTMLInputElement;
+      expect(udemyToggle.checked).toBe(true);
+    });
   });
 });

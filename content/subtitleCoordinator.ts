@@ -22,6 +22,7 @@ import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
 import { findMatchingRule } from '@/lib/siteRules';
+import { isSiteDisabled } from '@/lib/subtitleSites';
 
 /** Coordinator state */
 interface CoordinatorState {
@@ -172,6 +173,12 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     const settings = await loadSettings();
     if (!settings.subtitleSettings.enabled) {
       cleanupActiveOverlay();
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
+
+    // Per-site toggle: skip translation for disabled platforms (always-respond pattern)
+    if (isSiteDisabled(platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
       sendTranslatedSubtitle({ requestId, vttContent: body });
       return;
     }
@@ -471,7 +478,12 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
     return;
   }
 
-  const handler = detectCurrentHandler();
+  const handlerForCheck = detectCurrentHandler();
+  if (handlerForCheck && isSiteDisabled(handlerForCheck.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
+    return;
+  }
+
+  const handler = handlerForCheck;
   const domSource = handler?.getDomCueSource?.();
   if (!handler || !domSource) {
     console.warn('AnyLLMTranslate: No DOM cue source for platform', payload.platform);
@@ -955,6 +967,12 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
   const settings = await loadSettings();
   if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
 
+  // Per-site toggle: skip auto-activate for disabled platforms
+  const currentHandler = detectCurrentHandler();
+  if (currentHandler && isSiteDisabled(currentHandler.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
+    return;
+  }
+
   const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
@@ -989,6 +1007,11 @@ export async function tryAutoActivateForDom(): Promise<{ activated: boolean; rea
   }
   if (!settings.subtitleSettings.enabled || !settings.subtitleSettings.autoActivateSubtitles) {
     return { activated: false, reason: 'auto-activate disabled' };
+  }
+
+  // Per-site toggle: skip auto-activate for disabled platforms
+  if (handler && isSiteDisabled(handler.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
+    return { activated: false, reason: 'site disabled by user' };
   }
 
   // Precondition: Max's caption overlay must be present and visible.
