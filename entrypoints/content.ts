@@ -115,6 +115,12 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       ? extractPageContext(document, settings.enableLLMPageCategoryDetection)
       : undefined;
 
+    // Persist heuristic category in the singleton if not yet cached
+    if (pageContext?.category && !getAutoDetectedCategory()) {
+      setAutoDetectedCategory(pageContext.category);
+      broadcastCategoryInfo(settings, categoryOverride);
+    }
+
     if (pageContext) {
       await detectLLMCategoryIfNeeded(
         pageContext,
@@ -461,20 +467,27 @@ export function setupMessageListener(): void {
       // Return full category info to popup
       (async () => {
         const catSettings = await loadSettings();
-        // Singleton holds only LLM-detected results; fall back to heuristic for display
-        const llmDetected = getAutoDetectedCategory();
-        const heuristic = catSettings.enableLLMPageCategoryDetection
-          ? extractPageContext(document, true).category
-          : undefined;
+        // Singleton holds LLM-detected or heuristic results
+        let detected = getAutoDetectedCategory();
+
+        // If nothing cached yet, run heuristic detection and persist the result
+        if (!detected && catSettings.enableLLMPageCategoryDetection) {
+          const heuristic = extractPageContext(document, true).category;
+          if (heuristic) {
+            setAutoDetectedCategory(heuristic);
+            detected = heuristic;
+          }
+        }
+
         const info = buildCategoryInfo(catSettings, categoryOverride);
-        sendResponse({ ...info, autoDetected: llmDetected ?? heuristic });
+        sendResponse(info);
 
         // Lazy LLM detection: when nothing is detected yet, detection is enabled,
         // and no manual override is set, kick off an async detection so the popup's
         // pageCategoryUpdate listener fills in the category shortly after open.
         // The helper's in-flight guard prevents duplicate calls across repeated
         // popup opens while one detection is pending.
-        if (!llmDetected && !heuristic && catSettings.enableLLMPageCategoryDetection && !categoryOverride) {
+        if (!detected && catSettings.enableLLMPageCategoryDetection && !categoryOverride) {
           triggerAutoCategoryDetection(catSettings, categoryOverride, (cat) => {
             setAutoDetectedCategory(cat);
             broadcastCategoryInfo(catSettings, categoryOverride);

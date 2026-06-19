@@ -91,26 +91,123 @@ function detectCategory(doc: Document, domain: string): string | undefined {
   // 2. Check meta keywords
   const metaKeywords = doc.querySelector('meta[name="keywords"]');
   if (metaKeywords) {
-    const keywords = metaKeywords.getAttribute('content') ?? '';
-    if (keywords.includes('programming') || keywords.includes('software')) {
+    const keywords = (metaKeywords.getAttribute('content') ?? '').toLowerCase();
+    if (keywords.includes('programming') || keywords.includes('software') || keywords.includes('developer') || keywords.includes('api') || keywords.includes('sdk')) {
       return 'Software Development';
     }
-    if (keywords.includes('research') || keywords.includes('academic')) {
+    if (keywords.includes('research') || keywords.includes('academic') || keywords.includes('scholarly')) {
       return 'Academic Research';
     }
-    if (keywords.includes('news')) {
+    if (keywords.includes('news') || keywords.includes('journalism') || keywords.includes('breaking')) {
       return 'News';
     }
-    if (keywords.includes('education') || keywords.includes('learning')) {
+    if (keywords.includes('education') || keywords.includes('learning') || keywords.includes('course') || keywords.includes('tutorial')) {
+      return 'Online Education';
+    }
+    if (keywords.includes('shopping') || keywords.includes('ecommerce') || keywords.includes('buy') || keywords.includes('store')) {
+      return 'E-Commerce';
+    }
+    if (keywords.includes('health') || keywords.includes('medical') || keywords.includes('medicine')) {
+      return 'Health & Medicine';
+    }
+    if (keywords.includes('game') || keywords.includes('gaming')) {
+      return 'Gaming';
+    }
+    if (keywords.includes('travel') || keywords.includes('hotel') || keywords.includes('booking')) {
+      return 'Travel & Hospitality';
+    }
+    if (keywords.includes('forum') || keywords.includes('community') || keywords.includes('discussion')) {
+      return 'Community Discussion';
+    }
+    if (keywords.includes('blog') || keywords.includes('tech blog')) {
+      return 'Technology Blog';
+    }
+    if (keywords.includes('video') || keywords.includes('streaming') || keywords.includes('watch')) {
+      return 'Video Platform';
+    }
+  }
+
+  // 3. Check og:type and og:site_name meta tags
+  const ogType = doc.querySelector('meta[property="og:type"]')?.getAttribute('content')?.toLowerCase() ?? '';
+  const ogSiteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.toLowerCase() ?? '';
+
+  if (ogType === 'article' || ogType === 'blog') {
+    // Distinguish tech blogs from general news via domain/site name clues
+    if (ogSiteName.includes('blog') || ogSiteName.includes('dev') || ogSiteName.includes('tech') || ogSiteName.includes('engineering')) {
+      return 'Technology Blog';
+    }
+    if (ogSiteName.includes('news') || ogSiteName.includes('times') || ogSiteName.includes('post') || ogSiteName.includes('herald')) {
+      return 'News';
+    }
+    // Generic article — treat as blog
+    return 'Technology Blog';
+  }
+  if (ogType === 'product' || ogType === 'product.group') {
+    return 'E-Commerce';
+  }
+  if (ogType === 'video' || ogType === 'video.other' || ogType === 'video.movie' || ogType === 'video.episode') {
+    return 'Video Platform';
+  }
+  if (ogType === 'music' || ogType === 'music.song' || ogType === 'music.album') {
+    return 'Streaming Entertainment';
+  }
+  if (ogType === 'profile') {
+    return 'Social Media';
+  }
+
+  // 4. Check schema.org structured data (JSON-LD)
+  const schemaCategory = detectFromSchemaOrg(doc);
+  if (schemaCategory) return schemaCategory;
+
+  // 5. Check URL path patterns
+  const pathname = typeof window !== 'undefined' ? window.location.pathname.toLowerCase() : '';
+  if (/\/(docs?|documentation|reference|api)\//i.test(pathname)) {
+    return 'Web Development Documentation';
+  }
+  if (/\/(blog|posts?|articles?)\//i.test(pathname)) {
+    return 'Technology Blog';
+  }
+  if (/\/(wiki|encyclopedia)\//i.test(pathname)) {
+    return 'Encyclopedia';
+  }
+  if (/\/(forum|discuss|community|thread)\//i.test(pathname)) {
+    return 'Community Discussion';
+  }
+  if (/\/(learn|course|tutorial|lesson)\//i.test(pathname)) {
+    return 'Online Education';
+  }
+  if (/\/(shop|store|product|cart|checkout)\//i.test(pathname)) {
+    return 'E-Commerce';
+  }
+  if (/\/(news|press|releases?)\//i.test(pathname)) {
+    return 'News';
+  }
+
+  // 6. Check meta description for category clues
+  const metaDesc = doc.querySelector('meta[name="description"]')?.getAttribute('content')?.toLowerCase() ?? '';
+  if (metaDesc) {
+    if (/\b(api|sdk|library|framework|developer|open.?source|github|repository)\b/.test(metaDesc)) {
+      return 'Software Development';
+    }
+    if (/\b(documentation|docs|reference|getting.?started)\b/.test(metaDesc)) {
+      return 'Web Development Documentation';
+    }
+    if (/\b(research|study|paper|citation|peer.?review|abstract)\b/.test(metaDesc)) {
+      return 'Academic Research';
+    }
+    if (/\b(breaking.?news|headlines?|journalism|reporter|correspondent)\b/.test(metaDesc)) {
+      return 'News';
+    }
+    if (/\b(learn|course|tutorial|education|training|certification)\b/.test(metaDesc)) {
       return 'Online Education';
     }
   }
 
-  // 3. Fallback: analyze first h1 text
+  // 7. Analyze first h1 text
   const h1 = doc.querySelector('h1');
   if (h1) {
     const h1Text = h1.textContent ?? '';
-    if (/tutorial|guide|how to|documentation/i.test(h1Text)) {
+    if (/tutorial|guide|how to|documentation|getting started/i.test(h1Text)) {
       return 'Online Education';
     }
     if (/news|breaking|headline/i.test(h1Text)) {
@@ -119,8 +216,42 @@ function detectCategory(doc: Document, domain: string): string | undefined {
     if (/research|study|paper|journal/i.test(h1Text)) {
       return 'Academic Research';
     }
+    if (/api|sdk|developer|reference|docs/i.test(h1Text)) {
+      return 'Web Development Documentation';
+    }
   }
 
+  // 8. Check for article-like page structure (has <article> or <time> elements)
+  const hasArticle = doc.querySelector('article') !== null;
+  const hasTime = doc.querySelector('time[datetime]') !== null;
+  if (hasArticle && hasTime) {
+    return 'Technology Blog';
+  }
+
+  return undefined;
+}
+
+/** Detect category from schema.org JSON-LD structured data */
+function detectFromSchemaOrg(doc: Document): string | undefined {
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of scripts) {
+    try {
+      const data = JSON.parse(script.textContent ?? '');
+      const type = (data['@type'] ?? '').toLowerCase();
+      if (type === 'newsarticle' || type === 'reportagenewsarticle') return 'News';
+      if (type === 'blogposting' || type === 'technicalarticle') return 'Technology Blog';
+      if (type === 'scholarlyarticle') return 'Academic Research';
+      if (type === 'product' || type === 'offer') return 'E-Commerce';
+      if (type === 'course') return 'Online Education';
+      if (type === 'videoobject') return 'Video Platform';
+      if (type === 'softwareapplication' || type === 'softwaresourcecode') return 'Software Development';
+      if (type === 'discussionforumposting' || type === 'question') return 'Community Discussion';
+      if (type === 'medicalwebpage' || type === 'medicalcondition') return 'Health & Medicine';
+      if (type === 'recipe') return 'Technology Blog'; // food blogs are blog-like
+    } catch {
+      // Invalid JSON-LD — skip
+    }
+  }
   return undefined;
 }
 
