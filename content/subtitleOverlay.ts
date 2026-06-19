@@ -97,19 +97,46 @@ function createOverlay(): HTMLElement {
 
 /**
  * Position the overlay over the video element.
+ * When inside a fullscreen container, the overlay should fill the container
+ * using position:absolute instead of fixed viewport coordinates.
  */
 function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: OverlayConfig): void {
-  const videoRect = video.getBoundingClientRect();
+  const fullscreenEl = document.fullscreenElement;
 
-  // Set overlay size to match video
+  if (fullscreenEl && overlay.parentElement === fullscreenEl) {
+    // Inside a fullscreen container: use absolute positioning to fill the container.
+    // The video fills the fullscreen container, so we cover the whole area.
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.zIndex = '2147483647';
+    overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
+    return;
+  }
+
+  if (fullscreenEl && fullscreenEl === video) {
+    // The video element itself is fullscreen (popover path).
+    // Cover the entire viewport.
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.zIndex = '2147483647';
+    overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
+    return;
+  }
+
+  // Normal (non-fullscreen) mode: position fixed over video using viewport coords.
+  const videoRect = video.getBoundingClientRect();
   overlay.style.width = `${videoRect.width}px`;
   overlay.style.height = `${videoRect.height}px`;
-
-  // Position overlay over video
   overlay.style.position = 'fixed';
   overlay.style.top = `${videoRect.top}px`;
   overlay.style.left = `${videoRect.left}px`;
-  overlay.style.zIndex = '2147483647'; // Maximum z-index
+  overlay.style.zIndex = '2147483647';
 
   // Apply user offsets (drag-to-reposition)
   overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
@@ -253,6 +280,9 @@ function handleResize(entries: ResizeObserverEntry[]): void {
 
 /**
  * Handle fullscreen change.
+ * HBO Max (and similar custom players) fullscreen a container element,
+ * not the <video> itself. The overlay must be reparented into that container
+ * and re-positioned with absolute coordinates to remain visible.
  */
 function handleFullscreenChange(): void {
   const overlay = overlayState.overlay;
@@ -278,10 +308,17 @@ function handleFullscreenChange(): void {
         }
       }
     } else {
-      // The fullscreen element is a container (e.g. custom player).
-      // Move the overlay into the fullscreen container.
+      // The fullscreen element is a container (e.g. HBO Max custom player).
+      // Move the overlay into the fullscreen container so it's visible
+      // within the fullscreen stacking context.
       if (overlay.parentElement !== fullscreenEl) {
         fullscreenEl.appendChild(overlay);
+      }
+      // Ensure the fullscreen container has position:relative so our
+      // position:absolute overlay can anchor to it.
+      const containerPosition = getComputedStyle(fullscreenEl).position;
+      if (containerPosition === 'static') {
+        (fullscreenEl as HTMLElement).style.position = 'relative';
       }
       if (overlay.hasAttribute('popover')) {
         try {
@@ -309,11 +346,17 @@ function handleFullscreenChange(): void {
     }
   }
 
-  // Re-position and recalculate font size after fullscreen transition
-  setTimeout(() => {
-    positionOverlay(overlay, video, overlayState.config);
+  // Re-position and recalculate font size after fullscreen transition.
+  // Use two timeouts: an immediate one to cover fast transitions and
+  // a delayed one for slow animation completions (HBO Max player has
+  // ~300ms fullscreen animation).
+  const reposition = () => {
+    if (!overlayState.overlay || !overlayState.video) return;
+    positionOverlay(overlayState.overlay, overlayState.video, overlayState.config);
     updateOverlayStyle(overlayState.config);
-  }, 100);
+  };
+  setTimeout(reposition, 50);
+  setTimeout(reposition, 350);
 }
 
 /**

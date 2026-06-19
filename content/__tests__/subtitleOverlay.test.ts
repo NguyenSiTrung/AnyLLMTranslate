@@ -201,6 +201,32 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
   });
 
+  it('uses position:absolute inside fullscreen container after reposition', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    // Install fake timers BEFORE triggering the event so the scheduled
+    // setTimeout calls inside handleFullscreenChange are captured.
+    vi.useFakeTimers();
+
+    // Simulate container fullscreen
+    Object.defineProperty(document, 'fullscreenElement', {
+      value: container,
+      configurable: true
+    });
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    // Advance past both reposition timeouts (50ms + 350ms)
+    vi.advanceTimersByTime(400);
+    vi.useRealTimers();
+
+    expect(overlay.style.position).toBe('absolute');
+    expect(overlay.style.top).toBe('0px');
+    expect(overlay.style.left).toBe('0px');
+    expect(overlay.style.width).toBe('100%');
+    expect(overlay.style.height).toBe('100%');
+  });
+
   it('reverts to body on exit fullscreen', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
