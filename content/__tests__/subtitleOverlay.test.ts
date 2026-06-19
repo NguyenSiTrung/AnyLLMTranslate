@@ -182,7 +182,15 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(HTMLElement.prototype.showPopover).toHaveBeenCalled();
   });
 
-  it('reparents overlay when a container is fullscreen', () => {
+  it('reparents overlay when a container is fullscreen (when Popover API is NOT supported)', () => {
+    // Disable popover to test fallback path
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).popover;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).showPopover;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).hidePopover;
+
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     
@@ -198,10 +206,33 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
 
     expect(overlay.parentElement).toBe(container);
     expect(overlay.hasAttribute('popover')).toBe(false);
-    expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
   });
 
-  it('uses position:absolute inside fullscreen container after reposition', () => {
+  it('uses popover and does NOT reparent when container is fullscreen (when Popover API is supported)', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    // Simulate container fullscreen
+    Object.defineProperty(document, 'fullscreenElement', {
+      value: container,
+      configurable: true
+    });
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    expect(overlay.parentElement).toBe(document.body);
+    expect(overlay.getAttribute('popover')).toBe('manual');
+    expect(HTMLElement.prototype.showPopover).toHaveBeenCalled();
+  });
+
+  it('uses position:absolute inside fullscreen container after reposition (when Popover API is NOT supported)', () => {
+    // Disable popover to test fallback path
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).popover;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).showPopover;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).hidePopover;
+
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
 
@@ -225,6 +256,32 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.style.left).toBe('0px');
     expect(overlay.style.width).toBe('100%');
     expect(overlay.style.height).toBe('100%');
+  });
+
+  it('uses position:fixed aligned with video rect when container is fullscreen (when Popover API is supported)', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    // Install fake timers BEFORE triggering the event so the scheduled
+    // setTimeout calls inside handleFullscreenChange are captured.
+    vi.useFakeTimers();
+
+    // Simulate container fullscreen
+    Object.defineProperty(document, 'fullscreenElement', {
+      value: container,
+      configurable: true
+    });
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    // Advance past both reposition timeouts (50ms + 350ms)
+    vi.advanceTimersByTime(400);
+    vi.useRealTimers();
+
+    expect(overlay.style.position).toBe('fixed');
+    expect(overlay.style.top).toBe('0px');
+    expect(overlay.style.left).toBe('0px');
+    expect(overlay.style.width).toBe('800px');
+    expect(overlay.style.height).toBe('600px');
   });
 
   it('reverts to body on exit fullscreen', () => {

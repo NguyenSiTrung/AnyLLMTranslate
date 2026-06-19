@@ -124,6 +124,21 @@
   pointer-events: auto !important;
 }
 
+/* Popover-specific resets to clear browser user-agent defaults (borders, background, margin) */
+.anyllm-translate-subtitle-overlay[popover] {
+  border: none !important;
+  background: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  outline: none !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+.anyllm-translate-subtitle-overlay:popover-open {
+  display: flex !important;
+}
+
 .anyllm-translate-subtitle-text {
   all: revert;
   display: flex;

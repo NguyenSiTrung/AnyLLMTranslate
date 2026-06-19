@@ -104,7 +104,8 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
   const fullscreenEl = document.fullscreenElement;
 
   if (fullscreenEl && overlay.parentElement === fullscreenEl) {
-    // Inside a fullscreen container: use absolute positioning to fill the container.
+    // Inside a fullscreen container fallback path (when Popover API is NOT supported):
+    // use absolute positioning to fill the container.
     // The video fills the fullscreen container, so we cover the whole area.
     overlay.style.position = 'absolute';
     overlay.style.top = '0';
@@ -116,20 +117,8 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
     return;
   }
 
-  if (fullscreenEl && fullscreenEl === video) {
-    // The video element itself is fullscreen (popover path).
-    // Cover the entire viewport.
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100vw';
-    overlay.style.height = '100vh';
-    overlay.style.zIndex = '2147483647';
-    overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
-    return;
-  }
-
-  // Normal (non-fullscreen) mode: position fixed over video using viewport coords.
+  // Normal (non-fullscreen) mode, or Popover fullscreen mode:
+  // Position fixed over video using viewport coords.
   const videoRect = video.getBoundingClientRect();
   overlay.style.width = `${videoRect.width}px`;
   overlay.style.height = `${videoRect.height}px`;
@@ -292,34 +281,20 @@ function handleFullscreenChange(): void {
   const fullscreenEl = document.fullscreenElement;
 
   if (fullscreenEl) {
-    if (fullscreenEl === video) {
-      // The video element itself is fullscreen.
-      // We must append to document.body and use Popover API to bring it to the Top Layer.
+    if ('popover' in overlay) {
+      // Use Popover API to place the overlay in the Top Layer, on top of any fullscreen element.
       if (overlay.parentElement !== document.body) {
         document.body.appendChild(overlay);
       }
-      if ('popover' in overlay) {
-        overlay.setAttribute('popover', 'manual');
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (overlay as any).showPopover();
-        } catch {
-          // ignore error if already open
-        }
+      overlay.setAttribute('popover', 'manual');
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (overlay as any).showPopover();
+      } catch {
+        // ignore error if already open
       }
     } else {
-      // The fullscreen element is a container (e.g. HBO Max custom player).
-      // Move the overlay into the fullscreen container so it's visible
-      // within the fullscreen stacking context.
-      if (overlay.parentElement !== fullscreenEl) {
-        fullscreenEl.appendChild(overlay);
-      }
-      // Ensure the fullscreen container has position:relative so our
-      // position:absolute overlay can anchor to it.
-      const containerPosition = getComputedStyle(fullscreenEl).position;
-      if (containerPosition === 'static') {
-        (fullscreenEl as HTMLElement).style.position = 'relative';
-      }
+      // Fallback for browsers without Popover API support.
       if (overlay.hasAttribute('popover')) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -328,6 +303,22 @@ function handleFullscreenChange(): void {
           // ignore error
         }
         overlay.removeAttribute('popover');
+      }
+
+      if (fullscreenEl === video) {
+        if (overlay.parentElement !== document.body) {
+          document.body.appendChild(overlay);
+        }
+      } else {
+        if (overlay.parentElement !== fullscreenEl) {
+          fullscreenEl.appendChild(overlay);
+        }
+        // Ensure the fullscreen container has position:relative so our
+        // position:absolute overlay can anchor to it.
+        const containerPosition = getComputedStyle(fullscreenEl).position;
+        if (containerPosition === 'static') {
+          (fullscreenEl as HTMLElement).style.position = 'relative';
+        }
       }
     }
   } else {

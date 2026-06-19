@@ -13,7 +13,6 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PageTranslations } from './pdfTranslation';
-import type { PdfParagraph } from './pdfTextExtraction';
 
 /** Options for generating a translated PDF. */
 export interface GenerateTranslatedPdfOptions {
