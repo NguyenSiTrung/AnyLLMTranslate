@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import type { PageContext } from '@/types/config';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '../pageContext';
 
 describe('extractPageContext', () => {
@@ -142,7 +143,7 @@ describe('detectLLMCategoryIfNeeded', () => {
     llmCategoryDetectionMode: 'blocking',
   } as const;
 
-  function makePageContext() {
+  function makePageContext(): PageContext {
     return { title: 'Test', description: '', domain: 'example.com' };
   }
 
