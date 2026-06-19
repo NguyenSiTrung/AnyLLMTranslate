@@ -5,7 +5,7 @@
 interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
-  label: string;
+  label?: string;
   description?: string;
   id?: string;
   disabled?: boolean;
@@ -14,16 +14,18 @@ interface ToggleProps {
 export function Toggle({ checked, onChange, label, description, id, disabled = false }: ToggleProps) {
   return (
     <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-zinc-200">{label}</p>
-        {description && <p className="text-xs text-zinc-500 mt-0.5">{description}</p>}
-      </div>
+      {label && (
+        <div>
+          <p className="text-sm font-medium text-zinc-200">{label}</p>
+          {description && <p className="text-xs text-zinc-500 mt-0.5">{description}</p>}
+        </div>
+      )}
       <button
         id={id}
         type="button"
         role="switch"
         aria-checked={checked}
-        aria-label={label}
+        aria-label={label || id}
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${

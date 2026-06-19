@@ -295,11 +295,11 @@ describe('SubtitlesSection', () => {
       });
 
       render(<SubtitlesSection />);
-      const youtubeToggle = document.getElementById('subtitle-site-youtube') as HTMLInputElement;
-      expect(youtubeToggle.checked).toBe(false);
+      const youtubeToggle = document.getElementById('subtitle-site-youtube');
+      expect(youtubeToggle?.getAttribute('aria-checked')).toBe('false');
 
-      const udemyToggle = document.getElementById('subtitle-site-udemy') as HTMLInputElement;
-      expect(udemyToggle.checked).toBe(true);
+      const udemyToggle = document.getElementById('subtitle-site-udemy');
+      expect(udemyToggle?.getAttribute('aria-checked')).toBe('true');
     });
   });
 });

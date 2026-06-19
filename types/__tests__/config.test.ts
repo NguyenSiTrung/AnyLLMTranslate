@@ -131,6 +131,7 @@ describe('config types', () => {
         translationTimeout: 30,
         preferredSubtitleLanguage: 'en',
         autoActivateSubtitles: false,
+        disabledSubtitleSites: [],
       };
       expect(settings.fontSize).toBe(18);
       expect(settings.backgroundOpacity).toBe(0.5);
