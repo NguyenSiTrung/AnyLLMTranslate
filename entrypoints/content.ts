@@ -12,6 +12,12 @@ import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
+import {
+  getAutoDetectedCategory,
+  setAutoDetectedCategory,
+  buildCategoryInfo,
+  broadcastCategoryInfo,
+} from '@/content/categoryState';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
@@ -110,7 +116,16 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       : undefined;
 
     if (pageContext) {
-      await detectLLMCategoryIfNeeded(pageContext, settings, categoryOverride);
+      await detectLLMCategoryIfNeeded(
+        pageContext,
+        settings,
+        categoryOverride,
+        getAutoDetectedCategory(),
+        (cat) => {
+          setAutoDetectedCategory(cat);
+          broadcastCategoryInfo(settings, categoryOverride);
+        },
+      );
     }
 
     // Apply category override if present (FR-4: temp > siteRule > autoDetect)
@@ -439,23 +454,19 @@ function setupMessageListener(): void {
     } else if (message.action === 'categoryChanged') {
       // Update module-level category override from background
       categoryOverride = message.category ?? undefined;
+      // Refresh popup so manual override reflects immediately
+      loadSettings().then((s) => broadcastCategoryInfo(s, categoryOverride));
     } else if (message.action === 'getPageCategory') {
       // Return full category info to popup
       (async () => {
         const catSettings = await loadSettings();
-        const autoDetected = catSettings.enableLLMPageCategoryDetection
-          ? extractPageContext(document, true).category
-          : undefined;
-        const hostname = window.location.hostname;
-        const catRule = findMatchingRule(hostname, catSettings.siteRules);
-        const siteRuleCat = catRule?.category;
-        const effective = resolveCategory(autoDetected, siteRuleCat, categoryOverride);
-        sendResponse({
-          autoDetected,
-          siteRule: siteRuleCat,
-          override: categoryOverride,
-          effective,
-        });
+        // Prefer the LLM-detected value from shared state; fall back to heuristic
+        const autoDetected = getAutoDetectedCategory()
+          ?? (catSettings.enableLLMPageCategoryDetection
+            ? extractPageContext(document, true).category
+            : undefined);
+        setAutoDetectedCategory(autoDetected);
+        sendResponse(buildCategoryInfo(catSettings, categoryOverride));
       })();
       return true; // async response
     } else if (message.action === 'startSubtitleTranslation') {
