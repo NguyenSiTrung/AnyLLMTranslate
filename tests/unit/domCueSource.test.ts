@@ -200,4 +200,38 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
 
     cleanup();
   });
+
+  it('does NOT reset the buffer on aria-checked changes from non-track-button controls', async () => {
+    // A settings toggle (NOT a text-track button) that becomes checked.
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-testid', 'player-ux-settings-toggle');
+    toggle.setAttribute('aria-checked', 'false');
+    document.body.appendChild(toggle);
+
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    // Emit a first cue.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    cueEl.textContent = 'Cue one';
+    await flushObservers();
+    const cuesBefore = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cuesBefore?.length).toBeGreaterThanOrEqual(1);
+
+    // User toggles an unrelated settings control.
+    toggle.setAttribute('aria-checked', 'true');
+    await flushObservers();
+
+    // Emit a second cue — the buffer should still contain the first cue.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 8 });
+    cueEl.textContent = 'Cue two';
+    await flushObservers();
+
+    const cuesAfter = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } };
+    // Buffer NOT reset — both cues present.
+    expect(cuesAfter?.payload.cues).toHaveLength(2);
+    expect(cuesAfter?.payload.cues[0].text).toBe('Cue one');
+    expect(cuesAfter?.payload.cues[1].text).toBe('Cue two');
+
+    cleanup();
+  });
 });

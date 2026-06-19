@@ -76,11 +76,16 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
 
   // Reset the rolling buffer when the user switches Max's subtitle track
   // mid-session (a different track's cues are unrelated to the prior buffer).
+  // Filter to text-track buttons only — Max has other aria-checked controls
+  // (settings toggles, audio menu) that must NOT reset the cue buffer.
   const trackObserver = new MutationObserver((mutations) => {
     for (const m of mutations) {
       if (m.type !== 'attributes' || m.attributeName !== 'aria-checked') continue;
       const target = m.target as HTMLElement;
-      if (target.getAttribute('aria-checked') === 'true') {
+      if (
+        target.getAttribute('aria-checked') === 'true' &&
+        target.getAttribute('data-testid') === 'player-ux-text-track-button'
+      ) {
         console.log('[AnyLLMTranslate] Max subtitle track changed — resetting DOM cue buffer');
         resetBuffer();
         return;
