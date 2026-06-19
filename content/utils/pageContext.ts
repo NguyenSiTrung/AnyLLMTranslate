@@ -56,6 +56,28 @@ export const DOMAIN_CATEGORY_MAP: Record<string, string> = {
   'springer.com': 'Academic Journal',
   'ieee.org': 'Software Development',
   'acm.org': 'Academic Research',
+
+  // Streaming movie/TV platforms
+  'disneyplus.com': 'Streaming Entertainment',
+  'hulu.com': 'Streaming Entertainment',
+  'primevideo.com': 'Streaming Entertainment',
+  'tv.apple.com': 'Streaming Entertainment',
+  'peacocktv.com': 'Streaming Entertainment',
+  'paramountplus.com': 'Streaming Entertainment',
+  'max.com': 'Streaming Entertainment',
+  'youku.com': 'Streaming Entertainment',
+  'iqiyi.com': 'Streaming Entertainment',
+  'v.qq.com': 'Streaming Entertainment',
+  'bilibili.com': 'Streaming Entertainment',
+
+  // Online learning platforms
+  'khanacademy.org': 'Online Education',
+  'edx.org': 'Online Education',
+  'pluralsight.com': 'Online Education',
+  'skillshare.com': 'Online Education',
+  'udacity.com': 'Online Education',
+  'duolingo.com': 'Online Education',
+  'lingoda.com': 'Online Education',
 };
 
 /** Extract page context from a Document */
