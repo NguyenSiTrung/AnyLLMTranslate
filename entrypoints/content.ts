@@ -133,7 +133,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       const hostname = window.location.hostname;
       const matchingRule = findMatchingRule(hostname, settings.siteRules);
       const resolved = resolveCategory(
-        pageContext.category,
+        getAutoDetectedCategory() ?? pageContext.category,
         matchingRule?.category,
         categoryOverride,
       );
@@ -455,18 +455,18 @@ function setupMessageListener(): void {
       // Update module-level category override from background
       categoryOverride = message.category ?? undefined;
       // Refresh popup so manual override reflects immediately
-      loadSettings().then((s) => broadcastCategoryInfo(s, categoryOverride));
+      loadSettings().then((s) => broadcastCategoryInfo(s, categoryOverride)).catch(() => {});
     } else if (message.action === 'getPageCategory') {
       // Return full category info to popup
       (async () => {
         const catSettings = await loadSettings();
-        // Prefer the LLM-detected value from shared state; fall back to heuristic
-        const autoDetected = getAutoDetectedCategory()
-          ?? (catSettings.enableLLMPageCategoryDetection
-            ? extractPageContext(document, true).category
-            : undefined);
-        setAutoDetectedCategory(autoDetected);
-        sendResponse(buildCategoryInfo(catSettings, categoryOverride));
+        // Singleton holds only LLM-detected results; fall back to heuristic for display
+        const llmDetected = getAutoDetectedCategory();
+        const heuristic = catSettings.enableLLMPageCategoryDetection
+          ? extractPageContext(document, true).category
+          : undefined;
+        const info = buildCategoryInfo(catSettings, categoryOverride);
+        sendResponse({ ...info, autoDetected: llmDetected ?? heuristic });
       })();
       return true; // async response
     } else if (message.action === 'startSubtitleTranslation') {

@@ -892,3 +892,97 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
 });
+
+// ============================================================================
+// Auto-detected category from shared singleton state (regression test for C1)
+// ============================================================================
+
+describe('auto-detected category from shared state', () => {
+  // categoryState is NOT mocked, so it uses the real module. However, vi.resetModules()
+  // creates a fresh module instance for dynamically imported modules. We must import
+  // categoryState dynamically (after the coordinator) to share the same instance.
+  let categoryStateMod: {
+    setAutoDetectedCategory: (category: string | undefined) => void;
+    _resetCategoryState: () => void;
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    vi.resetModules();
+
+    // Simulate a YouTube watch page so isOnWatchPage() returns true
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockOnMessage.mockReturnValue(() => {});
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES }),
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    // Import coordinator (triggers module-level side-effects that capture the handler)
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+
+    // Import categoryState AFTER the coordinator so we share the same fresh
+    // module instance (vi.resetModules() invalidates the previous registry).
+    categoryStateMod = await import('@/content/categoryState');
+    categoryStateMod._resetCategoryState();
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('uses the shared autoDetectedCategory singleton value in resolveCategory', async () => {
+    // Seed the singleton with an LLM-detected category
+    categoryStateMod.setAutoDetectedCategory('News');
+
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableContextAwareTranslation: true,
+      enableLLMPageCategoryDetection: true,
+      llmCategoryDetectionMode: 'async',
+      siteRules: [],
+    });
+    mockExtractPageContext.mockReturnValue({
+      title: 'Test Video',
+      description: '',
+      domain: 'youtube.com',
+      // no category — heuristic found nothing
+    });
+    mockFindMatchingRule.mockReturnValue(undefined);
+    mockResolveCategory.mockReturnValue('News');
+
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello',
+      contentType: 'text/vtt',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-cat-001');
+
+    expect(mockResolveCategory).toHaveBeenCalledWith(
+      'News', // from the shared singleton, NOT undefined (heuristic found nothing)
+      undefined, // no siteRule
+      undefined, // no tab override
+    );
+  });
+});

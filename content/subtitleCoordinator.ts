@@ -150,10 +150,12 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
   // If a tab-level category exists, it overrides the auto-detected one.
   // Note: pageContext.category will be empty if extractPageContext found no generic info and
   // enableLLMPageCategoryDetection is off and no tab override is active.
+  // Prefer the shared singleton (LLM-detected) over the per-batch heuristic so
+  // async LLM results reach the translation prompt.
   const hostname = window.location.hostname;
   const matchingRule = findMatchingRule(hostname, settings.siteRules ?? []);
   const resolved = resolveCategory(
-    pageContext.category,
+    getAutoDetectedCategory() ?? pageContext.category,
     matchingRule?.category,
     state.categoryOverride,
   );
