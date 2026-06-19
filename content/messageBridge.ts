@@ -7,7 +7,12 @@
  */
 
 import { onMessage, sendMessage } from '@/inject/messageBridge';
-import type { SubtitleInterceptedPayload, SubtitleTranslatedPayload, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
+import type {
+  SubtitleInterceptedPayload,
+  SubtitleTranslatedPayload,
+  SubtitleTracksDiscoveredPayload,
+  SubtitleDomCuesPayload,
+} from '@/types/subtitle';
 
 /**
  * Listen for subtitle interception events from the MAIN world.
@@ -45,6 +50,22 @@ export function onTracksDiscovered(
 }
 
 /**
+ * Listen for DOM-scraped cue events from the MAIN world.
+ * Returns a cleanup function.
+ */
+export function onDomCues(
+  handler: (payload: SubtitleDomCuesPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_DOM_CUES', async (payload) => {
+    try {
+      await handler(payload as SubtitleDomCuesPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: DOM cues handler error', error);
+    }
+  });
+}
+
+/**
  * Send translated subtitle content back to the MAIN world.
  * IMPORTANT: The envelope requestId MUST match the original SUBTITLE_INTERCEPTED requestId
  * so that XHR/fetch interceptors can correlate and unblock the response.
@@ -62,4 +83,3 @@ export function startContentBridge(
 ): () => void {
   return onSubtitleIntercepted(handler);
 }
-
