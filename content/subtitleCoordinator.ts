@@ -9,7 +9,7 @@
  * - Activate overlay fallback with translated cues when interception times out
  */
 
-import { onSubtitleIntercepted, sendTranslatedSubtitle, onTracksDiscovered } from '@/content/messageBridge';
+import { onSubtitleIntercepted, sendTranslatedSubtitle, onTracksDiscovered, onDomCues } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
@@ -17,7 +17,7 @@ import { initializeControls, enableDragReposition } from '@/content/subtitleCont
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
-import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload, SubtitleDomCuesPayload } from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
@@ -40,6 +40,8 @@ interface CoordinatorState {
   categoryOverride: string | undefined;
   /** Active subtitle session ID — stale chunks with different IDs are dropped */
   activeSubtitleSessionId: number | null;
+  /** Injected <style> hiding the platform's native caption window (null when inactive) */
+  captionHideStyle: HTMLStyleElement | null;
 }
 
 const state: CoordinatorState = {
@@ -53,6 +55,7 @@ const state: CoordinatorState = {
   videoIsPlaying: false,
   categoryOverride: undefined,
   activeSubtitleSessionId: null,
+  captionHideStyle: null,
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -87,6 +90,24 @@ function cleanupActiveOverlay(): void {
   if (state.isOverlayMode) {
     cleanupOverlay();
     state.isOverlayMode = false;
+  }
+}
+
+/** Inject a <style> hiding the platform's native caption window. */
+function hideNativeCaptions(selector: string): void {
+  if (state.captionHideStyle) return;
+  const style = document.createElement('style');
+  style.setAttribute('data-anyllm-role', 'caption-hide');
+  style.textContent = `${selector} { visibility: hidden !important; }`;
+  document.head.appendChild(style);
+  state.captionHideStyle = style;
+}
+
+/** Remove the injected caption-hide <style>. */
+function restoreNativeCaptions(): void {
+  if (state.captionHideStyle) {
+    state.captionHideStyle.remove();
+    state.captionHideStyle = null;
   }
 }
 
@@ -304,6 +325,95 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 }
 
 /**
+ * Handle DOM-scraped cues from MAIN world (Max). Accumulates cues and drives
+ * the translate→overlay flow on first cue batch.
+ */
+async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
+  if (!isOnWatchPage()) return;
+  if (state.isOverlayMode) {
+    // Already active — just refresh the cue set.
+    updateCues(payload.cues);
+    return;
+  }
+  await activateOverlayFromDom(payload);
+}
+
+/**
+ * Activate overlay mode from DOM-scraped cues (Max).
+ * Hides native captions, starts with original cues, then translates.
+ */
+async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<void> {
+  if (state.isOverlayMode) return;
+
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) {
+    cleanupActiveOverlay();
+    return;
+  }
+
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (!handler || !domSource) {
+    console.warn('AnyLLMTranslate: No DOM cue source for platform', payload.platform);
+    return;
+  }
+
+  if (payload.cues.length === 0) {
+    console.log('AnyLLMTranslate: No DOM cues yet — waiting for caption changes');
+    return;
+  }
+
+  state.isOverlayMode = true;
+  console.log('AnyLLMTranslate: Activating overlay from DOM cues (Max)');
+
+  // Hide Max's native caption window.
+  hideNativeCaptions(domSource.captionWindowSelector);
+
+  const savedPrefs = await initializeControls();
+  const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
+
+  // Initialize overlay with original cues so they show immediately.
+  initializeOverlay(payload.cues, overlayConfig);
+
+  const textContainer = getOverlayTextContainer();
+  if (textContainer) {
+    state.dragCleanup = enableDragReposition(textContainer);
+  }
+
+  showSubtitleToast('Translating subtitles progressively...', true);
+
+  const sourceLanguage = settings.sourceLanguage === 'auto'
+    ? (payload.language || 'en')
+    : settings.sourceLanguage;
+
+  const pageContext = await buildSubtitlePageContext();
+
+  const response = await chrome.runtime.sendMessage({
+    action: 'translateSubtitle',
+    cues: payload.cues,
+    sourceLanguage,
+    targetLanguage: settings.targetLanguage,
+    pageContext,
+  }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+  if (!response?.success || !response.cues) {
+    console.warn('AnyLLMTranslate: DOM cue translation failed', response?.error);
+    hideSubtitleToast();
+    showSubtitleToast('Subtitle translation failed.');
+    return;
+  }
+
+  if (response.sessionId !== undefined) {
+    state.activeSubtitleSessionId = response.sessionId;
+  }
+
+  updateTranslatedCues(response.cues);
+
+  hideSubtitleToast();
+  showSubtitleToast('Subtitles processing...');
+}
+
+/**
  * Fetch subtitle content via background worker (CORS bypass).
  */
 async function fetchSubtitleContent(url: string): Promise<string> {
@@ -446,6 +556,9 @@ export function startCoordinator(): () => void {
   // Listen for track discovery from MAIN world
   const cleanupDiscovery = onTracksDiscovered(handleTracksDiscovered);
 
+  // Listen for DOM-scraped cues from MAIN world (Max)
+  const cleanupDomCues = onDomCues(handleDomCues);
+
   // Watch for SPA navigations to reset per-video state
   const cleanupNavWatcher = startSpaNavigationWatcher();
 
@@ -499,6 +612,7 @@ export function startCoordinator(): () => void {
     console.log('AnyLLMTranslate: Stopping subtitle coordinator');
     cleanupBridge();
     cleanupDiscovery();
+    cleanupDomCues();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
@@ -522,6 +636,7 @@ export function startCoordinator(): () => void {
     if (state.isOverlayMode) {
       cleanupOverlay();
     }
+    restoreNativeCaptions();
   };
 }
 
@@ -566,13 +681,14 @@ export function resetCoordinatorState(): void {
   }
   state.pendingRequests.clear();
   clearHoverCache();
+  restoreNativeCaptions();
 }
 
 /**
  * Detect if current page is a video watch page (not a listing/home page).
  * Guards against auto-activate firing on YouTube home, search, etc.
  */
-function isOnWatchPage(): boolean {
+export function isOnWatchPage(): boolean {
   const { pathname, hostname } = window.location;
 
   // For known platforms, use strict explicit matching.
@@ -590,6 +706,9 @@ function isOnWatchPage(): boolean {
   }
   if (hostname.includes('linkedin.com')) {
     return pathname.startsWith('/learning/');
+  }
+  if (hostname.includes('max.com') || hostname.includes('hbomax.com')) {
+    return pathname.includes('/video/watch/');
   }
 
   // Unknown platform — do not auto-activate on generic video elements
