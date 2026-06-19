@@ -13,6 +13,7 @@ import { resolveCategory } from '@/content/utils/pageContext';
 import { findMatchingRule } from '@/lib/siteRules';
 
 let autoDetectedCategory: string | undefined;
+let categoryDetectionInFlight = false;
 
 /** Get the current auto-detected category (LLM or heuristic). */
 export function getAutoDetectedCategory(): string | undefined {
@@ -22,6 +23,16 @@ export function getAutoDetectedCategory(): string | undefined {
 /** Set the auto-detected category (called from detection callbacks). */
 export function setAutoDetectedCategory(category: string | undefined): void {
   autoDetectedCategory = category;
+}
+
+/** Whether an LLM category detection call is currently in progress. */
+export function isCategoryDetectionInFlight(): boolean {
+  return categoryDetectionInFlight;
+}
+
+/** Mark LLM category detection as in-progress (or clear it). */
+export function setCategoryDetectionInFlight(v: boolean): void {
+  categoryDetectionInFlight = v;
 }
 
 /**
@@ -56,4 +67,5 @@ export function broadcastCategoryInfo(
 /** Reset all state (for testing). */
 export function _resetCategoryState(): void {
   autoDetectedCategory = undefined;
+  categoryDetectionInFlight = false;
 }

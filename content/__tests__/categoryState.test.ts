@@ -4,6 +4,8 @@ import {
   setAutoDetectedCategory,
   buildCategoryInfo,
   broadcastCategoryInfo,
+  isCategoryDetectionInFlight,
+  setCategoryDetectionInFlight,
   _resetCategoryState,
 } from '../categoryState';
 import type { ExtensionSettings } from '@/types/config';
@@ -73,6 +75,29 @@ describe('categoryState', () => {
           categoryInfo: expect.objectContaining({ autoDetected: 'News', effective: 'News' }),
         }),
       );
+    });
+  });
+
+  describe('categoryDetectionInFlight guard', () => {
+    it('is false by default', () => {
+      expect(isCategoryDetectionInFlight()).toBe(false);
+    });
+
+    it('setCategoryDetectionInFlight(true) makes isCategoryDetectionInFlight return true', () => {
+      setCategoryDetectionInFlight(true);
+      expect(isCategoryDetectionInFlight()).toBe(true);
+    });
+
+    it('can be cleared by setting false', () => {
+      setCategoryDetectionInFlight(true);
+      setCategoryDetectionInFlight(false);
+      expect(isCategoryDetectionInFlight()).toBe(false);
+    });
+
+    it('_resetCategoryState clears the in-flight flag', () => {
+      setCategoryDetectionInFlight(true);
+      _resetCategoryState();
+      expect(isCategoryDetectionInFlight()).toBe(false);
     });
   });
 });
