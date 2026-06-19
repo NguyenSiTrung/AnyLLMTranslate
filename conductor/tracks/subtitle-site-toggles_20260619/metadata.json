@@ -1,0 +1,25 @@
+{
+  "track_id": "subtitle-site-toggles_20260619",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-06-19T07:14:00Z",
+  "updated_at": "2026-06-19T07:14:00Z",
+  "description": "Add Supported Sites card to Subtitles settings showing all subtitle platforms with per-site enable/disable toggles. When a site is disabled, the subtitle interception/translation pipeline is completely skipped for that platform.",
+  "beads_epic": "ALT-lko",
+  "beads_tasks": {
+    "phase1": "ALT-lko.1",
+    "phase1_task1": "ALT-lko.1.1",
+    "phase1_task2": "ALT-lko.1.2",
+    "phase2": "ALT-lko.2",
+    "phase2_task1": "ALT-lko.2.1",
+    "phase2_task2": "ALT-lko.2.2",
+    "phase3": "ALT-lko.3",
+    "phase3_task1": "ALT-lko.3.1",
+    "phase3_task2": "ALT-lko.3.2",
+    "phase4": "ALT-lko.4",
+    "phase4_task1": "ALT-lko.4.1"
+  }
+}
