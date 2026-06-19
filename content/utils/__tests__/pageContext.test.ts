@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { PageContext } from '@/types/config';
-import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection } from '../pageContext';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection, DOMAIN_CATEGORY_MAP } from '../pageContext';
 
 vi.mock('@/content/categoryState', () => ({
   getAutoDetectedCategory: vi.fn(() => undefined),
@@ -294,5 +294,50 @@ describe('triggerAutoCategoryDetection', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(setCategoryDetectionInFlight).toHaveBeenCalledWith(false);
     expect(onDetected).not.toHaveBeenCalled();
+  });
+});
+
+describe('DOMAIN_CATEGORY_MAP', () => {
+  it('maps every streaming domain to Streaming Entertainment', () => {
+    const streaming = [
+      'netflix.com',
+      'disneyplus.com',
+      'hulu.com',
+      'primevideo.com',
+      'tv.apple.com',
+      'peacocktv.com',
+      'paramountplus.com',
+      'max.com',
+      'youku.com',
+      'iqiyi.com',
+      'v.qq.com',
+      'bilibili.com',
+    ];
+    for (const domain of streaming) {
+      expect(DOMAIN_CATEGORY_MAP[domain]).toBe('Streaming Entertainment');
+    }
+  });
+
+  it('maps every learning domain to Online Education', () => {
+    const learning = [
+      'udemy.com',
+      'coursera.org',
+      'khanacademy.org',
+      'edx.org',
+      'pluralsight.com',
+      'skillshare.com',
+      'udacity.com',
+      'duolingo.com',
+      'lingoda.com',
+    ];
+    for (const domain of learning) {
+      expect(DOMAIN_CATEGORY_MAP[domain]).toBe('Online Education');
+    }
+  });
+
+  it('does not collide with a non-streaming apex like netflix.com being reused elsewhere', () => {
+    // Sanity: the two streaming entries that already existed are still correct.
+    expect(DOMAIN_CATEGORY_MAP['netflix.com']).toBe('Streaming Entertainment');
+    expect(DOMAIN_CATEGORY_MAP['youtube.com']).toBe('Video Platform');
   });
 });
