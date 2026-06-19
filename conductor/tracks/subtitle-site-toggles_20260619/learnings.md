@@ -15,3 +15,13 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-19 14:55] - Phase 4 Task 1: Verification
+- **Implemented:** Fixed 3 issues discovered during verification — test assertion, TS type errors
+- **Files changed:** ui/Toggle.tsx, entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx, types/__tests__/config.test.ts
+- **Commit:** 2712e5f
+- **Learnings:**
+  - Patterns: Toggle component renders `<button role="switch" aria-checked>`, NOT `<input type="checkbox">` — tests must use `getAttribute('aria-checked')` instead of `.checked` property
+  - Gotchas: When adding a new required field to an interface (e.g., `disabledSubtitleSites` to `SubtitleSettings`), ALL inline mock objects in test files must be updated — `tsc --noEmit` catches these but tests may pass if mocks use spread from `DEFAULT_*` constants
+  - Patterns: Making Toggle's `label` prop optional enables standalone switch usage without duplicate visual text — use `id` as fallback for `aria-label`
+---

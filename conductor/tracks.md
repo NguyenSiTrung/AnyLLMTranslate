@@ -59,5 +59,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [~] Track: Subtitle Supported Sites Display & Per-Site Toggle
+## [x] Track: Subtitle Supported Sites Display & Per-Site Toggle
 *Link: [./conductor/tracks/subtitle-site-toggles_20260619/](./conductor/tracks/subtitle-site-toggles_20260619/)*
