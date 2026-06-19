@@ -18,12 +18,23 @@ import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
  * Returns a cleanup function. Returns a no-op cleanup when the handler
  * exposes no DOM cue source, or when no video / observe root is present.
  */
+/**
+ * DOM Cue Source — scrapes platform-rendered captions from the DOM.
+ *
+ * For platforms (e.g. HBO Max) that render captions themselves instead of
+ * exposing a VTT URL or native TextTrack. Observes a stable ancestor and
+ * samples video.currentTime on each cue-text change to derive cue timing.
+ *
+ * Both the <video> element and the caption overlay may be inserted late by the
+ * platform's SPA/player (Max mounts its React player after DOMContentLoaded).
+ * This function therefore observes document.documentElement for added nodes and
+ * (re)attaches the cue observer + video listener when the dependencies appear,
+ * mirroring textTrackDiscovery.ts's deferred-attach pattern. Returns a no-op
+ * cleanup only when the handler exposes no DOM cue source.
+ */
 export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridgeSender): () => void {
   const domSource = handler.getDomCueSource?.();
   if (!domSource) return () => {};
-
-  const video = findPrimaryVideo();
-  if (!video) return () => {};
 
   const cues: SubtitleCue[] = [];
   let lastText = '';
@@ -46,7 +57,14 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     bridge.send('SUBTITLE_DOM_CUES', payload);
   };
 
-  const sampleCue = () => {
+  /** Currently-attached cue observer + its video + pause handler (for cleanup on re-attach). */
+  let attached: {
+    observer: MutationObserver;
+    video: HTMLVideoElement;
+    pauseHandler: () => void;
+  } | null = null;
+
+  const sampleCue = (video: HTMLVideoElement) => {
     const cueEl = document.querySelector<HTMLElement>(domSource.cueSelector);
     const text = cueEl?.textContent?.trim() ?? '';
     if (!text || text === lastText) return;
@@ -66,13 +84,55 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     emit(domSource.readActiveLanguage(), extractVideoId());
   };
 
-  const rootEl = document.querySelector<HTMLElement>(domSource.observeRootSelector);
-  if (!rootEl) return () => {};
+  /** Attach the cue observer to a video + caption-overlay pair. Idempotent. */
+  const attach = (video: HTMLVideoElement, rootEl: HTMLElement) => {
+    // Detach any prior attachment (e.g. player re-mounted).
+    detach();
 
-  const observer = new MutationObserver(() => {
-    sampleCue();
+    const observer = new MutationObserver(() => {
+      sampleCue(video);
+    });
+    observer.observe(rootEl, { childList: true, subtree: true, characterData: true });
+
+    const pauseHandler = () => {
+      if (openCue) {
+        openCue.endTime = video.currentTime;
+        emit(domSource.readActiveLanguage(), extractVideoId());
+      }
+    };
+    video.addEventListener('pause', pauseHandler);
+
+    attached = { observer, video, pauseHandler };
+    // Sample once in case a cue is already showing.
+    sampleCue(video);
+  };
+
+  const detach = () => {
+    if (!attached) return;
+    attached.observer.disconnect();
+    attached.video.removeEventListener('pause', attached.pauseHandler);
+    attached = null;
+  };
+
+  /** Re-evaluate whether both the video and caption overlay are present; attach if so. */
+  const tryAttach = () => {
+    if (attached) return; // already attached
+    const video = findPrimaryVideo();
+    const rootEl = document.querySelector<HTMLElement>(domSource.observeRootSelector);
+    if (video && rootEl) {
+      attach(video, rootEl);
+    }
+  };
+
+  // Watch for dynamically inserted video / caption-overlay nodes (Max's React
+  // player mounts after DOMContentLoaded). Re-evaluate on each added subtree.
+  const documentObserver = new MutationObserver(() => {
+    tryAttach();
   });
-  observer.observe(rootEl, { childList: true, subtree: true, characterData: true });
+  documentObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+  // Initial attempt (dependencies may already be present at startup).
+  tryAttach();
 
   // Reset the rolling buffer when the user switches Max's subtitle track
   // mid-session (a different track's cues are unrelated to the prior buffer).
@@ -92,27 +152,16 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
       }
     }
   });
-  // Observe the document for aria-checked changes on track buttons.
-  // Track buttons may not exist yet at start; observe documentElement and filter.
   trackObserver.observe(document.documentElement, {
     attributes: true,
     subtree: true,
     attributeFilter: ['aria-checked'],
   });
 
-  // Cap dangling open cue when video pauses without a cue change.
-  const pauseHandler = () => {
-    if (openCue) {
-      openCue.endTime = video.currentTime;
-      emit(domSource.readActiveLanguage(), extractVideoId());
-    }
-  };
-  video.addEventListener('pause', pauseHandler);
-
   return () => {
-    observer.disconnect();
+    documentObserver.disconnect();
     trackObserver.disconnect();
-    video.removeEventListener('pause', pauseHandler);
+    detach();
   };
 }
 

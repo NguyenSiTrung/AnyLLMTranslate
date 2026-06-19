@@ -153,18 +153,52 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(() => cleanup()).not.toThrow();
   });
 
-  it('returns a no-op cleanup when no video element present', () => {
+  it('waits and attaches when the video element is absent at startup', async () => {
     document.body.innerHTML = '';
+    // No video at startup — scraper must NOT bail; it should wait.
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
     expect(typeof cleanup).toBe('function');
-    expect(() => cleanup()).not.toThrow();
+
+    // Video mounts later.
+    const lateVideo = document.createElement('video');
+    document.body.appendChild(lateVideo);
+    // Caption overlay mounts later.
+    const lateOverlay = document.createElement('div');
+    lateOverlay.setAttribute('data-testid', 'caption_renderer_overlay');
+    const lateCue = document.createElement('div');
+    lateCue.setAttribute('data-testid', 'cueBoxRowTextCue');
+    lateOverlay.appendChild(lateCue);
+    document.body.appendChild(lateOverlay);
+
+    Object.defineProperty(lateVideo, 'currentTime', { configurable: true, get: () => 3 });
+    lateCue.textContent = 'Late cue';
+    await flushObservers();
+
+    expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeDefined();
+    cleanup();
   });
 
-  it('returns a no-op cleanup when observe root not present', () => {
-    document.body.removeChild(captionOverlay);
+  it('waits and attaches when the caption overlay is absent at startup', async () => {
+    document.body.innerHTML = '';
+    const earlyVideo = document.createElement('video');
+    document.body.appendChild(earlyVideo);
+    // No caption overlay at startup — scraper must NOT bail.
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
-    expect(typeof cleanup).toBe('function');
-    expect(() => cleanup()).not.toThrow();
+
+    // Caption overlay mounts later.
+    const lateOverlay = document.createElement('div');
+    lateOverlay.setAttribute('data-testid', 'caption_renderer_overlay');
+    const lateCue = document.createElement('div');
+    lateCue.setAttribute('data-testid', 'cueBoxRowTextCue');
+    lateOverlay.appendChild(lateCue);
+    document.body.appendChild(lateOverlay);
+
+    Object.defineProperty(earlyVideo, 'currentTime', { configurable: true, get: () => 7 });
+    lateCue.textContent = 'Late cue';
+    await flushObservers();
+
+    expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeDefined();
+    cleanup();
   });
 
   it('resets the rolling cue buffer when the active track changes mid-session', async () => {
