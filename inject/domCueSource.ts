@@ -29,6 +29,13 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   let lastText = '';
   let openCue: SubtitleCue | null = null;
 
+  /** Reset the rolling cue buffer (e.g. on mid-session track switch). */
+  const resetBuffer = () => {
+    cues.length = 0;
+    lastText = '';
+    openCue = null;
+  };
+
   const emit = (language: string, videoId?: string) => {
     const payload: SubtitleDomCuesPayload = {
       cues: [...cues],
@@ -67,6 +74,27 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   });
   observer.observe(rootEl, { childList: true, subtree: true, characterData: true });
 
+  // Reset the rolling buffer when the user switches Max's subtitle track
+  // mid-session (a different track's cues are unrelated to the prior buffer).
+  const trackObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type !== 'attributes' || m.attributeName !== 'aria-checked') continue;
+      const target = m.target as HTMLElement;
+      if (target.getAttribute('aria-checked') === 'true') {
+        console.log('[AnyLLMTranslate] Max subtitle track changed — resetting DOM cue buffer');
+        resetBuffer();
+        return;
+      }
+    }
+  });
+  // Observe the document for aria-checked changes on track buttons.
+  // Track buttons may not exist yet at start; observe documentElement and filter.
+  trackObserver.observe(document.documentElement, {
+    attributes: true,
+    subtree: true,
+    attributeFilter: ['aria-checked'],
+  });
+
   // Cap dangling open cue when video pauses without a cue change.
   const pauseHandler = () => {
     if (openCue) {
@@ -78,6 +106,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
 
   return () => {
     observer.disconnect();
+    trackObserver.disconnect();
     video.removeEventListener('pause', pauseHandler);
   };
 }

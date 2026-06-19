@@ -166,4 +166,38 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(typeof cleanup).toBe('function');
     expect(() => cleanup()).not.toThrow();
   });
+
+  it('resets the rolling cue buffer when the active track changes mid-session', async () => {
+    // A track button that will become active mid-session.
+    const btn = document.createElement('button');
+    btn.setAttribute('data-testid', 'player-ux-text-track-button');
+    btn.setAttribute('aria-label', 'Thai');
+    btn.setAttribute('aria-checked', 'false');
+    document.body.appendChild(btn);
+
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    // Emit a first cue.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    cueEl.textContent = 'English cue';
+    await flushObservers();
+    const beforeSwitch = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(beforeSwitch?.length).toBeGreaterThanOrEqual(1);
+
+    // User switches Max's track to Thai: the button becomes aria-checked=true.
+    btn.setAttribute('aria-checked', 'true');
+    await flushObservers();
+
+    // Emit a cue from the new track.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 10 });
+    cueEl.textContent = 'Thai cue';
+    await flushObservers();
+
+    const afterSwitch = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } };
+    // Buffer was reset — only the new track's cue should be present.
+    expect(afterSwitch?.payload.cues).toHaveLength(1);
+    expect(afterSwitch?.payload.cues[0].text).toBe('Thai cue');
+
+    cleanup();
+  });
 });

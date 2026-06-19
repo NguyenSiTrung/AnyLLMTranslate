@@ -91,15 +91,23 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
 
     global.chrome = {
       runtime: {
-        sendMessage: vi.fn().mockResolvedValue({
-          success: true,
-          cues: [{ startTime: 0, endTime: 2, text: 'hi (vi)' }],
-          sessionId: 1,
+        // Return translated cues keyed by originalText so the merge map works.
+        sendMessage: vi.fn().mockImplementation((msg: { action: string; cues?: { text: string }[] }) => {
+          if (msg.action === 'translateSubtitle' && msg.cues) {
+            return Promise.resolve({
+              success: true,
+              cues: msg.cues.map((c, i) => ({
+                startTime: i,
+                endTime: i + 1,
+                text: `${c.text} (vi)`,
+                originalText: c.text,
+              })),
+              sessionId: 1,
+            });
+          }
+          return Promise.resolve({ success: true, cues: [], sessionId: 1 });
         }),
-        onMessage: {
-          addListener: vi.fn(),
-          removeListener: vi.fn(),
-        },
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
       },
     } as unknown as typeof chrome;
   });
@@ -165,7 +173,7 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
     expect(document.head.querySelector('style[data-anyllm-role="caption-hide"]')).toBeNull();
   });
 
-  it('handleDomCues refreshes cues via updateCues when already in overlay mode', async () => {
+  it('handleDomCues translates new cues on subsequent batches without clobbering translated cues', async () => {
     setLocation('www.max.com', '/video/watch/abc/def');
     const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
     vi.mocked(detectCurrentHandler).mockReturnValue({
@@ -181,7 +189,7 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
     const mod = await import('@/content/subtitleCoordinator');
     mod.startCoordinator();
 
-    // First payload activates overlay mode.
+    // First payload activates overlay mode and translates 'first'.
     await invokeDomCuesHandler({
       cues: [{ startTime: 0, endTime: 2, text: 'first' }],
       platform: 'hbomax',
@@ -191,15 +199,29 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
     vi.mocked(initializeOverlay).mockClear();
     vi.mocked(updateCues).mockClear();
 
-    // Second payload should refresh via updateCues, NOT re-init overlay.
+    // Second payload adds a new cue 'second'. The coordinator must translate
+    // the delta and update the overlay with BILINGUAL cues (originalText + text),
+    // NOT overwrite with raw source cues.
     await invokeDomCuesHandler({
-      cues: [{ startTime: 2, endTime: 4, text: 'second' }],
+      cues: [
+        { startTime: 0, endTime: 2, text: 'first' },
+        { startTime: 2, endTime: 4, text: 'second' },
+      ],
       platform: 'hbomax',
       language: 'en',
     });
-    expect(vi.mocked(updateCues)).toHaveBeenCalledWith([
-      { startTime: 2, endTime: 4, text: 'second' },
-    ]);
+    expect(vi.mocked(updateCues)).toHaveBeenCalled();
+    // The last updateCues call should carry translated cues: each has originalText
+    // (source) and text (translated).
+    const lastCall = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string;
+      originalText?: string;
+    }>;
+    expect(lastCall).toBeDefined();
+    const secondCue = lastCall.find((c) => c.originalText === 'second');
+    expect(secondCue).toBeDefined();
+    expect(secondCue?.text).toBe('second (vi)');
+    // Must not re-init the overlay on subsequent batches.
     expect(vi.mocked(initializeOverlay)).not.toHaveBeenCalled();
 
     mod.resetCoordinatorState();
@@ -207,9 +229,12 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
 });
 
 describe('subtitleCoordinator — Max activation precondition (tryAutoActivateForDom)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     document.head.innerHTML = '';
     document.body.innerHTML = '';
+    // Reset module-level coordinator state (shared across describe blocks).
+    const { resetCoordinatorState } = await import('@/content/subtitleCoordinator');
+    resetCoordinatorState();
     loadSettingsMock.mockReset();
     loadSettingsMock.mockResolvedValue(JSON.parse(JSON.stringify(baseSettings)));
     vi.clearAllMocks();

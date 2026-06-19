@@ -42,6 +42,12 @@ interface CoordinatorState {
   activeSubtitleSessionId: number | null;
   /** Injected <style> hiding the platform's native caption window (null when inactive) */
   captionHideStyle: HTMLStyleElement | null;
+  /** DOM-platform: rolling original (source-language) cues from the scraper */
+  domOriginalCues: SubtitleCue[];
+  /** DOM-platform: merged bilingual cues shown in the overlay (originalText + translated text) */
+  domTranslatedCues: SubtitleCue[];
+  /** DOM-platform: set of original cue texts already sent for translation (dedup) */
+  domTranslatedTexts: Set<string>;
 }
 
 const state: CoordinatorState = {
@@ -56,6 +62,9 @@ const state: CoordinatorState = {
   categoryOverride: undefined,
   activeSubtitleSessionId: null,
   captionHideStyle: null,
+  domOriginalCues: [],
+  domTranslatedCues: [],
+  domTranslatedTexts: new Set(),
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -325,17 +334,119 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 }
 
 /**
- * Handle DOM-scraped cues from MAIN world (Max). Accumulates cues and drives
- * the translate→overlay flow on first cue batch.
+ * Merge incoming DOM cues into the rolling original buffer (dedup by text).
+ * Returns the list of NEW cue texts not yet translated.
+ */
+function mergeDomOriginalCues(incoming: SubtitleCue[]): string[] {
+  const newTexts: string[] = [];
+  for (const cue of incoming) {
+    // Dedup by text+startTime — the scraper may re-emit the full rolling array.
+    const exists = state.domOriginalCues.some(
+      (c) => c.text === cue.text && c.startTime === cue.startTime,
+    );
+    if (!exists) {
+      state.domOriginalCues.push(cue);
+      if (!state.domTranslatedTexts.has(cue.text)) {
+        newTexts.push(cue.text);
+        state.domTranslatedTexts.add(cue.text);
+      }
+    }
+  }
+  return newTexts;
+}
+
+/**
+ * Rebuild domTranslatedCues from domOriginalCues, preserving any translations
+ * already applied (matched by original text). Each cue carries originalText
+ * (source) + text (translated, or source if not yet translated).
+ */
+function rebuildTranslatedCues(
+  translations: Map<string, string>,
+): void {
+  state.domTranslatedCues = state.domOriginalCues.map((cue) => ({
+    startTime: cue.startTime,
+    endTime: cue.endTime,
+    text: translations.get(cue.text) ?? cue.text,
+    originalText: cue.text,
+  }));
+}
+
+/**
+ * Translate the given new source cue texts and merge into the overlay.
+ * Sends a translateSubtitle request for the delta only.
+ */
+async function translateDomCueTexts(
+  newTexts: string[],
+  sourceLanguage: string,
+  targetLanguage: string,
+  pageContext: PageContext | undefined,
+  sessionId: number | null,
+): Promise<void> {
+  if (newTexts.length === 0) return;
+  const cuesToTranslate: SubtitleCue[] = newTexts.map((text, i) => ({
+    startTime: i,
+    endTime: i + 1,
+    text,
+  }));
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues: cuesToTranslate,
+      sourceLanguage,
+      targetLanguage,
+      pageContext,
+      sessionId: sessionId ?? undefined,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (!response?.success || !response.cues) {
+      console.warn('AnyLLMTranslate: DOM cue delta translation failed', response?.error);
+      return;
+    }
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
+    }
+    const translations = new Map<string, string>();
+    response.cues.forEach((c) => {
+      translations.set(c.originalText ?? c.text, c.text);
+    });
+    rebuildTranslatedCues(translations);
+    updateCues(state.domTranslatedCues);
+  } catch (error) {
+    console.warn('AnyLLMTranslate: DOM cue delta translation error', error);
+  }
+}
+
+/**
+ * Handle DOM-scraped cues from MAIN world (Max). Accumulates cues, translates
+ * the delta on each batch, and keeps the overlay showing bilingual cues
+ * (originalText + translated text). Never overwrites translated cues with raw
+ * source cues — that was the critical bug fixed here.
  */
 async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
-  if (state.isOverlayMode) {
-    // Already active — just refresh the cue set.
-    updateCues(payload.cues);
+  if (payload.cues.length === 0) return;
+
+  if (!state.isOverlayMode) {
+    await activateOverlayFromDom(payload);
     return;
   }
-  await activateOverlayFromDom(payload);
+
+  // Already active — merge new cues and translate the delta.
+  const newTexts = mergeDomOriginalCues(payload.cues);
+  if (newTexts.length === 0) return;
+
+  const settings = await loadSettings();
+  const sourceLanguage = settings.sourceLanguage === 'auto'
+    ? (payload.language || 'en')
+    : settings.sourceLanguage;
+  const pageContext = await buildSubtitlePageContext();
+  await translateDomCueTexts(
+    newTexts,
+    sourceLanguage,
+    settings.targetLanguage,
+    pageContext,
+    state.activeSubtitleSessionId,
+  );
 }
 
 /**
@@ -345,7 +456,9 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
 async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<void> {
   if (state.isOverlayMode) return;
 
+  const epochAtStart = state.navigationEpoch;
   const settings = await loadSettings();
+  if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
   if (!settings.subtitleSettings.enabled) {
     cleanupActiveOverlay();
     return;
@@ -369,11 +482,17 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   // Hide Max's native caption window.
   hideNativeCaptions(domSource.captionWindowSelector);
 
+  // Seed the rolling buffers with the first batch.
+  mergeDomOriginalCues(payload.cues);
+  const translations = new Map<string, string>();
+  rebuildTranslatedCues(translations);
+
   const savedPrefs = await initializeControls();
+  if (state.navigationEpoch !== epochAtStart) return; // stale
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
-  // Initialize overlay with original cues so they show immediately.
-  initializeOverlay(payload.cues, overlayConfig);
+  // Initialize overlay with bilingual cues (source until translated).
+  initializeOverlay(state.domTranslatedCues, overlayConfig);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
@@ -387,27 +506,17 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
     : settings.sourceLanguage;
 
   const pageContext = await buildSubtitlePageContext();
+  if (state.navigationEpoch !== epochAtStart) return; // stale
 
-  const response = await chrome.runtime.sendMessage({
-    action: 'translateSubtitle',
-    cues: payload.cues,
+  // Translate all cue texts seen so far (the first batch).
+  const newTexts = [...state.domTranslatedTexts];
+  await translateDomCueTexts(
+    newTexts,
     sourceLanguage,
-    targetLanguage: settings.targetLanguage,
+    settings.targetLanguage,
     pageContext,
-  }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
-
-  if (!response?.success || !response.cues) {
-    console.warn('AnyLLMTranslate: DOM cue translation failed', response?.error);
-    hideSubtitleToast();
-    showSubtitleToast('Subtitle translation failed.');
-    return;
-  }
-
-  if (response.sessionId !== undefined) {
-    state.activeSubtitleSessionId = response.sessionId;
-  }
-
-  updateTranslatedCues(response.cues);
+    null,
+  );
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
@@ -682,6 +791,9 @@ export function resetCoordinatorState(): void {
   state.pendingRequests.clear();
   clearHoverCache();
   restoreNativeCaptions();
+  state.domOriginalCues = [];
+  state.domTranslatedCues = [];
+  state.domTranslatedTexts = new Set();
 }
 
 /**
