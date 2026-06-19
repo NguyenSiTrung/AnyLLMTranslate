@@ -123,6 +123,7 @@ describe('config types', () => {
       const settings: SubtitleSettings = {
         position: 'bottom',
         fontSize: 18,
+        fontSizeMode: 'fixed',
         backgroundOpacity: 0.5,
         enabled: true,
         fontFamily: 'system',
@@ -140,6 +141,7 @@ describe('config types', () => {
     it('has sensible defaults', () => {
       expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
       expect(DEFAULT_SUBTITLE_SETTINGS.fontSize).toBe(16);
+      expect(DEFAULT_SUBTITLE_SETTINGS.fontSizeMode).toBe('fixed');
       expect(DEFAULT_SUBTITLE_SETTINGS.backgroundOpacity).toBe(0.7);
       expect(DEFAULT_SUBTITLE_SETTINGS.enabled).toBe(true);
     });

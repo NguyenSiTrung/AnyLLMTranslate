@@ -16,7 +16,7 @@ import { Slider } from '@/ui/Slider';
 import { Card } from '@/ui/Card';
 import { Select } from '@/ui/Select';
 import { SegmentedControl } from '@/ui/SegmentedControl';
-import type { SubtitleFontFamily, SubtitleDisplayMode } from '@/types/config';
+import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
 
 const POSITION_OPTIONS: { value: 'bottom' | 'top'; label: string }[] = [
   { value: 'bottom', label: 'Bottom' },
@@ -32,6 +32,11 @@ const FONT_FAMILY_OPTIONS: { value: SubtitleFontFamily; label: string }[] = [
 const DISPLAY_MODE_OPTIONS: { value: SubtitleDisplayMode; label: string }[] = [
   { value: 'bilingual', label: 'Bilingual' },
   { value: 'translation-only', label: 'Translated Only' },
+];
+
+const FONT_SIZE_MODE_OPTIONS: { value: SubtitleFontSizeMode; label: string }[] = [
+  { value: 'fixed', label: 'Fixed' },
+  { value: 'auto', label: 'Auto (Video Size)' },
 ];
 
 /** Sample subtitle cues that cycle through the preview */
@@ -54,7 +59,13 @@ function resolveFontFamily(family: SubtitleFontFamily): string {
 }
 
 /** Scale font size proportionally for the compact preview viewport */
-function scalePreviewFontSize(fontSize: number): number {
+function scalePreviewFontSize(fontSize: number, fontSizeMode: SubtitleFontSizeMode): number {
+  if (fontSizeMode === 'auto') {
+    // Preview container is ~170px tall; simulate auto calc at that height
+    const PREVIEW_HEIGHT = 170;
+    const autoSize = Math.round(PREVIEW_HEIGHT * 0.035);
+    return Math.max(10, Math.min(autoSize, 18));
+  }
   return Math.max(10, Math.min(Math.round(fontSize * 0.65), 18));
 }
 
@@ -79,6 +90,7 @@ function usePrefersReducedMotion(): boolean {
 /** Animated cue that smoothly cycles through sample phrases */
 function AnimatedCue({
   fontSize,
+  fontSizeMode,
   backgroundOpacity,
   fontFamily,
   displayMode,
@@ -86,6 +98,7 @@ function AnimatedCue({
   disabled,
 }: {
   fontSize: number;
+  fontSizeMode: SubtitleFontSizeMode;
   backgroundOpacity: number;
   fontFamily: SubtitleFontFamily;
   displayMode: SubtitleDisplayMode;
@@ -117,7 +130,7 @@ function AnimatedCue({
     };
   }, [disabled, prefersReducedMotion, advanceCue]);
 
-  const previewFontSize = scalePreviewFontSize(fontSize);
+  const previewFontSize = scalePreviewFontSize(fontSize, fontSizeMode);
   const resolvedFont = resolveFontFamily(fontFamily);
   const isTop = position === 'top';
   const cue = PREVIEW_CUES[cueIndex];
@@ -251,6 +264,7 @@ export function SubtitlesSection() {
               {/* Animated subtitle cue */}
               <AnimatedCue
                 fontSize={subtitleSettings.fontSize}
+                fontSizeMode={subtitleSettings.fontSizeMode}
                 backgroundOpacity={subtitleSettings.backgroundOpacity}
                 fontFamily={subtitleSettings.fontFamily}
                 displayMode={subtitleSettings.displayMode}
@@ -307,6 +321,20 @@ export function SubtitlesSection() {
                     />
                   </FieldGroup>
 
+                  <FieldGroup
+                    label="Font Size Mode"
+                    description="Fixed uses a set pixel value. Auto scales font size based on video player dimensions."
+                  >
+                    <SegmentedControl
+                      label="Font Size Mode"
+                      options={FONT_SIZE_MODE_OPTIONS}
+                      value={subtitleSettings.fontSizeMode}
+                      onChange={(val) => handleUpdate({ fontSizeMode: val })}
+                      disabled={isDisabled}
+                    />
+                  </FieldGroup>
+
+                  {subtitleSettings.fontSizeMode === 'fixed' && (
                   <Slider
                     id="subtitle-font-size"
                     label="Font Size"
@@ -320,6 +348,7 @@ export function SubtitlesSection() {
                     maxLabel="32px"
                     disabled={isDisabled}
                   />
+                  )}
 
                   <Slider
                     id="subtitle-opacity"

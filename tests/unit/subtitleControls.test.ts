@@ -130,6 +130,7 @@ describe('content/subtitleControls', () => {
     it('saves preferences to storage', async () => {
       const config = {
         fontSize: 24,
+        fontSizeMode: 'fixed' as const,
         position: 'top' as const,
         backgroundOpacity: 0.5,
         offsetX: 10,
@@ -148,6 +149,7 @@ describe('content/subtitleControls', () => {
 
       const config = {
         fontSize: 24,
+        fontSizeMode: 'fixed' as const,
         position: 'top' as const,
         backgroundOpacity: 0.5,
         offsetX: 0,

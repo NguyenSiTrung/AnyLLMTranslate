@@ -51,7 +51,7 @@ describe('SubtitlesSection', () => {
 
     it('renders font size slider', () => {
       render(<SubtitlesSection />);
-      expect(screen.getByText(/Font Size/)).toBeInTheDocument();
+      expect(screen.getByText(/^Font Size:/)).toBeInTheDocument();
     });
 
     it('renders background opacity slider', () => {
@@ -204,8 +204,10 @@ describe('SubtitlesSection', () => {
     it('disables appearance sliders when subtitles are disabled', () => {
       render(<SubtitlesSection />);
 
-      expect(screen.getByLabelText(/Font Size/)).toBeDisabled();
-      expect(screen.getByLabelText(/Background Opacity/)).toBeDisabled();
+      const fontSizeSlider = document.getElementById('subtitle-font-size') as HTMLInputElement;
+      const opacitySlider = document.getElementById('subtitle-opacity') as HTMLInputElement;
+      expect(fontSizeSlider).toBeDisabled();
+      expect(opacitySlider).toBeDisabled();
     });
   });
 

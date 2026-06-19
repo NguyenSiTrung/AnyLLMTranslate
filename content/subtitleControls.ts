@@ -19,6 +19,7 @@ const STORAGE_KEY = 'anyllm-translate-subtitle-prefs';
 /** Default preferences */
 const DEFAULT_PREFS: OverlayConfig = {
   fontSize: 16,
+  fontSizeMode: 'fixed',
   position: 'bottom',
   backgroundOpacity: 0.7,
   offsetX: 0,

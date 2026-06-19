@@ -105,12 +105,17 @@ export type SubtitleFontFamily = 'system' | 'serif' | 'monospace';
 /** Subtitle overlay display mode (independent of page displayMode) */
 export type SubtitleDisplayMode = 'bilingual' | 'translation-only';
 
+/** Subtitle font size mode: fixed pixel value or auto-scaled to video size */
+export type SubtitleFontSizeMode = 'fixed' | 'auto';
+
 /** Subtitle display settings */
 export interface SubtitleSettings {
   /** Subtitle position on video */
   position: 'bottom' | 'top';
-  /** Font size in pixels */
+  /** Font size in pixels (used when fontSizeMode is 'fixed') */
   fontSize: number;
+  /** Font size mode: 'fixed' uses the fontSize value directly, 'auto' scales based on video size */
+  fontSizeMode: SubtitleFontSizeMode;
   /** Background opacity (0–1) */
   backgroundOpacity: number;
   /** Whether subtitles are enabled */
@@ -234,6 +239,7 @@ export interface ProviderPresetDefinition {
 export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   position: 'bottom',
   fontSize: 16,
+  fontSizeMode: 'fixed',
   backgroundOpacity: 0.7,
   enabled: true,
   fontFamily: 'system',

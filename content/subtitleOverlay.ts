@@ -11,10 +11,12 @@
  */
 
 import type { SubtitleCue } from '@/types/subtitle';
+import type { SubtitleFontSizeMode } from '@/types/config';
 
 /** Overlay configuration options */
 export interface OverlayConfig {
-  fontSize: number; // 12-36px
+  fontSize: number; // 12-36px (used when fontSizeMode is 'fixed')
+  fontSizeMode: SubtitleFontSizeMode; // 'fixed' or 'auto'
   position: 'top' | 'bottom'; // Position relative to video
   backgroundOpacity: number; // 0-1
   offsetX: number; // Drag offset X
@@ -28,6 +30,7 @@ export interface OverlayConfig {
 /** Default overlay configuration */
 const DEFAULT_CONFIG: OverlayConfig = {
   fontSize: 20,
+  fontSizeMode: 'fixed',
   position: 'bottom',
   backgroundOpacity: 0.75,
   offsetX: 0,
@@ -113,13 +116,42 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
 }
 
 /**
+ * Calculate font size automatically based on video dimensions.
+ * Uses ~3.5% of video height, clamped to 14–48px.
+ * This ensures subtitles look proportional whether the video is a small
+ * embedded player (e.g. Udemy ~400px tall) or fullscreen (1080p+).
+ */
+export function calculateAutoFontSize(videoHeight: number): number {
+  const AUTO_FONT_RATIO = 0.035;
+  const AUTO_FONT_MIN = 14;
+  const AUTO_FONT_MAX = 48;
+  return Math.round(
+    Math.max(AUTO_FONT_MIN, Math.min(AUTO_FONT_MAX, videoHeight * AUTO_FONT_RATIO)),
+  );
+}
+
+/**
+ * Resolve the effective font size based on config and video dimensions.
+ */
+function resolveEffectiveFontSize(config: OverlayConfig, videoHeight: number): number {
+  if (config.fontSizeMode === 'auto') {
+    return calculateAutoFontSize(videoHeight);
+  }
+  return config.fontSize;
+}
+
+/**
  * Update overlay styling based on configuration.
  */
 function updateOverlayStyle(config: OverlayConfig): void {
   if (!overlayState.overlay) return;
 
   const overlay = overlayState.overlay;
-  overlay.style.fontSize = `${config.fontSize}px`;
+
+  // Resolve font size — auto mode needs video dimensions
+  const videoHeight = overlayState.video?.getBoundingClientRect().height ?? 0;
+  const effectiveFontSize = resolveEffectiveFontSize(config, videoHeight);
+  overlay.style.fontSize = `${effectiveFontSize}px`;
 
   // Set position class
   overlay.classList.remove('anyllm-translate-position-top', 'anyllm-translate-position-bottom');
@@ -213,6 +245,8 @@ function handleResize(entries: ResizeObserverEntry[]): void {
   for (const entry of entries) {
     if (entry.target === overlayState.video) {
       positionOverlay(overlayState.overlay, overlayState.video, overlayState.config);
+      // Recalculate font size on resize (important for auto mode)
+      updateOverlayStyle(overlayState.config);
     }
   }
 }
@@ -275,9 +309,10 @@ function handleFullscreenChange(): void {
     }
   }
 
-  // Re-position after fullscreen transition
+  // Re-position and recalculate font size after fullscreen transition
   setTimeout(() => {
     positionOverlay(overlay, video, overlayState.config);
+    updateOverlayStyle(overlayState.config);
   }, 100);
 }
 

@@ -85,6 +85,7 @@ function buildSubtitleOverlayConfig(
 ): Partial<OverlayConfig> {
   return {
     fontSize: subtitleSettings.fontSize,
+    fontSizeMode: subtitleSettings.fontSizeMode,
     position: subtitleSettings.position,
     backgroundOpacity: subtitleSettings.backgroundOpacity,
     fontFamily: resolveSubtitleFontFamily(subtitleSettings.fontFamily),
