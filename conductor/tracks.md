@@ -54,10 +54,9 @@ This file tracks all major tracks for the project.
 
 - ✅ **PDF Translation Download** (`pdf-download_20260618`) — Archived 2026-06-18. [View](./conductor/archive/pdf-download_20260618/)
 - ✅ **HBO Max DOM Cue-Scraping Subtitles** (`hbomax-dom-cue-subtitles_20260619`) — Archived 2026-06-19. Implemented via superpowers workflow (retroactively archived). DOM cue scraping for DRM/MSE platform with no VTT URL; new `DomCueSource` contract + MutationObserver scraper. [View](./conductor/archive/hbomax-dom-cue-subtitles_20260619/)
+- ✅ **Subtitle Supported Sites Display & Per-Site Toggle** (`subtitle-site-toggles_20260619`) — Archived 2026-06-19. Settings card listing 5 subtitle platforms with per-site enable/disable toggles; runtime coordinator filtering for disabled sites. [View](./conductor/archive/subtitle-site-toggles_20260619/)
 
 ---
 
 ## Active Tracks
 
-## [x] Track: Subtitle Supported Sites Display & Per-Site Toggle
-*Link: [./conductor/tracks/subtitle-site-toggles_20260619/](./conductor/tracks/subtitle-site-toggles_20260619/)*
