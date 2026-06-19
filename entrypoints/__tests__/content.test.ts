@@ -30,7 +30,29 @@ vi.mock('@/content/textSelection');
 vi.mock('@/content/hoverTranslate');
 vi.mock('@/content/keyboardShortcuts');
 
-import { startTranslation, stopTranslation } from '../content';
+const catMocks = vi.hoisted(() => ({
+  triggerAutoCategoryDetection: vi.fn().mockResolvedValue(undefined),
+  extractPageContext: vi.fn(() => ({ title: '', description: '', domain: 'example.com' })),
+  getAutoDetectedCategory: vi.fn(() => undefined),
+}));
+vi.mock('@/content/utils/pageContext', () => ({
+  extractPageContext: (...args: unknown[]) => catMocks.extractPageContext(...args),
+  resolveCategory: vi.fn(),
+  detectLLMCategoryIfNeeded: vi.fn(),
+  triggerAutoCategoryDetection: (...args: unknown[]) => catMocks.triggerAutoCategoryDetection(...args),
+  DOMAIN_CATEGORY_MAP: {},
+}));
+
+vi.mock('@/content/categoryState', () => ({
+  getAutoDetectedCategory: (...args: unknown[]) => catMocks.getAutoDetectedCategory(...args),
+  setAutoDetectedCategory: vi.fn(),
+  buildCategoryInfo: vi.fn(() => ({ autoDetected: undefined, siteRule: undefined, override: undefined, effective: undefined })),
+  broadcastCategoryInfo: vi.fn(),
+  isCategoryDetectionInFlight: vi.fn(() => false),
+  setCategoryDetectionInFlight: vi.fn(),
+}));
+
+import { startTranslation, stopTranslation, setupMessageListener } from '../content';
 import { applyTheme, applyPosition, applyDarkMode, setPageState, getPageState } from '@/content/translationDisplay';
 import { extractPieces } from '@/content/domWalker';
 import { ViewportObserver } from '@/content/viewportObserver';
@@ -597,6 +619,94 @@ describe('content.ts', () => {
 
       // Each start past the first must tear down the prior watcher exactly once.
       expect(mutationMocks.stop).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getPageCategory lazy detection', () => {
+    type Listener = (msg: { action: string; category?: string }, sender: unknown, sendResponse: (r: unknown) => void) => boolean | undefined;
+
+    function captureListener(): Listener | null {
+      let captured: Listener | null = null;
+      const addListener = vi.fn((l: Listener) => { captured = l; });
+      global.chrome = {
+        runtime: {
+          sendMessage: vi.fn().mockResolvedValue(undefined),
+          onMessage: { addListener, removeListener: vi.fn() },
+        },
+      } as unknown as typeof chrome;
+      setupMessageListener();
+      return captured;
+    }
+
+    beforeEach(() => {
+      vi.mocked(loadSettings).mockResolvedValue({
+        ...mockSettings,
+        enableLLMPageCategoryDetection: true,
+        enableContextAwareTranslation: true,
+        llmCategoryDetectionMode: 'async',
+        siteRules: [],
+      } as ExtensionSettings);
+      catMocks.getAutoDetectedCategory.mockReturnValue(undefined);
+      catMocks.triggerAutoCategoryDetection.mockClear();
+      catMocks.triggerAutoCategoryDetection.mockResolvedValue(undefined);
+    });
+
+    it('fires triggerAutoCategoryDetection when singleton is empty and detection is enabled', async () => {
+      const listener = captureListener();
+      expect(listener).not.toBeNull();
+
+      await new Promise<void>((resolve) => {
+        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+      });
+      // flush microtasks so the async IIFE reaches the trigger call
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(catMocks.triggerAutoCategoryDetection).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT fire triggerAutoCategoryDetection when singleton already has a value', async () => {
+      catMocks.getAutoDetectedCategory.mockReturnValue('News');
+      const listener = captureListener();
+
+      await new Promise<void>((resolve) => {
+        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+      });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire triggerAutoCategoryDetection when a heuristic category already exists', async () => {
+      catMocks.extractPageContext.mockReturnValueOnce({ title: '', description: '', domain: 'example.com', category: 'News' });
+      const listener = captureListener();
+
+      await new Promise<void>((resolve) => {
+        listener!({ action: 'getPageCategory' }, {}, () => resolve());
+      });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire triggerAutoCategoryDetection when an override is set', async () => {
+      const listener = captureListener();
+
+      // Simulate background forwarding a categoryChanged with an override.
+      // The handler updates module-level categoryOverride asynchronously via
+      // loadSettings().then(...); it does not call sendResponse, so resolve
+      // via microtask flush instead of waiting on sendResponse.
+      listener({ action: 'categoryChanged', category: 'Gaming' }, {}, () => {});
+      // Allow the async loadSettings().then(...) in the categoryChanged handler
+      // to run to completion so categoryOverride is populated before the next msg.
+      await new Promise((r) => setTimeout(r, 0));
+      // loadSettings is mocked to resolve synchronously, but the .then chain needs
+      // an extra tick. Flush a few microtask turns to be safe.
+      await new Promise((r) => setTimeout(r, 0));
+
+      listener({ action: 'getPageCategory' }, {}, () => {});
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
     });
   });
 });

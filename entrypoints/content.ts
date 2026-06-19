@@ -11,7 +11,7 @@ import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
-import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
 import {
   getAutoDetectedCategory,
   setAutoDetectedCategory,
@@ -436,8 +436,9 @@ async function initInteractionFeatures(): Promise<void> {
   chrome.storage.onChanged.addListener(_storageChangeListener);
 }
 
-/** Listen for messages from popup/background */
-function setupMessageListener(): void {
+/** Listen for messages from popup/background.
+ *  Exported for unit testing (normally invoked by the content script's main()). */
+export function setupMessageListener(): void {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'startTranslation') {
       startTranslation();
@@ -467,6 +468,18 @@ function setupMessageListener(): void {
           : undefined;
         const info = buildCategoryInfo(catSettings, categoryOverride);
         sendResponse({ ...info, autoDetected: llmDetected ?? heuristic });
+
+        // Lazy LLM detection: when nothing is detected yet, detection is enabled,
+        // and no manual override is set, kick off an async detection so the popup's
+        // pageCategoryUpdate listener fills in the category shortly after open.
+        // The helper's in-flight guard prevents duplicate calls across repeated
+        // popup opens while one detection is pending.
+        if (!llmDetected && !heuristic && catSettings.enableLLMPageCategoryDetection && !categoryOverride) {
+          triggerAutoCategoryDetection(catSettings, categoryOverride, (cat) => {
+            setAutoDetectedCategory(cat);
+            broadcastCategoryInfo(catSettings, categoryOverride);
+          }).catch(() => {});
+        }
       })();
       return true; // async response
     } else if (message.action === 'startSubtitleTranslation') {
