@@ -4,7 +4,18 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { PageContext } from '@/types/config';
-import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '../pageContext';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection } from '../pageContext';
+
+vi.mock('@/content/categoryState', () => ({
+  getAutoDetectedCategory: vi.fn(() => undefined),
+  setAutoDetectedCategory: vi.fn(),
+  setCategoryDetectionInFlight: vi.fn(),
+  isCategoryDetectionInFlight: vi.fn(() => false),
+  buildCategoryInfo: vi.fn(() => ({ autoDetected: undefined, siteRule: undefined, override: undefined, effective: undefined })),
+  broadcastCategoryInfo: vi.fn(),
+  _resetCategoryState: vi.fn(),
+}));
+import { getAutoDetectedCategory, setCategoryDetectionInFlight, isCategoryDetectionInFlight } from '@/content/categoryState';
 
 describe('extractPageContext', () => {
   beforeEach(() => {
@@ -210,5 +221,78 @@ describe('detectLLMCategoryIfNeeded', () => {
     // async mode resolves the promise internally; flush microtasks
     await new Promise((r) => setTimeout(r, 0));
     expect(onDetected).toHaveBeenCalledWith('Academic Research');
+  });
+});
+
+describe('triggerAutoCategoryDetection', () => {
+  const baseSettings = {
+    enableLLMPageCategoryDetection: true,
+    llmCategoryDetectionMode: 'async',
+  } as const;
+
+  beforeEach(() => {
+    document.title = 'Some page';
+    document.head.innerHTML = '';
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
+    });
+    vi.mocked(getAutoDetectedCategory).mockReturnValue(undefined);
+    vi.mocked(isCategoryDetectionInFlight).mockReturnValue(false);
+    vi.mocked(setCategoryDetectionInFlight).mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns early when LLM detection is disabled', async () => {
+    const onDetected = vi.fn();
+    const settings = { ...baseSettings, enableLLMPageCategoryDetection: false } as never;
+    await triggerAutoCategoryDetection(settings, undefined, onDetected);
+    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('returns early when a manual override is set', async () => {
+    const onDetected = vi.fn();
+    await triggerAutoCategoryDetection(baseSettings as never, 'Gaming', onDetected);
+    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('returns early when an auto-detected value already exists', async () => {
+    vi.mocked(getAutoDetectedCategory).mockReturnValue('News');
+    const onDetected = vi.fn();
+    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
+    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('returns early when a detection is already in flight', async () => {
+    vi.mocked(isCategoryDetectionInFlight).mockReturnValue(true);
+    const onDetected = vi.fn();
+    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
+    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('sets in-flight flag, fires detection, calls onDetected, then clears flag (async mode)', async () => {
+    const onDetected = vi.fn();
+    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
+    await new Promise((r) => setTimeout(r, 0)); // flush async-mode microtasks
+    expect(setCategoryDetectionInFlight).toHaveBeenCalledWith(true);
+    expect(setCategoryDetectionInFlight).toHaveBeenCalledWith(false);
+    expect(onDetected).toHaveBeenCalledWith('News');
+  });
+
+  it('clears the in-flight flag even when the LLM returns Other (no onDetected)', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Other' }) },
+    });
+    const onDetected = vi.fn();
+    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(setCategoryDetectionInFlight).toHaveBeenCalledWith(false);
+    expect(onDetected).not.toHaveBeenCalled();
   });
 });

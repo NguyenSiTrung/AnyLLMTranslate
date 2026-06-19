@@ -4,6 +4,11 @@
  */
 
 import type { PageContext, ExtensionSettings } from '@/types/config';
+import {
+  getAutoDetectedCategory,
+  isCategoryDetectionInFlight,
+  setCategoryDetectionInFlight,
+} from '@/content/categoryState';
 
 /** Truncate string to max length */
 function truncate(str: string, maxLen: number): string {
@@ -169,6 +174,42 @@ export async function detectLLMCategoryIfNeeded(
         onDetected(res.category);
       }
     }).catch(() => {});
+  }
+}
+
+/**
+ * Trigger an async LLM category detection if all of these hold:
+ *  - LLM page-category detection is enabled
+ *  - no manual override is set
+ *  - no auto-detected value is already cached
+ *  - no detection is already in flight
+ *
+ * The in-flight guard is set before dispatching and cleared on completion
+ * (success, 'Other' result, or failure) so callers can fire-and-forget without
+ * risking duplicate concurrent LLM calls for the same page.
+ *
+ * `onDetected` is invoked with the detected category (never 'Other').
+ */
+export async function triggerAutoCategoryDetection(
+  settings: ExtensionSettings,
+  manualOverride: string | undefined,
+  onDetected: (category: string) => void,
+): Promise<void> {
+  if (!settings.enableLLMPageCategoryDetection) return;
+  if (manualOverride) return;
+  if (getAutoDetectedCategory()) return;
+  if (isCategoryDetectionInFlight()) return;
+
+  setCategoryDetectionInFlight(true);
+  try {
+    const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
+    await detectLLMCategoryIfNeeded(pageContext, settings, manualOverride, undefined, onDetected);
+  } finally {
+    // async mode resolves detectLLMCategoryIfNeeded before the inner .then runs;
+    // blocking mode awaits it. Either way, by the time we reach here the LLM call
+    // has settled (or no-oped). Clear the guard so a later lazy request can run if
+    // this one produced nothing ('Other' / failure).
+    setCategoryDetectionInFlight(false);
   }
 }
 
