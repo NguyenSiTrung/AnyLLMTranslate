@@ -21,7 +21,7 @@ import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, S
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
-import { setAutoDetectedCategory, broadcastCategoryInfo } from '@/content/categoryState';
+import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory } from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 
@@ -140,7 +140,7 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
     pageContext,
     settings,
     state.categoryOverride,
-    undefined,
+    getAutoDetectedCategory(),
     (cat) => {
       setAutoDetectedCategory(cat);
       broadcastCategoryInfo(settings, state.categoryOverride);
