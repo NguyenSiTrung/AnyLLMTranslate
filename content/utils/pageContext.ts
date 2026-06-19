@@ -135,23 +135,29 @@ export function resolveCategory(
 
 /**
  * Perform LLM category detection based on settings mode.
- * - blocking: awaits detection and updates pageContext.category immediately
- * - async: dispatches detection in background and updates system-wide override when done
+ * - blocking: awaits detection, sets pageContext.category, calls onDetected
+ * - async: dispatches detection in background, calls onDetected on completion
+ *
+ * No longer mutates the override store — the caller decides what to do with
+ * the result via the onDetected callback.
  */
 export async function detectLLMCategoryIfNeeded(
   pageContext: PageContext,
   settings: ExtensionSettings,
-  currentOverride: string | undefined,
+  manualOverride: string | undefined,
+  existingAutoDetected: string | undefined,
+  onDetected: (category: string) => void,
 ): Promise<void> {
   if (!settings.enableLLMPageCategoryDetection) return;
-  if (currentOverride) return;
+  if (manualOverride) return;
+  if (existingAutoDetected) return;
 
   if (settings.llmCategoryDetectionMode === 'blocking') {
     try {
       const res = await chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext });
       if (res?.success && res.category && res.category !== 'Other') {
         pageContext.category = res.category;
-        chrome.runtime.sendMessage({ action: 'setCategoryOverride', category: res.category }).catch(() => {});
+        onDetected(res.category);
       }
     } catch {
       return;
@@ -160,7 +166,7 @@ export async function detectLLMCategoryIfNeeded(
     // async mode
     chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext }).then((res) => {
       if (res?.success && res.category && res.category !== 'Other') {
-        chrome.runtime.sendMessage({ action: 'setCategoryOverride', category: res.category }).catch(() => {});
+        onDetected(res.category);
       }
     }).catch(() => {});
   }

@@ -2,8 +2,8 @@
  * Tests for pageContext extraction utility.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { extractPageContext, resolveCategory } from '../pageContext';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '../pageContext';
 
 describe('extractPageContext', () => {
   beforeEach(() => {
@@ -133,5 +133,81 @@ describe('resolveCategory', () => {
 
   it('prefers siteRule over autoDetected', () => {
     expect(resolveCategory('auto', 'site')).toBe('site');
+  });
+});
+
+describe('detectLLMCategoryIfNeeded', () => {
+  const baseSettings = {
+    enableLLMPageCategoryDetection: true,
+    llmCategoryDetectionMode: 'blocking',
+  } as const;
+
+  function makePageContext() {
+    return { title: 'Test', description: '', domain: 'example.com' };
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns early when LLM detection is disabled', async () => {
+    const onDetected = vi.fn();
+    const settings = { ...baseSettings, enableLLMPageCategoryDetection: false };
+    await detectLLMCategoryIfNeeded(makePageContext(), settings as never, undefined, undefined, onDetected);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('returns early when a manual override is set', async () => {
+    const onDetected = vi.fn();
+    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, 'Gaming', undefined, onDetected);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('returns early when existingAutoDetected is already set', async () => {
+    const onDetected = vi.fn();
+    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, 'News', onDetected);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('calls onDetected with the LLM category in blocking mode', async () => {
+    const onDetected = vi.fn();
+    const ctx = makePageContext();
+    await detectLLMCategoryIfNeeded(ctx, baseSettings as never, undefined, undefined, onDetected);
+    expect(onDetected).toHaveBeenCalledWith('News');
+    expect(ctx.category).toBe('News');
+  });
+
+  it('does NOT call onDetected when category is Other', async () => {
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Other' }) },
+    });
+    const onDetected = vi.fn();
+    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, undefined, onDetected);
+    expect(onDetected).not.toHaveBeenCalled();
+  });
+
+  it('does NOT send setCategoryOverride', async () => {
+    const sendSpy = vi.fn().mockResolvedValue({ success: true, category: 'News' });
+    vi.stubGlobal('chrome', { runtime: { sendMessage: sendSpy } });
+    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, undefined, vi.fn());
+    const overrideCalls = sendSpy.mock.calls.filter((c: unknown[]) => (c[0] as { action?: string }).action === 'setCategoryOverride');
+    expect(overrideCalls).toHaveLength(0);
+  });
+
+  it('calls onDetected in async mode', async () => {
+    const sendSpy = vi.fn().mockResolvedValue({ success: true, category: 'Academic Research' });
+    vi.stubGlobal('chrome', { runtime: { sendMessage: sendSpy } });
+    const onDetected = vi.fn();
+    const settings = { ...baseSettings, llmCategoryDetectionMode: 'async' } as never;
+    await detectLLMCategoryIfNeeded(makePageContext(), settings, undefined, undefined, onDetected);
+    // async mode resolves the promise internally; flush microtasks
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onDetected).toHaveBeenCalledWith('Academic Research');
   });
 });
