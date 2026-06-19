@@ -39,6 +39,7 @@ export type MessageAction =
   | 'setCategoryOverride'
   | 'getCategoryOverride'
   | 'getPageCategory'
+  | 'pageCategoryUpdate'
   | 'DETECT_PAGE_CATEGORY_LLM'
   | 'CLASSIFY_PDF_PARAGRAPHS'
   | 'CLEAR_CACHE'
@@ -154,6 +155,12 @@ export interface GetPageCategoryMessage {
   action: 'getPageCategory';
 }
 
+/** Live category update from content script → popup (auto-detection result) */
+export interface PageCategoryUpdateMessage {
+  action: 'pageCategoryUpdate';
+  categoryInfo: CategoryInfo;
+}
+
 /** Detect page category using LLM (Content → Background) */
 export interface DetectPageCategoryLlmMessage {
   action: 'DETECT_PAGE_CATEGORY_LLM';
@@ -208,6 +215,7 @@ export type ExtensionMessage =
   | SetCategoryOverrideMessage
   | GetCategoryOverrideMessage
   | GetPageCategoryMessage
+  | PageCategoryUpdateMessage
   | DetectPageCategoryLlmMessage
   | ClassifyPdfParagraphsMessage
   | ClearCacheMessage
