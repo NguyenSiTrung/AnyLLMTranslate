@@ -76,10 +76,12 @@ vi.mock('@/lib/config', () => ({
 const mockExtractPageContext = vi.fn();
 const mockResolveCategory = vi.fn();
 const mockDetectLLMCategoryIfNeeded = vi.fn().mockResolvedValue(undefined);
+const mockTriggerAutoCategoryDetection = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/content/utils/pageContext', () => ({
   extractPageContext: (...args: unknown[]) => mockExtractPageContext(...args),
   resolveCategory: (...args: unknown[]) => mockResolveCategory(...args),
   detectLLMCategoryIfNeeded: (...args: unknown[]) => mockDetectLLMCategoryIfNeeded(...args),
+  triggerAutoCategoryDetection: (...args: unknown[]) => mockTriggerAutoCategoryDetection(...args),
   DOMAIN_CATEGORY_MAP: {},
 }));
 
@@ -983,6 +985,119 @@ describe('auto-detected category from shared state', () => {
       'News', // from the shared singleton, NOT undefined (heuristic found nothing)
       undefined, // no siteRule
       undefined, // no tab override
+    );
+  });
+});
+
+describe('subtitleCoordinator – proactive category detection', () => {
+  let categoryStateMod: typeof import('@/content/categoryState') | null = null;
+
+  beforeEach(async () => {
+    // Fake timers make the 1500ms proactive debounce deterministic and prevent
+    // leftover real timers from other tests firing during our waits.
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    vi.resetModules();
+
+    // YouTube watch page
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableLLMPageCategoryDetection: true,
+      enableContextAwareTranslation: true,
+      llmCategoryDetectionMode: 'async',
+      siteRules: [],
+    });
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockBuildBilingualVTT.mockReturnValue('WEBVTT\n\nbilingual');
+    mockBuildTranslationOnlyVTT.mockReturnValue('WEBVTT\n\ntranslation-only');
+    mockOnMessage.mockReturnValue(() => {});
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+    mockExtractPageContext.mockReturnValue({ title: 'Watch page', description: '', domain: 'www.youtube.com' });
+    mockDetectLLMCategoryIfNeeded.mockResolvedValue(undefined);
+    mockTriggerAutoCategoryDetection.mockClear();
+    mockTriggerAutoCategoryDetection.mockResolvedValue(undefined);
+    mockFindMatchingRule.mockReturnValue(undefined);
+    mockResolveCategory.mockReturnValue(undefined);
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+    categoryStateMod = await import('@/content/categoryState');
+    categoryStateMod._resetCategoryState();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+  });
+
+  it('fires triggerAutoCategoryDetection on startCoordinator when on a watch page', async () => {
+    // Advance past the 1500ms debounce. await vi.advanceTimersByTimeAsync so any
+    // microtasks scheduled inside the timer callback (loadSettings) also flush.
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fire proactive detection on a non-watch page (YouTube home)', async () => {
+    vi.resetModules();
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/', href: 'https://www.youtube.com/' },
+      writable: true,
+      configurable: true,
+    });
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(mockTriggerAutoCategoryDetection).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire when LLM detection is disabled', async () => {
+    vi.resetModules();
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableLLMPageCategoryDetection: false,
+      enableContextAwareTranslation: true,
+      siteRules: [],
+    });
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+    await vi.advanceTimersByTimeAsync(1700);
+    expect(mockTriggerAutoCategoryDetection).not.toHaveBeenCalled();
+  });
+
+  it('passes the category override through to triggerAutoCategoryDetection when set (categoryChanged received)', async () => {
+    // Dispatch a categoryChanged to every registered runtime listener; only the
+    // coordinator's listener mutates state.categoryOverride, the rest ignore it.
+    const addListenerCalls = (global.chrome.runtime.onMessage.addListener as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    for (const call of addListenerCalls) {
+      const l = call[0] as (m: { action: string; category?: string }) => void;
+      try { l({ action: 'categoryChanged', category: 'Gaming' }); } catch { /* ignore */ }
+    }
+    await vi.advanceTimersByTimeAsync(1700);
+    // The scheduler always invokes the helper; the override no-op guard lives inside
+    // the real triggerAutoCategoryDetection (covered by its own unit tests). Here we
+    // verify the override is propagated as the manualOverride argument so the guard
+    // will short-circuit in production.
+    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledTimes(1);
+    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledWith(
+      expect.anything(),
+      'Gaming',
+      expect.any(Function),
     );
   });
 });

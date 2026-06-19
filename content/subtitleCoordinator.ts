@@ -20,7 +20,7 @@ import { loadSettings } from '@/lib/config';
 import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload, SubtitleDomCuesPayload } from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
-import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded } from '@/content/utils/pageContext';
+import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
 import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory } from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
@@ -136,11 +136,12 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
 
   const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
 
-  await detectLLMCategoryIfNeeded(
-    pageContext,
+  // Delegate detection to the shared helper, which guards on disabled detection /
+  // existing override / existing autoDetected / in-flight, then writes the result
+  // into the shared singleton + broadcasts to the popup via the onDetected callback.
+  await triggerAutoCategoryDetection(
     settings,
     state.categoryOverride,
-    getAutoDetectedCategory(),
     (cat) => {
       setAutoDetectedCategory(cat);
       broadcastCategoryInfo(settings, state.categoryOverride);
@@ -682,12 +683,44 @@ function startSpaNavigationWatcher(): () => void {
   };
 }
 
+/** Debounce timer for proactive category detection on watch pages. */
+let proactiveCategoryDetectionTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Schedule a debounced proactive LLM category detection on subtitle watch pages.
+ *  No-ops (via triggerAutoCategoryDetection's guards) when not applicable: non-watch
+ *  page, disabled detection, existing override, existing autoDetected, or already
+ *  in flight. Debounced so page metadata (title/meta) can settle before extraction. */
+function scheduleProactiveCategoryDetection(): void {
+  if (proactiveCategoryDetectionTimer) {
+    clearTimeout(proactiveCategoryDetectionTimer);
+  }
+  proactiveCategoryDetectionTimer = setTimeout(() => {
+    proactiveCategoryDetectionTimer = null;
+    if (!isOnWatchPage()) return;
+    void (async () => {
+      const settings = await loadSettings();
+      if (!settings.enableContextAwareTranslation) return;
+      if (!settings.enableLLMPageCategoryDetection) return;
+      // state.categoryOverride and the singleton are checked inside the helper.
+      await triggerAutoCategoryDetection(settings, state.categoryOverride, (cat) => {
+        setAutoDetectedCategory(cat);
+        broadcastCategoryInfo(settings, state.categoryOverride);
+      });
+    })();
+  }, 1500);
+}
+
 /**
  * Start the subtitle coordinator.
  * Returns a cleanup function.
  */
 export function startCoordinator(): () => void {
   console.log('AnyLLMTranslate: Starting subtitle coordinator');
+
+  // Proactive LLM category detection on watch pages: fire once, debounced, so
+  // the popup shows a detected category before the user presses play. The
+  // trigger helper no-ops when not applicable, so this is safe to schedule always.
+  scheduleProactiveCategoryDetection();
 
   // Listen for intercepted subtitles
   const cleanupBridge = onSubtitleIntercepted(handleIntercepted);
@@ -759,6 +792,11 @@ export function startCoordinator(): () => void {
     if (state.discoverDebounceTimer !== null) {
       clearTimeout(state.discoverDebounceTimer);
       state.discoverDebounceTimer = null;
+    }
+
+    if (proactiveCategoryDetectionTimer !== null) {
+      clearTimeout(proactiveCategoryDetectionTimer);
+      proactiveCategoryDetectionTimer = null;
     }
 
     // Clear all pending timeouts
