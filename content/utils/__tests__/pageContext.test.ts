@@ -308,6 +308,7 @@ describe('DOMAIN_CATEGORY_MAP', () => {
       'peacocktv.com',
       'paramountplus.com',
       'max.com',
+      'hbomax.com',
       'youku.com',
       'iqiyi.com',
       'v.qq.com',

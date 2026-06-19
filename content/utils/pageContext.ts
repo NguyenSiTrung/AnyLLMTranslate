@@ -65,6 +65,7 @@ export const DOMAIN_CATEGORY_MAP: Record<string, string> = {
   'peacocktv.com': 'Streaming Entertainment',
   'paramountplus.com': 'Streaming Entertainment',
   'max.com': 'Streaming Entertainment',
+  'hbomax.com': 'Streaming Entertainment',
   'youku.com': 'Streaming Entertainment',
   'iqiyi.com': 'Streaming Entertainment',
   'v.qq.com': 'Streaming Entertainment',
