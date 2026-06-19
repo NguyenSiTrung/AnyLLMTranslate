@@ -1,26 +1,28 @@
 {
-  "lastRefresh": "2026-06-18T19:02:00+07:00",
+  "lastRefresh": "2026-06-19T13:00:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Added 3 incremental PDF features merged to master since 2026-06-16 — Math/Figure Skipping (feat/pdf-skip-math-figures), Heading Truncation & Rotated Text Fixes (8b1552a), Split/Translation-only View Toggle (feat/pdf-translation-only-view)",
-    "product.md: Expanded PDF Translation feature section with view modes, sub-modes, and math/figure skipping details",
-    "product.md: Updated Current State metrics (966 → 1004 tests, 76 → 80 files, 2.6 → 2.58 MB)",
-    "patterns.md: Added new 'PDF Content Classification & Layout' section (6 patterns: rule-vs-LLM split, classification-in-orchestration-seam, kind end-to-end propagation, orthogonal view-mode types, useVisiblePages container-ref switch, null-ref scroll-sync guards)",
+    "product.md: Added HBO Max to platform handlers list (YouTube, Udemy, Coursera, Netflix, LinkedIn Learning, HBO Max)",
+    "product.md: Added DOM cue scraping and auto font size mode to Video Subtitle Translation feature section",
+    "product.md: Added HBO Max DOM Cue-Scraping Subtitles to Implementation Status (archived 2026-06-19, shipped via superpowers workflow, commits 007d372...491f59f)",
+    "product.md: Updated Current State metrics (1047 → 1085 tests, 85 → 88 files, 2.58 → 3.74 MB, 43 → 44 tracks)",
+    "patterns.md: Added new 'DOM Cue Scraping — Subtitle Translation for DRM Platforms' section (14 patterns: stable-ancestor observation, far-future endTime, deferred-attach, track-change filter, rolling buffer reset, visibility:hidden over display:none, !important for inline overrides, never click Off, precondition on visible captions, preferredSubtitleLanguage as filter, fullscreen reparent, auto font size, optional interface methods, dedicated bridge message)",
     "patterns.md: Updated Last refreshed footer with current codebase health metrics",
-    "tracks.md: Added note about pdf-bilingual-inline_20260618 (Strategy B) being SHELVED — never merged to master, branch pruned",
-    "beads: Closed orphaned beads_AnyLLMTranslate-d67.1.1 (was IN_PROGRESS under CLOSED epic); updated epic d67 with SHELVED note",
-    "branches: Deleted stranded/merged local + remote branches (feat/pdf-bilingual-inline_20260618, feat/subtitle-reliability-hardening_20260612); only master remains",
-    "product.md.bak / patterns.md.bak: backups created before edits"
+    "tracks.md: Added hbomax-dom-cue-subtitles_20260619 archived track entry (implemented via superpowers, retroactively archived)",
+    "archive: Created conductor/archive/hbomax-dom-cue-subtitles_20260619/ with metadata.json, spec.md, plan.md, learnings.md, implement_state.json",
+    "beads: No drift — bd ready shows no open issues, no orphaned tasks, no active tracks",
+    "learnings: No new cross-track patterns to elevate (only new track since last refresh is HBO Max, already captured in patterns.md)",
+    "product.md.bak2 / patterns.md.bak2 / tracks.md.bak2: backups created before edits"
   ],
   "codebaseHealth": {
-    "tests": 1004,
-    "testFiles": 80,
-    "buildSize": "2.58 MB",
+    "tests": 1085,
+    "testFiles": 88,
+    "buildSize": "3.74 MB",
     "lintErrors": 0,
-    "archivedTracks": 42,
+    "archivedTracks": 44,
     "activeTracks": 0
   },
-  "shelvedWork": {
-    "pdf-bilingual-inline_20260618": "Strategy B (PDF Bilingual Inline) — Beads epic d67 was marked CLOSED but never merged to master. Branch pruned. Treated as SHELVED, not shipped. Revisit requires re-evaluating spec against current master PDF viewer."
+  "newTrack": {
+    "hbomax-dom-cue-subtitles_20260619": "HBO Max bilingual subtitle translation via DOM cue scraping. DRM/MSE platform with no VTT URL — new DomCueSource contract + MutationObserver scraper. Implemented via superpowers workflow, retroactively archived into conductor. 16 commits from design spec to fullscreen overlay fix."
   }
 }

@@ -37,7 +37,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### Video Subtitle Translation
 - XHR/Fetch interception via MAIN world script injection
-- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning
+- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning, HBO Max
+- **DOM cue scraping** for platforms that render captions into the DOM (HBO Max) — no VTT URL or native TextTrack; MutationObserver on stable ancestor samples `video.currentTime` to derive cue timing
+- **Auto font size mode** for subtitles — scales font size proportionally to video height (clamped to min/max), recalculated on video resize via ResizeObserver
 - WebVTT parser and bilingual builder
 - Custom subtitle overlay (fallback renderer)
 - Drag-and-drop subtitle repositioning with session persistence
@@ -139,9 +141,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **PDF Heading Truncation & Rotated Text Fixes** (2026-06-18, incremental, commit `8b1552a`): Fixed Vietnamese heading overlap in the translation pane and corrected rotated-text overlay rendering.
 - **PDF Split/Translation-only View Toggle** (2026-06-18, merged `feat/pdf-translation-only-view`): New orthogonal **View mode** segmented control (`Split` | `Translation-only`) in the PDF viewer header, alongside the existing Layout/Text sub-mode toggle. `PdfViewMode` type persisted to its own `chrome.storage.local` key (`anyllm-pdf-view-mode`, default `split`). `ViewerLayout` renders single-column in translation-only mode; `useVisiblePages` container ref re-targets to the right pane so Layout-overlay canvases still virtualize. Scroll sync is a no-op when the left pane is unmounted (`useSynchronizedScroll` guards on null refs); re-alignment re-engages via page-block interpolation on Split remount.
 - **PDF Translation Download** (Archived 2026-06-18, merged `feat/pdf-download_20260618`): Export translated PDFs via a 3-stage pipeline: (1) `translateAllPages` force-translates remaining pages with per-page error isolation and AbortSignal cancellation, (2) `pdfFontManager` downloads/caches Noto Sans TTF from Google Fonts CDN in IndexedDB, (3) `translatedPdfGenerator` creates a new PDF via pdf-lib with original pages as backgrounds and translated text overlaid (white masking rectangles, clamped font sizes, greedy word wrap, math/figure skip). Orchestrated by `usePdfDownload` hook with `DownloadProgressModal` multi-stage progress UI. 43 new tests added.
+- **HBO Max DOM Cue-Scraping Subtitles** (Archived 2026-06-19, shipped via superpowers workflow, commits `007d372`...`491f59f`): Added bilingual subtitle translation for HBO Max (`max.com` / `play.hbomax.com`) — a DRM/MSE platform that renders captions into the DOM with no VTT URL or native TextTrack. New `DomCueSource` contract (optional `getDomCueSource?()` on `SubtitleHandler`) and `domCueSource.ts` scraper (MutationObserver on stable ancestor, re-resolves cue selector on each fire, samples `video.currentTime` for cue timing, deferred-attach for late-mounting SPA player, rolling buffer reset on track switch). Coordinator DOM branch hides native captions via `visibility: hidden !important` and feeds cues into the existing overlay/translation pipeline. Auto-activate preconditioned on visible Max captions + language match. Also added auto font size mode for subtitles (proportional to video height, ResizeObserver-driven) and fullscreen overlay fixes (reparent into player container, Popover API for Top Layer). 3 new test files added.
+
 ### Current State
-- 1047 tests passing across 85 files. Build passing (`wxt build` ✅, ~2.58 MB). 0 lint errors.
-- **No active tracks.** All 43 tracks completed and archived.
+- 1085 tests passing across 88 files. Build passing (`wxt build` ✅, ~3.74 MB). 0 lint errors.
+- **No active tracks.** All 44 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

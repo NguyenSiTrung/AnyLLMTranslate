@@ -1,0 +1,23 @@
+{
+  "track_id": "hbomax-dom-cue-subtitles_20260619",
+  "type": "feature",
+  "status": "archived",
+  "priority": "high",
+  "depends_on": ["subtitle-reliability-hardening_20260612"],
+  "estimated_hours": null,
+  "created_at": "2026-06-19T00:00:00Z",
+  "updated_at": "2026-06-19T12:00:00Z",
+  "description": "HBO Max bilingual subtitle translation via DOM cue scraping — Max renders captions into the DOM (DRM/MSE video, no VTT URL, no TextTrack). New DomCueSource contract + MutationObserver scraper feeds existing subtitle overlay/translation pipeline.",
+  "beads_epic": null,
+  "beads_tasks": {},
+  "workflow": "superpowers (not conductor track — retroactively archived)",
+  "source_docs": {
+    "spec": "docs/superpowers/specs/2026-06-19-hbomax-subtitle-design.md",
+    "plan": "docs/superpowers/plans/2026-06-19-hbomax-subtitle.md"
+  },
+  "commits": {
+    "first": "007d372 (design spec)",
+    "last": "491f59f (fullscreen overlay reparent fix)",
+    "total": 16
+  }
+}

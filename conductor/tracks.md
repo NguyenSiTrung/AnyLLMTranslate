@@ -53,6 +53,7 @@ This file tracks all major tracks for the project.
 - ✅ **PDF Elastic Overlay Layout Mode** (`pdf-elastic-overlay_20260616`) — Archived 2026-06-16. [View](./conductor/archive/pdf-elastic-overlay_20260616/)
 
 - ✅ **PDF Translation Download** (`pdf-download_20260618`) — Archived 2026-06-18. [View](./conductor/archive/pdf-download_20260618/)
+- ✅ **HBO Max DOM Cue-Scraping Subtitles** (`hbomax-dom-cue-subtitles_20260619`) — Archived 2026-06-19. Implemented via superpowers workflow (retroactively archived). DOM cue scraping for DRM/MSE platform with no VTT URL; new `DomCueSource` contract + MutationObserver scraper. [View](./conductor/archive/hbomax-dom-cue-subtitles_20260619/)
 
 ---
 
