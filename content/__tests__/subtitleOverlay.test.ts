@@ -152,6 +152,8 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
   });
 
   afterEach(() => {
+    resetOverlayState();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (HTMLElement.prototype as any).showPopover;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,6 +164,18 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     // Clean up fullscreenElement
     Object.defineProperty(document, 'fullscreenElement', {
       value: null,
+      configurable: true
+    });
+    Object.defineProperty(document, 'webkitFullscreenElement', {
+      value: null,
+      configurable: true
+    });
+    Object.defineProperty(window, 'innerWidth', {
+      value: 1024,
+      configurable: true
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      value: 768,
       configurable: true
     });
   });
@@ -208,7 +222,7 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.hasAttribute('popover')).toBe(false);
   });
 
-  it('uses popover and does NOT reparent when container is fullscreen (when Popover API is supported)', () => {
+  it('reparents overlay when a container is fullscreen even when Popover API is supported', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
 
@@ -219,9 +233,9 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     });
     document.dispatchEvent(new Event('fullscreenchange'));
 
-    expect(overlay.parentElement).toBe(document.body);
-    expect(overlay.getAttribute('popover')).toBe('manual');
-    expect(HTMLElement.prototype.showPopover).toHaveBeenCalled();
+    expect(overlay.parentElement).toBe(container);
+    expect(overlay.hasAttribute('popover')).toBe(false);
+    expect(HTMLElement.prototype.showPopover).not.toHaveBeenCalled();
   });
 
   it('uses position:absolute inside fullscreen container after reposition (when Popover API is NOT supported)', () => {
@@ -258,7 +272,7 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.style.height).toBe('100%');
   });
 
-  it('uses position:fixed aligned with video rect when container is fullscreen (when Popover API is supported)', () => {
+  it('uses position:absolute inside fullscreen container when Popover API is supported', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
 
@@ -277,11 +291,46 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     vi.advanceTimersByTime(400);
     vi.useRealTimers();
 
-    expect(overlay.style.position).toBe('fixed');
+    expect(overlay.style.position).toBe('absolute');
     expect(overlay.style.top).toBe('0px');
     expect(overlay.style.left).toBe('0px');
-    expect(overlay.style.width).toBe('800px');
-    expect(overlay.style.height).toBe('600px');
+    expect(overlay.style.width).toBe('100%');
+    expect(overlay.style.height).toBe('100%');
+  });
+
+  it('reparents overlay into HBO player container when it is fullscreen-sized without Fullscreen API state', () => {
+    container.setAttribute('data-testid', 'playerContainer');
+    Object.defineProperty(window, 'innerWidth', {
+      value: 800,
+      configurable: true
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      value: 600,
+      configurable: true
+    });
+
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    expect(document.fullscreenElement).toBeNull();
+    expect(overlay.parentElement).toBe(container);
+    expect(overlay.style.position).toBe('absolute');
+    expect(overlay.style.width).toBe('100%');
+    expect(overlay.style.height).toBe('100%');
+  });
+
+  it('uses webkitFullscreenElement as fullscreen container fallback', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    Object.defineProperty(document, 'webkitFullscreenElement', {
+      value: container,
+      configurable: true
+    });
+    document.dispatchEvent(new Event('webkitfullscreenchange'));
+
+    expect(overlay.parentElement).toBe(container);
+    expect(overlay.hasAttribute('popover')).toBe(false);
   });
 
   it('reverts to body on exit fullscreen', () => {
