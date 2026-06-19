@@ -71,19 +71,40 @@ export async function detectLLMCategoryIfNeeded(
 
 This keeps the function pure of the global override store.
 
-### 2. `entrypoints/content.ts` — track auto-detected separately
+### 2. `content/categoryState.ts` — shared auto-detected state (NEW)
 
-- New module-level state: `let autoDetectedCategory: string | undefined;`
+Both `entrypoints/content.ts` and `content/subtitleCoordinator.ts` run LLM category detection independently (page translation vs. subtitle translation). Since they share one content-script context and the popup queries `content.ts` via `getPageCategory`, the auto-detected value must be shared so the popup reflects subtitle-page detection too.
+
+A tiny singleton module holds the auto-detected category and a broadcast helper:
+
+```ts
+// content/categoryState.ts
+export function getAutoDetectedCategory(): string | undefined;
+export function setAutoDetectedCategory(category: string | undefined): void;
+export function buildCategoryInfo(settings, tabOverride): CategoryInfo;
+export function broadcastCategoryInfo(settings, tabOverride): void;
+```
+
+`buildCategoryInfo` centralizes the `resolveCategory(autoDetected, siteRule, override)` + `findMatchingRule` logic currently duplicated in both call sites, and `broadcastCategoryInfo` sends `{ action: 'pageCategoryUpdate', categoryInfo }`.
+
+### 3. `entrypoints/content.ts` — use shared state
+
+- Import `getAutoDetectedCategory`, `setAutoDetectedCategory`, `buildCategoryInfo`, `broadcastCategoryInfo` from `@/content/categoryState`.
 - On page translation start, call the refactored `detectLLMCategoryIfNeeded` with:
   - `manualOverride = categoryOverride`
-  - `existingAutoDetected = autoDetectedCategory`
-  - `onDetected = (cat) => { autoDetectedCategory = cat; broadcastCategoryInfo(); }`
-- `getPageCategory` handler: compute `autoDetected = autoDetectedCategory ?? extractPageContext(document, true).category` (prefer the LLM result if known; fall back to heuristic).
-- New helper `broadcastCategoryInfo()` that builds the full `CategoryInfo` (autoDetected, siteRule, override, effective) and sends `{ action: 'pageCategoryUpdate', categoryInfo }` via `chrome.runtime.sendMessage`. Called after detection and after any `categoryChanged`/override mutation so the popup stays in sync.
+  - `existingAutoDetected = getAutoDetectedCategory()`
+  - `onDetected = (cat) => { setAutoDetectedCategory(cat); broadcastCategoryInfo(settings, categoryOverride); }`
+- `getPageCategory` handler: compute `autoDetected = getAutoDetectedCategory() ?? extractPageContext(document, true).category` (prefer the LLM result if known; fall back to heuristic), then return `buildCategoryInfo(settings, categoryOverride)`.
+- `categoryChanged` handler: after updating `categoryOverride`, call `broadcastCategoryInfo(settings, categoryOverride)` so the popup refreshes on manual change too.
 
 `categoryOverride` retains its meaning: **temporary, user-driven** choice only.
 
-### 3. `types/messages.ts` — new message
+### 4. `content/subtitleCoordinator.ts` — use shared state
+
+- Update the `detectLLMCategoryIfNeeded` call in `buildSubtitlePageContext` to the new signature with `onDetected = (cat) => { setAutoDetectedCategory(cat); broadcastCategoryInfo(settings, state.categoryOverride); }`.
+- The subtitle translation's own `resolveCategory` logic is unchanged (still uses `state.categoryOverride` + heuristic `pageContext.category`); only the LLM-detection side-effect moves to the shared module so the popup can see it.
+
+### 5. `types/messages.ts` — new message
 
 Add `'pageCategoryUpdate'` to `MessageAction`. Add:
 
@@ -96,7 +117,7 @@ export interface PageCategoryUpdateMessage {
 
 Add to the `ExtensionMessage` union.
 
-### 4. `entrypoints/popup/App.tsx` — display + live refresh
+### 6. `entrypoints/popup/App.tsx` — display + live refresh
 
 - Pass `categoryInfo?.autoDetected` to `CategoryPicker` as `detectedCategory` (rename current prop `effectiveCategory` → `detectedCategory`).
 - Display logic in `CategoryPicker`:
@@ -106,10 +127,11 @@ Add to the `ExtensionMessage` union.
   - "Auto Detect" row inside the dropdown shows the same `Auto (${detectedCategory})` form when selected.
 - In `App`, extend the existing `messageListener` to handle `'pageCategoryUpdate'`: `setCategoryInfo(message.categoryInfo)`. This makes the popup update live while open as Auto-detection finishes.
 
-### 5. Tests
+### 7. Tests
 
-- `content/__tests__/subtitleCoordinator.test.ts`: update the `detectLLMCategoryIfNeeded` mock signature to match the new params.
-- `content/utils/__tests__/pageContext.test.ts` (new or extended): unit-test the refactored function — early-return when manual override is set, early-return when `existingAutoDetected` is set, calls `onDetected` with the LLM category in both blocking and async modes, ignores `'Other'`.
+- `content/categoryState.test.ts` (new): unit-test `setAutoDetectedCategory`/`getAutoDetectedCategory`, `buildCategoryInfo` priority chain, `broadcastCategoryInfo` sends the right message.
+- `content/utils/__tests__/pageContext.test.ts` (extended): unit-test the refactored `detectLLMCategoryIfNeeded` — early-return when manual override is set, early-return when `existingAutoDetected` is set, calls `onDetected` with the LLM category in both blocking and async modes, ignores `'Other'`.
+- `content/__tests__/subtitleCoordinator.test.ts`: the existing `(...args) => mock(...)` mock already accepts any arity, so no signature change is needed — but verify tests still pass.
 - Manual smoke test: open a known-domain page (e.g. a Wikipedia article), enable Page Category Detection, open popup, confirm `Auto (Encyclopedia)` appears and updates live without opening the dropdown.
 
 ## Behavior matrix
@@ -124,12 +146,14 @@ Add to the `ExtensionMessage` union.
 
 ## Files touched
 
-- `content/utils/pageContext.ts` (refactor)
-- `entrypoints/content.ts` (new state, broadcast, getPageCategory tweak)
+- `content/categoryState.ts` (new — shared singleton)
+- `content/utils/pageContext.ts` (refactor `detectLLMCategoryIfNeeded`)
+- `entrypoints/content.ts` (use shared state, getPageCategory, broadcast)
+- `content/subtitleCoordinator.ts` (use shared state + new signature)
 - `types/messages.ts` (new message type)
 - `entrypoints/popup/App.tsx` (display + listener)
-- `content/__tests__/subtitleCoordinator.test.ts` (mock signature)
-- `content/utils/__tests__/pageContext.test.ts` (new unit tests)
+- `content/categoryState.test.ts` (new unit tests)
+- `content/utils/__tests__/pageContext.test.ts` (new unit tests for refactored fn)
 
 ## Risk
 
