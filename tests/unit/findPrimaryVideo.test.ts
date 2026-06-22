@@ -22,6 +22,10 @@ describe('findPrimaryVideo', () => {
     document.body.appendChild(small);
     document.body.appendChild(large);
 
+    // findPrimaryVideo filters by readyState >= 1 (HAVE_METADATA)
+    Object.defineProperty(small, 'readyState', { value: 1, configurable: true });
+    Object.defineProperty(large, 'readyState', { value: 1, configurable: true });
+
     small.getBoundingClientRect = () =>
       ({ width: 100, height: 100, left: 0, top: 0, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
     large.getBoundingClientRect = () =>

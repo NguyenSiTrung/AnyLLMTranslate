@@ -1,25 +1,25 @@
 {
-  "lastRefresh": "2026-06-22T16:28:00+07:00",
+  "lastRefresh": "2026-06-22T17:45:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (PDF auto-detect sync)",
-    "product.md: PDF Translation features — added auto-detection (document.contentType), auto-open modes (off/prompt/auto) with safeguards, popup getPageContentType wiring",
-    "product.md: Implementation Status — new 'PDF Auto-Detect & Auto-Open' entry (shipped on master via superpowers workflow, commits e24561f..1ae4b7c)",
-    "product.md: Current State metrics 1143/91 ~3.75MB -> 1182/95 ~3.58MB",
-    "patterns.md: New 'PDF Auto-Detect & Auto-Open (2026-06-22)' section (6 patterns: document.contentType detection, pure decision function extraction, infinite-loop guard, provider readiness gate, per-tab session dedupe, shared openPdfViewer helper)",
-    "patterns.md: Refresh marker + health footer updated",
+    "product.md: Refresh marker bumped (subtitle-deep-analysis-fixes sync)",
+    "product.md: Implementation Status — new 'Subtitle Deep Analysis Fixes' entry (50 findings across 9 phases, 43 new tests)",
+    "product.md: Current State metrics 1182/95 -> 1214/95, tracks 46 -> 47",
+    "patterns.md: Subtitle Deep Analysis Fixes section already present from prior refresh — no new patterns needed",
+    "patterns.md: Refresh marker + health footer updated (1213/99 -> 1214/95, build ~3.76MB -> ~3.58MB)",
     "tech-stack.md: No drift vs package.json (unchanged since last refresh)",
     "workflow.md: No drift (no CI/tooling changes)",
-    "tracks.md: No change (PDF auto-detect shipped on master without a conductor track)",
-    "beads: No drift (bd list --status open empty)",
+    "tracks.md: No change (subtitle-deep-analysis-fixes already listed as archived)",
+    "beads: No drift (no bd CLI / not enabled)",
+    "test-fix: findPrimaryVideo.test.ts — 'returns the largest video' test was failing because findPrimaryVideo filters by readyState >= 1 (HAVE_METADATA) but test videos had default readyState 0. Fixed by setting readyState via Object.defineProperty.",
     "backups: product.md.bak, patterns.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1182,
+    "tests": 1214,
     "testFiles": 95,
-    "buildSize": "3.58 MB",
+    "buildSize": "~3.58 MB",
     "lintErrors": 0,
-    "archivedTracks": 46,
+    "archivedTracks": 47,
     "activeTracks": 0
   },
   "beadsDrift": {

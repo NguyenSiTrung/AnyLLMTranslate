@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-22 all (PDF auto-detect sync) -->
+<!-- conductor-refresh: 2026-06-22 all (subtitle-deep-analysis-fixes sync) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -446,8 +446,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Shared `openPdfViewer()` for all entry points:** Background handler, popup button, and entrypoint redirect all call one helper (`services/background.ts → openPdfViewer`) rather than each constructing `chrome.tabs.create` / `tabs.update` calls. New entry points (context menu, future auto-modes) reuse it for consistent new-tab vs same-tab behavior. (from: PDF auto-detect work, shipped on master 2026-06-22)
 
 ---
-Last refreshed: 2026-06-22T17:30:00+07:00
-Codebase health: 1213 tests passing across 99 files, build ~3.76MB, 0 lint errors, 47 tracks archived, 0 active tracks
+Last refreshed: 2026-06-22T17:45:00+07:00
+Codebase health: 1214 tests passing across 95 files, build ~3.58MB, 0 lint errors, 47 tracks archived, 0 active tracks
 
 ## Subtitle Deep Analysis Fixes (2026-06-22)
 - **`SUBTITLE_CONFIG` bridge message for MAIN↔ISOLATED config sync:** MAIN world interceptors can't access `chrome.storage`. Coordinator sends a `SUBTITLE_CONFIG` postMessage with `translationTimeoutMs` at startup; inject.content script listens and calls `interceptor.setTimeout()`. Default 30s if no config received. (from: subtitle-deep-analysis-fixes_20260622, archived 2026-06-22)
