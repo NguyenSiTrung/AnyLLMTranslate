@@ -37,7 +37,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### Video Subtitle Translation
 - XHR/Fetch interception via MAIN world script injection
-- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning
+- Platform handlers: YouTube, Udemy, Coursera, Netflix, LinkedIn Learning, HBO Max
+- **DOM cue scraping** for platforms that render captions into the DOM (HBO Max) — no VTT URL or native TextTrack; MutationObserver on stable ancestor samples `video.currentTime` to derive cue timing
+- **Auto font size mode** for subtitles — scales font size proportionally to video height (clamped to min/max), recalculated on video resize via ResizeObserver
 - WebVTT parser and bilingual builder
 - Custom subtitle overlay (fallback renderer)
 - Drag-and-drop subtitle repositioning with session persistence
@@ -45,7 +47,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### PDF Translation
 - Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
-- Two right-pane modes: **Layout** (elastic overlay preserving original canvas with auto-height translated boxes) and **Text** (default reading mode, vertical flow)
+- **Two view modes** (orthogonal, persisted to `chrome.storage.local` under `anyllm-pdf-view-mode`): **Split** (original canvas left, translation right) and **Translation-only** (full-width reading flow, left pane hidden; canvas virtualization observer re-targets to the right pane in Layout sub-mode)
+- **Two right-pane sub-modes**: **Layout** (elastic overlay preserving original canvas with auto-height translated boxes) and **Text** (default reading mode, vertical flow)
+- **Math & figure/table skipping** — pure-math paragraphs (LaTeX blocks, `$$…$$`, high Unicode-symbol-ratio) and figure/chart/table text are kept verbatim and never sent to the LLM; an optional batched LLM classification pass (`CLASSIFY_PDF_PARAGRAPHS`) labels non-math paragraphs as `prose` or `figure`. Inline math inside prose is preserved via a prompt rule. Classification failures fail-open to translate-all (never loses content).
 - Progressive IntersectionObserver-based translation (viewport-only, no token storms)
 - Synchronized bidirectional scrolling between original and translated panes (page-block interpolation in Layout mode, ratio-based in Text mode)
 - Symmetrical layout widths (constrained and centered to match original page dimensions)
@@ -133,10 +137,15 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **PDF Viewer Performance Overhaul** (Archived 2026-06-12): Canvas virtualization via `useVisiblePages` hook (off-screen pages use lightweight placeholders), progressive page proxy streaming in batches of 3, `createSemaphore()` factory for isolated concurrency (PDF max 2 vs page/subtitle max 3), bidirectional scroll sync with `isUpdatingRef` guard, observer root fix (scroll pane not content wrapper), duplicate translation elimination. 30 new tests added (947 total).
 - **PDF Layout and Scroll Synchronization** (Archived 2026-06-12): Constrained translation slot widths symmetrically to match original page dimensions, moved the translation progress indicator pill into the persistent header, and simplified scroll synchronization to perform direct 1-to-1 mirroring when page heights match.
 - **PDF Elastic Overlay Layout Mode** (Archived 2026-06-16): Replaced rigid 1:1 bounding-box Layout mode with an Elastic Overlay that preserves the original page canvas (images/tables/blocks) while overlaying translated text boxes at their original positions with `height: auto` (no clipping, micro-fonts, or popovers). White background masks only original text; uncovered canvas areas stay visible. Added overflow spacer to reserve vertical space when translations exceed canvas height, and page-block interpolation scroll sync (aligns at page boundaries, interpolates within each page).
+- **PDF Math/Figure Skipping** (2026-06-17, incremental, merged `feat/pdf-skip-math-figures`): Pure-math paragraph detection (`pdfContentDetect.ts` — LaTeX block delimiters, standalone inline LaTeX, Unicode-symbol-ratio ≥ 0.4) kept verbatim; figure/chart/table text identified via a batched LLM classification pass (`CLASSIFY_PDF_PARAGRAPHS` message, `prose` | `figure` labels, fail-open on error). Inline math inside prose preserved via prompt rule. Classification runs inside `translateParagraphs()` for atomic failure handling, atomic retry, and unified `source→translated` cache (skipped paragraphs cache `source→source`). Bug 8vg later propagated paragraph `kind` end-to-end (`TranslationResultItem.kind` → `paragraphKinds`) so math/figures render as transparent origHeight-reserving spacers in the reflow (canvas formulas stay visible, prose boxes never overlap them).
+- **PDF Heading Truncation & Rotated Text Fixes** (2026-06-18, incremental, commit `8b1552a`): Fixed Vietnamese heading overlap in the translation pane and corrected rotated-text overlay rendering.
+- **PDF Split/Translation-only View Toggle** (2026-06-18, merged `feat/pdf-translation-only-view`): New orthogonal **View mode** segmented control (`Split` | `Translation-only`) in the PDF viewer header, alongside the existing Layout/Text sub-mode toggle. `PdfViewMode` type persisted to its own `chrome.storage.local` key (`anyllm-pdf-view-mode`, default `split`). `ViewerLayout` renders single-column in translation-only mode; `useVisiblePages` container ref re-targets to the right pane so Layout-overlay canvases still virtualize. Scroll sync is a no-op when the left pane is unmounted (`useSynchronizedScroll` guards on null refs); re-alignment re-engages via page-block interpolation on Split remount.
+- **PDF Translation Download** (Archived 2026-06-18, merged `feat/pdf-download_20260618`): Export translated PDFs via a 3-stage pipeline: (1) `translateAllPages` force-translates remaining pages with per-page error isolation and AbortSignal cancellation, (2) `pdfFontManager` downloads/caches Noto Sans TTF from Google Fonts CDN in IndexedDB, (3) `translatedPdfGenerator` creates a new PDF via pdf-lib with original pages as backgrounds and translated text overlaid (white masking rectangles, clamped font sizes, greedy word wrap, math/figure skip). Orchestrated by `usePdfDownload` hook with `DownloadProgressModal` multi-stage progress UI. 43 new tests added.
+- **HBO Max DOM Cue-Scraping Subtitles** (Archived 2026-06-19, shipped via superpowers workflow, commits `007d372`...`491f59f`): Added bilingual subtitle translation for HBO Max (`max.com` / `play.hbomax.com`) — a DRM/MSE platform that renders captions into the DOM with no VTT URL or native TextTrack. New `DomCueSource` contract (optional `getDomCueSource?()` on `SubtitleHandler`) and `domCueSource.ts` scraper (MutationObserver on stable ancestor, re-resolves cue selector on each fire, samples `video.currentTime` for cue timing, deferred-attach for late-mounting SPA player, rolling buffer reset on track switch). Coordinator DOM branch hides native captions via `visibility: hidden !important` and feeds cues into the existing overlay/translation pipeline. Auto-activate preconditioned on visible Max captions + language match. Also added auto font size mode for subtitles (proportional to video height, ResizeObserver-driven) and fullscreen overlay fixes (reparent into player container, Popover API for Top Layer). 3 new test files added.
 
 ### Current State
-- 966 tests passing across 76 files. Build passing (`wxt build` ✅, ~2.6 MB). 0 lint errors.
-- **No active tracks.** All 42 tracks completed and archived.
+- 1085 tests passing across 88 files. Build passing (`wxt build` ✅, ~3.74 MB). 0 lint errors.
+- **No active tracks.** All 44 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
