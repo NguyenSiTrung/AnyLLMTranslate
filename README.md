@@ -50,6 +50,13 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Keyboard shortcuts** (global via `chrome.commands` + page-level via event listeners)
 - **Context menu integration** — right-click → Translate Page / Translate Selection / Translate Section / Translate Subtitles
 
+### 📄 PDF Translation
+
+- **Bilingual PDF viewer** — opens PDFs in a bundled React app that renders each page on canvas and shows translations side-by-side; download a translated PDF with embedded text via `pdf-lib` + `@pdf-lib/fontkit`
+- **PDF auto-detection** — detects when a tab is rendering a PDF via `document.contentType === 'application/pdf'`, which catches extensionless URLs (e.g. `https://arxiv.org/pdf/2606.20543`) that URL-only heuristics miss
+- **Auto-open translator** — optional setting (`Options → Advanced → PDF Translator`) to open the translator automatically when a PDF tab loads. Off by default; supports per-site opt-out and new-tab vs same-tab open modes
+- **Math/figure-aware extraction** — LLM classifies paragraphs as prose vs figure/table so equations and captions are preserved untranslated
+
 ### ⚙️ Settings & Advanced
 
 - **Any OpenAI-compatible API** — OpenAI, Ollama, LM Studio, Groq, Together AI, Gemini, etc.
@@ -298,6 +305,41 @@ AnyLLMTranslate includes **16 built-in themes + 1 custom theme** that apply via 
 All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class).
 
 The **Custom** theme allows user-defined styling via the theme editor in Options → Themes, with live preview powered by CSS custom properties (`--anyllm-custom-*`).
+
+---
+
+## 📄 PDF Translation
+
+PDF translation runs in a bundled React page at `chrome-extension://<id>/pdf-viewer.html?file=<url>`. The viewer renders each page to canvas (left pane) and shows translations side-by-side (right pane); translated text can be downloaded as a new PDF with embedded text.
+
+### Opening the translator
+
+There are three ways to open the translator for a PDF, all of which funnel through one shared background helper:
+
+1. **Popup button** — click the extension icon on a PDF tab and press **Open current PDF**. The popup queries the content script for `document.contentType`, so this works even for extensionless URLs like `https://arxiv.org/pdf/2606.20543`.
+2. **Context menu** — right-click a `.pdf` link or a PDF page → **Open in PDF Translator**.
+3. **Auto-open** — see below.
+
+### Auto-opening the translator
+
+Enable **Options → Advanced → PDF Translator → Auto-open mode** to detect PDF tabs automatically and open the translator without a click. This also lights up the popup button for extensionless PDF URLs the URL-only heuristic misses.
+
+- **Off** — manual only (default).
+- **Prompt** — *(planned)* shows an in-page banner button on the native viewer.
+- **Auto** — opens the translator immediately when a PDF tab loads.
+
+Safeguards:
+
+- **Infinite-loop guard** — the bundled viewer loads a PDF too; detection is suppressed on `chrome-extension://` origins.
+- **Provider readiness gate** — nothing auto-opens if the LLM provider is not configured and tested.
+- **Per-tab dedupe** — each tab+document auto-opens at most once per browser session (state in `chrome.storage.session`, survives service-worker eviction).
+- **Per-site opt-out** — **Never auto-open these sites** (comma-separated hostnames) overrides the global setting.
+- **Open mode** — **New tab** keeps the native viewer; **Same tab** replaces it in place.
+
+### Limitations
+
+- `file://` PDFs require **Allow access to file URLs** toggled on in `chrome://extensions` (content scripts cannot run on `file://` otherwise).
+- Embedded PDFs (`<embed type="application/pdf">` inside an HTML host page) are not detected — only standalone PDF tabs.
 
 ---
 

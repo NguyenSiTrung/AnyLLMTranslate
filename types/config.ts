@@ -144,6 +144,27 @@ export interface CustomThemeConfig {
   fontSize: 'smaller' | 'same' | 'larger';
 }
 
+/** PDF auto-open trigger modes */
+export type PdfAutoOpenMode = 'off' | 'prompt' | 'auto';
+
+/** How the PDF viewer opens relative to the source tab */
+export type PdfOpenMode = 'new-tab' | 'same-tab';
+
+/** PDF translator settings */
+export interface PdfSettings {
+  /** When to auto-open the bundled viewer after detecting a PDF tab.
+   *  - 'off':    never auto-open (default; user must click popup/context menu)
+   *  - 'prompt': show an in-page banner button; one click opens the viewer
+   *  - 'auto':   open the viewer automatically
+   */
+  autoOpen: PdfAutoOpenMode;
+  /** Whether to open in a new tab (keeps the native viewer) or replace the
+   *  current tab (cleaner, but loses the native-viewer tab). */
+  openMode: PdfOpenMode;
+  /** Hostnames for which auto-open is suppressed even when autoOpen !== 'off'. */
+  neverAutoOpenSites: string[];
+}
+
 /** Page context extracted for context-aware translation */
 export interface PageContext {
   title: string;
@@ -220,6 +241,8 @@ export interface ExtensionSettings {
   llmCategoryDetectionMode: 'async' | 'blocking';
   /** Enable smart excludes — automatically skip structural/navigation elements from translation */
   enableSmartExcludes: boolean;
+  /** PDF translator auto-open behavior */
+  pdfSettings: PdfSettings;
 }
 
 /** Provider preset definitions */
@@ -259,6 +282,13 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   tapCount: 3,
   timeWindowMs: 500,
   targetLanguage: 'en',
+};
+
+/** Default PDF translator settings — auto-open is OFF by default. */
+export const DEFAULT_PDF_SETTINGS: PdfSettings = {
+  autoOpen: 'off',
+  openMode: 'new-tab',
+  neverAutoOpenSites: [],
 };
 
 /** Default custom theme configuration */
@@ -350,6 +380,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableLLMPageCategoryDetection: false,
   llmCategoryDetectionMode: 'async',
   enableSmartExcludes: true,
+  pdfSettings: { ...DEFAULT_PDF_SETTINGS },
 };
 
 /** All available provider presets */

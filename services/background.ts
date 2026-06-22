@@ -12,6 +12,7 @@ import type {
   DetectPageCategoryLlmMessage,
   ClassifyPdfParagraphsMessage,
   ClassifyPdfParagraphsResult,
+  PdfDetectedMessage,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
@@ -25,6 +26,7 @@ import { formatGlossary } from '@/lib/glossary';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
 import type { ProviderConfig } from '@/types/config';
+import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
 
 /** Priority queue state for active translation sessions */
 interface TranslationSession {
@@ -741,6 +743,72 @@ function handleStatusUpdate(
   }
 }
 
+/** Storage key for the set of (tabId::url) keys already auto-opened this session. */
+const PDF_AUTOOPEN_SESSION_KEY = 'pdf-autoopen-opened';
+
+/** Open the bundled PDF viewer for a URL. Shared by popup, context menu,
+ *  and auto-trigger so URL validation lives in one place.
+ *  Returns the viewer URL that was navigated to (for logging/tests). */
+export function openPdfViewer(
+  url: string,
+  mode: 'new-tab' | 'same-tab' = 'new-tab',
+  sourceTabId?: number,
+): string {
+  const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(url)}`);
+  if (mode === 'same-tab' && sourceTabId !== undefined) {
+    chrome.tabs.update(sourceTabId, { url: viewerUrl });
+  } else {
+    chrome.tabs.create({ url: viewerUrl });
+  }
+  return viewerUrl;
+}
+
+/** Read the set of already-auto-opened session keys from storage.session. */
+async function readOpenedKeys(): Promise<Set<string>> {
+  try {
+    const result = await chrome.storage.session.get(PDF_AUTOOPEN_SESSION_KEY);
+    const arr = (result[PDF_AUTOOPEN_SESSION_KEY] as string[] | undefined) ?? [];
+    return new Set(arr);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Persist an updated set of opened keys. */
+async function writeOpenedKeys(keys: Set<string>): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [PDF_AUTOOPEN_SESSION_KEY]: Array.from(keys) });
+  } catch {
+    // storage.session unavailable (older browser) — best-effort, dedupe degrades
+    // to per-SW-instance.
+  }
+}
+
+/** Handle a PDF_DETECTED message: decide + open + dedupe. */
+async function handlePdfDetected(
+  message: PdfDetectedMessage,
+  sender: chrome.runtime.MessageSender,
+): Promise<{ opened: boolean }> {
+  const tabId = message.tabId ?? sender.tab?.id;
+  if (tabId === undefined) return { opened: false };
+  const settings = await loadSettings();
+  const viewerOrigin = chrome.runtime.getURL('');
+  const sessionKey = buildSessionKey(tabId, message.url);
+  const openedKeys = await readOpenedKeys();
+  const decision = shouldAutoOpenPdf({
+    url: message.url,
+    viewerOrigin,
+    settings,
+    sessionKey,
+    openedSessionKeys: openedKeys,
+  });
+  if (!decision.open) return { opened: false };
+  openedKeys.add(sessionKey);
+  await writeOpenedKeys(openedKeys);
+  openPdfViewer(message.url, settings.pdfSettings?.openMode ?? 'new-tab', tabId);
+  return { opened: true };
+}
+
 export function handleMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender,
@@ -817,18 +885,20 @@ export function handleMessage(
     case 'OPEN_PDF_VIEWER': {
       // Validate the URL before forwarding to the viewer — file:// links and
       // HTTP(S) links both supported, everything else rejected.
+      const url = (message as { url: string }).url;
       try {
-        const parsed = new URL(message.url);
+        const parsed = new URL(url);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {
           return Promise.resolve({ success: false, error: 'Unsupported protocol' });
         }
       } catch {
         return Promise.resolve({ success: false, error: 'Invalid URL' });
       }
-      const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(message.url)}`);
-      chrome.tabs.create({ url: viewerUrl });
+      openPdfViewer(url);
       return Promise.resolve({ success: true });
     }
+    case 'PDF_DETECTED':
+      return handlePdfDetected(message as PdfDetectedMessage, _sender).then(() => ({ success: true }));
     default:
       return undefined;
   }

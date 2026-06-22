@@ -142,5 +142,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableLLMPageCategoryDetection: state.enableLLMPageCategoryDetection,
     llmCategoryDetectionMode: state.llmCategoryDetectionMode,
     enableSmartExcludes: state.enableSmartExcludes,
+    pdfSettings: state.pdfSettings,
   };
 }

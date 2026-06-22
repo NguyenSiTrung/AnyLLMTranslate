@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   DEFAULT_SUBTITLE_SETTINGS,
+  DEFAULT_PDF_SETTINGS,
   PROVIDER_PRESETS,
 } from '@/types/config';
 import type {
@@ -211,6 +212,20 @@ describe('config types', () => {
       for (const key of requiredKeys) {
         expect(settings).toHaveProperty(key);
       }
+    });
+  });
+
+  describe('DEFAULT_PDF_SETTINGS', () => {
+    it('has autoOpen off by default', () => {
+      expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
+      expect(DEFAULT_PDF_SETTINGS.openMode).toBe('new-tab');
+      expect(DEFAULT_PDF_SETTINGS.neverAutoOpenSites).toEqual([]);
+    });
+
+    it('is embedded in DEFAULT_SETTINGS', () => {
+      expect(DEFAULT_SETTINGS.pdfSettings).toBeDefined();
+      expect(DEFAULT_SETTINGS.pdfSettings.autoOpen).toBe('off');
+      expect(DEFAULT_SETTINGS.pdfSettings.openMode).toBe('new-tab');
     });
   });
 

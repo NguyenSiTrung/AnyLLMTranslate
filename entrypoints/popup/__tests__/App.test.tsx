@@ -126,3 +126,65 @@ describe('popup unsupported pages', () => {
     expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
   });
 });
+
+describe('popup PDF detection', () => {
+  // Configure a connected provider so the translate action renders (the popup
+  // gates most chrome.* calls behind provider readiness).
+  const connectedSettings = {
+    ...DEFAULT_SETTINGS,
+    provider: {
+      ...DEFAULT_SETTINGS.provider,
+      baseUrl: 'http://localhost:11434/v1',
+      model: 'gemma3:4b',
+      connectionStatus: 'success' as const,
+    },
+    onboarding: { completed: true, skipped: false, lastStep: 'done' as const },
+  };
+
+  it('lights up "Open current PDF" when content script reports isPdf=true (arxiv extensionless URL)', async () => {
+    storedSettings = connectedSettings;
+    queryTabs.mockResolvedValue([{ id: 7, url: 'https://arxiv.org/pdf/2606.20543' }]);
+    sendMessage.mockImplementation(async (_tabIdOrMsg: unknown, msg?: { action: string }) => {
+      // tabs.sendMessage(tabId, msg) is called with two args; runtime.sendMessage(msg) with one.
+      const action = (msg ?? (_tabIdOrMsg as { action: string }))?.action;
+      if (action === 'getPageContentType') return { isPdf: true };
+      if (action === 'getStatus') return { status: 'idle', translatedCount: 0, totalCount: 0 };
+      if (action === 'getPageCategory') return null;
+      return undefined;
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText(/open current pdf/i)).toBeInTheDocument();
+  });
+
+  it('does NOT show "Open current PDF" for an HTML tab', async () => {
+    storedSettings = connectedSettings;
+    queryTabs.mockResolvedValue([{ id: 7, url: 'https://example.com/article' }]);
+    sendMessage.mockImplementation(async (_tabIdOrMsg: unknown, msg?: { action: string }) => {
+      const action = (msg ?? (_tabIdOrMsg as { action: string }))?.action;
+      if (action === 'getPageContentType') return { isPdf: false };
+      if (action === 'getStatus') return { status: 'idle', translatedCount: 0, totalCount: 0 };
+      return undefined;
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/open current pdf/i)).not.toBeInTheDocument();
+    });
+    // The URL-paste affordance should be present instead.
+    expect(screen.getByText(/open url/i)).toBeInTheDocument();
+  });
+
+  it('falls back to URL heuristic when content script is unreachable', async () => {
+    storedSettings = connectedSettings;
+    // Classic .pdf suffix → URL regex fallback should fire.
+    queryTabs.mockResolvedValue([{ id: 7, url: 'https://example.com/paper.pdf' }]);
+    sendMessage.mockRejectedValue(new Error('content script not loaded'));
+
+    render(<App />);
+
+    expect(await screen.findByText(/open current pdf/i)).toBeInTheDocument();
+  });
+});
