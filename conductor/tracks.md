@@ -56,11 +56,12 @@ This file tracks all major tracks for the project.
 - ✅ **HBO Max DOM Cue-Scraping Subtitles** (`hbomax-dom-cue-subtitles_20260619`) — Archived 2026-06-19. Implemented via superpowers workflow (retroactively archived). DOM cue scraping for DRM/MSE platform with no VTT URL; new `DomCueSource` contract + MutationObserver scraper. [View](./conductor/archive/hbomax-dom-cue-subtitles_20260619/)
 - ✅ **Subtitle Supported Sites Display & Per-Site Toggle** (`subtitle-site-toggles_20260619`) — Archived 2026-06-19. Settings card listing 5 subtitle platforms with per-site enable/disable toggles; runtime coordinator filtering for disabled sites. [View](./conductor/archive/subtitle-site-toggles_20260619/)
 - ✅ **HBO Max Subtitle Hardening & UX Fixes** (`hbomax-subtitle-hardening_20260622`) — Archived 2026-06-22. Manual DOM activation (Alt+S), track-change bridge sync, debounced track discovery, shared `findPrimaryVideo`, Max context menu hosts. [View](./conductor/archive/hbomax-subtitle-hardening_20260622/)
+- ✅ **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Archived 2026-06-22. Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis across 9 phases. Parser fixes, interceptor hardening, DOM cue source improvements, chunk delta delivery, coordinator overhaul, overlay accessibility, 43 new tests. [View](./conductor/archive/subtitle-deep-analysis-fixes_20260622/)
 
 ---
 
 ## Active Tracks
 
-- [x] **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis. Priority: High. [View](./conductor/tracks/subtitle-deep-analysis-fixes_20260622/)
+(no active tracks)
 
 ---
