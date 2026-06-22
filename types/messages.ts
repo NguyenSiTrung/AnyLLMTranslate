@@ -43,7 +43,8 @@ export type MessageAction =
   | 'DETECT_PAGE_CATEGORY_LLM'
   | 'CLASSIFY_PDF_PARAGRAPHS'
   | 'CLEAR_CACHE'
-  | 'OPEN_PDF_VIEWER';
+  | 'OPEN_PDF_VIEWER'
+  | 'PDF_DETECTED';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -194,6 +195,16 @@ export interface OpenPdfViewerMessage {
   url: string;
 }
 
+/** Notification from a content script that the active document is a PDF.
+ *  Sent when `document.contentType === 'application/pdf'` on a non-viewer tab. */
+export interface PdfDetectedMessage {
+  action: 'PDF_DETECTED';
+  /** The PDF document's URL (the native viewer's location.href). */
+  url: string;
+  /** Sending tab id (mirrors sender.tab.id; included for explicit routing). */
+  tabId?: number;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -219,7 +230,8 @@ export type ExtensionMessage =
   | DetectPageCategoryLlmMessage
   | ClassifyPdfParagraphsMessage
   | ClearCacheMessage
-  | OpenPdfViewerMessage;
+  | OpenPdfViewerMessage
+  | PdfDetectedMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {
