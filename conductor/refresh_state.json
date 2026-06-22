@@ -1,28 +1,33 @@
 {
-  "lastRefresh": "2026-06-19T13:00:00+07:00",
+  "lastRefresh": "2026-06-22T13:40:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Added HBO Max to platform handlers list (YouTube, Udemy, Coursera, Netflix, LinkedIn Learning, HBO Max)",
-    "product.md: Added DOM cue scraping and auto font size mode to Video Subtitle Translation feature section",
-    "product.md: Added HBO Max DOM Cue-Scraping Subtitles to Implementation Status (archived 2026-06-19, shipped via superpowers workflow, commits 007d372...491f59f)",
-    "product.md: Updated Current State metrics (1047 → 1085 tests, 85 → 88 files, 2.58 → 3.74 MB, 43 → 44 tracks)",
-    "patterns.md: Added new 'DOM Cue Scraping — Subtitle Translation for DRM Platforms' section (14 patterns: stable-ancestor observation, far-future endTime, deferred-attach, track-change filter, rolling buffer reset, visibility:hidden over display:none, !important for inline overrides, never click Off, precondition on visible captions, preferredSubtitleLanguage as filter, fullscreen reparent, auto font size, optional interface methods, dedicated bridge message)",
-    "patterns.md: Updated Last refreshed footer with current codebase health metrics",
-    "tracks.md: Added hbomax-dom-cue-subtitles_20260619 archived track entry (implemented via superpowers, retroactively archived)",
-    "archive: Created conductor/archive/hbomax-dom-cue-subtitles_20260619/ with metadata.json, spec.md, plan.md, learnings.md, implement_state.json",
-    "beads: No drift — bd ready shows no open issues, no orphaned tasks, no active tracks",
-    "learnings: No new cross-track patterns to elevate (only new track since last refresh is HBO Max, already captured in patterns.md)",
-    "product.md.bak2 / patterns.md.bak2 / tracks.md.bak2: backups created before edits"
+    "product.md: Per-site subtitle toggles in Video Subtitle Translation features",
+    "product.md: Implementation entries for subtitle-site-toggles_20260619 and hbomax-subtitle-hardening_20260622",
+    "product.md: Current State metrics 1085/88 -> 1143/91 tests/files, build ~3.75 MB, 46 archived tracks",
+    "patterns.md: HBO Max Subtitle Hardening section (4 patterns)",
+    "patterns.md: Subtitle Per-Site Toggles section (3 patterns)",
+    "patterns.md: Updated health footer",
+    "tracks.md: No change (already lists both new archives)",
+    "tech-stack.md: No drift vs package.json",
+    "beads: DRIFT - epics ALT-7qw and ALT-lko still open while tracks archived",
+    "backups: product.md.bak, patterns.md.bak"
   ],
   "codebaseHealth": {
-    "tests": 1085,
-    "testFiles": 88,
-    "buildSize": "3.74 MB",
+    "tests": 1143,
+    "testFiles": 91,
+    "buildSize": "3.75 MB",
     "lintErrors": 0,
-    "archivedTracks": 44,
+    "archivedTracks": 46,
     "activeTracks": 0
   },
-  "newTrack": {
-    "hbomax-dom-cue-subtitles_20260619": "HBO Max bilingual subtitle translation via DOM cue scraping. DRM/MSE platform with no VTT URL — new DomCueSource contract + MutationObserver scraper. Implemented via superpowers workflow, retroactively archived into conductor. 16 commits from design spec to fullscreen overlay fix."
+  "beadsDrift": {
+    "openEpics": [
+      "ALT-7qw",
+      "ALT-lko"
+    ],
+    "openTaskCount": 13,
+    "conductorStatus": "both tracks archived in tracks.md",
+    "recommendedAction": "Close ALT-7qw and ALT-lko subtrees in Beads to match conductor"
   }
 }

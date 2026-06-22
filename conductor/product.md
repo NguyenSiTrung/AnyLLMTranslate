@@ -1,3 +1,4 @@
+<!-- conductor-refresh: 2026-06-22 all -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -44,6 +45,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Custom subtitle overlay (fallback renderer)
 - Drag-and-drop subtitle repositioning with session persistence
 - Proactive subtitle track discovery (HTML5 TextTrack + platform handlers)
+- **Per-site subtitle toggles** — Settings card lists supported subtitle platforms with enable/disable switches; content-script coordinator skips the pipeline when a site is disabled (`disabledSubtitleSites`)
 
 ### PDF Translation
 - Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
@@ -142,10 +144,12 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **PDF Split/Translation-only View Toggle** (2026-06-18, merged `feat/pdf-translation-only-view`): New orthogonal **View mode** segmented control (`Split` | `Translation-only`) in the PDF viewer header, alongside the existing Layout/Text sub-mode toggle. `PdfViewMode` type persisted to its own `chrome.storage.local` key (`anyllm-pdf-view-mode`, default `split`). `ViewerLayout` renders single-column in translation-only mode; `useVisiblePages` container ref re-targets to the right pane so Layout-overlay canvases still virtualize. Scroll sync is a no-op when the left pane is unmounted (`useSynchronizedScroll` guards on null refs); re-alignment re-engages via page-block interpolation on Split remount.
 - **PDF Translation Download** (Archived 2026-06-18, merged `feat/pdf-download_20260618`): Export translated PDFs via a 3-stage pipeline: (1) `translateAllPages` force-translates remaining pages with per-page error isolation and AbortSignal cancellation, (2) `pdfFontManager` downloads/caches Noto Sans TTF from Google Fonts CDN in IndexedDB, (3) `translatedPdfGenerator` creates a new PDF via pdf-lib with original pages as backgrounds and translated text overlaid (white masking rectangles, clamped font sizes, greedy word wrap, math/figure skip). Orchestrated by `usePdfDownload` hook with `DownloadProgressModal` multi-stage progress UI. 43 new tests added.
 - **HBO Max DOM Cue-Scraping Subtitles** (Archived 2026-06-19, shipped via superpowers workflow, commits `007d372`...`491f59f`): Added bilingual subtitle translation for HBO Max (`max.com` / `play.hbomax.com`) — a DRM/MSE platform that renders captions into the DOM with no VTT URL or native TextTrack. New `DomCueSource` contract (optional `getDomCueSource?()` on `SubtitleHandler`) and `domCueSource.ts` scraper (MutationObserver on stable ancestor, re-resolves cue selector on each fire, samples `video.currentTime` for cue timing, deferred-attach for late-mounting SPA player, rolling buffer reset on track switch). Coordinator DOM branch hides native captions via `visibility: hidden !important` and feeds cues into the existing overlay/translation pipeline. Auto-activate preconditioned on visible Max captions + language match. Also added auto font size mode for subtitles (proportional to video height, ResizeObserver-driven) and fullscreen overlay fixes (reparent into player container, Popover API for Top Layer). 3 new test files added.
+- **Subtitle Supported Sites Display & Per-Site Toggle** (Archived 2026-06-19): Settings **Supported Sites** card in Subtitles section with per-platform enable/disable toggles (`disabledSubtitleSites` in `SubtitleSettings`). Content-script coordinator gates on `isSiteDisabled()` so disabled platforms skip interception and translation entirely. `lib/subtitleSites.ts` centralizes the supported platform list.
+- **HBO Max Subtitle Hardening & UX Fixes** (Archived 2026-06-22): Manual DOM activation via **Alt+S** (`manualActivateSubtitles` / `tryAutoActivateForDom({ manual: true })`), `SUBTITLE_DOM_TRACK_CHANGED` bridge sync on track switch, debounced DOM track discovery for popup track list, shared `findPrimaryVideo` for consistent video selection, Max context-menu host coverage, Spanish `es` language map alignment.
 
 ### Current State
-- 1085 tests passing across 88 files. Build passing (`wxt build` ✅, ~3.74 MB). 0 lint errors.
-- **No active tracks.** All 44 tracks completed and archived.
+- 1143 tests passing across 91 files. Build passing (`wxt build` ✅, ~3.75 MB). 0 lint errors.
+- **No active tracks.** All 46 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 

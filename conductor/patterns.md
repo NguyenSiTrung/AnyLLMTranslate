@@ -1,3 +1,4 @@
+<!-- conductor-refresh: 2026-06-22 all -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -425,6 +426,17 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Optional interface methods for new cue source paradigms:** `getDomCueSource?()` is optional on `SubtitleHandler` — existing URL-intercepting handlers (YouTube, Udemy, Coursera, LinkedIn) are unaffected. New platforms opt in by implementing the method. (from: hbomax-dom-cue-subtitles_20260619, archived 2026-06-19)
 - **Dedicated bridge message per concern:** `SUBTITLE_DOM_CUES` is separate from `SUBTITLE_TRACKS_DISCOVERED` — keeps DOM-cue concerns isolated from track discovery. (from: hbomax-dom-cue-subtitles_20260619, archived 2026-06-19)
 
+## HBO Max Subtitle Hardening (2026-06-22)
+- **Manual DOM activation bypasses auto gates:** `tryAutoActivateForDom({ manual: true })` for Alt+S skips auto-activate and preferred-language preconditions when the user explicitly requests translation on DRM DOM-cue platforms. (from: hbomax-subtitle-hardening_20260622, archived 2026-06-22)
+- **DOM track changes need a dedicated bridge callback:** Register `onDomTrackChanged` on the message bridge when the coordinator starts; MAIN-world scrapers emit `SUBTITLE_DOM_TRACK_CHANGED` so the content script resets DOM translation state and refreshes popup track metadata. (from: hbomax-subtitle-hardening_20260622, archived 2026-06-22)
+- **Shared primary video selection:** Use `findPrimaryVideo()` instead of ad-hoc “largest video” heuristics so coordinator, DOM scraper, and overlay agree on the same `<video>` on multi-player pages. (from: hbomax-subtitle-hardening_20260622, archived 2026-06-22)
+- **Coordinator test mocks must include new bridge hooks:** After adding `onDomTrackChanged`, every `messageBridge` mock in coordinator/DOM tests must export the new callback or registration throws at runtime. (from: hbomax-subtitle-hardening_20260622, archived 2026-06-22)
+
+## Subtitle Per-Site Toggles (2026-06-19)
+- **Per-site filtering in ISOLATED world only:** MAIN-world inject cannot read `chrome.storage`; gate subtitle work in the content-script coordinator with `loadSettings()` + `isSiteDisabled(platform)` — never in the inject script. (from: subtitle-site-toggles_20260619, archived 2026-06-19)
+- **Settings type changes require DEFAULT + test mocks:** Adding a field to `SubtitleSettings` (e.g. `disabledSubtitleSites`) requires updating `DEFAULT_SUBTITLE_SETTINGS` and every inline mock in tests (or spread from defaults). (from: subtitle-site-toggles_20260619, archived 2026-06-19)
+- **Toggle UI uses `role="switch"` + `aria-checked`:** The shared `Toggle` component is a button switch, not `<input type="checkbox">` — tests assert `getAttribute('aria-checked')`, not `.checked`. (from: subtitle-site-toggles_20260619, archived 2026-06-19)
+
 ---
-Last refreshed: 2026-06-19T13:00:00+07:00
-Codebase health: 1085 tests passing across 88 files, build ~3.74MB, 0 lint errors, 44 tracks archived, 0 active tracks
+Last refreshed: 2026-06-22T13:40:00+07:00
+Codebase health: 1143 tests passing across 91 files, build ~3.75MB, 0 lint errors, 46 tracks archived, 0 active tracks
