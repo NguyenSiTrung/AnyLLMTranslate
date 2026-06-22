@@ -125,6 +125,26 @@ describe('popup unsupported pages', () => {
     expect(await screen.findByText(/this page can't be translated/i)).toBeInTheDocument();
     expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
   });
+
+  it('shows PDF-translation-active message on the extension pdf-viewer page', async () => {
+    storedSettings = {
+      ...DEFAULT_SETTINGS,
+      provider: {
+        ...DEFAULT_SETTINGS.provider,
+        baseUrl: 'http://localhost:11434/v1',
+        model: 'gemma3:4b',
+        connectionStatus: 'success',
+      },
+      onboarding: { completed: true, skipped: false, lastStep: 'done' },
+    };
+    queryTabs.mockResolvedValue([{ id: 7, url: 'chrome-extension://test/pdf-viewer.html?file=https://example.com/paper.pdf' }]);
+
+    render(<App />);
+
+    expect(await screen.findByText(/pdf translation is active/i)).toBeInTheDocument();
+    expect(screen.queryByText(/this page can't be translated/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /translate page/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('popup PDF detection', () => {

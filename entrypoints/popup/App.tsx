@@ -73,6 +73,19 @@ function getUnsupportedPageInfo(tab?: chrome.tabs.Tab): UnsupportedPageInfo | nu
       || (url.hostname === 'chrome.google.com' && url.pathname.startsWith('/webstore'))
       || url.hostname === 'microsoftedge.microsoft.com';
 
+    // The extension's own PDF viewer is a chrome-extension:// page that
+    // handles translation internally — don't show the "can't be translated"
+    // message there.
+    const isPdfViewer = url.protocol === 'chrome-extension:'
+      && url.pathname === '/pdf-viewer.html';
+
+    if (isPdfViewer) {
+      return {
+        title: "PDF translation is active",
+        description: "Use the translation controls in the PDF viewer tab. Page translation is not needed here.",
+      };
+    }
+
     if (!isWebPage || isBrowserStore) {
       return {
         title: "This page can't be translated",
