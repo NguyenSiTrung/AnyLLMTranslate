@@ -54,6 +54,10 @@ export interface SubtitleInterceptedPayload {
   body: string;
   platform: string;
   originalLanguage: string;
+  /** Track language from the intercepted URL (if extractable) */
+  trackLanguage?: string;
+  /** Full track URL for identity comparison (race condition prevention) */
+  trackUrl?: string;
 }
 
 /** Payload for SUBTITLE_TRANSLATED messages */

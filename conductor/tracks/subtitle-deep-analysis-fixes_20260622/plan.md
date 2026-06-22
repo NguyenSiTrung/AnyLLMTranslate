@@ -11,26 +11,26 @@
 
 Independent fixes to subtitle parsing, VTT builder, and type definitions. No dependencies on other phases.
 
-- [ ] Task 1.1: Fix parseTimestamp for MM:SS.mmm (2-segment) VTT format
+- [x] Task 1.1: Fix parseTimestamp for MM:SS.mmm (2-segment) VTT format
   <!-- files: lib/subtitleParser.ts, tests/unit/subtitleParser.test.ts -->
   - Update regex to accept optional hours: `(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})`
   - Handle both 2-segment and 3-segment timestamps
   - Add test cases for MM:SS.mmm format
 
-- [ ] Task 1.2: Skip NOTE and STYLE blocks in parseWebVTT
+- [x] Task 1.2: Skip NOTE and STYLE blocks in parseWebVTT
   <!-- files: lib/subtitleParser.ts, tests/unit/subtitleParser.test.ts -->
   - Explicitly detect blocks starting with `NOTE` or `STYLE` and skip them
   - Add test cases for NOTE/STYLE blocks mixed with cues
 
-- [ ] Task 1.3: Add track identity fields to SubtitleInterceptedPayload type
+- [x] Task 1.3: Add track identity fields to SubtitleInterceptedPayload type
   <!-- files: types/subtitle.ts -->
   - Add `trackLanguage?: string` and `trackUrl?: string` to `SubtitleInterceptedPayload`
   - Add `isWatchPage?: () => boolean` to `SubtitleHandler` interface (optional)
 
-- [ ] Task 1.4: Remove dead code in parser/builder layer
+- [x] Task 1.4: Remove dead code in parser/builder layer
   <!-- files: lib/subtitleBuilder.ts, types/config.ts -->
   - Remove `buildBilingualVTT`, `buildTranslationOnlyVTT`, `BilingualOptions` from `subtitleBuilder.ts`
-  - Remove `translationTimeout` from `SubtitleSettings` type and `DEFAULT_SUBTITLE_SETTINGS`
+  - Keep `translationTimeout` in SubtitleSettings (wired in Phase 2 Task 2.1)
   - Update any tests that reference removed code
 
 ---

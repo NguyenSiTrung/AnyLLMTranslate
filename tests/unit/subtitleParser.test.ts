@@ -102,6 +102,66 @@ Valid cue`;
     expect(cues).toHaveLength(1);
     expect(cues[0].text).toBe('Valid cue');
   });
+
+  it('skips NOTE blocks', () => {
+    const vtt = `WEBVTT
+
+NOTE
+This is a comment block
+spanning multiple lines
+
+1
+00:00:01.000 --> 00:00:04.000
+Actual cue`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe('Actual cue');
+  });
+
+  it('skips STYLE blocks', () => {
+    const vtt = `WEBVTT
+
+STYLE
+::cue { color: white }
+
+1
+00:00:01.000 --> 00:00:04.000
+Actual cue`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe('Actual cue');
+  });
+
+  it('skips REGION blocks', () => {
+    const vtt = `WEBVTT
+
+REGION
+id:bottom lines:3
+
+1
+00:00:01.000 --> 00:00:04.000
+Actual cue`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe('Actual cue');
+  });
+
+  it('parses MM:SS.mmm (2-segment) timestamps', () => {
+    const vtt = `WEBVTT
+
+1
+00:05.000 --> 00:10.000
+Short format cue`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].startTime).toBe(5);
+    expect(cues[0].endTime).toBe(10);
+    expect(cues[0].text).toBe('Short format cue');
+  });
 });
 
 describe('parseSRT', () => {
@@ -204,6 +264,12 @@ describe('parseTimestamp', () => {
     expect(parseTimestamp('00:00:01.000')).toBe(1);
     expect(parseTimestamp('00:01:30.000')).toBe(90);
     expect(parseTimestamp('01:00:00.000')).toBe(3600);
+  });
+
+  it('parses MM:SS.mmm (2-segment) timestamps', () => {
+    expect(parseTimestamp('00:01.000')).toBe(1);
+    expect(parseTimestamp('01:30.000')).toBe(90);
+    expect(parseTimestamp('05:00.500')).toBe(300.5);
   });
 
   it('handles milliseconds', () => {

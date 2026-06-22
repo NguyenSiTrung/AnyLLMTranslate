@@ -37,6 +37,10 @@ export function parseWebVTT(vtt: string): SubtitleCue[] {
     const trimmed = block.trim();
     if (!trimmed) continue;
 
+    // Skip NOTE and STYLE blocks (WebVTT block types that aren't cues)
+    const firstLine = trimmed.split('\n')[0].trim();
+    if (firstLine === 'NOTE' || firstLine === 'STYLE' || firstLine === 'REGION') continue;
+
     const cue = parseVttCueBlock(trimmed);
     if (cue) cues.push(cue);
   }
@@ -64,18 +68,27 @@ function parseVttCueBlock(block: string): SubtitleCue | null {
   const timingLine = lines[timingLineIndex];
   const textLines = lines.slice(timingLineIndex + 1);
 
-  // Parse timing
+  // Parse timing — accept both HH:MM:SS.mmm and MM:SS.mmm formats
   const timingMatch = timingLine.match(
-    /(\d{1,2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}\.\d{3})(.*)/,
+    /(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})(.*)/,
   );
 
   if (!timingMatch) return null;
 
-  const startTime = parseTimestamp(timingMatch[1]);
-  const endTime = parseTimestamp(timingMatch[2]);
+  const startHours = timingMatch[1] ? parseInt(timingMatch[1], 10) : 0;
+  const startMinutes = parseInt(timingMatch[2], 10);
+  const startSeconds = parseInt(timingMatch[3], 10);
+  const startMs = parseInt(timingMatch[4], 10);
+  const startTime = startHours * 3600 + startMinutes * 60 + startSeconds + startMs / 1000;
+
+  const endHours = timingMatch[5] ? parseInt(timingMatch[5], 10) : 0;
+  const endMinutes = parseInt(timingMatch[6], 10);
+  const endSeconds = parseInt(timingMatch[7], 10);
+  const endMs = parseInt(timingMatch[8], 10);
+  const endTime = endHours * 3600 + endMinutes * 60 + endSeconds + endMs / 1000;
 
   // Parse optional positioning metadata from timing line
-  const metadataStr = timingMatch[3]?.trim() || '';
+  const metadataStr = timingMatch[9]?.trim() || '';
   const metadata: Record<string, string> = {};
   const metadataRegex = /(\w+):(\S+)/g;
   let metaMatch;
@@ -205,13 +218,14 @@ export function detectFormat(content: string): SubtitleFormat | null {
 }
 
 /**
- * Parse a timestamp string (HH:MM:SS.mmm) into seconds.
+ * Parse a timestamp string (HH:MM:SS.mmm or MM:SS.mmm) into seconds.
  */
 export function parseTimestamp(ts: string): number {
-  const match = ts.match(/(\d{1,2}):(\d{2}):(\d{2})\.(\d{3})/);
+  // Match optional hours, then minutes:seconds.milliseconds
+  const match = ts.match(/(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})/);
   if (!match) return 0;
 
-  const hours = parseInt(match[1], 10);
+  const hours = match[1] ? parseInt(match[1], 10) : 0;
   const minutes = parseInt(match[2], 10);
   const seconds = parseInt(match[3], 10);
   const milliseconds = parseInt(match[4], 10);

@@ -28,6 +28,10 @@ export interface SubtitleHandler {
   /** For DOM-sourced platforms (e.g. Max): return cue-scraping contract.
    *  Platforms that intercept URLs return undefined. */
   getDomCueSource?(): DomCueSource;
+
+  /** Whether the current page is a video watch page (vs. listing/search).
+   *  When absent, callers fall back to hostname-based detection. */
+  isWatchPage?(): boolean;
 }
 
 /** Handler registry — auto-detects platform by hostname and routes to the right handler */
