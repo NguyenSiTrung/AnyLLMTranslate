@@ -196,10 +196,14 @@ function createOverlay(): HTMLElement {
   const overlay = document.createElement('div');
   overlay.className = 'anyllm-translate-subtitle-overlay';
   overlay.setAttribute('data-anyllm-role', 'subtitle-overlay');
+  overlay.setAttribute('role', 'caption');
+  overlay.setAttribute('aria-label', 'Translated subtitles overlay');
+  overlay.setAttribute('aria-live', 'polite');
 
   // Container for subtitle text
   const textContainer = document.createElement('div');
   textContainer.className = 'anyllm-translate-subtitle-text';
+  textContainer.setAttribute('aria-live', 'polite');
   overlay.appendChild(textContainer);
 
   // Original text (smaller, dimmer)

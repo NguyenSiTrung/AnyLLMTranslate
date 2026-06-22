@@ -134,12 +134,16 @@ function cleanupActiveOverlay(): void {
   }
 }
 
-/** Inject a <style> hiding the platform's native caption window. */
+/** Inject a <style> hiding the platform's native caption window.
+ *  Uses display:none to fully remove from layout (opacity:0 fallback
+ *  if display:none causes layout shift issues on specific platforms). */
 function hideNativeCaptions(selector: string): void {
   if (state.captionHideStyle) return;
   const style = document.createElement('style');
   style.setAttribute('data-anyllm-role', 'caption-hide');
-  style.textContent = `${selector} { visibility: hidden !important; }`;
+  // Use display:none for most platforms — fully removes caption from layout.
+  // The !important ensures platform CSS doesn't override our hiding rule.
+  style.textContent = `${selector} { display: none !important; }`;
   document.head.appendChild(style);
   state.captionHideStyle = style;
 }
