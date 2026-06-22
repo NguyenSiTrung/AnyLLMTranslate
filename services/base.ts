@@ -199,25 +199,6 @@ export function parseTranslationResponse(
 export function validateProviderConfig(
   config: ProviderConfig,
 ): { valid: boolean; error?: string } {
-  // Langflow preset: requires endpointUrl + apiKey, NOT baseUrl/model
-  if (config.preset === 'langflow') {
-    if (!config.endpointUrl?.trim()) {
-      return { valid: false, error: 'Endpoint URL is required for Langflow' };
-    }
-
-    try {
-      new URL(config.endpointUrl);
-    } catch {
-      return { valid: false, error: 'Invalid Endpoint URL format' };
-    }
-
-    if (!config.apiKey?.trim()) {
-      return { valid: false, error: 'API key is required for Langflow' };
-    }
-
-    return { valid: true };
-  }
-
   // OpenAI-compatible preset (custom, or legacy ollama)
   if (!config.baseUrl) {
     return { valid: false, error: 'Base URL is required' };

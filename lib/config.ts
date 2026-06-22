@@ -58,6 +58,13 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.provider.preset = 'custom';
     }
 
+    // Migrate removed Langflow preset → custom (user must reconfigure base URL / model)
+    if ((merged.provider.preset as string) === 'langflow') {
+      merged.provider.preset = 'custom';
+      merged.provider.displayName = 'Custom';
+      merged.provider.connectionStatus = 'unknown';
+    }
+
     return merged;
   } catch {
     return { ...DEFAULT_SETTINGS };

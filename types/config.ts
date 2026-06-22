@@ -4,9 +4,9 @@
  */
 
 /** Provider preset identifiers */
-export type ProviderPreset = 'custom' | 'langflow';
+export type ProviderPreset = 'custom';
 
-/** Provider configuration for OpenAI-compatible APIs and Langflow */
+/** Provider configuration for OpenAI-compatible APIs */
 export interface ProviderConfig {
   preset: ProviderPreset;
   baseUrl: string;
@@ -22,12 +22,6 @@ export interface ProviderConfig {
   requestTimeoutMs?: number;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
-  /** Langflow: Full API endpoint URL (e.g. https://server/api/v1/run/flow) */
-  endpointUrl?: string;
-  /** Langflow: Component ID for the LLM component */
-  componentId?: string;
-  /** Langflow: JSONPath for extracting response text (default: outputs[0].outputs[0].results.text.text) */
-  responseTextPath?: string;
 }
 
 /** Onboarding flow state for first-run setup */
@@ -254,10 +248,6 @@ export interface ProviderPresetDefinition {
   defaultModel?: string;
   requiresApiKey: boolean;
   placeholder?: string;
-  /** Default endpoint URL for Langflow presets */
-  defaultEndpointUrl?: string;
-  /** Default response text path for Langflow presets */
-  defaultResponseTextPath?: string;
 }
 
 /** Default subtitle settings */
@@ -392,13 +382,5 @@ export const PROVIDER_PRESETS: ProviderPresetDefinition[] = [
     baseUrl: '',
     defaultModel: '',
     requiresApiKey: false,
-  },
-  {
-    preset: 'langflow',
-    displayName: 'Langflow',
-    description: 'Connect to Langflow-based LLM endpoints',
-    requiresApiKey: true,
-    defaultEndpointUrl: '',
-    defaultResponseTextPath: 'outputs[0].outputs[0].results.text.text',
   },
 ];

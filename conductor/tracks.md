@@ -41,8 +41,7 @@ This file tracks all major tracks for the project.
 - ✅ **Bilingual Display UI/UX Hardening** (`bilingual-display-ux_20260505`) — Archived 2026-05-05. [View](./conductor/archive/bilingual-display-ux_20260505/)
 - ✅ **Settings UI/UX Consistency & Polish** (`settings-ux-audit_20260506`) — Archived 2026-05-06. [View](./conductor/archive/settings-ux-audit_20260506/)
 
-- ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
-- ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
+- ✅ **Custom Endpoint Provider — - ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
 - ✅ **Deep Analysis Hardening & Improvements** (`deep-analysis-hardening_20260611`) — Archived 2026-06-11. [View](./conductor/archive/deep-analysis-hardening_20260611/)
 - ✅ **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Archived 2026-06-12. [View](./conductor/archive/subtitle-reliability-hardening_20260612/)
 - ✅ **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)

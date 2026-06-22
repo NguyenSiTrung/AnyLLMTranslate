@@ -57,9 +57,9 @@ describe('config types', () => {
   });
 
   describe('ProviderPreset', () => {
-    it('supports 2 preset options', () => {
-      const presets: ProviderPreset[] = ['custom', 'langflow'];
-      expect(presets).toHaveLength(2);
+    it('supports custom preset', () => {
+      const presets: ProviderPreset[] = ['custom'];
+      expect(presets).toHaveLength(1);
     });
   });
 
@@ -230,8 +230,8 @@ describe('config types', () => {
   });
 
   describe('PROVIDER_PRESETS', () => {
-    it('has 2 preset definitions', () => {
-      expect(PROVIDER_PRESETS).toHaveLength(2);
+    it('has 1 preset definition', () => {
+      expect(PROVIDER_PRESETS).toHaveLength(1);
     });
 
     it('includes custom as first preset', () => {
@@ -239,10 +239,6 @@ describe('config types', () => {
       expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
     });
 
-    it('includes langflow as second preset', () => {
-      expect(PROVIDER_PRESETS[1].preset).toBe('langflow');
-      expect(PROVIDER_PRESETS[1].requiresApiKey).toBe(true);
-    });
 
     it('all presets have required fields', () => {
       for (const preset of PROVIDER_PRESETS) {

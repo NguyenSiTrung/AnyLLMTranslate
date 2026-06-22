@@ -39,8 +39,6 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
 
   const readiness = getProviderReadiness(settings.provider);
   const recoveryMessage = getProviderRecoveryMessage(readiness);
-  const isLangflow = settings.provider.preset === 'langflow';
-
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
   const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
   const [isTesting, setIsTesting] = useState(false);
@@ -49,30 +47,16 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
   const handlePresetChange = useCallback((preset: ProviderPreset) => {
     const presetDef = PROVIDER_PRESETS.find((p) => p.preset === preset);
     if (presetDef) {
-      if (preset === 'langflow') {
-        updateProvider({
-          preset,
-          baseUrl: '',
-          model: '',
-          displayName: presetDef.displayName,
-          requiresApiKey: presetDef.requiresApiKey,
-          endpointUrl: settings.provider.endpointUrl || '',
-          componentId: settings.provider.componentId || '',
-          responseTextPath: settings.provider.responseTextPath || 'outputs[0].outputs[0].results.text.text',
-          connectionStatus: 'unknown',
-        });
-      } else {
-        updateProvider({
-          preset,
-          baseUrl: presetDef.baseUrl,
-          model: presetDef.defaultModel,
-          displayName: presetDef.displayName,
-          requiresApiKey: presetDef.requiresApiKey,
-          connectionStatus: 'unknown',
-        });
-      }
+      updateProvider({
+        preset,
+        baseUrl: presetDef.baseUrl ?? '',
+        model: presetDef.defaultModel ?? '',
+        displayName: presetDef.displayName,
+        requiresApiKey: presetDef.requiresApiKey,
+        connectionStatus: 'unknown',
+      });
     }
-  }, [updateProvider, settings.provider.endpointUrl, settings.provider.componentId, settings.provider.responseTextPath]);
+  }, [updateProvider]);
 
   const handleTestConnection = useCallback(async () => {
     setIsTesting(true);
@@ -105,10 +89,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
   const totalSteps = 3;
   const progressPct = (completedSteps / totalSteps) * 100;
 
-  /** Test step labels vary by preset */
-  const stepLabels = isLangflow
-    ? { ping: 'Endpoint Ping', models: 'Skipped (N/A)', translation: 'Translation Test' }
-    : { ping: 'API Ping', models: 'Model Listing', translation: 'Translation Test' };
+  const stepLabels = { ping: 'API Ping', models: 'Model Listing', translation: 'Translation Test' };
 
   return (
     <div className="animate-fade-in-up">
@@ -146,7 +127,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
             <div className="space-y-4">
               {/* Provider Preset — visual cards */}
               <FieldGroup label="Provider Preset">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   {PROVIDER_PRESETS.map((p) => {
                     const isActive = settings.provider.preset === p.preset;
                     return (
@@ -163,7 +144,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                           {p.displayName}
                         </p>
                         <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                          {p.preset === 'langflow' ? p.description : p.baseUrl}
+                          {p.description ?? p.baseUrl}
                         </p>
                       </button>
                     );
@@ -171,60 +152,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                 </div>
               </FieldGroup>
 
-              {/* Conditional fields based on preset */}
-              {isLangflow ? (
-                <>
-                  {/* Langflow: Endpoint URL */}
-                  <FieldGroup
-                    label="Endpoint URL"
-                    description="The full Langflow API endpoint URL."
-                    htmlFor="provider-endpoint-url"
-                  >
-                    <Input
-                      id="provider-endpoint-url"
-                      type="url"
-                      value={settings.provider.endpointUrl || ''}
-                      onChange={(e) => updateProvider({ endpointUrl: e.target.value, connectionStatus: 'unknown' })}
-                      placeholder="https://your-langflow-server/api/v1/run/your-flow"
-                      className="font-mono"
-                    />
-                  </FieldGroup>
-
-                  {/* Langflow: API Key */}
-                  <FieldGroup
-                    label="API Key"
-                    description="Required for Langflow authentication."
-                    htmlFor="provider-api-key"
-                  >
-                    <Input
-                      id="provider-api-key"
-                      type="password"
-                      value={settings.provider.apiKey}
-                      onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })}
-                      placeholder="lf-..."
-                      className="font-mono"
-                    />
-                  </FieldGroup>
-
-                  {/* Langflow: Component ID */}
-                  <FieldGroup
-                    label="Component ID"
-                    description="The Langflow component key (e.g., ChatModel-ABC)."
-                    htmlFor="provider-component-id"
-                  >
-                    <Input
-                      id="provider-component-id"
-                      type="text"
-                      value={settings.provider.componentId || ''}
-                      onChange={(e) => updateProvider({ componentId: e.target.value, connectionStatus: 'unknown' })}
-                      placeholder="ChatModel-XXXXX"
-                      className="font-mono"
-                    />
-                  </FieldGroup>
-                </>
-              ) : (
-                <>
-                  {/* OpenAI Compatible: Base URL */}
+              {/* OpenAI Compatible: Base URL */}
                   <FieldGroup
                     label="Base URL"
                     description="The API endpoint for your provider."
@@ -291,8 +219,6 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                       </div>
                     )}
                   </FieldGroup>
-                </>
-              )}
             </div>
           </Card>
         </div>
@@ -388,24 +314,6 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
 
             {showAdvanced && (
               <div className="px-5 pb-5 space-y-5 border-t border-zinc-700/60 pt-4 animate-fade-in-up">
-                {/* Langflow-specific: Response Text Path */}
-                {isLangflow && (
-                  <FieldGroup
-                    label="Response Text Path"
-                    description="JSONPath for extracting response text from Langflow's response."
-                    htmlFor="provider-response-text-path"
-                  >
-                    <Input
-                      id="provider-response-text-path"
-                      type="text"
-                      value={settings.provider.responseTextPath || 'outputs[0].outputs[0].results.text.text'}
-                      onChange={(e) => updateProvider({ responseTextPath: e.target.value })}
-                      placeholder="outputs[0].outputs[0].results.text.text"
-                      className="font-mono text-xs"
-                    />
-                  </FieldGroup>
-                )}
-
                 {/* Temperature & Max Tokens */}
                 <div className="grid grid-cols-2 gap-4">
                   <Slider

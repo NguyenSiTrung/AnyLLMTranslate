@@ -70,28 +70,14 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
   const handlePresetChange = async (preset: ProviderPreset) => {
     const presetDef = PROVIDER_PRESETS.find((p) => p.preset === preset);
     if (!presetDef) return;
-    if (preset === 'langflow') {
-      await updateProvider({
-        preset,
-        baseUrl: '',
-        model: '',
-        displayName: presetDef.displayName,
-        requiresApiKey: presetDef.requiresApiKey,
-        endpointUrl: settings.provider.endpointUrl || '',
-        componentId: settings.provider.componentId || '',
-        responseTextPath: settings.provider.responseTextPath || 'outputs[0].outputs[0].results.text.text',
-        connectionStatus: 'unknown',
-      });
-    } else {
-      await updateProvider({
-        preset,
-        baseUrl: presetDef.baseUrl,
-        model: presetDef.defaultModel,
-        displayName: presetDef.displayName,
-        requiresApiKey: presetDef.requiresApiKey,
-        connectionStatus: 'unknown',
-      });
-    }
+    await updateProvider({
+      preset,
+      baseUrl: presetDef.baseUrl ?? '',
+      model: presetDef.defaultModel ?? '',
+      displayName: presetDef.displayName,
+      requiresApiKey: presetDef.requiresApiKey,
+      connectionStatus: 'unknown',
+    });
   };
 
   const handleTestConnection = async () => {
@@ -175,7 +161,7 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                 <div>
                   <h3 className="text-xl font-semibold text-zinc-100">Translate with your own LLM</h3>
                   <p className="text-sm text-zinc-400 mt-2 leading-6">
-                    Connect any OpenAI-compatible provider, Ollama, or Langflow endpoint, test it, then choose your target language.
+                    Connect any OpenAI-compatible provider or Ollama endpoint, test it, then choose your target language.
                   </p>
                 </div>
               </div>
@@ -191,7 +177,7 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
               <Card title="Provider" icon={<Server className="w-4 h-4" />} variant="bordered">
                 <div className="space-y-4">
                   <FieldGroup label="Provider preset">
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       {PROVIDER_PRESETS.map((preset) => (
                         <button
                           key={preset.preset}
@@ -200,26 +186,13 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                           className={`text-left p-3 rounded-lg border ${settings.provider.preset === preset.preset ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-zinc-800 bg-zinc-900 text-zinc-300'}`}
                         >
                           <div className="font-medium text-sm">{preset.displayName}</div>
-                          <div className="text-xs text-zinc-500 mt-1 truncate">{preset.preset === 'langflow' ? preset.description : (preset.baseUrl || 'Bring your own endpoint')}</div>
+                          <div className="text-xs text-zinc-500 mt-1 truncate">{preset.description ?? (preset.baseUrl || 'Bring your own endpoint')}</div>
                         </button>
                       ))}
                     </div>
                   </FieldGroup>
 
-                  {settings.provider.preset === 'langflow' ? (
-                    <>
-                      <FieldGroup label="Endpoint URL" htmlFor="setup-endpoint-url">
-                        <Input id="setup-endpoint-url" value={settings.provider.endpointUrl || ''} onChange={(e) => updateProvider({ endpointUrl: e.target.value, connectionStatus: 'unknown' })} placeholder="https://your-langflow-server/api/v1/run/your-flow" />
-                      </FieldGroup>
-                      <FieldGroup label="API Key" htmlFor="setup-api-key" description="Required for Langflow authentication.">
-                        <Input id="setup-api-key" type="password" value={settings.provider.apiKey} onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })} placeholder="lf-..." />
-                      </FieldGroup>
-                      <FieldGroup label="Component ID" htmlFor="setup-component-id">
-                        <Input id="setup-component-id" value={settings.provider.componentId || ''} onChange={(e) => updateProvider({ componentId: e.target.value, connectionStatus: 'unknown' })} placeholder="ChatModel-XXXXX" />
-                      </FieldGroup>
-                    </>
-                  ) : (
-                    <>
+                  <>
                       <FieldGroup label="Base URL" htmlFor="setup-base-url">
                         <Input id="setup-base-url" value={settings.provider.baseUrl} onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })} />
                       </FieldGroup>
@@ -230,7 +203,6 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                         <Input id="setup-model" value={settings.provider.model} onChange={(e) => updateProvider({ model: e.target.value, connectionStatus: 'unknown' })} />
                       </FieldGroup>
                     </>
-                  )}
                 </div>
               </Card>
               <div className="flex justify-between">

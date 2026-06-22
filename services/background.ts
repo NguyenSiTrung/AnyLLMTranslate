@@ -18,7 +18,6 @@ import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
-import { LangflowService } from '@/services/langflowService';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
@@ -217,16 +216,11 @@ async function initService(): Promise<TranslationService & { updateConfig(config
   const settings = await loadSettings();
   const config = settings.provider;
 
-  // Re-create if preset changed (e.g., switching between custom ↔ langflow)
+  // Re-create if preset changed
   if (translationService && activePreset === config.preset) {
     translationService.updateConfig(config);
   } else {
-    // Route by preset: Langflow gets its own service, everything else is OpenAI-compatible
-    if (config.preset === 'langflow') {
-      translationService = new LangflowService(config);
-    } else {
-      translationService = new OpenAICompatibleService(config);
-    }
+    translationService = new OpenAICompatibleService(config);
     activePreset = config.preset;
   }
 
