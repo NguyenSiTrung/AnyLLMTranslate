@@ -538,6 +538,7 @@ export default function App() {
   const [activeTabUrl, setActiveTabUrl] = useState<string | null>(null);
   const [pdfUrlInput, setPdfUrlInput] = useState('');
   const [pdfInputOpen, setPdfInputOpen] = useState(false);
+  const [activeTabIsPdf, setActiveTabIsPdf] = useState(false);
 
   useEffect(() => {
     loadSettingsFromStorage();
@@ -554,6 +555,22 @@ export default function App() {
               setActiveHostname(url.hostname);
             }
           } catch { /* invalid URL */ }
+        }
+        // Ask the content script whether the document is actually a PDF —
+        // catches extensionless URLs (arxiv.org/pdf/2606.20543) that the
+        // URL-only heuristic misses. Falls back to the URL heuristic if the
+        // content script has not loaded yet (e.g. on a fresh tab).
+        if (tab?.id) {
+          try {
+            const ct = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContentType' });
+            if (ct?.isPdf === true) {
+              setActiveTabIsPdf(true);
+            } else {
+              setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
+            }
+          } catch {
+            setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
+          }
         }
       } catch { /* tab query failed */ }
     })();
@@ -821,9 +838,10 @@ export default function App() {
   const isActive = isTranslating || status.status === 'done';
   const progressPercent = status.totalCount > 0 ? Math.round((status.translatedCount / status.totalCount) * 100) : 0;
 
-  // Active tab is a PDF when the URL ends in .pdf (case-insensitive) — the
-  // browser's built-in PDF viewer shows plain .pdf URLs without a host page.
-  const activeTabIsPdf = Boolean(activeTabUrl && /\.pdf(?:\?|#|$)/i.test(activeTabUrl));
+  // Whether the active tab is a PDF is resolved in the initial effect above
+  // via a content-script query (getPageContentType) with a URL-heuristic
+  // fallback. The result drives the "Open current PDF" affordance and works
+  // for extensionless URLs (arxiv.org/pdf/2606.20543) the heuristic misses.
 
   // Show the category dropdown whenever context-aware translation is on, even
   // when LLM-based detection is off: the cheap heuristic domain-map detection
@@ -1212,6 +1230,28 @@ export default function App() {
                     label="Page Category Detection"
                     icon={Tag}
                   />
+                </div>
+
+                <div className="pt-3 border-t border-zinc-800/60 mt-3">
+                  <Toggle
+                    checked={settings.pdfSettings?.autoOpen === 'auto'}
+                    onChange={() => {
+                      const next = settings.pdfSettings?.autoOpen === 'auto' ? 'off' : 'auto';
+                      updateSetting({
+                        pdfSettings: {
+                          ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
+                          autoOpen: next,
+                        },
+                      });
+                    }}
+                    label="Auto-open PDF Translator"
+                    icon={FileText}
+                  />
+                  {settings.pdfSettings?.autoOpen === 'auto' && (
+                    <p className="pl-5 mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                      PDFs open in the translator automatically. Toggle off to keep manual control. Configure in full settings.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
