@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-22 all -->
+<!-- conductor-refresh: 2026-06-22 all (PDF auto-detect sync) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -437,6 +437,14 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Settings type changes require DEFAULT + test mocks:** Adding a field to `SubtitleSettings` (e.g. `disabledSubtitleSites`) requires updating `DEFAULT_SUBTITLE_SETTINGS` and every inline mock in tests (or spread from defaults). (from: subtitle-site-toggles_20260619, archived 2026-06-19)
 - **Toggle UI uses `role="switch"` + `aria-checked`:** The shared `Toggle` component is a button switch, not `<input type="checkbox">` — tests assert `getAttribute('aria-checked')`, not `.checked`. (from: subtitle-site-toggles_20260619, archived 2026-06-19)
 
+## PDF Auto-Detect & Auto-Open (2026-06-22)
+- **`document.contentType === 'application/pdf'` for extensionless URL detection:** The only signal that catches PDFs at URLs without a `.pdf` suffix (e.g. `https://arxiv.org/pdf/2606.20543`) without requiring `webNavigation`/`webRequest` permissions. Content scripts on the native viewer's document can read this property directly. (from: PDF auto-detect work, shipped on master 2026-06-22)
+- **Pure decision function extracted from background I/O:** `shouldAutoOpenPdf(input)` takes injected values (url, viewerOrigin, settings, sessionKey, openedSessionKeys) and returns `{open, reason}`; the background handler owns all `chrome.*` calls (reading settings, reading/writing the dedupe set, opening the tab). Every safeguard branch is unit-testable without chrome API mocking — same extraction pattern as `getProviderReadiness()` and the subtitle decision functions. (from: PDF auto-detect work, shipped on master 2026-06-22)
+- **Infinite-loop guard via own-origin prefix check:** The bundled viewer (`chrome-extension://<id>/pdf-viewer.html`) loads a PDF too, so naive detection would re-trigger forever. Suppress detection on `chrome-extension://` origins — check in *both* the content script (`detectPdfAndNotify` skips the message) and the background (`shouldAutoOpenPdf` step 1), so a round-trip is avoided on every viewer load. (from: PDF auto-detect work, shipped on master 2026-06-22)
+- **Provider readiness gate on auto-features:** Never auto-open into a viewer that can't translate. `getProviderReadiness(settings.provider).canTranslate` is checked before any automatic action. Same gate pattern should apply to any auto-feature that depends on a configured provider. (from: PDF auto-detect work, shipped on master 2026-06-22)
+- **Per-tab dedupe in `chrome.storage.session`:** Survives service-worker eviction (unlike in-memory state). Key is `tabId::origin+pathname` — strips `#hash` and `?query` so anchor navigation (`#page=3`) doesn't re-open. One auto-open per tab+document per browser session. (from: PDF auto-detect work, shipped on master 2026-06-22)
+- **Shared `openPdfViewer()` for all entry points:** Background handler, popup button, and entrypoint redirect all call one helper (`services/background.ts → openPdfViewer`) rather than each constructing `chrome.tabs.create` / `tabs.update` calls. New entry points (context menu, future auto-modes) reuse it for consistent new-tab vs same-tab behavior. (from: PDF auto-detect work, shipped on master 2026-06-22)
+
 ---
-Last refreshed: 2026-06-22T13:40:00+07:00
-Codebase health: 1143 tests passing across 91 files, build ~3.75MB, 0 lint errors, 46 tracks archived, 0 active tracks
+Last refreshed: 2026-06-22T16:28:00+07:00
+Codebase health: 1182 tests passing across 95 files, build ~3.58MB, 0 lint errors, 46 tracks archived, 0 active tracks

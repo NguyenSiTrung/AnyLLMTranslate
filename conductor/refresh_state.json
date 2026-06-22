@@ -1,36 +1,32 @@
 {
-  "lastRefresh": "2026-06-22T13:40:00+07:00",
+  "lastRefresh": "2026-06-22T16:28:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Per-site subtitle toggles in Video Subtitle Translation features",
-    "product.md: Implementation entries for subtitle-site-toggles_20260619 and hbomax-subtitle-hardening_20260622",
-    "product.md: Current State metrics 1085/88 -> 1143/91 tests/files, build ~3.75 MB, 46 archived tracks",
-    "patterns.md: HBO Max Subtitle Hardening section (4 patterns)",
-    "patterns.md: Subtitle Per-Site Toggles section (3 patterns)",
-    "patterns.md: Updated health footer",
-    "tracks.md: No change (already lists both new archives)",
-    "tech-stack.md: No drift vs package.json",
-    "beads: DRIFT - epics ALT-7qw and ALT-lko still open while tracks archived",
-    "backups: product.md.bak, patterns.md.bak",
-    "beads: Closed 13 issues to match archived conductor tracks (user option A)"
+    "product.md: Refresh marker bumped (PDF auto-detect sync)",
+    "product.md: PDF Translation features — added auto-detection (document.contentType), auto-open modes (off/prompt/auto) with safeguards, popup getPageContentType wiring",
+    "product.md: Implementation Status — new 'PDF Auto-Detect & Auto-Open' entry (shipped on master via superpowers workflow, commits e24561f..1ae4b7c)",
+    "product.md: Current State metrics 1143/91 ~3.75MB -> 1182/95 ~3.58MB",
+    "patterns.md: New 'PDF Auto-Detect & Auto-Open (2026-06-22)' section (6 patterns: document.contentType detection, pure decision function extraction, infinite-loop guard, provider readiness gate, per-tab session dedupe, shared openPdfViewer helper)",
+    "patterns.md: Refresh marker + health footer updated",
+    "tech-stack.md: No drift vs package.json (unchanged since last refresh)",
+    "workflow.md: No drift (no CI/tooling changes)",
+    "tracks.md: No change (PDF auto-detect shipped on master without a conductor track)",
+    "beads: No drift (bd list --status open empty)",
+    "backups: product.md.bak, patterns.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1143,
-    "testFiles": 91,
-    "buildSize": "3.75 MB",
+    "tests": 1182,
+    "testFiles": 95,
+    "buildSize": "3.58 MB",
     "lintErrors": 0,
     "archivedTracks": 46,
     "activeTracks": 0
   },
   "beadsDrift": {
-    "openEpics": [
-      "ALT-7qw",
-      "ALT-lko"
-    ],
-    "openTaskCount": 13,
-    "conductorStatus": "both tracks archived in tracks.md",
-    "recommendedAction": "Close ALT-7qw and ALT-lko subtrees in Beads to match conductor",
-    "resolvedAt": "2026-06-22",
-    "action": "Closed ALT-7qw and ALT-lko subtrees (13 issues)"
+    "openEpics": [],
+    "openTaskCount": 0,
+    "conductorStatus": "in sync",
+    "recommendedAction": "none",
+    "resolvedAt": "2026-06-22"
   }
 }
