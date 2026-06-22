@@ -68,6 +68,12 @@ interface CoordinatorState {
   domTranslationMap: Map<string, string>;
   /** Translated cues array (merged from chunk deltas) for overlay display */
   translatedCues: SubtitleCue[] | null;
+  /** Cached settings to avoid loadSettings() in hot paths */
+  cachedSettings: Awaited<ReturnType<typeof loadSettings>> | null;
+  /** Active track identity (language + URL) for race condition prevention */
+  activeTrackIdentity: string | null;
+  /** URLs already fetched via selectSubtitleTrack (dedup with interceptor flow) */
+  fetchedTrackUrls: Set<string>;
 }
 
 const state: CoordinatorState = {
@@ -87,6 +93,9 @@ const state: CoordinatorState = {
   domTranslatedTexts: new Set(),
   domTranslationMap: new Map(),
   translatedCues: null,
+  cachedSettings: null,
+  activeTrackIdentity: null,
+  fetchedTrackUrls: new Set(),
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -203,8 +212,17 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     return;
   }
 
+  // Task 6.3: Deduplicate with auto-activate (fetch) flow
+  if (state.fetchedTrackUrls.has(url)) {
+    console.log('AnyLLMTranslate: Skipping intercepted URL — already fetched via selectSubtitleTrack', { url });
+    sendTranslatedSubtitle({ requestId, vttContent: body });
+    return;
+  }
+
   try {
-    const settings = await loadSettings();
+    // Task 6.1: Use cached settings in hot path, fall back to loadSettings
+    const settings = state.cachedSettings ?? await loadSettings();
+    if (!state.cachedSettings) state.cachedSettings = settings;
     if (!settings.subtitleSettings.enabled) {
       cleanupActiveOverlay();
       sendTranslatedSubtitle({ requestId, vttContent: body });
@@ -222,6 +240,18 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sendTranslatedSubtitle({ requestId, vttContent: body });
       return;
     }
+
+    // Task 6.2: Track identity guard — cancel previous session if track changed
+    const trackIdentity = `${originalLanguage}:${url}`;
+    if (state.activeTrackIdentity !== null && state.activeTrackIdentity !== trackIdentity) {
+      console.log('AnyLLMTranslate: Track changed, resetting previous session', {
+        previous: state.activeTrackIdentity,
+        current: trackIdentity,
+      });
+      cleanupActiveOverlay();
+      state.translatedCues = null;
+    }
+    state.activeTrackIdentity = trackIdentity;
 
     const cues = handler.transformResponse(body, contentType, url);
     if (cues.length === 0) {
@@ -250,9 +280,10 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       updateCues(cues);
     }
 
-    // Post an empty VTT back to the interceptor to disable native subtitles
-    // and prevent duplicate rendering
-    sendTranslatedSubtitle({ requestId, vttContent: 'WEBVTT\n\n' });
+    // Task 6.4: Don't blank native subtitles until translation succeeds.
+    // If translation fails, we send the original body back so native subtitles continue.
+    // The overlay shows original cues on top while waiting — temporary duplication
+    // is acceptable and better than blanking native subtitles before we know translation works.
 
     const sourceLanguage = settings.sourceLanguage === 'auto' 
       ? (originalLanguage || 'en') 
@@ -272,10 +303,16 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
+      // Task 6.4: Restore native subtitles on failure — send original body back
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      cleanupActiveOverlay();
       hideSubtitleToast();
       showSubtitleToast('Subtitle translation failed.');
       return;
     }
+
+    // Translation succeeded — now blank native subtitles (overlay takes over)
+    sendTranslatedSubtitle({ requestId, vttContent: 'WEBVTT\n\n' });
 
     // Track the active session so stale chunks from older sessions are dropped
     if (response.sessionId !== undefined) {
@@ -289,6 +326,9 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     showSubtitleToast('Subtitles processing...');
   } catch (error) {
     console.warn('AnyLLMTranslate: handleIntercepted error', error);
+    // Task 6.4: Restore native subtitles on error — send original body back
+    sendTranslatedSubtitle({ requestId, vttContent: body });
+    cleanupActiveOverlay();
     hideSubtitleToast();
     showSubtitleToast('Subtitle translation error.');
   }
@@ -533,7 +573,9 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
 
   if (newTexts.length === 0) return;
 
-  const settings = await loadSettings();
+  // Task 6.1: Use cached settings in hot path
+  const settings = state.cachedSettings ?? await loadSettings();
+  if (!state.cachedSettings) state.cachedSettings = settings;
   const sourceLanguage = settings.sourceLanguage === 'auto'
     ? (payload.language || 'en')
     : settings.sourceLanguage;
@@ -814,6 +856,26 @@ function scheduleProactiveCategoryDetection(): void {
 export function startCoordinator(): () => void {
   console.log('AnyLLMTranslate: Starting subtitle coordinator');
 
+  // Task 6.1: Settings are cached lazily in hot paths (handleIntercepted, handleDomCues).
+  // Refresh cache on settings changes.
+  const settingsChangeListener = () => {
+    loadSettings().then((s) => { state.cachedSettings = s; }).catch(() => {});
+  };
+  try { chrome.storage.onChanged.addListener(settingsChangeListener); } catch { /* tests may not mock */ }
+
+  // Send SUBTITLE_CONFIG to MAIN world interceptors with the timeout setting
+  loadSettings().then((s) => {
+    try {
+      window.postMessage({
+        type: 'SUBTITLE_CONFIG',
+        channel: 'anyllm-translate',
+        requestId: `config-${Date.now()}`,
+        payload: { translationTimeoutMs: (s.subtitleSettings.translationTimeout ?? 30) * 1000 },
+      }, window.location.origin);
+    } catch { /* ignore */ }
+  }).catch(() => {});
+
+
   // Proactive LLM category detection on watch pages: fire once, debounced, so
   // the popup shows a detected category before the user presses play. The
   // trigger helper no-ops when not applicable, so this is safe to schedule always.
@@ -843,7 +905,7 @@ export function startCoordinator(): () => void {
   const handleExtensionMessage = (
     message: unknown,
     _sender: chrome.runtime.MessageSender,
-    _sendResponse: () => void
+    _sendResponse: (response?: unknown) => void
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; chunkStart?: number; chunkCues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED') {
@@ -871,14 +933,11 @@ export function startCoordinator(): () => void {
     // Handle popup requesting subtitle track selection
     if (msg.action === 'SELECT_SUBTITLE_TRACK' && msg.language) {
       selectSubtitleTrack(msg.language);
+      _sendResponse({ success: true });
     }
-    // Handle popup querying available tracks
+    // Handle popup querying available tracks — use sendResponse directly
     if (msg.action === 'GET_AVAILABLE_TRACKS') {
-      _sendResponse();
-      chrome.runtime.sendMessage({
-        action: 'SUBTITLE_TRACKS_AVAILABLE',
-        tracks: state.availableTracks,
-      });
+      _sendResponse({ tracks: state.availableTracks });
     }
     // Handle category override changes from popup
     if (msg.action === 'categoryChanged') {
@@ -897,6 +956,7 @@ export function startCoordinator(): () => void {
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
+    try { chrome.storage.onChanged.removeListener(settingsChangeListener); } catch { /* tests */ }
 
     if (state.discoverDebounceTimer !== null) {
       clearTimeout(state.discoverDebounceTimer);
@@ -958,6 +1018,10 @@ export function resetCoordinatorState(): void {
   state.videoIsPlaying = false;
   state.categoryOverride = undefined;
   state.activeSubtitleSessionId = null;
+  state.activeTrackIdentity = null;
+  state.fetchedTrackUrls.clear();
+  state.translatedCues = null;
+  state.cachedSettings = null;
   if (state.discoverDebounceTimer !== null) {
     clearTimeout(state.discoverDebounceTimer);
     state.discoverDebounceTimer = null;
@@ -1315,6 +1379,8 @@ export async function selectSubtitleTrack(language: string): Promise<void> {
   }
 
   console.log('AnyLLMTranslate: Selecting subtitle track', { language, url: track.url });
+  // Task 6.3: Record fetched URL to deduplicate with interceptor flow
+  state.fetchedTrackUrls.add(track.url);
   await activateOverlayMode(track.url);
 }
 

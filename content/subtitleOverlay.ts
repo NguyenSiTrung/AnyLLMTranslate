@@ -303,16 +303,35 @@ function updateOverlayStyle(config: OverlayConfig): void {
 }
 
 /**
- * Find the active cue for the current video time.
+ * Find the active cue for the current video time using binary search.
+ * Returns the index of the last cue whose [startTime, endTime) contains currentTime.
+ * O(log n) instead of O(n) per timeupdate event.
  */
 function findActiveCue(currentTime: number): number {
-  for (let i = 0; i < overlayState.cues.length; i++) {
-    const cue = overlayState.cues[i];
-    if (currentTime >= cue.startTime && currentTime < cue.endTime) {
-      return i;
+  const cues = overlayState.cues;
+  if (cues.length === 0) return -1;
+
+  let lo = 0;
+  let hi = cues.length - 1;
+  let result = -1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const cue = cues[mid];
+
+    if (currentTime < cue.startTime) {
+      hi = mid - 1;
+    } else if (currentTime >= cue.endTime) {
+      lo = mid + 1;
+    } else {
+      // Found a matching cue — but there may be multiple overlapping cues.
+      // Task 6.6: Return the LAST (most recent) matching cue after seeks.
+      result = mid;
+      lo = mid + 1;
     }
   }
-  return -1;
+
+  return result;
 }
 
 /**
@@ -492,10 +511,18 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
 
 /**
  * Update the subtitle cues (e.g., after translation).
+ * Task 6.5: Only reset currentCueIndex if the cue array reference actually changed.
+ * If the same array is updated in place, keep currentCueIndex and let handleTimeUpdate
+ * check if the active cue content changed.
  */
 export function updateCues(cues: SubtitleCue[]): void {
+  const wasSameRef = overlayState.cues === cues;
   overlayState.cues = cues;
-  overlayState.currentCueIndex = -1; // Force re-evaluation
+
+  if (!wasSameRef) {
+    // New array reference — force re-evaluation
+    overlayState.currentCueIndex = -1;
+  }
 
   // Update display immediately if video is playing
   if (overlayState.video) {
