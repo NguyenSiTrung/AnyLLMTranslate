@@ -34,6 +34,7 @@ export class FetchInterceptor {
 
     const registry = this.registry;
     const bridge = this.bridge;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
 
     const patchedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

@@ -23,24 +23,24 @@ interface MockTrack {
  *  stub it via Object.defineProperty. */
 function makeTextTracks(initial: MockTrack[] = []) {
   const tracks = [...initial];
-  const listeners: Record<string, Array<() => void>> = {};
+  const listeners: Record<string, Array<(e?: Event) => void>> = {};
 
   const list = tracks as MockTrack[] & {
-    addEventListener: (event: string, handler: () => void) => void;
-    removeEventListener: (event: string, handler: () => void) => void;
+    addEventListener: (event: string, handler: (e?: Event) => void) => void;
+    removeEventListener: (event: string, handler: (e?: Event) => void) => void;
     dispatchEvent: (event: Event) => boolean;
     __addTrack: (track: MockTrack) => void;
   };
 
   (list as unknown as Record<string, unknown>).addEventListener = (
     event: string,
-    handler: () => void
+    handler: (e?: Event) => void
   ) => {
     (listeners[event] ??= []).push(handler);
   };
   (list as unknown as Record<string, unknown>).removeEventListener = (
     event: string,
-    handler: () => void
+    handler: (e?: Event) => void
   ) => {
     listeners[event] = (listeners[event] || []).filter((h) => h !== handler);
   };

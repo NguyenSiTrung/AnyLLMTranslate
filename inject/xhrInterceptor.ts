@@ -41,6 +41,7 @@ export class XhrInterceptor {
 
     const registry = this.registry;
     const bridge = this.bridge;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
 
     // Patch XMLHttpRequest.prototype.open

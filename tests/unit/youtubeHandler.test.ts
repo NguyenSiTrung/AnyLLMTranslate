@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 
 describe('YouTubeHandler', () => {
@@ -99,8 +99,9 @@ describe('YouTubeHandler', () => {
 
     it('languageExtractor captures both lang and tlang params (tlang takes priority)', () => {
       const patterns = handler.getPatterns();
-      const extractor = patterns[0].languageExtractor!;
+      const extractor = patterns[0].languageExtractor;
       expect(extractor).toBeDefined();
+      if (!extractor) return; // type guard
 
       // tlang takes priority over lang
       const bothUrl = new URL(
