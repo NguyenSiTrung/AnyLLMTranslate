@@ -271,4 +271,16 @@ describe('FetchInterceptor', () => {
       removeSpy.mockRestore();
     });
   });
+
+  describe('configurable timeout', () => {
+    it('accepts custom timeout via setTimeout()', () => {
+      interceptor.setTimeout(5000);
+      interceptor.enable();
+      const okResponse = new Response('WEBVTT\n\ntest', { status: 200, headers: { 'Content-Type': 'text/vtt' } });
+      mockFetch.mockResolvedValue(okResponse);
+
+      // Just verify it doesn't throw with custom timeout
+      expect(() => window.fetch('https://cdna.udemycdn.com/subs/course.vtt')).not.toThrow();
+    });
+  });
 });

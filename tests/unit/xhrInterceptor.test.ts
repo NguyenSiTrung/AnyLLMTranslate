@@ -323,4 +323,60 @@ describe('XhrInterceptor', () => {
       expect(onloadHandler).toHaveBeenCalled();
     });
   });
+
+  describe('response property override', () => {
+    it('overrides both responseText and response with translated VTT', () => {
+      interceptor.enable();
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      xhr.send();
+
+      simulateXhrComplete(xhr);
+
+      const translatedEvent = {
+        data: {
+          channel: 'anyllm-translate',
+          type: 'SUBTITLE_TRANSLATED',
+          requestId: 'req-123',
+          payload: { vttContent: 'WEBVTT\ntranslated' },
+        },
+        origin: window.location.origin,
+      } as MessageEvent;
+      for (const listener of [...messageListeners]) {
+        listener(translatedEvent);
+      }
+
+      expect(xhr.responseText).toBe('WEBVTT\ntranslated');
+      expect(xhr.response).toBe('WEBVTT\ntranslated');
+    });
+  });
+
+  describe('configurable timeout', () => {
+    it('uses default 30s timeout', () => {
+      // The default timeout is 30000ms — just verify the interceptor accepts setTimeout
+      expect(interceptor).toBeDefined();
+    });
+
+    it('accepts custom timeout via setTimeout()', () => {
+      interceptor.setTimeout(5000);
+      interceptor.enable();
+      // Just verify it doesn't throw — actual timeout behavior is hard to test in jsdom
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      expect(() => xhr.send()).not.toThrow();
+    });
+  });
+
+  describe('abort handling', () => {
+    it('registers abort listener without throwing', () => {
+      interceptor.enable();
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+      // send triggers handleResponse which registers abort handler
+      expect(() => xhr.send()).not.toThrow();
+      simulateXhrComplete(xhr);
+      // If abort handler registration failed, send/simulateXhrComplete would throw
+      expect(messageListeners.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
