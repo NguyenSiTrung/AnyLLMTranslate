@@ -18,6 +18,8 @@ const OriginalXHR = window.XMLHttpRequest;
 
 export class XhrInterceptor {
   private enabled = false;
+  /** Configurable translation timeout in ms (default 30s). */
+  private translationTimeoutMs = 30000;
   /** Original prototype methods captured at enable time, restored on disable. */
   private originalOpen: typeof OriginalXHR.prototype.open | null = null;
   private originalAddEventListenerRef: typeof OriginalXHR.prototype.addEventListener | null = null;
@@ -28,12 +30,18 @@ export class XhrInterceptor {
     private bridge: MessageBridgeSender,
   ) {}
 
+  /** Set the translation timeout (called when coordinator sends SUBTITLE_CONFIG). */
+  setTimeout(ms: number): void {
+    this.translationTimeoutMs = ms;
+  }
+
   enable(): void {
     if (this.enabled) return;
     this.enabled = true;
 
     const registry = this.registry;
     const bridge = this.bridge;
+    const self = this;
 
     // Patch XMLHttpRequest.prototype.open
     const originalOpen = OriginalXHR.prototype.open;
@@ -181,31 +189,68 @@ export class XhrInterceptor {
 
         // Listen for translation result
         const expectedOrigin = window.location.origin;
+
+        /** Clean up listener, timeout, and abort handler. */
+        let cleanedUp = false;
+        const cleanup = () => {
+          if (cleanedUp) return;
+          cleanedUp = true;
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', translatedHandler);
+          xhrRef.removeEventListener('abort', abortHandler);
+        };
+
         const translatedHandler = (event: MessageEvent) => {
           if (event.origin !== expectedOrigin) return;
           if (event.data?.channel !== 'anyllm-translate') return;
           if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
           if (event.data?.requestId !== requestId) return;
 
-          clearTimeout(timeoutId);
-          window.removeEventListener('message', translatedHandler);
+          cleanup();
 
-          // Replace the response text with translated VTT
+          const translatedVtt = event.data.payload.vttContent;
+
+          // Replace responseText with translated VTT
           Object.defineProperty(xhrRef, 'responseText', {
-            value: event.data.payload.vttContent,
+            value: translatedVtt,
             writable: false,
             configurable: true,
           });
 
+          // Also override response property (handles responseType variants)
+          const responseType = xhrRef.responseType;
+          if (responseType === 'arraybuffer') {
+            const encoder = new TextEncoder();
+            Object.defineProperty(xhrRef, 'response', {
+              value: encoder.encode(translatedVtt).buffer,
+              writable: false,
+              configurable: true,
+            });
+          } else {
+            // text, json, or empty — response is the VTT string
+            Object.defineProperty(xhrRef, 'response', {
+              value: translatedVtt,
+              writable: false,
+              configurable: true,
+            });
+          }
+
+          replayHandlers();
+        };
+
+        // Abort handler — clean up dangling listener when player switches tracks
+        const abortHandler = () => {
+          cleanup();
           replayHandlers();
         };
 
         // Self-cleaning timeout — remove listener and replay with original content
         const timeoutId = setTimeout(() => {
-          window.removeEventListener('message', translatedHandler);
+          cleanup();
           replayHandlers();
-        }, 30000);
+        }, self.translationTimeoutMs);
 
+        xhrRef.addEventListener('abort', abortHandler);
         window.addEventListener('message', translatedHandler);
       };
 

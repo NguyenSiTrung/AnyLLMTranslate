@@ -9,12 +9,21 @@ export class YouTubeHandler implements SubtitleHandler {
       window.location.hostname.includes('youtube.com');
   }
 
+  isWatchPage(): boolean {
+    return window.location.pathname === '/watch';
+  }
+
   getPatterns(): SubtitleUrlPattern[] {
     return [
       {
         platform: 'youtube',
-        pattern: /\/api\/timedtext/,
-        languageExtractor: (url) => url.searchParams.get('lang') || '',
+        // Anchored to youtube.com domain to avoid false positives on other sites
+        pattern: /youtube\.com\/api\/timedtext/,
+        languageExtractor: (url) => {
+          // tlang = translation language (for translated subtitle URLs)
+          // lang = source language
+          return url.searchParams.get('tlang') || url.searchParams.get('lang') || '';
+        },
       },
     ];
   }

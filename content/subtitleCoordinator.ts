@@ -949,14 +949,18 @@ export function resetCoordinatorState(): void {
 /**
  * Detect if current page is a video watch page (not a listing/home page).
  * Guards against auto-activate firing on YouTube home, search, etc.
+ * Delegates to the current handler's isWatchPage() when available.
  */
 export function isOnWatchPage(): boolean {
+  // Prefer handler-specific watch page detection
+  const handler = detectCurrentHandler();
+  if (handler?.isWatchPage) {
+    return handler.isWatchPage();
+  }
+
   const { pathname, hostname } = window.location;
 
-  // For known platforms, use strict explicit matching.
-  // Return false immediately for non-watch paths — never fall through to
-  // the generic heuristic, since these platforms have listing/home/search
-  // pages with autoplay thumbnail videos that would trigger it incorrectly.
+  // Fallback for handlers without isWatchPage — use strict explicit matching.
   if (hostname.includes('youtube.com')) {
     return pathname === '/watch';
   }

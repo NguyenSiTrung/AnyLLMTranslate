@@ -37,7 +37,8 @@ export type BridgeMessageType =
   | 'SUBTITLE_ERROR'
   | 'SUBTITLE_TRACKS_DISCOVERED'
   | 'SUBTITLE_DOM_CUES'
-  | 'SUBTITLE_DOM_TRACK_CHANGED';
+  | 'SUBTITLE_DOM_TRACK_CHANGED'
+  | 'SUBTITLE_CONFIG';
 
 /** postMessage payload between worlds */
 export interface BridgeMessage<T = unknown> {
@@ -100,6 +101,12 @@ export interface SubtitleDomTrackChangedPayload {
   platform: string;
   language: string;
   videoId?: string;
+}
+
+/** Payload for SUBTITLE_CONFIG messages (coordinator → MAIN world interceptors) */
+export interface SubtitleConfigPayload {
+  /** Translation timeout in milliseconds */
+  translationTimeoutMs: number;
 }
 
 /** Platform subtitle URL pattern definition */

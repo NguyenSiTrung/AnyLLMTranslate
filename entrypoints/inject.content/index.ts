@@ -11,7 +11,7 @@ import { InterceptorRegistry } from '@/inject/interceptorRegistry';
 import { createBridgeSender } from '@/inject/messageBridge';
 import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
-import { registerSubtitleHandlers, getAllPatterns, getMetadataPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
+import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -20,6 +20,7 @@ import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
+import { onMessage } from '@/inject/messageBridge';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -40,8 +41,9 @@ export default defineContentScript({
     const registry = new InterceptorRegistry();
     const bridge = createBridgeSender();
 
-    // Register all platform URL patterns (subtitle content interception)
-    registry.registerPatterns(getAllPatterns());
+    // Register patterns only for handlers that detect the current host
+    // (avoids cross-platform false positives on non-target domains)
+    registry.registerPatterns(getPatternsForCurrentHost());
 
     // Register metadata patterns (read-only, non-blocking track discovery)
     registry.registerMetadataPatterns(getMetadataPatternsForCurrentHost());
@@ -51,6 +53,17 @@ export default defineContentScript({
 
     xhrInterceptor.enable();
     fetchInterceptor.enable();
+
+    // Listen for config messages from the coordinator (ISOLATED world)
+    // to update the translation timeout from user settings
+    onMessage('SUBTITLE_CONFIG', (payload) => {
+      const config = payload as { translationTimeoutMs: number };
+      if (config?.translationTimeoutMs) {
+        xhrInterceptor.setTimeout(config.translationTimeoutMs);
+        fetchInterceptor.setTimeout(config.translationTimeoutMs);
+        console.log('[AnyLLMTranslate] Interceptor timeout updated to', config.translationTimeoutMs, 'ms');
+      }
+    });
 
     // Handle BFCache lifecycle: disable interceptors when page goes into BFCache,
     // re-enable when it's restored. Non-persisted pagehide means the page is

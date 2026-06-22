@@ -16,6 +16,38 @@ const LABEL_TO_LANGUAGE: Record<string, string> = {
   Thai: 'th',
   Spanish: 'es',
   Vietnamese: 'vi',
+  French: 'fr',
+  German: 'de',
+  Italian: 'it',
+  Japanese: 'ja',
+  Korean: 'ko',
+  Portuguese: 'pt',
+  'Portuguese (Brazil)': 'pt-BR',
+  Russian: 'ru',
+  Arabic: 'ar',
+  Hindi: 'hi',
+  Polish: 'pl',
+  Turkish: 'tr',
+  Dutch: 'nl',
+  Danish: 'da',
+  Finnish: 'fi',
+  Swedish: 'sv',
+  Norwegian: 'no',
+  'Norwegian Bokmål': 'nb',
+  Czech: 'cs',
+  Hungarian: 'hu',
+  Greek: 'el',
+  Hebrew: 'he',
+  Romanian: 'ro',
+  Catalan: 'ca',
+  Ukrainian: 'uk',
+  Bulgarian: 'bg',
+  Croatian: 'hr',
+  Slovak: 'sk',
+  Slovenian: 'sl',
+  Estonian: 'et',
+  Latvian: 'lv',
+  Lithuanian: 'lt',
 };
 
 export class HboMaxHandler implements SubtitleHandler {
@@ -30,6 +62,10 @@ export class HboMaxHandler implements SubtitleHandler {
       host === 'play.hbomax.com' ||
       host.endsWith('.hbomax.com')
     );
+  }
+
+  isWatchPage(): boolean {
+    return window.location.pathname.includes('/video/watch/');
   }
 
   getPatterns(): SubtitleUrlPattern[] {

@@ -57,7 +57,8 @@ export function detectCurrentHandler(): SubtitleHandler | null {
   return null;
 }
 
-/** Get all URL patterns from all handlers that match the current hostname */
+/** Get all URL patterns from handlers that detect the current hostname.
+ *  This avoids cross-platform false positives from non-target domains. */
 export function getPatternsForCurrentHost(): SubtitleUrlPattern[] {
   const patterns: SubtitleUrlPattern[] = [];
   for (const handler of handlers) {
@@ -65,7 +66,6 @@ export function getPatternsForCurrentHost(): SubtitleUrlPattern[] {
       patterns.push(...handler.getPatterns());
     }
   }
-  // Also include patterns from all handlers for matching in interceptor
   return patterns;
 }
 

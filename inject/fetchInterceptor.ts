@@ -13,6 +13,8 @@ const originalFetch = window.fetch.bind(window);
 
 export class FetchInterceptor {
   private enabled = false;
+  /** Configurable translation timeout in ms (default 30s). */
+  private translationTimeoutMs = 30000;
   /** Reference to the patched fetch so disable() only restores our own patch. */
   private patchedFetch: typeof window.fetch | null = null;
 
@@ -21,12 +23,18 @@ export class FetchInterceptor {
     private bridge: MessageBridgeSender,
   ) {}
 
+  /** Set the translation timeout (called when coordinator sends SUBTITLE_CONFIG). */
+  setTimeout(ms: number): void {
+    this.translationTimeoutMs = ms;
+  }
+
   enable(): void {
     if (this.enabled) return;
     this.enabled = true;
 
     const registry = this.registry;
     const bridge = this.bridge;
+    const self = this;
 
     const patchedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -88,7 +96,7 @@ export class FetchInterceptor {
           window.removeEventListener('message', translatedHandler);
           // Translation timed out — return original response
           resolve(response);
-        }, 30000);
+        }, self.translationTimeoutMs);
 
         const translatedHandler = (event: MessageEvent) => {
           if (event.origin !== expectedOrigin) return;
