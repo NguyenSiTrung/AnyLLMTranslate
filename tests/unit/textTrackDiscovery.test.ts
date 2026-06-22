@@ -1,0 +1,287 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
+import type { SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
+
+/** Flush pending MutationObserver callbacks (jsdom delivers them as microtasks).
+ *  Also waits for the 50ms debounce in textTrackDiscovery's MutationObserver wrapper. */
+function flushObservers(): Promise<void> {
+  return new Promise((resolve) => {
+    Promise.resolve()
+      .then(() => Promise.resolve())
+      .then(() => setTimeout(resolve, 60));
+  });
+}
+
+interface MockTrack {
+  kind: string;
+  language: string;
+  label: string;
+}
+
+/** Create a mock TextTrackList: an array with event-target methods.
+ *  jsdom does not populate video.textTracks from <track> elements, so we must
+ *  stub it via Object.defineProperty. */
+function makeTextTracks(initial: MockTrack[] = []) {
+  const tracks = [...initial];
+  const listeners: Record<string, Array<() => void>> = {};
+
+  const list = tracks as MockTrack[] & {
+    addEventListener: (event: string, handler: () => void) => void;
+    removeEventListener: (event: string, handler: () => void) => void;
+    dispatchEvent: (event: Event) => boolean;
+    __addTrack: (track: MockTrack) => void;
+  };
+
+  (list as unknown as Record<string, unknown>).addEventListener = (
+    event: string,
+    handler: () => void
+  ) => {
+    (listeners[event] ??= []).push(handler);
+  };
+  (list as unknown as Record<string, unknown>).removeEventListener = (
+    event: string,
+    handler: () => void
+  ) => {
+    listeners[event] = (listeners[event] || []).filter((h) => h !== handler);
+  };
+  (list as unknown as Record<string, unknown>).dispatchEvent = (event: Event) => {
+    (listeners[event.type] || []).forEach((h) => h(event));
+    return true;
+  };
+  (list as unknown as Record<string, unknown>).__addTrack = (track: MockTrack) => {
+    tracks.push(track);
+    const evt = new Event('addtrack');
+    (listeners['addtrack'] || []).forEach((h) => h(evt));
+  };
+
+  return list;
+}
+
+/** Attach a mock textTracks object to a video element. */
+function stubTextTracks(video: HTMLVideoElement, tracks: ReturnType<typeof makeTextTracks>) {
+  Object.defineProperty(video, 'textTracks', {
+    configurable: true,
+    value: tracks,
+  });
+}
+
+/** Create a video with optional <track> children and a mock textTracks list. */
+function makeVideo(tracks: MockTrack[] = [], domTrackSrcs: Array<{ srclang: string; kind: string; src: string }> = []): HTMLVideoElement {
+  const video = document.createElement('video');
+  for (const dt of domTrackSrcs) {
+    const el = document.createElement('track');
+    el.kind = dt.kind;
+    el.srclang = dt.srclang;
+    el.src = dt.src;
+    video.appendChild(el);
+  }
+  stubTextTracks(video, makeTextTracks(tracks));
+  return video;
+}
+
+describe('startTextTrackDiscovery', () => {
+  let bridge: { send: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    bridge = { send: vi.fn(() => 'req-1') };
+    document.body.innerHTML = '';
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns a cleanup function', () => {
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(typeof cleanup).toBe('function');
+    cleanup();
+  });
+
+  it('scans existing video elements for textTracks', () => {
+    const video = makeVideo(
+      [{ kind: 'subtitles', language: 'en', label: 'English' }],
+      [{ srclang: 'en', kind: 'subtitles', src: 'https://example.com/en.vtt' }]
+    );
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    expect(bridge.send).toHaveBeenCalledWith(
+      'SUBTITLE_TRACKS_DISCOVERED',
+      expect.objectContaining({ platform: 'html5' })
+    );
+
+    cleanup();
+  });
+
+  it('sends SUBTITLE_TRACKS_DISCOVERED with correct payload when tracks are found', () => {
+    const video = makeVideo(
+      [
+        { kind: 'subtitles', language: 'en', label: 'English' },
+        { kind: 'captions', language: 'es', label: 'Spanish' },
+      ],
+      [
+        { srclang: 'en', kind: 'subtitles', src: 'https://example.com/en.vtt' },
+        { srclang: 'es', kind: 'captions', src: 'https://example.com/es.vtt' },
+      ]
+    );
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+    const payload = bridge.send.mock.calls[0][1] as SubtitleTracksDiscoveredPayload;
+
+    expect(bridge.send).toHaveBeenCalledWith('SUBTITLE_TRACKS_DISCOVERED', expect.any(Object));
+    expect(payload.platform).toBe('html5');
+    expect(payload.tracks).toHaveLength(2);
+    expect(payload.tracks[0].language).toBe('en');
+    expect(payload.tracks[0].label).toBe('English');
+    expect(payload.tracks[0].url).toBe('https://example.com/en.vtt');
+    expect(payload.tracks[0].isAutoGenerated).toBe(false);
+    expect(payload.tracks[1].language).toBe('es');
+
+    cleanup();
+  });
+
+  it('does NOT send when no tracks exist', () => {
+    const video = makeVideo([]);
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    cleanup();
+  });
+
+  it('watches for dynamically inserted video elements via MutationObserver', async () => {
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    const video = makeVideo(
+      [{ kind: 'subtitles', language: 'fr', label: 'French' }],
+      [{ srclang: 'fr', kind: 'subtitles', src: 'https://example.com/fr.vtt' }]
+    );
+    document.body.appendChild(video);
+
+    await flushObservers();
+
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    expect(bridge.send).toHaveBeenCalledWith(
+      'SUBTITLE_TRACKS_DISCOVERED',
+      expect.objectContaining({ platform: 'html5' })
+    );
+
+    cleanup();
+  });
+
+  it('re-scans on addtrack event', () => {
+    const tracks = makeTextTracks([]);
+    const video = document.createElement('video');
+    stubTextTracks(video, tracks);
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    // Simulate an addtrack event with a new track
+    (tracks as unknown as { __addTrack: (t: MockTrack) => void }).__addTrack({
+      kind: 'subtitles',
+      language: 'de',
+      label: 'German',
+    });
+
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    const payload = bridge.send.mock.calls[0][1] as SubtitleTracksDiscoveredPayload;
+    expect(payload.tracks).toHaveLength(1);
+    expect(payload.tracks[0].language).toBe('de');
+
+    cleanup();
+  });
+
+  it('re-scans on loadedmetadata event', () => {
+    const tracks = makeTextTracks([
+      { kind: 'subtitles', language: 'ja', label: 'Japanese' },
+    ]);
+    const video = document.createElement('video');
+    stubTextTracks(video, tracks);
+    // Make tracks appear empty initially so the initial scan doesn't fire
+    // Then restore them before dispatching loadedmetadata
+    Object.defineProperty(video, 'textTracks', {
+      configurable: true,
+      value: makeTextTracks([]),
+    });
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    // Now replace textTracks with real content and dispatch loadedmetadata
+    stubTextTracks(video, tracks);
+    video.dispatchEvent(new Event('loadedmetadata'));
+
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    const payload = bridge.send.mock.calls[0][1] as SubtitleTracksDiscoveredPayload;
+    expect(payload.tracks).toHaveLength(1);
+    expect(payload.tracks[0].language).toBe('ja');
+
+    cleanup();
+  });
+
+  it('cleanup disconnects observers and removes listeners', async () => {
+    const tracks = makeTextTracks([]);
+    const video = document.createElement('video');
+    stubTextTracks(video, tracks);
+    document.body.appendChild(video);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+
+    // Add a track after cleanup — should NOT trigger a send
+    cleanup();
+    (tracks as unknown as { __addTrack: (t: MockTrack) => void }).__addTrack({
+      kind: 'subtitles',
+      language: 'ko',
+      label: 'Korean',
+    });
+
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    // Dynamically inserted video after cleanup should also be ignored
+    const video2 = makeVideo([{ kind: 'subtitles', language: 'zh', label: 'Chinese' }]);
+    document.body.appendChild(video2);
+    await flushObservers();
+
+    expect(bridge.send).not.toHaveBeenCalled();
+  });
+
+  it('only targets primary (largest) video, not thumbnail previews', () => {
+    // Thumbnail: small, no readyState (filtered out by findPrimaryVideo)
+    const thumb = makeVideo(
+      [{ kind: 'subtitles', language: 'en', label: 'English' }],
+      [{ srclang: 'en', kind: 'subtitles', src: 'https://example.com/thumb.vtt' }]
+    );
+    thumb.getBoundingClientRect = () =>
+      ({ width: 100, height: 100, left: 0, top: 0, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    document.body.appendChild(thumb);
+
+    // Primary: large, readyState >= 1
+    const primary = makeVideo(
+      [{ kind: 'subtitles', language: 'es', label: 'Spanish' }],
+      [{ srclang: 'es', kind: 'subtitles', src: 'https://example.com/primary.vtt' }]
+    );
+    Object.defineProperty(primary, 'readyState', { configurable: true, get: () => 1 });
+    primary.getBoundingClientRect = () =>
+      ({ width: 1280, height: 720, left: 0, top: 0, right: 1280, bottom: 720, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    document.body.appendChild(primary);
+
+    const cleanup = startTextTrackDiscovery(bridge);
+
+    // Should only have sent tracks from the primary video
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    const payload = bridge.send.mock.calls[0][1] as SubtitleTracksDiscoveredPayload;
+    expect(payload.tracks).toHaveLength(1);
+    expect(payload.tracks[0].language).toBe('es');
+    expect(payload.tracks[0].url).toBe('https://example.com/primary.vtt');
+
+    cleanup();
+  });
+});
