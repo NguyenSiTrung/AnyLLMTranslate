@@ -3,15 +3,9 @@
  * Wires up the message router, settings listener, keyboard commands, and context menus.
  */
 
-import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule, initSubtitleSessionCleanup } from '@/services/background';
+import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule, initSubtitleSessionCleanup, openPdfViewer } from '@/services/background';
 import { initTabCleanup } from '@/services/categoryStore';
 import { warmDebugCache } from '@/services/debugLog';
-
-/** Open the bundled PDF viewer for a given PDF URL. */
-function openPdfViewer(url: string): void {
-  const viewerUrl = chrome.runtime.getURL(`pdf-viewer.html?file=${encodeURIComponent(url)}`);
-  chrome.tabs.create({ url: viewerUrl });
-}
 
 /** Send message to the active tab's content script */
 async function sendToActiveTab(message: Record<string, unknown>): Promise<void> {
