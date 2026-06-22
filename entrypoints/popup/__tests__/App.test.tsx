@@ -126,9 +126,10 @@ describe('popup unsupported pages', () => {
     expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
   });
 
-  it('shows PDF-translation-active message on the extension pdf-viewer page', async () => {
+  it('shows PDF-translation-active message and category dropdown on the extension pdf-viewer page', async () => {
     storedSettings = {
       ...DEFAULT_SETTINGS,
+      enableContextAwareTranslation: true,
       provider: {
         ...DEFAULT_SETTINGS.provider,
         baseUrl: 'http://localhost:11434/v1',
@@ -138,12 +139,19 @@ describe('popup unsupported pages', () => {
       onboarding: { completed: true, skipped: false, lastStep: 'done' },
     };
     queryTabs.mockResolvedValue([{ id: 7, url: 'chrome-extension://test/pdf-viewer.html?file=https://example.com/paper.pdf' }]);
+    sendMessage.mockImplementation(async (_tabIdOrMsg: unknown, msg?: { action: string }) => {
+      const action = (msg ?? (_tabIdOrMsg as { action: string }))?.action;
+      if (action === 'getCategoryOverride') return { override: undefined };
+      return undefined;
+    });
 
     render(<App />);
 
     expect(await screen.findByText(/pdf translation is active/i)).toBeInTheDocument();
     expect(screen.queryByText(/this page can't be translated/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /translate page/i })).not.toBeInTheDocument();
+    // Category dropdown should be visible with the PDF source hostname
+    expect(screen.getByText(/category/i)).toBeInTheDocument();
   });
 });
 

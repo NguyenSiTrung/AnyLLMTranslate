@@ -243,6 +243,16 @@ async function handleTranslate(
   const acquire = isPdf ? acquirePdfSemaphore : acquireSemaphore;
   const release = isPdf ? releasePdfSemaphore : releaseSemaphore;
 
+  // For PDF translations, honor any tab-scoped category override set via the
+  // popup's category dropdown (the PDF viewer hardcodes 'document' because it
+  // has no content script to detect categories).
+  if (isPdf && message.pageContext && sender?.tab?.id) {
+    const override = fetchCategoryOverride(sender.tab.id);
+    if (override) {
+      message.pageContext = { ...message.pageContext, category: override };
+    }
+  }
+
   await acquire();
   try {
     // Track page translation (once per tab session)

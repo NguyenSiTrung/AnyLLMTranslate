@@ -566,6 +566,18 @@ export default function App() {
             const url = new URL(tab.url);
             if (url.protocol === 'http:' || url.protocol === 'https:') {
               setActiveHostname(url.hostname);
+            } else if (url.protocol === 'chrome-extension:' && url.pathname === '/pdf-viewer.html') {
+              // PDF viewer: extract hostname from the ?file= param so the
+              // category dropdown and site rules work for the source PDF URL.
+              const fileUrl = url.searchParams.get('file');
+              if (fileUrl) {
+                try {
+                  const parsed = new URL(fileUrl);
+                  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                    setActiveHostname(parsed.hostname);
+                  }
+                } catch { /* invalid file URL */ }
+              }
             }
           } catch { /* invalid URL */ }
         }
@@ -596,7 +608,32 @@ export default function App() {
           try {
             const catInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageCategory' });
             if (catInfo) setCategoryInfo(catInfo as CategoryInfo);
-          } catch { /* content script not loaded */ }
+          } catch {
+            // Content script not loaded (e.g. PDF viewer page) — ask the
+            // background for any tab-scoped category override so the dropdown
+            // still reflects the current state.
+            try {
+              const bgResult = await chrome.runtime.sendMessage({
+                action: 'getCategoryOverride',
+                tabId: tab.id,
+              });
+              if (bgResult?.override) {
+                setCategoryInfo({
+                  override: bgResult.override,
+                  effective: bgResult.override,
+                });
+              } else {
+                // No override set; show auto-detected 'document' for PDFs
+                const tabUrl = tab.url ?? '';
+                if (tabUrl.includes('/pdf-viewer.html')) {
+                  setCategoryInfo({
+                    autoDetected: 'document',
+                    effective: 'document',
+                  });
+                }
+              }
+            } catch { /* background unreachable */ }
+          }
         }
       } catch { /* tab query failed */ }
     })();
