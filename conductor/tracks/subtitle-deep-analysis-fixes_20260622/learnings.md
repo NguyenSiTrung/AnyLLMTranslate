@@ -33,4 +33,13 @@ Patterns, gotchas, and context discovered during implementation.
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## [2026-06-22 17:25] - Track Complete: All 9 Phases
+- **Implemented:** 50 findings from deep analysis across 9 phases
+- **Files changed:** lib/subtitleParser.ts, lib/subtitleBuilder.ts (removed), types/subtitle.ts, types/config.ts, inject/xhrInterceptor.ts, inject/fetchInterceptor.ts, inject/domCueSource.ts, inject/textTrackDiscovery.ts, inject/messageBridge.ts, inject/subtitleHandlers/registry.ts, inject/subtitleHandlers/youtube.ts, inject/subtitleHandlers/coursera.ts, inject/subtitleHandlers/udemy.ts, inject/subtitleHandlers/linkedin.ts, inject/subtitleHandlers/hbomax.ts, content/subtitleCoordinator.ts, content/subtitleOverlay.ts, services/background.ts, entrypoints/inject.content/index.ts
+- **Commits:** 7 commits (Phase 1, Phase 2+5, Phase 3+4, Phase 6, Phase 7, Phase 8, Phase 9)
+- **Tests:** 1213 passing (up from 1182), 0 lint errors, 0 type errors, build OK
+- **Learnings:**
+  - Patterns: `SUBTITLE_CONFIG` bridge message pattern for MAIN↔ISOLATED config sync; binary search for cue lookup; lazy settings caching with storage.onChanged refresh
+  - Gotchas: `const self = this` in interceptor closures triggers `no-this-alias` lint; test mock `addEventListener` must capture all event types or `simulateXhrComplete` breaks; proactive settings caching in startCoordinator races with test mock setup — use lazy caching instead
+  - Context: `translationTimeout` in SubtitleSettings is now wired to interceptors via SUBTITLE_CONFIG message (was previously unused); `sendTranslatedSubtitle` is one-shot per requestId — must not send empty VTT before translation succeeds if you want to restore native on failure
+  - Spec issue: FR-1 (use translationTimeout) and FR-13 (remove translationTimeout) were contradictory — resolved by wiring it to interceptors (making it no longer unused)

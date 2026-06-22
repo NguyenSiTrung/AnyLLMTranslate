@@ -61,6 +61,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- [~] **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis. Priority: High. [View](./conductor/tracks/subtitle-deep-analysis-fixes_20260622/)
+- [x] **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis. Priority: High. [View](./conductor/tracks/subtitle-deep-analysis-fixes_20260622/)
 
 ---
