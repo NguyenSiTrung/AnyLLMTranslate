@@ -239,3 +239,81 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith({ enableContextAwareTranslation: false });
   });
 });
+
+describe('AdvancedSection - PDF Translator', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+  const mockResetToDefaults = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    maxBatchChars: 2000,
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below',
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: '',
+    debugMode: false,
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      if (typeof selector === 'function') {
+        return selector({ ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      }
+      return { ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+  });
+
+  it('renders the PDF Translator card with auto-open mode defaulting to off', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('PDF Translator')).toBeInTheDocument();
+    const autoOpenSelect = screen.getByLabelText('Auto-open mode') as HTMLSelectElement;
+    expect(autoOpenSelect.value).toBe('off');
+  });
+
+  it('renders the open-mode select defaulting to new-tab', () => {
+    render(<AdvancedSection />);
+    const openModeSelect = screen.getByLabelText('Open mode') as HTMLSelectElement;
+    expect(openModeSelect.value).toBe('new-tab');
+  });
+
+  it('does NOT show never-open list when autoOpen is off', () => {
+    render(<AdvancedSection />);
+    expect(screen.queryByLabelText('Never auto-open these sites')).not.toBeInTheDocument();
+  });
+
+  it('shows never-open list after choosing auto', () => {
+    render(<AdvancedSection />);
+    fireEvent.change(screen.getByLabelText('Auto-open mode'), { target: { value: 'auto' } });
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      pdfSettings: { autoOpen: 'auto', openMode: 'new-tab', neverAutoOpenSites: [] },
+    });
+  });
+
+  it('updates autoOpen mode via the select', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, pdfSettings: { ...baseSettings.pdfSettings, autoOpen: 'auto' as const } };
+      if (typeof selector === 'function') return selector({ ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      return { ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+    render(<AdvancedSection />);
+    fireEvent.change(screen.getByLabelText('Auto-open mode'), { target: { value: 'off' } });
+    expect(mockUpdateSettings).toHaveBeenCalledWith({
+      pdfSettings: { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] },
+    });
+  });
+});

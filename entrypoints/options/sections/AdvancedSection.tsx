@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -273,8 +273,79 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Data & Developer Tools */}
+        {/* PDF Translator */}
         <div className="animate-stagger" style={stagger(2)}>
+          <Card title="PDF Translator" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-4">
+              <FieldGroup
+                label="Auto-open mode"
+                description="Detect PDF tabs (including extensionless URLs like arxiv.org/pdf/2606.20543) and open the translator automatically. Default is off."
+                htmlFor="pdf-auto-open-select"
+              >
+                <Select
+                  id="pdf-auto-open-select"
+                  value={settings.pdfSettings?.autoOpen ?? 'off'}
+                  onChange={(e) => updateSettings({
+                    pdfSettings: {
+                      ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
+                      autoOpen: e.target.value as 'off' | 'prompt' | 'auto',
+                    },
+                  })}
+                  options={[
+                    { value: 'off', label: 'Off (manual only)' },
+                    { value: 'prompt', label: 'Prompt (show banner button)' },
+                    { value: 'auto', label: 'Auto (open immediately)' },
+                  ]}
+                />
+              </FieldGroup>
+
+              <FieldGroup
+                label="Open mode"
+                description="New tab keeps the native viewer; same tab replaces it in place."
+                htmlFor="pdf-open-mode-select"
+              >
+                <Select
+                  id="pdf-open-mode-select"
+                  value={settings.pdfSettings?.openMode ?? 'new-tab'}
+                  onChange={(e) => updateSettings({
+                    pdfSettings: {
+                      ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
+                      openMode: e.target.value as 'new-tab' | 'same-tab',
+                    },
+                  })}
+                  options={[
+                    { value: 'new-tab', label: 'New tab' },
+                    { value: 'same-tab', label: 'Same tab (replace)' },
+                  ]}
+                />
+              </FieldGroup>
+
+              {settings.pdfSettings?.autoOpen && settings.pdfSettings.autoOpen !== 'off' && (
+                <FieldGroup
+                  label="Never auto-open these sites"
+                  description="Comma-separated hostnames. Auto-open is suppressed for these even when enabled above."
+                  htmlFor="pdf-never-open-input"
+                >
+                  <Input
+                    id="pdf-never-open-input"
+                    type="text"
+                    placeholder="example.com, arxiv.org"
+                    value={(settings.pdfSettings?.neverAutoOpenSites ?? []).join(', ')}
+                    onChange={(e) => updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
+                        neverAutoOpenSites: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      },
+                    })}
+                  />
+                </FieldGroup>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Data & Developer Tools */}
+        <div className="animate-stagger" style={stagger(3)}>
           <Card title="Data & Developer Tools" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-3 mb-5">
               <Button
@@ -318,7 +389,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Reset */}
-        <div className="animate-stagger" style={stagger(3)}>
+        <div className="animate-stagger" style={stagger(4)}>
           <Button
             id="reset-all-settings-btn"
             variant="danger"

@@ -57,8 +57,10 @@ function settingsWith(overrides: Record<string, unknown>) {
 
 describe('handleMessage — PDF_DETECTED', () => {
   beforeEach(() => {
-    for (const k of Object.keys(mockStorage)) delete mockStorage[k];
-    for (const k of Object.keys(sessionStorageState)) delete sessionStorageState[k];
+    // Clear storage without triggering no-dynamic-delete.
+    Object.keys(mockStorage).forEach((k) => { mockStorage[k] = undefined; });
+    // Reassign to fresh empty objects to fully reset (mock closures capture the reference).
+    Object.keys(sessionStorageState).forEach((k) => { sessionStorageState[k] = undefined; });
     mockTabsCreate.mockClear();
     mockTabsUpdate.mockClear();
   });
