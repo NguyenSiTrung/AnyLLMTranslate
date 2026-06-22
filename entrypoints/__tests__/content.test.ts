@@ -741,4 +741,47 @@ describe('content.ts', () => {
       expect(catMocks.triggerAutoCategoryDetection).not.toHaveBeenCalled();
     });
   });
+
+  describe('getPageContentType action', () => {
+    type Listener = (msg: { action: string }, sender: unknown, sendResponse: (r: unknown) => void) => boolean | undefined;
+
+    function captureListener(): Listener {
+      let captured: Listener | null = null;
+      const addListener = vi.fn((l: Listener) => { captured = l; });
+      global.chrome = {
+        runtime: {
+          sendMessage: vi.fn().mockResolvedValue(undefined),
+          onMessage: { addListener, removeListener: vi.fn() },
+        },
+      } as unknown as typeof chrome;
+      setupMessageListener();
+      if (!captured) throw new Error('setupMessageListener did not register an onMessage listener');
+      return captured;
+    }
+
+    function setContentType(value: string | undefined): void {
+      Object.defineProperty(document, 'contentType', { configurable: true, value });
+    }
+
+    it('responds with isPdf=true when document.contentType is application/pdf', () => {
+      const listener = captureListener();
+      setContentType('application/pdf');
+      try {
+        let captured: unknown;
+        const ret = listener({ action: 'getPageContentType' }, {}, (r: unknown) => { captured = r; });
+        expect(captured).toEqual({ isPdf: true });
+        expect(ret).toBe(false);
+      } finally {
+        setContentType('text/html');
+      }
+    });
+
+    it('responds with isPdf=false when document.contentType is text/html', () => {
+      const listener = captureListener();
+      setContentType('text/html');
+      let captured: unknown;
+      listener({ action: 'getPageContentType' }, {}, (r: unknown) => { captured = r; });
+      expect(captured).toEqual({ isPdf: false });
+    });
+  });
 });

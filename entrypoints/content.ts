@@ -26,6 +26,7 @@ import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateCo
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
+import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { SHORT_PIECE_THRESHOLD } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
@@ -512,6 +513,12 @@ export function setupMessageListener(): void {
         totalCount: allPieces.length,
       });
       return false; // synchronous
+    } else if (message.action === 'getPageContentType') {
+      // Popup asks whether the active document is a PDF so its "Open current PDF"
+      // button works for extensionless URLs (e.g. https://arxiv.org/pdf/2606.20543)
+      // that the URL-only heuristic in the popup misses.
+      sendResponse({ isPdf: document.contentType === 'application/pdf' });
+      return false; // synchronous
     }
   });
 }
@@ -558,6 +565,21 @@ export default defineContentScript({
           stopTranslation();
         });
       }
+    }
+
+    // PDF auto-detect: if the browser is rendering a PDF in its native viewer,
+    // notify the background so it can auto-open the bundled translator. The
+    // contentType check catches extensionless URLs (arxiv.org/pdf/2606.20543)
+    // that URL heuristics miss. Skipped on extension pages (loop guard: the
+    // viewer itself loads a PDF) — the background also re-checks defensively.
+    if (!isExtensionPage) {
+      detectPdfAndNotify({
+        contentType: document.contentType,
+        href: location.href,
+        viewerOrigin: chrome.runtime.getURL(''),
+        tabId: 0, // background resolves the real tab id from sender.tab.id
+        sendMessage: (msg) => chrome.runtime.sendMessage(msg),
+      });
     }
 
     // Flush pending cache LRU updates on page unload
