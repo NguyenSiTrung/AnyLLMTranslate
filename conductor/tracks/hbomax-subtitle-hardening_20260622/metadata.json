@@ -1,0 +1,18 @@
+{
+  "track_id": "hbomax-subtitle-hardening_20260622",
+  "type": "improvement",
+  "status": "new",
+  "priority": "high",
+  "depends_on": ["hbomax-dom-cue-subtitles_20260619"],
+  "estimated_hours": 12,
+  "created_at": "2026-06-22T00:00:00Z",
+  "updated_at": "2026-06-22T00:00:00Z",
+  "description": "Fix and harden HBO Max DOM subtitle flow: manual Alt+S activation, track-switch state sync, track discovery for popup, shared primary-video selection, context menu coverage, and language-code alignment.",
+  "beads_epic": "ALT-7qw",
+  "beads_tasks": {},
+  "source_docs": {
+    "analysis": "Deep analysis session 2026-06-22 (HBO Max subtitle feature)",
+    "prior_spec": "docs/superpowers/specs/2026-06-19-hbomax-subtitle-design.md",
+    "prior_archive": "conductor/archive/hbomax-dom-cue-subtitles_20260619/"
+  }
+}

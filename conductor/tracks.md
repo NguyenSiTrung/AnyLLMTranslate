@@ -60,3 +60,9 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
+- [ ] **HBO Max Subtitle Hardening & UX Fixes** (`hbomax-subtitle-hardening_20260622`)
+  *Link: [./conductor/tracks/hbomax-subtitle-hardening_20260622/](./conductor/tracks/hbomax-subtitle-hardening_20260622/)*
+  Priority: high. Alt+S DOM activation, track-switch state sync, track discovery, shared primary video, context menu, language codes.
+
+---
+
