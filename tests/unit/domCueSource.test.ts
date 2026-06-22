@@ -222,6 +222,10 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     btn.setAttribute('aria-checked', 'true');
     await flushObservers();
 
+    const trackChanged = sentMessages.find((m) => m.type === 'SUBTITLE_DOM_TRACK_CHANGED');
+    expect(trackChanged).toBeDefined();
+    expect((trackChanged?.payload as { platform: string }).platform).toBe('hbomax');
+
     // Emit a cue from the new track.
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 10 });
     cueEl.textContent = 'Thai cue';

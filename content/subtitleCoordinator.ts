@@ -9,7 +9,13 @@
  * - Activate overlay fallback with translated cues when interception times out
  */
 
-import { onSubtitleIntercepted, sendTranslatedSubtitle, onTracksDiscovered, onDomCues } from '@/content/messageBridge';
+import {
+  onSubtitleIntercepted,
+  sendTranslatedSubtitle,
+  onTracksDiscovered,
+  onDomCues,
+  onDomTrackChanged,
+} from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
@@ -17,7 +23,14 @@ import { initializeControls, enableDragReposition } from '@/content/subtitleCont
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
-import type { SubtitleCue, SubtitleInterceptedPayload, AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload, SubtitleDomCuesPayload } from '@/types/subtitle';
+import type {
+  SubtitleCue,
+  SubtitleInterceptedPayload,
+  AvailableSubtitleTrack,
+  SubtitleTracksDiscoveredPayload,
+  SubtitleDomCuesPayload,
+  SubtitleDomTrackChangedPayload,
+} from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
@@ -36,6 +49,8 @@ interface CoordinatorState {
   navigationEpoch: number;
   /** Debounce timer for track discovery events */
   discoverDebounceTimer: ReturnType<typeof setTimeout> | null;
+  /** Debounce timer for DOM track list scraping (Max) */
+  domDiscoverDebounceTimer: ReturnType<typeof setTimeout> | null;
   /** True once the user has pressed play on the primary video */
   videoIsPlaying: boolean;
   /** Temporary tab-scoped category override from popup */
@@ -62,6 +77,7 @@ const state: CoordinatorState = {
   availableTracks: [],
   navigationEpoch: 0,
   discoverDebounceTimer: null,
+  domDiscoverDebounceTimer: null,
   videoIsPlaying: false,
   categoryOverride: undefined,
   activeSubtitleSessionId: null,
@@ -441,6 +457,56 @@ async function translateDomCueTexts(
   }
 }
 
+/** Clear DOM-platform translation buffers without tearing down the overlay shell. */
+function clearDomTranslationBuffers(): void {
+  state.domOriginalCues = [];
+  state.domTranslatedCues = [];
+  state.domTranslatedTexts = new Set();
+  state.domTranslationMap = new Map();
+  state.activeSubtitleSessionId = null;
+}
+
+/**
+ * Reset coordinator state when Max subtitle track changes mid-session.
+ */
+async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): Promise<void> {
+  console.log('AnyLLMTranslate: DOM subtitle track changed — clearing translation state');
+  cancelBackgroundSubtitleSession();
+  clearDomTranslationBuffers();
+  if (state.isOverlayMode) {
+    updateCues([]);
+  }
+  scheduleDomTrackDiscovery();
+}
+
+const DOM_TRACK_DISCOVER_DEBOUNCE_MS = 300;
+
+/** Debounced scrape of Max track buttons → SUBTITLE_TRACKS_AVAILABLE. */
+function scheduleDomTrackDiscovery(): void {
+  if (state.domDiscoverDebounceTimer !== null) {
+    clearTimeout(state.domDiscoverDebounceTimer);
+  }
+  state.domDiscoverDebounceTimer = setTimeout(() => {
+    state.domDiscoverDebounceTimer = null;
+    void discoverDomSubtitleTracks();
+  }, DOM_TRACK_DISCOVER_DEBOUNCE_MS);
+}
+
+async function discoverDomSubtitleTracks(): Promise<void> {
+  if (!isOnWatchPage()) return;
+  const handler = detectCurrentHandler();
+  if (!handler?.getDomCueSource?.() || !handler.extractAvailableTracks) return;
+
+  const tracks = handler.extractAvailableTracks('', 'application/json', '');
+  if (tracks.length === 0) return;
+
+  await processTracksDiscovered({
+    platform: handler.platform,
+    tracks,
+    videoId: tracks[0]?.videoId,
+  });
+}
+
 /**
  * Handle DOM-scraped cues from MAIN world (Max). Accumulates cues, translates
  * the delta on each batch, and keeps the overlay showing bilingual cues
@@ -735,6 +801,11 @@ export function startCoordinator(): () => void {
   // Listen for DOM-scraped cues from MAIN world (Max)
   const cleanupDomCues = onDomCues(handleDomCues);
 
+  const cleanupDomTrackChanged = onDomTrackChanged(handleDomTrackChanged);
+
+  // Proactive DOM track list for popup (Max has no metadata URLs)
+  scheduleDomTrackDiscovery();
+
   // Watch for SPA navigations to reset per-video state
   const cleanupNavWatcher = startSpaNavigationWatcher();
 
@@ -789,6 +860,7 @@ export function startCoordinator(): () => void {
     cleanupBridge();
     cleanupDiscovery();
     cleanupDomCues();
+    cleanupDomTrackChanged();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
@@ -796,6 +868,10 @@ export function startCoordinator(): () => void {
     if (state.discoverDebounceTimer !== null) {
       clearTimeout(state.discoverDebounceTimer);
       state.discoverDebounceTimer = null;
+    }
+    if (state.domDiscoverDebounceTimer !== null) {
+      clearTimeout(state.domDiscoverDebounceTimer);
+      state.domDiscoverDebounceTimer = null;
     }
 
     if (proactiveCategoryDetectionTimer !== null) {
@@ -853,6 +929,10 @@ export function resetCoordinatorState(): void {
     clearTimeout(state.discoverDebounceTimer);
     state.discoverDebounceTimer = null;
   }
+  if (state.domDiscoverDebounceTimer !== null) {
+    clearTimeout(state.domDiscoverDebounceTimer);
+    state.domDiscoverDebounceTimer = null;
+  }
   if (state.dragCleanup) {
     state.dragCleanup();
     state.dragCleanup = null;
@@ -863,10 +943,7 @@ export function resetCoordinatorState(): void {
   state.pendingRequests.clear();
   clearHoverCache();
   restoreNativeCaptions();
-  state.domOriginalCues = [];
-  state.domTranslatedCues = [];
-  state.domTranslatedTexts = new Set();
-  state.domTranslationMap = new Map();
+  clearDomTranslationBuffers();
 }
 
 /**
@@ -1045,7 +1122,9 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
  *   2. Active Max track language matches preferredSubtitleLanguage (or preferred is 'auto')
  * Returns { activated, reason } for testability.
  */
-export async function tryAutoActivateForDom(): Promise<{ activated: boolean; reason: string }> {
+export async function tryAutoActivateForDom(options?: {
+  manual?: boolean;
+}): Promise<{ activated: boolean; reason: string }> {
   if (state.isOverlayMode) return { activated: false, reason: 'already active' };
   if (!isOnWatchPage()) return { activated: false, reason: 'not a watch page' };
 
@@ -1059,7 +1138,10 @@ export async function tryAutoActivateForDom(): Promise<{ activated: boolean; rea
   if (state.navigationEpoch !== epochAtStart) {
     return { activated: false, reason: 'stale (SPA navigation)' };
   }
-  if (!settings.subtitleSettings.enabled || !settings.subtitleSettings.autoActivateSubtitles) {
+  if (!settings.subtitleSettings.enabled) {
+    return { activated: false, reason: 'subtitles disabled' };
+  }
+  if (!options?.manual && !settings.subtitleSettings.autoActivateSubtitles) {
     return { activated: false, reason: 'auto-activate disabled' };
   }
 
@@ -1082,7 +1164,12 @@ export async function tryAutoActivateForDom(): Promise<{ activated: boolean; rea
   }
 
   const preferred = settings.subtitleSettings.preferredSubtitleLanguage;
-  if (preferred && preferred !== 'auto' && activeLang !== preferred) {
+  if (
+    !options?.manual &&
+    preferred &&
+    preferred !== 'auto' &&
+    activeLang !== preferred
+  ) {
     return { activated: false, reason: `active language ${activeLang} != preferred ${preferred}` };
   }
 
@@ -1175,6 +1262,16 @@ function startVideoPlaybackWatcher(): () => void {
  */
 export async function selectSubtitleTrack(language: string): Promise<void> {
   const track = state.availableTracks.find((t) => t.language === language);
+  const handler = detectCurrentHandler();
+  if (handler?.getDomCueSource) {
+    if (!track) {
+      console.warn('AnyLLMTranslate: No DOM track metadata for', language);
+      return;
+    }
+    console.log('AnyLLMTranslate: DOM platform track selected — awaiting cues', { language });
+    await tryAutoActivateForDom({ manual: true });
+    return;
+  }
   if (!track?.url) {
     console.warn('AnyLLMTranslate: No URL for track', language);
     return;
@@ -1182,6 +1279,32 @@ export async function selectSubtitleTrack(language: string): Promise<void> {
 
   console.log('AnyLLMTranslate: Selecting subtitle track', { language, url: track.url });
   await activateOverlayMode(track.url);
+}
+
+/**
+ * Manual subtitle activation (Alt+S, context menu). Uses DOM path when the
+ * current handler has no VTT URL.
+ */
+export async function manualActivateSubtitles(): Promise<void> {
+  const handler = detectCurrentHandler();
+  if (handler?.getDomCueSource) {
+    await tryAutoActivateForDom({ manual: true });
+    return;
+  }
+
+  const tracks = getAvailableTracks();
+  if (tracks.length === 0) {
+    console.warn('AnyLLMTranslate: No subtitle tracks available for manual activation');
+    return;
+  }
+
+  const settings = await loadSettings();
+  const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
+  const preferred = tracks.find((t) => t.language === preferredLang);
+  const trackToSelect = preferred ?? tracks[0];
+  if (trackToSelect) {
+    await selectSubtitleTrack(trackToSelect.language);
+  }
 }
 
 /**

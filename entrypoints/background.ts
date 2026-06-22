@@ -50,6 +50,9 @@ function setupContextMenus(): void {
         '*://*.youtube.com/*',
         '*://*.udemy.com/*',
         '*://*.coursera.org/*',
+        '*://*.linkedin.com/*',
+        '*://*.max.com/*',
+        '*://*.hbomax.com/*',
       ],
     });
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Capture the onDomCues handler so we can invoke it directly with payloads.
+// Capture the onDomCues / onDomTrackChanged handlers so we can invoke them directly.
 let capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let capturedDomTrackChangedHandler: ((payload: unknown) => Promise<void>) | null = null;
 
 /** Invoke the captured DOM cues handler, asserting it was registered. */
 async function invokeDomCuesHandler(payload: unknown): Promise<void> {
@@ -16,6 +17,10 @@ vi.mock('@/content/messageBridge', () => ({
   onTracksDiscovered: () => () => {},
   onDomCues: (handler: (payload: unknown) => Promise<void>) => {
     capturedDomCuesHandler = handler;
+    return () => {};
+  },
+  onDomTrackChanged: (handler: (payload: unknown) => Promise<void>) => {
+    capturedDomTrackChangedHandler = handler;
     return () => {};
   },
   sendTranslatedSubtitle: vi.fn(),
@@ -84,6 +89,7 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
     document.head.innerHTML = '';
     document.body.innerHTML = '';
     capturedDomCuesHandler = null;
+    capturedDomTrackChangedHandler = null;
     loadSettingsMock.mockReset();
     loadSettingsMock.mockResolvedValue(JSON.parse(JSON.stringify(baseSettings)));
     vi.clearAllMocks();
@@ -356,6 +362,112 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
     const result = await tryAutoActivateForDom();
     expect(result.activated).toBe(true);
     expect(result.reason).toContain('en');
+    resetCoordinatorState();
+  });
+
+  it('manual tryAutoActivateForDom activates when preferred language mismatches active track', async () => {
+    setLocation('www.max.com', '/video/watch/x/y');
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-testid', 'caption_renderer_overlay');
+    overlay.style.visibility = 'visible';
+    document.body.appendChild(overlay);
+    const btn = document.createElement('button');
+    btn.setAttribute('data-testid', 'player-ux-text-track-button');
+    btn.setAttribute('aria-label', 'Thai');
+    btn.setAttribute('aria-checked', 'true');
+    document.body.appendChild(btn);
+
+    const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+    vi.mocked(detectCurrentHandler).mockReturnValue({
+      platform: 'hbomax',
+      getDomCueSource: () => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'th',
+      }),
+    } as never);
+
+    loadSettingsMock.mockResolvedValue({
+      ...JSON.parse(JSON.stringify(baseSettings)),
+      subtitleSettings: {
+        ...baseSettings.subtitleSettings,
+        preferredSubtitleLanguage: 'en',
+      },
+    });
+
+    const { tryAutoActivateForDom, resetCoordinatorState } = await import('@/content/subtitleCoordinator');
+    const manual = await tryAutoActivateForDom({ manual: true });
+    expect(manual.activated).toBe(true);
+    resetCoordinatorState();
+  });
+
+  it('handleDomTrackChanged clears overlay cues and cancels background session', async () => {
+    setLocation('www.max.com', '/video/watch/abc/def');
+    const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+    vi.mocked(detectCurrentHandler).mockReturnValue({
+      platform: 'hbomax',
+      getDomCueSource: () => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      }),
+    } as never);
+
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+
+    await invokeDomCuesHandler({
+      cues: [{ startTime: 0, endTime: 2, text: 'first' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    const { updateCues } = await import('@/content/subtitleOverlay');
+    vi.mocked(updateCues).mockClear();
+
+    expect(capturedDomTrackChangedHandler).not.toBeNull();
+    if (capturedDomTrackChangedHandler) {
+      await capturedDomTrackChangedHandler({ platform: 'hbomax', language: 'th' });
+    }
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'CANCEL_SUBTITLE_SESSION' }),
+    );
+    expect(vi.mocked(updateCues)).toHaveBeenCalledWith([]);
+
+    mod.resetCoordinatorState();
+  });
+
+  it('manualActivateSubtitles succeeds on DOM platform without track URLs', async () => {
+    setLocation('www.max.com', '/video/watch/x/y');
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-testid', 'caption_renderer_overlay');
+    overlay.style.visibility = 'visible';
+    document.body.appendChild(overlay);
+    const btn = document.createElement('button');
+    btn.setAttribute('data-testid', 'player-ux-text-track-button');
+    btn.setAttribute('aria-label', 'English');
+    btn.setAttribute('aria-checked', 'true');
+    document.body.appendChild(btn);
+
+    const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+    vi.mocked(detectCurrentHandler).mockReturnValue({
+      platform: 'hbomax',
+      getDomCueSource: () => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      }),
+    } as never);
+
+    const { manualActivateSubtitles, tryAutoActivateForDom, resetCoordinatorState } =
+      await import('@/content/subtitleCoordinator');
+    await expect(manualActivateSubtitles()).resolves.toBeUndefined();
+    const after = await tryAutoActivateForDom({ manual: true });
+    expect(after.activated).toBe(true);
     resetCoordinatorState();
   });
 });

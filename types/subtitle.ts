@@ -36,7 +36,8 @@ export type BridgeMessageType =
   | 'SUBTITLE_METADATA'
   | 'SUBTITLE_ERROR'
   | 'SUBTITLE_TRACKS_DISCOVERED'
-  | 'SUBTITLE_DOM_CUES';
+  | 'SUBTITLE_DOM_CUES'
+  | 'SUBTITLE_DOM_TRACK_CHANGED';
 
 /** postMessage payload between worlds */
 export interface BridgeMessage<T = unknown> {
@@ -87,6 +88,13 @@ export interface SubtitleDomCuesPayload {
   cues: SubtitleCue[];
   platform: string;   // e.g. 'hbomax'
   language: string;   // active source language ('' if unknown)
+  videoId?: string;
+}
+
+/** Payload when the user switches a DOM-sourced subtitle track mid-session */
+export interface SubtitleDomTrackChangedPayload {
+  platform: string;
+  language: string;
   videoId?: string;
 }
 

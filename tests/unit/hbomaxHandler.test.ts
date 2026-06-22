@@ -93,7 +93,7 @@ describe('HboMaxHandler', () => {
       `;
       const tracks = handler.extractAvailableTracks('', 'application/json', '');
       expect(tracks).toHaveLength(1);
-      expect(tracks[0].language).toBe('spanish');
+      expect(tracks[0].language).toBe('es');
       expect(tracks[0].label).toBe('Spanish');
     });
   });

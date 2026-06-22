@@ -8,6 +8,7 @@
  * Mirrors textTrackDiscovery.ts shape: returns a cleanup function.
  */
 
+import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
@@ -160,6 +161,11 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
       ) {
         console.log('[AnyLLMTranslate] Max subtitle track changed — resetting DOM cue buffer');
         resetBuffer();
+        bridge.send('SUBTITLE_DOM_TRACK_CHANGED', {
+          platform: handler.platform,
+          language: domSource.readActiveLanguage(),
+          videoId: extractVideoId(),
+        });
         return;
       }
     }
@@ -175,19 +181,6 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     trackObserver.disconnect();
     detach();
   };
-}
-
-function findPrimaryVideo(): HTMLVideoElement | null {
-  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
-  if (videos.length === 0) return null;
-  if (videos.length === 1) return videos[0];
-  const scored = videos
-    .map((v) => {
-      const rect = v.getBoundingClientRect();
-      return { video: v, score: rect.width * rect.height };
-    })
-    .sort((a, b) => b.score - a.score);
-  return scored[0]?.video ?? null;
 }
 
 function extractVideoId(): string | undefined {

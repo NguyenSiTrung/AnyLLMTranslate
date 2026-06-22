@@ -10,6 +10,7 @@
  * - Smooth fade-in/out transitions between cues
  */
 
+import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { SubtitleFontSizeMode } from '@/types/config';
 
@@ -181,12 +182,11 @@ function syncOverlayHost(overlay: HTMLElement, video: HTMLVideoElement): HTMLEle
 }
 
 /**
- * Find the first video element on the page.
+ * Find the primary video element on the page (largest by layout area).
  * Returns null if no video is found.
  */
 function findVideoElement(): HTMLVideoElement | null {
-  const videos = document.querySelectorAll('video');
-  return videos.length > 0 ? videos[0] : null;
+  return findPrimaryVideo();
 }
 
 /**

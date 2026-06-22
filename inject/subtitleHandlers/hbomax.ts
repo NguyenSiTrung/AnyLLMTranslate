@@ -14,6 +14,7 @@ const LABEL_TO_LANGUAGE: Record<string, string> = {
   Indonesian: 'id',
   Malay: 'ms',
   Thai: 'th',
+  Spanish: 'es',
   Vietnamese: 'vi',
 };
 

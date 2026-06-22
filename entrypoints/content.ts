@@ -502,20 +502,8 @@ export function setupMessageListener(): void {
       })();
       return true; // async response
     } else if (message.action === 'startSubtitleTranslation') {
-      // Manual subtitle activation — select preferred track from coordinator
-      import('@/content/subtitleCoordinator').then(({ selectSubtitleTrack, getAvailableTracks }) => {
-        const tracks = getAvailableTracks();
-        if (tracks.length > 0) {
-          // Try to find preferred language track, fall back to first available
-          loadSettings().then((settings) => {
-            const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
-            const preferred = tracks.find((t) => t.language === preferredLang);
-            const trackToSelect = preferred || tracks[0];
-            if (trackToSelect?.url) {
-              selectSubtitleTrack(trackToSelect.language);
-            }
-          });
-        }
+      void import('@/content/subtitleCoordinator').then(({ manualActivateSubtitles }) => {
+        void manualActivateSubtitles();
       });
     } else if (message.action === 'getStatus') {
       sendResponse({

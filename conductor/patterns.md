@@ -42,6 +42,10 @@ Reusable patterns discovered during development. Read this before starting new w
 - CORS bypass for subtitle fetching: direct fetch first, fallback to chrome.runtime.sendMessage via background worker. (from: phase2-subtitles_20260409, archived 2026-04-09)
 - Subtitle handlers must be registered in both the isolated world script (coordination/UI) and the MAIN world script (XHR/fetch interception) — missing either registration breaks the pipeline. (from: linkedin-subtitles_20260523, archived 2026-05-25)
 - Background service worker's `SUBTITLE_ALLOWLIST` must include CDN domains (e.g. `licdn.com` for LinkedIn) to permit CORS-bypass subtitle downloads via the MAIN world scripts. (from: linkedin-subtitles_20260523, archived 2026-05-25)
+- DOM-sourced platforms (Max): manual Alt+S / context menu must call `tryAutoActivateForDom({ manual: true })` — do not require `track.url` or `autoActivateSubtitles`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
+- On Max mid-session track switch, MAIN world emits `SUBTITLE_DOM_TRACK_CHANGED` after resetting the cue buffer; ISOLATED clears `domOriginalCues` / `domTranslationMap`, empties overlay cues, and sends `CANCEL_SUBTITLE_SESSION`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
+- Use shared `lib/findPrimaryVideo()` (largest layout area) for DOM cue sampling and subtitle overlay attachment when multiple `<video>` elements exist. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
+- Debounced `handler.extractAvailableTracks()` on Max watch pages populates `availableTracks` with `url: undefined` for popup `SUBTITLE_TRACKS_AVAILABLE`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
 
 ## Type System
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)

@@ -12,6 +12,7 @@ import type {
   SubtitleTranslatedPayload,
   SubtitleTracksDiscoveredPayload,
   SubtitleDomCuesPayload,
+  SubtitleDomTrackChangedPayload,
 } from '@/types/subtitle';
 
 /**
@@ -61,6 +62,22 @@ export function onDomCues(
       await handler(payload as SubtitleDomCuesPayload);
     } catch (error) {
       console.warn('AnyLLMTranslate: DOM cues handler error', error);
+    }
+  });
+}
+
+/**
+ * Listen for DOM subtitle track changes from the MAIN world.
+ * Returns a cleanup function.
+ */
+export function onDomTrackChanged(
+  handler: (payload: SubtitleDomTrackChangedPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_DOM_TRACK_CHANGED', async (payload) => {
+    try {
+      await handler(payload as SubtitleDomTrackChangedPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: DOM track changed handler error', error);
     }
   });
 }

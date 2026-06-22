@@ -18,6 +18,7 @@ vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: vi.fn(() => vi.fn()),
   onTracksDiscovered: vi.fn(() => vi.fn()),
   onDomCues: vi.fn(() => vi.fn()),
+  onDomTrackChanged: vi.fn(() => vi.fn()),
   sendTranslatedSubtitle: vi.fn(),
 }));
 
