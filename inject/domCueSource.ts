@@ -13,9 +13,21 @@ import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
 
+/** Maximum number of cues to keep in the rolling buffer (sliding window). */
+const MAX_CUES = 200;
+
+/** Debounce a function by ms. Coalesces rapid calls into one. */
+function debounce<T extends () => void>(fn: T, ms: number): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fn, ms);
+  };
+}
+
 /**
  * Start observing the page for DOM-rendered captions.
- * Emits SUBTITLE_DOM_CUES messages with a rolling SubtitleCue[].
+ * Emits SUBTITLE_DOM_CUES messages with a rolling SubtitleCue[] (capped at MAX_CUES).
  * Returns a cleanup function. Returns a no-op cleanup when the handler
  * exposes no DOM cue source, or when no video / observe root is present.
  */
@@ -91,6 +103,10 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     // findActiveCue() can match it. The next cue will close this one precisely.
     const cue: SubtitleCue = { startTime: t, endTime: t + 86400, text };
     cues.push(cue);
+    // Sliding window: cap buffer to last MAX_CUES entries
+    if (cues.length > MAX_CUES) {
+      cues.splice(0, cues.length - MAX_CUES);
+    }
     openCue = cue;
     lastText = text;
 
@@ -102,9 +118,9 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     // Detach any prior attachment (e.g. player re-mounted).
     detach();
 
-    const observer = new MutationObserver(() => {
-      sampleCue(video);
-    });
+    const observer = new MutationObserver(
+      debounce(() => sampleCue(video), 50),
+    );
     observer.observe(rootEl, { childList: true, subtree: true, characterData: true });
 
     const pauseHandler = () => {
@@ -139,9 +155,9 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
 
   // Watch for dynamically inserted video / caption-overlay nodes (Max's React
   // player mounts after DOMContentLoaded). Re-evaluate on each added subtree.
-  const documentObserver = new MutationObserver(() => {
-    tryAttach();
-  });
+  const documentObserver = new MutationObserver(
+    debounce(tryAttach, 50),
+  );
   documentObserver.observe(document.documentElement, { childList: true, subtree: true });
 
   // Initial attempt (dependencies may already be present at startup).

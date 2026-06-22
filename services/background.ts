@@ -530,10 +530,12 @@ async function handleTranslateSubtitle(
                  for (let j = 0; j < chunkResult.length; j++) {
                     translatedCues[i + j] = chunkResult[j];
                  }
-                 // Send the FULL updated array to tab
+                 // Send ONLY the translated chunk delta (not the full array)
+                 // to reduce message size from O(n) to O(chunk_size)
                  chrome.tabs.sendMessage(tabId, {
                     action: 'SUBTITLE_CHUNK_TRANSLATED',
-                    cues: translatedCues,
+                    chunkStart: i,
+                    chunkCues: chunkResult,
                     sessionId: session.sessionId,
                  });
                }
@@ -569,13 +571,6 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)udemy\.com$/,
   /(?:^|\.)coursera\.org$/,
   /(?:^|\.)coursera-user-content\.net$/,
-  /(?:^|\.)vimeo\.com$/,
-  /(?:^|\.)vimeocdn\.com$/,
-  /(?:^|\.)netflix\.com$/,
-  /(?:^|\.)nflxvideo\.net$/,
-  /(?:^|\.)amazon\.com$/,
-  /(?:^|\.)primevideo\.com$/,
-  /(?:^|\.)aiv-cdn\.net$/,
   /(?:^|\.)cloudfront\.net$/,
   /(?:^|\.)akamaized\.net$/,
   /(?:^|\.)linkedin\.com$/,

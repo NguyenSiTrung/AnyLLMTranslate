@@ -42,7 +42,6 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 interface CoordinatorState {
   isOverlayMode: boolean;
   pendingRequests: Map<string, ReturnType<typeof setTimeout>>;
-  interceptTimeout: number;
   dragCleanup: (() => void) | null;
   availableTracks: AvailableSubtitleTrack[];
   /** Incremented on SPA navigation to invalidate stale async callbacks */
@@ -67,12 +66,13 @@ interface CoordinatorState {
   domTranslatedTexts: Set<string>;
   /** DOM-platform: persistent map of originalText → translatedText across batches */
   domTranslationMap: Map<string, string>;
+  /** Translated cues array (merged from chunk deltas) for overlay display */
+  translatedCues: SubtitleCue[] | null;
 }
 
 const state: CoordinatorState = {
   isOverlayMode: false,
   pendingRequests: new Map(),
-  interceptTimeout: 30000, // Reserved for future use — interceptors manage their own timeouts
   dragCleanup: null,
   availableTracks: [],
   navigationEpoch: 0,
@@ -86,6 +86,7 @@ const state: CoordinatorState = {
   domTranslatedCues: [],
   domTranslatedTexts: new Set(),
   domTranslationMap: new Map(),
+  translatedCues: null,
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -678,6 +679,32 @@ export function updateTranslatedCues(cues: SubtitleCue[]): void {
 }
 
 /**
+ * Merge a translated chunk into the existing translated cues array at the given offset.
+ * Called when background sends chunk deltas (SUBTITLE_CHUNK_TRANSLATED with chunkStart).
+ */
+function mergeTranslatedChunk(chunkStart: number, chunkCues: SubtitleCue[]): void {
+  if (!state.isOverlayMode) {
+    console.warn('AnyLLMTranslate: Cannot merge chunk - not in overlay mode');
+    return;
+  }
+  // Get current translated cues from the overlay, merge chunk, and update
+  const currentCues = state.translatedCues
+    ? [...state.translatedCues]
+    : new Array<SubtitleCue>(chunkStart + chunkCues.length);
+  // Ensure array is large enough
+  const needed = chunkStart + chunkCues.length;
+  if (currentCues.length < needed) {
+    currentCues.length = needed;
+  }
+  // Merge chunk at offset
+  for (let j = 0; j < chunkCues.length; j++) {
+    currentCues[chunkStart + j] = chunkCues[j];
+  }
+  state.translatedCues = currentCues;
+  updateCues(currentCues);
+}
+
+/**
  * Clear a pending request timeout to prevent spurious overlay activation.
  * Called when translation completes successfully.
  */
@@ -818,8 +845,8 @@ export function startCoordinator(): () => void {
     _sender: chrome.runtime.MessageSender,
     _sendResponse: () => void
   ) => {
-    const msg = message as { action?: string; cues?: SubtitleCue[]; language?: string };
-    if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED' && msg.cues) {
+    const msg = message as { action?: string; cues?: SubtitleCue[]; chunkStart?: number; chunkCues?: SubtitleCue[]; language?: string };
+    if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED') {
       // Drop stale chunks from old subtitle sessions
       const chunkSessionId = (message as { sessionId?: number }).sessionId;
       if (
@@ -833,7 +860,13 @@ export function startCoordinator(): () => void {
         });
         return;
       }
-      updateTranslatedCues(msg.cues);
+      // Handle chunk delta format (chunkStart + chunkCues)
+      if (msg.chunkCues && msg.chunkStart !== undefined) {
+        mergeTranslatedChunk(msg.chunkStart, msg.chunkCues);
+      } else if (msg.cues) {
+        // Fallback: full array format (backward compat)
+        updateTranslatedCues(msg.cues);
+      }
     }
     // Handle popup requesting subtitle track selection
     if (msg.action === 'SELECT_SUBTITLE_TRACK' && msg.language) {

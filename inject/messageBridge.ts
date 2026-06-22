@@ -67,39 +67,3 @@ export function onMessage(
   window.addEventListener('message', listener);
   return () => window.removeEventListener('message', listener);
 }
-
-/**
- * Send a message and wait for a response.
- * Correlates the response via requestId.
- */
-export function requestResponse<TReq, TRes>(
-  type: BridgeMessageType,
-  payload: TReq,
-  responseType: BridgeMessageType,
-  timeoutMs = 5000,
-): Promise<TRes> {
-  return new Promise((resolve, reject) => {
-    const cleanup = onMessage(responseType, (resPayload) => {
-      cleanup();
-      resolve(resPayload as TRes);
-    }, { once: true });
-
-    const requestId = sendMessage(type, payload);
-
-    // Store the requestId so the responder can correlate
-    (window as Window & { __anyllmTranslateRequests?: Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }> })
-      .__anyllmTranslateRequests = (window as Window & { __anyllmTranslateRequests?: Map<string, unknown> }).__anyllmTranslateRequests || new Map();
-
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error(`Bridge request ${requestId} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    // Override resolve to clear timer
-    const originalResolve = resolve;
-    resolve = ((value: TRes | PromiseLike<TRes>) => {
-      clearTimeout(timer);
-      originalResolve(value);
-    }) as typeof resolve;
-  });
-}

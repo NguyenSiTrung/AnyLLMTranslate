@@ -23,12 +23,13 @@ function makeDomSource(readActiveLanguage = () => 'en'): DomCueSource {
   };
 }
 
-/** Flush pending MutationObserver callbacks (jsdom delivers them as microtasks). */
+/** Flush pending MutationObserver callbacks (jsdom delivers them as microtasks).
+ *  Also waits for the 50ms debounce in domCueSource's MutationObserver wrappers. */
 function flushObservers(): Promise<void> {
   return new Promise((resolve) => {
     Promise.resolve()
       .then(() => Promise.resolve())
-      .then(() => resolve());
+      .then(() => setTimeout(resolve, 60));
   });
 }
 

@@ -11,6 +11,7 @@
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
+import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 
 /** Set of already-reported video elements to avoid duplicate messages */
 const reportedVideos = new WeakSet<HTMLVideoElement>();
@@ -90,30 +91,6 @@ function watchVideo(video: HTMLVideoElement, bridge: MessageBridgeSender): void 
 }
 
 /**
- * Find the "primary" video element on the page — the one the user is watching.
- * Heuristic: largest visible area + has a currentSrc (not a thumbnail preview).
- * Falls back to any video with a src if nothing dominant is found.
- */
-function findPrimaryVideo(): HTMLVideoElement | null {
-  const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'));
-  if (videos.length === 0) return null;
-  if (videos.length === 1) return videos[0];
-
-  // Score by visible area × (has currentSrc bonus)
-  const scored = videos
-    .filter((v) => v.readyState >= 1) // HAVE_METADATA or more
-    .map((v) => {
-      const rect = v.getBoundingClientRect();
-      const area = rect.width * rect.height;
-      const srcBonus = v.currentSrc ? 2 : 1;
-      return { video: v, score: area * srcBonus };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  return scored[0]?.video ?? null;
-}
-
-/**
  * Start HTML5 TextTrack discovery.
  * Targets only the primary (largest/loaded) video element to avoid
  * picking up thumbnail preview videos on listing pages.
@@ -130,20 +107,29 @@ export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void
   // Initial scan
   scanPrimary();
 
-  // Watch for dynamically inserted video elements
+  // Watch for dynamically inserted video elements (throttled)
+  let scanTimer: ReturnType<typeof setTimeout> | null = null;
+  const debouncedScan = () => {
+    if (scanTimer) clearTimeout(scanTimer);
+    scanTimer = setTimeout(scanPrimary, 50);
+  };
+
   const observer = new MutationObserver((mutations) => {
+    let hasVideo = false;
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node instanceof HTMLVideoElement) {
-          // Re-evaluate primary on each new video addition
-          scanPrimary();
+          hasVideo = true;
+          break;
         }
-        // Also check descendants of added containers
         if (node instanceof HTMLElement && node.querySelector('video')) {
-          scanPrimary();
+          hasVideo = true;
+          break;
         }
       }
+      if (hasVideo) break;
     }
+    if (hasVideo) debouncedScan();
   });
 
   observer.observe(document.documentElement, {
