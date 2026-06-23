@@ -199,3 +199,42 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
     expect(ids).toContain('unique-id-def');
   });
 });
+
+// ── Web-page prompt regression guard ──────────────────────────────────────────
+// Sub-project: subtitle profiles & profile-driven prompt. The subtitle path now
+// routes to buildSubtitleSystemPrompt via subtitleKnobs. This guard verifies the
+// WEB-PAGE translate path is unaffected: it still uses buildSystemPrompt and
+// honors settings.customSystemPrompt, and never emits the subtitle identity.
+describe('handleTranslate — web-page prompt unchanged by subtitle profiles', () => {
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+  });
+
+  it('uses buildSystemPrompt with customSystemPrompt and not the subtitle prompt', async () => {
+    // Seed a custom web-page system prompt in settings.
+    mockStorage['anyllm-translate-settings'] = {
+      customSystemPrompt:
+        'WEB CUSTOM MARKER {{targetLanguage}}. {{glossary}} Respond with JSON {"translations": {}}.',
+    };
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const systemPrompt = body.messages[0].content;
+
+    // Web custom prompt is honored.
+    expect(systemPrompt).toContain('WEB CUSTOM MARKER');
+    // Subtitle prompt must NOT leak into the web path.
+    expect(systemPrompt).not.toContain('subtitle translator');
+  });
+});
