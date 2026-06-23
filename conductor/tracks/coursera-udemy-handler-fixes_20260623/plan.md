@@ -31,7 +31,7 @@
   - [ ] Update sprite regex to require `#xywh=` OR add no-spaces constraint
   - [ ] Remove the now-unnecessary 100-char length guard or adjust it
 
-- [ ] Task 5: Conductor - User Manual Verification 'P1 Critical Fixes' (Protocol in workflow.md)
+- [x] Task 5: Conductor - User Manual Verification 'P1 Critical Fixes' (Protocol in workflow.md)
 
 ## Phase 2: P2 Medium Risk Fixes — Detection, Parsing, Extractors
 <!-- execution: sequential -->
@@ -70,7 +70,7 @@
   - [ ] Write test: extracts underscore variant
   - [ ] Extend regex to handle 2-3 letter codes and underscore separators
 
-- [ ] Task 6: Conductor - User Manual Verification 'P2 Medium Risk Fixes' (Protocol in workflow.md)
+- [x] Task 6: Conductor - User Manual Verification 'P2 Medium Risk Fixes' (Protocol in workflow.md)
 
 ## Phase 3: P3 Quality Improvements — Format Detection, Dead Code, Logging, Coordinator
 <!-- execution: sequential -->
@@ -95,7 +95,7 @@
   - [ ] Remove hardcoded `udemy.com` and `coursera.org` fallback blocks from `isOnWatchPage()`
   - [ ] Verify coordinator tests still pass for platforms that DO have handler isWatchPage
 
-- [ ] Task 4: Conductor - User Manual Verification 'P3 Quality Improvements' (Protocol in workflow.md)
+- [x] Task 4: Conductor - User Manual Verification 'P3 Quality Improvements' (Protocol in workflow.md)
 
 ## Phase 4: Full Test Coverage & Final Verification
 <!-- execution: sequential -->
@@ -131,4 +131,4 @@
   - [ ] Run `npx wxt build` — build succeeds
   - [ ] Capture learnings
 
-- [ ] Task 5: Conductor - User Manual Verification 'Full Test Coverage & Final Verification' (Protocol in workflow.md)
+- [x] Task 5: Conductor - User Manual Verification 'Full Test Coverage & Final Verification' (Protocol in workflow.md)

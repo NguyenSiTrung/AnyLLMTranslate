@@ -46,6 +46,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - On Max mid-session track switch, MAIN world emits `SUBTITLE_DOM_TRACK_CHANGED` after resetting the cue buffer; ISOLATED clears `domOriginalCues` / `domTranslationMap`, empties overlay cues, and sends `CANCEL_SUBTITLE_SESSION`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
 - Use shared `lib/findPrimaryVideo()` (largest layout area) for DOM cue sampling and subtitle overlay attachment when multiple `<video>` elements exist. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
 - Debounced `handler.extractAvailableTracks()` on Max watch pages populates `availableTracks` with `url: undefined` for popup `SUBTITLE_TRACKS_AVAILABLE`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
+- Coursera subtitles may be served from `cloudfront.net` VTT URLs — add CDN patterns in `getPatterns()` (not only `coursera.org`). Coursera/Udemy `detect()` should use `hostname === 'x.com' || hostname.endsWith('.x.com')` to reject spoofed domains like `notcoursera.org`. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- Udemy `locale_id` should map to BCP-47 with `replace('_', '-')` so `en_US` / `en_GB` do not dedupe together; sprite cue filter must require `#xywh=` on image filenames. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
 
 ## Type System
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)
