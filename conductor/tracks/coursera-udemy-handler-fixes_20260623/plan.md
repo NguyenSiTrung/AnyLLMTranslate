@@ -3,27 +3,27 @@
 ## Phase 1: P1 Critical Fixes — Coursera CDN & videoId, Udemy Locale & Sprite Filter
 <!-- execution: parallel -->
 
-- [ ] Task 1: Add Coursera CDN subtitle URL pattern
+- [x] Task 1: Add Coursera CDN subtitle URL pattern
   <!-- files: inject/subtitleHandlers/coursera.ts, tests/unit/courseraHandler.test.ts -->
   - [ ] Write test: CDN VTT URL (cloudfront.net) matches Coursera handler patterns
   - [ ] Add CDN pattern to `getPatterns()` (e.g. `/cloudfront\.net\/.*\.vtt/` or broader CDN regex)
   - [ ] Add languageExtractor for CDN URLs (extract lang from filename or path)
   - [ ] Verify pattern is registered via `getPatternsForCurrentHost()` when on coursera.org
 
-- [ ] Task 2: Fix Coursera videoId extraction from metadata API
+- [x] Task 2: Fix Coursera videoId extraction from metadata API
   <!-- files: inject/subtitleHandlers/coursera.ts, tests/unit/courseraHandler.test.ts -->
   - [ ] Write test: `extractAvailableTracks` returns correct videoId from API response body
   - [ ] Fix `videoId` extraction — pull from response data (e.g. `data.id`, `data.elementId`, or course/lecture ID field) instead of URL path
   - [ ] Write test: videoId is undefined when not present in response (graceful)
 
-- [ ] Task 3: Fix Udemy locale region preservation
+- [x] Task 3: Fix Udemy locale region preservation
   <!-- files: inject/subtitleHandlers/udemy.ts, tests/unit/udemyHandler.test.ts -->
   - [ ] Write test: `extractAvailableTracks` with `en_US` and `en_GB` returns distinct tracks
   - [ ] Write test: `locale_id` `en_US` produces language `en-US` (BCP-47 with hyphen)
   - [ ] Change `locale_id.split('_')[0]` to preserve full locale: `locale_id.replace('_', '-')`
   - [ ] Verify coordinator dedup no longer collapses same-language-different-region tracks
 
-- [ ] Task 4: Fix Udemy sprite filter false positives
+- [x] Task 4: Fix Udemy sprite filter false positives
   <!-- files: inject/subtitleHandlers/udemy.ts, tests/unit/udemyHandler.test.ts -->
   - [ ] Write test: short subtitle "See photo.png" is NOT filtered out
   - [ ] Write test: "thumb-sprites.jpg#xywh=0,0,100,100" IS filtered out

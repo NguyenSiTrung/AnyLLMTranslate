@@ -17,6 +17,17 @@ export class CourseraHandler implements SubtitleHandler {
     return [
       {
         platform: 'coursera',
+        pattern: /cloudfront\.net\/.*\.vtt/i,
+        languageExtractor: (url) => {
+          const filename = url.pathname.split('/').pop() || '';
+          const fileMatch = filename.match(/[_-]([a-z]{2}([-_][A-Z]{2})?)\.vtt$/i);
+          if (fileMatch) return fileMatch[1].replace('_', '-');
+          const pathMatch = url.pathname.match(/\/([a-z]{2}([-_][A-Z]{2})?)\//i);
+          return pathMatch?.[1]?.replace('_', '-') || '';
+        },
+      },
+      {
+        platform: 'coursera',
         pattern: /coursera\.org\/.*subtitle/,
         languageExtractor: (url) => {
           // Language often in query param or path segment
@@ -62,13 +73,19 @@ export class CourseraHandler implements SubtitleHandler {
       const data = JSON.parse(body);
       const tracks: AvailableSubtitleTrack[] = [];
 
-      // Extract videoId from URL path (e.g., /learn/.../lecture/xyz)
-      const urlMatch = url.match(/\/lecture\/([^/?]+)/);
-      const videoId = urlMatch?.[1] || undefined;
+      const urlLectureMatch = url.match(/\/lecture\/([^/?]+)/);
 
       // Coursera may provide subtitleLanguageCodes or subtitles in various locations
       const elements = data?.elements || data?.linked || [];
       for (const element of (Array.isArray(elements) ? elements : [elements])) {
+        const elementId =
+          (typeof element?.id === 'string' && element.id) ||
+          (typeof element?.elementId === 'string' && element.elementId) ||
+          undefined;
+        const videoId =
+          elementId ||
+          (typeof data?.id === 'string' ? data.id : undefined) ||
+          urlLectureMatch?.[1];
         // Check for subtitles array
         const subtitles = element?.subtitles || element?.subtitlesVtt || {};
         if (typeof subtitles === 'object' && !Array.isArray(subtitles)) {
