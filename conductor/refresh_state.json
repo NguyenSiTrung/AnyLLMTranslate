@@ -1,33 +1,23 @@
 {
-  "lastRefresh": "2026-06-23T10:05:00+07:00",
+  "lastRefresh": "2026-06-23T13:35:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (openai-provider-catalog sync)",
-    "product.md: BYOK value prop — Langflow removed; catalog + model picker noted",
-    "product.md: Implementation Status — OpenAI-Compatible Provider Catalog & Model Picker entry",
-    "product.md: Current State metrics 1214/95 -> 1195/96, build ~3.58MB -> ~3.75MB",
-    "patterns.md: Fixed corrupted Custom Endpoints section; added resolveCatalogSelection note",
+    "product.md: Refresh marker bumped (audit-v2 sync)",
+    "product.md: Implementation Status — Codebase Audit v2 entry added (4 P0, 8 P1, 28 P2, 40+ P3)",
+    "product.md: Current State metrics 1195/96 -> 1206/98, build ~3.75MB -> ~3.76MB, 47 -> 48 tracks",
+    "patterns.md: 27 new patterns elevated from audit-v2 learnings (6 phases)",
     "patterns.md: Refresh marker + health footer updated",
-    "tracks.md: Fixed merged archive line 44 (langflow-provider + linkedin-subtitles)",
+    "tracks.md: Already current (audit-v2 listed in Archived section)",
     "tech-stack.md: No drift vs package.json",
     "workflow.md: No drift",
-    "beads: Synced Conductor -> Beads — closed open epics/tasks for archived tracks",
     "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1195,
-    "testFiles": 96,
-    "buildSize": "~3.75 MB",
+    "tests": 1206,
+    "testFiles": 98,
+    "buildSize": "~3.76 MB",
     "lintErrors": 0,
-    "archivedTracks": 47,
+    "archivedTracks": 48,
     "activeTracks": 0
-  },
-  "beadsDrift": {
-    "openEpics": [],
-    "openTaskCount": 0,
-    "conductorStatus": "in sync",
-    "recommendedAction": "none",
-    "resolvedAt": "2026-06-23",
-    "syncDirection": "conductor-to-beads"
   }
 }

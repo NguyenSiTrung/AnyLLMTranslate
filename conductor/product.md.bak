@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-22 all (subtitle-deep-analysis-fixes sync) -->
+<!-- conductor-refresh: 2026-06-23 all (openai-provider-catalog sync) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -23,7 +23,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 1. **Bilingual Side-by-Side Display** — Translated text appears below/beside original paragraphs with minimal layout disruption, supporting 15+ visual themes
 2. **Video Subtitle Translation** — Real-time bilingual subtitles on Udemy, Coursera, YouTube, Netflix, and LinkedIn Learning via XHR/fetch interception
-3. **Universal LLM Backend (BYOK)** — Connect to any OpenAI-compatible API (OpenAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, Gemini, Claude via proxy) and Langflow (non-OpenAI custom endpoint)
+3. **Universal LLM Backend (BYOK)** — Connect to any OpenAI-compatible API (OpenAI, DeepSeek, Groq, Ollama, LM Studio, vLLM, Gemini, Claude via proxy, or other compatible gateways) using a searchable provider catalog and on-demand model picker
 4. **Premium Display UX** — Multiple translation themes (underline, highlight, bubble, mask, fade-in), dark mode, loading/error states
 5. **Smart DOM Translation** — Viewport-based lazy translation, SPA support via MutationObserver, intelligent paragraph detection
 
@@ -151,9 +151,10 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **HBO Max Subtitle Hardening & UX Fixes** (Archived 2026-06-22): Manual DOM activation via **Alt+S** (`manualActivateSubtitles` / `tryAutoActivateForDom({ manual: true })`), `SUBTITLE_DOM_TRACK_CHANGED` bridge sync on track switch, debounced DOM track discovery for popup track list, shared `findPrimaryVideo` for consistent video selection, Max context-menu host coverage, Spanish `es` language map alignment.
 - **Subtitle Deep Analysis Fixes** (Archived 2026-06-22): Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis across 9 phases. Parser fixes (MM:SS.mmm timestamps, NOTE/STYLE block skipping, dead `buildBilingualVTT` removal), interceptor hardening (`translationTimeout` setting wired to XHR/fetch via `SUBTITLE_CONFIG` bridge message, `response` override alongside `responseText`, host-pattern anchoring, abort signal handling), DOM cue source improvements (rolling buffer cap, binary search `findActiveCue`, MutationObserver debounce), chunk delta delivery (O(chunk) instead of O(n) messages), coordinator overhaul (lazy settings caching, `GET_AVAILABLE_TRACKS`/`SELECT_SUBTITLE_TRACK` proper `sendResponse`, `isWatchPage()` delegated to handlers), overlay accessibility (ARIA attributes, flicker-free `updateCues`, native subtitle fallback on failure), platform handler fixes (Coursera/YouTube/LinkedIn/Udemy metadata patterns, Max language map expansion, dead Netflix/Amazon entries removed), unified `findPrimaryVideo` with `readyState` filter, 43 new tests added.
 - **PDF Auto-Detect & Auto-Open** (2026-06-22, shipped directly on master via superpowers workflow, commits `e24561f`...`1ae4b7c`): Detects standalone PDF tabs via `document.contentType === 'application/pdf'` (catches extensionless URLs without `webNavigation`/`webRequest` permissions), notifies the background via `PDF_DETECTED`, and optionally auto-opens the bundled translator. New `PdfSettings` config (`pdfSettings.autoOpen: 'off' | 'prompt' | 'auto'`, `openMode: 'new-tab' | 'same-tab'`, `neverAutoOpenSites`), `shouldAutoOpenPdf()` pure decision function with 5 safeguards (infinite-loop guard, setting gate, provider-readiness gate, per-site opt-out, per-tab dedupe), shared `openPdfViewer()` helper used by background/popup/entrypoint, popup `getPageContentType` query, and Options → Advanced → PDF Translator settings card. 39 new tests added (5 test files).
+- **OpenAI-Compatible Provider Catalog & Model Picker** (Archived 2026-06-23): Searchable `OPENAI_COMPATIBLE_CATALOG` with base URL auto-fill, `ProviderCatalogPicker` and on-demand `ModelPicker` (GET `/models` via `listProviderModels`) in Options provider section and setup wizard; storage remains `preset: 'custom'`.
 
 ### Current State
-- 1214 tests passing across 95 files. Build passing (`wxt build` ✅, ~3.58 MB). 0 lint errors.
+- 1195 tests passing across 96 files. Build passing (`wxt build` ✅, ~3.75 MB). 0 lint errors.
 - **No active tracks.** All 47 tracks completed and archived.
 
 ## Out of Scope (Initial Release)

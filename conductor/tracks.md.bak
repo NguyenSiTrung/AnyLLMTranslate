@@ -41,7 +41,8 @@ This file tracks all major tracks for the project.
 - ✅ **Bilingual Display UI/UX Hardening** (`bilingual-display-ux_20260505`) — Archived 2026-05-05. [View](./conductor/archive/bilingual-display-ux_20260505/)
 - ✅ **Settings UI/UX Consistency & Polish** (`settings-ux-audit_20260506`) — Archived 2026-05-06. [View](./conductor/archive/settings-ux-audit_20260506/)
 
-- ✅ **Custom Endpoint Provider — - ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
+- ✅ **Custom Endpoint Provider — Langflow Support** (`langflow-provider_20260513`) — Archived 2026-05-13. [View](./conductor/archive/langflow-provider_20260513/)
+- ✅ **LinkedIn Learning Subtitle Support** (`linkedin-subtitles_20260523`) — Archived 2026-05-25. [View](./conductor/archive/linkedin-subtitles_20260523/)
 - ✅ **Deep Analysis Hardening & Improvements** (`deep-analysis-hardening_20260611`) — Archived 2026-06-11. [View](./conductor/archive/deep-analysis-hardening_20260611/)
 - ✅ **Subtitle Handling Reliability and Hardening** (`subtitle-reliability-hardening_20260612`) — Archived 2026-06-12. [View](./conductor/archive/subtitle-reliability-hardening_20260612/)
 - ✅ **PDF Translation Support** (`pdf-translation_20260612`) — Archived 2026-06-12. [View](./conductor/archive/pdf-translation_20260612/)
@@ -57,11 +58,12 @@ This file tracks all major tracks for the project.
 - ✅ **HBO Max Subtitle Hardening & UX Fixes** (`hbomax-subtitle-hardening_20260622`) — Archived 2026-06-22. Manual DOM activation (Alt+S), track-change bridge sync, debounced track discovery, shared `findPrimaryVideo`, Max context menu hosts. [View](./conductor/archive/hbomax-subtitle-hardening_20260622/)
 - ✅ **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Archived 2026-06-22. Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis across 9 phases. Parser fixes, interceptor hardening, DOM cue source improvements, chunk delta delivery, coordinator overhaul, overlay accessibility, 43 new tests. [View](./conductor/archive/subtitle-deep-analysis-fixes_20260622/)
 - ✅ **OpenAI-Compatible Provider Catalog & Model Picker** (`openai-provider-catalog_20260623`) — Archived 2026-06-23. Searchable provider catalog with base URL auto-fill and on-demand GET /models picker in options and setup wizard. [View](./conductor/archive/openai-provider-catalog_20260623/)
+- ✅ **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (`audit-v2_20260623`) — Archived 2026-06-23. Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes, 8 P1 bugs, 28 P2 issues, 40+ P3 minor items across all modules. 6 phases, 91 total tasks. [View](./conductor/archive/audit-v2_20260623/)
 
 ---
 
 ## Active Tracks
 
-_(none)_
+(none)
 
 ---
