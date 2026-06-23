@@ -65,6 +65,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_(none)_
+- 🔶 **Youku Subtitle Support** (`youku-subtitles_20260624`) — NEW. Bilingual subtitle translation for Youku (youku.tv/youku.com/m.youku.com) via DOM cue scraping of the `#subtitle` SVG container, with optional Phase 2 XHR interception. *Link: [./conductor/tracks/youku-subtitles_20260624/](./conductor/tracks/youku-subtitles_20260624/)*
 
 ---
