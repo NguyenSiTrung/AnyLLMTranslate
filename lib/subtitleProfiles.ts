@@ -50,14 +50,31 @@ export const DOMAIN_PROFILE_MAP: Record<string, SubtitleProfile> = {
   'youtube.com': 'media',
   'max.com': 'cinematic',
   'hbomax.com': 'cinematic',
+  'youku.tv': 'cinematic',
+  'youku.com': 'cinematic',
 };
 
 /**
  * Resolve a subtitle profile from a hostname. Unknown domains fall back to
  * `'media'` (balanced defaults).
+ *
+ * Subdomains resolve to their registrable domain's profile: the host is
+ * matched directly first, then progressively stripped of its leftmost label
+ * (e.g. `v.youku.com` → `youku.com`) until a mapping is found. This lets one
+ * map entry cover all of a platform's subdomains (`www.youku.tv`, `m.youku.com`,
+ * `play.hbomax.com`) without enumerating each.
  */
 export function resolveProfile(hostname: string): SubtitleProfile {
-  return DOMAIN_PROFILE_MAP[hostname] ?? 'media';
+  const host = hostname.toLowerCase();
+  if (DOMAIN_PROFILE_MAP[host]) return DOMAIN_PROFILE_MAP[host];
+  // Walk up the label chain: foo.example.com → example.com → com
+  let labels = host.split('.');
+  while (labels.length > 2) {
+    labels = labels.slice(1);
+    const parent = labels.join('.');
+    if (DOMAIN_PROFILE_MAP[parent]) return DOMAIN_PROFILE_MAP[parent];
+  }
+  return 'media';
 }
 
 /** A partial set of knob values — absent knobs inherit from the layer below. */

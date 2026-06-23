@@ -17,6 +17,7 @@ import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
+import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
@@ -36,6 +37,7 @@ export default defineContentScript({
        new CourseraHandler(),
        new LinkedInHandler(),
        new HboMaxHandler(),
+       new YoukuHandler(),
      ]);
 
     const registry = new InterceptorRegistry();

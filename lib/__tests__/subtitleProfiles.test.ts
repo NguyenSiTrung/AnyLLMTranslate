@@ -35,6 +35,33 @@ describe('resolveProfile', () => {
     expect(resolveProfile('hbomax.com')).toBe('cinematic');
   });
 
+  it('returns cinematic for youku.tv', () => {
+    expect(resolveProfile('youku.tv')).toBe('cinematic');
+  });
+
+  it('returns cinematic for youku.com', () => {
+    expect(resolveProfile('youku.com')).toBe('cinematic');
+  });
+
+  it('resolves youku.tv subdomains to cinematic', () => {
+    expect(resolveProfile('www.youku.tv')).toBe('cinematic');
+  });
+
+  it('resolves youku.com subdomains to cinematic', () => {
+    expect(resolveProfile('v.youku.com')).toBe('cinematic');
+    expect(resolveProfile('m.youku.com')).toBe('cinematic');
+  });
+
+  it('resolves hbomax.com subdomains to cinematic', () => {
+    // Regression guard: previously play.hbomax.com fell back to 'media'.
+    expect(resolveProfile('play.hbomax.com')).toBe('cinematic');
+  });
+
+  it('does not match a domain that merely ends with a mapped suffix', () => {
+    expect(resolveProfile('notyouku.com')).toBe('media');
+    expect(resolveProfile('youku.evil.com')).toBe('media');
+  });
+
   it('falls back to media for an unmapped domain', () => {
     expect(resolveProfile('example.org')).toBe('media');
   });

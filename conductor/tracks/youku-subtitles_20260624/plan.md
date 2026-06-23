@@ -2,39 +2,44 @@
 
 ## Phase 1: Handler & Language Mapping (TDD)
 
-- [ ] Task 1.1: Scaffold test file `tests/unit/youkuHandler.test.ts` with RED tests for `platform`, `detect()` (true for youku.tv/youku.com/m.youku.com + subdomains, false for spoofed hosts like notyouku.com), `isWatchPage()` (true on `/v/v_show/id_*`, `/v_show/id_*`, false on listing pages).
+- [x] Task 1.1: Scaffold test file `tests/unit/youkuHandler.test.ts` with RED tests for `platform`, `detect()` (true for youku.tv/youku.com/m.youku.com + subdomains, false for spoofed hosts like notyouku.com), `isWatchPage()` (true on `/v/v_show/id_*`, `/v_show/id_*`, false on listing pages).
   <!-- files: tests/unit/youkuHandler.test.ts -->
+  ✅ 58 tests, RED→GREEN confirmed.
 
-- [ ] Task 1.2: Implement `YoukuHandler` skeleton in `inject/subtitleHandlers/youku.ts` — `platform = 'youku'`, `detect()` (anchored hostname match for youku.tv, youku.com, m.youku.com + subdomains, reject spoofs), `isWatchPage()`. GREEN against Task 1.1.
+- [x] Task 1.2: Implement `YoukuHandler` skeleton in `inject/subtitleHandlers/youku.ts` — `platform = 'youku'`, `detect()` (anchored hostname match for youku.tv, youku.com, m.youku.com + subdomains, reject spoofs), `isWatchPage()`. GREEN against Task 1.1.
   <!-- files: inject/subtitleHandlers/youku.ts -->
 
-- [ ] Task 1.3: Add Youku internal-code → BCP-47 language map (`CHS→zh-Hans, CHT→zh-Hant, EN→en, KR→ko, ES→es, PO→pt, TH→th, AR→ar, ID→id, VI→vi, MS→ms`) as a pure exported function. Add RED tests asserting each mapping + unknown-code fallback.
+- [x] Task 1.3: Add Youku internal-code → BCP-47 language map (`CHS→zh-Hans, CHT→zh-Hant, EN→en, KR→ko, ES→es, PO→pt, TH→th, AR→ar, ID→id, VI→vi, MS→ms`) as a pure exported function. Add RED tests asserting each mapping + unknown-code fallback.
   <!-- files: inject/subtitleHandlers/youku.ts, tests/unit/youkuHandler.test.ts -->
+  Exported as `youkuCodeToLanguage()`; `CHS` exposed as `data-val="default"`.
 
-- [ ] Task 1.4: Implement `getDomCueSource()` mirroring HBO Max — MutationObserver on stable ancestor of `<div id="subtitle">`, scrape `<text>/<tspan>` text per fire, re-resolve cue selector, sample `video.currentTime` (shared `findPrimaryVideo()`) for cue timing, deferred-attach for late-mounting SPA player, rolling buffer reset on track switch. RED→GREEN tests for cue extraction, timing sampling, and selector re-resolution.
+- [x] Task 1.4: Implement `getDomCueSource()` mirroring HBO Max — MutationObserver on stable ancestor of `<div id="subtitle">`, scrape `<text>/<tspan>` text per fire, re-resolve cue selector, sample `video.currentTime` (shared `findPrimaryVideo()`) for cue timing, deferred-attach for late-mounting SPA player, rolling buffer reset on track switch. RED→GREEN tests for cue extraction, timing sampling, and selector re-resolution.
   <!-- files: inject/subtitleHandlers/youku.ts, tests/unit/youkuHandler.test.ts -->
+  Selectors: `#subtitle` (cue + caption window), `#ykPlayer` (observe root). Timing/deferred-attach/rolling-buffer logic lives in the shared `domCueSource.ts` (no edits needed — handler only supplies the contract).
 
-- [ ] Task 1.5: Implement `extractAvailableTracks()` — parse the subtitle language picker DOM (`com="subtitle"` panel, `data-val`, language labels) into `AvailableSubtitleTrack[]` with `url: undefined`, applying the Task 1.3 code map. RED→GREEN tests for picker parsing + malformed-DOM → `[]`.
+- [x] Task 1.5: Implement `extractAvailableTracks()` — parse the subtitle language picker DOM (`com="subtitle"` panel, `data-val`, language labels) into `AvailableSubtitleTrack[]` with `url: undefined`, applying the Task 1.3 code map. RED→GREEN tests for picker parsing + malformed-DOM → `[]`.
   <!-- files: inject/subtitleHandlers/youku.ts, tests/unit/youkuHandler.test.ts -->
 
 - [ ] Task: Conductor - User Manual Verification 'Handler & Language Mapping' (Protocol in workflow.md)
 
 ## Phase 2: Wiring & Registration
 
-- [ ] Task 2.1: Register `YoukuHandler` in MAIN world — import + add to `registerSubtitleHandlers([])` array in `entrypoints/inject.content/index.ts`.
+- [x] Task 2.1: Register `YoukuHandler` in MAIN world — import + add to `registerSubtitleHandlers([])` array in `entrypoints/inject.content/index.ts`.
   <!-- files: entrypoints/inject.content/index.ts -->
 
-- [ ] Task 2.2: Register `YoukuHandler` in ISOLATED world — import + add to `registerSubtitleHandlers([])` array in `entrypoints/content.ts`.
+- [x] Task 2.2: Register `YoukuHandler` in ISOLATED world — import + add to `registerSubtitleHandlers([])` array in `entrypoints/content.ts`.
   <!-- files: entrypoints/content.ts -->
 
-- [ ] Task 2.3: Add Youku to `SUPPORTED_SUBTITLE_SITES` (`lib/subtitleSites.ts`) with `methodHint: 'DOM cue scraping'`; update `lib/__tests__/subtitleSites.test.ts` length 5→6 and ordered array to include `'youku'`.
+- [x] Task 2.3: Add Youku to `SUPPORTED_SUBTITLE_SITES` (`lib/subtitleSites.ts`) with `methodHint: 'DOM cue scraping'`; update `lib/__tests__/subtitleSites.test.ts` length 5→6 and ordered array to include `'youku'`.
   <!-- files: lib/subtitleSites.ts, lib/__tests__/subtitleSites.test.ts -->
 
-- [ ] Task 2.4: Map Youku hostnames → `'cinematic'` in `DOMAIN_PROFILE_MAP` (`lib/subtitleProfiles.ts`) so the cinematic register/brevity knobs apply.
+- [x] Task 2.4: Map Youku hostnames → `'cinematic'` in `DOMAIN_PROFILE_MAP` (`lib/subtitleProfiles.ts`) so the cinematic register/brevity knobs apply.
   <!-- files: lib/subtitleProfiles.ts -->
+  Also made `resolveProfile()` subdomain-aware (label-stripping walk) so `v.youku.com`/`www.youku.tv`/`m.youku.com` resolve correctly without enumerating each — fixes a latent HBO Max gap (`play.hbomax.com` previously fell back to `media`).
 
-- [ ] Task 2.5: Add Youku hosts to subtitle context-menu `documentUrlPatterns` (find existing subtitle context menu; add `*://*.youku.tv/*`, `*://*.youku.com/*`, `*://*.m.youku.com/*`).
-  <!-- files: <context menu file, TBD on impl> -->
+- [x] Task 2.5: Add Youku hosts to subtitle context-menu `documentUrlPatterns` (find existing subtitle context menu; add `*://*.youku.tv/*`, `*://*.youku.com/*`, `*://*.m.youku.com/*`).
+  <!-- files: entrypoints/background.ts -->
+  Added `*://*.youku.tv/*` + `*://*.youku.com/*` (`*.m.youku.com/*` is covered by the `*.youku.com/*` glob).
 
 - [ ] Task: Conductor - User Manual Verification 'Wiring & Registration' (Protocol in workflow.md)
 

@@ -47,6 +47,8 @@ function setupContextMenus(): void {
         '*://*.linkedin.com/*',
         '*://*.max.com/*',
         '*://*.hbomax.com/*',
+        '*://*.youku.tv/*',
+        '*://*.youku.com/*',
       ],
     });
 

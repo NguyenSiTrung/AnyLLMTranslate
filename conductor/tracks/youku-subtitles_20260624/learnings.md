@@ -62,3 +62,15 @@ From the subtitle picker (`com="subtitle"` panel, `data-val`):
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-24] Phase 1 & 2: YoukuHandler + Wiring
+- **Implemented:** `YoukuHandler` (DOM cue scraping) mirroring HBO Max; pure `youkuCodeToLanguage()` map; registered in both worlds; added to `SUPPORTED_SUBTITLE_SITES`; mapped to `cinematic`; context-menu + auto-activate reuse the generic coordinator paths unchanged.
+- **Files changed:** `inject/subtitleHandlers/youku.ts` (new), `tests/unit/youkuHandler.test.ts` (new), `lib/subtitleSites.ts`, `lib/subtitleProfiles.ts`, `entrypoints/inject.content/index.ts`, `entrypoints/content.ts`, `entrypoints/background.ts`, plus 3 test fixtures (`subtitleSites`, `subtitleProfiles`, `SubtitlesSection`).
+- **Tests:** 58 new youku tests + 7 new profile tests; 1477/1478 suite (1 pre-existing date-rollover unrelated). tsc/lint/build clean for new code (5 pre-existing lint + 3 pre-existing tsc errors tracked as subtitle-quality follow-up).
+- **Learnings:**
+  - **Pattern:** `resolveProfile()` was exact-hostname-only, so subdomains (`v.youku.com`, `www.youku.tv`, `m.youku.com`) fell through to `media`. Made it subdomain-aware via a label-stripping walk (match host → strip leftmost label → re-match, stop at 2 labels). Latent HBO Max gap surfaced as a bonus regression test: `play.hbomax.com` was silently `media` before. Generic improvement — any future multi-subdomain platform benefits.
+  - **Pattern:** Youku videoId is base64-like and the watch URL appends `.html` (`/v_show/id_XNjQ4...==.html`). The naive `([^/]+)` capture swallowed the `.html`. Use `([^/.]+)` since the id charset never contains `.` or `/`.
+  - **Pattern:** Youku marks the active picker item inconsistently — class (`current`/`active`/`on`/`selected`) OR `aria-selected="true"`. `readActiveLanguage()` checks both; class check uses a word-boundary regex so a future item class like `subtle-current` won't false-positive.
+  - **Pattern:** When two DOM-cue platforms share the same `methodHint` ('DOM cue scraping' — HBO Max + Youku), the SubtitlesSection test's `getByText` (singular) breaks. Switch to `getAllByText(...).toHaveLength(2)`. The UI renders from `SUPPORTED_SUBTITLE_SITES.map(...)`, so adding a site needs no component change — only the test's hardcoded counts.
+  - **Context:** `data-val="default"` is Youku's Simplified-Chinese sentinel (not a real code). Map it to `zh-Hans` in `YOUKU_CODE_TO_LANGUAGE` alongside `chs`.
+  - **Gotcha:** `domCueSource.ts` hardcodes the HBO Max track-change observer to `[data-testid="player-ux-text-track-button"]`. Youku's picker has no such attribute, so on Youku the `SUBTITLE_DOM_TRACK_CHANGED` bridge event won't fire on manual track switch. Acceptable for Phase 1 (cue text still updates via the generic observer; buffer reset is best-effort). Flagged for a future generalization — the selector should be derived from the `DomCueSource` contract (e.g. an optional `trackSwitchSelector`).
