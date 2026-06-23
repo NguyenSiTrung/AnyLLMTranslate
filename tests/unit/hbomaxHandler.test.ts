@@ -116,5 +116,12 @@ describe('HboMaxHandler', () => {
       `;
       expect(handler.getDomCueSource().readActiveLanguage()).toBe('');
     });
+
+    it('does not override captionHideMethod (defaults to display:none)', () => {
+      // Regression guard: Max's caption window is the PARENT of the cue element,
+      // so display:none is safe and correct. Must NOT declare 'visibility'.
+      const source = handler.getDomCueSource();
+      expect(source.captionHideMethod).toBeUndefined();
+    });
   });
 });

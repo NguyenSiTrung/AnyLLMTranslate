@@ -185,6 +185,14 @@ describe('YoukuHandler', () => {
       expect(source.observeRootSelector).toBe('#ykPlayer');
     });
 
+    it('declares captionHideMethod: visibility (cue source == hide target)', () => {
+      // #subtitle is BOTH the cue source AND the hide target. display:none
+      // would empty it (the KUI player stops rendering into a hidden node),
+      // starving the scraper of cues. visibility:hidden keeps it populated.
+      const source = handler.getDomCueSource();
+      expect(source.captionHideMethod).toBe('visibility');
+    });
+
     it('readActiveLanguage maps the active picker item to a BCP-47 code', () => {
       document.body.innerHTML = `
         <div com="subtitle">

@@ -146,15 +146,22 @@ function cleanupActiveOverlay(): void {
 }
 
 /** Inject a <style> hiding the platform's native caption window.
- *  Uses display:none to fully remove from layout (opacity:0 fallback
- *  if display:none causes layout shift issues on specific platforms). */
-function hideNativeCaptions(selector: string): void {
+ *  - `method: 'display'` (default): `display: none !important` — fully removes
+ *    the caption from layout. Correct when the platform keeps populating the
+ *    node while hidden (HBO Max's React renderer writes to a child regardless).
+ *  - `method: 'visibility'`: `visibility: hidden !important` — preserves box
+ *    geometry and keeps the caption renderer producing cues. REQUIRED for
+ *    platforms that stop populating a `display:none` container (Youku's KUI
+ *    player), or when the hide target is the cue source itself
+ *    (cueSelector === captionWindowSelector). */
+function hideNativeCaptions(selector: string, method: 'display' | 'visibility' = 'display'): void {
   if (state.captionHideStyle) return;
   const style = document.createElement('style');
   style.setAttribute('data-anyllm-role', 'caption-hide');
-  // Use display:none for most platforms — fully removes caption from layout.
-  // The !important ensures platform CSS doesn't override our hiding rule.
-  style.textContent = `${selector} { display: none !important; }`;
+  const rule = method === 'visibility'
+    ? `${selector} { visibility: hidden !important; }`
+    : `${selector} { display: none !important; }`;
+  style.textContent = rule;
   document.head.appendChild(style);
   state.captionHideStyle = style;
 }
@@ -650,8 +657,11 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   state.isOverlayMode = true;
   console.log('AnyLLMTranslate: Activating overlay from DOM cues (Max)');
 
-  // Hide Max's native caption window.
-  hideNativeCaptions(domSource.captionWindowSelector);
+  // Hide the platform's native caption window so only our overlay shows.
+  // Method (display vs visibility) is platform-configured: Youku needs
+  // visibility:hidden because its KUI player stops populating a display:none
+  // #subtitle container (and #subtitle is both cue source AND hide target).
+  hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
 
   // Seed the rolling buffers with the first batch.
   mergeDomOriginalCues(payload.cues);

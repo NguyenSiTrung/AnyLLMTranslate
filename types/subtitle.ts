@@ -145,6 +145,17 @@ export interface DomCueSource {
    * 'aria-selected'.
    */
   trackSwitchAttribute?: string;
+  /**
+   * How to hide the native caption window while the overlay is active.
+   * - `'display'` (default): `display: none !important` — fully removes the
+   *   caption from layout. Correct when the caption renderer keeps populating
+   *   the node while it is display:none (HBO Max).
+   * - `'visibility'`: `visibility: hidden !important` — preserves box geometry
+   *   and keeps the caption renderer producing cues. Required for platforms
+   *   (Youku) that stop populating a `display:none` container, AND when the
+   *   hide target IS the cue source (cueSelector === captionWindowSelector).
+   */
+  captionHideMethod?: 'display' | 'visibility';
 }
 
 /** Supported subtitle formats */

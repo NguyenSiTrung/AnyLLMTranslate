@@ -108,7 +108,12 @@ export class YoukuHandler implements SubtitleHandler {
     return {
       // Cue text is the aggregated textContent of the SVG caption container.
       cueSelector: '#subtitle',
-      // The native caption window we hide (visibility:hidden) while active.
+      // The native caption window we hide while the overlay is active. On
+      // Youku this IS the cue source (#subtitle), so we must use
+      // visibility:hidden (not display:none) — the KUI player stops rendering
+      // captions into a display:none container, which would empty the cue
+      // source. visibility:hidden keeps it in the render tree so cues keep
+      // flowing while the native caption is visually suppressed.
       captionWindowSelector: '#subtitle',
       // Observe the stable player container so the observer survives inner
       // SVG replacement by the KUI player across cue transitions.
@@ -120,6 +125,8 @@ export class YoukuHandler implements SubtitleHandler {
       // readActiveLanguage, but MutationObserver needs a stable attribute).
       trackSwitchSelector: '[com="subtitle"] [data-val]',
       trackSwitchAttribute: 'aria-selected',
+      // visibility:hidden (not display:none) — see captionWindowSelector note.
+      captionHideMethod: 'visibility',
     };
   }
 
