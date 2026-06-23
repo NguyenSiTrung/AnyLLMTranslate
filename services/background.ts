@@ -394,7 +394,7 @@ async function handleTranslateSubtitle(
   // Now each chunk (including the synchronous first chunk) acquires its own slot.
   try {
     const service = await initService();
-    const { cues, sourceLanguage, targetLanguage, pageContext } = message;
+    const { cues, sourceLanguage, targetLanguage } = message;
     const tabId = sender?.tab?.id;
 
     const subtitleSettings = await loadSettings();
