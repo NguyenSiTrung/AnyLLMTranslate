@@ -63,6 +63,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_(none)_
+- 🔸 **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (`audit-v2_20260623`) — Priority: High. Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes, 8 P1 bugs, 28 P2 issues, 40+ P3 minor items across all modules. [View](./conductor/tracks/audit-v2_20260623/)
 
 ---

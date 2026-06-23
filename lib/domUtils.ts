@@ -20,9 +20,12 @@ export function deduplicateAncestors(elements: Element[]): Element[] {
 
   const result: Element[] = [sorted[0]];
   for (let i = 1; i < sorted.length; i++) {
-    const last = result[result.length - 1];
-    // In DOM order, if last.contains(sorted[i]), skip sorted[i]
-    if (!last.contains(sorted[i])) {
+    // P0: check against EVERY kept ancestor, not just the last one. The previous
+    // `result[result.length - 1].contains(el)` check missed descendants of an
+    // earlier-kept element when a sibling appeared between them in DOM order:
+    // sorted [A, B, C] with A⊇C but B a sibling kept C incorrectly because it
+    // only compared against B (the last pushed).
+    if (!result.some((r) => r.contains(sorted[i]))) {
       result.push(sorted[i]);
     }
   }

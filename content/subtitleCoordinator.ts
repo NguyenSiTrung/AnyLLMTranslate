@@ -721,6 +721,7 @@ export function updateTranslatedCues(cues: SubtitleCue[]): void {
     console.warn('AnyLLMTranslate: Cannot update cues - not in overlay mode');
     return;
   }
+  state.translatedCues = cues;
   updateCues(cues);
 }
 

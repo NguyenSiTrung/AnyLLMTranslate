@@ -864,6 +864,45 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
 
+  it('P0 regression: chunk delta merges onto full-array translatedCues (not a fresh array)', async () => {
+    // Establish session 42 with a full-array update (updateTranslatedCues path)
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-merge-1');
+
+    mockUpdateCues.mockClear();
+
+    // Send a chunk delta at offset 0 with a single cue (subset of the full array).
+    // Before the fix, updateTranslatedCues never set state.translatedCues, so the merge
+    // started from a fresh sparse array and the other cue was lost. After the fix, the
+    // merge starts from the full array; updateCues receives an array where the chunk cue
+    // replaced index 0 and the original index-1 cue is preserved.
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: [{ startTime: 0, endTime: 2, text: 'Bonjour', originalText: 'Hello' }],
+        sessionId: 42,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    expect(mockUpdateCues).toHaveBeenCalledTimes(1);
+    const mergedArg = mockUpdateCues.mock.calls[0][0] as Array<{ text: string }>;
+    // Length must equal the full array (2), not the chunk (1) — proves translatedCues was retained
+    expect(mergedArg).toHaveLength(2);
+    // Chunk cue replaced index 0
+    expect(mergedArg[0].text).toBe('Bonjour');
+    // Original index-1 cue preserved (would be undefined before the fix)
+    expect(mergedArg[1].text).toBe('Thế giới');
+  });
+
   it('accepts chunks when no session has been established yet (backward compat)', async () => {
     // Establish overlay mode via interception, but mock the response WITHOUT sessionId
     // to simulate a legacy background that doesn't send sessionId yet

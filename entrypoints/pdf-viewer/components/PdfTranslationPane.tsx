@@ -225,8 +225,23 @@ function LayoutOverlay({
   pdfPage: PDFPageProxy | null;
   dims?: { width: number; height: number };
 }): React.ReactElement {
+  // P0 (Rules of Hooks): The conditional early-return lives in this wrapper. The
+  // actual hook-using body is in LayoutOverlayInner, which only mounts once both
+  // pdfPage and dims are available — so its hooks always run with valid data and
+  // in a stable order. Rendering <></> here never interleaves with hook calls.
   if (!pdfPage || !dims) return <></>;
+  return <LayoutOverlayInner page={page} pdfPage={pdfPage} dims={dims} />;
+}
 
+function LayoutOverlayInner({
+  page,
+  pdfPage,
+  dims,
+}: {
+  page: PageTranslations;
+  pdfPage: PDFPageProxy;
+  dims: { width: number; height: number };
+}): React.ReactElement {
   const baseViewport = pdfPage.getViewport({ scale: 1 });
   const scale = RENDER_WIDTH_PX / baseViewport.width;
   const viewport = pdfPage.getViewport({ scale });

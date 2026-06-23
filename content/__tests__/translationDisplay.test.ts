@@ -419,6 +419,51 @@ describe('translationDisplay', () => {
 
       expect(document.querySelector('[data-anyllm-piece-id="piece-1"]')).toBeNull();
     });
+
+    it('P0 regression: does NOT un-mark original markers for OTHER translations', () => {
+      // Two separate paragraphs, each with its own translation.
+      const p1 = document.createElement('p');
+      const p2 = document.createElement('p');
+      document.body.appendChild(p1);
+      document.body.appendChild(p2);
+      applyTranslation(p1, 'piece-a', 'Translation A');
+      applyTranslation(p2, 'piece-b', 'Translation B');
+
+      // Both parents should be marked as translated originals.
+      expect(p1.hasAttribute('data-anyllm-translated')).toBe(true);
+      expect(p2.hasAttribute('data-anyllm-translated')).toBe(true);
+
+      // Remove only piece-a.
+      removeTranslation('piece-a');
+
+      // p1 (the removed piece's original) should be un-marked (no translations remain).
+      expect(p1.hasAttribute('data-anyllm-translated')).toBe(false);
+      // p2 — a completely unrelated translation — MUST still be marked, and its
+      // translation element must still exist. Before the fix, removeTranslation
+      // wiped ALL [data-anyllm-translated] markers on the page.
+      expect(p2.hasAttribute('data-anyllm-translated')).toBe(true);
+      expect(document.querySelector('[data-anyllm-piece-id="piece-b"]')).not.toBeNull();
+    });
+
+    it('keeps the marker if other translations remain in the same ancestor', () => {
+      // A list item whose translation element stays inside its parent after removal of
+      // a sibling piece is an edge case; here we just confirm that when an ancestor still
+      // contains another translation, the marker is retained.
+      const parent = document.createElement('div');
+      document.body.appendChild(parent);
+      applyTranslation(parent, 'piece-x', 'Translation X');
+      // Manually add a second translation element sharing the same marked ancestor.
+      const second = document.createElement('div');
+      second.setAttribute('data-anyllm-role', 'translation');
+      second.setAttribute('data-anyllm-piece-id', 'piece-y');
+      parent.appendChild(second);
+
+      removeTranslation('piece-x');
+
+      // Ancestor keeps its marker because piece-y still remains inside it.
+      expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
+      expect(parent.querySelector('[data-anyllm-piece-id="piece-y"]')).not.toBeNull();
+    });
   });
 
   describe('removeAllTranslations', () => {

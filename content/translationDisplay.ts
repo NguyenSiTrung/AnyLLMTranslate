@@ -569,15 +569,62 @@ export function clearErrorState(parentElement: Element, pieceId: string): void {
 /** Remove a single translation by piece ID */
 export function removeTranslation(pieceId: string): void {
   const el = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
-  if (el) {
-    el.remove();
+  if (!el) return;
+
+  // Determine the associated original element BEFORE removing the translation.
+  // Translations may be either a descendant of the marked original (contained
+  // elements like <li>/<td>) or a sibling inserted after it (the common case
+  // for <p>/<div> blocks via insertAfterTranslationGroup).
+  let originalAncestor = el.closest(`[${DATA_ATTRS.TRANSLATED}]`) ?? null;
+  if (!originalAncestor) {
+    // Sibling case: walk backwards past any translation siblings to find the
+    // preceding original element (the paragraph the translation was appended to).
+    let prev = el.previousElementSibling;
+    while (prev) {
+      if (
+        prev.getAttribute(DATA_ATTRS.ROLE) === 'translation' ||
+        prev.hasAttribute(DATA_ATTRS.PIECE_ID)
+      ) {
+        prev = prev.previousElementSibling;
+        continue;
+      }
+      if (prev.hasAttribute(DATA_ATTRS.TRANSLATED)) {
+        originalAncestor = prev;
+      }
+      break;
+    }
   }
 
-  // Clean up original marker if no more translations
-  const originals = document.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
-  for (const original of originals) {
-    original.removeAttribute(DATA_ATTRS.ROLE);
-    original.removeAttribute(DATA_ATTRS.TRANSLATED);
+  el.remove();
+
+  // Only clean up the marker on THIS piece's original, and only if no other
+  // translation elements remain associated with it. Previously this walked
+  // every [TRANSLATED] element on the page and un-marked them all — wiping
+  // markers for completely unrelated translations.
+  if (!originalAncestor) return;
+
+  // Contained case: original holds translations as descendants.
+  const containedRemaining = originalAncestor.querySelectorAll(
+    `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}]`,
+  );
+  // Sibling case: original is followed by one or more translation siblings.
+  let siblingRemaining = false;
+  const next = originalAncestor.nextElementSibling;
+  while (next) {
+    if (
+      next.getAttribute(DATA_ATTRS.ROLE) === 'translation' ||
+      next.hasAttribute(DATA_ATTRS.PIECE_ID)
+    ) {
+      siblingRemaining = true;
+      break;
+    }
+    // Stop at the first non-translation sibling (next paragraph, etc.).
+    break;
+  }
+
+  if (containedRemaining.length === 0 && !siblingRemaining) {
+    originalAncestor.removeAttribute(DATA_ATTRS.ROLE);
+    originalAncestor.removeAttribute(DATA_ATTRS.TRANSLATED);
   }
 }
 
