@@ -2,7 +2,7 @@
 
 > **Translate any webpage & video subtitles into your language using any OpenAI-compatible LLM.**
 
-AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilingual translation for web pages and video subtitles. Unlike traditional translation tools, it shows translations **inline alongside original text** — preserving context while enabling comprehension. Powered entirely by your own LLM endpoint: no data leaves your machine except to your configured API.
+AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bilingual translation for web pages, video subtitles, and PDFs. Unlike traditional translation tools, it shows translations **inline alongside original text** — preserving context while enabling comprehension. Powered entirely by your own LLM endpoint: no data leaves your machine except to your configured API.
 
 ---
 
@@ -20,6 +20,7 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Dark mode support** — auto (system `prefers-color-scheme`), light, or forced dark
 - **SPA support** — MutationObserver-based dynamic content detection for single-page applications
 - **Auto-translate** — per-site automatic translation on page load via hostname matching with wildcard support; dismissible notification bar
+- **Smart excludes** — automatically skip nav, TOC, footers, sidebars, pagination, and infoboxes (configurable)
 
 ### 🎬 Video Subtitle Translation
 
@@ -27,7 +28,13 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
   - **YouTube**: Supports `/api/timedtext` endpoint with srv3 XML and JSON3 formats
   - **Udemy**: Handles VTT from `udemycdn.com` with sprite metadata filtering
   - **Coursera**: Processes VTT from `coursera.org` with query/path language extraction
-  - **Vimeo, Netflix, Amazon**: Subtitle fetch allowlist for CORS bypass
+  - **LinkedIn Learning**: Fetches VTT from `licdn.com` with param/path/filename language extraction and transcript API metadata parsing
+  - **HBO Max / Max**: DOM cue scraping from `[data-testid="cueBoxRowTextCue"]` with aria-label-based language detection (no VTT URL interception)
+  - **Vimeo, Netflix, Amazon**: Subtitle fetch allowlist for CORS bypass (overlay fallback)
+- **Three interception strategies**:
+  - **XHR interception** — YouTube, Udemy
+  - **Fetch interception** — LinkedIn Learning
+  - **DOM cue scraping** — HBO Max (for platforms without VTT URLs)
 - **Proactive subtitle track discovery** via HTML5 TextTrack fallback with MutationObserver + `addtrack` events
 - **XHR + Fetch interception** via MAIN world script (`inject.content` at `document_start`)
 - **Dual-mode architecture**:
@@ -60,7 +67,8 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 ### ⚙️ Settings & Advanced
 
 - **Any OpenAI-compatible API** — OpenAI, Ollama, LM Studio, Groq, Together AI, Gemini, etc.
-- **Provider presets** — Ollama (local, no key required) and Custom
+- **Provider catalog** — search and select from 8 popular providers (OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI, Ollama, LM Studio) or configure a custom endpoint
+- **Auto model listing** — fetches available models from providers that support model listing via the `/v1/models` endpoint
 - **Connection tester** — sends a round-trip ping and reports latency
 - **Request timeout configuration** — configurable timeout for API requests (default: 60s)
 - **Customizable system prompt** with `{{SOURCE_LANG}}` / `{{TARGET_LANG}}` variable injection
@@ -75,10 +83,11 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 - **Translation cache** — IndexedDB via `idb-keyval`, SHA-256 keyed, configurable TTL/size limits, LRU eviction via `chrome.alarms`, daily automatic eviction
 - **Statistics tracking** — characters translated, API calls, cache hit/miss rate, pages translated, subtitle cues, daily activity bar chart (last 30 days, CSS-only)
 - **Custom theme editor** — user-defined themes with configurable text color, background, border style/color, font style, and size; live preview via CSS custom properties
-- **Subtitle settings** — position, font family, display mode (bilingual vs translation-only), background opacity, translation timeout, preferred language, auto-activation
+- **Subtitle settings** — position, font family, display mode (bilingual vs translation-only), background opacity, translation timeout, preferred language, auto-activation, per-platform disable
 - **AES-GCM encryption** — API keys encrypted at rest via `lib/crypto.ts`
-- **Rate limiting** — in-process semaphore limiting concurrent translation requests (max 3)
+- **Rate limiting** — in-process semaphore limiting concurrent translation requests (max 3 for pages/subtitles, max 2 for PDFs)
 - **React error boundaries** — graceful error handling for popup and options pages
+- **Setup wizard** — 5-step first-run onboarding (welcome, provider selection, connection test, language, done) with compact provider catalog picker
 
 ---
 
@@ -113,15 +122,19 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 ### Configuration
 
 1. Click the **AnyLLMTranslate** icon in the Chrome toolbar
-2. Click the **Settings** gear icon to open the Options page
-3. Go to the **Provider** tab and configure your LLM:
-   - **Preset**: Choose `Ollama` (local, no key) or `Custom`
+2. If this is your first time, the **Setup Wizard** will guide you through:
+   - Selecting a provider from the catalog (or entering a custom endpoint)
+   - Testing the connection
+   - Choosing your target language
+3. Or click the **Settings** gear icon to open the full Options page
+4. Go to the **Provider** tab and configure your LLM:
+   - **Search or browse** the provider catalog (OpenRouter, Groq, Ollama, LM Studio, etc.)
    - **API Base URL**: e.g., `http://localhost:11434/v1` or `https://api.openai.com/v1`
-   - **API Key**: Your API key (leave blank for Ollama)
-   - **Model**: e.g., `gemma3:4b`, `gpt-4o-mini`
-4. Click **Test Connection** to verify
-5. Go to **General** tab → set your **Target Language**
-6. Return to any webpage → click **Translate Page**
+   - **API Key**: Your API key (leave blank for local providers like Ollama)
+   - **Model**: Select from the auto-fetched list or type a model name
+5. Click **Test Connection** to verify
+6. Go to **General** tab → set your **Target Language**
+7. Return to any webpage → click **Translate Page**
 
 ---
 
@@ -129,35 +142,37 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 
 ### Tech Stack
 
-| Layer               | Technology                                                            |
-| ------------------- | --------------------------------------------------------------------- |
-| Extension framework | **WXT** v0.20.20 (Manifest V3)                                        |
-| Build output        | **~640 KB** (639.79 kB)                                               |
-| UI                  | **React 19** + **TypeScript 5.9** (14-component shared UI library)    |
-| Styling             | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes)   |
-| State management    | **Zustand v5** with `chrome.storage.local` sync                       |
-| Translation cache   | **IndexedDB** via `idb-keyval`                                        |
-| Encryption          | **AES-GCM** (Web Crypto API) for API key storage                      |
-| Icons               | **Lucide React**                                                      |
-| Testing             | **Vitest** + `@testing-library/react` + `jsdom` (697 tests, 55 files) |
-| Linting             | ESLint + `typescript-eslint` + Prettier                               |
-| Service worker      | Rate limiting (max 3 concurrent), keep-alive alarm, session tracking  |
+| Layer               | Technology                                                              |
+| ------------------- | ----------------------------------------------------------------------- |
+| Extension framework | **WXT** v0.20.20 (Manifest V3 Chrome, Manifest V2 Firefox)               |
+| UI                  | **React 19** + **TypeScript 5.9** (15-component shared UI library)      |
+| Styling             | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes)     |
+| State management    | **Zustand v5** with `chrome.storage.local` sync                          |
+| Translation cache   | **IndexedDB** via `idb-keyval`                                           |
+| Encryption          | **AES-GCM** (Web Crypto API) for API key storage                        |
+| Icons               | **Lucide React**                                                        |
+| Testing             | **Vitest** + `@testing-library/react` + `jsdom` (1240 tests, 98 files) |
+| Linting             | ESLint + `typescript-eslint` + Prettier                                 |
+| Service worker      | Rate limiting, keep-alive alarm, session tracking, retry with backoff   |
 
 ### Commands
 
-| Command                 | Description                                   |
-| ----------------------- | --------------------------------------------- |
-| `npm run dev`           | Start development server (Chrome, hot reload) |
-| `npm run dev:firefox`   | Start development server (Firefox)            |
-| `npm run build`         | Production build → `.output/chrome-mv3`       |
-| `npm run build:firefox` | Production build → `.output/firefox-mv2`      |
-| `npm test`              | Run all tests                                 |
-| `npm run test:watch`    | Vitest watch mode                             |
-| `npm run test:coverage` | Coverage report                               |
-| `npm run lint`          | ESLint check                                  |
-| `npm run lint:fix`      | ESLint auto-fix                               |
-| `npm run format`        | Prettier format                               |
-| `npm run zip`           | Create distributable ZIP for Chrome Web Store |
+| Command                  | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
+| `npm run dev`            | Start development server (Chrome, hot reload)            |
+| `npm run dev:firefox`    | Start development server (Firefox)                        |
+| `npm run build`          | Production build → `.output/chrome-mv3`                   |
+| `npm run build:firefox`  | Production build → `.output/firefox-mv2`                  |
+| `npm test`               | Run all tests                                            |
+| `npm run test:watch`     | Vitest watch mode                                        |
+| `npm run test:coverage`  | Coverage report                                          |
+| `npm run lint`           | ESLint check                                             |
+| `npm run lint:fix`       | ESLint auto-fix                                          |
+| `npm run format`         | Prettier format                                          |
+| `npm run zip`            | Create distributable ZIP for Chrome Web Store             |
+| `npm run zip:firefox`    | Create distributable ZIP for Firefox Add-ons             |
+| `npm run zip:source`     | Create source code archive (git archive)                  |
+| `npm run compile`        | TypeScript type check (`tsc --noEmit`)                    |
 
 ### Project Structure
 
@@ -169,22 +184,31 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 │   ├── popup/                 # Popup React UI (340px, dark theme)
 │   │   ├── App.tsx            # Main popup component (language selector, translate button, theme/mode toggles, category override)
 │   │   └── main.tsx
-│   └── options/               # Options page React UI (full-screen, sidebar navigation)
-│       ├── App.tsx            # Layout: sidebar navigation + tab content
-│       ├── ThemePreview.tsx   # Live theme preview component
-│       ├── CustomThemeEditor.tsx # User-defined custom theme editor
-│       └── sections/          # 11 settings sections
-│           ├── GeneralSection.tsx
-│           ├── ProviderSection.tsx
-│           ├── ThemesSection.tsx
-│           ├── DictionarySection.tsx
-│           ├── GlossaryTranslatePreview.tsx
-│           ├── SiteRulesSection.tsx
-│           ├── SubtitlesSection.tsx
-│           ├── ShortcutsSection.tsx
-│           ├── InlineTranslateSection.tsx
-│           ├── StatisticsSection.tsx
-│           └── AdvancedSection.tsx
+│   ├── options/               # Options page React UI (full-screen, sidebar navigation)
+│   │   ├── App.tsx            # Layout: sidebar navigation + tab content
+│   │   ├── SetupWizard.tsx    # 5-step first-run onboarding wizard with provider catalog
+│   │   ├── ThemePreview.tsx   # Live theme preview component
+│   │   ├── CustomThemeEditor.tsx # User-defined custom theme editor
+│   │   ├── components/        # Specialized options components
+│   │   │   ├── ModelPicker.tsx            # Auto-fetch models from provider API
+│   │   │   └── ProviderCatalogPicker.tsx    # Search/filter provider catalog
+│   │   └── sections/          # 11 settings sections
+│   │       ├── GeneralSection.tsx
+│   │       ├── ProviderSection.tsx
+│   │       ├── ThemesSection.tsx
+│   │       ├── DictionarySection.tsx
+│   │       ├── GlossaryTranslatePreview.tsx
+│   │       ├── SiteRulesSection.tsx
+│   │       ├── SubtitlesSection.tsx
+│   │       ├── ShortcutsSection.tsx
+│   │       ├── InlineTranslateSection.tsx
+│   │       ├── StatisticsSection.tsx
+│   │       └── AdvancedSection.tsx
+│   └── pdf-viewer/            # Bundled PDF translation React app
+│       ├── App.tsx
+│       ├── components/        # PdfCanvasRenderer, PdfTranslationPane, DownloadProgressModal, FilePermissionGuide
+│       ├── hooks/             # usePdfDocument, usePdfDownload, usePdfPageTranslations, useSynchronizedScroll
+│       └── lib/               # PDF text extraction, font management, translated PDF generation
 ├── content/                   # Content script modules
 │   ├── domWalker.ts           # TreeWalker-based text piece extraction
 │   ├── viewportObserver.ts    # IntersectionObserver lazy translation
@@ -202,6 +226,8 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 │   ├── subtitleControls.ts    # Subtitle control UI
 │   ├── subtitleOverlay.ts     # Custom overlay renderer (fixed positioning, Popover API top layer)
 │   ├── subtitleToast.ts       # Subtitle status notifications
+│   ├── pdfDetect.ts           # PDF content type detection
+│   ├── categoryState.ts       # Category state management for content scripts
 │   └── utils/
 │       └── pageContext.ts     # Page context extraction for context-aware translation
 ├── inject/                    # In-page injected script modules (MAIN world)
@@ -210,20 +236,26 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 │   ├── interceptorRegistry.ts # URL pattern matching registry
 │   ├── messageBridge.ts       # Inject ↔ content postMessage bridge
 │   ├── textTrackDiscovery.ts  # HTML5 TextTrack subtitle discovery
+│   ├── domCueSource.ts        # DOM-based cue scraping for platforms without VTT URLs
 │   └── subtitleHandlers/      # Platform-specific subtitle handlers
 │       ├── youtube.ts         # YouTube /api/timedtext (srv3 XML, JSON3)
 │       ├── udemy.ts           # Udemy VTT with sprite filtering
 │       ├── coursera.ts        # Coursera VTT with language extraction
+│       ├── linkedin.ts        # LinkedIn Learning VTT with param/path/filename language extraction
+│       ├── hbomax.ts          # HBO Max / Max DOM cue scraping
 │       └── registry.ts        # Handler interface + registration system
 ├── services/                  # Background services
 │   ├── background.ts          # Tab state machine + translation message handler, rate limiting
 │   ├── base.ts                # Abstract TranslationService + prompt builder + response parser
-│   ├── openaiCompatible.ts    # OpenAI-compatible API client
+│   ├── openaiCompatible.ts    # OpenAI-compatible API client (retry with exponential backoff)
 │   ├── batcher.ts             # Request batching, deduplication, char-limit splitting
 │   ├── cacheManager.ts        # IndexedDB cache (TTL + LRU, daily eviction)
 │   ├── categoryStore.ts       # Tab-scoped category override store (in-memory Map<tabId, category>)
 │   ├── providerTester.ts      # Connection testing with latency measurement
-│   └── statsCollector.ts      # Translation statistics tracking (daily charts)
+│   ├── statsCollector.ts      # Translation statistics tracking (daily charts)
+│   ├── pdfAutoOpen.ts         # Pure decision logic for PDF auto-open
+│   ├── providerReadiness.ts   # Provider readiness state machine
+│   └── debugLog.ts            # Debug logging with cached settings check
 ├── stores/
 │   └── settingsStore.ts       # Zustand store with chrome.storage.local sync
 ├── ui/                        # Reusable React component library (options page)
@@ -231,30 +263,36 @@ AnyLLMTranslate is a Chrome (Manifest V3) extension that provides seamless bilin
 │   ├── Slider.tsx, Badge.tsx, Card.tsx
 │   ├── Modal.tsx, Toast.tsx, ToastProvider.tsx
 │   ├── FieldGroup.tsx, EmptyState.tsx
-│   ├── SegmentedControl.tsx   # Segmented control component
+│   ├── SegmentedControl.tsx, SectionHeader.tsx
 │   └── ErrorBoundary.tsx      # React error boundary
 ├── styles/
-│   ├── inject.css             # 16 themes + custom theme + page states (data-anyllm-theme, data-anyllm-position)
+│   ├── inject.css             # 17 themes + custom theme + page states (data-anyllm-theme, data-anyllm-position)
 │   ├── subtitle.css           # Subtitle overlay styles (fixed positioning, drag-and-drop)
 │   └── tooltip.css            # Selection translate tooltip styles
 ├── types/                     # TypeScript type definitions
 │   ├── index.ts               # Barrel re-export
 │   ├── config.ts              # ExtensionSettings, ProviderConfig, ThemeName, SiteRule, CustomThemeConfig, InlineTranslateSettings, etc.
 │   ├── translation.ts         # TranslationPiece, TranslationRequest, CacheEntry
-│   ├── messages.ts            # Chrome message protocol types
-│   ├── subtitle.ts            # Subtitle data types
+│   ├── messages.ts            # Chrome message protocol types (23 message types)
+│   ├── subtitle.ts            # SubtitleCue, AvailableSubtitleTrack, DomCueSource, SubtitleUrlPattern
 │   └── stats.ts               # Statistics tracking types
 ├── lib/                       # Shared utilities
 │   ├── constants.ts           # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
-│   ├── config.ts              # loadSettings() helper
-│   ├── languages.ts           # 36 languages (ISO 639-1 codes with native names)
+│   ├── config.ts              # loadSettings() helper with migration
+│   ├── languages.ts           # 35 languages (ISO 639-1 codes with native names) + Auto-Detect
 │   ├── categories.ts          # 21 predefined page categories for context-aware translation
 │   ├── glossary.ts            # Glossary formatting, mismatch detection, CSV/JSON import/export
-│   ├── siteRules.ts           # Site rule matching utilities
+│   ├── siteRules.ts           # Site rule matching utilities + built-in rules
 │   ├── subtitleParser.ts      # WebVTT parser
 │   ├── subtitleBuilder.ts     # Bilingual VTT builder
+│   ├── subtitleSites.ts       # Subtitle platform metadata (5 supported platforms)
+│   ├── openAiCompatibleCatalog.ts # Static catalog of 9 LLM providers (8 popular + custom)
+│   ├── providerReadiness.ts   # Provider readiness state machine
+│   ├── findPrimaryVideo.ts    # Video element detection
 │   ├── crypto.ts              # SHA-256 hashing for cache keys + AES-GCM encryption for API keys
 │   ├── performance.ts         # Performance measurement utilities
+│   ├── domUtils.ts            # DOM utility functions
+│   ├── styleUtils.ts          # Style utilities
 │   └── utils.ts               # General utility functions
 └── wxt.config.ts              # WXT configuration (permissions, commands, Tailwind plugin, CSP)
 ```
@@ -345,16 +383,20 @@ Safeguards:
 
 ## 🎬 Subtitle Handler Architecture
 
-The extension uses a modular, extensible subtitle handler system:
+The extension uses a modular, extensible subtitle handler system with three interception strategies:
 
 ### Handler Interface
 
 All platform handlers implement the `SubtitleHandler` interface:
 
-- `platform`: Unique identifier (e.g., `'youtube'`, `'udemy'`, `'coursera'`)
+- `platform`: Unique identifier (e.g., `'youtube'`, `'udemy'`, `'coursera'`, `'linkedin'`, `'hbomax'`)
 - `detect()`: Returns `true` if the handler applies to the current page
 - `getPatterns()`: Returns URL patterns for interception with optional language extractors
 - `transformResponse()`: Transforms raw subtitle content into normalized `SubtitleCue[]`
+- `getMetadataPatterns()`: *(optional)* Returns URL patterns for metadata API responses that list available tracks
+- `extractAvailableTracks()`: *(optional)* Extracts available subtitle tracks from a metadata API response
+- `getDomCueSource()`: *(optional)* Returns cue-scraping contract for DOM-sourced platforms (e.g. Max)
+- `isWatchPage()`: *(optional)* Returns `true` if the current page is a video watch page (vs. listing/search)
 
 ### Handler Registry
 
@@ -372,14 +414,16 @@ All platform handlers implement the `SubtitleHandler` interface:
 - **Detection**: `youtube.com` hostname
 - **Language**: Extracted from `lang` query parameter
 - **Parser**: Custom XML DOM parser + JSON3 event parser
+- **Interception**: XHR
 
 #### Udemy
 
 - **Endpoint**: `*.udemycdn.com/*.vtt`
 - **Format**: Standard WebVTT
 - **Detection**: `udemy.com` hostname
-- **Language**: Extracted from path segments (e.g., `/subtitle-en/`, `/en/`)
+- **Language**: Extracted from path segments (e.g., `/subtitle-en/`, `/en/`) with locale normalization
 - **Special**: Filters sprite metadata cues (image file references with `#xywh=` coordinates) using length heuristic (>100 chars)
+- **Interception**: XHR
 
 #### Coursera
 
@@ -387,6 +431,24 @@ All platform handlers implement the `SubtitleHandler` interface:
 - **Format**: Standard WebVTT
 - **Detection**: `coursera.org` hostname
 - **Language**: Extracted from `lang` query param or path segment (e.g., `/en/`)
+- **Interception**: XHR
+
+#### LinkedIn Learning
+
+- **Endpoint**: `licdn.com/*.vtt` (and `linkedin.com` CDN domains)
+- **Format**: Standard WebVTT
+- **Detection**: `linkedin.com` hostname + `/learning/` path for watch pages
+- **Language**: Extracted from query params (`lang`, `locale`), path segments, or filename suffix
+- **Metadata**: Parses transcript/caption/subtitle API responses for track discovery
+- **Interception**: Fetch
+
+#### HBO Max / Max
+
+- **Format**: DOM cue scraping (no VTT URL)
+- **Detection**: `max.com`, `play.hbomax.com` hostnames + `/video/watch/` path for watch pages
+- **Language**: aria-label-based from `[data-testid="player-ux-text-track-button"]` with 40+ label-to-language mappings
+- **Cue source**: Reads `[data-testid="cueBoxRowTextCue"]` with MutationObserver for cue changes
+- **Interception**: DOM scraping (no URL interception)
 
 ### Dual-Mode Architecture
 
@@ -413,6 +475,8 @@ All platform handlers implement the `SubtitleHandler` interface:
 - **AES-GCM encryption** — API keys stored encrypted at rest via Web Crypto API
 - **Content Security Policy** — strict CSP on extension pages (`script-src 'self'; connect-src 'self' https:`)
 - **Subtitle URL allowlist** — only whitelisted domains for subtitle fetch CORS bypass
+- **SSRF protection** — private/loopback/host blocking for subtitle CORS-bypass fetch
+- **Prompt injection mitigation** — page context fields capped, wrapped in XML delimiters, marked as untrusted data
 - **No telemetry.** No analytics. No crash reporting.
 - **All data is local** — stored in `chrome.storage.local` (settings, statistics) and `IndexedDB` (translation cache).
 - **API calls go only to your configured endpoint.** The extension never phones home.
@@ -422,7 +486,7 @@ All platform handlers implement the `SubtitleHandler` interface:
 
 ## 🧪 Testing
 
-The project maintains comprehensive test coverage (**697 tests across 55 files**):
+The project maintains comprehensive test coverage (**1240 tests across 98 files**):
 
 ```bash
 npm test             # Run all tests
@@ -441,19 +505,25 @@ Coverage areas:
 - Keyboard shortcut handling
 - Mutation watcher SPA detection
 - Auto-translate notification
-- OpenAI-compatible API client (request/response)
+- PDF content type detection and auto-open decision logic
+- OpenAI-compatible API client (request/response, retry)
 - Request batcher (deduplication, char-limit splitting)
 - IndexedDB cache manager (TTL, LRU eviction)
 - Category store (tab-scoped overrides)
-- Subtitle parser, builder, handler (YouTube, Udemy, Coursera)
+- Provider readiness state machine
+- Subtitle parser, builder, handler (YouTube, Udemy, Coursera, LinkedIn, HBO Max)
+- Subtitle sites metadata
+- DOM cue source scraping
 - Glossary CSV/JSON import/export
 - Site rules matching (wildcards)
 - Language code utilities
 - Settings store (Zustand + chrome.storage sync)
 - Statistics collection and daily tracking
-- Theme CSS coverage (all 16 themes + custom, dark mode, states)
-- UI component library (Button, Input, Toggle, Modal, Toast, SegmentedControl, etc.)
+- Provider catalog search/filter
+- Theme CSS coverage (all 17 themes + custom, dark mode, states)
+- UI component library (Button, Input, Toggle, Modal, Toast, SegmentedControl, SectionHeader, etc.)
 - Options page components (ThemePreview, CustomThemeEditor, StatisticsSection)
+- PDF viewer components (PdfCanvasRenderer, hooks, translation, download)
 - AES-GCM crypto utilities
 
 ---
