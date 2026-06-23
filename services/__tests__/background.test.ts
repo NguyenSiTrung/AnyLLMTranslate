@@ -312,6 +312,80 @@ describe('services/background', () => {
       expect(body.messages[0].content).not.toContain('precise, faithful translation');
     });
 
+    it('applies a per-tab knob override over the profile preset', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'cinematic',                              // preset faithfulness = idiomatic
+          knobOverrides: { faithfulness: 'literal' },        // per-tab overrides to literal
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      // literal line present, idiomatic line absent (overridden).
+      expect(body.messages[0].content).toContain('precise, faithful translation');
+      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
+    });
+
+    it('applies a persisted global knob override when no per-tab override is set', async () => {
+      // Seed global override in settings storage.
+      mockStorage['anyllm-translate-settings'] = {
+        subtitleSettings: { knobOverrides: { profanity: 'remove' } },
+      };
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'media',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('Remove strong profanity entirely');
+    });
+
+    it('produces the plain profile prompt when neither override is set (regression)', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'media',   // all defaults → no knob lines
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      // Media preset = neutral/balanced/moderate/preserve → identity only, no knob lines.
+      expect(body.messages[0].content).toContain('subtitle translator');
+      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
+      expect(body.messages[0].content).not.toContain('precise, faithful translation');
+      expect(body.messages[0].content).not.toContain('Remove strong profanity');
+    });
+
     it('seeds the first chunk with look-ahead context cues', async () => {
       // Build 30 cues so chunk 0 = cues[0..24] and look-ahead = cues[25..27].
       const cues = Array.from({ length: 30 }, (_, i) => ({

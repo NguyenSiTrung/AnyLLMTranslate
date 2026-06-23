@@ -22,7 +22,7 @@ import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
-import { PROFILE_PRESETS, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
+import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
@@ -405,13 +405,18 @@ async function handleTranslateSubtitle(
     const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
 
     // Resolve translation knobs from the content-script-provided profile.
-    // Unknown/absent profile falls back to 'media' (balanced defaults). The
-    // second `?? PROFILE_PRESETS.media` guards against a malformed/unexpected
-    // profile string from untrusted runtime data — PROFILE_PRESETS[badKey]
-    // would be undefined, so without this the service would silently fall
-    // through to the web prompt instead of the subtitle prompt.
+    // Unknown/absent profile falls back to 'media' (balanced defaults); an
+    // unexpected profile string falls back inside resolveEffectiveKnobs too
+    // (guards against malformed untrusted runtime data).
     const profile: SubtitleProfile = message.profile ?? 'media';
-    const subtitleKnobs: ProfileKnobs = PROFILE_PRESETS[profile] ?? PROFILE_PRESETS.media;
+    // Layer partial overrides over the profile preset. Precedence:
+    // per-tab (message.knobOverrides) > global (persisted) > preset.
+    // With both absent this returns PROFILE_PRESETS[profile] exactly.
+    const subtitleKnobs: ProfileKnobs = resolveEffectiveKnobs(
+      profile,
+      subtitleSettings.subtitleSettings?.knobOverrides,
+      message.knobOverrides,
+    );
 
     // Per-film proper-noun glossary: load by content hash, or pre-scan once and
     // persist. Seeds the rolling glossary so chunk 0 translates with the full
