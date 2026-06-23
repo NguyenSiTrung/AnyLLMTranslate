@@ -13,6 +13,8 @@
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { SubtitleFontSizeMode } from '@/types/config';
+import { requiredReadDuration } from '@/lib/subtitleTiming';
+import { lineBudgetForCue, wrapSubtitleText } from '@/lib/subtitleWrap';
 
 /** Overlay configuration options */
 export interface OverlayConfig {
@@ -342,7 +344,23 @@ function findActiveCue(currentTime: number): number {
 }
 
 /**
- * Update the displayed subtitle text.
+ * Render a list of wrapped lines as child <div> elements inside a block.
+ * Uses textContent per line (XSS-safe — never innerHTML). Clears the block first.
+ */
+function renderLines(block: HTMLElement, lines: string[]): void {
+  block.textContent = '';
+  for (const line of lines) {
+    const lineEl = document.createElement('div');
+    lineEl.textContent = line;
+    block.appendChild(lineEl);
+  }
+}
+
+/**
+ * Update the displayed subtitle text. Each block (original + translation) is
+ * wrapped into bounded, word-broken lines via the subtitleWrap helper, then
+ * rendered as explicit line <div>s. The char-per-line budget flexes with the
+ * cue's available reading time (reused from 5a's requiredReadDuration).
  */
 function updateDisplayedText(cueIndex: number): void {
   if (!overlayState.overlay) return;
@@ -352,8 +370,16 @@ function updateDisplayedText(cueIndex: number): void {
 
   if (cueIndex >= 0 && cueIndex < overlayState.cues.length) {
     const cue = overlayState.cues[cueIndex];
-    originalEl.textContent = cue.originalText || cue.text;
-    translatedEl.textContent = cue.text;
+    const duration = Math.max(0, cue.endTime - cue.startTime);
+    const requiredRead = requiredReadDuration(cue);
+    const budget = lineBudgetForCue(duration, requiredRead);
+
+    const origText = cue.originalText || cue.text;
+    const origLines = wrapSubtitleText(origText, budget.maxCharsPerLine, budget.origMaxLines).lines;
+    const transLines = wrapSubtitleText(cue.text, budget.maxCharsPerLine, budget.transMaxLines).lines;
+
+    renderLines(originalEl, origLines);
+    renderLines(translatedEl, transLines);
     overlayState.overlay.classList.add('anyllm-translate-subtitle-visible');
   } else {
     originalEl.textContent = '';

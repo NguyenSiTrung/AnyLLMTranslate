@@ -20,6 +20,7 @@ import {
   updateConfig,
   resetOverlayState,
   getConfig,
+  updateCues,
 } from '@/content/subtitleOverlay';
 
 const MOCK_CUES = [
@@ -351,5 +352,91 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.parentElement).toBe(document.body);
     expect(overlay.hasAttribute('popover')).toBe(false);
     expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
+  });
+});
+
+// ============================================================================
+// Sub-project 5b: line-wrapping renders explicit line divs
+// ============================================================================
+describe('subtitleOverlay — line wrapping (sub-project 5b)', () => {
+  /** Helper: initialize the overlay with cues and display the first cue. */
+  function showCue(cues: Array<{ startTime: number; endTime: number; text: string; originalText?: string }>): void {
+    const video = document.querySelector('video') as HTMLVideoElement;
+    initializeOverlay(cues, {}, video);
+    // Display is driven by video.timeupdate -> handleTimeUpdate -> findActiveCue.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => cues[0].startTime + 0.1 });
+    updateCues(cues);
+    video.dispatchEvent(new Event('timeupdate'));
+  }
+
+  it('renders a long translation as at most 2 line divs (not one wrapping block)', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+
+    // A cue with a long translation (well over 42 chars) and a generous window
+    // so requiredRead is small relative to duration -> wide CPL, but still 2 lines.
+    const longText = 'This is a rather long translated subtitle line that should wrap into two separate line divs rather than one big block';
+    const cues = [{ startTime: 0, endTime: 8, text: longText, originalText: 'orig' }];
+    showCue(cues);
+
+    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
+    expect(translatedEl).not.toBeNull();
+    const lineDivs = translatedEl.querySelectorAll(':scope > div');
+    // Must render as wrapped line divs, capped at 2.
+    expect(lineDivs.length).toBeGreaterThanOrEqual(1);
+    expect(lineDivs.length).toBeLessThanOrEqual(2);
+    // No innerHTML was used — each line div carries only text.
+    lineDivs.forEach((d) => {
+      expect((d as HTMLElement).children.length).toBe(0);
+    });
+  });
+
+  it('renders a short cue as a single line div (no needless wrapping)', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+
+    const cues = [{ startTime: 0, endTime: 4, text: 'Hi', originalText: 'Hola' }];
+    showCue(cues);
+
+    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
+    const lineDivs = translatedEl.querySelectorAll(':scope > div');
+    expect(lineDivs.length).toBe(1);
+    expect(lineDivs[0].textContent).toBe('Hi');
+
+    const originalEl = document.querySelector('.anyllm-translate-subtitle-original') as HTMLElement;
+    const origDivs = originalEl.querySelectorAll(':scope > div');
+    expect(origDivs.length).toBe(1);
+    expect(origDivs[0].textContent).toBe('Hola');
+  });
+
+  it('never exceeds 2 line divs in either block (the 2+2 cap)', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+
+    // Very long text in BOTH blocks, tight window -> narrow CPL -> max wrapping.
+    const veryLong = 'word '.repeat(40).trim(); // 40 words
+    const cues = [{
+      startTime: 0, endTime: 1,
+      text: veryLong, originalText: veryLong,
+    }];
+    showCue(cues);
+
+    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
+    const originalEl = document.querySelector('.anyllm-translate-subtitle-original') as HTMLElement;
+    expect(translatedEl.querySelectorAll(':scope > div').length).toBeLessThanOrEqual(2);
+    expect(originalEl.querySelectorAll(':scope > div').length).toBeLessThanOrEqual(2);
+  });
+
+  it('uses textContent per line (XSS-safe — no innerHTML)', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+
+    // A cue whose text contains HTML-like content.
+    const cues = [{
+      startTime: 0, endTime: 4,
+      text: '<b>not bold</b>', originalText: '<img src=x>',
+    }];
+    showCue(cues);
+
+    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
+    // textContent renders the string literally; no <b> element is created.
+    expect(translatedEl.querySelectorAll('b').length).toBe(0);
+    expect(translatedEl.textContent).toContain('<b>not bold</b>');
   });
 });
