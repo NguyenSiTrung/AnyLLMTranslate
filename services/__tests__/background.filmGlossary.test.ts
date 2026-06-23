@@ -38,6 +38,9 @@ vi.stubGlobal('chrome', {
 vi.mock('@/services/cacheManager', () => ({
   getCachedTranslation: vi.fn().mockResolvedValue(null),
   cacheTranslation: vi.fn().mockResolvedValue(undefined),
+  // Sub-project 6: subtitle path now uses key-based variants.
+  getCachedTranslationByKey: vi.fn().mockResolvedValue(null),
+  cacheTranslationByKey: vi.fn().mockResolvedValue(undefined),
   evictCache: vi.fn(),
   clearCache: vi.fn(),
   flushLruUpdates: vi.fn(),
