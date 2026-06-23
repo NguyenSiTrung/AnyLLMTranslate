@@ -113,6 +113,10 @@ export class HboMaxHandler implements SubtitleHandler {
       observeRootSelector: '[data-testid="caption_renderer_overlay"]',
       readActiveLanguage: () => this.readActiveLanguage(),
       videoIdExtractor: () => this.extractVideoId(),
+      // Track-switch detection: Max's text-track buttons carry aria-checked.
+      // (Previously hardcoded in domCueSource.ts; now declared per-platform.)
+      trackSwitchSelector: '[data-testid="player-ux-text-track-button"]',
+      trackSwitchAttribute: 'aria-checked',
     };
   }
 

@@ -21,6 +21,10 @@ function makeDomSource(readActiveLanguage = () => 'en'): DomCueSource {
     captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
     observeRootSelector: '[data-testid="caption_renderer_overlay"]',
     readActiveLanguage,
+    // HBO Max track-switch config — now declared via the contract (previously
+    // hardcoded in domCueSource.ts). Without this, the observer is skipped.
+    trackSwitchSelector: '[data-testid="player-ux-text-track-button"]',
+    trackSwitchAttribute: 'aria-checked',
   };
 }
 
@@ -341,6 +345,96 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     const open = cues.find((c) => c.text === 'Open cue');
     expect(open).toBeDefined();
     expect((open as SubtitleCue).endTime).toBe(OPEN_CUE_END_SENTINEL);
+
+    cleanup();
+  });
+
+  it('resets the buffer when a track-switch item activates (configurable selector + attribute — Youku aria-selected)', async () => {
+    // Youku-style picker: com="subtitle" panel with [data-val] items that use
+    // aria-selected (NOT aria-checked) to mark the active track.
+    const panel = document.createElement('div');
+    panel.setAttribute('com', 'subtitle');
+    const enItem = document.createElement('li');
+    enItem.setAttribute('data-val', 'en');
+    enItem.setAttribute('aria-selected', 'false');
+    enItem.textContent = 'English';
+    const thItem = document.createElement('li');
+    thItem.setAttribute('data-val', 'th');
+    thItem.setAttribute('aria-selected', 'false');
+    thItem.textContent = 'ภาษาไทย';
+    panel.appendChild(enItem);
+    panel.appendChild(thItem);
+    document.body.appendChild(panel);
+
+    const youkuDomSource: DomCueSource = {
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'th',
+      trackSwitchSelector: '[com="subtitle"] [data-val]',
+      trackSwitchAttribute: 'aria-selected',
+    };
+    const youkuHandler = { ...makeHandler(youkuDomSource), platform: 'youku' } as unknown as SubtitleHandler;
+    const cleanup = startDomCueSource(youkuHandler, bridge);
+
+    // Seed a cue from the first track.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    cueEl.textContent = 'English cue';
+    await flushObservers();
+
+    // Switch to Thai: the picker item becomes aria-selected=true.
+    thItem.setAttribute('aria-selected', 'true');
+    await flushObservers();
+
+    const trackChanged = sentMessages.find((m) => m.type === 'SUBTITLE_DOM_TRACK_CHANGED');
+    expect(trackChanged).toBeDefined();
+    expect((trackChanged?.payload as { platform: string }).platform).toBe('youku');
+    expect((trackChanged?.payload as { language: string }).language).toBe('th');
+
+    // Cue from the new track — buffer was reset, only this cue remains.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 9 });
+    cueEl.textContent = 'Thai cue';
+    await flushObservers();
+    const afterSwitch = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } };
+    expect(afterSwitch?.payload.cues).toHaveLength(1);
+    expect(afterSwitch?.payload.cues[0].text).toBe('Thai cue');
+
+    cleanup();
+  });
+
+  it('does NOT set up a track-switch observer when trackSwitchSelector is absent', async () => {
+    // A handler with no trackSwitchSelector — switching a track button must NOT
+    // reset the buffer (the observer is skipped entirely).
+    const noTrackDomSource: DomCueSource = {
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'en',
+    };
+    const cleanup = startDomCueSource(makeHandler(noTrackDomSource), bridge);
+
+    // A button that looks like a track switch, but the handler ignores it.
+    const btn = document.createElement('button');
+    btn.setAttribute('data-testid', 'player-ux-text-track-button');
+    btn.setAttribute('aria-checked', 'false');
+    document.body.appendChild(btn);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    cueEl.textContent = 'Cue A';
+    await flushObservers();
+
+    btn.setAttribute('aria-checked', 'true');
+    await flushObservers();
+
+    // No track-change message should fire.
+    expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_TRACK_CHANGED')).toBeUndefined();
+
+    // Buffer intact — next cue appends rather than resetting.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 8 });
+    cueEl.textContent = 'Cue B';
+    await flushObservers();
+    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues?.length).toBeGreaterThanOrEqual(2);
 
     cleanup();
   });

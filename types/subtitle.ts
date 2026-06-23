@@ -130,6 +130,21 @@ export interface DomCueSource {
    * Used to scope DOM cues to a single video. Optional — defaults to undefined.
    */
   videoIdExtractor?: () => string | undefined;
+  /**
+   * Selector for subtitle-track buttons whose activation signals a track
+   * switch mid-session (the rolling cue buffer is reset on switch). When
+   * absent, no track-switch detection is performed — cue text still updates
+   * via the main observer, but the buffer is not reset on a language change.
+   * E.g. HBO Max `[data-testid="player-ux-text-track-button"]`,
+   * Youku `[com="subtitle"] [data-val]`.
+   */
+  trackSwitchSelector?: string;
+  /**
+   * Attribute on {@link trackSwitchSelector} items whose value 'true' marks
+   * the newly-active track. Defaults to 'aria-checked'; Youku's picker uses
+   * 'aria-selected'.
+   */
+  trackSwitchAttribute?: string;
 }
 
 /** Supported subtitle formats */

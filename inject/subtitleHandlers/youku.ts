@@ -115,6 +115,11 @@ export class YoukuHandler implements SubtitleHandler {
       observeRootSelector: '#ykPlayer',
       readActiveLanguage: () => this.readActiveLanguage(),
       videoIdExtractor: () => this.extractVideoId(),
+      // Track-switch detection: Youku marks the active picker item with
+      // aria-selected="true" (its class-based marker is handled in
+      // readActiveLanguage, but MutationObserver needs a stable attribute).
+      trackSwitchSelector: '[com="subtitle"] [data-val]',
+      trackSwitchAttribute: 'aria-selected',
     };
   }
 

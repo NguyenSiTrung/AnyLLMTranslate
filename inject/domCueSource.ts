@@ -192,38 +192,47 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   // Initial attempt (dependencies may already be present at startup).
   tryAttach();
 
-  // Reset the rolling buffer when the user switches Max's subtitle track
-  // mid-session (a different track's cues are unrelated to the prior buffer).
-  // Filter to text-track buttons only — Max has other aria-checked controls
-  // (settings toggles, audio menu) that must NOT reset the cue buffer.
-  const trackObserver = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      if (m.type !== 'attributes' || m.attributeName !== 'aria-checked') continue;
-      const target = m.target as HTMLElement;
-      if (
-        target.getAttribute('aria-checked') === 'true' &&
-        target.getAttribute('data-testid') === 'player-ux-text-track-button'
-      ) {
-        console.log('[AnyLLMTranslate] Max subtitle track changed — resetting DOM cue buffer');
-        resetBuffer();
-        bridge.send('SUBTITLE_DOM_TRACK_CHANGED', {
-          platform: handler.platform,
-          language: domSource.readActiveLanguage(),
-          videoId: domSource.videoIdExtractor?.(),
-        });
-        return;
+  // Reset the rolling buffer when the user switches the platform's subtitle
+  // track mid-session (a different track's cues are unrelated to the prior
+  // buffer). The selector + activation attribute are platform-specific and
+  // come from the DomCueSource contract — e.g. HBO Max watches aria-checked on
+  // [data-testid="player-ux-text-track-button"]; Youku watches aria-selected
+  // on [com="subtitle"] [data-val]. When no selector is configured, track-switch
+  // detection is skipped entirely (cue text still updates via the main observer).
+  let trackObserver: MutationObserver | null = null;
+  const trackSwitchSelector = domSource.trackSwitchSelector;
+  if (trackSwitchSelector) {
+    const trackAttr = domSource.trackSwitchAttribute ?? 'aria-checked';
+    trackObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type !== 'attributes' || m.attributeName !== trackAttr) continue;
+        const target = m.target as HTMLElement;
+        if (typeof target.matches !== 'function') continue;
+        // matches() handles descendant combinators (e.g. Youku's
+        // `[com="subtitle"] [data-val]`), so one selector covers both the
+        // button itself (HBO Max) and picker items nested in a panel (Youku).
+        if (target.matches(trackSwitchSelector) && target.getAttribute(trackAttr) === 'true') {
+          console.log(`[AnyLLMTranslate] ${handler.platform} subtitle track changed — resetting DOM cue buffer`);
+          resetBuffer();
+          bridge.send('SUBTITLE_DOM_TRACK_CHANGED', {
+            platform: handler.platform,
+            language: domSource.readActiveLanguage(),
+            videoId: domSource.videoIdExtractor?.(),
+          });
+          return;
+        }
       }
-    }
-  });
-  trackObserver.observe(document.documentElement, {
-    attributes: true,
-    subtree: true,
-    attributeFilter: ['aria-checked'],
-  });
+    });
+    trackObserver.observe(document.documentElement, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: [trackAttr],
+    });
+  }
 
   return () => {
     documentObserver.disconnect();
-    trackObserver.disconnect();
+    trackObserver?.disconnect();
     detach();
   };
 }
