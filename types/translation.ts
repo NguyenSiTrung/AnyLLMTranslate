@@ -3,6 +3,7 @@
  */
 
 import type { PageContext } from './config';
+import type { ProfileKnobs } from './subtitleProfiles';
 
 /** A translatable piece of content extracted from the DOM */
 export interface TranslationPiece {
@@ -34,6 +35,9 @@ export interface TranslationRequest {
   customSystemPrompt?: string | null;
   /** Page context for context-aware translation */
   pageContext?: PageContext;
+  /** When set, the request is a subtitle translation: the service routes to
+   *  buildSubtitleSystemPrompt() and ignores customSystemPrompt. */
+  subtitleKnobs?: ProfileKnobs;
 }
 
 /** Result from the translation service */

@@ -12,6 +12,7 @@ import type {
 } from '@/types/translation';
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
+import { buildSubtitleSystemPrompt } from './subtitlePrompt';
 import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/messages';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
@@ -42,12 +43,21 @@ export class OpenAICompatibleService implements TranslationService {
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     try {
-      const systemPrompt = buildSystemPrompt(
-        request.targetLanguage,
-        request.customSystemPrompt,
-        request.glossaryBlock,
-        request.pageContext,
-      );
+      // Subtitle requests carry subtitleKnobs → use the profile-driven subtitle
+      // prompt and ignore the web customSystemPrompt. Web-page requests fall
+      // through to buildSystemPrompt exactly as before.
+      const systemPrompt = request.subtitleKnobs
+        ? buildSubtitleSystemPrompt(
+            request.targetLanguage,
+            request.subtitleKnobs,
+            request.glossaryBlock,
+          )
+        : buildSystemPrompt(
+            request.targetLanguage,
+            request.customSystemPrompt,
+            request.glossaryBlock,
+            request.pageContext,
+          );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
       const completionRequest: ChatCompletionRequest = {

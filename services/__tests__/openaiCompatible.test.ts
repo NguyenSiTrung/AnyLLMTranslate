@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenAICompatibleService } from '../openaiCompatible';
 import type { ProviderConfig } from '../../types/config';
+import { buildSubtitleSystemPrompt } from '@/services/subtitlePrompt';
+import { PROFILE_PRESETS } from '@/lib/subtitleProfiles';
 
 const mockConfig: ProviderConfig = {
   preset: 'custom',
@@ -283,6 +285,59 @@ describe('OpenAICompatibleService', () => {
       const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       const url = fetchCall[0] as string;
       expect(url).toContain('api.example.com');
+    });
+  });
+
+  describe('subtitle prompt routing', () => {
+    it('uses the subtitle prompt and ignores customSystemPrompt when subtitleKnobs is set', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
+        texts: new Map([['s1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        subtitleKnobs: PROFILE_PRESETS.cinematic,
+        customSystemPrompt: 'IGNORE ME — web custom prompt',
+      });
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const systemPrompt = body.messages[0].content;
+
+      // Subtitle identity present.
+      expect(systemPrompt).toContain('subtitle translator');
+      // Cinematic knob instruction present.
+      expect(systemPrompt).toContain('idiomatic, natural phrasing');
+      // Web custom prompt ignored.
+      expect(systemPrompt).not.toContain('IGNORE ME');
+      // Sanity: equals what buildSubtitleSystemPrompt produces (same targetLanguage code).
+      expect(systemPrompt).toBe(buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.cinematic));
+    });
+
+    it('uses the web prompt and honors customSystemPrompt when subtitleKnobs is absent', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      const webTemplate = 'Translate to {{targetLanguage}} ONLY. {{glossary}}\nRespond with JSON {"translations": {}}.';
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
+        texts: new Map([['s1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        customSystemPrompt: webTemplate,
+      });
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const systemPrompt = body.messages[0].content;
+
+      expect(systemPrompt).toContain('Vietnamese (vi)');
+      expect(systemPrompt).toContain('ONLY');
+      expect(systemPrompt).not.toContain('subtitle translator');
     });
   });
 });
