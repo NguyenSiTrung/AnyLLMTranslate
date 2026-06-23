@@ -70,14 +70,34 @@ export function AdvancedSection() {
     a.download = `anyllm-translate-settings-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showSuccess('Settings exported successfully');
-  }, [settings, showSuccess]);
+    // P2 security: warn the user that the export contains their API key in
+    // cleartext (the provider object is decrypted at load) so they treat the
+    // file as a secret.
+    if (settings.provider?.apiKey) {
+      showError('Exported file contains your API key in cleartext — keep it private!');
+    } else {
+      showSuccess('Settings exported successfully');
+    }
+  }, [settings, showSuccess, showError]);
 
   const handleImportSettings = useCallback(async (file: File) => {
     try {
       const text = await file.text();
-      const imported = JSON.parse(text);
-      const merged = { ...DEFAULT_SETTINGS, ...imported };
+      const parsed = JSON.parse(text);
+      // P2 security: guard against prototype pollution. JSON.parse alone does NOT
+      // set __proto__ on a plain object literal, but a crafted payload with a
+      // "__proto__"/"constructor"/"prototype" key survives the spread below and
+      // can pollute Object.prototype. Strip them before merging.
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Settings file must be a JSON object');
+      }
+      const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+      const sanitized: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (FORBIDDEN_KEYS.has(key)) continue;
+        sanitized[key] = value;
+      }
+      const merged = { ...DEFAULT_SETTINGS, ...sanitized };
       await updateSettings(merged);
       showSuccess('Settings imported successfully!');
     } catch {

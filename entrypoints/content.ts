@@ -433,10 +433,10 @@ async function initInteractionFeatures(): Promise<void> {
         const next = newSettings.displayMode === 'translation-only' ? 'translation-only' : 'dual';
         setPageState(next);
       }
-      // Apply custom theme CSS variables when customTheme changes even if theme stays 'custom'
-      if (newSettings.customTheme && settings.theme === 'custom' && getPageState() !== 'off') {
-        applyCustomTheme(newSettings.customTheme);
-      }
+      // P1: removed dead customTheme re-apply block that read the stale closure
+      // `settings.theme` (frozen at initInteractionFeatures() time) instead of
+      // newSettings. The theme block above (lines 418-425) already applies
+      // customTheme correctly from newSettings on every change.
       // Inline translate settings
       if (newSettings.inlineTranslate) {
         setInlineTranslateEnabled(newSettings.inlineTranslate.enabled);

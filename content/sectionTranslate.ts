@@ -132,8 +132,17 @@ export function removeSectionTranslation(sectionEl: Element): void {
   const translations = sectionEl.querySelectorAll(`[${DATA_ATTRS.ROLE}="translation"]`);
   translations.forEach((el) => el.remove());
 
-  // Remove loading/error placeholders
-  const placeholders = sectionEl.querySelectorAll(`[${DATA_ATTRS.ROLE}="loading"], [${DATA_ATTRS.ROLE}="error"]`);
+  // Remove inline bilingual elements and translation-only clones (siblings of the
+  // originals created in translation-only mode). Previously these were missed,
+  // leaving orphaned inline translations behind after section removal.
+  const inlineBilinguals = sectionEl.querySelectorAll('.anyllm-inline-bilingual, [data-anyllm-inline-clone-for]');
+  inlineBilinguals.forEach((el) => el.remove());
+
+  // Remove loading/error placeholders by piece-id (they carry PIECE_ID, not a
+  // bogus [role=loading]/[role=error] selector that matched nothing).
+  const placeholders = sectionEl.querySelectorAll(
+    `[${DATA_ATTRS.PIECE_ID}].anyllm-translate-loading, [${DATA_ATTRS.PIECE_ID}].anyllm-inline-bilingual-loading, [${DATA_ATTRS.PIECE_ID}].anyllm-inline-bilingual-error`,
+  );
   placeholders.forEach((el) => el.remove());
 
   // Remove dismiss button

@@ -22,11 +22,19 @@ let currentHoverTarget: Element | null = null;
 /** Cache of already-translated elements (element → translatedText) */
 let hoverCache = new WeakMap<Element, string>();
 
+/**
+ * Monotonic counter incorporated into hover IDs so two elements with identical
+ * textContent (repetitive UI like "Loading...", repeated product titles) get
+ * distinct piece IDs. Without this, the second element's ID collides with the
+ * first and is skipped by the `querySelector([PIECE_ID])` duplicate check.
+ */
+let hoverIdCounter = 0;
+
 /** Generate a unique piece ID for hover translations */
 function generateHoverId(element: Element): string {
   const text = element.textContent?.slice(0, 50) ?? '';
   const hash = Array.from(text).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-  return `hover-${Math.abs(hash).toString(36)}`;
+  return `hover-${Math.abs(hash).toString(36)}-${hoverIdCounter++}`;
 }
 
 /** Check if element should be skipped */
@@ -180,6 +188,9 @@ export function isHoverTranslateEnabled(): boolean {
 /** Clear hover translation cache */
 export function clearHoverCache(): void {
   hoverCache = new WeakMap<Element, string>();
+  // Reset the ID counter so a fresh translation session on the same page doesn't
+  // keep growing the suffix unnecessarily (keeps IDs short and predictable).
+  hoverIdCounter = 0;
 }
 
 export { HOVER_TARGETS };

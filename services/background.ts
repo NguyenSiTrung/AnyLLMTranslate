@@ -381,7 +381,11 @@ async function handleTranslateSubtitle(
   sender?: chrome.runtime.MessageSender,
 ): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number }> {
   const sessionId = ++subtitleSessionCounter;
-  await acquireSemaphore();
+  // P1 semaphore bypass fix: previously a single acquire/release wrapped the
+  // whole function, but the async chunk loop runs AFTER this function returns —
+  // so releaseSemaphore() fired while background chunks were still translating,
+  // letting the next handleTranslateSubtitle bypass the MAX_CONCURRENT limit.
+  // Now each chunk (including the synchronous first chunk) acquires its own slot.
   try {
     const service = await initService();
     const { cues, sourceLanguage, targetLanguage, pageContext } = message;
@@ -398,90 +402,97 @@ async function handleTranslateSubtitle(
 
     // Helper to translate a chunk
     const translateChunk = async (chunkCues: SubtitleCue[], contextCues: SubtitleCue[]) => {
-      const chunkResult: SubtitleCue[] = new Array(chunkCues.length);
-      const uncachedIndices: number[] = [];
-      const uniqueTexts = new Set<string>();
-      
-      for (let i = 0; i < chunkCues.length; i++) {
-        const cue = chunkCues[i];
-        const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage, subtitleSettings.cacheTTLDays);
-        if (cached) {
-          chunkResult[i] = {
-            ...cue,
-            text: cached,
-            originalText: cue.text,
-          };
-        } else {
-          uncachedIndices.push(i);
-          uniqueTexts.add(cue.text);
-        }
-      }
+      // Each chunk holds its own semaphore slot so MAX_CONCURRENT is enforced
+      // across the synchronous first chunk AND the background chunk loop.
+      await acquireSemaphore();
+      try {
+        const chunkResult: SubtitleCue[] = new Array(chunkCues.length);
+        const uncachedIndices: number[] = [];
+        const uniqueTexts = new Set<string>();
 
-      if (uniqueTexts.size > 0) {
-        const texts = new Map<string, string>();
-        const idToOriginalText = new Map<string, string>();
-        
-        let counter = 1;
-        // Prepend context cues (LLM translates them, but we ignore the result)
-        for (const ctxCue of contextCues) {
-           texts.set(`ctx${counter++}`, ctxCue.text);
-        }
-        
-        counter = 1;
-        for (const text of uniqueTexts) {
-          const id = `s${counter++}`;
-          texts.set(id, text);
-          idToOriginalText.set(id, text);
+        for (let i = 0; i < chunkCues.length; i++) {
+          const cue = chunkCues[i];
+          const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage, subtitleSettings.cacheTTLDays);
+          if (cached) {
+            chunkResult[i] = {
+              ...cue,
+              text: cached,
+              originalText: cue.text,
+            };
+          } else {
+            uncachedIndices.push(i);
+            uniqueTexts.add(cue.text);
+          }
         }
 
-        const result = await service.translate({
-          texts,
-          sourceLanguage,
-          targetLanguage,
-          glossaryBlock: subtitleGlossary || undefined,
-          customSystemPrompt: subtitleSettings.customSystemPrompt ?? null,
-          pageContext,
-        });
+        if (uniqueTexts.size > 0) {
+          const texts = new Map<string, string>();
+          const idToOriginalText = new Map<string, string>();
 
-        if (result.success) {
-          const textToTranslation = new Map<string, string>();
-          for (const [id, translatedText] of result.translations.entries()) {
-            if (id.startsWith('ctx')) continue; // Ignore context
-
-            const originalText = idToOriginalText.get(id);
-            if (originalText) {
-              textToTranslation.set(originalText, translatedText);
-              // Cache the translation
-              await cacheTranslation(originalText, translatedText, sourceLanguage, targetLanguage);
-            }
+          let counter = 1;
+          // Prepend context cues (LLM translates them, but we ignore the result)
+          for (const ctxCue of contextCues) {
+            texts.set(`ctx${counter++}`, ctxCue.text);
           }
 
-          for (const i of uncachedIndices) {
-            const cue = chunkCues[i];
-            const translatedText = textToTranslation.get(cue.text);
-            if (translatedText) {
-              chunkResult[i] = {
-                ...cue,
-                text: translatedText,
-                originalText: cue.text,
-              };
-            } else {
-              chunkResult[i] = { ...cue };
-            }
+          counter = 1;
+          for (const text of uniqueTexts) {
+            const id = `s${counter++}`;
+            texts.set(id, text);
+            idToOriginalText.set(id, text);
           }
 
-          // Track subtitle API call + character stats (fire-and-forget)
-          const chunkChars = [...uniqueTexts].reduce((sum, t) => sum + t.length, 0);
-          incrementStats({
-            totalApiCalls: 1,
-            totalCharactersTranslated: chunkChars,
-          }).catch(() => {});
-          recordDailyStats(chunkChars, 1, chunkCues.length - uncachedIndices.length).catch(() => {});
-        } else {
-          throw new Error(result.error ?? 'Chunk translation failed');
+          const result = await service.translate({
+            texts,
+            sourceLanguage,
+            targetLanguage,
+            glossaryBlock: subtitleGlossary || undefined,
+            customSystemPrompt: subtitleSettings.customSystemPrompt ?? null,
+            pageContext,
+          });
+
+          if (result.success) {
+            const textToTranslation = new Map<string, string>();
+            for (const [id, translatedText] of result.translations.entries()) {
+              if (id.startsWith('ctx')) continue; // Ignore context
+
+              const originalText = idToOriginalText.get(id);
+              if (originalText) {
+                textToTranslation.set(originalText, translatedText);
+                // Cache the translation
+                await cacheTranslation(originalText, translatedText, sourceLanguage, targetLanguage);
+              }
+            }
+
+            for (const i of uncachedIndices) {
+              const cue = chunkCues[i];
+              const translatedText = textToTranslation.get(cue.text);
+              if (translatedText) {
+                chunkResult[i] = {
+                  ...cue,
+                  text: translatedText,
+                  originalText: cue.text,
+                };
+              } else {
+                chunkResult[i] = { ...cue };
+              }
+            }
+
+            // Track subtitle API call + character stats (fire-and-forget)
+            const chunkChars = [...uniqueTexts].reduce((sum, t) => sum + t.length, 0);
+            incrementStats({
+              totalApiCalls: 1,
+              totalCharactersTranslated: chunkChars,
+            }).catch(() => {});
+            recordDailyStats(chunkChars, 1, chunkCues.length - uncachedIndices.length).catch(() => {});
+          } else {
+            throw new Error(result.error ?? 'Chunk translation failed');
+          }
         }
+        return chunkResult;
+      } finally {
+        releaseSemaphore();
       }
-      return chunkResult;
     };
 
     // Process first chunk synchronously to return immediately
@@ -561,8 +572,6 @@ async function handleTranslateSubtitle(
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
     return { success: false, error: errorMsg };
-  } finally {
-    releaseSemaphore();
   }
 }
 

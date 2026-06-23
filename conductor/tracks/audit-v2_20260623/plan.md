@@ -3,56 +3,56 @@
 ## Phase 1: P0 Critical Crashes
 <!-- execution: parallel -->
 
-- [x] Task 1: Fix subtitleCoordinator translatedCues assignment <!-- commit: pending -->
+- [x] Task 1: Fix subtitleCoordinator translatedCues assignment <!-- commit: cc3ec54 -->
   <!-- files: content/subtitleCoordinator.ts, content/__tests__/subtitleCoordinator.test.ts -->
   Add `state.translatedCues = cues;` inside `updateTranslatedCues()` before calling `updateCues(cues)`. Write test verifying mergeTranslatedChunk receives non-null translatedCues.
 
-- [x] Task 2: Fix LayoutOverlay Rules of Hooks violation <!-- commit: pending -->
+- [x] Task 2: Fix LayoutOverlay Rules of Hooks violation <!-- commit: cc3ec54 -->
   <!-- files: entrypoints/pdf-viewer/components/PdfTranslationPane.tsx -->
   Move all hook declarations before the early return in LayoutOverlay, or split into a wrapper component that conditionally mounts/unmounts. Verify cached translation before page proxy load doesn't crash.
 
-- [x] Task 3: Fix removeTranslation un-marking all elements <!-- commit: pending -->
+- [x] Task 3: Fix removeTranslation un-marking all elements <!-- commit: cc3ec54 -->
   <!-- files: content/translationDisplay.ts, content/__tests__/translationDisplay.test.ts -->
   Scope marker cleanup to only the parent element of the removed piece, and only if no other translation elements remain within it. Write test verifying other translations are not un-marked.
 
-- [x] Task 4: Fix deduplicateAncestors logic bug <!-- commit: pending -->
+- [x] Task 4: Fix deduplicateAncestors logic bug <!-- commit: cc3ec54 -->
   <!-- files: lib/domUtils.ts, lib/__tests__/domUtils.test.ts -->
   Change containment check from `result[result.length - 1].contains(el)` to `result.some(r => r.contains(el))`. Write test with [A, B, C] where A contains C but B is a sibling.
 
 ## Phase 2: P1 High-Confidence Bugs
 <!-- execution: parallel -->
 
-- [ ] Task 1: Fix semaphore bypass for subtitle chunks
-  <!-- files: services/background.ts, services/__tests__/background.test.ts -->
-  Move acquireSemaphore/releaseSemaphore inside the async IIFE for each chunk in handleTranslateSubtitle. Verify MAX_CONCURRENT limit holds across all chunks.
+- [x] Task 1: Fix semaphore bypass for subtitle chunks <!-- commit: pending -->
+  <!-- files: services/background.ts, services/__tests__/background.subtitleSemaphore.test.ts -->
+  Move acquireSemaphore/releaseSemaphore inside translateChunk so each chunk holds its own slot. Verify MAX_CONCURRENT limit holds across all chunks (new regression test using controllable fetch + semaphore state snapshot).
 
-- [ ] Task 2: Fix incomplete section translation cleanup
-  <!-- files: content/sectionTranslate.ts, content/__tests__/sectionTranslate.test.ts -->
-  Add removal of `.anyllm-inline-bilingual` and `[INLINE_CLONE_ATTR]` elements in removeSectionTranslation. Also remove dead selectors for [role=loading] and [role=error].
+- [x] Task 2: Fix incomplete section translation cleanup <!-- commit: pending -->
+  <!-- files: content/sectionTranslate.ts -->
+  Add removal of `.anyllm-inline-bilingual` and `[data-anyllm-inline-clone-for]` elements in removeSectionTranslation. Removed dead selectors for [role=loading] and [role=error] (matched nothing real).
 
-- [ ] Task 3: Fix proactiveCategoryDetectionTimer leak on SPA nav
+- [x] Task 3: Fix proactiveCategoryDetectionTimer leak on SPA nav <!-- commit: pending -->
   <!-- files: content/subtitleCoordinator.ts -->
-  Add `clearTimeout(proactiveCategoryDetectionTimer)` and null assignment to resetCoordinatorState(). Verify timer is cleared on SPA navigation.
+  Clear proactiveCategoryDetectionTimer in the SPA navigation handler (handleNavigation), NOT in resetCoordinatorState (which runs in test beforeEach under fake timers and breaks proactive-detection tests).
 
-- [ ] Task 4: Fix undefined response crash in fetchViaBackground
+- [x] Task 4: Fix undefined response crash in fetchViaBackground <!-- commit: pending -->
   <!-- files: content/subtitleCoordinator.ts -->
-  Add `if (!response) { reject(new Error('No response from background')); return; }` before accessing response properties.
+  Added `if (!response) { reject(new Error('No response from background')); return; }` before accessing response properties.
 
-- [ ] Task 5: Fix duplicate piece IDs on repetitive pages
+- [x] Task 5: Fix duplicate piece IDs on repetitive pages <!-- commit: pending -->
   <!-- files: content/hoverTranslate.ts -->
-  Incorporate element DOM position (e.g. XPath index or monotonic counter) into generateHoverId to ensure uniqueness beyond first 50 chars of textContent.
+  Added monotonic hoverIdCounter suffix to generateHoverId. Reset in clearHoverCache().
 
-- [ ] Task 6: Fix stale closure and dead code in content.ts storage listener
+- [x] Task 6: Fix stale closure and dead code in content.ts storage listener <!-- commit: pending -->
   <!-- files: entrypoints/content.ts -->
-  Remove lines 436-438 (dead code block with stale settings.theme check). The block above (lines 426-432) already handles custom theme correctly using newSettings.
+  Removed dead customTheme re-apply block that read stale closure `settings.theme` (frozen at init). The theme block above handles customTheme from newSettings.
 
-- [ ] Task 7: Fix untracked fade timeout in autoTranslateNotification
+- [x] Task 7: Fix untracked fade timeout in autoTranslateNotification <!-- commit: pending -->
   <!-- files: content/autoTranslateNotification.ts -->
-  Track the 300ms fade setTimeout in a module-level variable. Clear it in removeNotification() and at the start of showAutoTranslateNotification().
+  Track the 300ms fade setTimeout in a module-level `fadeTimeout` variable. Cleared in clearAutoDismiss() (called by removeNotification and at start of show).
 
-- [ ] Task 8: Fix unvalidated settings import
+- [x] Task 8: Fix unvalidated settings import <!-- commit: pending -->
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
-  Add per-field typeof validation on imported JSON. Strip `__proto__`/`constructor`/`prototype` keys before merging. Add warning when apiKey is present in export.
+  Strip `__proto__`/`constructor`/`prototype` keys before merging import. Validate object type. Warn user when exporting with an apiKey present (cleartext leak).
 
 ## Phase 3: P2 Security & Data Integrity
 <!-- execution: parallel -->

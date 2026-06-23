@@ -10,11 +10,20 @@ const FADE_DURATION_MS = 300;
 
 let notificationEl: HTMLElement | null = null;
 let autoDismissTimeout: ReturnType<typeof setTimeout> | null = null;
+// P1: track the fade-out timeout so it can be cancelled. Previously it was
+// untracked — if a new notification was shown (or removeNotification ran) during
+// the 300ms fade window, the stale fade callback still fired and removed the
+// fresh notification.
+let fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function clearAutoDismiss(): void {
   if (autoDismissTimeout) {
     clearTimeout(autoDismissTimeout);
     autoDismissTimeout = null;
+  }
+  if (fadeTimeout) {
+    clearTimeout(fadeTimeout);
+    fadeTimeout = null;
   }
 }
 
@@ -61,7 +70,8 @@ export function showAutoTranslateNotification(onDisable: () => void): void {
   autoDismissTimeout = setTimeout(() => {
     if (notificationEl) {
       notificationEl.classList.add(HIDING_CLASS);
-      setTimeout(() => {
+      fadeTimeout = setTimeout(() => {
+        fadeTimeout = null;
         removeNotification();
       }, FADE_DURATION_MS);
     }

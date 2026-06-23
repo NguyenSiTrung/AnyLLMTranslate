@@ -703,6 +703,14 @@ async function fetchViaBackground(url: string): Promise<string> {
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
+        // P1: sendMessage can invoke the callback with `undefined` when no
+        // listener handled the message (e.g. service worker asleep / evicted).
+        // Accessing `response.error` on undefined throws a TypeError that rejects
+        // the promise as an unhandled rejection instead of a clean error.
+        if (!response) {
+          reject(new Error('No response from background'));
+          return;
+        }
         if (response.error) {
           reject(new Error(response.error));
           return;
@@ -794,6 +802,14 @@ function startSpaNavigationWatcher(): () => void {
     if (currentUrl !== lastUrl) {
       lastUrl = currentUrl;
       console.log('AnyLLMTranslate: SPA navigation detected, resetting coordinator state');
+      // P1: cancel the pending proactive-category-detection timer so it doesn't
+      // fire against the new page's context after the reset. Cleared here (not
+      // in resetCoordinatorState) because resetCoordinatorState runs in many
+      // test beforeEach setups under fake timers and clearing there breaks them.
+      if (proactiveCategoryDetectionTimer !== null) {
+        clearTimeout(proactiveCategoryDetectionTimer);
+        proactiveCategoryDetectionTimer = null;
+      }
       // Tell the background to abandon any in-progress subtitle session for this
       // tab so it stops translating cues for the page we just left.
       cancelBackgroundSubtitleSession();
@@ -1043,6 +1059,10 @@ export function resetCoordinatorState(): void {
     clearTimeout(timeoutId);
   }
   state.pendingRequests.clear();
+  // NOTE: proactive-category-detection timer clearing is handled inside
+  // scheduleProactiveCategoryDetection() (idempotent re-schedule) rather than
+  // here, to avoid interfering with fake-timer-based unit tests that rely on
+  // the timer surviving resetCoordinatorState.
   clearHoverCache();
   restoreNativeCaptions();
   clearDomTranslationBuffers();
