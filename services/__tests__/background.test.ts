@@ -172,7 +172,7 @@ describe('services/background', () => {
   });
 
   describe('handleMessage — translateSubtitle', () => {
-    it('forwards pageContext to service.translate() when provided', async () => {
+    it('uses the subtitle prompt (pageContext is not injected for subtitles)', async () => {
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -196,9 +196,11 @@ describe('services/background', () => {
       const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).toContain('UNTRUSTED DATA');
-      expect(body.messages[0].content).toContain('<page_domain>youtube.com</page_domain>');
-      expect(body.messages[0].content).toContain('<page_category>entertainment</page_category>');
+      // Subtitle path uses the profile-driven subtitle prompt, which does not
+      // inject pageContext (UNTRUSTED DATA block is a web-page-prompt feature).
+      expect(body.messages[0].content).toContain('subtitle translator');
+      expect(body.messages[0].content).not.toContain('UNTRUSTED DATA');
+      expect(body.messages[0].content).not.toContain('<page_domain>');
     });
 
     it('works correctly when pageContext is undefined (backward compat)', async () => {
@@ -224,6 +226,111 @@ describe('services/background', () => {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body.messages[0].content).not.toContain('UNTRUSTED DATA');
+    });
+
+    it('routes cinematic profile to the subtitle prompt', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'cinematic',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('subtitle translator');
+      expect(body.messages[0].content).toContain('idiomatic, natural phrasing');
+    });
+
+    it('routes educational profile to the subtitle prompt (literal)', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'educational',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('precise, faithful translation');
+    });
+
+    it('falls back to media profile when profile is absent (backward compat)', async () => {
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      // Media = all defaults → subtitle identity present but no knob lines.
+      expect(body.messages[0].content).toContain('subtitle translator');
+      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
+      expect(body.messages[0].content).not.toContain('precise, faithful translation');
+    });
+
+    it('seeds the first chunk with look-ahead context cues', async () => {
+      // Build 30 cues so chunk 0 = cues[0..24] and look-ahead = cues[25..27].
+      const cues = Array.from({ length: 30 }, (_, i) => ({
+        startTime: i,
+        endTime: i + 1,
+        text: `Line ${i}`,
+      }));
+      // The first-chunk call sends ctx1..ctx3 (look-ahead) + s* keys.
+      const keys = ['ctx1', 'ctx2', 'ctx3', ...Array.from({ length: 25 }, (_, i) => `s${i + 1}`)];
+      const translations: Record<string, string> = {};
+      for (const k of keys) translations[k] = `T-${k}`;
+      mockFetch(JSON.stringify({ translations }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'media',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const firstCallBody = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      // The user prompt is messages[1].content: a prefix line then a JSON object.
+      const userPayload = JSON.parse(
+        firstCallBody.messages[1].content.split('\n\n').slice(1).join('\n\n'),
+      ) as Record<string, string>;
+
+      // Look-ahead cues 25, 26, 27 must appear as ctx1, ctx2, ctx3.
+      expect(userPayload.ctx1).toBe('Line 25');
+      expect(userPayload.ctx2).toBe('Line 26');
+      expect(userPayload.ctx3).toBe('Line 27');
     });
   });
 

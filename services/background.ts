@@ -22,6 +22,7 @@ import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
+import { PROFILE_PRESETS, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
 import type { ProviderConfig } from '@/types/config';
@@ -399,6 +400,11 @@ async function handleTranslateSubtitle(
     const subtitleSettings = await loadSettings();
     const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
 
+    // Resolve translation knobs from the content-script-provided profile.
+    // Unknown/absent profile falls back to 'media' (balanced defaults).
+    const profile: SubtitleProfile = message.profile ?? 'media';
+    const subtitleKnobs: ProfileKnobs = PROFILE_PRESETS[profile];
+
     const CONTEXT_SIZE = 3;
 
     // Mutate a copy of cues as we go
@@ -451,8 +457,9 @@ async function handleTranslateSubtitle(
             sourceLanguage,
             targetLanguage,
             glossaryBlock: subtitleGlossary || undefined,
-            customSystemPrompt: subtitleSettings.customSystemPrompt ?? null,
-            pageContext,
+            // Subtitle path: subtitleKnobs routes to the subtitle prompt and
+            // customSystemPrompt/pageContext are ignored by the service.
+            subtitleKnobs,
           });
 
           if (result.success) {
@@ -502,7 +509,13 @@ async function handleTranslateSubtitle(
     // Process first chunk synchronously to return immediately
     const firstChunkCues = cues.slice(0, CHUNK_SIZE);
     try {
-      const firstChunkResult = await translateChunk(firstChunkCues, []);
+      // Seed chunk 0 with look-ahead context (cues right AFTER the first chunk)
+    // instead of empty context. The model already ignores ctx* translations
+    // (see the `id.startsWith('ctx')` skip below), so this reuses the existing
+    // context machinery — it just feeds forward cues for the opening chunk,
+    // which otherwise translates context-blind.
+    const firstChunkLookahead = cues.slice(CHUNK_SIZE, CHUNK_SIZE + CONTEXT_SIZE);
+    const firstChunkResult = await translateChunk(firstChunkCues, firstChunkLookahead);
       for (let j = 0; j < firstChunkResult.length; j++) {
          translatedCues[j] = firstChunkResult[j];
       }
