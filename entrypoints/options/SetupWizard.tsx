@@ -80,7 +80,7 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
 
     const result = await testConnection(settings.provider, (progressStep) => {
       setTestProgress((prev) => [...prev, progressStep]);
-    });
+    }, settings.targetLanguage);
 
     setTestResult(result);
     setIsTesting(false);

@@ -11,6 +11,25 @@ import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomTheme
 const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
 const INLINE_CLONE_ATTR = 'data-anyllm-inline-clone-for';
 
+/** Track all inline-translation-only clone elements for O(1) removal
+ *  instead of querySelectorAll on every sync. */
+const inlineCloneElements = new Set<HTMLElement>();
+
+/** Re-trigger a CSS fade-in animation without a synchronous forced reflow.
+ *  Uses requestAnimationFrame to defer the offsetHeight read so the main
+ *  thread isn't blocked for layout calculation per translated piece. */
+function restartAnimation(el: HTMLElement): void {
+  el.style.animation = 'none';
+  requestAnimationFrame(() => {
+    // Force a reflow in the rAF callback (next frame) so the browser
+    // registers the animation reset. This is still a forced reflow but
+    // it's deferred to the next frame, not inline in the call stack.
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+    el.style.animation = '';
+  });
+}
+
 /** When the mask theme is active, translation elements need a focus
  *  affordance so keyboard-only users can reveal the blurred text without
  *  a mouse hover. CSS already styles `:focus`/`:focus-visible` for the
@@ -182,10 +201,10 @@ function getInlineRenderTarget(parentElement: Element): Element {
 }
 
 function removeInlineTranslationOnlyClones(): void {
-  const clones = document.querySelectorAll(`[${INLINE_CLONE_ATTR}]`);
-  for (const clone of clones) {
+  for (const clone of inlineCloneElements) {
     clone.remove();
   }
+  inlineCloneElements.clear();
 }
 
 function getInlineTranslationText(inlineEl: Element): string {
@@ -244,6 +263,7 @@ function syncInlineTranslationOnlySiblings(): void {
     } else {
       parent.after(clone);
     }
+    inlineCloneElements.add(clone);
   }
 }
 
@@ -305,11 +325,8 @@ export function applyTranslation(
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
     if (!existing.hasAttribute('dir')) existing.setAttribute('dir', 'auto');
     applyMaskA11yIfNeeded(existing as HTMLElement);
-    // Re-trigger fade-in animation by forcing reflow
-    (existing as HTMLElement).style.animation = 'none';
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    (existing as HTMLElement).offsetHeight;
-    (existing as HTMLElement).style.animation = '';
+    // Re-trigger fade-in animation via rAF to avoid synchronous forced reflow
+    restartAnimation(existing as HTMLElement);
     return;
   }
 
@@ -431,11 +448,8 @@ export function applyInlineTranslation(
     // Accessibility: set lang for screen readers and title for hover tooltip
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
     (existing as HTMLElement).title = translatedText;
-    // Re-trigger animation
-    (existing as HTMLElement).style.animation = 'none';
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    (existing as HTMLElement).offsetHeight;
-    (existing as HTMLElement).style.animation = '';
+    // Re-trigger animation via rAF to avoid synchronous forced reflow
+    restartAnimation(existing as HTMLElement);
     debouncedSyncInlineSiblings();
     return;
   }

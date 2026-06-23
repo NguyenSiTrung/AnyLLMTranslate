@@ -16,6 +16,18 @@ import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/mes
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
 
+/** Custom error class carrying the HTTP status code so retry logic can
+ *  distinguish 4xx client errors (no retry) from 5xx/network errors (retry)
+ *  without fragile string matching on error.message. */
+export class ApiError extends Error {
+  readonly statusCode: number;
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+  }
+}
+
 export class OpenAICompatibleService implements TranslationService {
   private config: ProviderConfig;
 
@@ -181,6 +193,27 @@ Rules:
     if (paragraphs.length === 0) {
       return { success: true, labels: {} };
     }
+
+    // Batch to avoid exceeding the model's context window on large pages.
+    const BATCH_SIZE = 50;
+    const allLabels: Record<string, PdfParagraphLabel> = {};
+
+    for (let batchStart = 0; batchStart < paragraphs.length; batchStart += BATCH_SIZE) {
+      const batch = paragraphs.slice(batchStart, batchStart + BATCH_SIZE);
+      const result = await this.classifyPdfBatch(batch);
+      if (!result.success) {
+        return result;
+      }
+      Object.assign(allLabels, result.labels);
+    }
+
+    return { success: true, labels: allLabels };
+  }
+
+  /** Classify a single batch of paragraphs (≤50 entries). */
+  private async classifyPdfBatch(
+    paragraphs: Array<{ id: string; text: string }>,
+  ): Promise<ClassifyPdfParagraphsResult> {
     try {
       const systemPrompt = `You classify paragraphs extracted from a PDF page.
 For each paragraph id, return exactly one label:
@@ -313,7 +346,7 @@ Rules:
           return this.fetchWithRetry(request, maxRetries, attempt + 1);
         }
 
-        throw new Error(errorMessage);
+        throw new ApiError(errorMessage, response.status);
       }
 
       return (await response.json()) as ChatCompletionResponse;
@@ -323,8 +356,11 @@ Rules:
         throw new Error(`Translation request timed out after ${timeout}ms`, { cause: error });
       }
 
-      // Retry on network errors (no response.status available)
-      if (attempt <= maxRetries && !(error instanceof Error && error.message.startsWith('HTTP 4'))) {
+      // Retry on network errors (no response.status available).
+      // 4xx client errors should NOT be retried (determined via ApiError.statusCode,
+      // not fragile string matching on error.message).
+      const isClientError = error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500;
+      if (attempt <= maxRetries && !isClientError) {
         const backoff = 500 * Math.pow(2, attempt - 1);
         await new Promise((resolve) => setTimeout(resolve, backoff));
         return this.fetchWithRetry(request, maxRetries, attempt + 1);

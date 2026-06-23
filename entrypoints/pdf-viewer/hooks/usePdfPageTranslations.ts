@@ -111,6 +111,10 @@ export function usePdfPageTranslations({
   const [pages, setPages] = useState<Map<number, PageTranslations>>(new Map());
   const pagesRef = useRef(pages);
   useEffect(() => { pagesRef.current = pages; }, [pages]);
+  // Track latest pdfPages in a ref so the IntersectionObserver callback
+  // always sees fresh page proxies without re-creating the observer.
+  const pdfPagesRef = useRef(pdfPages);
+  useEffect(() => { pdfPagesRef.current = pdfPages; }, [pdfPages]);
   // Stable per-page translator references so retry triggers re-extract the same page
   const inFlightRef = useRef<Set<number>>(new Set());
 
@@ -126,7 +130,8 @@ export function usePdfPageTranslations({
     if (!container) return;
     const scrollRoot = container.closest('[data-pane="right"]') as HTMLElement | null;
 
-    // Each page should have a slot in the right pane — observe them
+    // Re-query slots inside the effect — avoids depending on the array reference
+    // which would tear down and recreate the IntersectionObserver on every render.
     const slots: Element[] = Array.from(container.querySelectorAll('[data-page-slot]'));
     if (slots.length === 0) return;
 
@@ -155,7 +160,7 @@ export function usePdfPageTranslations({
               settings.targetLanguage,
             );
             if (cached) {
-              const page = pdfPages[pageNumber - 1];
+              const page = pdfPagesRef.current[pageNumber - 1];
               let originalParagraphs: PdfParagraph[] = [];
               if (page) {
                 try {
@@ -178,7 +183,7 @@ export function usePdfPageTranslations({
               return;
             }
 
-            const page = pdfPages[pageNumber - 1];
+            const page = pdfPagesRef.current[pageNumber - 1];
             if (!page) {
               inFlightRef.current.delete(pageNumber);
               return;
@@ -198,7 +203,7 @@ export function usePdfPageTranslations({
     return () => {
       observer.disconnect();
     };
-  }, [pdfPages, pdfUrl, containerRef, rootMargin]);
+  }, [pdfPages.length, pdfUrl, containerRef, rootMargin]);
 
   const translatedCount = Array.from(pages.values()).filter((p) => p.state === 'translated').length;
 

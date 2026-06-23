@@ -10,6 +10,19 @@ const HIGHLIGHT_CLASS = 'anyllm-section-highlight';
 const MIN_SIZE = 50;
 const SKIP_TAGS = new Set(['BODY', 'HTML']);
 
+/** Tags that are always block-level per HTML spec — avoids getComputedStyle
+ *  for the common case, reducing layout thrashing during picker hover. */
+const BLOCK_TAGS = new Set([
+  'DIV', 'P', 'SECTION', 'ARTICLE', 'MAIN', 'HEADER', 'FOOTER', 'ASIDE',
+  'NAV', 'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TR',
+  'BLOCKQUOTE', 'PRE', 'FORM', 'FIELDSET', 'FIGURE', 'FIGCAPTION',
+  'DETAILS', 'SUMMARY', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HR',
+  'ADDRESS', 'DL', 'DT', 'DD', 'BR', 'PICTURE', 'IFRAME', 'VIDEO',
+]);
+
+/** Cache of computed block-level results for tags not in BLOCK_TAGS. */
+const blockLevelCache = new WeakMap<Element, boolean>();
+
 let isActive = false;
 let highlightedEl: Element | null = null;
 let onSectionSelected: ((el: Element) => void) | null = null;
@@ -19,9 +32,18 @@ function isExtensionNode(el: Element): boolean {
 }
 
 function isBlockLevel(el: Element): boolean {
+  // Fast path: known block-level tags per HTML spec — no computed style needed.
+  if (BLOCK_TAGS.has(el.tagName)) return true;
+
+  // Cached result from a previous getComputedStyle call.
+  const cached = blockLevelCache.get(el);
+  if (cached !== undefined) return cached;
+
   const style = window.getComputedStyle(el);
-  return style.display === 'block' || style.display === 'flex' || style.display === 'grid'
+  const isBlock = style.display === 'block' || style.display === 'flex' || style.display === 'grid'
     || style.display === 'table' || style.display === 'list-item';
+  blockLevelCache.set(el, isBlock);
+  return isBlock;
 }
 
 function findPickableAncestor(target: Element): Element | null {

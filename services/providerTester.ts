@@ -32,6 +32,7 @@ export type ConnectionTestProgress = (step: ConnectionTestStep, stepIndex: numbe
 export async function testConnection(
   config: ProviderConfig,
   onProgress?: ConnectionTestProgress,
+  targetLanguage?: string,
 ): Promise<ConnectionTestResult> {
 
   const steps: ConnectionTestStep[] = [];
@@ -62,7 +63,7 @@ export async function testConnection(
   }
 
   // Step 3: Translation test
-  const translationStep = await testTranslation(config);
+  const translationStep = await testTranslation(config, targetLanguage);
   steps.push(translationStep);
   onProgress?.(translationStep, 2);
 
@@ -90,6 +91,9 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
@@ -98,7 +102,9 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
         messages: [{ role: 'user', content: 'Hello' }],
         max_tokens: 1,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     const latencyMs = Math.round(performance.now() - start);
 
@@ -114,6 +120,9 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
 
     return { name: 'ping', success: true, latencyMs };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { name: 'ping', success: false, latencyMs: Math.round(performance.now() - start), error: 'Ping timed out after 15s' };
+    }
     return {
       name: 'ping',
       success: false,
@@ -160,10 +169,15 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
     const response = await fetch(`${config.baseUrl}/models`, {
       method: 'GET',
       headers,
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     const latencyMs = Math.round(performance.now() - start);
 
@@ -186,6 +200,9 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
       data: modelIds,
     };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { name: 'models', success: false, latencyMs: Math.round(performance.now() - start), error: 'Model listing timed out after 15s' };
+    }
     return {
       name: 'models',
       success: false,
@@ -196,8 +213,9 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
 }
 
 /** Step 3: Translate a sample sentence and return result + latency */
-async function testTranslation(config: ProviderConfig): Promise<ConnectionTestStep> {
+async function testTranslation(config: ProviderConfig, targetLanguage?: string): Promise<ConnectionTestStep> {
   const start = performance.now();
+  const lang = targetLanguage || 'Vietnamese';
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -205,6 +223,9 @@ async function testTranslation(config: ProviderConfig): Promise<ConnectionTestSt
     if (config.apiKey) {
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -214,14 +235,16 @@ async function testTranslation(config: ProviderConfig): Promise<ConnectionTestSt
         messages: [
           {
             role: 'system',
-            content: 'You are a translator. Translate the following text to Vietnamese. Respond only with the translation.',
+            content: `You are a translator. Translate the following text to ${lang}. Respond only with the translation.`,
           },
           { role: 'user', content: 'Hello, how are you today?' },
         ],
         max_tokens: 100,
         temperature: 0.3,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timer);
 
     const latencyMs = Math.round(performance.now() - start);
 
@@ -246,6 +269,9 @@ async function testTranslation(config: ProviderConfig): Promise<ConnectionTestSt
       data: content.trim(),
     };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { name: 'translation', success: false, latencyMs: Math.round(performance.now() - start), error: 'Translation test timed out after 30s' };
+    }
     return {
       name: 'translation',
       success: false,

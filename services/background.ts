@@ -16,7 +16,7 @@ import type {
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import { loadSettings, onSettingsChange } from '@/lib/config';
-import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride } from '@/services/categoryStore';
+import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
@@ -75,6 +75,7 @@ function stopSubtitleSession(tabId: number): void {
  * and page-translation session tracking. Call once at service worker startup.
  */
 export function initSubtitleSessionCleanup(): void {
+  initCategoryTabCleanup();
   chrome.tabs.onRemoved.addListener((tabId: number) => {
     stopSubtitleSession(tabId);
     translatedTabSessions.delete(tabId);
@@ -553,6 +554,11 @@ async function handleTranslateSubtitle(
                     chunkCues: chunkResult,
                     sessionId: session.sessionId,
                  });
+                 // Track per-chunk subtitle stats (fire-and-forget) — avoids
+                 // overcounting upfront when background chunks may fail.
+                 incrementStats({
+                   totalSubtitlesCuesTranslated: chunkResult.length,
+                 }).catch(() => {});
                }
             } catch (error) {
                console.warn("AnyLLMTranslate: Background chunk translation failed", error);
@@ -563,9 +569,11 @@ async function handleTranslateSubtitle(
       })();
     }
 
-    // Track subtitle stats (fire-and-forget)
+    // Track subtitle stats for the first chunk only (fire-and-forget).
+    // Background chunk stats are tracked per-chunk in the async loop above
+    // to avoid overcounting cues that may fail in later chunks.
     incrementStats({
-      totalSubtitlesCuesTranslated: cues.length,
+      totalSubtitlesCuesTranslated: Math.min(cues.length, CHUNK_SIZE),
     }).catch(() => {});
 
     return { success: true, cues: translatedCues, sessionId };
@@ -654,14 +662,21 @@ async function handleFetchSubtitle(
   if (!isAllowedSubtitleUrl(message.url)) {
     return { success: false, error: 'URL not in subtitle allow-list' };
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(message.url);
+    const response = await fetch(message.url, { signal: controller.signal });
+    clearTimeout(timer);
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
     const content = await response.text();
     return { success: true, content };
   } catch (error) {
+    clearTimeout(timer);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { success: false, error: 'Subtitle fetch timed out after 30s' };
+    }
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
     return { success: false, error: errorMsg };
   }

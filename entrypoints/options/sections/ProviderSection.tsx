@@ -56,7 +56,7 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
 
     const result = await testConnection(settings.provider, (step) => {
       setTestProgress((prev) => [...prev, step]);
-    });
+    }, settings.targetLanguage);
 
     setTestResult(result);
     setIsTesting(false);

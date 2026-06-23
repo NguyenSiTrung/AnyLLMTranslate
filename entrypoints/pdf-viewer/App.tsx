@@ -24,6 +24,13 @@ import { useVisiblePages } from './hooks/useVisiblePages';
 import { usePdfDownload } from './hooks/usePdfDownload';
 import { DownloadProgressModal } from './components/DownloadProgressModal';
 
+/** Stable sentinel for untranslated pages — avoids creating a new
+ *  { paragraphs: new Map(), state: 'idle' } object on every render. */
+const IDLE_PAGE: { paragraphs: Map<string, string>; state: 'idle' } = {
+  paragraphs: new Map() as Map<string, string>,
+  state: 'idle' as const,
+};
+
 
 /** Extract a PDF URL from the `?file=` query parameter */
 function getPdfUrlFromQuery(): string | null {
@@ -159,7 +166,7 @@ export default function App(): ReactElement {
       <>
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
-          const translation = translations.get(pageNumber) ?? { paragraphs: new Map(), state: 'idle' as const };
+          const translation = translations.get(pageNumber) ?? IDLE_PAGE;
           const dims = pageDimensions.get(pageNumber);
           const widthStyle = dims ? `${dims.width}px` : '720px';
           const page = pages[idx] ?? null;

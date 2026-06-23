@@ -120,55 +120,55 @@
 ## Phase 4: P2 Performance, Timeouts & Resource Leaks
 <!-- execution: parallel -->
 
-- [ ] Task 1: Wire categoryStore.initTabCleanup in background
+- [x] Task 1: Wire categoryStore.initTabCleanup in background <!-- commit: pending -->
   <!-- files: services/background.ts, services/categoryStore.ts -->
   Call categoryStore.initTabCleanup() at SW startup or inside initSubtitleSessionCleanup. Add guard in categoryStore to prevent duplicate listener registration.
 
-- [ ] Task 2: Add timeout to handleFetchSubtitle
+- [x] Task 2: Add timeout to handleFetchSubtitle <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Add AbortController with 30s timeout to fetch() call in handleFetchSubtitle.
 
-- [ ] Task 3: Fix subtitle stat overcounting
+- [x] Task 3: Fix subtitle stat overcounting <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Move incrementStats for totalSubtitlesCuesTranslated to per-chunk completion instead of counting all cues upfront.
 
-- [ ] Task 4: Replace fragile HTTP status string matching with error class
+- [x] Task 4: Replace fragile HTTP status string matching with error class <!-- commit: pending -->
   <!-- files: services/openaiCompatible.ts -->
   Create a custom ApiError class with statusCode property. Use it in fetchWithRetry instead of message.startsWith('HTTP 4').
 
-- [ ] Task 5: Add batching to classifyPdfParagraphs
+- [x] Task 5: Add batching to classifyPdfParagraphs <!-- commit: pending -->
   <!-- files: services/openaiCompatible.ts -->
   Batch paragraphs (e.g. 50 at a time) and merge results to avoid exceeding model context window.
 
-- [ ] Task 6: Add timeouts to providerTester (all 3 steps)
+- [x] Task 6: Add timeouts to providerTester (all 3 steps) <!-- commit: pending -->
   <!-- files: services/providerTester.ts -->
   Add AbortController with 15-30s timeout to testPing, testModelListing, and testTranslation fetch calls.
 
-- [ ] Task 7: Fix hardcoded Vietnamese in providerTester
+- [x] Task 7: Fix hardcoded Vietnamese in providerTester <!-- commit: pending -->
   <!-- files: services/providerTester.ts -->
   Accept targetLanguage as parameter and use user's configured target language instead of hardcoding Vietnamese.
 
-- [ ] Task 8: Reduce forced reflows in translationDisplay
+- [x] Task 8: Reduce forced reflows in translationDisplay <!-- commit: pending -->
   <!-- files: content/translationDisplay.ts -->
   Use requestAnimationFrame to defer animation restart instead of reading offsetHeight synchronously per piece.
 
-- [ ] Task 9: Fix O(N^2) inline translation sibling sync
+- [x] Task 9: Fix O(N^2) inline translation sibling sync <!-- commit: pending -->
   <!-- files: content/translationDisplay.ts -->
   Route all syncInlineTranslationOnlySiblings calls through scheduleDomWrite debounce. Maintain a Set of clone elements for O(1) removal.
 
-- [ ] Task 10: Fix layout thrashing in sectionPicker
+- [x] Task 10: Fix layout thrashing in sectionPicker <!-- commit: pending -->
   <!-- files: content/sectionPicker.ts -->
   Cache computed styles during picker mode. Use tagName + block-element set for initial filter, fall back to getComputedStyle only for custom elements.
 
-- [ ] Task 11: Narrow MutationObserver scope in subtitleCoordinator
+- [x] Task 11: Narrow MutationObserver scope in subtitleCoordinator <!-- commit: pending -->
   <!-- files: content/subtitleCoordinator.ts -->
   Filter mutations to only process nodes that could contain `<video>` elements. Or narrow observation root once primary video is found.
 
-- [ ] Task 12: Fix new Map/object per render in PDF viewer
+- [x] Task 12: Fix new Map/object per render in PDF viewer <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/App.tsx -->
   Hoist a module-level stable IDLE sentinel object and reuse it for untranslated pages.
 
-- [ ] Task 13: Fix IntersectionObserver churn in usePdfPageTranslations
+- [x] Task 13: Fix IntersectionObserver churn in usePdfPageTranslations <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfPageTranslations.ts -->
   Depend on a stable signal (e.g. pdfPages.length) instead of the array reference. Re-query slots inside the effect.
 

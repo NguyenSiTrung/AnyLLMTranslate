@@ -1365,9 +1365,26 @@ function startVideoPlaybackWatcher(): () => void {
   // Initial scan
   scanForVideos();
 
-  // Watch for dynamically added videos (e.g. YouTube player loads after page)
-  const observer = new MutationObserver(() => {
-    scanForVideos();
+  // Watch for dynamically added videos (e.g. YouTube player loads after page).
+  // Filter mutations to only scan when added nodes could contain <video> elements,
+  // avoiding a full scanForVideos on every text/style/class change.
+  const observer = new MutationObserver((mutations) => {
+    let needsScan = false;
+    for (const mutation of mutations) {
+      if (mutation.type !== 'childList') continue;
+      for (const node of mutation.addedNodes) {
+        if (node instanceof HTMLVideoElement) {
+          needsScan = true;
+          break;
+        }
+        if (node instanceof Element && node.querySelector('video')) {
+          needsScan = true;
+          break;
+        }
+      }
+      if (needsScan) break;
+    }
+    if (needsScan) scanForVideos();
   });
 
   observer.observe(document.documentElement, { childList: true, subtree: true });
