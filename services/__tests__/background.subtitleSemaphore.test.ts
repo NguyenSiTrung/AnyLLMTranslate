@@ -60,6 +60,19 @@ function mockControllableFetch() {
   }));
 }
 
+// Sub-project 3 added a per-film pre-scan that runs (and fetches) BEFORE chunk
+// 0 acquires its semaphore slot. This test observes the semaphore state during
+// the chunk-0 fetch, so short-circuit the pre-scan to keep chunk 0 as the only
+// latched fetch. (Pre-scan behavior is covered in background.filmGlossary.test.ts.)
+vi.mock('@/services/subtitleNameScanner', () => ({
+  preScanNames: vi.fn().mockResolvedValue({}),
+}));
+vi.mock('@/services/filmGlossaryStore', () => ({
+  loadFilmGlossary: vi.fn().mockResolvedValue(undefined),
+  saveFilmGlossary: vi.fn().mockResolvedValue(undefined),
+  FILM_GLOSSARY_STORAGE_KEY: 'anyllm-film-glossary',
+}));
+
 // All background exports are imported dynamically per-test so module-level state
 // resets (vi.resetModules) keep the test harness and the module under test on the
 // SAME module instance (static + dynamic imports would otherwise diverge after reset).

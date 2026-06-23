@@ -37,6 +37,19 @@ vi.stubGlobal('chrome', {
   },
 });
 
+// Sub-project 3 added a per-film pre-scan that runs before chunk 0. These tests
+// assert chunk-translation behavior, so short-circuit the pre-scan to an empty
+// result (cache miss → empty pre-scan → no persistence). The pre-scan is
+// exercised in its own test file (background.filmGlossary.test.ts).
+vi.mock('@/services/subtitleNameScanner', () => ({
+  preScanNames: vi.fn().mockResolvedValue({}),
+}));
+vi.mock('@/services/filmGlossaryStore', () => ({
+  loadFilmGlossary: vi.fn().mockResolvedValue(undefined),
+  saveFilmGlossary: vi.fn().mockResolvedValue(undefined),
+  FILM_GLOSSARY_STORAGE_KEY: 'anyllm-film-glossary',
+}));
+
 // Mock fetch for translation service
 function mockFetch(content: string) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
