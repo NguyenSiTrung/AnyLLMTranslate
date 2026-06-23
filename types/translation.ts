@@ -38,6 +38,9 @@ export interface TranslationRequest {
   /** When set, the request is a subtitle translation: the service routes to
    *  buildSubtitleSystemPrompt() and ignores customSystemPrompt. */
   subtitleKnobs?: ProfileKnobs;
+  /** Rolling proper-noun glossary block for subtitle cross-chunk continuity.
+   *  Injected into the subtitle system prompt after the user's global glossary. */
+  rollingGlossaryBlock?: string;
 }
 
 /** Result from the translation service */
@@ -53,6 +56,10 @@ export interface TranslationResult {
   /** True when the LLM omitted some IDs and they were back-filled with the
    *  original text (success, but content was repaired — useful for stats). */
   partial?: boolean;
+  /** Proper nouns extracted from the response (subtitle path only).
+   *  Populated when the model returns a "properNouns" field alongside
+   *  "translations". Undefined on the web-page translation path. */
+  properNouns?: Record<string, string>;
 }
 
 /** Translation service interface */
