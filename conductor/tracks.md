@@ -56,12 +56,12 @@ This file tracks all major tracks for the project.
 - ✅ **Subtitle Supported Sites Display & Per-Site Toggle** (`subtitle-site-toggles_20260619`) — Archived 2026-06-19. Settings card listing 5 subtitle platforms with per-site enable/disable toggles; runtime coordinator filtering for disabled sites. [View](./conductor/archive/subtitle-site-toggles_20260619/)
 - ✅ **HBO Max Subtitle Hardening & UX Fixes** (`hbomax-subtitle-hardening_20260622`) — Archived 2026-06-22. Manual DOM activation (Alt+S), track-change bridge sync, debounced track discovery, shared `findPrimaryVideo`, Max context menu hosts. [View](./conductor/archive/hbomax-subtitle-hardening_20260622/)
 - ✅ **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Archived 2026-06-22. Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis across 9 phases. Parser fixes, interceptor hardening, DOM cue source improvements, chunk delta delivery, coordinator overhaul, overlay accessibility, 43 new tests. [View](./conductor/archive/subtitle-deep-analysis-fixes_20260622/)
+- ✅ **OpenAI-Compatible Provider Catalog & Model Picker** (`openai-provider-catalog_20260623`) — Archived 2026-06-23. Searchable provider catalog with base URL auto-fill and on-demand GET /models picker in options and setup wizard. [View](./conductor/archive/openai-provider-catalog_20260623/)
 
 ---
 
 ## Active Tracks
 
-## [x] Track: OpenAI-Compatible Provider Catalog & Model Picker
-*Link: [./conductor/tracks/openai-provider-catalog_20260623/](./conductor/tracks/openai-provider-catalog_20260623/)*
+_(none)_
 
 ---
