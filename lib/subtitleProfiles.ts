@@ -59,3 +59,27 @@ export const DOMAIN_PROFILE_MAP: Record<string, SubtitleProfile> = {
 export function resolveProfile(hostname: string): SubtitleProfile {
   return DOMAIN_PROFILE_MAP[hostname] ?? 'media';
 }
+
+/** A partial set of knob values — absent knobs inherit from the layer below. */
+export type KnobOverride = Partial<ProfileKnobs>;
+
+/**
+ * Resolve the effective knobs by layering partial overrides over the profile
+ * preset. Precedence: perTab > global > preset. Keys absent from an override
+ * inherit from the layer below. An unknown profile string falls back to 'media'
+ * (guards against malformed untrusted runtime data, matching resolveProfile).
+ *
+ * With both overrides empty/absent this returns PROFILE_PRESETS[profile]
+ * exactly — today's behavior, byte-for-byte.
+ */
+export function resolveEffectiveKnobs(
+  profile: SubtitleProfile,
+  globalOverride?: KnobOverride,
+  perTabOverride?: KnobOverride,
+): ProfileKnobs {
+  return {
+    ...(PROFILE_PRESETS[profile] ?? PROFILE_PRESETS.media),
+    ...(globalOverride ?? {}),
+    ...(perTabOverride ?? {}),
+  };
+}

@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveProfile,
+  resolveEffectiveKnobs,
   PROFILE_PRESETS,
   DOMAIN_PROFILE_MAP,
   type SubtitleProfile,
@@ -86,5 +87,55 @@ describe('DOMAIN_PROFILE_MAP', () => {
       expect(key).not.toContain('/');
       expect(key).not.toContain(':');
     }
+  });
+});
+
+describe('resolveEffectiveKnobs', () => {
+  it('returns the profile preset unchanged when both overrides are absent', () => {
+    expect(resolveEffectiveKnobs('cinematic')).toEqual(PROFILE_PRESETS.cinematic);
+    expect(resolveEffectiveKnobs('educational')).toEqual(PROFILE_PRESETS.educational);
+  });
+
+  it('returns the profile preset unchanged when overrides are empty objects', () => {
+    expect(resolveEffectiveKnobs('media', {}, {})).toEqual(PROFILE_PRESETS.media);
+  });
+
+  it('falls back to media preset for an unknown profile string', () => {
+    // Guard against untrusted runtime data: PROFILE_PRESETS[badKey] is undefined.
+    const result = resolveEffectiveKnobs('bogus' as SubtitleProfile);
+    expect(result).toEqual(PROFILE_PRESETS.media);
+  });
+
+  it('global override replaces only the set knob; others inherit from preset', () => {
+    const result = resolveEffectiveKnobs('cinematic', { profanity: 'remove' });
+    expect(result).toEqual({
+      register: 'casual',        // from cinematic preset
+      faithfulness: 'idiomatic', // from cinematic preset
+      brevity: 'moderate',       // from cinematic preset
+      profanity: 'remove',       // overridden
+    });
+  });
+
+  it('per-tab override wins over global on the same knob', () => {
+    const result = resolveEffectiveKnobs(
+      'cinematic',
+      { faithfulness: 'literal' },   // global
+      { faithfulness: 'balanced' },  // per-tab wins
+    );
+    expect(result.faithfulness).toBe('balanced');
+  });
+
+  it('per-tab and global apply on disjoint knobs', () => {
+    const result = resolveEffectiveKnobs(
+      'media',
+      { profanity: 'soften' },   // global only
+      { brevity: 'terse' },      // per-tab only
+    );
+    expect(result).toEqual({
+      register: 'neutral',       // from media preset
+      faithfulness: 'balanced',  // from media preset
+      brevity: 'terse',          // per-tab
+      profanity: 'soften',       // global
+    });
   });
 });
