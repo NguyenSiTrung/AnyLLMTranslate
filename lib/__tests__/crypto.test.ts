@@ -68,9 +68,11 @@ describe('crypto — API key encryption', () => {
     expect(encrypted1).not.toBe(encrypted2);
   });
 
-  it('gracefully returns raw value on decryption failure', async () => {
+  it('P2 security: returns empty string (not ciphertext) on decryption failure', async () => {
     const corrupted = 'enc:not-valid-base64!!!';
-    expect(await decryptApiKey(corrupted)).toBe(corrupted);
+    // Previously returned the raw ciphertext, which a caller could then send as
+    // the API key. Now returns '' so an undecryptable value can't leak.
+    expect(await decryptApiKey(corrupted)).toBe('');
   });
 
   describe('per-install salt', () => {

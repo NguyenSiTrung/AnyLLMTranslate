@@ -38,6 +38,11 @@ const pendingLruUpdates = new Map<string, CacheEntry>();
 /** Debounce timer for LRU flush */
 let lruFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** P2: set while clearCache() is in progress so concurrent getCachedTranslation
+ *  reads skip the LRU-update step — otherwise a read during clear could re-add
+ *  an entry to pendingLruUpdates and a later flush would resurrect it. */
+let isClearing = false;
+
 /** Mutex to prevent overlapping async flush calls */
 let isFlushing = false;
 
@@ -79,15 +84,18 @@ export async function getCachedTranslation(
       return null;
     }
 
-    // FR-4: Defer LRU update — accumulate in Map and flush via debounce
-    entry.lastAccessedAt = Date.now();
-    pendingLruUpdates.set(key, entry);
-    if (lruFlushTimer !== null) clearTimeout(lruFlushTimer);
-    lruFlushTimer = setTimeout(() => {
-      flushLruUpdates().catch(() => {
-        // Silently fail — LRU update is best-effort
-      });
-    }, 100);
+    // FR-4: Defer LRU update — accumulate in Map and flush via debounce.
+    // Skip while a clear is in progress to avoid resurrecting cleared entries.
+    if (!isClearing) {
+      entry.lastAccessedAt = Date.now();
+      pendingLruUpdates.set(key, entry);
+      if (lruFlushTimer !== null) clearTimeout(lruFlushTimer);
+      lruFlushTimer = setTimeout(() => {
+        flushLruUpdates().catch(() => {
+          // Silently fail — LRU update is best-effort
+        });
+      }, 100);
+    }
 
     return entry.translatedText;
   } catch {
@@ -167,16 +175,23 @@ export async function evictCache(
 
 /** Clear the entire cache */
 export async function clearCache(): Promise<void> {
-  // Cancel any pending LRU flush to prevent re-writing deleted entries
-  if (lruFlushTimer !== null) {
-    clearTimeout(lruFlushTimer);
-    lruFlushTimer = null;
-  }
-  pendingLruUpdates.clear();
+  // P2: gate concurrent reads so they don't re-add entries to pendingLruUpdates
+  // while we're deleting. Reset in finally so a failure doesn't wedge the cache.
+  isClearing = true;
+  try {
+    // Cancel any pending LRU flush to prevent re-writing deleted entries
+    if (lruFlushTimer !== null) {
+      clearTimeout(lruFlushTimer);
+      lruFlushTimer = null;
+    }
+    pendingLruUpdates.clear();
 
-  const allKeys = await keys(getStore());
-  for (const key of allKeys) {
-    await del(key, getStore());
+    const allKeys = await keys(getStore());
+    for (const key of allKeys) {
+      await del(key, getStore());
+    }
+  } finally {
+    isClearing = false;
   }
 }
 

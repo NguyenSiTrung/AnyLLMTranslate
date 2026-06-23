@@ -182,13 +182,13 @@ export async function decryptApiKeyResult(value: string): Promise<DecryptResult>
 /**
  * Decrypt an API key.
  * If the input is not prefixed with 'enc:', returns it as-is (backward compat).
- * If decryption fails, returns the raw value (legacy graceful fallback).
- *
- * Prefer {@link decryptApiKeyResult} when you need to detect undecryptable values.
+ * If decryption fails, returns '' (P2: previously returned the raw ciphertext,
+ * which a caller could then send as the API key — a security risk). Prefer
+ * {@link decryptApiKeyResult} when you need to detect undecryptable values.
  */
 export async function decryptApiKey(ciphertext: string): Promise<string> {
   const result = await decryptApiKeyResult(ciphertext);
-  if (result.encrypted && !result.ok) return ciphertext;
+  if (result.encrypted && !result.ok) return '';
   return result.value;
 }
 

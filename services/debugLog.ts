@@ -36,16 +36,33 @@ export async function isDebugLoggingEnabledAsync(): Promise<boolean> {
  * Synchronous check used from LLM request/response logging.
  * Returns the last cached value. On the very first call (before any async
  * read) the default is `false` (logging off), which is the safe behaviour.
+ *
+ * P2: if the cache is stale (past TTL or invalidated), schedule a background
+ * refresh so the NEXT call observes the new value — without blocking this call
+ * on an async read (logging paths must stay sync). This is what makes a
+ * debugMode toggle take effect promptly instead of being stuck on the old
+ * cached value until the next explicit warmup.
  */
 export function isDebugLoggingEnabled(): boolean {
+  const now = Date.now();
+  if (now - lastReadAt >= TTL_MS) {
+    // Fire-and-forget refresh; keep returning the last known value for THIS call.
+    void isDebugLoggingEnabledAsync();
+  }
   return cachedEnabled;
 }
 
 /** Invalidate the cached debug value. Called on settings change so the next
- *  log call observes the new value without waiting for TTL expiry. */
+ *  log call observes the new value without waiting for TTL expiry.
+ *
+ *  P2 bug: previously this set `cachedEnabled = false` directly. That meant
+ *  toggling debugMode ON via storage.onChanged immediately reset the cache to
+ *  false, so debug logging stayed broken until the next 5s TTL read (and on a
+ *  quiet SW that may never happen before eviction). Now it only clears the TTL
+ *  timestamp — the cached value is left intact (not clobbered to false) and the
+ *  next sync `isDebugLoggingEnabled()` call schedules a background refresh. */
 export function invalidateDebugCache(): void {
   lastReadAt = 0;
-  cachedEnabled = false;
 }
 
 /** Warm the cache from current settings. Should be called at SW startup. */

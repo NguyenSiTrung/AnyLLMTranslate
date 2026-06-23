@@ -57,65 +57,65 @@
 ## Phase 3: P2 Security & Data Integrity
 <!-- execution: parallel -->
 
-- [ ] Task 1: Fix SSRF - add 172.16/12 and IPv6 private ranges
+- [x] Task 1: Fix SSRF - add 172.16/12 and IPv6 private ranges <!-- commit: pending -->
   <!-- files: services/background.ts -->
-  Add 172.16.0.0/12 check, IPv6 ULA (fc00::/7), and IPv6 link-local (fe80::/10) to isAllowedSubtitleUrl private IP validation.
+  Extracted isPrivateHost() helper covering 172.16/12, IPv6 ULA fc00::/7, link-local fe80::/10, CGNAT 100.64/10, 0/8. Replaced brittle startsWith checks.
 
-- [ ] Task 2: Block file:// from content-script OPEN_PDF_VIEWER
+- [x] Task 2: Block file:// from content-script OPEN_PDF_VIEWER <!-- commit: pending -->
   <!-- files: services/background.ts -->
-  Only allow file:// protocol from trusted senders (popup). Strip file:// support from content-script-originated messages.
+  Reject file:// protocol when sender has a tab.id (content script); allow only from trusted extension senders (popup/options).
 
-- [ ] Task 3: Warn on HTTP baseUrl with API key
+- [x] Task 3: Warn on HTTP baseUrl with API key <!-- commit: pending -->
   <!-- files: services/openaiCompatible.ts -->
-  Add protocol check - warn or strip API key for non-https URLs in fetchWithRetry.
+  Console.warn when sending Authorization header over http:// (cleartext credential leak). Still send for local LLM providers.
 
-- [ ] Task 4: Mitigate prompt injection via pageContext
-  <!-- files: services/base.ts -->
-  Wrap pageContext fields in delimiters (e.g. `<page_title>...</page_title>`) and add instruction to treat content as data not instructions. Limit field length.
-
-- [ ] Task 5: Fix partial translations reported as success
+- [x] Task 4: Mitigate prompt injection via pageContext <!-- commit: pending -->
   <!-- files: services/base.ts, services/__tests__/base.test.ts -->
-  When LLM returns fewer IDs than expected, either return success=false or include missing IDs with empty/fallback translations. Add test for partial response.
+  Wrap each pageContext field in XML delimiters (<page_title>…</page_title>), cap field length (300/200/100 chars), preamble instructs model to treat as untrusted data.
 
-- [ ] Task 6: Fix debug logging permanently broken in background SW
-  <!-- files: services/debugLog.ts, services/background.ts -->
-  Call warmDebugCache() at SW startup. Change invalidateDebugCache() to trigger async refresh instead of setting cachedEnabled=false.
+- [x] Task 5: Fix partial translations reported as success <!-- commit: pending -->
+  <!-- files: services/openaiCompatible.ts, types/translation.ts, services/__tests__/openaiCompatible.test.ts -->
+  Back-fill missing IDs with original text, flag result.partial=true. Added TranslationResult.partial field + regression test.
 
-- [ ] Task 7: Fix cache clear race condition
+- [x] Task 6: Fix debug logging permanently broken in background SW <!-- commit: pending -->
+  <!-- files: services/debugLog.ts, services/__tests__/debugLog.test.ts -->
+  invalidateDebugCache() clears TTL only (no longer forces cachedEnabled=false); isDebugLoggingEnabled() triggers background refresh when stale. warmDebugCache already called at SW startup.
+
+- [x] Task 7: Fix cache clear race condition <!-- commit: pending -->
   <!-- files: services/cacheManager.ts -->
-  Set a module-level `isClearing` flag that getCachedTranslation checks, or clear timer and pending map AFTER deleting all keys.
+  Added isClearing flag; getCachedTranslation skips LRU-update while clearing; clearCache resets flag in finally.
 
-- [ ] Task 8: Fix textTrackDiscovery module-level mutable state
+- [x] Task 8: Fix textTrackDiscovery module-level mutable state <!-- commit: pending -->
   <!-- files: inject/textTrackDiscovery.ts -->
-  Move WeakSets and cleanup array into closure scope or add guard to prevent re-registration. Ensure cleanup doesn't clear shared state from other invocations.
+  Moved reportedVideos, metadataListenedVideos, videoCleanupHandlers into startTextTrackDiscovery closure scope so each invocation has isolated state.
 
-- [ ] Task 9: Fix XHR interceptor readyState suppression
+- [x] Task 9: Fix XHR interceptor readyState suppression <!-- commit: pending -->
   <!-- files: inject/xhrInterceptor.ts -->
-  Replay intermediate readyState callbacks (1/2/3) instead of suppressing them. Only delay the final readyState 4 callback until translation completes.
+  Wrap onreadystatechange so non-4 states (1/2/3) pass through immediately; only readyState 4 held back for translation replay.
 
-- [ ] Task 10: Fix XHR disable clobbering third-party patches
+- [x] Task 10: Fix XHR disable clobbering third-party patches <!-- commit: pending -->
   <!-- files: inject/xhrInterceptor.ts -->
-  Add identity check before restoring prototype methods (like fetchInterceptor does for window.fetch).
+  Track patchedOpen/AddEventListener/Send; disable() only restores when prototype method identity-equals our patch.
 
-- [ ] Task 11: Fix fetch interceptor pending translation leak
+- [x] Task 11: Fix fetch interceptor pending translation leak <!-- commit: pending -->
   <!-- files: inject/fetchInterceptor.ts -->
-  In disable(), clean up pending subtitle translations: remove message listeners and clear pending timeouts.
+  Track pendingHandlers + pendingTimeouts in instance Sets; disable() drains both (removeEventListener + clearTimeout).
 
-- [ ] Task 12: Fix shallow spread in onSettingsChange
+- [x] Task 12: Fix shallow spread in onSettingsChange <!-- commit: pending -->
   <!-- files: lib/config.ts -->
-  Replace shallow spread with deepMerge for constructing callback arguments in onSettingsChange().
+  Replaced shallow {...DEFAULT, ...newVal} with deepMerge so nested objects (provider, subtitleSettings) survive partial storage updates.
 
-- [ ] Task 13: Fix broad "model" keyword matching
+- [x] Task 13: Fix broad "model" keyword matching <!-- commit: pending -->
   <!-- files: lib/providerReadiness.ts -->
-  Use specific patterns like 'model not found', 'model_not_found', 'does not exist' instead of just 'model'.
+  Replaced bare includes('model') with specific MODEL_ERROR_PATTERNS ('model not found', 'model_not_found', 'does not exist', etc.).
 
-- [ ] Task 14: Fix DOM cue source no seek handling
+- [x] Task 14: Fix DOM cue source no seek handling <!-- commit: pending -->
   <!-- files: inject/domCueSource.ts -->
-  Add video 'seeked' event listener to close/reset the open cue on seek. Prevents corrupted cue timeline.
+  Added 'seeked' event listener that closes the open cue (endTime=startTime) on seek to prevent timeline corruption.
 
-- [ ] Task 15: Fix legacy decryptApiKey returning ciphertext on failure
-  <!-- files: lib/crypto.ts -->
-  Change decryptApiKey to return '' on failure instead of raw ciphertext. Keep decryptApiKeyResult as the primary API.
+- [x] Task 15: Fix legacy decryptApiKey returning ciphertext on failure <!-- commit: pending -->
+  <!-- files: lib/crypto.ts, lib/__tests__/crypto.test.ts -->
+  decryptApiKey returns '' on decrypt failure instead of raw ciphertext (was a credential-leak risk).
 
 ## Phase 4: P2 Performance, Timeouts & Resource Leaks
 <!-- execution: parallel -->

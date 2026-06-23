@@ -17,6 +17,14 @@ export class FetchInterceptor {
   private translationTimeoutMs = 30000;
   /** Reference to the patched fetch so disable() only restores our own patch. */
   private patchedFetch: typeof window.fetch | null = null;
+  /**
+   * P2: pending translation listeners registered by in-flight intercepted
+   * requests. Drained in disable() so a BFCache restore / teardown doesn't
+   * leave dangling listeners that resolve with stale content.
+   */
+  private pendingHandlers: Set<(event: MessageEvent) => void> = new Set();
+  /** Pending timeout ids for in-flight translations (cleared on disable). */
+  private pendingTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
 
   constructor(
     private registry: InterceptorRegistry,
@@ -95,9 +103,12 @@ export class FetchInterceptor {
 
         const timeout = setTimeout(() => {
           window.removeEventListener('message', translatedHandler);
+          self.pendingHandlers.delete(translatedHandler);
+          self.pendingTimeouts.delete(timeout);
           // Translation timed out — return original response
           resolve(response);
         }, self.translationTimeoutMs);
+        self.pendingTimeouts.add(timeout);
 
         const translatedHandler = (event: MessageEvent) => {
           if (event.origin !== expectedOrigin) return;
@@ -106,7 +117,9 @@ export class FetchInterceptor {
           if (event.data?.requestId !== requestId) return;
 
           clearTimeout(timeout);
+          self.pendingTimeouts.delete(timeout);
           window.removeEventListener('message', translatedHandler);
+          self.pendingHandlers.delete(translatedHandler);
 
           // Create a new Response with the translated content
           const translatedResponse = new Response(event.data.payload.vttContent, {
@@ -117,6 +130,7 @@ export class FetchInterceptor {
           resolve(translatedResponse);
         };
 
+        self.pendingHandlers.add(translatedHandler);
         window.addEventListener('message', translatedHandler);
       });
     };
@@ -132,6 +146,17 @@ export class FetchInterceptor {
     if (this.patchedFetch && window.fetch === this.patchedFetch) {
       window.fetch = originalFetch;
     }
+    // P2: drain pending translation listeners + timeouts so disable() (e.g. on
+    // BFCache pagehide) doesn't leak handlers that resolve with stale content
+    // or fire after the interceptor is gone.
+    for (const handler of this.pendingHandlers) {
+      window.removeEventListener('message', handler);
+    }
+    this.pendingHandlers.clear();
+    for (const t of this.pendingTimeouts) {
+      clearTimeout(t);
+    }
+    this.pendingTimeouts.clear();
     this.patchedFetch = null;
     this.enabled = false;
   }

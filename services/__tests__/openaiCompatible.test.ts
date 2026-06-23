@@ -111,6 +111,26 @@ describe('OpenAICompatibleService', () => {
       expect(result.error).toContain('Empty response');
     });
 
+    it('P2 regression: back-fills missing IDs with original text and flags partial', async () => {
+      // LLM returns only p1, omitting p2 — previously reported success:true
+      // with a short map (p2 silently lost).
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ translations: { p1: 'Xin chào' } }));
+
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.translate({
+        texts: new Map([['p1', 'Hello'], ['p2', 'Goodbye']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.partial).toBe(true);
+      // p2 back-filled with its original text (not lost).
+      expect(result.translations.get('p1')).toBe('Xin chào');
+      expect(result.translations.get('p2')).toBe('Goodbye');
+      expect(result.translations.size).toBe(2);
+    });
+
     it('returns error on malformed JSON response', async () => {
       globalThis.fetch = mockFetchResponse('not json at all {{{');
 

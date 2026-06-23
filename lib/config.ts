@@ -107,9 +107,18 @@ export function onSettingsChange(
     if (areaName === 'local' && changes[STORAGE_KEYS.SETTINGS]) {
       const newVal = changes[STORAGE_KEYS.SETTINGS].newValue as ExtensionSettings;
       const oldVal = changes[STORAGE_KEYS.SETTINGS].oldValue as ExtensionSettings;
+      // P2: deep-merge with DEFAULT_SETTINGS so partial storage updates (which
+      // may omit nested objects like provider/subtitleSettings) don't lose
+      // nested fields. Shallow spread previously replaced nested objects whole.
       callback(
-        { ...DEFAULT_SETTINGS, ...newVal },
-        { ...DEFAULT_SETTINGS, ...oldVal },
+        deepMerge(
+          DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+          newVal as unknown as Record<string, unknown>,
+        ) as unknown as ExtensionSettings,
+        deepMerge(
+          DEFAULT_SETTINGS as unknown as Record<string, unknown>,
+          oldVal as unknown as Record<string, unknown>,
+        ) as unknown as ExtensionSettings,
       );
     }
   };

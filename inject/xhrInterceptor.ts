@@ -24,6 +24,10 @@ export class XhrInterceptor {
   private originalOpen: typeof OriginalXHR.prototype.open | null = null;
   private originalAddEventListenerRef: typeof OriginalXHR.prototype.addEventListener | null = null;
   private originalSendRef: typeof OriginalXHR.prototype.send | null = null;
+  /** The patched methods we installed (for identity check on disable). */
+  private patchedOpen: ((this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) => void) | null = null;
+  private patchedAddEventListener: ((this: XMLHttpRequest, type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => void) | null = null;
+  private patchedSend: ((this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) => void) | null = null;
 
   constructor(
     private registry: InterceptorRegistry,
@@ -68,6 +72,7 @@ export class XhrInterceptor {
 
       return (originalOpen as (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) => void).apply(this, [method, url, ...args]);
     };
+    this.patchedOpen = OriginalXHR.prototype.open as XhrInterceptor['patchedOpen'];
 
     // Patch XMLHttpRequest.prototype.addEventListener to capture load/readystatechange handlers
     const originalAddEventListener = OriginalXHR.prototype.addEventListener;
@@ -95,6 +100,7 @@ export class XhrInterceptor {
 
       return originalAddEventListener.call(this, type, listener, options);
     };
+    this.patchedAddEventListener = OriginalXHR.prototype.addEventListener as XhrInterceptor['patchedAddEventListener'];
 
     // Patch XMLHttpRequest.prototype.send
     const originalSend = OriginalXHR.prototype.send;
@@ -140,8 +146,21 @@ export class XhrInterceptor {
       const originalOnReadyStateChange = this.onreadystatechange;
       const originalOnLoad = this.onload;
 
-      // Suppress original property handlers — we'll replay them after translation
-      this.onreadystatechange = null;
+      // P2: do NOT suppress onreadystatechange entirely — players rely on
+      // intermediate readyState transitions (1 OPENED, 2 HEADERS_RECEIVED,
+      // 3 LOADING) to show loading spinners / progress. Only the final
+      // readyState 4 (DONE) must be held back until translation completes.
+      // Wrap the handler so non-4 states pass through immediately; 4 is
+      // captured for replay after translation.
+      this.onreadystatechange = function (ev: Event) {
+        if (xhrRef.readyState !== 4) {
+          if (originalOnReadyStateChange) {
+            originalOnReadyStateChange.call(xhrRef, ev);
+          }
+        }
+        // readyState 4 is replayed by replayHandlers() after translation.
+      };
+      // onload fires only at readyState 4, so it must be held back too.
       this.onload = null;
 
       // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -260,20 +279,33 @@ export class XhrInterceptor {
 
       return originalSend.apply(this, [_body]);
     };
+    this.patchedSend = OriginalXHR.prototype.send as XhrInterceptor['patchedSend'];
   }
 
   disable(): void {
     if (!this.enabled) return;
-    // Restore the patched prototype methods so re-enabling does not double-wrap
-    // (capturing an already-patched method as the "original").
-    if (this.originalOpen) OriginalXHR.prototype.open = this.originalOpen;
-    if (this.originalAddEventListenerRef) {
+    // P2: only restore a prototype method if it still identity-equals the one
+    // we installed. A third party may have wrapped our patch after enable();
+    // blindly overwriting would clobber their wrapper. Mirrors the
+    // FetchInterceptor.disable() identity-check pattern.
+    if (this.originalOpen && OriginalXHR.prototype.open === this.patchedOpen) {
+      OriginalXHR.prototype.open = this.originalOpen;
+    }
+    if (
+      this.originalAddEventListenerRef &&
+      OriginalXHR.prototype.addEventListener === this.patchedAddEventListener
+    ) {
       OriginalXHR.prototype.addEventListener = this.originalAddEventListenerRef;
     }
-    if (this.originalSendRef) OriginalXHR.prototype.send = this.originalSendRef;
+    if (this.originalSendRef && OriginalXHR.prototype.send === this.patchedSend) {
+      OriginalXHR.prototype.send = this.originalSendRef;
+    }
     this.originalOpen = null;
     this.originalAddEventListenerRef = null;
     this.originalSendRef = null;
+    this.patchedOpen = null;
+    this.patchedAddEventListener = null;
+    this.patchedSend = null;
     window.XMLHttpRequest = OriginalXHR;
     this.enabled = false;
   }

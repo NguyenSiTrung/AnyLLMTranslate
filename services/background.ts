@@ -599,15 +599,7 @@ function isAllowedSubtitleUrl(url: string): boolean {
     }
     // Block private/loopback/link-local hosts
     const host = parsed.hostname;
-    if (
-      host === 'localhost' ||
-      host.startsWith('127.') ||
-      host.startsWith('10.') ||
-      host.startsWith('192.168.') ||
-      host === '0.0.0.0' ||
-      host === '[::1]' ||
-      host.startsWith('169.254.')
-    ) {
+    if (isPrivateHost(host)) {
       return false;
     }
     // Match against allowlist using hostname suffix matching
@@ -615,6 +607,44 @@ function isAllowedSubtitleUrl(url: string): boolean {
   } catch {
     return false; // Invalid URL
   }
+}
+
+/**
+ * Returns true if `host` is a private/loopback/link-local address (IPv4 or IPv6,
+ * bare or bracketed). Used to mitigate SSRF via the subtitle CORS-bypass fetch.
+ *
+ * Covers: localhost, 127/8, 10/8, 172.16/12 (NOT all of 172/8 — public 172.x
+ * addresses must stay reachable), 192.168/16, 169.254/16, 0.0.0.0, IPv6 loopback
+ * ::1, IPv6 ULA fc00::/7, and IPv6 link-local fe80::/10.
+ */
+function isPrivateHost(host: string): boolean {
+  // Strip IPv6 brackets for consistent matching.
+  const h = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+
+  if (h === 'localhost' || h === '0.0.0.0' || h === '::') return true;
+
+  // IPv6 textual forms (normalize to lowercase, strip zone-id after %).
+  const v6 = h.split('%')[0].toLowerCase();
+  if (v6 === '::1') return true;
+  if (v6.startsWith('fc') || v6.startsWith('fd')) return true; // ULA fc00::/7
+  if (v6.startsWith('fe80') || v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb')) {
+    return true; // link-local fe80::/10
+  }
+
+  // IPv4 dotted-quad checks. Guard against non-numeric hosts (domains) early.
+  const parts = h.split('.');
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const [a, b] = parts.map(Number) as [number, number, number, number];
+    if (a === 127) return true; // 127.0.0.0/8 loopback
+    if (a === 10) return true; // 10.0.0.0/8 private
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+    if (a === 0) return true; // 0.0.0.0/8 "this network"
+  }
+
+  return false;
 }
 
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
@@ -891,13 +921,19 @@ export function handleMessage(
     case 'CLEAR_CACHE':
       return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
     case 'OPEN_PDF_VIEWER': {
-      // Validate the URL before forwarding to the viewer — file:// links and
-      // HTTP(S) links both supported, everything else rejected.
+      // Validate the URL before forwarding to the viewer.
       const url = (message as { url: string }).url;
       try {
         const parsed = new URL(url);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:' && parsed.protocol !== 'file:') {
           return Promise.resolve({ success: false, error: 'Unsupported protocol' });
+        }
+        // P2 security: file:// is only allowed from trusted extension senders
+        // (popup/options — which have no sender.tab). Content scripts run on
+        // untrusted host pages and must not be able to open arbitrary local
+        // files (would let a malicious page enumerate the user's filesystem).
+        if (parsed.protocol === 'file:' && _sender?.tab?.id !== undefined) {
+          return Promise.resolve({ success: false, error: 'file:// not allowed from content scripts' });
         }
       } catch {
         return Promise.resolve({ success: false, error: 'Invalid URL' });

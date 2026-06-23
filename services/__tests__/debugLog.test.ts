@@ -20,6 +20,9 @@ const mockedLoadSettings = loadSettings as unknown as ReturnType<typeof vi.fn>;
 describe('services/debugLog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default mock so invalidateDebugCache's fire-and-forget refresh resolves
+    // cleanly instead of rejecting with an unconfigured mock.
+    mockedLoadSettings.mockResolvedValue({ debugMode: false } as never);
     invalidateDebugCache();
   });
 
@@ -49,15 +52,37 @@ describe('services/debugLog', () => {
     expect(isDebugLoggingEnabled()).toBe(true);
   });
 
-  it('picks up new value after invalidateDebugCache', async () => {
+  it('picks up new value after invalidateDebugCache (async refresh on next sync read)', async () => {
     mockedLoadSettings.mockResolvedValueOnce({ debugMode: true } as never);
     await warmDebugCache();
     expect(isDebugLoggingEnabled()).toBe(true);
 
+    // invalidateDebugCache clears the TTL; the next sync read schedules a
+    // background refresh that picks up the new value.
+    mockedLoadSettings.mockResolvedValue({ debugMode: false } as never);
     invalidateDebugCache();
+    // First sync call returns the stale cached value but triggers refresh.
+    isDebugLoggingEnabled();
+    await vi.waitFor(() => {
+      expect(isDebugLoggingEnabled()).toBe(false);
+    });
+  });
+
+  it('P2 regression: invalidateDebugCache does NOT force cachedEnabled=false on toggling ON', async () => {
+    // The old impl set cachedEnabled=false inside invalidateDebugCache, which
+    // meant enabling debugMode via storage.onChanged immediately reset the
+    // cache to false — debug logging stayed broken until the next TTL read.
     mockedLoadSettings.mockResolvedValueOnce({ debugMode: false } as never);
-    await isDebugLoggingEnabledAsync();
+    await warmDebugCache();
     expect(isDebugLoggingEnabled()).toBe(false);
+
+    // Now the user enables debugMode; storage.onChanged fires invalidateDebugCache.
+    mockedLoadSettings.mockResolvedValue({ debugMode: true } as never);
+    invalidateDebugCache();
+    isDebugLoggingEnabled(); // triggers background refresh
+    await vi.waitFor(() => {
+      expect(isDebugLoggingEnabled()).toBe(true);
+    });
   });
 
   it('silently treats chrome.storage read errors as disabled', async () => {

@@ -75,6 +75,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     observer: MutationObserver;
     video: HTMLVideoElement;
     pauseHandler: () => void;
+    seekedHandler: () => void;
   } | null = null;
 
   const sampleCue = (video: HTMLVideoElement) => {
@@ -131,7 +132,21 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     };
     video.addEventListener('pause', pauseHandler);
 
-    attached = { observer, video, pauseHandler };
+    // P2: on seek, close the currently-open cue at the OLD currentTime so its
+    // endTime isn't left dangling across the jump. Without this, a seek while a
+    // cue is open produces a cue spanning the gap (e.g. 10s→5min), corrupting
+    // the timeline and confusing findActiveCue.
+    const seekedHandler = () => {
+      if (openCue) {
+        // endTime was set relative to pre-seek playback; close it and clear so
+        // the next sampleCue starts a fresh cue at the new position.
+        openCue.endTime = openCue.startTime;
+        openCue = null;
+      }
+    };
+    video.addEventListener('seeked', seekedHandler);
+
+    attached = { observer, video, pauseHandler, seekedHandler };
     // Sample once in case a cue is already showing.
     sampleCue(video);
   };
@@ -140,6 +155,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     if (!attached) return;
     attached.observer.disconnect();
     attached.video.removeEventListener('pause', attached.pauseHandler);
+    attached.video.removeEventListener('seeked', attached.seekedHandler);
     attached = null;
   };
 

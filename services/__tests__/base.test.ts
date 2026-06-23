@@ -85,11 +85,11 @@ describe('buildSystemPrompt', () => {
       domain: 'docs.python.org',
       category: 'software documentation',
     });
-    expect(prompt).toContain('Page context for consistent terminology');
-    expect(prompt).toContain('Title: Python Tutorial');
-    expect(prompt).toContain('Topic: Learn Python basics');
-    expect(prompt).toContain('Domain: docs.python.org');
-    expect(prompt).toContain('Category: software documentation');
+    expect(prompt).toContain('UNTRUSTED DATA');
+    expect(prompt).toContain('<page_title>Python Tutorial</page_title>');
+    expect(prompt).toContain('<page_topic>Learn Python basics</page_topic>');
+    expect(prompt).toContain('<page_domain>docs.python.org</page_domain>');
+    expect(prompt).toContain('<page_category>software documentation</page_category>');
   });
 
   it('omits empty page context fields', () => {
@@ -98,10 +98,10 @@ describe('buildSystemPrompt', () => {
       description: '',
       domain: 'example.com',
     });
-    expect(prompt).toContain('Page context for consistent terminology');
-    expect(prompt).toContain('Domain: example.com');
-    expect(prompt).not.toContain('Title:');
-    expect(prompt).not.toContain('Topic:');
+    expect(prompt).toContain('UNTRUSTED DATA');
+    expect(prompt).toContain('<page_domain>example.com</page_domain>');
+    expect(prompt).not.toContain('<page_title>');
+    expect(prompt).not.toContain('<page_topic>');
   });
 
   it('does not append context block when all fields are empty', () => {
@@ -110,12 +110,25 @@ describe('buildSystemPrompt', () => {
       description: '',
       domain: '',
     });
-    expect(prompt).not.toContain('Page context for consistent terminology');
+    expect(prompt).not.toContain('UNTRUSTED DATA');
   });
 
   it('does not append context block when pageContext is undefined', () => {
     const prompt = buildSystemPrompt('Vietnamese');
-    expect(prompt).not.toContain('Page context for consistent terminology');
+    expect(prompt).not.toContain('UNTRUSTED DATA');
+  });
+
+  it('P2 security: caps long page-context fields to mitigate prompt injection', () => {
+    const longTitle = 'A'.repeat(1000);
+    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+      title: longTitle,
+      description: '',
+      domain: 'example.com',
+    });
+    // The title must be truncated — a 1000-char title would otherwise dominate
+    // the context window and could smuggle prompt directives.
+    expect(prompt).not.toContain('B'.repeat(1000));
+    expect(prompt.length).toBeLessThan(5000);
   });
 });
 

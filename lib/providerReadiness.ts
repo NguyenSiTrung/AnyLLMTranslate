@@ -138,7 +138,19 @@ export function getConnectionErrorMessage(error?: string): RecoveryMessage {
     };
   }
 
-  if (normalized.includes('404') || normalized.includes('model')) {
+  // P2: use specific model-related patterns instead of bare 'model', which
+  // matched unrelated errors containing the word (e.g. "rate model exceeded").
+  const MODEL_ERROR_PATTERNS = [
+    'model not found',
+    'model_not_found',
+    'does not exist',
+    'does_not_exist',
+    'model is deprecated',
+    'no such model',
+    'invalid model',
+    'unknown model',
+  ];
+  if (normalized.includes('404') || MODEL_ERROR_PATTERNS.some((p) => normalized.includes(p))) {
     return {
       title: 'Model not found',
       description: 'The configured model was not accepted by the provider.',

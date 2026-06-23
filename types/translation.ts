@@ -46,6 +46,9 @@ export interface TranslationResult {
   error?: string;
   /** Detected source language (if auto-detect was used) */
   detectedLanguage?: string;
+  /** True when the LLM omitted some IDs and they were back-filled with the
+   *  original text (success, but content was repaired — useful for stats). */
+  partial?: boolean;
 }
 
 /** Translation service interface */

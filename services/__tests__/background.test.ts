@@ -196,9 +196,9 @@ describe('services/background', () => {
       const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).toContain('Page context for consistent terminology');
-      expect(body.messages[0].content).toContain('Domain: youtube.com');
-      expect(body.messages[0].content).toContain('Category: entertainment');
+      expect(body.messages[0].content).toContain('UNTRUSTED DATA');
+      expect(body.messages[0].content).toContain('<page_domain>youtube.com</page_domain>');
+      expect(body.messages[0].content).toContain('<page_category>entertainment</page_category>');
     });
 
     it('works correctly when pageContext is undefined (backward compat)', async () => {
@@ -223,7 +223,7 @@ describe('services/background', () => {
       const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).not.toContain('Page context for consistent terminology');
+      expect(body.messages[0].content).not.toContain('UNTRUSTED DATA');
     });
   });
 

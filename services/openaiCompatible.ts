@@ -71,9 +71,25 @@ export class OpenAICompatibleService implements TranslationService {
       const expectedIds = Array.from(request.texts.keys());
       const translations = parseTranslationResponse(responseText, expectedIds);
 
+      // P2 correctness: when the LLM omits some IDs, fall back to the original
+      // text so callers don't silently drop content (a partial response was
+      // previously reported as success: true with a short map, losing pieces).
+      let partial = false;
+      if (translations.size < expectedIds.length) {
+        partial = true;
+        for (const id of expectedIds) {
+          if (!translations.has(id)) {
+            translations.set(id, request.texts.get(id) ?? '');
+          }
+        }
+      }
+
       return {
         success: true,
         translations,
+        // Surfaced for callers/stats that want to distinguish a clean response
+        // from a repaired partial one. Still success (content is not lost).
+        partial,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown translation error';
@@ -243,6 +259,20 @@ Rules:
     // Only add Authorization header if API key is provided
     // Local providers (Ollama, LM Studio) don't need auth
     if (this.config.apiKey) {
+      // P2 security: warn when an API key is sent over a non-https URL — the
+      // Authorization header (and request body) travel in cleartext. We still
+      // send (local LLM providers legitimately use http://) but log loudly so a
+      // user who mistyped a cloud-provider URL (http instead of https) notices.
+      try {
+        if (new URL(this.config.baseUrl).protocol === 'http:') {
+          console.warn(
+            'AnyLLMTranslate: API key is being sent over an insecure (http://) connection. ' +
+              'If this is a cloud provider, use https:// to avoid exposing your key.',
+          );
+        }
+      } catch {
+        // Malformed baseUrl — the fetch below will surface the real error.
+      }
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 

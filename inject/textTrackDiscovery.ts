@@ -13,9 +13,6 @@ import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { AvailableSubtitleTrack, SubtitleTracksDiscoveredPayload } from '@/types/subtitle';
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 
-/** Set of already-reported video elements to avoid duplicate messages */
-const reportedVideos = new WeakSet<HTMLVideoElement>();
-
 /** Scan a video element's textTracks and send discovery message */
 function scanVideoTracks(video: HTMLVideoElement, bridge: MessageBridgeSender): void {
   const tracks: AvailableSubtitleTrack[] = [];
@@ -53,54 +50,58 @@ function scanVideoTracks(video: HTMLVideoElement, bridge: MessageBridgeSender): 
   }
 }
 
-/** Videos that have a loadedmetadata listener attached */
-const metadataListenedVideos = new WeakSet<HTMLVideoElement>();
-
-/**
- * Store cleanup handlers for event listeners attached to video elements.
- * Maps video → list of { target, event, handler } for removal on teardown.
- */
-const videoCleanupHandlers: Array<{ target: EventTarget; event: string; handler: EventListener }> = [];
-
-/** Attach track listeners to a video element */
-function watchVideo(video: HTMLVideoElement, bridge: MessageBridgeSender): void {
-  if (reportedVideos.has(video)) return;
-  reportedVideos.add(video);
-
-  // Scan existing tracks
-  if (video.textTracks.length > 0) {
-    scanVideoTracks(video, bridge);
-  }
-
-  // Listen for future track additions
-  const addTrackHandler = () => {
-    scanVideoTracks(video, bridge);
-  };
-  video.textTracks.addEventListener('addtrack', addTrackHandler);
-  videoCleanupHandlers.push({ target: video.textTracks, event: 'addtrack', handler: addTrackHandler });
-
-  // Re-scan when metadata becomes available — tracks may not exist until then
-  if (!metadataListenedVideos.has(video)) {
-    metadataListenedVideos.add(video);
-    const metadataHandler = () => {
-      scanVideoTracks(video, bridge);
-    };
-    video.addEventListener('loadedmetadata', metadataHandler);
-    videoCleanupHandlers.push({ target: video, event: 'loadedmetadata', handler: metadataHandler });
-  }
-}
-
 /**
  * Start HTML5 TextTrack discovery.
  * Targets only the primary (largest/loaded) video element to avoid
  * picking up thumbnail preview videos on listing pages.
  * Returns a cleanup function.
+ *
+ * P2: all per-invocation state (reportedVideos, metadataListenedVideos,
+ * cleanup handlers) lives in CLOSURE scope, not module scope. Previously these
+ * were module-level, so a second invocation (e.g. BFCache restore re-init)
+ * would (a) skip already-reported videos via the shared WeakSet and (b) have
+ * its cleanup handlers cleared by the first invocation's teardown.
  */
 export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void {
+  /** Set of already-reported video elements to avoid duplicate messages */
+  const reportedVideos = new WeakSet<HTMLVideoElement>();
+  /** Videos that have a loadedmetadata listener attached */
+  const metadataListenedVideos = new WeakSet<HTMLVideoElement>();
+  /** Cleanup handlers for event listeners attached to video elements. */
+  const videoCleanupHandlers: Array<{ target: EventTarget; event: string; handler: EventListener }> = [];
+
+  /** Attach track listeners to a video element */
+  const watchVideo = (video: HTMLVideoElement) => {
+    if (reportedVideos.has(video)) return;
+    reportedVideos.add(video);
+
+    // Scan existing tracks
+    if (video.textTracks.length > 0) {
+      scanVideoTracks(video, bridge);
+    }
+
+    // Listen for future track additions
+    const addTrackHandler = () => {
+      scanVideoTracks(video, bridge);
+    };
+    video.textTracks.addEventListener('addtrack', addTrackHandler);
+    videoCleanupHandlers.push({ target: video.textTracks, event: 'addtrack', handler: addTrackHandler });
+
+    // Re-scan when metadata becomes available — tracks may not exist until then
+    if (!metadataListenedVideos.has(video)) {
+      metadataListenedVideos.add(video);
+      const metadataHandler = () => {
+        scanVideoTracks(video, bridge);
+      };
+      video.addEventListener('loadedmetadata', metadataHandler);
+      videoCleanupHandlers.push({ target: video, event: 'loadedmetadata', handler: metadataHandler });
+    }
+  };
+
   const scanPrimary = () => {
     const primary = findPrimaryVideo();
     if (primary) {
-      watchVideo(primary, bridge);
+      watchVideo(primary);
     }
   };
 
@@ -139,11 +140,11 @@ export function startTextTrackDiscovery(bridge: MessageBridgeSender): () => void
 
   return () => {
     observer.disconnect();
-    // Remove all video event listeners
+    if (scanTimer) clearTimeout(scanTimer);
+    // Remove all video event listeners registered by THIS invocation only.
     for (const { target, event, handler } of videoCleanupHandlers) {
       target.removeEventListener(event, handler);
     }
     videoCleanupHandlers.length = 0;
   };
 }
-
