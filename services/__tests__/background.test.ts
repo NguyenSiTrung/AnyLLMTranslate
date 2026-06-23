@@ -516,7 +516,7 @@ describe('services/background', () => {
 
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
-      await handleMessage(
+      const result = await handleMessage(
         {
           action: 'translateSubtitle',
           cues,
@@ -525,7 +525,7 @@ describe('services/background', () => {
           profile: 'media',
         },
         { tab: { id: 46 } } as chrome.runtime.MessageSender,
-      );
+      ) as { success: boolean; cues?: Array<{ text: string; originalText?: string }> };
 
       // The mockFetch response translates s1 → 'Xin chào'. The result cue's
       // originalText should be 'Hello' (not '[John] Hello'), confirming cache
@@ -536,11 +536,9 @@ describe('services/background', () => {
       };
       // Verify the LLM received the prefixed text
       expect(body.messages[1].content).toContain('[John] Hello');
-      // The cache mock (getCachedTranslation) is mocked to return null,
-      // so the cue goes through the LLM path. The originalText in the
-      // response should be the unprefixed 'Hello'.
-      // (This is verified by the translation result containing the cue
-      // with originalText: 'Hello' — checked via the response shape.)
+      // Verify cache safety: originalText (which feeds cacheTranslation) is
+      // the unprefixed 'Hello', not the voice-prefixed '[John] Hello'.
+      expect(result.cues?.[0].originalText).toBe('Hello');
     });
   });
 
