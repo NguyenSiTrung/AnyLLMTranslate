@@ -5,7 +5,7 @@
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { PageContext } from './config';
-import type { SubtitleProfile } from '@/lib/subtitleProfiles';
+import type { SubtitleProfile, ProfileKnobs } from '@/lib/subtitleProfiles';
 
 /** Category resolution info returned to popup */
 export interface CategoryInfo {
@@ -95,6 +95,17 @@ export interface TranslateSubtitleMessage {
   /** Subtitle profile resolved by the content script from window.location.hostname.
    *  Background falls back to 'media' when absent (backward compat). */
   profile?: SubtitleProfile;
+  /** Per-tab translation-style override (session-scoped; from popup).
+   *  Partial<ProfileKnobs> — set knobs override the profile/global layers.
+   *  Undefined when no per-tab override is active. */
+  knobOverrides?: Partial<ProfileKnobs>;
+}
+
+/** Popup → content: set or clear the active tab's per-subtitle translation-style override. */
+export interface SetSubtitleKnobOverrideMessage {
+  action: 'setSubtitleKnobOverride';
+  /** Partial knobs to set, or null to clear the tab override entirely. */
+  knobOverrides: Partial<ProfileKnobs> | null;
 }
 
 /** Subtitle fetch request (CORS bypass) from content script → background */

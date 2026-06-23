@@ -3,6 +3,8 @@
  * Persisted in chrome.storage.local
  */
 
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+
 /** Provider preset identifiers */
 export type ProviderPreset = 'custom';
 
@@ -126,6 +128,13 @@ export interface SubtitleSettings {
   autoActivateSubtitles: boolean;
   /** Platform identifiers disabled by the user (opt-out model; empty = all enabled) */
   disabledSubtitleSites: string[];
+  /**
+   * Per-knob global translation-style overrides. Only set knobs override the
+   * resolved profile preset; absent knobs inherit. Undefined/empty == no
+   * override == today's behavior. Consumed in services/background.ts via
+   * resolveEffectiveKnobs().
+   */
+  knobOverrides?: Partial<ProfileKnobs>;
 }
 
 /** Custom theme user-defined configuration */
@@ -263,6 +272,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   preferredSubtitleLanguage: 'en',
   autoActivateSubtitles: false,
   disabledSubtitleSites: [],
+  knobOverrides: {},
 };
 
 /** Default inline translate settings */
