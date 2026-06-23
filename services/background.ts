@@ -24,6 +24,9 @@ import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '
 import { formatGlossary } from '@/lib/glossary';
 import { PROFILE_PRESETS, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
+import { contentHash } from '@/lib/subtitleFilmGlossary';
+import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
+import { preScanNames } from '@/services/subtitleNameScanner';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
 import type { ProviderConfig } from '@/types/config';
@@ -410,13 +413,36 @@ async function handleTranslateSubtitle(
     const profile: SubtitleProfile = message.profile ?? 'media';
     const subtitleKnobs: ProfileKnobs = PROFILE_PRESETS[profile] ?? PROFILE_PRESETS.media;
 
+    // Per-film proper-noun glossary: load by content hash, or pre-scan once and
+    // persist. Seeds the rolling glossary so chunk 0 translates with the full
+    // name list. Every failure degrades to an empty seed — translation proceeds.
+    const filmHash = await contentHash(cues);
+    let filmGlossary: Record<string, string> | undefined;
+    try {
+      filmGlossary = await loadFilmGlossary(filmHash);
+      if (!filmGlossary) {
+        filmGlossary = await preScanNames(service, sourceLanguage, targetLanguage, cues, subtitleKnobs);
+        if (filmGlossary && Object.keys(filmGlossary).length > 0) {
+          await saveFilmGlossary(filmHash, filmGlossary);
+        }
+      }
+    } catch {
+      filmGlossary = undefined;
+    }
+
     const CONTEXT_SIZE = 3;
 
     // Per-session rolling proper-noun glossary. Accumulates across chunks:
     // each chunk's extracted properNouns are merged in, and the formatted
     // block is injected into the next chunk's subtitle prompt for name
     // consistency. Dies when handleTranslateSubtitle returns (closure scope).
+    // Seeded from the film glossary (pre-scan or persisted) so chunk 0 starts
+    // with every known name. Seeding through mergeProperNouns enforces
+    // MAX_ROLLING_GLOSSARY uniformly.
     const rollingGlossary = new Map<string, string>();
+    if (filmGlossary) {
+      mergeProperNouns(rollingGlossary, filmGlossary);
+    }
 
     // Mutate a copy of cues as we go
     const translatedCues = [...cues];
