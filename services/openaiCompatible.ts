@@ -13,6 +13,7 @@ import type {
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
 import { buildSubtitleSystemPrompt } from './subtitlePrompt';
+import { extractProperNouns } from './subtitleResponse';
 import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/messages';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
@@ -51,6 +52,7 @@ export class OpenAICompatibleService implements TranslationService {
             request.targetLanguage,
             request.subtitleKnobs,
             request.glossaryBlock,
+            request.rollingGlossaryBlock,
           )
         : buildSystemPrompt(
             request.targetLanguage,
@@ -106,12 +108,19 @@ export class OpenAICompatibleService implements TranslationService {
         }
       }
 
+      // Subtitle path: extract proper nouns for the rolling glossary.
+      // Web-page path: properNouns stays undefined.
+      const properNouns = request.subtitleKnobs
+        ? extractProperNouns(responseText)
+        : undefined;
+
       return {
         success: true,
         translations,
         // Surfaced for callers/stats that want to distinguish a clean response
         // from a repaired partial one. Still success (content is not lost).
         partial,
+        properNouns,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown translation error';

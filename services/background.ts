@@ -23,6 +23,7 @@ import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { PROFILE_PRESETS, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
+import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
 import type { ProviderConfig } from '@/types/config';
@@ -411,6 +412,12 @@ async function handleTranslateSubtitle(
 
     const CONTEXT_SIZE = 3;
 
+    // Per-session rolling proper-noun glossary. Accumulates across chunks:
+    // each chunk's extracted properNouns are merged in, and the formatted
+    // block is injected into the next chunk's subtitle prompt for name
+    // consistency. Dies when handleTranslateSubtitle returns (closure scope).
+    const rollingGlossary = new Map<string, string>();
+
     // Mutate a copy of cues as we go
     const translatedCues = [...cues];
 
@@ -444,15 +451,23 @@ async function handleTranslateSubtitle(
           const idToOriginalText = new Map<string, string>();
 
           let counter = 1;
-          // Prepend context cues (LLM translates them, but we ignore the result)
+          // Prepend context cues (LLM translates them, but we ignore the result).
+          // Voice prefix: [Speaker] is added when cue.voice is present so the
+          // model understands dialogue flow. Cache is unaffected (ctx results
+          // are never cached).
           for (const ctxCue of contextCues) {
-            texts.set(`ctx${counter++}`, ctxCue.text);
+            const ctxText = ctxCue.voice ? `[${ctxCue.voice}] ${ctxCue.text}` : ctxCue.text;
+            texts.set(`ctx${counter++}`, ctxText);
           }
 
           counter = 1;
           for (const text of uniqueTexts) {
             const id = `s${counter++}`;
-            texts.set(id, text);
+            // Find the voice for this unique text (first matching uncached cue).
+            const voiceIdx = uncachedIndices.find(j => chunkCues[j].text === text);
+            const cueWithVoice = voiceIdx !== undefined ? chunkCues[voiceIdx] : undefined;
+            const prefixedText = cueWithVoice?.voice ? `[${cueWithVoice.voice}] ${text}` : text;
+            texts.set(id, prefixedText);
             idToOriginalText.set(id, text);
           }
 
@@ -464,6 +479,8 @@ async function handleTranslateSubtitle(
             // Subtitle path: subtitleKnobs routes to the subtitle prompt and
             // customSystemPrompt/pageContext are ignored by the service.
             subtitleKnobs,
+            // Rolling proper-noun glossary for cross-chunk name consistency.
+            rollingGlossaryBlock: formatRollingGlossary(rollingGlossary) || undefined,
           });
 
           if (result.success) {
@@ -500,6 +517,12 @@ async function handleTranslateSubtitle(
               totalCharactersTranslated: chunkChars,
             }).catch(() => {});
             recordDailyStats(chunkChars, 1, chunkCues.length - uncachedIndices.length).catch(() => {});
+
+            // Merge extracted proper nouns into the rolling glossary so the
+            // next chunk's prompt carries forward name consistency.
+            if (result.properNouns) {
+              mergeProperNouns(rollingGlossary, result.properNouns);
+            }
           } else {
             throw new Error(result.error ?? 'Chunk translation failed');
           }
@@ -557,7 +580,10 @@ async function handleTranslateSubtitle(
             const i = session.queue.shift();
             if (i === undefined) break;
             const chunkCues = cues.slice(i, i + CHUNK_SIZE);
-            const contextCues = cues.slice(Math.max(0, i - CONTEXT_SIZE), i);
+            // Bidirectional context: preceding cues + following cues.
+            const precedingCues = cues.slice(Math.max(0, i - CONTEXT_SIZE), i);
+            const followingCues = cues.slice(i + CHUNK_SIZE, i + CHUNK_SIZE + CONTEXT_SIZE);
+            const contextCues = [...precedingCues, ...followingCues];
             
             try {
                const chunkResult = await translateChunk(chunkCues, contextCues);

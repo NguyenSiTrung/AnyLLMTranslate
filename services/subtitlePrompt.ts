@@ -21,11 +21,13 @@ Subtitle rules:
 - Translate as natural spoken dialogue that a viewer reads at a glance while listening.
 - Preserve the meaning and tone of the original line.
 - Keep each translation roughly the same length as the source so it fits on screen.
-- Maintain continuity of names and references across lines.`;
+- Maintain continuity of names and references across lines.
+- When a line is prefixed with [Speaker Name], that identifies who is speaking. Use this to maintain dialogue flow and speaker-appropriate tone. Do not translate or repeat the speaker name in the output.`;
 
 /** Fixed Part D — JSON output contract (parser depends on this; must not change). */
-const JSON_CONTRACT = `Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "...", "id2": "..."}}
-The keys in "translations" must exactly match the input keys.`;
+const JSON_CONTRACT = `Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "...", "id2": "..."}, "properNouns": {"SourceName": "TranslatedName"}}
+The keys in "translations" must exactly match the input keys.
+In "properNouns", include proper nouns (character names, place names, brands, technical terms) from the source texts and their translations.`;
 
 /** Knob → instruction line. Default values are omitted (emit nothing). */
 const REGISTER_LINE: Record<Exclude<Register, 'neutral'>, string> = {
@@ -52,6 +54,7 @@ export function buildSubtitleSystemPrompt(
   targetLanguage: string,
   knobs: ProfileKnobs,
   glossaryBlock?: string,
+  rollingGlossaryBlock?: string,
 ): string {
   const targetLanguageName = getLanguageName(targetLanguage);
   const displayTargetLanguage = targetLanguageName !== targetLanguage
@@ -79,9 +82,14 @@ export function buildSubtitleSystemPrompt(
     prompt += '\n\n' + knobLines.join('\n');
   }
 
-  // Part C — glossary.
+  // Part C — glossary (user's global glossary).
   if (glossaryBlock) {
     prompt += '\n\n' + glossaryBlock;
+  }
+
+  // Part C2 — rolling proper-noun glossary (per-session continuity).
+  if (rollingGlossaryBlock) {
+    prompt += '\n\n' + rollingGlossaryBlock;
   }
 
   // Part D — JSON contract.

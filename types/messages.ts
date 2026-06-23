@@ -5,7 +5,7 @@
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { PageContext } from './config';
-import type { SubtitleProfile } from './subtitleProfiles';
+import type { SubtitleProfile } from '@/lib/subtitleProfiles';
 
 /** Category resolution info returned to popup */
 export interface CategoryInfo {

@@ -100,12 +100,20 @@ function parseVttCueBlock(block: string): SubtitleCue | null {
   }
 
   // Parse text (preserve HTML tags)
-  const text = textLines.join('\n').trim();
+  const rawText = textLines.join('\n').trim();
+
+  // Extract WebVTT <v Speaker> voice tag. The tag is stripped from display
+  // text; the speaker name is stored in cue.voice for prompt-level context.
+  // Anonymous <v> tags (no name) are stripped but produce no voice.
+  const voiceMatch = rawText.match(/^<v(?:\s+([^>]+))?>/i);
+  const voice = voiceMatch?.[1]?.trim();
+  const text = voiceMatch ? rawText.slice(voiceMatch[0].length).trim() : rawText;
 
   return {
     startTime,
     endTime,
     text,
+    voice,
     metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
   };
 }
