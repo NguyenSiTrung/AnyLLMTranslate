@@ -17,6 +17,14 @@ vi.mock('@/inject/subtitleHandlers/registry', () => ({
   detectCurrentHandler: mockDetectCurrentHandler,
 }));
 
+// Mock subtitleToast with a spy so tests can assert on calls deterministically,
+// independent of the real module's cross-test singleton state.
+const mockShowSubtitleToast = vi.fn();
+vi.mock('@/content/subtitleToast', () => ({
+  showSubtitleToast: mockShowSubtitleToast,
+  hideSubtitleToast: vi.fn(),
+}));
+
 const mockBuildBilingualVTT = vi.fn();
 const mockBuildTranslationOnlyVTT = vi.fn();
 vi.mock('@/lib/subtitleBuilder', () => ({
@@ -1127,6 +1135,37 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
 
     const cuesArg = mockUpdateCues.mock.calls[0][0] as Array<{ endTime: number }>;
     expect(cuesArg[0].endTime).toBe(10);
+  });
+
+  it('sub-project 6 — surfaces a toast on SUBTITLE_CHUNK_FAILED (idempotent within cooldown)', async () => {
+    // Establish session 42 via interception (same setup as the chunk-merge tests).
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-fail-1');
+    mockShowSubtitleToast.mockClear();
+
+    // Send a chunk-failed message — the failure toast should be shown.
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_FAILED', chunkStart: 25, sessionId: 42 },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockShowSubtitleToast).toHaveBeenCalledTimes(1);
+    expect(mockShowSubtitleToast.mock.calls[0][0]).toContain("couldn't be translated");
+
+    // A second failed message within the cooldown window must NOT show another
+    // toast (idempotency). The spy call count stays at 1.
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_FAILED', chunkStart: 50, sessionId: 42 },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockShowSubtitleToast).toHaveBeenCalledTimes(1);
   });
 });
 

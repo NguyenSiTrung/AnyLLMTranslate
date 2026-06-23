@@ -543,6 +543,11 @@ async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): 
 
 const DOM_TRACK_DISCOVER_DEBOUNCE_MS = 300;
 
+/** Last time a SUBTITLE_CHUNK_FAILED toast was shown (ms). Idempotency guard
+ *  to prevent toast-spam from a stream of failed background chunks. */
+let lastChunkFailedToastAt = 0;
+const CHUNK_FAILED_TOAST_COOLDOWN_MS = 5000;
+
 /** Debounced scrape of Max track buttons → SUBTITLE_TRACKS_AVAILABLE. */
 function scheduleDomTrackDiscovery(): void {
   if (state.domDiscoverDebounceTimer !== null) {
@@ -971,6 +976,17 @@ export function startCoordinator(): () => void {
       } else if (msg.cues) {
         // Fallback: full array format (backward compat)
         updateTranslatedCues(msg.cues);
+      }
+    }
+    // Sub-project 6: a background chunk failed all retries. Surface a
+    // non-blocking toast so the user knows a section wasn't translated
+    // (instead of silently swallowing). Idempotent within a cooldown window to
+    // avoid toast-spam from a stream of failed chunks.
+    if (msg.action === 'SUBTITLE_CHUNK_FAILED') {
+      const now = Date.now();
+      if (now - lastChunkFailedToastAt > CHUNK_FAILED_TOAST_COOLDOWN_MS) {
+        lastChunkFailedToastAt = now;
+        showSubtitleToast('A section of subtitles couldn\'t be translated — showing original.');
       }
     }
     // Handle popup requesting subtitle track selection
