@@ -59,7 +59,7 @@ This file tracks all major tracks for the project.
 - ✅ **Subtitle Deep Analysis Fixes** (`subtitle-deep-analysis-fixes_20260622`) — Archived 2026-06-22. Comprehensive fix and improvement of subtitle feature addressing 50 findings from deep analysis across 9 phases. Parser fixes, interceptor hardening, DOM cue source improvements, chunk delta delivery, coordinator overhaul, overlay accessibility, 43 new tests. [View](./conductor/archive/subtitle-deep-analysis-fixes_20260622/)
 - ✅ **OpenAI-Compatible Provider Catalog & Model Picker** (`openai-provider-catalog_20260623`) — Archived 2026-06-23. Searchable provider catalog with base URL auto-fill and on-demand GET /models picker in options and setup wizard. [View](./conductor/archive/openai-provider-catalog_20260623/)
 - ✅ **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (`audit-v2_20260623`) — Archived 2026-06-23. Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes, 8 P1 bugs, 28 P2 issues, 40+ P3 minor items across all modules. 6 phases, 91 total tasks. [View](./conductor/archive/audit-v2_20260623/)
-- ✅ **Coursera & Udemy Subtitle Handler Fixes** (`coursera-udemy-handler-fixes_20260623`) — Completed 2026-06-23. CDN interception, videoId/locale/sprite fixes, domain-anchored detect, parseSubtitles, coordinator isWatchPage cleanup, full handler tests. [View](./conductor/tracks/coursera-udemy-handler-fixes_20260623/)
+- ✅ **Coursera & Udemy Subtitle Handler Fixes** (`coursera-udemy-handler-fixes_20260623`) — Archived 2026-06-23. CDN interception, videoId/locale/sprite fixes, domain-anchored detect, parseSubtitles, coordinator isWatchPage cleanup, full handler tests. [View](./conductor/archive/coursera-udemy-handler-fixes_20260623/)
 
 ---
 
