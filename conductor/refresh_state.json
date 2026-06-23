@@ -1,23 +1,23 @@
 {
-  "lastRefresh": "2026-06-22T17:45:00+07:00",
+  "lastRefresh": "2026-06-23T10:05:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (subtitle-deep-analysis-fixes sync)",
-    "product.md: Implementation Status — new 'Subtitle Deep Analysis Fixes' entry (50 findings across 9 phases, 43 new tests)",
-    "product.md: Current State metrics 1182/95 -> 1214/95, tracks 46 -> 47",
-    "patterns.md: Subtitle Deep Analysis Fixes section already present from prior refresh — no new patterns needed",
-    "patterns.md: Refresh marker + health footer updated (1213/99 -> 1214/95, build ~3.76MB -> ~3.58MB)",
-    "tech-stack.md: No drift vs package.json (unchanged since last refresh)",
-    "workflow.md: No drift (no CI/tooling changes)",
-    "tracks.md: No change (subtitle-deep-analysis-fixes already listed as archived)",
-    "beads: No drift (no bd CLI / not enabled)",
-    "test-fix: findPrimaryVideo.test.ts — 'returns the largest video' test was failing because findPrimaryVideo filters by readyState >= 1 (HAVE_METADATA) but test videos had default readyState 0. Fixed by setting readyState via Object.defineProperty.",
-    "backups: product.md.bak, patterns.md.bak refreshed before edits"
+    "product.md: Refresh marker bumped (openai-provider-catalog sync)",
+    "product.md: BYOK value prop — Langflow removed; catalog + model picker noted",
+    "product.md: Implementation Status — OpenAI-Compatible Provider Catalog & Model Picker entry",
+    "product.md: Current State metrics 1214/95 -> 1195/96, build ~3.58MB -> ~3.75MB",
+    "patterns.md: Fixed corrupted Custom Endpoints section; added resolveCatalogSelection note",
+    "patterns.md: Refresh marker + health footer updated",
+    "tracks.md: Fixed merged archive line 44 (langflow-provider + linkedin-subtitles)",
+    "tech-stack.md: No drift vs package.json",
+    "workflow.md: No drift",
+    "beads: Synced Conductor -> Beads — closed open epics/tasks for archived tracks",
+    "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1214,
-    "testFiles": 95,
-    "buildSize": "~3.58 MB",
+    "tests": 1195,
+    "testFiles": 96,
+    "buildSize": "~3.75 MB",
     "lintErrors": 0,
     "archivedTracks": 47,
     "activeTracks": 0
@@ -27,6 +27,7 @@
     "openTaskCount": 0,
     "conductorStatus": "in sync",
     "recommendedAction": "none",
-    "resolvedAt": "2026-06-22"
+    "resolvedAt": "2026-06-23",
+    "syncDirection": "conductor-to-beads"
   }
 }

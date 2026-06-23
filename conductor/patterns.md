@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-22 all (subtitle-deep-analysis-fixes sync) -->
+<!-- conductor-refresh: 2026-06-23 all (openai-provider-catalog sync) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -51,7 +51,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 - Export `DEFAULT_SETTINGS` alongside types for single source of truth on initial values. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 - `PROVIDER_PRESETS` array with `requiresApiKey`, `placeholder`, `baseUrl`, `defaultModel` enables preset selection UX without hardcoding. (from: phase3-ux-polish_20260410, archived 2026-04-10)
-- OpenAI-compatible setup: `lib/openAiCompatibleCatalog.ts` + options `ProviderCatalogPicker` / `ModelPicker`; keep `preset: 'custom'` in storage; `listProviderModels` for GET /models without full test. (from: openai-provider-catalog_20260623, 2026-06-23)
+- OpenAI-compatible setup: `lib/openAiCompatibleCatalog.ts` + options `ProviderCatalogPicker` / `ModelPicker`; keep `preset: 'custom'` in storage; `listProviderModels` for GET /models without full test; `resolveCatalogSelection` preserves API key when picking a catalog entry. (from: openai-provider-catalog_20260623, 2026-06-23)
 
 ## State Management
 - Zustand + chrome.storage bidirectional sync: write on mutation, listen via `chrome.storage.onChanged` for cross-context updates (popup ↔ options ↔ content). (from: phase3-ux-polish_20260410, archived 2026-04-10)
@@ -344,7 +344,9 @@ Reusable patterns discovered during development. Read this before starting new w
 - Provider `connectionStatus` must reset to `'unknown'` on any field edit (baseUrl, apiKey, model) — prevents stale "connected" badge after user changes credentials. (from: incremental, 2026-05-05)
 - Setup wizard uses a controlled dialog pattern with `ref` + `tabIndex={-1}` for focus management — dialog auto-focuses on step change via `useEffect`. (from: incremental, 2026-05-05)
 
-## Custom Endpoints & - **Provider-agnostic interface:** Consolidate custom endpoint types by defining a standard `TranslationService` interface (`translate()`, `testConnection()`, `detectPageCategory?()`). The factory function `initService()` in `background.ts` instantiates the correct service implementation based on the `preset` value, allowing seamless addition of new providers without affecting core translation pipeline logic. (from: - **JSONPath dynamic extraction:** Dynamic or flow-based APIs (like - **Plain-text fallbacks for translation:** If JSON parsing fails (common when flows or reasoning models return plain text instead of JSON), implement a fallback that maps the entire response text directly to a single expected piece ID, or splits by newline to map line-by-line to multiple expected piece IDs. (from: - **Conditional UI Rendering for presets:** Redesign settings forms to conditionally render inputs based on the selected preset (e.g., Endpoint URL, Component ID, and Response Text Path for 
+## Custom Endpoints (historical)
+- **Provider-agnostic interface:** A standard `TranslationService` interface (`translate()`, `testConnection()`, `detectPageCategory?()`) with `initService()` in the background selecting the implementation — keeps the translation pipeline preset-agnostic. (from: langflow-provider_20260513, archived 2026-05-13; Langflow preset later removed — use OpenAI-compatible `custom` + catalog.)
+- **Plain-text fallbacks for translation:** If JSON parsing fails (reasoning models or non-JSON APIs), map the full response to one piece ID or split by newline for multi-piece batches. (from: langflow-provider_20260513, archived 2026-05-13)
 ## Deep-Analysis Hardening (2026-06-11)
 - **Debug-log TTL cache with warmup + invalidation:** Gate sensitive logs (prompts, page text) behind a short-TTL cached `settings.debugMode` read (5s) to avoid a `chrome.storage` read on every LLM call. Default the cache to `false` so first-call logs (which may fire before async warmup completes) are silently dropped. Call `warmDebugCache()` at SW startup, and wire cache invalidation into the same `onSettingsChange()` listener that re-inits the service so toggling takes effect on the next LLM call without waiting for TTL expiry. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
 - **Origin validation as FIRST guard in MAIN-world postMessage handlers:** Inline `addEventListener('message', ...)` closures in MAIN-world inject scripts (e.g. `FetchInterceptor`, `XhrInterceptor`) must check `event.origin !== window.location.origin` as the first guard. The shared `messageBridge.onMessage` already validates origin; the inline listeners were the gap and could let forged cross-origin messages resolve subtitle `Promise`s with attacker-controlled VTT. (from: deep-analysis-hardening_20260611, archived 2026-06-11)
@@ -441,8 +443,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Shared `openPdfViewer()` for all entry points:** Background handler, popup button, and entrypoint redirect all call one helper (`services/background.ts → openPdfViewer`) rather than each constructing `chrome.tabs.create` / `tabs.update` calls. New entry points (context menu, future auto-modes) reuse it for consistent new-tab vs same-tab behavior. (from: PDF auto-detect work, shipped on master 2026-06-22)
 
 ---
-Last refreshed: 2026-06-22T17:45:00+07:00
-Codebase health: 1214 tests passing across 95 files, build ~3.58MB, 0 lint errors, 47 tracks archived, 0 active tracks
+Last refreshed: 2026-06-23T10:05:00+07:00
+Codebase health: 1195 tests passing across 96 files, build ~3.75MB, 0 lint errors, 47 tracks archived, 0 active tracks
 
 ## Subtitle Deep Analysis Fixes (2026-06-22)
 - **`SUBTITLE_CONFIG` bridge message for MAIN↔ISOLATED config sync:** MAIN world interceptors can't access `chrome.storage`. Coordinator sends a `SUBTITLE_CONFIG` postMessage with `translationTimeoutMs` at startup; inject.content script listens and calls `interceptor.setTimeout()`. Default 30s if no config received. (from: subtitle-deep-analysis-fixes_20260622, archived 2026-06-22)
