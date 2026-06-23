@@ -24,6 +24,8 @@ export class TranslationBatcher {
   private service: TranslationService;
   private sourceLanguage: string;
   private targetLanguage: string;
+  private glossaryBlock?: string;
+  private customSystemPrompt?: string | null;
 
   constructor(
     service: TranslationService,
@@ -32,6 +34,8 @@ export class TranslationBatcher {
       flushDelayMs?: number;
       sourceLanguage: string;
       targetLanguage: string;
+      glossaryBlock?: string;
+      customSystemPrompt?: string | null;
     },
   ) {
     this.service = service;
@@ -39,6 +43,8 @@ export class TranslationBatcher {
     this.flushDelayMs = options.flushDelayMs ?? 50;
     this.sourceLanguage = options.sourceLanguage;
     this.targetLanguage = options.targetLanguage;
+    this.glossaryBlock = options.glossaryBlock;
+    this.customSystemPrompt = options.customSystemPrompt;
   }
 
   /** Add a text for translation, returns promise of translated text */
@@ -62,6 +68,10 @@ export class TranslationBatcher {
     promise.finally(() => {
       this.inFlight.delete(dedupeKey);
     }).catch(() => { /* handled by caller */ });
+
+    // No-op catch on the original promise prevents unhandled rejection
+    // warnings if the caller never attaches a .catch() handler.
+    promise.catch(() => {});
 
     return promise;
   }
@@ -178,6 +188,8 @@ export class TranslationBatcher {
         texts,
         sourceLanguage: this.sourceLanguage,
         targetLanguage: this.targetLanguage,
+        glossaryBlock: this.glossaryBlock || undefined,
+        customSystemPrompt: this.customSystemPrompt ?? null,
       });
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Translation failed');

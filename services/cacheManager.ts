@@ -3,7 +3,7 @@
  * Uses SHA-256 hashing for cache keys, TTL-based expiry, and LRU eviction.
  */
 
-import { createStore, get, set, del, keys, entries } from 'idb-keyval';
+import { createStore, get, set, del, entries, clear } from 'idb-keyval';
 import type { CacheEntry } from '@/types/translation';
 import { STORAGE_KEYS } from '@/lib/constants';
 
@@ -56,7 +56,12 @@ export async function flushLruUpdates(): Promise<void> {
   pendingLruUpdates.clear();
   try {
     for (const [key, entry] of batch) {
-      await set(key, entry, getStore());
+      try {
+        await set(key, entry, getStore());
+      } catch {
+        // Re-add failed entries for retry on next flush
+        pendingLruUpdates.set(key, entry);
+      }
     }
   } finally {
     isFlushing = false;
@@ -186,10 +191,8 @@ export async function clearCache(): Promise<void> {
     }
     pendingLruUpdates.clear();
 
-    const allKeys = await keys(getStore());
-    for (const key of allKeys) {
-      await del(key, getStore());
-    }
+    // Use idb-keyval clear() for bulk deletion instead of sequential del() loop
+    await clear(getStore());
   } finally {
     isClearing = false;
   }

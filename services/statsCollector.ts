@@ -52,7 +52,7 @@ export async function recordDailyStats(
 ): Promise<void> {
   return chainUpdate(async () => {
     const current = await getStats();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
     const daily = [...current.dailyStats];
     const idx = daily.findIndex((d) => d.date === today);
     if (idx >= 0) {
@@ -68,7 +68,7 @@ export async function recordDailyStats(
     // Prune entries older than 30 days
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const cutoffStr = cutoff.toLocaleDateString('en-CA');
     const pruned = daily.filter((d) => d.date >= cutoffStr);
     await chrome.storage.local.set({
       [STATS_STORAGE_KEY]: { ...current, dailyStats: pruned },

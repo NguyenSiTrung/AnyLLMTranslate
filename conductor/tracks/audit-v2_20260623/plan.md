@@ -175,61 +175,61 @@
 ## Phase 5: P3 Services, Background & Lib
 <!-- execution: parallel -->
 
-- [ ] Task 1: Fix tabId || sender.tab?.id to use nullish coalescing
+- [x] Task 1: Fix tabId || sender.tab?.id to use nullish coalescing <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Replace `||` with `??` for tabId checks in setCategoryOverride and getCategoryOverride handlers.
 
-- [ ] Task 2: Extract CHUNK_SIZE to module-level constant
+- [x] Task 2: Extract CHUNK_SIZE to module-level constant <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Move hardcoded 25 to a module-level CHUNK_SIZE constant. Reference in both handleTranslateSubtitle and PRIORITIZE_SUBTITLE_CHUNK handler.
 
-- [ ] Task 3: Move clearKeepaliveAlarm to finally block
+- [x] Task 3: Move clearKeepaliveAlarm to finally block <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Remove redundant clearKeepaliveAlarm calls in success/failure/catch paths. Add single call in finally block.
 
-- [ ] Task 4: Fix ensureKeepaliveAlarm race
+- [x] Task 4: Fix ensureKeepaliveAlarm race <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Track alarm existence with a module-level boolean flag to prevent redundant create calls.
 
-- [ ] Task 5: Add .catch() to updateSettings handler
+- [x] Task 5: Add .catch() to updateSettings handler <!-- commit: pending -->
   <!-- files: services/background.ts -->
   Add `.catch(() => ({ success: false, error: '...' }))` to initService().then() chain.
 
-- [ ] Task 6: Fix unclosed think-block regex
+- [x] Task 6: Fix unclosed think-block regex <!-- commit: pending -->
   <!-- files: services/base.ts -->
   Add fallback regex `/think:[\s\S]*$/` to handle unclosed think blocks after the primary regex.
 
-- [ ] Task 7: Add protocol check in validateProviderConfig
+- [x] Task 7: Add protocol check in validateProviderConfig <!-- commit: pending -->
   <!-- files: services/base.ts -->
   Verify baseUrl protocol is http: or https: in validateProviderConfig.
 
-- [ ] Task 8: Pass glossary and custom prompt through batcher
+- [x] Task 8: Pass glossary and custom prompt through batcher <!-- commit: pending -->
   <!-- files: services/batcher.ts -->
   Accept glossaryBlock and customSystemPrompt in constructor or add() options and forward to service.translate().
 
-- [ ] Task 9: Add no-op catch to batcher add() promise
+- [x] Task 9: Add no-op catch to batcher add() promise <!-- commit: pending -->
   <!-- files: services/batcher.ts -->
   Attach a no-op .catch() to the original promise before returning to prevent unhandled rejections.
 
-- [ ] Task 10: Use idb-keyval clear() in cacheManager
+- [x] Task 10: Use idb-keyval clear() in cacheManager <!-- commit: pending -->
   <!-- files: services/cacheManager.ts -->
   Replace sequential del() loop with clear() from idb-keyval for bulk cache clearing.
 
-- [ ] Task 11: Fix flushLruUpdates silent failure
+- [x] Task 11: Fix flushLruUpdates silent failure <!-- commit: pending -->
   <!-- files: services/cacheManager.ts -->
   On set() failure, re-add failed entries to pendingLruUpdates for retry on next flush.
 
-- [ ] Task 12: Fix neverAutoOpenSites subdomain matching
+- [x] Task 12: Fix neverAutoOpenSites subdomain matching <!-- commit: pending -->
   <!-- files: services/pdfAutoOpen.ts -->
   Use hostname suffix matching: `hostname === site || hostname.endsWith('.' + site)`.
 
-- [ ] Task 13: Fix UTC date in statsCollector
+- [x] Task 13: Fix UTC date in statsCollector <!-- commit: pending -->
   <!-- files: services/statsCollector.ts -->
   Use local date formatting (e.g. `new Date().toLocaleDateString('en-CA')`) instead of UTC.
 
-- [ ] Task 14: Guard categoryStore initTabCleanup against duplicate registration
+- [x] Task 14: Guard categoryStore initTabCleanup against duplicate registration <!-- commit: done in Phase 4 -->
   <!-- files: services/categoryStore.ts -->
-  Add module-level boolean flag to ensure chrome.tabs.onRemoved listener is registered only once.
+  Add module-level boolean flag to ensure chrome.tabs.onRemoved listener is registered only once. (Completed in Phase 4 Task 1)
 
 ## Phase 6: P3 Content, Inject, UI & Config
 <!-- execution: parallel -->

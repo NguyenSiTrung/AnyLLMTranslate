@@ -69,7 +69,11 @@ export function shouldAutoOpenPdf(input: ShouldAutoOpenInput): ShouldAutoOpenRes
   // 4. Per-site opt-out.
   try {
     const hostname = new URL(url).hostname;
-    if (settings.pdfSettings?.neverAutoOpenSites?.includes(hostname)) {
+    const blockedSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
+    const isBlocked = blockedSites.some(
+      (site) => hostname === site || hostname.endsWith('.' + site),
+    );
+    if (isBlocked) {
       return { open: false, reason: `hostname ${hostname} blocked` };
     }
   } catch {

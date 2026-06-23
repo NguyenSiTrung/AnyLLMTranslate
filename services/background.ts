@@ -39,18 +39,20 @@ let subtitleSessionCounter = 0;
 /** Keep-alive alarm name for MV3 service worker */
 const KEEPALIVE_ALARM = 'sw-keepalive';
 
+/** Track alarm existence to prevent redundant chrome.alarms.create calls */
+let keepaliveAlarmActive = false;
+
 /** Create or ensure keep-alive alarm exists when sessions are active */
 function ensureKeepaliveAlarm(): void {
-  chrome.alarms.get(KEEPALIVE_ALARM, (alarm) => {
-    if (!alarm) {
-      chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.33 }); // ~20s
-    }
-  });
+  if (keepaliveAlarmActive) return;
+  keepaliveAlarmActive = true;
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.33 }); // ~20s
 }
 
 /** Clear keep-alive alarm when no sessions remain */
 function clearKeepaliveAlarm(): void {
-  if (activeSessions.size === 0) {
+  if (activeSessions.size === 0 && keepaliveAlarmActive) {
+    keepaliveAlarmActive = false;
     chrome.alarms.clear(KEEPALIVE_ALARM);
   }
 }
@@ -169,6 +171,9 @@ const semaphore = createSemaphore(MAX_CONCURRENT, MAX_QUEUE, QUEUE_TIMEOUT_MS);
 const acquireSemaphore = semaphore.acquire;
 const releaseSemaphore = semaphore.release;
 
+/** Chunk size for progressive subtitle translation (cues per LLM call). */
+const CHUNK_SIZE = 25;
+
 /** Dedicated PDF semaphore: max 2 concurrent, queue 6 — isolated from page/subtitle */
 const PDF_MAX_CONCURRENT = 2;
 const PDF_MAX_QUEUE = 6;
@@ -201,6 +206,7 @@ function __seedSubtitleSessionForTest(tabId: number): { queue: number[]; session
   const sid = ++subtitleSessionCounter;
   const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {}, sessionId: sid };
   activeSessions.set(tabId, session);
+  keepaliveAlarmActive = true; // simulate ensureKeepaliveAlarm having been called
   return session;
 }
 
@@ -335,23 +341,21 @@ async function handleTranslate(
       }).catch(() => {});
       recordDailyStats(totalChars, 1, cachedResults.length).catch(() => {});
 
-      clearKeepaliveAlarm();
       return {
         success: true,
         results: [...cachedResults, ...freshResults],
       };
     } else {
-      clearKeepaliveAlarm();
       return {
         success: false,
         error: result.error ?? 'Translation failed',
       };
     }
   } catch (error) {
-    clearKeepaliveAlarm();
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, error: errorMsg };
   } finally {
+    clearKeepaliveAlarm();
     release();
   }
 }
@@ -395,7 +399,6 @@ async function handleTranslateSubtitle(
     const subtitleSettings = await loadSettings();
     const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
 
-    const CHUNK_SIZE = 25;
     const CONTEXT_SIZE = 3;
 
     // Mutate a copy of cues as we go
@@ -872,7 +875,7 @@ export function handleMessage(
     case 'testConnection':
       return handleTestConnection();
     case 'updateSettings':
-      return initService().then(() => ({ success: true }));
+      return initService().then(() => ({ success: true })).catch(() => ({ success: false, error: 'Failed to update settings' }));
     case 'translateSubtitle':
       return handleTranslateSubtitle(message, _sender);
     case 'FETCH_SUBTITLE':
@@ -907,13 +910,13 @@ export function handleMessage(
       if (tabId) {
         const session = activeSessions.get(tabId);
         if (session) {
-          session.setPriority(message.cueIndex, 25); // CHUNK_SIZE is 25
+          session.setPriority(message.cueIndex, CHUNK_SIZE);
         }
       }
       return undefined;
     }
     case 'setCategoryOverride': {
-      const tabId = message.tabId || _sender.tab?.id;
+      const tabId = message.tabId ?? _sender.tab?.id;
       if (!tabId) return Promise.resolve({ success: false });
       storeCategoryOverride(tabId, message.category);
       // Forward categoryChanged to the content tab so it updates immediately
@@ -924,7 +927,7 @@ export function handleMessage(
       return Promise.resolve({ success: true });
     }
     case 'getCategoryOverride': {
-      const tabId = message.tabId || _sender.tab?.id;
+      const tabId = message.tabId ?? _sender.tab?.id;
       if (!tabId) return Promise.resolve({ override: undefined });
       const override = fetchCategoryOverride(tabId);
       return Promise.resolve({ override });

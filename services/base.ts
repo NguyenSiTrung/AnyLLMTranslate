@@ -145,8 +145,12 @@ export function parseTranslationResponse(
 ): Map<string, string> {
   const translations = new Map<string, string>();
 
-  // Remove <think>...</think> blocks entirely (for models like DeepSeek R1)
-  const cleanText = responseText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  // Remove <think>...</think> blocks entirely (for models like DeepSeek R1).
+  // Fallback: also strip unclosed <think> blocks (model forgot closing tag).
+  const cleanText = responseText
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/g, '')
+    .trim();
 
   let parsed: Record<string, unknown> | null = null;
 
@@ -216,7 +220,10 @@ export function validateProviderConfig(
   }
 
   try {
-    new URL(config.baseUrl);
+    const parsed = new URL(config.baseUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { valid: false, error: 'Base URL must use http: or https: protocol' };
+    }
   } catch {
     return { valid: false, error: 'Invalid Base URL format' };
   }
