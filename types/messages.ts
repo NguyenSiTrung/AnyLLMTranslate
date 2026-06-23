@@ -5,6 +5,7 @@
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { PageContext } from './config';
+import type { SubtitleProfile } from './subtitleProfiles';
 
 /** Category resolution info returned to popup */
 export interface CategoryInfo {
@@ -91,6 +92,9 @@ export interface TranslateSubtitleMessage {
   sourceLanguage: string;
   targetLanguage: string;
   pageContext?: PageContext;
+  /** Subtitle profile resolved by the content script from window.location.hostname.
+   *  Background falls back to 'media' when absent (backward compat). */
+  profile?: SubtitleProfile;
 }
 
 /** Subtitle fetch request (CORS bypass) from content script → background */

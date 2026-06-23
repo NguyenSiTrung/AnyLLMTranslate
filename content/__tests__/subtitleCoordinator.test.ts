@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { resolveProfile } from '@/lib/subtitleProfiles';
 
 // ============================================================================
 // Module-level mock factories — vi.mock() is hoisted, so define fn vars here
@@ -219,6 +220,30 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       }),
+    );
+  });
+
+  it('includes the resolved profile on the translateSubtitle payload', async () => {
+    // jsdom default hostname is 'localhost' (unmapped) → resolves to 'media'.
+    if (capturedInterceptedHandler) {
+      await capturedInterceptedHandler(
+        {
+          url: 'https://youtube.com/timedtext',
+          body: '<transcript>...</transcript>',
+          contentType: 'application/json',
+          platform: 'youtube',
+          originalLanguage: 'en',
+        },
+        'req-profile',
+      );
+    }
+
+    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sent).toBeDefined();
+    expect((sent[0] as { profile?: string }).profile).toBe(
+      resolveProfile(window.location.hostname),
     );
   });
 

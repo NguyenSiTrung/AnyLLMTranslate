@@ -38,6 +38,14 @@ import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } fro
 import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory } from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
+import { resolveProfile, type SubtitleProfile } from '@/lib/subtitleProfiles';
+
+/** Resolve the subtitle profile for the current page from its hostname.
+ *  Called per outbound translateSubtitle message; resolveProfile is a cheap
+ *  map lookup, so no caching needed. */
+function currentSubtitleProfile(): SubtitleProfile {
+  return resolveProfile(window.location.hostname);
+}
 
 /** Coordinator state */
 interface CoordinatorState {
@@ -302,6 +310,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
+      profile: currentSubtitleProfile(),
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
@@ -383,6 +392,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
+      profile: currentSubtitleProfile(),
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (response?.success && response.cues) {
@@ -473,6 +483,7 @@ async function translateDomCueTexts(
       sourceLanguage,
       targetLanguage,
       pageContext,
+      profile: currentSubtitleProfile(),
       sessionId: sessionId ?? undefined,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
