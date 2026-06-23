@@ -340,4 +340,75 @@ describe('OpenAICompatibleService', () => {
       expect(systemPrompt).not.toContain('subtitle translator');
     });
   });
+
+  describe('translate — subtitle path with properNouns', () => {
+    it('extracts properNouns from subtitle response and attaches to result', async () => {
+      const responseContent = JSON.stringify({
+        translations: { s1: 'Hola' },
+        properNouns: { John: 'Juan' },
+      });
+      globalThis.fetch = mockFetchResponse(responseContent);
+
+      const service = new OpenAICompatibleService(mockConfig);
+      const texts = new Map<string, string>();
+      texts.set('s1', 'Hello');
+
+      const result = await service.translate({
+        texts,
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        subtitleKnobs: PROFILE_PRESETS.media,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.properNouns).toEqual({ John: 'Juan' });
+    });
+
+    it('returns properNouns undefined on the web-page path', async () => {
+      const responseContent = JSON.stringify({
+        translations: { p1: 'Hola' },
+      });
+      globalThis.fetch = mockFetchResponse(responseContent);
+
+      const service = new OpenAICompatibleService(mockConfig);
+      const texts = new Map<string, string>();
+      texts.set('p1', 'Hello');
+
+      const result = await service.translate({
+        texts,
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        customSystemPrompt: null,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.properNouns).toBeUndefined();
+    });
+
+    it('passes rollingGlossaryBlock to the subtitle prompt', async () => {
+      const responseContent = JSON.stringify({
+        translations: { s1: 'Hola' },
+      });
+      globalThis.fetch = mockFetchResponse(responseContent);
+
+      const service = new OpenAICompatibleService(mockConfig);
+      const texts = new Map<string, string>();
+      texts.set('s1', 'Hello');
+
+      await service.translate({
+        texts,
+        sourceLanguage: 'en',
+        targetLanguage: 'es',
+        subtitleKnobs: PROFILE_PRESETS.media,
+        rollingGlossaryBlock: 'Previously translated names in this content (use these consistently):\n- "John" → "Juan"',
+      });
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).toContain('Previously translated names');
+      expect(body.messages[0].content).toContain('"John" → "Juan"');
+    });
+  });
 });
