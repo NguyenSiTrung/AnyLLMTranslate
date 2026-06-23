@@ -60,11 +60,12 @@ This file tracks all major tracks for the project.
 - ✅ **OpenAI-Compatible Provider Catalog & Model Picker** (`openai-provider-catalog_20260623`) — Archived 2026-06-23. Searchable provider catalog with base URL auto-fill and on-demand GET /models picker in options and setup wizard. [View](./conductor/archive/openai-provider-catalog_20260623/)
 - ✅ **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (`audit-v2_20260623`) — Archived 2026-06-23. Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes, 8 P1 bugs, 28 P2 issues, 40+ P3 minor items across all modules. 6 phases, 91 total tasks. [View](./conductor/archive/audit-v2_20260623/)
 - ✅ **Coursera & Udemy Subtitle Handler Fixes** (`coursera-udemy-handler-fixes_20260623`) — Archived 2026-06-23. CDN interception, videoId/locale/sprite fixes, domain-anchored detect, parseSubtitles, coordinator isWatchPage cleanup, full handler tests. [View](./conductor/archive/coursera-udemy-handler-fixes_20260623/)
+- ✅ **Youku Subtitle Support** (`youku-subtitles_20260624`) — Archived 2026-06-24. Bilingual subtitle translation for Youku (youku.tv/youku.com/m.youku.com) via DOM cue scraping of the `#subtitle` SVG container. New `YoukuHandler`; `youkuCodeToLanguage()` (11 codes→BCP-47); `cinematic` profile. Generalized `domCueSource.ts` track-switch detection to derive selector + activation attribute from the `DomCueSource` contract (was HBO-Max-hardcoded); `resolveProfile()` made subdomain-aware. Phase 4 (XHR interception) skipped — DOM scraping is the shipped path. 60 new tests. [View](./conductor/archive/youku-subtitles_20260624/)
 
 ---
 
 ## Active Tracks
 
-- 🔶 **Youku Subtitle Support** (`youku-subtitles_20260624`) — IN PROGRESS. Bilingual subtitle translation for Youku (youku.tv/youku.com/m.youku.com) via DOM cue scraping of the `#subtitle` SVG container, with optional Phase 2 XHR interception. *Link: [./conductor/tracks/youku-subtitles_20260624/](./conductor/tracks/youku-subtitles_20260624/)*
+*(none — all tracks archived)*
 
 ---

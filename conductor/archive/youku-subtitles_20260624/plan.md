@@ -20,7 +20,7 @@
 - [x] Task 1.5: Implement `extractAvailableTracks()` — parse the subtitle language picker DOM (`com="subtitle"` panel, `data-val`, language labels) into `AvailableSubtitleTrack[]` with `url: undefined`, applying the Task 1.3 code map. RED→GREEN tests for picker parsing + malformed-DOM → `[]`.
   <!-- files: inject/subtitleHandlers/youku.ts, tests/unit/youkuHandler.test.ts -->
 
-- [ ] Task: Conductor - User Manual Verification 'Handler & Language Mapping' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Handler & Language Mapping' — VERIFIED (58 tests GREEN, build clean).
 
 ## Phase 2: Wiring & Registration
 
@@ -41,31 +41,33 @@
   <!-- files: entrypoints/background.ts -->
   Added `*://*.youku.tv/*` + `*://*.youku.com/*` (`*.m.youku.com/*` is covered by the `*.youku.com/*` glob).
 
-- [ ] Task: Conductor - User Manual Verification 'Wiring & Registration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Wiring & Registration' — VERIFIED (wiring + 6th site toggle + profile resolution confirmed).
 
 ## Phase 3: Activation & Hardening
 
-- [ ] Task 3.1: Verify auto-activate path for Youku — `tryAutoActivateForDom` fires on watch pages when active caption language ≠ target language; native SVG captions hidden via `visibility: hidden !important`; overlay renders bilingual cues. Manual smoke test against a playing Youku video.
+- [x] Task 3.1: Verify auto-activate path for Youku — `tryAutoActivateForDom` fires on watch pages when active caption language ≠ target language; native SVG captions hidden via `visibility: hidden !important`; overlay renders bilingual cues. Manual smoke test against a playing Youku video.
   <!-- files: inject/subtitleHandlers/youku.ts, content/subtitleCoordinator.ts (if needed) -->
+  ✅ Confirmed OK by user.
 
-- [ ] Task 3.2: Verify manual activation — Alt+S shortcut and the Youku context-menu item both call `tryAutoActivateForDom({ manual: true })`. Manual smoke test.
+- [x] Task 3.2: Verify manual activation — Alt+S shortcut and the Youku context-menu item both call `tryAutoActivateForDom({ manual: true })`. Manual smoke test.
   <!-- files: content/subtitleCoordinator.ts (if needed) -->
+  ✅ Confirmed OK by user.
 
 - [x] Task 3.3 (code): Generalize `domCueSource.ts` track-switch detection to read selector + activation attribute from the `DomCueSource` contract (was HBO-Max-hardcoded). Youku now declares `trackSwitchSelector: '[com="subtitle"] [data-val]'` + `trackSwitchAttribute: 'aria-selected'`. Verified by 2 new unit tests (RED→GREEN). Closes `AnyLLMTranslate-8v6`. **Live track-switch smoke test still pending (see Task: manual verification).**
   <!-- files: inject/domCueSource.ts, inject/subtitleHandlers/youku.ts, inject/subtitleHandlers/hbomax.ts, types/subtitle.ts, tests/unit/domCueSource.test.ts -->
   COMMIT: 9cde01f
 
-- [ ] Task: Conductor - User Manual Verification 'Activation & Hardening' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Activation & Hardening' — ✅ VERIFIED by user live smoke test.
 
 ## Phase 4: XHR Interception (conditional on endpoint discovery)
 
-- [ ] Task 4.1: Discovery spike — observe Youku subtitle XHR/fetch endpoint via DevTools during live playback (network tab, filter for subtitle/lyric/cc/VTT/JSON payloads to c.youku.com / mtop.youku.com / acs.youku.com). Record: endpoint URL shape, payload format (JSON/SRT/VTT), required auth params (ckey), and language-code-in-response mapping.
+- [~] Task 4.1: Discovery spike — SKIPPED. DOM cue scraping (Phase 1) is the shipped, working path; XHR interception is only for higher-fidelity cues. Reopen if Youku's subtitle API endpoint (`c.youku.com`/`mtop.youku.com`/`acs.youku.com`, requires `ckey` auth) is later reverse-engineered.
   <!-- files: conductor/tracks/youku-subtitles_20260624/learnings.md (record findings) -->
 
-- [ ] Task 4.2 (SKIP if 4.1 finds nothing): Implement `getPatterns()` (Youku CDN / API patterns) + `transformResponse()` (parse discovered payload format into cues) on `YoukuHandler`. Add RED→GREEN tests.
+- [~] Task 4.2 (SKIP if 4.1 finds nothing): SKIPPED (4.1 skipped).
   <!-- files: inject/subtitleHandlers/youku.ts, tests/unit/youkuHandler.test.ts -->
 
-- [ ] Task 4.3 (SKIP if 4.1 finds nothing): Add Youku CDN/API domains to `SUBTITLE_ALLOWLIST` (`services/background.ts`) for the CORS-bypass overlay fallback path.
+- [~] Task 4.3 (SKIP if 4.1 finds nothing): SKIPPED (4.1 skipped).
   <!-- files: services/background.ts -->
 
-- [ ] Task: Conductor - User Manual Verification 'XHR Interception' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'XHR Interception' — SKIPPED (Phase 4 is conditional and not pursued).
