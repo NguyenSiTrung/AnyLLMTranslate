@@ -36,3 +36,12 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-23] - Phase 1-4 implementation
+- **Implemented:** Coursera CDN VTT patterns, API videoId extraction, subtitlesVtt array handling; Udemy locale BCP-47, sprite `#xywh=` filter, CDN language path extractor; domain-anchored detect(); parseSubtitles + warn on metadata parse errors; removed coordinator Udemy/Coursera isWatchPage fallbacks.
+- **Files changed:** inject/subtitleHandlers/coursera.ts, inject/subtitleHandlers/udemy.ts, content/subtitleCoordinator.ts, tests/unit/*, content/__tests__/subtitleCoordinator.test.ts
+- **Learnings:**
+  - Patterns: Coordinator proactive detection tests need `mockHandler.isWatchPage` when `detectCurrentHandler` is mocked — pathname fallback no longer covers YouTube without handler.
+  - Gotchas: Coursera VTT language from filename uses `[_-]({2,3}...)` before path segments to avoid matching `api` in `/api/...`.
+  - Context: `getPatternsForCurrentHost()` only includes patterns when `handler.detect()` is true on current hostname.
+---

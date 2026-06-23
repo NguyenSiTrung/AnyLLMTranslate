@@ -1068,12 +1068,6 @@ export function isOnWatchPage(): boolean {
   if (hostname.includes('youtube.com')) {
     return pathname === '/watch';
   }
-  if (hostname.includes('udemy.com')) {
-    return pathname.includes('/learn/');
-  }
-  if (hostname.includes('coursera.org')) {
-    return pathname.includes('/lecture/');
-  }
   if (hostname.includes('linkedin.com')) {
     return pathname.startsWith('/learning/');
   }

@@ -128,6 +128,7 @@ const mockHandler = {
   detect: vi.fn(() => true),
   getPatterns: vi.fn(() => []),
   transformResponse: vi.fn(() => MOCK_CUES),
+  isWatchPage: vi.fn(() => window.location.pathname === '/watch'),
 };
 
 // ============================================================================
@@ -1039,9 +1040,13 @@ describe('subtitleCoordinator – proactive category detection', () => {
     // Fake timers make the 1500ms proactive debounce deterministic and prevent
     // leftover real timers from other tests firing during our waits.
     vi.useFakeTimers();
+    vi.clearAllTimers();
     vi.clearAllMocks();
     capturedInterceptedHandler = null;
     vi.resetModules();
+
+    mockHandler.isWatchPage.mockImplementation(() => window.location.pathname === '/watch');
+    mockDetectCurrentHandler.mockReturnValue(mockHandler);
 
     // YouTube watch page
     Object.defineProperty(window, 'location', {
@@ -1098,6 +1103,9 @@ describe('subtitleCoordinator – proactive category detection', () => {
 
   it('does NOT fire proactive detection on a non-watch page (YouTube home)', async () => {
     vi.resetModules();
+    mockTriggerAutoCategoryDetection.mockClear();
+    mockDetectCurrentHandler.mockReturnValue(mockHandler);
+    mockHandler.isWatchPage.mockReturnValue(false);
     Object.defineProperty(window, 'location', {
       value: { hostname: 'www.youtube.com', pathname: '/', href: 'https://www.youtube.com/' },
       writable: true,

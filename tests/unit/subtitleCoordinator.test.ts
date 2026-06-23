@@ -6,7 +6,9 @@ import {
   isInOverlayMode,
   resetCoordinatorState,
   clearPendingRequest,
+  isOnWatchPage,
 } from '@/content/subtitleCoordinator';
+import * as handlerRegistry from '@/inject/subtitleHandlers/registry';
 import { resetOverlayState } from '@/content/subtitleOverlay';
 import type { SubtitleCue } from '@/types/subtitle';
 import * as messageBridge from '@/content/messageBridge';
@@ -50,6 +52,30 @@ vi.mock('@/inject/subtitleHandlers/registry', () => ({
   })),
   detectCurrentHandler: vi.fn(() => null),
 }));
+
+describe('isOnWatchPage', () => {
+  afterEach(() => {
+    vi.mocked(handlerRegistry.detectCurrentHandler).mockReturnValue(null);
+  });
+
+  it('delegates to handler isWatchPage when handler is detected', () => {
+    const isWatchPage = vi.fn(() => true);
+    vi.mocked(handlerRegistry.detectCurrentHandler).mockReturnValue({
+      platform: 'coursera',
+      detect: vi.fn(),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      isWatchPage,
+    });
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.coursera.org', pathname: '/browse' },
+      writable: true,
+      configurable: true,
+    });
+    expect(isOnWatchPage()).toBe(true);
+    expect(isWatchPage).toHaveBeenCalled();
+  });
+});
 
 describe('content/subtitleCoordinator', () => {
   beforeEach(() => {
