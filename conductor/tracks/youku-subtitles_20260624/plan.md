@@ -51,8 +51,9 @@
 - [ ] Task 3.2: Verify manual activation — Alt+S shortcut and the Youku context-menu item both call `tryAutoActivateForDom({ manual: true })`. Manual smoke test.
   <!-- files: content/subtitleCoordinator.ts (if needed) -->
 
-- [ ] Task 3.3: Verify track-switch buffer reset — switching caption language in the Youku picker emits `SUBTITLE_DOM_TRACK_CHANGED`, clears `domOriginalCues`/`domTranslationMap`, empties overlay, sends `CANCEL_SUBTITLE_SESSION`. Manual smoke test + any needed handler hook.
-  <!-- files: inject/subtitleHandlers/youku.ts -->
+- [x] Task 3.3 (code): Generalize `domCueSource.ts` track-switch detection to read selector + activation attribute from the `DomCueSource` contract (was HBO-Max-hardcoded). Youku now declares `trackSwitchSelector: '[com="subtitle"] [data-val]'` + `trackSwitchAttribute: 'aria-selected'`. Verified by 2 new unit tests (RED→GREEN). Closes `AnyLLMTranslate-8v6`. **Live track-switch smoke test still pending (see Task: manual verification).**
+  <!-- files: inject/domCueSource.ts, inject/subtitleHandlers/youku.ts, inject/subtitleHandlers/hbomax.ts, types/subtitle.ts, tests/unit/domCueSource.test.ts -->
+  COMMIT: 9cde01f
 
 - [ ] Task: Conductor - User Manual Verification 'Activation & Hardening' (Protocol in workflow.md)
 
