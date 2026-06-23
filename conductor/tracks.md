@@ -64,6 +64,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-(none)
+- 🔶 **Coursera & Udemy Subtitle Handler Fixes** (`coursera-udemy-handler-fixes_20260623`) — New. Comprehensive fix and improvement of Coursera and Udemy subtitle handlers: CDN interception, videoId extraction, locale preservation, sprite filter false positives, domain detection, metadata parsing, format auto-detection, dead code removal, error logging, coordinator cleanup, and full test coverage. Priority: High. [View](./conductor/tracks/coursera-udemy-handler-fixes_20260623/)
 
 ---
