@@ -3,7 +3,7 @@
  */
 
 import type { PageContext } from './config';
-import type { ProfileKnobs } from './subtitleProfiles';
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 
 /** A translatable piece of content extracted from the DOM */
 export interface TranslationPiece {
