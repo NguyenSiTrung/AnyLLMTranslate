@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { startDomCueSource } from '@/inject/domCueSource';
+import { OPEN_CUE_END_SENTINEL } from '@/lib/subtitleTiming';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { DomCueSource, SubtitleCue } from '@/types/subtitle';
 
@@ -270,6 +271,76 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(cuesAfter?.payload.cues).toHaveLength(2);
     expect(cuesAfter?.payload.cues[0].text).toBe('Cue one');
     expect(cuesAfter?.payload.cues[1].text).toBe('Cue two');
+
+    cleanup();
+  });
+
+  it('on seeked, does NOT collapse the open cue to zero duration — finalizes at currentTime', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    // Open a cue at t=20.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 20 });
+    cueEl.textContent = 'Open before seek';
+    await flushObservers();
+
+    // Forward-seek to t=35: the open cue should be finalized at 35 (a real
+    // span 20→35), NOT collapsed to endTime === startTime (0s duration).
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 35 });
+    video.dispatchEvent(new Event('seeked'));
+    await flushObservers();
+
+    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
+    const open = cues.find((c) => c.text === 'Open before seek');
+    expect(open).toBeDefined();
+    const oc = open as SubtitleCue;
+    expect(oc.startTime).toBe(20);
+    // Pre-fix this was startTime (20) -> zero duration. Post-fix it is 35.
+    expect(oc.endTime).toBe(35);
+    expect(oc.endTime).toBeGreaterThan(oc.startTime);
+
+    cleanup();
+  });
+
+  it('on backward seeked, the open cue does not linger with a negative/far-future span', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    // Open a cue at t=40.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 40 });
+    cueEl.textContent = 'Open then jump back';
+    await flushObservers();
+
+    // Backward-seek to t=5. The cue started at 40; clamping to max(5, 40+0.1)
+    // means endTime = 40.1 — a tiny (0.1s) cue that vanishes immediately rather
+    // than spanning the 40→5 gap or lingering as stale text.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    video.dispatchEvent(new Event('seeked'));
+    await flushObservers();
+
+    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
+    const open = cues.find((c) => c.text === 'Open then jump back');
+    expect(open).toBeDefined();
+    const oc = open as SubtitleCue;
+    expect(oc.endTime).toBeGreaterThanOrEqual(oc.startTime); // never negative
+    // Duration must be tiny (≤ 1s), not a multi-second span.
+    expect(oc.endTime - oc.startTime).toBeLessThanOrEqual(1);
+
+    cleanup();
+  });
+
+  it('uses OPEN_CUE_END_SENTINEL (not 86400) for the open cue marker', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 10 });
+    cueEl.textContent = 'Open cue';
+    await flushObservers();
+
+    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
+    const open = cues.find((c) => c.text === 'Open cue');
+    expect(open).toBeDefined();
+    expect((open as SubtitleCue).endTime).toBe(OPEN_CUE_END_SENTINEL);
 
     cleanup();
   });

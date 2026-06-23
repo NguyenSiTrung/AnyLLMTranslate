@@ -9,6 +9,7 @@
  */
 
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
+import { OPEN_CUE_END_SENTINEL } from '@/lib/subtitleTiming';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
@@ -109,9 +110,10 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
       openCue = null;
     }
 
-    // Use a far-future endTime for the open (current) cue so the overlay's
+    // Use the OPEN_CUE_END_SENTINEL for the open (current) cue so the overlay's
     // findActiveCue() can match it. The next cue will close this one precisely.
-    const cue: SubtitleCue = { startTime: t, endTime: t + 86400, text };
+    // (Number.MAX_SAFE_INTEGER — not 86400, which a >24h film would overflow.)
+    const cue: SubtitleCue = { startTime: t, endTime: OPEN_CUE_END_SENTINEL, text };
     cues.push(cue);
     // Sliding window: cap buffer to last MAX_CUES entries
     if (cues.length > MAX_CUES) {
@@ -141,15 +143,17 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     };
     video.addEventListener('pause', pauseHandler);
 
-    // P2: on seek, close the currently-open cue at the OLD currentTime so its
-    // endTime isn't left dangling across the jump. Without this, a seek while a
-    // cue is open produces a cue spanning the gap (e.g. 10s→5min), corrupting
-    // the timeline and confusing findActiveCue.
+    // On seek, finalize the currently-open cue at the NEW currentTime so its
+    // endTime reflects real playback. A forward seek (e.g. 10s→5min) gives the
+    // cue an honest span ending at 5min; a backward seek clamps to
+    // startTime + 0.1s so the cue is a tiny sliver that vanishes immediately
+    // rather than spanning the jump or lingering as stale text.
+    // (Pre-fix this set endTime = startTime, producing a zero-duration cue that
+    // vanished as if it had never existed — losing the just-displayed caption.)
     const seekedHandler = () => {
       if (openCue) {
-        // endTime was set relative to pre-seek playback; close it and clear so
-        // the next sampleCue starts a fresh cue at the new position.
-        openCue.endTime = openCue.startTime;
+        openCue.endTime = Math.max(video.currentTime, openCue.startTime + 0.1);
+        emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
         openCue = null;
       }
     };
