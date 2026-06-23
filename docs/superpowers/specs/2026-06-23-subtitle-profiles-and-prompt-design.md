@@ -230,19 +230,43 @@ is reused unchanged for subtitles, since the per-request format is identical.)
 This is the single routing seam between the two prompt worlds; it keeps the
 regression risk confined to the subtitle path.
 
-### D. `services/background.ts` — profile resolution + first-chunk fix
+### D. Profile resolution in the content script + first-chunk fix
 
-Two changes in `handleTranslateSubtitle` (`services/background.ts:384`):
+**Why resolve in the content script, not the background:** the manifest
+(`wxt.config.ts:13`) declares permissions `['storage', 'activeTab', 'contextMenus',
+'sidePanel', 'alarms']` — there is **no `"tabs"` permission**. Without it,
+`sender.tab.url` in the background service worker is `undefined` for passive
+message routing (`activeTab` is a transient grant and does not cover this case).
+So the background cannot reliably learn the page's hostname from the sender.
+The content script, however, always has `window.location.hostname`, and it is
+the originator of every `translateSubtitle` message
+(`content/subtitleCoordinator.ts:300, 381, 471`). Resolving the profile in the
+content script and passing it in the message is therefore the only approach
+that works without adding a new permission, and it keeps the pure
+`resolveProfile` resolver as the single source of truth.
 
-1. **Profile resolution (once per request).** Derive the hostname from
-   `sender.tab.url` (already available — confirmed at line 397), call
-   `resolveProfile(hostname)`, look up `PROFILE_PRESETS[profile]`, and pass the
-   resolved `ProfileKnobs` through `translateChunk` into the
-   `service.translate({ ...subtitleKnobs })` call (around `background.ts:449`).
-   The DOM-scrape path (HBO Max) flows through the same `translateChunk`, so it
-   inherits the cinematic profile automatically — no separate work.
+Changes:
 
-2. **First-chunk context fix.** At `services/background.ts:505`, replace
+1. **Message field.** Add `profile?: SubtitleProfile` to
+   `TranslateSubtitleMessage` (`types/messages.ts:88`). The background reads
+   `message.profile ?? 'media'` as a defensive fallback.
+
+2. **Content script resolution.** In `content/subtitleCoordinator.ts`, resolve
+   the profile once via `resolveProfile(window.location.hostname)` at the three
+   `translateSubtitle` send sites (lines 300, 381, 471) and include it in the
+   payload. To avoid repetition, a single helper
+   `currentSubtitleProfile(): SubtitleProfile` wraps the call.
+
+3. **Background consumption.** In `handleTranslateSubtitle`
+   (`services/background.ts:384`), read `message.profile ?? 'media'`, look up
+   `PROFILE_PRESETS[profile]`, and pass the resolved `ProfileKnobs` through
+   `translateChunk` into the `service.translate({ ...subtitleKnobs })` call
+   (around `background.ts:449`). The DOM-scrape path (HBO Max) flows through
+   the same message — its coordinator send site (`subtitleCoordinator.ts:471`)
+   also resolves and passes the profile — so it inherits the cinematic profile
+   automatically.
+
+4. **First-chunk context fix.** At `services/background.ts:505`, replace
    `translateChunk(firstChunkCues, [])` with a seed of **look-ahead cues**:
    `translateChunk(firstChunkCues, cues.slice(CHUNK_SIZE, CHUNK_SIZE + CONTEXT_SIZE))`.
    The model already ignores `ctx` translations (`background.ts:461`), so this
@@ -254,18 +278,21 @@ Two changes in `handleTranslateSubtitle` (`services/background.ts:384`):
 ## Data flow
 
 ```
-content script ──translateSubtitle──▶ background.handleTranslateSubtitle
-                                          │
-                                          ├─ resolveProfile(sender.tab.url hostname)
-                                          ├─ PROFILE_PRESETS[profile] → ProfileKnobs
-                                          │
-                                          └─ translateChunk(cues, context)
-                                                  │
-                                                  └─ service.translate({
-                                                       texts, sourceLanguage, targetLanguage,
-                                                       subtitleKnobs,   ← routes to subtitle prompt
-                                                       glossaryBlock,
-                                                     })
+content script (subtitleCoordinator)
+   │ resolveProfile(window.location.hostname) → SubtitleProfile
+   │
+   └──translateSubtitle { cues, ..., profile }──▶ background.handleTranslateSubtitle
+                                                     │
+                                                     ├─ message.profile ?? 'media'
+                                                     ├─ PROFILE_PRESETS[profile] → ProfileKnobs
+                                                     │
+                                                     └─ translateChunk(cues, context)
+                                                             │
+                                                             └─ service.translate({
+                                                                  texts, sourceLanguage, targetLanguage,
+                                                                  subtitleKnobs,   ← routes to subtitle prompt
+                                                                  glossaryBlock,
+                                                                })
 ```
 
 Web-page translation path is untouched and continues to call `service.translate`
@@ -311,17 +338,23 @@ Grounded in the existing vitest setup (`vitest.config.ts`, `content/__tests__/`,
    moderate, relaxed, preserve) produces no line.
 
 4. **Integration — `handleTranslateSubtitle`** (extend existing background tests
-   or add new): mock the translation service, send a subtitle request, assert
-   the service receives the subtitle prompt (not the web prompt). Stub
-   `sender.tab.url` with a udemy.com URL vs an hbomax.com URL and assert the
-   prompt differs by profile (educational prompt contains "precise, faithful";
-   cinematic prompt contains "idiomatic").
+   or add new): mock the translation service, send a subtitle request with
+   `profile: 'educational'` vs `profile: 'cinematic'`, and assert the service
+   receives the subtitle prompt (not the web prompt) and that the prompt differs
+   by profile (educational prompt contains "precise, faithful"; cinematic prompt
+   contains "idiomatic").
 
-5. **Regression — first-chunk context**: assert chunk 0 now receives forward
+5. **Integration — content-script resolution**: a coordinator test asserting
+   that the `translateSubtitle` message sent to the background includes the
+   resolved `profile` field. This can be exercised by stubbing
+   `window.location.hostname` to `udemy.com` / `max.com` and asserting the
+   outgoing message's `profile`.
+
+6. **Regression — first-chunk context**: assert chunk 0 now receives forward
    cues as `ctx` entries (not `[]`). Assert chunks 1+ still receive preceding
    cues as today (unchanged behavior).
 
-6. **Regression — web-page path unchanged**: a `translateText` test confirms the
+7. **Regression — web-page path unchanged**: a `translateText` test confirms the
    web path still uses `buildSystemPrompt` and honors `customSystemPrompt`. This
    is the key guard against the main regression risk of this sub-project.
 
@@ -332,13 +365,14 @@ Grounded in the existing vitest setup (`vitest.config.ts`, `content/__tests__/`,
 | `lib/subtitleProfiles.ts` | Profile enum, knob types, presets, domain map, `resolveProfile` | ✅ new |
 | `services/subtitlePrompt.ts` | `buildSubtitleSystemPrompt`, knob→instruction map | ✅ new |
 | `types/translation.ts` | Add `subtitleKnobs?: ProfileKnobs` to `TranslationRequest` | edit |
+| `types/messages.ts` | Add `profile?: SubtitleProfile` to `TranslateSubtitleMessage` | edit |
 | `services/openaiCompatible.ts` | Select subtitle vs web prompt by presence of `subtitleKnobs`; ignore `customSystemPrompt` for subtitles | edit |
-| `services/background.ts` | Resolve profile in `handleTranslateSubtitle`; pass knobs through `translateChunk` → service; chunk-0 look-ahead fix (~10 lines near line 505) | edit |
-| `lib/subtitleProfiles.test.ts`, `services/subtitlePrompt.test.ts` | New unit tests above | ✅ new |
-| Background test extension | Integration + regression tests above | edit |
+| `content/subtitleCoordinator.ts` | Add `currentSubtitleProfile()` helper; resolve + pass `profile` at the 3 `translateSubtitle` send sites (lines 300, 381, 471) | edit |
+| `services/background.ts` | Read `message.profile ?? 'media'`, resolve knobs, pass through `translateChunk` → service; chunk-0 look-ahead fix (~10 lines near line 505) | edit |
+| `lib/__tests__/subtitleProfiles.test.ts`, `services/__tests__/subtitlePrompt.test.ts` | New unit tests above | ✅ new |
+| `services/__tests__/background.test.ts`, `content/__tests__/subtitleCoordinator.test.ts` | Integration + regression tests above | edit |
 
-Net new production logic ≈ 120 lines (profiles, prompt builder, routing). This
-is deliberately small — a foundation layer.
+Net new production logic ≈ 130 lines (profiles, prompt builder, routing, content-script helper). This is deliberately small — a foundation layer.
 
 ## Success criteria
 
