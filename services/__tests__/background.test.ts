@@ -322,15 +322,15 @@ describe('services/background', () => {
       const firstCallBody = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      // The user prompt is messages[1].content: a prefix line then a JSON object.
-      const userPayload = JSON.parse(
-        firstCallBody.messages[1].content.split('\n\n').slice(1).join('\n\n'),
-      ) as Record<string, string>;
+      // The user prompt (messages[1].content) embeds a JSON object of entries.
+      // Assert on the raw content so the test does not break if buildUserPrompt's
+      // separator format changes — we only care that the forward cues are present.
+      const userContent = firstCallBody.messages[1].content;
 
       // Look-ahead cues 25, 26, 27 must appear as ctx1, ctx2, ctx3.
-      expect(userPayload.ctx1).toBe('Line 25');
-      expect(userPayload.ctx2).toBe('Line 26');
-      expect(userPayload.ctx3).toBe('Line 27');
+      expect(userContent).toContain('"ctx1": "Line 25"');
+      expect(userContent).toContain('"ctx2": "Line 26"');
+      expect(userContent).toContain('"ctx3": "Line 27"');
     });
   });
 

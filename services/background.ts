@@ -401,9 +401,13 @@ async function handleTranslateSubtitle(
     const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
 
     // Resolve translation knobs from the content-script-provided profile.
-    // Unknown/absent profile falls back to 'media' (balanced defaults).
+    // Unknown/absent profile falls back to 'media' (balanced defaults). The
+    // second `?? PROFILE_PRESETS.media` guards against a malformed/unexpected
+    // profile string from untrusted runtime data — PROFILE_PRESETS[badKey]
+    // would be undefined, so without this the service would silently fall
+    // through to the web prompt instead of the subtitle prompt.
     const profile: SubtitleProfile = message.profile ?? 'media';
-    const subtitleKnobs: ProfileKnobs = PROFILE_PRESETS[profile];
+    const subtitleKnobs: ProfileKnobs = PROFILE_PRESETS[profile] ?? PROFILE_PRESETS.media;
 
     const CONTEXT_SIZE = 3;
 
@@ -510,12 +514,12 @@ async function handleTranslateSubtitle(
     const firstChunkCues = cues.slice(0, CHUNK_SIZE);
     try {
       // Seed chunk 0 with look-ahead context (cues right AFTER the first chunk)
-    // instead of empty context. The model already ignores ctx* translations
-    // (see the `id.startsWith('ctx')` skip below), so this reuses the existing
-    // context machinery — it just feeds forward cues for the opening chunk,
-    // which otherwise translates context-blind.
-    const firstChunkLookahead = cues.slice(CHUNK_SIZE, CHUNK_SIZE + CONTEXT_SIZE);
-    const firstChunkResult = await translateChunk(firstChunkCues, firstChunkLookahead);
+      // instead of empty context. The model already ignores ctx* translations
+      // (see the `id.startsWith('ctx')` skip below), so this reuses the existing
+      // context machinery — it just feeds forward cues for the opening chunk,
+      // which otherwise translates context-blind.
+      const firstChunkLookahead = cues.slice(CHUNK_SIZE, CHUNK_SIZE + CONTEXT_SIZE);
+      const firstChunkResult = await translateChunk(firstChunkCues, firstChunkLookahead);
       for (let j = 0; j < firstChunkResult.length; j++) {
          translatedCues[j] = firstChunkResult[j];
       }

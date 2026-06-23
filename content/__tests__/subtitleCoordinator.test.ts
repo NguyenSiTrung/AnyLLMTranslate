@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { resolveProfile } from '@/lib/subtitleProfiles';
 
 // ============================================================================
 // Module-level mock factories — vi.mock() is hoisted, so define fn vars here
@@ -178,6 +177,13 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
   });
 
   afterEach(() => {
+    // startCoordinator() schedules a real 1500ms proactive-category-detection
+    // timer (subtitleCoordinator.ts:859). This block uses real timers, so that
+    // pending timer would otherwise fire during the later "proactive category
+    // detection" block (which uses fake timers + advanceTimersByTimeAsync),
+    // inflating mockTriggerAutoCategoryDetection call counts. Clear pending
+    // timers here without altering the fake/real timer mode.
+    vi.clearAllTimers();
     vi.resetModules();
   });
 
@@ -224,7 +230,16 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
   });
 
   it('includes the resolved profile on the translateSubtitle payload', async () => {
-    // jsdom default hostname is 'localhost' (unmapped) → resolves to 'media'.
+    // Override the beforeEach hostname stub to a bare mapped domain so the
+    // resolved profile is concretely verifiable (youtube.com → media), not a
+    // tautology against whatever the coordinator computed. Keep platform
+    // consistent with the handler mock (youtube).
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'youtube.com', pathname: '/watch', href: 'https://youtube.com/watch?v=test123' },
+      writable: true,
+      configurable: true,
+    });
+
     if (capturedInterceptedHandler) {
       await capturedInterceptedHandler(
         {
@@ -242,9 +257,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
     );
     expect(sent).toBeDefined();
-    expect((sent[0] as { profile?: string }).profile).toBe(
-      resolveProfile(window.location.hostname),
-    );
+    expect((sent[0] as { profile?: string }).profile).toBe('media');
   });
 
   it('falls back to settings.sourceLanguage when payload.originalLanguage is empty', async () => {
