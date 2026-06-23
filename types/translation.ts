@@ -41,6 +41,11 @@ export interface TranslationRequest {
   /** Rolling proper-noun glossary block for subtitle cross-chunk continuity.
    *  Injected into the subtitle system prompt after the user's global glossary. */
   rollingGlossaryBlock?: string;
+  /** When set, the service uses this string verbatim as the system prompt and
+   *  skips both buildSystemPrompt and buildSubtitleSystemPrompt. Used by the
+   *  per-film pre-scan (services/subtitleNameScanner.ts) to inject its own
+   *  name-extraction prompt. */
+  preScanSystemPrompt?: string;
 }
 
 /** Result from the translation service */

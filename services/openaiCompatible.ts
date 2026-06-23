@@ -44,22 +44,25 @@ export class OpenAICompatibleService implements TranslationService {
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     try {
-      // Subtitle requests carry subtitleKnobs → use the profile-driven subtitle
-      // prompt and ignore the web customSystemPrompt. Web-page requests fall
-      // through to buildSystemPrompt exactly as before.
-      const systemPrompt = request.subtitleKnobs
-        ? buildSubtitleSystemPrompt(
-            request.targetLanguage,
-            request.subtitleKnobs,
-            request.glossaryBlock,
-            request.rollingGlossaryBlock,
-          )
-        : buildSystemPrompt(
-            request.targetLanguage,
-            request.customSystemPrompt,
-            request.glossaryBlock,
-            request.pageContext,
-          );
+      // Prompt routing (highest precedence first):
+      //  1. preScanSystemPrompt → use verbatim (per-film name-extraction call).
+      //  2. subtitleKnobs       → profile-driven subtitle prompt (customSystemPrompt ignored).
+      //  3. (neither)           → web-page prompt, honoring customSystemPrompt.
+      const systemPrompt = request.preScanSystemPrompt
+        ? request.preScanSystemPrompt
+        : request.subtitleKnobs
+          ? buildSubtitleSystemPrompt(
+              request.targetLanguage,
+              request.subtitleKnobs,
+              request.glossaryBlock,
+              request.rollingGlossaryBlock,
+            )
+          : buildSystemPrompt(
+              request.targetLanguage,
+              request.customSystemPrompt,
+              request.glossaryBlock,
+              request.pageContext,
+            );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
       const completionRequest: ChatCompletionRequest = {
