@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Subtitles as SubtitlesIcon, Play, Languages, Globe } from 'lucide-react';
+import { Subtitles as SubtitlesIcon, Play, Languages, Globe, RotateCcw } from 'lucide-react';
 import { SUPPORTED_SUBTITLE_SITES } from '@/lib/subtitleSites';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -18,6 +18,10 @@ import { Card } from '@/ui/Card';
 import { Select } from '@/ui/Select';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+
+// Auto = inherit from the resolved profile preset (omit the key from the override).
+type KnobKey = keyof ProfileKnobs;
 
 const POSITION_OPTIONS: { value: 'bottom' | 'top'; label: string }[] = [
   { value: 'bottom', label: 'Bottom' },
@@ -38,6 +42,34 @@ const DISPLAY_MODE_OPTIONS: { value: SubtitleDisplayMode; label: string }[] = [
 const FONT_SIZE_MODE_OPTIONS: { value: SubtitleFontSizeMode; label: string }[] = [
   { value: 'fixed', label: 'Fixed' },
   { value: 'auto', label: 'Auto (Video Size)' },
+];
+
+const REGISTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'formal', label: 'Formal' },
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'casual', label: 'Casual' },
+];
+
+const FAITHFULNESS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'literal', label: 'Literal' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'idiomatic', label: 'Idiomatic' },
+];
+
+const BREVITY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'relaxed', label: 'Relaxed' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'terse', label: 'Terse' },
+];
+
+const PROFANITY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'preserve', label: 'Preserve' },
+  { value: 'soften', label: 'Soften' },
+  { value: 'remove', label: 'Remove' },
 ];
 
 /** Sample subtitle cues that cycle through the preview */
@@ -220,6 +252,22 @@ export function SubtitlesSection() {
   const preferredLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isDisabled = !subtitleSettings.enabled;
 
+  const overrides = subtitleSettings.knobOverrides ?? {};
+
+  const handleKnobChange = (knob: KnobKey, value: string) => {
+    const next = { ...overrides };
+    if (value === 'auto') {
+      delete next[knob];
+    } else {
+      (next as Record<string, string>)[knob] = value;
+    }
+    handleUpdate({ knobOverrides: next });
+  };
+
+  const handleResetKnobs = () => {
+    handleUpdate({ knobOverrides: {} });
+  };
+
   return (
     <div className="animate-fade-in-up">
       <SectionHeader
@@ -285,8 +333,67 @@ export function SubtitlesSection() {
           </Card>
         </div>
 
-        {/* Controls card */}
+        {/* Translation Style card — editable translation knobs (global override) */}
         <div className="animate-stagger" style={stagger(1)}>
+          <Card variant="bordered" title="Translation Style">
+            <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
+              Auto uses the recommended value for each site's profile (Educational / Media / Cinematic).
+              Override any knob to apply it everywhere subtitles are translated.
+            </p>
+            <div className={`${isDisabled ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-200`}>
+              <div className="space-y-5">
+                <FieldGroup label="Register" description="Tone of the translation.">
+                  <SegmentedControl
+                    label="Register"
+                    options={REGISTER_OPTIONS}
+                    value={overrides.register ?? 'auto'}
+                    onChange={(v) => handleKnobChange('register', v)}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
+                <FieldGroup label="Faithfulness" description="How closely the translation tracks the source wording.">
+                  <SegmentedControl
+                    label="Faithfulness"
+                    options={FAITHFULNESS_OPTIONS}
+                    value={overrides.faithfulness ?? 'auto'}
+                    onChange={(v) => handleKnobChange('faithfulness', v)}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
+                <FieldGroup label="Brevity" description="How aggressively filler is trimmed for on-screen brevity.">
+                  <SegmentedControl
+                    label="Brevity"
+                    options={BREVITY_OPTIONS}
+                    value={overrides.brevity ?? 'auto'}
+                    onChange={(v) => handleKnobChange('brevity', v)}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
+                <FieldGroup label="Profanity" description="How to handle strong profanity.">
+                  <SegmentedControl
+                    label="Profanity"
+                    options={PROFANITY_OPTIONS}
+                    value={overrides.profanity ?? 'auto'}
+                    onChange={(v) => handleKnobChange('profanity', v)}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
+                <button
+                  type="button"
+                  onClick={handleResetKnobs}
+                  disabled={isDisabled || Object.keys(overrides).length === 0}
+                  className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset to profile defaults
+                </button>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Controls card */}
+        <div className="animate-stagger" style={stagger(2)}>
           <Card variant="bordered">
             <div className="space-y-5">
               <Toggle
