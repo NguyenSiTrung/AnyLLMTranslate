@@ -38,7 +38,7 @@ import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } fro
 import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory } from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
-import { resolveProfile, type SubtitleProfile } from '@/lib/subtitleProfiles';
+import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -62,6 +62,8 @@ interface CoordinatorState {
   videoIsPlaying: boolean;
   /** Temporary tab-scoped category override from popup */
   categoryOverride: string | undefined;
+  /** Temporary tab-scoped translation-knob override from popup (resets on reload/nav). */
+  subtitleKnobOverride: Partial<ProfileKnobs> | undefined;
   /** Active subtitle session ID — stale chunks with different IDs are dropped */
   activeSubtitleSessionId: number | null;
   /** Injected <style> hiding the platform's native caption window (null when inactive) */
@@ -93,6 +95,7 @@ const state: CoordinatorState = {
   domDiscoverDebounceTimer: null,
   videoIsPlaying: false,
   categoryOverride: undefined,
+  subtitleKnobOverride: undefined,
   activeSubtitleSessionId: null,
   captionHideStyle: null,
   domOriginalCues: [],
@@ -314,6 +317,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       targetLanguage: settings.targetLanguage,
       pageContext,
       profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
@@ -396,6 +400,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
       targetLanguage: settings.targetLanguage,
       pageContext,
       profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (response?.success && response.cues) {
@@ -487,6 +492,7 @@ async function translateDomCueTexts(
       targetLanguage,
       pageContext,
       profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
       sessionId: sessionId ?? undefined,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
@@ -972,6 +978,15 @@ export function startCoordinator(): () => void {
     if (msg.action === 'categoryChanged') {
       state.categoryOverride = (message as { category?: string | null }).category ?? undefined;
     }
+    // Handle per-tab subtitle knob override from popup (set/clear)
+    if (msg.action === 'setSubtitleKnobOverride') {
+      const o = (message as { knobOverrides?: Partial<ProfileKnobs> | null }).knobOverrides;
+      state.subtitleKnobOverride = o ?? undefined; // null clears → undefined
+    }
+    // Popup queries the current tab override on open
+    if (msg.action === 'getSubtitleKnobOverride') {
+      _sendResponse({ knobOverrides: state.subtitleKnobOverride ?? {} });
+    }
   };
   chrome.runtime.onMessage.addListener(handleExtensionMessage);
 
@@ -1040,6 +1055,7 @@ export function resetCoordinatorState(): void {
   state.navigationEpoch++;
   state.videoIsPlaying = false;
   state.categoryOverride = undefined;
+  state.subtitleKnobOverride = undefined;
   state.activeSubtitleSessionId = null;
   state.activeTrackIdentity = null;
   state.fetchedTrackUrls.clear();

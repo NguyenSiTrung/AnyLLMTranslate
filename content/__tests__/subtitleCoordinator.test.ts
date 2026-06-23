@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 
 // ============================================================================
 // Module-level mock factories — vi.mock() is hoisted, so define fn vars here
@@ -258,6 +259,89 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
     expect(sent).toBeDefined();
     expect((sent[0] as { profile?: string }).profile).toBe('media');
+  });
+
+  it('includes knobOverrides on the outgoing translateSubtitle message when set', async () => {
+    // Dispatch setSubtitleKnobOverride to every registered runtime listener;
+    // only the coordinator's listener mutates state.subtitleKnobOverride.
+    const addListenerCalls = (global.chrome.runtime.onMessage.addListener as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    for (const call of addListenerCalls) {
+      const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
+      try { l({ action: 'setSubtitleKnobOverride', knobOverrides: { faithfulness: 'literal' } }); } catch { /* ignore */ }
+    }
+
+    if (capturedInterceptedHandler) {
+      await capturedInterceptedHandler(
+        {
+          url: 'https://youtube.com/timedtext',
+          body: '<transcript>...</transcript>',
+          contentType: 'application/json',
+          platform: 'youtube',
+          originalLanguage: 'en',
+        },
+        'req-knobs-set',
+      );
+    }
+
+    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sent).toBeDefined();
+    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toEqual({ faithfulness: 'literal' });
+  });
+
+  it('omits knobOverrides from the outgoing message when not set', async () => {
+    // No setSubtitleKnobOverride dispatched → state.subtitleKnobOverride is undefined.
+    if (capturedInterceptedHandler) {
+      await capturedInterceptedHandler(
+        {
+          url: 'https://youtube.com/timedtext',
+          body: '<transcript>...</transcript>',
+          contentType: 'application/json',
+          platform: 'youtube',
+          originalLanguage: 'en',
+        },
+        'req-knobs-unset',
+      );
+    }
+
+    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sent).toBeDefined();
+    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
+  });
+
+  it('clears the override when setSubtitleKnobOverride receives null', async () => {
+    const addListenerCalls = (global.chrome.runtime.onMessage.addListener as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    // Set, then clear with null.
+    for (const call of addListenerCalls) {
+      const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
+      try { l({ action: 'setSubtitleKnobOverride', knobOverrides: { brevity: 'terse' } }); } catch { /* ignore */ }
+    }
+    for (const call of addListenerCalls) {
+      const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
+      try { l({ action: 'setSubtitleKnobOverride', knobOverrides: null }); } catch { /* ignore */ }
+    }
+
+    if (capturedInterceptedHandler) {
+      await capturedInterceptedHandler(
+        {
+          url: 'https://youtube.com/timedtext',
+          body: '<transcript>...</transcript>',
+          contentType: 'application/json',
+          platform: 'youtube',
+          originalLanguage: 'en',
+        },
+        'req-knobs-cleared',
+      );
+    }
+
+    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sent).toBeDefined();
+    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
   });
 
   it('falls back to settings.sourceLanguage when payload.originalLanguage is empty', async () => {
