@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-23 all (audit-v2 sync) -->
+<!-- conductor-refresh: 2026-06-23 all (coursera-udemy + metrics) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -27,6 +27,9 @@ Reusable patterns discovered during development. Read this before starting new w
 - DOM-dependent tests using MutationObserver or event listeners in Vitest/jsdom require an async event loop tick (e.g., `await Promise.resolve()`) to allow handlers to register before asserting results. (from: linkedin-subtitles_20260523, archived 2026-05-25)
 - Storage mocks in tests need settings nested under the correct key (`anyllm-translate-settings` rather than direct keys) to avoid fallback default values. (from: linkedin-subtitles_20260523, archived 2026-05-25)
 - Prefer explicit top-level type imports over inline `import(...)` type annotations to avoid TypeScript/ESLint warnings about forbidden inline imports. (from: linkedin-subtitles_20260523, archived 2026-05-25)
+- Subtitle coordinator tests: `vi.resetModules()` before dynamic import in `beforeEach`, then call `startCoordinator()` explicitly; capture listener handlers in module-level vars from mock factories. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- `FetchInterceptor` captures `window.fetch` at module load — mock `fetch` before dynamic import of inject modules. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- jsdom `XMLHttpRequest` fires real `readystatechange` events — use spies to capture handlers when testing interceptors. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
 
 ## Subtitle & Interception
 - WXT MAIN world injection uses `world: 'MAIN'` and `run_at: 'document_start'` in wxt.config.ts for XHR/fetch access. (from: phase2-subtitles_20260409, archived 2026-04-09)
@@ -48,6 +51,9 @@ Reusable patterns discovered during development. Read this before starting new w
 - Debounced `handler.extractAvailableTracks()` on Max watch pages populates `availableTracks` with `url: undefined` for popup `SUBTITLE_TRACKS_AVAILABLE`. (from: hbomax-subtitle-hardening_20260622, 2026-06-22)
 - Coursera subtitles may be served from `cloudfront.net` VTT URLs — add CDN patterns in `getPatterns()` (not only `coursera.org`). Coursera/Udemy `detect()` should use `hostname === 'x.com' || hostname.endsWith('.x.com')` to reject spoofed domains like `notcoursera.org`. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
 - Udemy `locale_id` should map to BCP-47 with `replace('_', '-')` so `en_US` / `en_GB` do not dedupe together; sprite cue filter must require `#xywh=` on image filenames. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- `getPatternsForCurrentHost()` only registers interceptor patterns when `handler.detect()` is true on the current hostname. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- Coordinator proactive-detection tests must stub `mockHandler.isWatchPage` when `detectCurrentHandler` is mocked — Udemy/Coursera no longer use coordinator pathname fallbacks. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
+- Coursera VTT language from filename: use `[_-]({2,3}...)` before path segments so `/api/` segments are not mistaken for language codes. (from: coursera-udemy-handler-fixes_20260623, 2026-06-23)
 
 ## Type System
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)

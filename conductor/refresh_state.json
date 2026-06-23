@@ -1,23 +1,24 @@
 {
-  "lastRefresh": "2026-06-23T13:35:00+07:00",
+  "lastRefresh": "2026-06-23T15:05:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (audit-v2 sync)",
-    "product.md: Implementation Status — Codebase Audit v2 entry added (4 P0, 8 P1, 28 P2, 40+ P3)",
-    "product.md: Current State metrics 1195/96 -> 1206/98, build ~3.75MB -> ~3.76MB, 47 -> 48 tracks",
-    "patterns.md: 27 new patterns elevated from audit-v2 learnings (6 phases)",
-    "patterns.md: Refresh marker + health footer updated",
-    "tracks.md: Already current (audit-v2 listed in Archived section)",
+    "product.md: Refresh marker bumped (coursera-udemy + metrics)",
+    "product.md: Implementation Status — Coursera & Udemy Subtitle Handler Fixes entry added",
+    "product.md: Current State metrics 1206 -> 1240 tests",
+    "patterns.md: 7 patterns elevated from coursera-udemy-handler-fixes learnings",
+    "patterns.md: Refresh marker updated",
+    "tracks.md: No change (coursera-udemy already archived)",
     "tech-stack.md: No drift vs package.json",
     "workflow.md: No drift",
     "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1206,
+    "tests": 1240,
     "testFiles": 98,
     "buildSize": "~3.76 MB",
     "lintErrors": 0,
-    "archivedTracks": 48,
+    "archivedTracks": 49,
     "activeTracks": 0
-  }
+  },
+  "beadsDrift": "Open ready issues for archived epics audit-v2 and coursera-udemy (ALT-0gu, ALT-74e) — close or sync Beads separately"
 }
