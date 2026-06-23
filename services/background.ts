@@ -20,9 +20,11 @@ import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fe
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
-import { getCachedTranslation, cacheTranslation, evictCache, clearCache } from '@/services/cacheManager';
+import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
+import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
+import { withRetry } from '@/lib/subtitleRetry';
 import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
@@ -449,6 +451,14 @@ async function handleTranslateSubtitle(
       mergeProperNouns(rollingGlossary, filmGlossary);
     }
 
+    /** Build a stable glossary snapshot for the subtitle cache key. Captures the
+     *  current global + rolling + film glossary state so a cache entry is
+     *  invalidated when the glossary grows. */
+    const buildGlossarySnapshot = (): GlossarySnapshot => ({
+      globalEntries: (subtitleSettings.glossary ?? []).map((e) => ({ source: e.source, target: e.target })),
+      properNouns: [...new Set([...rollingGlossary.keys(), ...(filmGlossary ? Object.keys(filmGlossary) : [])])],
+    });
+
     // Mutate a copy of cues as we go
     const translatedCues = [...cues];
 
@@ -464,7 +474,11 @@ async function handleTranslateSubtitle(
 
         for (let i = 0; i < chunkCues.length; i++) {
           const cue = chunkCues[i];
-          const cached = await getCachedTranslation(cue.text, sourceLanguage, targetLanguage, subtitleSettings.cacheTTLDays);
+          // Sub-project 6: context-aware subtitle cache key (profile + knobs +
+          // glossary, namespaced from the web path) instead of the bare
+          // SHA-256(src:tgt:text). Web path's getCachedTranslation is untouched.
+          const subtitleKey = await generateSubtitleCacheKey(cue.text, sourceLanguage, targetLanguage, subtitleKnobs, buildGlossarySnapshot());
+          const cached = await getCachedTranslationByKey(subtitleKey, subtitleSettings.cacheTTLDays);
           if (cached) {
             chunkResult[i] = {
               ...cue,
@@ -502,16 +516,37 @@ async function handleTranslateSubtitle(
             idToOriginalText.set(id, text);
           }
 
-          const result = await service.translate({
-            texts,
-            sourceLanguage,
-            targetLanguage,
-            glossaryBlock: subtitleGlossary || undefined,
-            // Subtitle path: subtitleKnobs routes to the subtitle prompt and
-            // customSystemPrompt/pageContext are ignored by the service.
-            subtitleKnobs,
-            // Rolling proper-noun glossary for cross-chunk name consistency.
-            rollingGlossaryBlock: formatRollingGlossary(rollingGlossary) || undefined,
+          // Sub-project 6: chunk-level retry with exponential backoff. The
+          // wrapper normalizes service.translate's { success: false } into a
+          // throw so withRetry's thrown-error model applies. NOTE: because the
+          // service returns an error STRING (not a thrown ApiError), the 4xx
+          // status code is not visible here — shouldRetry returns true for all
+          // failures, so 4xx is retried twice. This is a deliberate trade-off
+          // vs. broad service-layer churn; 4xx is rare and the cost is 2 wasted
+          // calls. (Making the service re-throw ApiError on 4xx would enable
+          // true fail-fast but touches every caller.)
+          const runTranslate = async () => {
+            const r = await service.translate({
+              texts,
+              sourceLanguage,
+              targetLanguage,
+              glossaryBlock: subtitleGlossary || undefined,
+              // Subtitle path: subtitleKnobs routes to the subtitle prompt and
+              // customSystemPrompt/pageContext are ignored by the service.
+              subtitleKnobs,
+              // Rolling proper-noun glossary for cross-chunk name consistency.
+              rollingGlossaryBlock: formatRollingGlossary(rollingGlossary) || undefined,
+            });
+            if (!r.success) {
+              throw new Error(r.error ?? 'Chunk translation failed');
+            }
+            return r;
+          };
+
+          const result = await withRetry(runTranslate, {
+            maxRetries: 2,
+            baseDelayMs: 500,
+            shouldRetry: () => true, // 4xx status not visible; retry all failures
           });
 
           if (result.success) {
@@ -522,8 +557,14 @@ async function handleTranslateSubtitle(
               const originalText = idToOriginalText.get(id);
               if (originalText) {
                 textToTranslation.set(originalText, translatedText);
-                // Cache the translation
-                await cacheTranslation(originalText, translatedText, sourceLanguage, targetLanguage);
+                // Partial-result guard: when the LLM omitted this ID, the service
+                // back-fills it with the source text. Never cache that — it would
+                // persist source-as-translation. (result.partial marks the chunk.)
+                const isBackfilled = result.partial === true && translatedText === originalText;
+                if (!isBackfilled) {
+                  const writeKey = await generateSubtitleCacheKey(originalText, sourceLanguage, targetLanguage, subtitleKnobs, buildGlossarySnapshot());
+                  await cacheTranslationByKey(writeKey, translatedText, sourceLanguage, targetLanguage);
+                }
               }
             }
 
@@ -639,6 +680,16 @@ async function handleTranslateSubtitle(
                }
             } catch (error) {
                console.warn("AnyLLMTranslate: Background chunk translation failed", error);
+               // Sub-project 6: surface the failure so the user knows a section
+               // wasn't translated (instead of silently swallowing). Best-effort
+               // — tab/SW may be gone.
+               try {
+                 chrome.tabs.sendMessage(tabId, {
+                   action: 'SUBTITLE_CHUNK_FAILED',
+                   chunkStart: i,
+                   sessionId: session.sessionId,
+                 });
+               } catch { /* tab gone — nothing to do */ }
             }
          }
          activeSessions.delete(tabId);

@@ -31,6 +31,7 @@ export type MessageAction =
   | 'FETCH_SUBTITLE'
   | 'statusUpdate'
   | 'SUBTITLE_CHUNK_TRANSLATED'
+  | 'SUBTITLE_CHUNK_FAILED'
   | 'PRIORITIZE_SUBTITLE_CHUNK'
   | 'CANCEL_SUBTITLE_SESSION'
   | 'SUBTITLE_TRACKS_AVAILABLE'
@@ -133,6 +134,13 @@ export interface StatusUpdateMessage {
 export interface SubtitleChunkTranslatedMessage {
   action: 'SUBTITLE_CHUNK_TRANSLATED';
   cues: SubtitleCue[];
+}
+
+/** Background → Content: a background chunk failed all retries (no translation). */
+export interface SubtitleChunkFailedMessage {
+  action: 'SUBTITLE_CHUNK_FAILED';
+  chunkStart: number;
+  sessionId: number | null;
 }
 
 /** Priority queue request from content script → background */

@@ -132,6 +132,66 @@ export async function cacheTranslation(
   }
 }
 
+/**
+ * Read a cached translation by an EXACT precomputed key.
+ *
+ * Used by the subtitle path, which computes its own context-aware key via
+ * `generateSubtitleCacheKey` (profile + knobs + glossary, namespaced from the
+ * web path). The generic `getCachedTranslation` (text→key) is untouched and
+ * remains the entry point for web/selection/PDF.
+ */
+export async function getCachedTranslationByKey(key: string, ttlDays = 30): Promise<string | null> {
+  try {
+    const entry = await get<CacheEntry>(key, getStore());
+    if (!entry) return null;
+    const safeTtlDays = Math.max(1, ttlDays);
+    const ttlMs = safeTtlDays * 24 * 60 * 60 * 1000;
+    if (Date.now() - entry.cachedAt > ttlMs) {
+      await del(key, getStore());
+      return null;
+    }
+    if (!isClearing) {
+      entry.lastAccessedAt = Date.now();
+      pendingLruUpdates.set(key, entry);
+      if (lruFlushTimer !== null) clearTimeout(lruFlushTimer);
+      lruFlushTimer = setTimeout(() => {
+        flushLruUpdates().catch(() => {
+          // Silently fail — LRU update is best-effort
+        });
+      }, 100);
+    }
+    return entry.translatedText;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store a translation by an EXACT precomputed key (subtitle path).
+ * Mirrors `cacheTranslation` but skips key generation.
+ */
+export async function cacheTranslationByKey(
+  key: string,
+  translatedText: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<void> {
+  try {
+    const entry: CacheEntry = {
+      key,
+      translatedText,
+      sourceLanguage,
+      targetLanguage,
+      cachedAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      sizeBytes: new TextEncoder().encode(translatedText).length,
+    };
+    await set(key, entry, getStore());
+  } catch {
+    // Silently fail — cache is best-effort
+  }
+}
+
 /** Evict expired and LRU entries to stay under maxSizeMB */
 export async function evictCache(
   maxSizeMB = 100,
