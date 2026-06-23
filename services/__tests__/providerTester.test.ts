@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { testConnection } from '@/services/providerTester';
+import { listProviderModels, testConnection } from '@/services/providerTester';
 import type { ProviderConfig } from '@/types/config';
 import type { ConnectionTestProgress } from '@/services/providerTester';
 
@@ -17,6 +17,42 @@ const mockConfig: ProviderConfig = {
   displayName: 'Ollama',
   requiresApiKey: false,
 };
+
+describe('listProviderModels', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('returns model ids on success', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ data: [{ id: 'a' }, { id: 'b' }] }), { status: 200 }),
+    ) as typeof fetch;
+
+    const result = await listProviderModels({
+      baseUrl: 'http://localhost:11434/v1',
+      apiKey: '',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.models).toEqual(['a', 'b']);
+  });
+
+  it('returns error when listing fails', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 403 })) as typeof fetch;
+
+    const result = await listProviderModels({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-x',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.models).toEqual([]);
+    expect(result.error).toContain('403');
+  });
+});
 
 describe('testConnection', () => {
   const originalFetch = globalThis.fetch;

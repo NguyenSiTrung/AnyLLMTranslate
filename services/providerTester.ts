@@ -123,6 +123,34 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
   }
 }
 
+export interface ListProviderModelsResult {
+  success: boolean;
+  models: string[];
+  error?: string;
+  latencyMs: number;
+}
+
+/** Fetch model IDs from GET {baseUrl}/models without running full connection test. */
+export async function listProviderModels(
+  config: Pick<ProviderConfig, 'baseUrl' | 'apiKey'>,
+): Promise<ListProviderModelsResult> {
+  const step = await testModelListing({
+    ...config,
+    preset: 'custom',
+    model: 'test',
+    temperature: 0,
+    maxTokens: 1,
+    displayName: '',
+    requiresApiKey: Boolean(config.apiKey),
+  });
+  return {
+    success: step.success,
+    models: step.success && Array.isArray(step.data) ? (step.data as string[]) : [],
+    error: step.error,
+    latencyMs: step.latencyMs,
+  };
+}
+
 /** Step 2: Call /v1/models to enumerate available models */
 async function testModelListing(config: ProviderConfig): Promise<ConnectionTestStep> {
   const start = performance.now();

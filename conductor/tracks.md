@@ -61,7 +61,7 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [ ] Track: OpenAI-Compatible Provider Catalog & Model Picker
+## [x] Track: OpenAI-Compatible Provider Catalog & Model Picker
 *Link: [./conductor/tracks/openai-provider-catalog_20260623/](./conductor/tracks/openai-provider-catalog_20260623/)*
 
 ---

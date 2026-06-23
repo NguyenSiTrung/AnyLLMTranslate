@@ -11,8 +11,9 @@ import {
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { PROVIDER_PRESETS } from '@/types/config';
-import type { ProviderPreset } from '@/types/config';
+import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
+import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
+import { ModelPicker } from '../components/ModelPicker';
 import { testConnection } from '@/services/providerTester';
 import type { ConnectionTestResult, ConnectionTestStep } from '@/services/providerTester';
 import { getProviderReadiness, getProviderRecoveryMessage } from '@/lib/providerReadiness';
@@ -44,19 +45,9 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
   const [isTesting, setIsTesting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const handlePresetChange = useCallback((preset: ProviderPreset) => {
-    const presetDef = PROVIDER_PRESETS.find((p) => p.preset === preset);
-    if (presetDef) {
-      updateProvider({
-        preset,
-        baseUrl: presetDef.baseUrl ?? '',
-        model: presetDef.defaultModel ?? '',
-        displayName: presetDef.displayName,
-        requiresApiKey: presetDef.requiresApiKey,
-        connectionStatus: 'unknown',
-      });
-    }
-  }, [updateProvider]);
+  const catalogId = inferCatalogId(settings.provider.baseUrl);
+  const catalogEntry = getCatalogEntryById(catalogId);
+  const apiKeyPlaceholder = catalogEntry?.placeholder ?? 'sk-...';
 
   const handleTestConnection = useCallback(async () => {
     setIsTesting(true);
@@ -125,32 +116,11 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
         <div className="animate-stagger" style={stagger(1)}>
           <Card title="Provider Configuration" icon={<Server className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
-              {/* Provider Preset — visual cards */}
-              <FieldGroup label="Provider Preset">
-                <div className="grid grid-cols-1 gap-2">
-                  {PROVIDER_PRESETS.map((p) => {
-                    const isActive = settings.provider.preset === p.preset;
-                    return (
-                      <button
-                        key={p.preset}
-                        onClick={() => handlePresetChange(p.preset)}
-                        className={`text-left p-3.5 rounded-lg border transition-all duration-150 cursor-pointer ${
-                          isActive
-                            ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/30'
-                            : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700 hover:bg-zinc-800/50'
-                        }`}
-                      >
-                        <p className={`text-sm font-medium ${isActive ? 'text-blue-400' : 'text-zinc-200'}`}>
-                          {p.displayName}
-                        </p>
-                        <p className="text-xs text-zinc-500 mt-0.5 truncate">
-                          {p.description ?? p.baseUrl}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </FieldGroup>
+	              <ProviderCatalogPicker
+	                selectedCatalogId={catalogId}
+	                provider={settings.provider}
+	                onSelect={({ patch }) => updateProvider(patch)}
+	              />
 
               {/* OpenAI Compatible: Base URL */}
                   <FieldGroup
@@ -179,46 +149,16 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                       type="password"
                       value={settings.provider.apiKey}
                       onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })}
-                      placeholder={PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset)?.placeholder ?? 'sk-...'}
+	                      placeholder={apiKeyPlaceholder}
                       className="font-mono"
                     />
                   </FieldGroup>
 
-                  {/* OpenAI Compatible: Model */}
-                  <FieldGroup
-                    label="Model"
-                    description="The model ID to use for translations."
-                    htmlFor="provider-model"
-                  >
-                    <Input
-                      id="provider-model"
-                      type="text"
-                      value={settings.provider.model}
-                      onChange={(e) => updateProvider({ model: e.target.value, connectionStatus: 'unknown' })}
-                      placeholder="model-name"
-                      className="font-mono"
-                    />
-                    {testResult && testResult.models.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs text-zinc-500 mb-1">Available models:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {testResult.models.slice(0, 12).map((m) => (
-                            <button
-                              key={m}
-                              onClick={() => updateProvider({ model: m, connectionStatus: 'unknown' })}
-                              className={`text-xs px-2 py-0.5 rounded font-mono transition-colors cursor-pointer ${
-                                settings.provider.model === m
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                              }`}
-                            >
-                              {m}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </FieldGroup>
+	                  <ModelPicker
+	                    provider={settings.provider}
+	                    testModels={testResult?.models ?? []}
+	                    onModelChange={(model) => updateProvider({ model, connectionStatus: 'unknown' })}
+	                  />
             </div>
           </Card>
         </div>

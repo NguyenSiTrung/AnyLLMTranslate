@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Languages, Loader2, Server, XCircle, Zap } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { PROVIDER_PRESETS } from '@/types/config';
-import type { OnboardingState, ProviderPreset } from '@/types/config';
+import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
+import type { OnboardingState } from '@/types/config';
+import { ProviderCatalogPicker, inferCatalogId } from './components/ProviderCatalogPicker';
+import { ModelPicker } from './components/ModelPicker';
 import { LANGUAGES } from '@/lib/languages';
 import { testConnection } from '@/services/providerTester';
 import type { ConnectionTestResult, ConnectionTestStep } from '@/services/providerTester';
@@ -67,18 +69,9 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
     onClose();
   };
 
-  const handlePresetChange = async (preset: ProviderPreset) => {
-    const presetDef = PROVIDER_PRESETS.find((p) => p.preset === preset);
-    if (!presetDef) return;
-    await updateProvider({
-      preset,
-      baseUrl: presetDef.baseUrl ?? '',
-      model: presetDef.defaultModel ?? '',
-      displayName: presetDef.displayName,
-      requiresApiKey: presetDef.requiresApiKey,
-      connectionStatus: 'unknown',
-    });
-  };
+  const catalogId = inferCatalogId(settings.provider.baseUrl);
+  const catalogEntry = getCatalogEntryById(catalogId);
+  const apiKeyPlaceholder = catalogEntry?.placeholder ?? 'sk-...';
 
   const handleTestConnection = async () => {
     setIsTesting(true);
@@ -176,33 +169,25 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
             <div className="space-y-5">
               <Card title="Provider" icon={<Server className="w-4 h-4" />} variant="bordered">
                 <div className="space-y-4">
-                  <FieldGroup label="Provider preset">
-                    <div className="grid grid-cols-1 gap-2">
-                      {PROVIDER_PRESETS.map((preset) => (
-                        <button
-                          key={preset.preset}
-                          type="button"
-                          onClick={() => handlePresetChange(preset.preset)}
-                          className={`text-left p-3 rounded-lg border ${settings.provider.preset === preset.preset ? 'border-blue-500 bg-blue-500/10 text-blue-300' : 'border-zinc-800 bg-zinc-900 text-zinc-300'}`}
-                        >
-                          <div className="font-medium text-sm">{preset.displayName}</div>
-                          <div className="text-xs text-zinc-500 mt-1 truncate">{preset.description ?? (preset.baseUrl || 'Bring your own endpoint')}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </FieldGroup>
+	                  <ProviderCatalogPicker
+	                    selectedCatalogId={catalogId}
+	                    provider={settings.provider}
+	                    onSelect={({ patch }) => updateProvider(patch)}
+	                  />
 
-                  <>
-                      <FieldGroup label="Base URL" htmlFor="setup-base-url">
-                        <Input id="setup-base-url" value={settings.provider.baseUrl} onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })} />
-                      </FieldGroup>
-                      <FieldGroup label="API Key" htmlFor="setup-api-key" description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional for local providers.'}>
-                        <Input id="setup-api-key" type="password" value={settings.provider.apiKey} onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })} />
-                      </FieldGroup>
-                      <FieldGroup label="Model" htmlFor="setup-model">
-                        <Input id="setup-model" value={settings.provider.model} onChange={(e) => updateProvider({ model: e.target.value, connectionStatus: 'unknown' })} />
-                      </FieldGroup>
-                    </>
+	                  <>
+	                      <FieldGroup label="Base URL" htmlFor="setup-base-url">
+	                        <Input id="setup-base-url" value={settings.provider.baseUrl} onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })} />
+	                      </FieldGroup>
+	                      <FieldGroup label="API Key" htmlFor="setup-api-key" description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional for local providers.'}>
+	                        <Input id="setup-api-key" type="password" value={settings.provider.apiKey} onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })} placeholder={apiKeyPlaceholder} />
+	                      </FieldGroup>
+	                      <ModelPicker
+	                        inputId="setup-model"
+	                        provider={settings.provider}
+	                        onModelChange={(model) => updateProvider({ model, connectionStatus: 'unknown' })}
+	                      />
+	                    </>
                 </div>
               </Card>
               <div className="flex justify-between">

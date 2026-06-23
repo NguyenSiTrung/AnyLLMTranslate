@@ -21,6 +21,7 @@ vi.mock('@/stores/settingsStore', () => ({
 
 vi.mock('@/services/providerTester', () => ({
   testConnection: vi.fn(),
+  listProviderModels: vi.fn(async () => ({ success: true, models: [], latencyMs: 0 })),
 }));
 
 function renderSection(onOpenSetup = vi.fn()) {

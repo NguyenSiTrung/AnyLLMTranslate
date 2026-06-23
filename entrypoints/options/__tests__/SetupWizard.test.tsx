@@ -22,6 +22,7 @@ vi.mock('@/stores/settingsStore', () => ({
 }));
 
 vi.mock('@/services/providerTester', () => ({
+  listProviderModels: vi.fn(async () => ({ success: true, models: [], latencyMs: 0 })),
   testConnection: vi.fn(async (_provider, onProgress) => {
     onProgress?.({ name: 'ping', success: true, latencyMs: 10 }, 0);
     onProgress?.({ name: 'models', success: true, latencyMs: 12, data: ['gemma3:4b'] }, 1);

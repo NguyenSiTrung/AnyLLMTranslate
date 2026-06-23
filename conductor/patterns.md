@@ -51,6 +51,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - Use string union types (not enums) for discriminated unions like `ThemeName`/`ProviderPreset` — keeps bundle small and enables exhaustive matching. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 - Export `DEFAULT_SETTINGS` alongside types for single source of truth on initial values. (from: phase3-ux-polish_20260410, archived 2026-04-10)
 - `PROVIDER_PRESETS` array with `requiresApiKey`, `placeholder`, `baseUrl`, `defaultModel` enables preset selection UX without hardcoding. (from: phase3-ux-polish_20260410, archived 2026-04-10)
+- OpenAI-compatible setup: `lib/openAiCompatibleCatalog.ts` + options `ProviderCatalogPicker` / `ModelPicker`; keep `preset: 'custom'` in storage; `listProviderModels` for GET /models without full test. (from: openai-provider-catalog_20260623, 2026-06-23)
 
 ## State Management
 - Zustand + chrome.storage bidirectional sync: write on mutation, listen via `chrome.storage.onChanged` for cross-context updates (popup ↔ options ↔ content). (from: phase3-ux-polish_20260410, archived 2026-04-10)
