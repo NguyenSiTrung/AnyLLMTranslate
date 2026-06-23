@@ -22,6 +22,8 @@ interface ProviderCatalogPickerProps {
   selectedCatalogId?: string;
   provider: Pick<ProviderConfig, 'baseUrl' | 'apiKey' | 'model'>;
   onSelect: (selection: ProviderCatalogSelection) => void;
+  /** Shorter list for constrained layouts (e.g. setup wizard modal). */
+  compact?: boolean;
 }
 
 export function inferCatalogId(baseUrl: string): string {
@@ -56,6 +58,7 @@ export function ProviderCatalogPicker({
   selectedCatalogId: selectedCatalogIdProp,
   provider,
   onSelect,
+  compact = false,
 }: ProviderCatalogPickerProps) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => filterCatalog(query), [query]);
@@ -78,7 +81,7 @@ export function ProviderCatalogPicker({
         />
       </div>
       <div
-        className="max-h-48 overflow-y-auto rounded-lg border border-zinc-800 divide-y divide-zinc-800/80"
+        className={`${compact ? 'max-h-32' : 'max-h-48'} overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800 divide-y divide-zinc-800/80`}
         role="listbox"
         aria-label="Provider catalog"
       >

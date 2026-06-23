@@ -107,21 +107,23 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
   const failedMessage = getConnectionErrorMessage(failedStep?.error);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 sm:p-6"
+      role="presentation"
+    >
       <div
         ref={dialogRef}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="AnyLLMTranslate setup guide"
-        className="w-full max-w-2xl mx-4 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-scale-in"
+        className="w-full max-w-2xl my-auto flex max-h-[min(90vh,720px)] min-h-0 flex-col bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden animate-scale-in"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-          <div>
+        <div className="flex shrink-0 items-start justify-between gap-3 px-5 py-4 sm:px-6 border-b border-zinc-800">
+          <div className="min-w-0 flex-1">
             <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider">Step {STEP_INDEX[step]} of 5</p>
-            <h2 className="text-lg font-semibold text-zinc-100">Setup guide</h2>
-            {/* M5: Visual progress bar */}
-            <div className="flex items-center gap-1.5 mt-2">
+            <h2 className="text-lg font-semibold text-zinc-100 truncate">Setup guide</h2>
+            <div className="flex items-center gap-1.5 mt-2 max-w-full">
               {[1, 2, 3, 4, 5].map((s) => {
                 const current = STEP_INDEX[step];
                 const isCompleted = s < current;
@@ -129,22 +131,26 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                 return (
                   <div
                     key={s}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                    className={`h-1.5 flex-1 max-w-8 rounded-full transition-all duration-300 ${
                       isCompleted
-                        ? 'w-8 bg-blue-500'
+                        ? 'bg-blue-500'
                         : isCurrent
-                          ? 'w-8 bg-blue-400 animate-pulse'
-                          : 'w-8 bg-zinc-700'
+                          ? 'bg-blue-400 animate-pulse'
+                          : 'bg-zinc-700'
                     }`}
                   />
                 );
               })}
             </div>
           </div>
-          {step !== 'welcome' && <Button variant="ghost" size="sm" onClick={handleSkip}>Skip for now</Button>}
+          {step !== 'welcome' && (
+            <Button variant="ghost" size="sm" className="shrink-0" onClick={handleSkip}>
+              Skip for now
+            </Button>
+          )}
         </div>
 
-        <div className="p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-5 sm:p-6">
           {step === 'welcome' && (
             <div className="space-y-5">
               <div className="flex items-start gap-4">
@@ -168,29 +174,41 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
           {step === 'provider' && (
             <div className="space-y-5">
               <Card title="Provider" icon={<Server className="w-4 h-4" />} variant="bordered">
-                <div className="space-y-4">
-	                  <ProviderCatalogPicker
-	                    selectedCatalogId={catalogId}
-	                    provider={settings.provider}
-	                    onSelect={({ patch }) => updateProvider(patch)}
-	                  />
-
-	                  <>
-	                      <FieldGroup label="Base URL" htmlFor="setup-base-url">
-	                        <Input id="setup-base-url" value={settings.provider.baseUrl} onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })} />
-	                      </FieldGroup>
-	                      <FieldGroup label="API Key" htmlFor="setup-api-key" description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional for local providers.'}>
-	                        <Input id="setup-api-key" type="password" value={settings.provider.apiKey} onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })} placeholder={apiKeyPlaceholder} />
-	                      </FieldGroup>
-	                      <ModelPicker
-	                        inputId="setup-model"
-	                        provider={settings.provider}
-	                        onModelChange={(model) => updateProvider({ model, connectionStatus: 'unknown' })}
-	                      />
-	                    </>
+                <div className="space-y-4 min-w-0">
+                  <ProviderCatalogPicker
+                    compact
+                    selectedCatalogId={catalogId}
+                    provider={settings.provider}
+                    onSelect={({ patch }) => updateProvider(patch)}
+                  />
+                  <FieldGroup label="Base URL" htmlFor="setup-base-url">
+                    <Input
+                      id="setup-base-url"
+                      value={settings.provider.baseUrl}
+                      onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })}
+                    />
+                  </FieldGroup>
+                  <FieldGroup
+                    label="API Key"
+                    htmlFor="setup-api-key"
+                    description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional for local providers.'}
+                  >
+                    <Input
+                      id="setup-api-key"
+                      type="password"
+                      value={settings.provider.apiKey}
+                      onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })}
+                      placeholder={apiKeyPlaceholder}
+                    />
+                  </FieldGroup>
+                  <ModelPicker
+                    inputId="setup-model"
+                    provider={settings.provider}
+                    onModelChange={(model) => updateProvider({ model, connectionStatus: 'unknown' })}
+                  />
                 </div>
               </Card>
-              <div className="flex justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                 <Button variant="ghost" onClick={() => setWizardStep('welcome')}>Back</Button>
                 <Button onClick={() => setWizardStep('test')}>Continue to test</Button>
               </div>
