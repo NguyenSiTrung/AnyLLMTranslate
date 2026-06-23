@@ -61,6 +61,9 @@ const overlayState: OverlayState = {
   resizeObserver: null,
 };
 
+/** Tracked fullscreen reposition timeouts — cleared on cleanup to prevent leaks. */
+const fullscreenRepositionTimeouts = new Set<ReturnType<typeof setTimeout>>();
+
 type PopoverElement = HTMLElement & {
   showPopover?: () => void;
   hidePopover?: () => void;
@@ -380,6 +383,7 @@ function handleTimeUpdate(): void {
  */
 function handleSeeked(): void {
   if (!overlayState.video) return;
+  if (overlayState.cues.length === 0) return;
 
   const currentTime = overlayState.video.currentTime;
   const activeCueIndex = findActiveCue(currentTime);
@@ -431,8 +435,15 @@ function handleFullscreenChange(): void {
     positionOverlay(overlayState.overlay, overlayState.video, overlayState.config);
     updateOverlayStyle(overlayState.config);
   };
-  setTimeout(reposition, 50);
-  setTimeout(reposition, 350);
+  const scheduleReposition = (delay: number): void => {
+    const id = setTimeout(() => {
+      fullscreenRepositionTimeouts.delete(id);
+      reposition();
+    }, delay);
+    fullscreenRepositionTimeouts.add(id);
+  };
+  scheduleReposition(50);
+  scheduleReposition(350);
 }
 
 /**
@@ -573,6 +584,12 @@ export function getOverlayTextContainer(): HTMLElement | null {
  * Clean up and remove the overlay.
  */
 export function cleanup(): void {
+  // Clear any pending fullscreen reposition timeouts
+  for (const id of fullscreenRepositionTimeouts) {
+    clearTimeout(id);
+  }
+  fullscreenRepositionTimeouts.clear();
+
   if (overlayState.video) {
     detachVideoListeners(overlayState.video);
   }

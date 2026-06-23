@@ -2,7 +2,7 @@
  * Model field with optional Browse models (GET /models) without full connection test.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, List } from 'lucide-react';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
 import { inferCatalogId } from './ProviderCatalogPicker';
@@ -37,6 +37,14 @@ export function ModelPicker({
   const [browseModels, setBrowseModels] = useState<string[]>([]);
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isBrowsing, setIsBrowsing] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const handleBrowse = useCallback(async () => {
     setIsBrowsing(true);
@@ -45,6 +53,7 @@ export function ModelPicker({
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
     });
+    if (!mountedRef.current) return;
     setIsBrowsing(false);
     if (!result.success) {
       setBrowseModels([]);

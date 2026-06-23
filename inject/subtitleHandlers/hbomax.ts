@@ -112,6 +112,7 @@ export class HboMaxHandler implements SubtitleHandler {
       captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
       observeRootSelector: '[data-testid="caption_renderer_overlay"]',
       readActiveLanguage: () => this.readActiveLanguage(),
+      videoIdExtractor: () => this.extractVideoId(),
     };
   }
 

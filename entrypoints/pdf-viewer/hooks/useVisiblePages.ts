@@ -38,10 +38,19 @@ export function useVisiblePages({
 }: UseVisiblePagesOptions): UseVisiblePagesResult {
   const [visiblePages, setVisiblePages] = useState<Set<number>>(new Set());
   const observedPagesRef = useRef<Set<number>>(new Set());
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+
+  // Sync the ref's current element into state so the observer effect can
+  // depend on the resolved element rather than the mutable ref's .current
+  // property (which React does not track in dependency arrays).
+  useEffect(() => {
+    if (containerRef.current !== container) {
+      setContainer(containerRef.current);
+    }
+  });
 
   useEffect(() => {
     if (totalPages === 0) return;
-    const container = containerRef.current;
     if (!container) return;
 
     const slots: Element[] = Array.from(
@@ -94,7 +103,7 @@ export function useVisiblePages({
     return () => {
       observer.disconnect();
     };
-  }, [totalPages, containerRef, containerRef.current, buffer, rootMargin]);
+  }, [totalPages, container, buffer, rootMargin]);
 
   return { visiblePages };
 }

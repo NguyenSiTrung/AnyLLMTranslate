@@ -38,8 +38,7 @@ const undoMap = new WeakMap<Element, string>();
  * the same KeyboardEvent propagates through both listeners. This WeakSet
  * ensures each event is processed exactly once.
  */
-const processedEventIds = new Map<string, number>();
-const DEDUP_WINDOW_MS = 50;
+const processedEvents = new WeakSet<KeyboardEvent>();
 
 /* ── Guards ───────────────────────────────────────────────────── */
 
@@ -111,8 +110,12 @@ export function replaceElementText(el: HTMLElement, newText: string): void {
     el.focus();
     el.select();
     if (hasExecCommand) {
-      // Insert replacement — this is undoable via Ctrl+Z
-      document.execCommand('insertText', false, newText);
+      // Insert replacement — this is undoable via Ctrl+Z.
+      // Check the return value; if execCommand fails, fall back to direct assignment.
+      const success = document.execCommand('insertText', false, newText);
+      if (!success) {
+        el.value = newText;
+      }
     } else {
       // Fallback: direct assignment (no native undo, but works in test env)
       el.value = newText;
@@ -121,7 +124,11 @@ export function replaceElementText(el: HTMLElement, newText: string): void {
     el.focus();
     if (hasExecCommand) {
       document.execCommand('selectAll', false, undefined);
-      document.execCommand('insertText', false, newText);
+      // Check the return value; if execCommand fails, fall back to direct assignment.
+      const success = document.execCommand('insertText', false, newText);
+      if (!success) {
+        el.textContent = newText;
+      }
     } else {
       el.textContent = newText;
     }
@@ -285,16 +292,8 @@ async function handleGestureTrigger(el: HTMLElement): Promise<void> {
 
 function onKeyDown(event: KeyboardEvent): void {
   // Dedup: we listen on both window + document (capture). Process each event once.
-  const dedupKey = `${event.timeStamp}-${event.key}-${event.type}`;
-  const lastSeen = processedEventIds.get(dedupKey);
-  if (lastSeen && Date.now() - lastSeen < DEDUP_WINDOW_MS) return;
-  processedEventIds.set(dedupKey, Date.now());
-
-  // Prune stale dedup entries to prevent unbounded growth
-  const pruneThreshold = Date.now() - DEDUP_WINDOW_MS * 2;
-  for (const [key, ts] of processedEventIds) {
-    if (ts < pruneThreshold) processedEventIds.delete(key);
-  }
+  if (processedEvents.has(event)) return;
+  processedEvents.add(event);
 
   if (!config.enabled) {
     return;

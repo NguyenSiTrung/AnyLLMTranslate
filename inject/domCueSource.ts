@@ -61,8 +61,17 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   };
 
   const emit = (language: string, videoId?: string) => {
+    // Deep-copy each cue so downstream listeners cannot mutate the rolling
+    // buffer's cue objects (e.g. overwriting openCue.endTime). A shallow
+    // `[...cues]` array copy still shares the same SubtitleCue references.
+    const cuesSnapshot = cues.map((c) => ({
+      ...c,
+      text: c.text,
+      startTime: c.startTime,
+      endTime: c.endTime,
+    }));
     const payload: SubtitleDomCuesPayload = {
-      cues: [...cues],
+      cues: cuesSnapshot,
       platform: handler.platform,
       language,
       videoId,
@@ -87,7 +96,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
         openCue.endTime = video.currentTime;
         openCue = null;
         lastText = '';
-        emit(domSource.readActiveLanguage(), extractVideoId());
+        emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
       }
       return;
     }
@@ -111,7 +120,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     openCue = cue;
     lastText = text;
 
-    emit(domSource.readActiveLanguage(), extractVideoId());
+    emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
   };
 
   /** Attach the cue observer to a video + caption-overlay pair. Idempotent. */
@@ -127,7 +136,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     const pauseHandler = () => {
       if (openCue) {
         openCue.endTime = video.currentTime;
-        emit(domSource.readActiveLanguage(), extractVideoId());
+        emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
       }
     };
     video.addEventListener('pause', pauseHandler);
@@ -196,7 +205,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
         bridge.send('SUBTITLE_DOM_TRACK_CHANGED', {
           platform: handler.platform,
           language: domSource.readActiveLanguage(),
-          videoId: extractVideoId(),
+          videoId: domSource.videoIdExtractor?.(),
         });
         return;
       }
@@ -213,9 +222,4 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     trackObserver.disconnect();
     detach();
   };
-}
-
-function extractVideoId(): string | undefined {
-  const match = window.location.pathname.match(/\/video\/watch\/([^/]+)/);
-  return match?.[1];
 }

@@ -18,6 +18,7 @@ import {
 } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
+import { clearTranslatedSections } from '@/content/sectionTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
@@ -41,7 +42,6 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 /** Coordinator state */
 interface CoordinatorState {
   isOverlayMode: boolean;
-  pendingRequests: Map<string, ReturnType<typeof setTimeout>>;
   dragCleanup: (() => void) | null;
   availableTracks: AvailableSubtitleTrack[];
   /** Incremented on SPA navigation to invalidate stale async callbacks */
@@ -78,7 +78,6 @@ interface CoordinatorState {
 
 const state: CoordinatorState = {
   isOverlayMode: false,
-  pendingRequests: new Map(),
   dragCleanup: null,
   availableTracks: [],
   navigationEpoch: 0,
@@ -414,12 +413,6 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   if (textContainer) {
     state.dragCleanup = enableDragReposition(textContainer);
   }
-
-  // Clear all pending timeouts since we're in overlay mode now
-  for (const timeoutId of state.pendingRequests.values()) {
-    clearTimeout(timeoutId);
-  }
-  state.pendingRequests.clear();
 }
 
 /**
@@ -762,13 +755,11 @@ function mergeTranslatedChunk(chunkStart: number, chunkCues: SubtitleCue[]): voi
 /**
  * Clear a pending request timeout to prevent spurious overlay activation.
  * Called when translation completes successfully.
+ * NOTE: The pendingRequests Map was removed (it was never populated via .set()).
+ * This function is kept as a no-op export for backward compatibility with tests.
  */
-export function clearPendingRequest(requestId: string): void {
-  const timeoutId = state.pendingRequests.get(requestId);
-  if (timeoutId) {
-    clearTimeout(timeoutId);
-    state.pendingRequests.delete(requestId);
-  }
+export function clearPendingRequest(_requestId: string): void {
+  // No-op — pendingRequests Map was dead code (.set() was never called).
 }
 
 /**
@@ -993,12 +984,6 @@ export function startCoordinator(): () => void {
       proactiveCategoryDetectionTimer = null;
     }
 
-    // Clear all pending timeouts
-    for (const timeoutId of state.pendingRequests.values()) {
-      clearTimeout(timeoutId);
-    }
-    state.pendingRequests.clear();
-
     // Cleanup drag listeners and overlay if active
     if (state.dragCleanup) {
       state.dragCleanup();
@@ -1055,15 +1040,12 @@ export function resetCoordinatorState(): void {
     state.dragCleanup();
     state.dragCleanup = null;
   }
-  for (const timeoutId of state.pendingRequests.values()) {
-    clearTimeout(timeoutId);
-  }
-  state.pendingRequests.clear();
   // NOTE: proactive-category-detection timer clearing is handled inside
   // scheduleProactiveCategoryDetection() (idempotent re-schedule) rather than
   // here, to avoid interfering with fake-timer-based unit tests that rely on
   // the timer surviving resetCoordinatorState.
   clearHoverCache();
+  clearTranslatedSections();
   restoreNativeCaptions();
   clearDomTranslationBuffers();
 }

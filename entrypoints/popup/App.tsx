@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   Languages, Loader2, CheckCircle2, AlertCircle, Settings,
   ArrowRightLeft, Palette, ChevronDown, Search,
-  Globe2, Sparkles, Activity, Square, Subtitles, FileText, Tag, Save
+  Globe2, Sparkles, Activity, Square, FileText, Tag, Save
 } from 'lucide-react';
 import type { Zap } from 'lucide-react';
 import type { StatusResponse, TabTranslationStatus, ExtensionMessage } from '@/types/messages';
@@ -16,6 +16,7 @@ import { loadSettings, updateSettings } from '@/lib/config';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { getProviderReadiness, getProviderRecoveryMessage } from '@/lib/providerReadiness';
 import type { CategoryInfo } from '@/types/messages';
+import { Toggle as SharedToggle } from '@/ui/Toggle';
 
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string; badge: string }> = {
   idle: { icon: Globe2, label: 'Ready to Translate', color: 'text-zinc-400', badge: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' },
@@ -282,43 +283,6 @@ function CustomSelect({
   );
 }
 
-function Toggle({
-  checked,
-  onChange,
-  label,
-  icon: Icon,
-}: {
-  checked: boolean;
-  onChange: () => void;
-  label?: string;
-  icon?: typeof Zap;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2 px-1">
-      {label && (
-        <div className="flex items-center gap-2 min-w-0">
-          {Icon && <Icon className="w-4 h-4 text-zinc-400 shrink-0" />}
-          <span className={TYPOGRAPHY.body}>{label}</span>
-        </div>
-      )}
-      <button
-        onClick={onChange}
-        className={`relative w-11 h-6 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shrink-0 ${
-          checked
-            ? 'bg-gradient-to-r from-blue-600 to-blue-500 shadow-lg shadow-blue-500/30'
-            : 'bg-zinc-700 hover:bg-zinc-600'
-        }`}
-      >
-        <span
-          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 ${
-            checked ? 'translate-x-5' : 'translate-x-0'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
-
 /** Grouped categories for organized display */
 const CATEGORY_GROUPS: { label: string; items: string[] }[] = [
   {
@@ -555,87 +519,88 @@ export default function App() {
 
   useEffect(() => {
     loadSettingsFromStorage();
-    queryTabStatus();
 
     (async () => {
+      // Single tab query reused for status, URL/hostname/PDF detection, and category info.
+      let tab: chrome.tabs.Tab | undefined;
       try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.url) {
-          setActiveTabUrl(tab.url);
-          try {
-            const url = new URL(tab.url);
-            if (url.protocol === 'http:' || url.protocol === 'https:') {
-              setActiveHostname(url.hostname);
-            } else if (url.protocol === 'chrome-extension:' && url.pathname === '/pdf-viewer.html') {
-              // PDF viewer: extract hostname from the ?file= param so the
-              // category dropdown and site rules work for the source PDF URL.
-              const fileUrl = url.searchParams.get('file');
-              if (fileUrl) {
-                try {
-                  const parsed = new URL(fileUrl);
-                  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-                    setActiveHostname(parsed.hostname);
-                  }
-                } catch { /* invalid file URL */ }
-              }
+        [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      } catch { /* tab query failed */ }
+
+      // 1. Tab translation status
+      void queryTabStatus(tab);
+
+      // 2. URL / hostname / PDF detection
+      if (tab?.url) {
+        setActiveTabUrl(tab.url);
+        try {
+          const url = new URL(tab.url);
+          if (url.protocol === 'http:' || url.protocol === 'https:') {
+            setActiveHostname(url.hostname);
+          } else if (url.protocol === 'chrome-extension:' && url.pathname === '/pdf-viewer.html') {
+            // PDF viewer: extract hostname from the ?file= param so the
+            // category dropdown and site rules work for the source PDF URL.
+            const fileUrl = url.searchParams.get('file');
+            if (fileUrl) {
+              try {
+                const parsed = new URL(fileUrl);
+                if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                  setActiveHostname(parsed.hostname);
+                }
+              } catch { /* invalid file URL */ }
             }
-          } catch { /* invalid URL */ }
-        }
-        // Ask the content script whether the document is actually a PDF —
-        // catches extensionless URLs (arxiv.org/pdf/2606.20543) that the
-        // URL-only heuristic misses. Falls back to the URL heuristic if the
-        // content script has not loaded yet (e.g. on a fresh tab).
-        if (tab?.id) {
-          try {
-            const ct = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContentType' });
-            if (ct?.isPdf === true) {
-              setActiveTabIsPdf(true);
-            } else {
-              setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
-            }
-          } catch {
+          }
+        } catch { /* invalid URL */ }
+      }
+      // Ask the content script whether the document is actually a PDF —
+      // catches extensionless URLs (arxiv.org/pdf/2606.20543) that the
+      // URL-only heuristic misses. Falls back to the URL heuristic if the
+      // content script has not loaded yet (e.g. on a fresh tab).
+      if (tab?.id) {
+        try {
+          const ct = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContentType' });
+          if (ct?.isPdf === true) {
+            setActiveTabIsPdf(true);
+          } else {
             setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
           }
+        } catch {
+          setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
         }
-      } catch { /* tab query failed */ }
-    })();
+      }
 
-    // Load current category info from content script
-    (async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.id) {
+      // 3. Category info from content script
+      if (tab?.id) {
+        try {
+          const catInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageCategory' });
+          if (catInfo) setCategoryInfo(catInfo as CategoryInfo);
+        } catch {
+          // Content script not loaded (e.g. PDF viewer page) — ask the
+          // background for any tab-scoped category override so the dropdown
+          // still reflects the current state.
           try {
-            const catInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageCategory' });
-            if (catInfo) setCategoryInfo(catInfo as CategoryInfo);
-          } catch {
-            // Content script not loaded (e.g. PDF viewer page) — ask the
-            // background for any tab-scoped category override so the dropdown
-            // still reflects the current state.
-            try {
-              const bgResult = await chrome.runtime.sendMessage({
-                action: 'getCategoryOverride',
-                tabId: tab.id,
+            const bgResult = await chrome.runtime.sendMessage({
+              action: 'getCategoryOverride',
+              tabId: tab.id,
+            });
+            if (bgResult?.override) {
+              setCategoryInfo({
+                override: bgResult.override,
+                effective: bgResult.override,
               });
-              if (bgResult?.override) {
+            } else {
+              // No override set; show auto-detected 'document' for PDFs
+              const tabUrl = tab.url ?? '';
+              if (tabUrl.includes('/pdf-viewer.html')) {
                 setCategoryInfo({
-                  override: bgResult.override,
-                  effective: bgResult.override,
+                  autoDetected: 'document',
+                  effective: 'document',
                 });
-              } else {
-                // No override set; show auto-detected 'document' for PDFs
-                const tabUrl = tab.url ?? '';
-                if (tabUrl.includes('/pdf-viewer.html')) {
-                  setCategoryInfo({
-                    autoDetected: 'document',
-                    effective: 'document',
-                  });
-                }
               }
-            } catch { /* background unreachable */ }
-          }
+            }
+          } catch { /* background unreachable */ }
         }
-      } catch { /* tab query failed */ }
+      }
     })();
 
     const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
@@ -668,9 +633,9 @@ export default function App() {
     } catch { /* defaults */ }
   }
 
-  async function queryTabStatus() {
+  async function queryTabStatus(activeTab?: chrome.tabs.Tab) {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const tab = activeTab ?? (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
       const unsupported = getUnsupportedPageInfo(tab);
       setUnsupportedPage(unsupported);
       if (unsupported) {
@@ -1172,11 +1137,10 @@ export default function App() {
 
         {/* Site Rule Toggle */}
         {activeHostname && (
-          <Toggle
+          <SharedToggle
             checked={isAlwaysTranslate}
             onChange={handleToggleAlwaysTranslate}
             label={`Always translate ${activeHostname}`}
-            icon={Globe2}
           />
         )}
 
@@ -1242,11 +1206,10 @@ export default function App() {
                   </div>
                 </div>
 
-                <Toggle
+                <SharedToggle
                   checked={settings.subtitleSettings.enabled}
                   onChange={() => updateSubtitleSetting({ enabled: !settings.subtitleSettings.enabled })}
                   label="Subtitle Translation"
-                  icon={Subtitles}
                 />
               </div>
             </div>
@@ -1266,24 +1229,22 @@ export default function App() {
           {advancedExpanded && (
             <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="bg-zinc-900/70 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-4 shadow-lg shadow-black/20">
-                <Toggle
+                <SharedToggle
                   checked={settings.enableContextAwareTranslation}
                   onChange={() => updateSetting({ enableContextAwareTranslation: !settings.enableContextAwareTranslation })}
                   label="Context-Aware Translation"
-                  icon={FileText}
                 />
 
                 <div className={`pl-5 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
-                  <Toggle
+                  <SharedToggle
                     checked={settings.enableLLMPageCategoryDetection}
                     onChange={() => updateSetting({ enableLLMPageCategoryDetection: !settings.enableLLMPageCategoryDetection })}
                     label="Page Category Detection"
-                    icon={Tag}
                   />
                 </div>
 
                 <div className="pt-3 border-t border-zinc-800/60 mt-3">
-                  <Toggle
+                  <SharedToggle
                     checked={settings.pdfSettings?.autoOpen === 'auto'}
                     onChange={() => {
                       const next = settings.pdfSettings?.autoOpen === 'auto' ? 'off' : 'auto';
@@ -1295,7 +1256,6 @@ export default function App() {
                       });
                     }}
                     label="Auto-open PDF Translator"
-                    icon={FileText}
                   />
                   {settings.pdfSettings?.autoOpen === 'auto' && (
                     <p className="pl-5 mt-1 text-[10px] text-zinc-500 leading-relaxed">

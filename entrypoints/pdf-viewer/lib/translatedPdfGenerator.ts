@@ -27,6 +27,8 @@ export interface GenerateTranslatedPdfOptions {
   fontBytes?: Uint8Array;
   /** Called after each page is processed. */
   onProgress?: (completedPages: number, totalPages: number) => void;
+  /** Optional AbortSignal to cancel the generation mid-loop. */
+  signal?: AbortSignal;
 }
 
 /** Right margin (PDF units) for heading full-width calculation. */
@@ -108,7 +110,7 @@ async function embedFont(
 export async function generateTranslatedPdf(
   options: GenerateTranslatedPdfOptions,
 ): Promise<Uint8Array> {
-  const { originalPdfBytes, pageTranslations, fontBytes, onProgress } = options;
+  const { originalPdfBytes, pageTranslations, fontBytes, onProgress, signal } = options;
 
   // Load the original PDF (read-only source) and create a new output doc.
   const originalDoc = await PDFDocument.load(originalPdfBytes);
@@ -120,6 +122,9 @@ export async function generateTranslatedPdf(
   const totalPages = originalDoc.getPageCount();
 
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+    // Check for cancellation at the start of each page iteration.
+    if (signal?.aborted) break;
+
     // Embed the original page as a drawable element.
     const [embeddedPage] = await outputDoc.embedPdf(originalDoc, [pageIndex]);
     const { width: pageWidth, height: pageHeight } = embeddedPage;

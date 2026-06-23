@@ -6,7 +6,17 @@ export interface FontProgress {
 }
 
 const CACHE_KEY = 'pdf-font:noto-sans:v1';
-const FONT_URL =
+
+/**
+ * Hardcoded TTF URL for Noto Sans from Google Fonts' gstatic CDN.
+ *
+ * Google Fonts CSS API (https://fonts.googleapis.com/css2?family=Noto+Sans)
+ * returns a stylesheet with the current TTF URL, but fetching CSS at runtime
+ * adds latency and a parsing step. This URL is pinned to a specific version
+ * (v39) for reproducibility. If it goes stale, update it by visiting the
+ * CSS API URL in a browser and copying the `src: url(...)` TTF link.
+ */
+const NOTO_SANS_TTF_URL =
   'https://fonts.gstatic.com/s/notosans/v39/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A-9a6Vc.ttf';
 
 /**
@@ -23,7 +33,7 @@ export async function getFont(
     return new Uint8Array(cached);
   }
 
-  const response = await fetch(FONT_URL);
+  const response = await fetch(NOTO_SANS_TTF_URL);
   if (!response.ok) {
     throw new Error(`Font download failed: ${response.status}`);
   }

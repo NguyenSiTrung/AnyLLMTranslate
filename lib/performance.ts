@@ -26,7 +26,11 @@ function flushDomWrites(): void {
   pendingWrites = [];
 
   for (const write of writes) {
-    write();
+    try {
+      write();
+    } catch {
+      // Continue with remaining writes even if one fails
+    }
   }
 }
 
@@ -48,7 +52,8 @@ export function getPendingWriteCount(): number {
  * Debounce a function call.
  * Returns a new function that will only execute after `delay` ms of inactivity.
  */
-export function debounce<T extends (...args: unknown[]) => void>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => void>(
   fn: T,
   delay: number,
 ): (...args: Parameters<T>) => void {
@@ -67,7 +72,8 @@ export function debounce<T extends (...args: unknown[]) => void>(
  * Throttle a function call.
  * Ensures the function is called at most once every `interval` ms.
  */
-export function throttle<T extends (...args: unknown[]) => void>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function throttle<T extends (...args: any[]) => void>(
   fn: T,
   interval: number,
 ): (...args: Parameters<T>) => void {

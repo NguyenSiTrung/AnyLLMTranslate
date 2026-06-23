@@ -169,6 +169,32 @@ export class XhrInterceptor {
       const handleResponse = () => {
         if (xhrRef.readyState !== 4 || xhrRef.status !== 200) return;
 
+        // P3: responseType 'json' (or 'arraybuffer'/'blob'/'document') makes
+        // responseText throw InvalidStateError. Subtitle formats are text-based,
+        // so a non-text responseType means this isn't an interceptable subtitle
+        // payload. Skip interception and replay the original handlers so the
+        // page's player still receives its response without a crash.
+        if (xhrRef.responseType !== '' && xhrRef.responseType !== 'text') {
+          console.warn('AnyLLMTranslate: XHR interceptor skipping non-text responseType', {
+            url: xhr.__anyllmTranslateUrl,
+            responseType: xhrRef.responseType,
+          });
+          if (originalOnReadyStateChange) originalOnReadyStateChange.call(xhrRef, new Event('readystatechange'));
+          if (originalOnLoad) originalOnLoad.call(xhrRef, new ProgressEvent('load'));
+          const eventHandlers = xhr.__anyllmTranslateEventHandlers;
+          if (eventHandlers) {
+            for (const h of eventHandlers.get('readystatechange') || []) {
+              if (typeof h === 'function') h.call(xhrRef, new Event('readystatechange'));
+              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new Event('readystatechange'));
+            }
+            for (const h of eventHandlers.get('load') || []) {
+              if (typeof h === 'function') h.call(xhrRef, new ProgressEvent('load'));
+              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new ProgressEvent('load'));
+            }
+          }
+          return;
+        }
+
         const responseText = xhrRef.responseText;
         const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
           url: xhr.__anyllmTranslateUrl || '',

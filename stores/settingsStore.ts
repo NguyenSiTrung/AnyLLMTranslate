@@ -43,12 +43,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   updateSettings: async (partial) => {
     await updateSettingsInStorage(partial);
-    set(partial);
+    set((state) => deepMerge(state as unknown as Record<string, unknown>, partial as unknown as Record<string, unknown>) as unknown as SettingsState);
   },
 
   updateSetting: async (partial) => {
     await updateSettingsInStorage(partial);
-    set(partial);
+    set((state) => deepMerge(state as unknown as Record<string, unknown>, partial as unknown as Record<string, unknown>) as unknown as SettingsState);
   },
 
   updateProvider: async (partial) => {
@@ -83,12 +83,14 @@ export function initStorageSync(): () => void {
 
     // Synchronous merge for immediate UI updates — but strip the encrypted
     // apiKey so it doesn't briefly flash in UI before async decryption.
+    // Use a sentinel value instead of empty string to prevent a flash of the
+    // unencrypted key state (UI can detect the sentinel and show a placeholder).
     const merged = deepMerge(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       newVal as Record<string, unknown>,
     ) as unknown as ExtensionSettings;
     if (merged.provider?.apiKey) {
-      merged.provider = { ...merged.provider, apiKey: '' };
+      merged.provider = { ...merged.provider, apiKey: '***' };
     }
     useSettingsStore.setState(merged);
 

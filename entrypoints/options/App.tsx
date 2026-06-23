@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Zap, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
   Languages, Check, BarChart3, TextCursorInput,
@@ -132,6 +132,21 @@ export default function App() {
     }
   };
 
+  /** Translate the active tab's page — wired to the SetupWizard "done" step. */
+  const handleTranslateCurrentPage = useCallback(async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab?.id && tab.url) {
+        try {
+          await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
+        } catch {
+          // Content script not loaded — ignore silently
+        }
+      }
+      setShowSetupWizard(false);
+    } catch { /* tab query failed */ }
+  }, []);
+
   if (!isLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-zinc-950">
@@ -241,6 +256,7 @@ export default function App() {
       <SetupWizard
         open={showSetupWizard}
         onClose={() => setShowSetupWizard(false)}
+        onTranslateCurrentPage={handleTranslateCurrentPage}
       />
     </ToastProvider>
   );

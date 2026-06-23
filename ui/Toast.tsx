@@ -2,7 +2,7 @@
  * Toast notification component with auto-dismiss.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
 
 export type ToastVariant = 'success' | 'error' | 'info';
@@ -39,14 +39,29 @@ const iconColors: Record<ToastVariant, string> = {
 export function Toast({ id, variant, message, duration = 4000, onDismiss }: ToastProps) {
   const [isExiting, setIsExiting] = useState(false);
   const Icon = icons[variant];
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsExiting(true);
-      setTimeout(() => onDismiss(id), 200);
+      dismissTimerRef.current = setTimeout(() => onDismiss(id), 200);
     }, duration);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current);
+        dismissTimerRef.current = undefined;
+      }
+    };
   }, [id, duration, onDismiss]);
+
+  const handleManualDismiss = () => {
+    if (dismissTimerRef.current) {
+      clearTimeout(dismissTimerRef.current);
+    }
+    setIsExiting(true);
+    dismissTimerRef.current = setTimeout(() => onDismiss(id), 200);
+  };
 
   return (
     <div
@@ -58,10 +73,7 @@ export function Toast({ id, variant, message, duration = 4000, onDismiss }: Toas
       <Icon className={`w-4 h-4 shrink-0 ${iconColors[variant]}`} />
       <p className="text-sm text-zinc-200 flex-1">{message}</p>
       <button
-        onClick={() => {
-          setIsExiting(true);
-          setTimeout(() => onDismiss(id), 200);
-        }}
+        onClick={handleManualDismiss}
         className="p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
         aria-label="Dismiss notification"
       >

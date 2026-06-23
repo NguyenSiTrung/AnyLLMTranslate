@@ -81,7 +81,20 @@ export class FetchInterceptor {
       const response = await originalFetch(input, init);
       if (!response.ok) return response;
       const responseClone = response.clone();
-      const responseText = await responseClone.text();
+      // P3: responseClone.text() can throw if the body was already consumed or
+      // the stream is locked/errored (e.g. opaque responses, double-read on
+      // some platforms). Fall back to the original response so the page keeps
+      // working even if we can't intercept this request.
+      let responseText: string;
+      try {
+        responseText = await responseClone.text();
+      } catch (err) {
+        console.warn('AnyLLMTranslate: Failed to read cloned subtitle response; passing through original', {
+          url: urlString,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return response;
+      }
 
       const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
         url: urlString,

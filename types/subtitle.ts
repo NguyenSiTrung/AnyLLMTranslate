@@ -125,6 +125,11 @@ export interface DomCueSource {
   observeRootSelector: string;
   /** Extract the active track's language from the DOM ('' if unknown/off) */
   readActiveLanguage(): string;
+  /**
+   * Extract a platform-specific video id from the current page (URL/DOM).
+   * Used to scope DOM cues to a single video. Optional — defaults to undefined.
+   */
+  videoIdExtractor?: () => string | undefined;
 }
 
 /** Supported subtitle formats */

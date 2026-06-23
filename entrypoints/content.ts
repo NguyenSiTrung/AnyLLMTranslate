@@ -20,7 +20,7 @@ import {
 } from '@/content/categoryState';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
-import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay } from '@/content/hoverTranslate';
+import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay, clearHoverCache } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
 import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
@@ -354,6 +354,7 @@ export function stopTranslation(): void {
   }
   removeAllTranslations();
   removeAllSectionTranslations();
+  clearHoverCache();
   hideAutoTranslateNotification();
   allPieces = [];
   activeRequests = 0;
@@ -590,6 +591,26 @@ export default defineContentScript({
       if (coordinatorCleanup) {
         coordinatorCleanup();
         coordinatorCleanup = null;
+      }
+      if (_textSelectionCleanup) {
+        _textSelectionCleanup();
+        _textSelectionCleanup = null;
+      }
+      if (_hoverTranslateCleanup) {
+        _hoverTranslateCleanup();
+        _hoverTranslateCleanup = null;
+      }
+      if (_keyboardShortcutsCleanup) {
+        _keyboardShortcutsCleanup();
+        _keyboardShortcutsCleanup = null;
+      }
+      if (_inlineTranslateCleanup) {
+        _inlineTranslateCleanup();
+        _inlineTranslateCleanup = null;
+      }
+      if (_storageChangeListener) {
+        chrome.storage.onChanged.removeListener(_storageChangeListener);
+        _storageChangeListener = null;
       }
     });
     console.log('[AnyLLMTranslate] Content script loaded');

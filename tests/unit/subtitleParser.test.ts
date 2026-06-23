@@ -277,7 +277,7 @@ describe('parseTimestamp', () => {
     expect(parseTimestamp('00:00:00.001')).toBe(0.001);
   });
 
-  it('returns 0 for invalid format', () => {
-    expect(parseTimestamp('invalid')).toBe(0);
+  it('returns NaN for invalid format', () => {
+    expect(parseTimestamp('invalid')).toBeNaN();
   });
 });

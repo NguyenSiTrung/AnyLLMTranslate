@@ -45,7 +45,11 @@ export class InterceptorRegistry {
   matchUrl(url: string): UrlMatch | null {
     for (const entry of this.patterns) {
       if (entry.pattern.test(url)) {
-        const parsedUrl = new URL(url, 'http://example.com');
+        // Resolve relative URLs against the actual page origin so platform
+        // handlers' languageExtractor receives a usable URL object. Using a
+        // dummy base ('http://example.com') would yield wrong host/path info
+        // for relative subtitle URLs.
+        const parsedUrl = new URL(url, window.location.origin);
         return {
           platform: entry.platform,
           language: entry.languageExtractor?.(parsedUrl),
@@ -60,7 +64,7 @@ export class InterceptorRegistry {
   matchMetadataUrl(url: string): UrlMatch | null {
     for (const entry of this.metadataPatterns) {
       if (entry.pattern.test(url)) {
-        const parsedUrl = new URL(url, 'http://example.com');
+        const parsedUrl = new URL(url, window.location.origin);
         return {
           platform: entry.platform,
           language: entry.languageExtractor?.(parsedUrl),

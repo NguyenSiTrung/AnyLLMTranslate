@@ -4,7 +4,7 @@
  * Includes an animated mini video player preview reactive to all settings.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Subtitles as SubtitlesIcon, Play, Languages, Globe } from 'lucide-react';
 import { SUPPORTED_SUBTITLE_SITES } from '@/lib/subtitleSites';
 import { SectionHeader } from '@/ui/SectionHeader';
@@ -109,25 +109,31 @@ function AnimatedCue({
   const [cueIndex, setCueIndex] = useState(0);
   const [phase, setPhase] = useState<'visible' | 'fading'>('visible');
   const prefersReducedMotion = usePrefersReducedMotion();
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const advanceCue = useCallback(() => {
     setPhase('fading');
-    const fadeTimer = setTimeout(() => {
+    // Clear any previous fade timer before starting a new one
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+    }
+    fadeTimerRef.current = setTimeout(() => {
       setCueIndex((i) => (i + 1) % PREVIEW_CUES.length);
       setPhase('visible');
     }, 500); // match CSS transition duration
-    return fadeTimer;
   }, []);
 
   useEffect(() => {
     if (disabled || prefersReducedMotion) return;
-    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     const interval = setInterval(() => {
-      fadeTimer = advanceCue();
+      advanceCue();
     }, 3500);
     return () => {
       clearInterval(interval);
-      if (fadeTimer) clearTimeout(fadeTimer);
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = undefined;
+      }
     };
   }, [disabled, prefersReducedMotion, advanceCue]);
 

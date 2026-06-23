@@ -165,6 +165,15 @@ export function removeAllSectionTranslations(): void {
   }
 }
 
+/**
+ * Clear the translated sections array without removing DOM elements.
+ * Intended for SPA navigation where the DOM is being replaced anyway,
+ * so we only need to reset the tracking array to prevent stale references.
+ */
+export function clearTranslatedSections(): void {
+  translatedSections.length = 0;
+}
+
 export function getTranslatedSections(): readonly TranslatedSection[] {
   return translatedSections;
 }

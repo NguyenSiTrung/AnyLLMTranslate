@@ -65,7 +65,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.click();
   // Cleanup after a tick to allow the browser to start the download.
   setTimeout(() => {
-    document.body.removeChild(a);
+    if (a.parentNode) document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 100);
 }
@@ -164,6 +164,7 @@ export function usePdfDownload({
         originalPdfBytes,
         pageTranslations: translateResult.translations,
         fontBytes,
+        signal: controller.signal,
         onProgress: (completed, total) => {
           setProgress(total > 0 ? completed / total : 1);
           setMessage(`Generating PDF… (${completed}/${total} pages)`);

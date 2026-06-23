@@ -3,7 +3,7 @@
  * Header uses inline SectionHeader pattern (consistent with GeneralSection).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Loader2, CheckCircle2, XCircle, RotateCcw,
   Zap, ChevronDown, AlertTriangle, Server, Radio,
@@ -44,6 +44,18 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
   const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
   const [isTesting, setIsTesting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [draftPrompt, setDraftPrompt] = useState(
+    settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+  );
+
+  // Sync draft when the prompt is reset to null externally (e.g. Reset button).
+  // We intentionally do NOT sync on every settings change to avoid cursor
+  // jitter while the user is actively typing.
+  useEffect(() => {
+    if (settings.customSystemPrompt === null) {
+      setDraftPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+    }
+  }, [settings.customSystemPrompt]);
 
   const catalogId = inferCatalogId(settings.provider.baseUrl);
   const catalogEntry = getCatalogEntryById(catalogId);
@@ -289,9 +301,10 @@ export function ProviderSection({ onOpenSetup }: ProviderSectionProps = {}) {
                 >
                   <textarea
                     id="provider-system-prompt"
-                    value={settings.customSystemPrompt || DEFAULT_SYSTEM_PROMPT_TEMPLATE}
+                    value={draftPrompt}
                     onChange={(e) => {
-                      const val = e.target.value === DEFAULT_SYSTEM_PROMPT_TEMPLATE ? null : e.target.value;
+                      const val = e.target.value;
+                      setDraftPrompt(val);
                       updateSettings({ customSystemPrompt: val });
                     }}
                     rows={8}

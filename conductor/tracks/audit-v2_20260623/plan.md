@@ -234,146 +234,146 @@
 ## Phase 6: P3 Content, Inject, UI & Config
 <!-- execution: parallel -->
 
-- [ ] Task 1: Remove dead pendingRequests Map in subtitleCoordinator
+- [x] Task 1: Remove dead pendingRequests Map in subtitleCoordinator <!-- commit: pending -->
   <!-- files: content/subtitleCoordinator.ts -->
   Remove the pendingRequests Map and all related code (iteration, clear, clearPendingRequest) since .set() is never called.
 
-- [ ] Task 2: Fix beforeunload cleanup in content.ts
+- [x] Task 2: Fix beforeunload cleanup in content.ts <!-- commit: pending -->
   <!-- files: entrypoints/content.ts -->
   Call all cleanup functions (_textSelectionCleanup, _hoverTranslateCleanup, _keyboardShortcutsCleanup, _inlineTranslateCleanup) and remove _storageChangeListener in beforeunload handler.
 
-- [ ] Task 3: Track fullscreen reposition timeouts in subtitleOverlay
+- [x] Task 3: Track fullscreen reposition timeouts in subtitleOverlay <!-- commit: pending -->
   <!-- files: content/subtitleOverlay.ts -->
   Store setTimeout IDs and clear them in cleanup().
 
-- [ ] Task 4: Fix inlineTranslate dedup key collision
+- [x] Task 4: Fix inlineTranslate dedup key collision <!-- commit: pending -->
   <!-- files: content/inlineTranslate.ts -->
   Use a simpler single-event dedup (e.g. lastProcessedEvent reference check) instead of composite key.
 
-- [ ] Task 5: Add execCommand fallback in inlineTranslate
+- [x] Task 5: Add execCommand fallback in inlineTranslate <!-- commit: pending -->
   <!-- files: content/inlineTranslate.ts -->
   Check return value of execCommand('insertText'). Fall back to direct assignment if it returns false.
 
-- [ ] Task 6: Guard PRIORITIZE_SUBTITLE_CHUNK on seek
+- [x] Task 6: Guard PRIORITIZE_SUBTITLE_CHUNK on seek <!-- commit: pending -->
   <!-- files: content/subtitleOverlay.ts -->
   Add guard for overlayState.cues.length > 0 before sending PRIORITIZE_SUBTITLE_CHUNK.
 
-- [ ] Task 7: Remove dead createControlsUI in subtitleControls
+- [x] Task 7: Remove dead createControlsUI in subtitleControls <!-- commit: pending -->
   <!-- files: content/subtitleControls.ts -->
   Remove exported createControlsUI() that is never imported or called.
 
-- [ ] Task 8: Fix settingsStore shallow set replacing nested objects
+- [x] Task 8: Fix settingsStore shallow set replacing nested objects <!-- commit: pending -->
   <!-- files: stores/settingsStore.ts -->
   Use deepMerge for the set() call in updateSettings/updateSetting, or remove in favor of storage event-driven update.
 
-- [ ] Task 9: Fix initStorageSync apiKey flash
+- [x] Task 9: Fix initStorageSync apiKey flash <!-- commit: pending -->
   <!-- files: stores/settingsStore.ts -->
   Use a sentinel value like '***' instead of empty string when stripping encrypted apiKey.
 
-- [ ] Task 10: Fix performance.ts flushDomWrites try-catch
+- [x] Task 10: Fix performance.ts flushDomWrites try-catch <!-- commit: pending -->
   <!-- files: lib/performance.ts -->
   Wrap each write in try-catch to ensure all writes execute even if one fails.
 
-- [ ] Task 11: Fix debounce/throttle type constraint
+- [x] Task 11: Fix debounce/throttle type constraint <!-- commit: pending -->
   <!-- files: lib/performance.ts -->
   Change type constraint from `(...args: unknown[]) => void` to `(...args: any[]) => void`.
 
-- [ ] Task 12: Fix parseTimestamp returning 0 on failure
+- [x] Task 12: Fix parseTimestamp returning 0 on failure <!-- commit: pending -->
   <!-- files: lib/subtitleParser.ts -->
   Return NaN instead of 0 on regex match failure so callers can skip invalid cues.
 
-- [ ] Task 13: Fix parseWebVTT headerless fallback
+- [x] Task 13: Fix parseWebVTT headerless fallback <!-- commit: pending -->
   <!-- files: lib/subtitleParser.ts -->
   Fall back to stripping only the 'WEBVTT' line if no double-newline is found.
 
-- [ ] Task 14: Fix glossary word boundary matching
+- [x] Task 14: Fix glossary word boundary matching <!-- commit: pending -->
   <!-- files: lib/glossary.ts -->
   Use word-boundary aware matching or require minimum term length to avoid false positive mismatch flags.
 
-- [ ] Task 15: Fix deepMerge for special object types
+- [x] Task 15: Fix deepMerge for special object types <!-- commit: pending -->
   <!-- files: lib/utils.ts -->
   Add checks for Date, RegExp, Map, Set before treating objects as mergeable plain objects.
 
-- [ ] Task 16: Fix crypto.ts bytesToBase64 for large arrays
+- [x] Task 16: Fix crypto.ts bytesToBase64 for large arrays <!-- commit: pending -->
   <!-- files: lib/crypto.ts -->
   Use chunked approach for String.fromCharCode to avoid stack overflow on large arrays.
 
-- [ ] Task 17: Fix domCueSource emit shallow copy
+- [x] Task 17: Fix domCueSource emit shallow copy <!-- commit: pending -->
   <!-- files: inject/domCueSource.ts -->
   Deep-copy cue objects in emit() or use immutable cue objects to prevent buffer corruption.
 
-- [ ] Task 18: Fix fetchInterceptor responseClone.text try-catch
+- [x] Task 18: Fix fetchInterceptor responseClone.text try-catch <!-- commit: pending -->
   <!-- files: inject/fetchInterceptor.ts -->
   Wrap responseClone.text() in try-catch, fall back to original response on read failure.
 
-- [ ] Task 19: Fix interceptorRegistry relative URL base
+- [x] Task 19: Fix interceptorRegistry relative URL base <!-- commit: pending -->
   <!-- files: inject/interceptorRegistry.ts -->
   Use window.location.origin as base for relative URL resolution instead of example.com.
 
-- [ ] Task 20: Fix xhrInterceptor JSON responseType
+- [x] Task 20: Fix xhrInterceptor JSON responseType <!-- commit: pending -->
   <!-- files: inject/xhrInterceptor.ts -->
   Check responseType === 'json' and parse accordingly, or document that JSON is unsupported for intercepted subtitles.
 
-- [ ] Task 21: Fix domCueSource hardcoded HBO Max URL pattern
+- [x] Task 21: Fix domCueSource hardcoded HBO Max URL pattern <!-- commit: pending -->
   <!-- files: inject/domCueSource.ts -->
   Move extractVideoId to handler's getDomCueSource() configuration instead of hardcoding in generic module.
 
-- [ ] Task 22: Remove dead paragraphCount prop in PDF viewer
+- [x] Task 22: Remove dead paragraphCount prop in PDF viewer <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/App.tsx -->
   Compute real paragraph count from translation.originalParagraphs?.length or remove the prop.
 
-- [ ] Task 23: Wire or remove dead onTranslateCurrentPage in SetupWizard
+- [x] Task 23: Wire or remove dead onTranslateCurrentPage in SetupWizard <!-- commit: pending -->
   <!-- files: entrypoints/options/SetupWizard.tsx, entrypoints/options/App.tsx -->
   Wire onTranslateCurrentPage prop in App or remove the dead prop/button.
 
-- [ ] Task 24: Fix popup triple tab query
+- [x] Task 24: Fix popup triple tab query <!-- commit: pending -->
   <!-- files: entrypoints/popup/App.tsx -->
   Combine three separate chrome.tabs.query calls into a single query on popup mount.
 
-- [ ] Task 25: Consolidate popup Toggle with shared ui/Toggle
+- [x] Task 25: Consolidate popup Toggle with shared ui/Toggle <!-- commit: pending -->
   <!-- files: entrypoints/popup/App.tsx -->
   Replace local Toggle component with shared ui/Toggle.tsx to fix incompatible onChange signatures.
 
-- [ ] Task 26: Fix PDF download cancellation support
+- [x] Task 26: Fix PDF download cancellation support <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/lib/translatedPdfGenerator.ts -->
   Thread AbortSignal through generateTranslatedPdf per-page loop and break on abort.
 
-- [ ] Task 27: Fix pdfFontManager hardcoded font URL
+- [x] Task 27: Fix pdfFontManager hardcoded font URL <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/lib/pdfFontManager.ts -->
   Use Google Fonts CSS API URL to resolve current TTF, or bundle the font locally.
 
-- [ ] Task 28: Fix ModelPicker unmount setState warning
+- [x] Task 28: Fix ModelPicker unmount setState warning <!-- commit: pending -->
   <!-- files: entrypoints/options/components/ModelPicker.tsx -->
   Add AbortController or mountedRef guard and bail on cleanup.
 
-- [ ] Task 29: Fix SubtitlesSection AnimatedCue timer leak
+- [x] Task 29: Fix SubtitlesSection AnimatedCue timer leak <!-- commit: pending -->
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
   Clear current fadeTimer at start of each interval tick, or track all pending timers in a ref.
 
-- [ ] Task 30: Fix Toast inner timer not cleared on manual dismiss
+- [x] Task 30: Fix Toast inner timer not cleared on manual dismiss <!-- commit: pending -->
   <!-- files: entrypoints/ui/Toast.tsx -->
   Track inner 200ms setTimeout in a ref and clear it in effect cleanup.
 
-- [ ] Task 31: Fix ProviderSection custom prompt jitter
+- [x] Task 31: Fix ProviderSection custom prompt jitter <!-- commit: pending -->
   <!-- files: entrypoints/options/sections/ProviderSection.tsx -->
   Use local draft state and only commit null on explicit 'Reset' action.
 
-- [ ] Task 32: Fix usePdfDownload untracked timeout
+- [x] Task 32: Fix usePdfDownload untracked timeout <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfDownload.ts -->
   Store the setTimeout ID and clear it on unmount, or guard with a.parentNode check.
 
-- [ ] Task 33: Fix useVisiblePages containerRef.current in deps
+- [x] Task 33: Fix useVisiblePages containerRef.current in deps <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/hooks/useVisiblePages.ts -->
   Use a callback ref or state to track the container element instead of listing ref.current in deps.
 
-- [ ] Task 34: Fix PdfCanvasRenderer callback deps
+- [x] Task 34: Fix PdfCanvasRenderer callback deps <!-- commit: pending -->
   <!-- files: entrypoints/pdf-viewer/components/PdfCanvasRenderer.tsx -->
   Wrap onRendered and onError in useRef or use a ref-based latest-callback pattern.
 
-- [ ] Task 35: Fix content.ts hoverTranslate cache not cleared on stop
+- [x] Task 35: Fix content.ts hoverTranslate cache not cleared on stop <!-- commit: pending -->
   <!-- files: entrypoints/content.ts -->
   Call clearHoverCache() in stopTranslation() in content.ts.
 
-- [ ] Task 36: Fix content.ts sectionTranslate not cleared on SPA nav
+- [x] Task 36: Fix content.ts sectionTranslate not cleared on SPA nav <!-- commit: pending -->
   <!-- files: content/sectionTranslate.ts -->
   Clear translatedSections array on SPA navigation or beforeunload.

@@ -54,6 +54,13 @@ export function PdfCanvasRenderer({
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(false);
 
+  // Store the latest callback props in refs so the render effect does not
+  // re-run when the parent passes new closure identities on every render.
+  const onRenderedRef = useRef(onRendered);
+  const onErrorRef = useRef(onError);
+  onRenderedRef.current = onRendered;
+  onErrorRef.current = onError;
+
   useEffect(() => {
     if (!page || !visible) return;
     const canvas = canvasRef.current;
@@ -69,7 +76,7 @@ export function PdfCanvasRenderer({
     if (!ctx) {
       const err = new Error('Failed to acquire 2D context');
       setError(err.message);
-      onError?.(pageNumber, err);
+      onErrorRef.current?.(pageNumber, err);
       return;
     }
 
@@ -113,14 +120,14 @@ export function PdfCanvasRenderer({
     renderTask.promise
       .then(() => {
         setRendered(true);
-        onRendered?.(pageNumber);
+        onRenderedRef.current?.(pageNumber);
       })
       .catch((renderErr: unknown) => {
         // render() can throw a TaskCancelledError — ignore that one
         if (renderErr instanceof Error && renderErr.message.includes('cancelled')) return;
         const err = renderErr instanceof Error ? renderErr : new Error(String(renderErr));
         setError(err.message);
-        onError?.(pageNumber, err);
+        onErrorRef.current?.(pageNumber, err);
       });
 
     return () => {
@@ -128,7 +135,7 @@ export function PdfCanvasRenderer({
       renderTask.cancel();
       textLayer?.cancel();
     };
-  }, [page, visible, pageNumber, maxWidth, devicePixelRatio, enableTextLayer, onRendered, onError]);
+  }, [page, visible, pageNumber, maxWidth, devicePixelRatio, enableTextLayer]);
 
   const widthStyle = dims ? `${dims.width}px` : '720px';
   const heightStyle = dims ? `${dims.height}px` : '960px';

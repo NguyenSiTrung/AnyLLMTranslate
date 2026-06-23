@@ -26,9 +26,12 @@ export function parseWebVTT(vtt: string): SubtitleCue[] {
 
   // Remove VTT header (everything before first blank line after WEBVTT)
   const headerEndIndex = content.indexOf('\n\n');
-  if (headerEndIndex === -1) return [];
-
-  content = content.slice(headerEndIndex + 2);
+  if (headerEndIndex === -1) {
+    // No double-newline found: strip only the 'WEBVTT' line and parse the rest
+    content = content.replace(/^WEBVTT[^\n]*\n?/, '');
+  } else {
+    content = content.slice(headerEndIndex + 2);
+  }
 
   const cues: SubtitleCue[] = [];
   const cueBlocks = content.split(/\n\n+/);
@@ -223,7 +226,7 @@ export function detectFormat(content: string): SubtitleFormat | null {
 export function parseTimestamp(ts: string): number {
   // Match optional hours, then minutes:seconds.milliseconds
   const match = ts.match(/(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})/);
-  if (!match) return 0;
+  if (!match) return NaN;
 
   const hours = match[1] ? parseInt(match[1], 10) : 0;
   const minutes = parseInt(match[2], 10);

@@ -26,7 +26,7 @@ import { DownloadProgressModal } from './components/DownloadProgressModal';
 
 /** Stable sentinel for untranslated pages — avoids creating a new
  *  { paragraphs: new Map(), state: 'idle' } object on every render. */
-const IDLE_PAGE: { paragraphs: Map<string, string>; state: 'idle' } = {
+const IDLE_PAGE: { paragraphs: Map<string, string>; state: 'idle'; originalParagraphs?: never } = {
   paragraphs: new Map() as Map<string, string>,
   state: 'idle' as const,
 };
@@ -181,7 +181,7 @@ export default function App(): ReactElement {
               <PdfTranslationPane
                 pageNumber={pageNumber}
                 page={translation}
-                paragraphCount={0}
+                paragraphCount={translation.originalParagraphs?.length ?? 0}
                 onRetry={retryPage}
                 layoutMode={layoutMode}
                 pdfPage={page}

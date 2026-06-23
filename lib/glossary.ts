@@ -25,11 +25,16 @@ export function checkGlossaryMismatches(
   const inputLower = inputText.toLowerCase();
   const outputLower = outputText.toLowerCase();
 
-  return entries.filter(
-    (e) =>
-      inputLower.includes(e.source.toLowerCase()) &&
-      !outputLower.includes(e.target.toLowerCase()),
-  );
+  return entries.filter((e) => {
+    const sourceLower = e.source.toLowerCase();
+    const targetLower = e.target.toLowerCase();
+    // Require minimum term length to avoid false positives on very short terms
+    if (sourceLower.length < 2) return false;
+    // Use word-boundary-aware matching to avoid substring false positives
+    const sourceRegex = new RegExp(`\\b${escapeRegExp(sourceLower)}\\b`);
+    const targetRegex = new RegExp(`\\b${escapeRegExp(targetLower)}\\b`);
+    return sourceRegex.test(inputLower) && !targetRegex.test(outputLower);
+  });
 }
 
 /** Parse a CSV string into GlossaryEntry objects */
@@ -84,6 +89,10 @@ export function parseGlossaryJSON(json: string): GlossaryEntry[] {
       target: entry.target,
     };
   });
+}
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function isHeaderLine(line: string): boolean {
