@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleMessage } from '../background';
+import type { ExtensionMessage } from '@/types/messages';
 
 // Storage backing shared by the chrome.storage.local stub.
 const mockStorage: Record<string, unknown> = {};
@@ -132,16 +133,16 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
     preScanNamesMock.mockResolvedValue({ Dumbledore: 'Phù thủy' });
     mockFetchChunkTranslation();
 
-    const res = await handleMessage(
+    const res = (await handleMessage(
       {
         action: 'translateSubtitle',
         cues: subtitleCues(3),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         profile: 'cinematic',
-      } as any,
+      } as ExtensionMessage,
       fakeSender(),
-    );
+    )) as { success: boolean };
 
     expect(res.success).toBe(true);
     expect(preScanNamesMock).toHaveBeenCalledTimes(1);
@@ -154,16 +155,16 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
     loadFilmGlossaryMock.mockResolvedValue({ Dumbledore: 'Phù thủy' }); // hit
     mockFetchChunkTranslation();
 
-    const res = await handleMessage(
+    const res = (await handleMessage(
       {
         action: 'translateSubtitle',
         cues: subtitleCues(3),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         profile: 'cinematic',
-      } as any,
+      } as ExtensionMessage,
       fakeSender(),
-    );
+    )) as { success: boolean };
 
     expect(res.success).toBe(true);
     expect(preScanNamesMock).not.toHaveBeenCalled();
@@ -175,16 +176,16 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
     preScanNamesMock.mockRejectedValue(new Error('network down'));
     mockFetchChunkTranslation();
 
-    const res = await handleMessage(
+    const res = (await handleMessage(
       {
         action: 'translateSubtitle',
         cues: subtitleCues(3),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         profile: 'cinematic',
-      } as any,
+      } as ExtensionMessage,
       fakeSender(),
-    );
+    )) as { success: boolean };
 
     expect(res.success).toBe(true);
     // On failure we do not persist.
@@ -199,7 +200,7 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
         pieces: [{ id: 'p1', text: 'hello' }],
         sourceLanguage: 'en',
         targetLanguage: 'vi',
-      } as any,
+      } as ExtensionMessage,
       fakeSender(),
     );
     expect(loadFilmGlossaryMock).not.toHaveBeenCalled();
@@ -212,8 +213,8 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
     const fetched: { body?: string } = {};
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (_url: string, init: any) => {
-        if (init?.body) fetched.body = init.body;
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.body) fetched.body = String(init.body);
         return {
           ok: true,
           status: 200,
@@ -245,7 +246,7 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         profile: 'cinematic',
-      } as any,
+      } as ExtensionMessage,
       fakeSender(),
     );
 

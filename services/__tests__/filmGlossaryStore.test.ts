@@ -19,9 +19,6 @@ vi.stubGlobal('chrome', {
       set: vi.fn(async (items: Record<string, unknown>) => {
         Object.assign(backing, items);
       }),
-      remove: vi.fn(async (key: string) => {
-        delete backing[key];
-      }),
     },
     onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
   },
