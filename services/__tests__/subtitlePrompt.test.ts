@@ -107,3 +107,44 @@ describe('buildSubtitleSystemPrompt — glossary', () => {
     expect(p).not.toContain('Glossary');
   });
 });
+
+describe('buildSubtitleSystemPrompt — voice instruction', () => {
+  it('includes the speaker prefix instruction', () => {
+    const prompt = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media);
+    expect(prompt).toContain('[Speaker Name]');
+    expect(prompt).toContain('who is speaking');
+    expect(prompt).toContain('Do not translate or repeat the speaker name');
+  });
+});
+
+describe('buildSubtitleSystemPrompt — rolling glossary', () => {
+  it('appends rolling glossary block when provided', () => {
+    const rolling = 'Previously translated names in this content (use these consistently):\n- "John" → "Juan"';
+    const p = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media, undefined, rolling);
+    expect(p).toContain('Previously translated names');
+    expect(p).toContain('"John" → "Juan"');
+  });
+
+  it('omits rolling glossary when not provided', () => {
+    const p = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media);
+    expect(p).not.toContain('Previously translated names');
+  });
+
+  it('places rolling glossary after user glossary and before JSON contract', () => {
+    const glossary = 'Translation Glossary (always use these translations):\n- "React" → "React"';
+    const rolling = 'Previously translated names in this content (use these consistently):\n- "John" → "Juan"';
+    const p = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media, glossary, rolling);
+    const glossaryIdx = p.indexOf('Translation Glossary');
+    const rollingIdx = p.indexOf('Previously translated names');
+    const contractIdx = p.indexOf('Respond ONLY with valid JSON');
+    expect(glossaryIdx).toBeLessThan(rollingIdx);
+    expect(rollingIdx).toBeLessThan(contractIdx);
+  });
+});
+
+describe('buildSubtitleSystemPrompt — extended JSON contract', () => {
+  it('mentions properNouns in the JSON contract', () => {
+    const prompt = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media);
+    expect(prompt).toContain('properNouns');
+  });
+});
