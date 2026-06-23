@@ -16,6 +16,7 @@ import { loadSettings, updateSettings } from '@/lib/config';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { getProviderReadiness, getProviderRecoveryMessage } from '@/lib/providerReadiness';
 import type { CategoryInfo } from '@/types/messages';
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 import { Toggle as SharedToggle } from '@/ui/Toggle';
 
 const STATUS_CONFIG: Record<TabTranslationStatus, { icon: typeof Zap; label: string; color: string; badge: string }> = {
@@ -511,11 +512,28 @@ export default function App() {
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
+  const [styleExpanded, setStyleExpanded] = useState(false);
+  const [tabOverrides, setTabOverrides] = useState<Partial<ProfileKnobs>>({});
   const [unsupportedPage, setUnsupportedPage] = useState<UnsupportedPageInfo | null>(null);
   const [activeTabUrl, setActiveTabUrl] = useState<string | null>(null);
   const [pdfUrlInput, setPdfUrlInput] = useState('');
   const [pdfInputOpen, setPdfInputOpen] = useState(false);
   const [activeTabIsPdf, setActiveTabIsPdf] = useState(false);
+
+  // When the subtitle-style expander opens, read the live per-tab override.
+  useEffect(() => {
+    if (!styleExpanded) return;
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+        const resp = await chrome.tabs.sendMessage(tab.id, { action: 'getSubtitleKnobOverride' }) as { knobOverrides?: Partial<ProfileKnobs> };
+        setTabOverrides(resp?.knobOverrides ?? {});
+      } catch {
+        // content script not present (non-subtitle page) — leave empty.
+      }
+    })();
+  }, [styleExpanded]);
 
   useEffect(() => {
     loadSettingsFromStorage();
@@ -672,6 +690,26 @@ export default function App() {
     });
     setSettings(updated);
   }, [settings]);
+
+  const handleTabKnob = useCallback(async (knob: keyof ProfileKnobs, value: string) => {
+    const next = { ...tabOverrides };
+    if (value === 'auto') {
+      delete next[knob];
+    } else {
+      (next as Record<string, string>)[knob] = value;
+    }
+    setTabOverrides(next);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'setSubtitleKnobOverride',
+        knobOverrides: Object.keys(next).length ? next : null,
+      });
+    } catch {
+      /* content script may not be present */
+    }
+  }, [tabOverrides]);
 
   const isAlwaysTranslate = activeHostname
     ? settings.siteRules.some(r => r.hostname === activeHostname && r.alwaysTranslate)
@@ -1211,6 +1249,53 @@ export default function App() {
                   onChange={() => updateSubtitleSetting({ enabled: !settings.subtitleSettings.enabled })}
                   label="Subtitle Translation"
                 />
+                {settings.subtitleSettings.enabled && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStyleExpanded(!styleExpanded)}
+                      className="w-full flex items-center justify-between text-zinc-400 hover:text-zinc-200 transition-colors text-xs"
+                    >
+                      <span>Subtitle style (this tab)</span>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-all duration-300 ${styleExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {styleExpanded && (
+                      <div className="mt-3 space-y-3">
+                        <p className="text-[10px] text-zinc-500 leading-relaxed">
+                          Applies to upcoming lines. Auto uses the site's profile. Resets on reload.
+                        </p>
+                        {([
+                          { knob: 'faithfulness' as const, opts: ['auto', 'literal', 'balanced', 'idiomatic'] },
+                          { knob: 'brevity' as const, opts: ['auto', 'relaxed', 'moderate', 'terse'] },
+                          { knob: 'register' as const, opts: ['auto', 'formal', 'neutral', 'casual'] },
+                          { knob: 'profanity' as const, opts: ['auto', 'preserve', 'soften', 'remove'] },
+                        ]).map(({ knob, opts }) => (
+                          <div key={knob}>
+                            <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800/50">
+                              {opts.map((opt) => {
+                                const active = (tabOverrides[knob] ?? 'auto') === opt;
+                                return (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    onClick={() => handleTabKnob(knob, opt)}
+                                    className={`flex-1 py-1.5 px-2 rounded-md text-[11px] font-medium capitalize transition-all ${
+                                      active
+                                        ? 'bg-blue-600 text-white shadow-sm'
+                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
