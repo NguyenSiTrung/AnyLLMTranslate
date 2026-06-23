@@ -1,0 +1,11 @@
+{
+  "track_id": "openai-provider-catalog_20260623",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-06-23T00:00:00Z",
+  "updated_at": "2026-06-23T00:00:00Z",
+  "description": "Searchable OpenAI-compatible provider catalog with auto-fill base URL and on-demand /models picker."
+}
