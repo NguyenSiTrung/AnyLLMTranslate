@@ -68,21 +68,42 @@ readTime = max( chars(original) / CPS_ORIG , chars(translation) / CPS_TRANS )
 ```
 
 with `CPS_ORIG = 20` (native scan) and `CPS_TRANS = 12` (learner studying a
-foreign line). A cue is "readable" when `endTime - startTime >= readTime +
-margin` (`margin = 0.3s`).
+foreign line). `text` is always present (it is what the overlay's translated
+line displays); `originalText` is the source line, present once translated.
+A cue is "readable" when `endTime - startTime >= requiredReadDuration`
+(`readTime + margin`, `margin = 0.3s`).
 
 ### Duration policy — extend + cap (never shorten, never split)
 
 ```
-finalEnd(i) = max( originalEnd(i),                           // floor: never shorten
-                   min( originalStart(i) + MAX_EXT_ABS,       // absolute cap (+4s)
-                        originalStart(i) * (1 + MAX_EXT_RATIO),  // ratio cap (+50%)
-                        nextCueStart(i) - GAP ))              // don't overlap next cue
+required(i) = requiredReadDuration(cue[i])                 // read time + margin
+
+finalEnd(i) = max( originalEnd(i),                         // floor: never shorten
+                   min( start(i) + required(i),             // ideal: just enough to read
+                        start(i) + MAX_EXT_ABS,             // hard ceiling (+4s)
+                        nextCueStart(i) - GAP ))            // don't overlap next cue
 ```
 
 - **Never shorten** — original timing is a floor.
-- **Cap** at both `+50%` (relative) and `+4s` (absolute), whichever is smaller,
-  and never overlap the next cue (`GAP = 50ms`).
+- **Target = required read time.** A cue is extended to exactly what the viewer
+  needs to read both lines, no more.
+- **Hard ceiling** `MAX_EXT_ABS = +4s` prevents runaway extension of cues with
+  very long text (the `required` target could otherwise be tens of seconds).
+- **No overlap** — never extend into the next cue (`GAP = 50ms`).
+- **Idempotent by construction.** `finalEnd` depends only on `start`,
+  `required` (a function of the cue's texts), the constant `MAX_EXT_ABS`, and
+  the next cue's `start` — **none of which change when the function is re-run on
+  already-adapted cues**. So re-running is a no-op. This is required because the
+  coordinator re-adapts the whole merged array on every progressive chunk
+  (`mergeTranslatedChunk` reads back the previously-adapted `state.translatedCues`).
+
+> **Refinement from the original brainstorm:** the earlier design had a
+> `+50% (relative)` ratio cap. It was dropped during implementation planning
+> because (a) a cap computed from `endTime` feeds back into itself and breaks
+> idempotence, and (b) it capped short dense cues *below* their required read
+> time, working against the feature's readability goal. The `+4s` absolute cap
+  and the next-cue gap remain as the runaway guards; `required` is the natural
+  limiter. This faithfully realizes the spec's intent.
 - **No split.** A capped cue that still can't be read stays hard — an honest
   failure, not worth the bilingual-pair flicker/desync that splitting would
   cause. In a bilingual overlay a single cue is already an original/translation
@@ -90,7 +111,8 @@ finalEnd(i) = max( originalEnd(i),                           // floor: never sho
   cues (breaks the feature and fights the chunk delta-merge logic in
   `subtitleCoordinator.ts:756`). Split is a clean future extension point if
   real data shows it's needed.
-- **Last cue** (no next neighbor): capped by `+4s` / `+50%` only.
+- **Last cue** (no next neighbor): capped by `+4s` absolute only (the next-cue
+  gap does not apply). The `required` read time is still the natural target.
 
 Why extend+cap over the alternatives:
 
@@ -135,8 +157,7 @@ export const CPS_TRANS = 12;       // chars/sec — learner studying the transla
 export const READ_MARGIN_S = 0.3;  // breathing room beyond computed read time
 
 // Extension caps.
-export const MAX_EXT_RATIO = 0.5;  // never extend beyond +50% of (end - start)
-export const MAX_EXT_ABS = 4;      // never extend beyond +4s absolute
+export const MAX_EXT_ABS = 4;      // never extend beyond +4s absolute (runaway guard)
 export const NEXT_CUE_GAP_S = 0.05;// never overlap the next cue — leave 50ms
 
 /**
@@ -157,7 +178,8 @@ export function requiredReadDuration(cue: { text: string; originalText?: string 
  * is readable in its window, subject to the extend+cap policy.
  *
  * - Cues are never shortened (original endTime is a floor).
- * - Extensions are capped by +50% relative, +4s absolute, and (cue[i+1].start - GAP).
+ * - Extensions are capped by +4s absolute and (cue[i+1].start - GAP); the
+ *   required read time is the natural target.
  * - The last cue has no neighbor cap.
  * - Pure, idempotent: safe to re-run on the merged array after each progressive chunk.
  *
@@ -256,7 +278,7 @@ Grounded in the existing vitest setup.
    - `adaptCueTimings`:
      - extends an over-fast cue to its required duration;
      - **never shortens** a cue whose original duration already suffices;
-     - caps at `+50%` relative and `+4s` absolute (whichever binds);
+     - caps at `+4s` absolute and at `nextCueStart - GAP` (no overlap);
      - caps at `nextCueStart - GAP` (no overlap);
      - last cue (no neighbor) is capped by absolute/ratio only;
      - is pure/idempotent (re-running is a no-op on already-adapted input; input
@@ -293,7 +315,7 @@ fixes + two call sites).
 
 - A bilingual cue whose translation can't be read in its source window is
   extended (visible on YouTube / Udemy / Coursera / Max), capped so it never
-  overlaps the next cue and never exceeds `+50%` / `+4s`.
+  overlaps the next cue and never exceeds `+4s` absolute.
 - No cue is ever shortened.
 - Max/HBO: seeking no longer erases the on-screen cue; backward seeks don't
   leave stale text; no `86400` magic number.
