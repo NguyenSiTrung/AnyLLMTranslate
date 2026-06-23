@@ -70,3 +70,22 @@ Patterns, gotchas, and context discovered during implementation.
   - Patterns: **Set<HTMLElement> tracking for O(1) clone removal.** Instead of `document.querySelectorAll('[data-attr]')` on every sync, maintain a `Set` of created clone elements. Clear and iterate the Set for removal — O(n) but no DOM query, and the Set is cleared on each sync cycle.
   - Gotchas: **Pre-existing flaky test in subtitleCoordinator proactive category detection tests** — tests using `vi.resetModules()` + `vi.advanceTimersByTimeAsync()` have cross-test timer contamination. The `beforeEach` schedules a proactive detection timer that can fire in subsequent tests if not consumed. This is a pre-existing issue (baseline also has 1 non-deterministic failure), not introduced by Phase 4 changes.
 ---
+
+## [2026-06-23 13:15] - Phase 5: P3 Services, Background & Lib
+- **Implemented:** Fixed 14 P3 issues: `??` for tabId, module-level CHUNK_SIZE, clearKeepaliveAlarm in finally, ensureKeepaliveAlarm boolean flag, .catch() on updateSettings, unclosed think-block regex fallback, protocol check in validateProviderConfig, glossary/customPrompt through batcher, no-op catch on batcher promise, idb-keyval clear(), flushLruUpdates retry on failure, neverAutoOpenSites subdomain matching, local date in statsCollector, categoryStore duplicate guard (done in P4).
+- **Files changed:** services/background.ts, services/base.ts, services/batcher.ts, services/cacheManager.ts, services/pdfAutoOpen.ts, services/statsCollector.ts, services/categoryStore.ts
+- **Learnings:**
+  - Patterns: **Boolean flag for alarm existence prevents redundant chrome.alarms.create calls.** `ensureKeepaliveAlarm` previously called `chrome.alarms.get` (async callback) every time; a module-level `keepaliveAlarmActive` flag is synchronous and avoids the callback. Test seed helpers must also set the flag.
+  - Patterns: **`toLocaleDateString('en-CA')` gives local YYYY-MM-DD** — avoids UTC misalignment in daily stats. `toISOString().slice(0,10)` uses UTC which can be off by a day for late-evening users.
+---
+
+## [2026-06-23 13:25] - Phase 6: P3 Content, Inject, UI & Config
+- **Implemented:** Fixed 36 P3 issues across content, inject, lib, UI, and PDF viewer. Dead code removal (pendingRequests, createControlsUI, paragraphCount prop), timer leak fixes (fullscreen, AnimatedCue, Toast, usePdfDownload), React hook fixes (useVisiblePages callback ref, PdfCanvasRenderer callback refs, ModelPicker mountedRef), performance fixes (inlineTranslate WeakSet dedup, execCommand fallback, popup single tab query), security/correctness (interceptorRegistry URL base, xhrInterceptor JSON guard, domCueSource deep copy + configurable videoIdExtractor), and lib robustness (deepMerge special types, chunked bytesToBase64, parseTimestamp NaN, glossary word boundaries).
+- **Files changed:** 33 files across content/, inject/, lib/, entrypoints/, stores/, types/, ui/, tests/
+- **Learnings:**
+  - Patterns: **deepMerge must check for Date, RegExp, Map, Set** before treating objects as plain mergeable. Without this check, `new Date()` gets deep-merged into a plain object losing its temporal semantics.
+  - Patterns: **Chunked String.fromCharCode for large arrays** — spreading a 100K-element Uint8Array into `String.fromCharCode(...bytes)` overflows the call stack. Use 8192-byte chunks.
+  - Patterns: **React callback refs beat ref.current in deps** — `containerRef.current` in a useEffect deps array never changes identity (the ref object is stable), so the effect never re-runs when the container element actually changes. Use `useState` + callback ref to track the element.
+  - Patterns: **Ref-based latest-callback pattern** — wrap `onRendered`/`onError` props in `useRef` updated each render, then read from the ref inside the effect. This prevents effect re-runs when parent passes new callback closures while keeping the effect calling the latest version.
+  - Patterns: **domCueSource videoIdExtractor moved to handler config** — generic modules should not hardcode platform-specific URL patterns. Adding an optional `videoIdExtractor?: () => string | undefined` to the `DomCueSource` interface and providing it from the HBO Max handler keeps the generic module platform-agnostic.
+---
