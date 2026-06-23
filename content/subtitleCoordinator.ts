@@ -300,7 +300,10 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       ? (originalLanguage || 'en') 
       : settings.sourceLanguage;
 
-    showSubtitleToast('Translating subtitles progressively...', true);
+    // On first-ever viewing of a film, the background runs a one-time name
+    // pre-scan before chunk 0 (cached thereafter). The toast copy reflects the
+    // possible brief delay without leaking background internals.
+    showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
 
     const pageContext = await buildSubtitlePageContext();
 
@@ -651,7 +654,10 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
     state.dragCleanup = enableDragReposition(textContainer);
   }
 
-  showSubtitleToast('Translating subtitles progressively...', true);
+  // On first-ever viewing of a film, the background runs a one-time name
+  // pre-scan before chunk 0 (cached thereafter). The toast copy reflects the
+  // possible brief delay without leaking background internals.
+  showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
 
   const sourceLanguage = settings.sourceLanguage === 'auto'
     ? (payload.language || 'en')
