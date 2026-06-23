@@ -1,24 +1,31 @@
 {
-  "lastRefresh": "2026-06-23T15:05:00+07:00",
+  "lastRefresh": "2026-06-23T22:50:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (coursera-udemy + metrics)",
-    "product.md: Implementation Status — Coursera & Udemy Subtitle Handler Fixes entry added",
-    "product.md: Current State metrics 1206 -> 1240 tests",
-    "patterns.md: 7 patterns elevated from coursera-udemy-handler-fixes learnings",
+    "product.md: Refresh marker bumped (subtitle-quality-pipeline + metrics)",
+    "product.md: Video Subtitle Translation — 4 new feature bullets (profile-driven prompt, context & continuity, per-film proper-noun extraction, knob overrides)",
+    "product.md: Implementation Status — Subtitle Quality Pipeline entry added (sub-projects 1–4 via superpowers workflow)",
+    "product.md: Current State metrics 1240->1354 tests, 98->107 files, 3.76->3.77 MB; archived tracks 48->50; noted 5 lint errors regression",
+    "patterns.md: 10 patterns elevated into new 'Subtitle Quality Pipeline (2026-06-23)' section",
+    "patterns.md: Stale mid-file footer annotated as superseded; current footer appended at end of file",
     "patterns.md: Refresh marker updated",
-    "tracks.md: No change (coursera-udemy already archived)",
-    "tech-stack.md: No drift vs package.json",
+    "tracks.md: No change (subtitle quality work shipped via superpowers workflow, not as conductor tracks; 50 archived tracks confirmed)",
+    "tech-stack.md: No drift vs package.json (no dependency changes)",
     "workflow.md: No drift",
     "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1240,
-    "testFiles": 98,
-    "buildSize": "~3.76 MB",
-    "lintErrors": 0,
-    "archivedTracks": 49,
+    "tests": 1354,
+    "testFiles": 107,
+    "buildSize": "~3.77 MB",
+    "lintErrors": 5,
+    "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 290,312,344); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Introduced by subtitle quality work; regression from prior 0-lint state.",
+    "archivedTracks": 50,
     "activeTracks": 0
   },
-  "beadsDrift": "Open ready issues for archived epics audit-v2 and coursera-udemy (ALT-0gu, ALT-74e) — close or sync Beads separately"
+  "lintRegression": {
+    "severity": "follow-up",
+    "note": "Project's '0 lint errors' invariant broken by 5 errors in subtitle quality code. Not fixed in this refresh (out of scope). Candidate for a small follow-up track."
+  },
+  "beadsDrift": "Unchanged from prior refresh: open ready issues for archived epics audit-v2 and coursera-udemy (ALT-0gu, ALT-74e) — close or sync Beads separately. No conductor-side state change to sync this cycle (subtitle quality work shipped via superpowers workflow, not tracked as conductor tracks)."
 }

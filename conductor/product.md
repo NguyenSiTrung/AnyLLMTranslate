@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-23 all (coursera-udemy + metrics) -->
+<!-- conductor-refresh: 2026-06-23 all (subtitle-quality-pipeline + metrics) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -46,6 +46,10 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Drag-and-drop subtitle repositioning with session persistence
 - Proactive subtitle track discovery (HTML5 TextTrack + platform handlers)
 - **Per-site subtitle toggles** — Settings card lists supported subtitle platforms with enable/disable switches; content-script coordinator skips the pipeline when a site is disabled (`disabledSubtitleSites`)
+- **Profile-driven subtitle prompt** — each subtitle site's hostname resolves to one of three profiles (`educational` / `media` / `cinematic`), each presetting four translation knobs (**Register**, **Faithfulness**, **Brevity**, **Profanity**) that drive a dedicated subtitle system prompt (separate from the generic web-page prompt). Resolution happens in the content script (no `tabs` permission).
+- **Subtitle context & continuity** — bidirectional chunk look-ahead (forward cues seeded into chunk 0), a per-session **rolling proper-noun glossary** that accumulates names as chunks translate, and VTT `<v Speaker>` voice-tag parsing carried into the prompt.
+- **Per-film proper-noun extraction** — a dedicated name-extraction pre-scan prompt runs once per film, seeds the rolling glossary with canonical names before chunk 0, and is cached in `chrome.storage.local` keyed by content hash (`lib/subtitleFilmGlossary.ts`, `services/filmGlossaryStore.ts`).
+- **Editable translation knob overrides** — the four knobs are user-editable at two layers: a persisted **global override** (Options → Subtitles → Translation Style) and a session-scoped **per-tab override** (popup Subtitle style expander). A pure `resolveEffectiveKnobs(profile, global, perTab)` helper merges in precedence order (per-tab > global > preset); with both empty, behavior is identical to the profile preset.
 
 ### PDF Translation
 - Built-in PDF.js viewer (`entrypoints/pdf-viewer/`) with side-by-side layout
@@ -154,10 +158,11 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **OpenAI-Compatible Provider Catalog & Model Picker** (Archived 2026-06-23): Searchable `OPENAI_COMPATIBLE_CATALOG` with base URL auto-fill, `ProviderCatalogPicker` and on-demand `ModelPicker` (GET `/models` via `listProviderModels`) in Options provider section and setup wizard; storage remains `preset: 'custom'`.
 - **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (Archived 2026-06-23): Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes (subtitle `translatedCues` assignment, PDF LayoutOverlay Rules of Hooks violation, global un-marking on translation removal, `deduplicateAncestors` last-element-only bug), 8 P1 bugs (semaphore-per-chunk fix, incomplete section cleanup, timer leaks, undefined-response crash, duplicate hover IDs, stale closures, unvalidated settings import with prototype-pollution guard), 28 P2 issues (SSRF 172.16/12 + IPv6 ranges, file:// block, HTTP apiKey warning, prompt-injection delimiters + length caps, XHR readyState replay, deepMerge in onSettingsChange, ApiError class with statusCode, React IntersectionObserver churn fix, MutationObserver filtering, requestAnimationFrame reflow deferral, Set-based clone tracking, providerTester timeouts, PDF classification batching), 40+ P3 minor items (deepMerge special types, chunked bytesToBase64, parseTimestamp NaN guard, boolean alarm flag, toLocaleDateString en-CA, dead code removal). 6 phases, 91 total tasks. 11 new tests added.
 - **Coursera & Udemy Subtitle Handler Fixes** (Archived 2026-06-23): Coursera CloudFront VTT interception patterns, metadata/API `videoId` extraction, `subtitlesVtt` handling; Udemy BCP-47 `locale_id` mapping and sprite cue filter requiring `#xywh=`; domain-anchored `detect()`; `parseSubtitles` with metadata parse warnings; coordinator cleanup (removed Udemy/Coursera `isWatchPage` pathname fallbacks — handlers own watch-page detection). Full handler and coordinator test coverage.
+- **Subtitle Quality Pipeline** (2026-06-23, shipped via superpowers workflow in 4 sub-projects): (1) Profile-driven prompt — hostname → `educational|media|cinematic` profile → 4-knob preset (`Register`/`Faithfulness`/`Brevity`/`Profanity`) driving a dedicated subtitle system prompt; profile resolved in content script. (2) Context & continuity — bidirectional chunk look-ahead, per-session rolling proper-noun glossary, VTT `<v Speaker>` voice-tag parsing, `properNouns` JSON contract in prompt. (3) Per-film proper-noun extraction — dedicated name-extraction pre-scan prompt seeds the glossary before chunk 0; content-hash canonicalization; `chrome.storage.local` film-glossary seam. (4) Knob overrides — `resolveEffectiveKnobs(profile, global, perTab)` pure merge with global persisted (Options) + session-scoped per-tab (popup) overrides; "Auto = absence" pattern (omitted keys, no sentinels). 114 new tests added.
 
 ### Current State
-- 1240 tests passing across 98 files. Build passing (`wxt build` ✅, ~3.76 MB). 0 lint errors.
-- **No active tracks.** All 48 tracks completed and archived.
+- 1354 tests passing across 107 files. Build passing (`wxt build` ✅, ~3.77 MB). 5 lint errors (`no-non-null-assertion` in subtitleCoordinator tests, `no-dynamic-delete` in SubtitlesSection/popup — introduced by subtitle quality work, tracked for follow-up).
+- **No active tracks.** All 50 tracks completed and archived.
 
 ## Out of Scope (Initial Release)
 
