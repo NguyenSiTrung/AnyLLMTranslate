@@ -1056,11 +1056,79 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
 
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
-});
 
-// ============================================================================
-// Auto-detected category from shared singleton state (regression test for C1)
-// ============================================================================
+  it('sub-project 5a — VTT path: an over-fast bilingual cue reaches updateCues with an extended endTime', async () => {
+    // Establish session 42 via interception (mirrors the chunk-merge regression test).
+    // Note: session setup pre-populates state.translatedCues with MOCK_TRANSLATED_CUES
+    // (cue at startTime 0, cue at startTime 2). Our chunk cue merges at offset 0,
+    // so the resulting array is [ourCue(start 0), mockCue(start 2)] — meaning our
+    // cue's extension is capped by the next cue at startTime 2 (cap = 2 - 0.05 = 1.95),
+    // tighter than the 2.3s required read time.
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-timing-1');
+
+    mockUpdateCues.mockClear();
+
+    // Our cue: required read = max(24/12, 40/20) + 0.3 = 2.3s; window 1s.
+    // Capped by next cue (start 2): finalEnd = min(2.3, absCap 4, neighborCap 1.95) = 1.95.
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: [
+          { startTime: 0, endTime: 1, text: 'a'.repeat(24), originalText: 'b'.repeat(40) },
+        ],
+        sessionId: 42,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    expect(mockUpdateCues).toHaveBeenCalledTimes(1);
+    const cuesArg = mockUpdateCues.mock.calls[0][0] as Array<{ endTime: number }>;
+    // Extended from 1 -> 1.95 (capped by the next cue at startTime 2), proving
+    // adaptCueTimings ran on the merged array before updateCues.
+    expect(cuesArg[0].endTime).toBeCloseTo(1.95, 5);
+    expect(cuesArg[0].endTime).toBeGreaterThan(1);
+  });
+
+  it('sub-project 5a — VTT path: an already-readable cue is NOT shortened', async () => {
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-timing-2');
+
+    mockUpdateCues.mockClear();
+
+    // Window 10s, tiny text -> required ~0.35s. endTime must stay 10 (floor).
+    // Chunk offset 0 merges onto the pre-populated array; our cue at offset 0
+    // has startTime 0, the mock cue sits at startTime 2 — our 10s window far
+    // exceeds both required (0.35) and neighbor (1.95), so no change.
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: [{ startTime: 0, endTime: 10, text: 'hi', originalText: 'ho' }],
+        sessionId: 42,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    const cuesArg = mockUpdateCues.mock.calls[0][0] as Array<{ endTime: number }>;
+    expect(cuesArg[0].endTime).toBe(10);
+  });
+});
 
 describe('auto-detected category from shared state', () => {
   // categoryState is NOT mocked, so it uses the real module. However, vi.resetModules()

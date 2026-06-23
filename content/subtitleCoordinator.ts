@@ -39,6 +39,7 @@ import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
+import { adaptCueTimings } from '@/lib/subtitleTiming';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -459,12 +460,15 @@ function mergeDomOriginalCues(incoming: SubtitleCue[]): string[] {
  * (translated, or source if not yet translated).
  */
 function rebuildTranslatedCues(): void {
-  state.domTranslatedCues = state.domOriginalCues.map((cue) => ({
+  const built = state.domOriginalCues.map((cue) => ({
     startTime: cue.startTime,
     endTime: cue.endTime,
     text: state.domTranslationMap.get(cue.text) ?? cue.text,
     originalText: cue.text,
   }));
+  // Sub-project 5a: adapt bilingual cue endTimes for reading speed (extend +
+  // cap, never shorten). Runs on the full rebuilt array each batch.
+  state.domTranslatedCues = adaptCueTimings(built);
 }
 
 /**
@@ -771,8 +775,12 @@ function mergeTranslatedChunk(chunkStart: number, chunkCues: SubtitleCue[]): voi
   for (let j = 0; j < chunkCues.length; j++) {
     currentCues[chunkStart + j] = chunkCues[j];
   }
-  state.translatedCues = currentCues;
-  updateCues(currentCues);
+  // Sub-project 5a: adapt bilingual cue endTimes for reading speed (extend +
+  // cap, never shorten). Safe to re-run on the whole merged array after each
+  // progressive chunk — the helper filters sparse slots and is idempotent.
+  const adapted = adaptCueTimings(currentCues);
+  state.translatedCues = adapted;
+  updateCues(adapted);
 }
 
 /**
