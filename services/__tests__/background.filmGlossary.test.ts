@@ -205,4 +205,52 @@ describe('handleTranslateSubtitle — per-film pre-scan integration', () => {
     expect(loadFilmGlossaryMock).not.toHaveBeenCalled();
     expect(preScanNamesMock).not.toHaveBeenCalled();
   });
+
+  it('seeds chunk 0 with film-glossary names (rollingGlossaryBlock carries a name)', async () => {
+    // Capture the chunk-0 service.translate call (the real OpenAICompatibleService
+    // is used; we inspect fetch's request body for the system prompt).
+    const fetched: { body?: string } = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: any) => {
+        if (init?.body) fetched.body = init.body;
+        return {
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve({
+              id: 'x',
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: '{"translations": {"s1": "x"}}',
+                  },
+                  finish_reason: 'stop',
+                },
+              ],
+            }),
+          text: () => Promise.resolve(''),
+        };
+      }),
+    );
+
+    loadFilmGlossaryMock.mockResolvedValue(undefined); // miss → pre-scan
+    preScanNamesMock.mockResolvedValue({ Dumbledore: 'Phù thủy' });
+
+    await handleMessage(
+      {
+        action: 'translateSubtitle',
+        cues: subtitleCues(3),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        profile: 'cinematic',
+      } as any,
+      fakeSender(),
+    );
+
+    // The chunk-0 system prompt must contain the seeded name and its translation.
+    expect(fetched.body).toContain('Dumbledore');
+    expect(fetched.body).toContain('Phù thủy');
+  });
 });
