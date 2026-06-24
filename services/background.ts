@@ -228,7 +228,7 @@ let activePreset: string | null = null;
 /** Initialize or re-create translation service from settings */
 async function initService(): Promise<TranslationService & { updateConfig(config: ProviderConfig): void }> {
   const settings = await loadSettings();
-  const config = settings.provider;
+  const config = { ...settings.provider, maxRpm: settings.maxRpm };
 
   // Re-create if preset changed
   if (translationService && activePreset === config.preset) {

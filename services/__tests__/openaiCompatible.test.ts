@@ -3,6 +3,7 @@ import { OpenAICompatibleService } from '../openaiCompatible';
 import type { ProviderConfig } from '../../types/config';
 import { buildSubtitleSystemPrompt } from '@/services/subtitlePrompt';
 import { PROFILE_PRESETS } from '@/lib/subtitleProfiles';
+import { createRateLimiter } from '@/lib/rateLimiter';
 
 const mockConfig: ProviderConfig = {
   preset: 'custom',
@@ -409,6 +410,125 @@ describe('OpenAICompatibleService', () => {
       };
       expect(body.messages[0].content).toContain('Previously translated names');
       expect(body.messages[0].content).toContain('"John" → "Juan"');
+    });
+  });
+
+  describe('RPM rate limiter integration', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const mockTranslateResponse = () => {
+      const content = JSON.stringify({ translations: { p1: 'test' } });
+      return vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({
+          id: 'test',
+          choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+        text: () => Promise.resolve(''),
+      });
+    };
+
+    it('maxRpm flows from config into the service limiter (unlimited by default)', async () => {
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
+      const service = new OpenAICompatibleService(mockConfig);
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('maxRpm from config is respected (unlimited when 0)', async () => {
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
+      const configWithRpm: ProviderConfig = { ...mockConfig, maxRpm: 0 };
+      const service = new OpenAICompatibleService(configWithRpm);
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateConfig calls setMaxRpm with the new value', async () => {
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
+      const service = new OpenAICompatibleService({ ...mockConfig, maxRpm: 0 });
+      service.updateConfig({ ...mockConfig, maxRpm: 30 });
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('acquire() is awaited before fetch (call order verified)', async () => {
+      vi.useFakeTimers();
+      const fetchSpy = mockTranslateResponse();
+      globalThis.fetch = fetchSpy;
+
+      const service = new OpenAICompatibleService({ ...mockConfig, maxRpm: 1 });
+
+      const p1 = service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      await Promise.resolve();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const p2 = service.translate({
+        texts: new Map([['p1', 'World']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      await Promise.resolve();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(60_001);
+      await Promise.all([p1, p2]);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('changing maxRpm via updateConfig from 0 to N enables limiting', async () => {
+      vi.useFakeTimers();
+      const fetchSpy = mockTranslateResponse();
+      globalThis.fetch = fetchSpy;
+
+      const service = new OpenAICompatibleService({ ...mockConfig, maxRpm: 0 });
+      await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      service.updateConfig({ ...mockConfig, maxRpm: 1 });
+
+      await service.translate({
+        texts: new Map([['p1', 'World']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+      const p3 = service.translate({
+        texts: new Map([['p1', 'Foo']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      await Promise.resolve();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(60_001);
+      await p3;
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
   });
 });

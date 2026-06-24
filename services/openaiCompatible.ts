@@ -17,6 +17,7 @@ import { extractProperNouns } from './subtitleResponse';
 import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/messages';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
+import { createRateLimiter, type RateLimiter } from '@/lib/rateLimiter';
 
 /** Custom error class carrying the HTTP status code so retry logic can
  *  distinguish 4xx client errors (no retry) from 5xx/network errors (retry)
@@ -32,14 +33,17 @@ export class ApiError extends Error {
 
 export class OpenAICompatibleService implements TranslationService {
   private config: ProviderConfig;
+  private rateLimiter: RateLimiter;
 
   constructor(config: ProviderConfig) {
     this.config = config;
+    this.rateLimiter = createRateLimiter(config.maxRpm ?? 0);
   }
 
   /** Update the provider config (e.g., on settings change) */
   updateConfig(config: ProviderConfig): void {
     this.config = config;
+    this.rateLimiter.setMaxRpm(config.maxRpm ?? 0);
   }
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
@@ -305,6 +309,10 @@ Rules:
     maxRetries: number,
     attempt = 1,
   ): Promise<ChatCompletionResponse> {
+    // RPM rate limiting: wait for a slot before starting the request-timeout
+    // clock (so the timeout doesn't fire during the RPM wait).
+    await this.rateLimiter.acquire();
+
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
     const headers: Record<string, string> = {
