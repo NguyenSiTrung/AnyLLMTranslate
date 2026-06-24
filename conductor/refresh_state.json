@@ -1,26 +1,27 @@
 {
-  "lastRefresh": "2026-06-24T11:50:00+07:00",
+  "lastRefresh": "2026-06-24T15:55:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (max-rpm + response_format retry + test consolidation)",
-    "product.md: Translation Engine — 2 new feature bullets (provider capability self-healing for response_format rejection; user-configurable RPM rate limiting)",
-    "product.md: Implementation Status — 3 new entries (Max RPM Rate Limiting, response_format Auto-Retry & Rejection Memory, Test Suite Consolidation)",
-    "product.md: Current State metrics 1482/112/51 -> 1500/111/52 (net -18 tests from consolidation 8d3c5a7, not a regression)",
-    "patterns.md: 2 new patterns in new 'Provider Capability Self-Healing (2026-06-24)' section (remember per-instance rejection to avoid wasted failed call; recovery vs prevention at the fetchWithRetry chokepoint)",
-    "patterns.md: Footer metrics updated (1518/113/51 -> 1500/111/52) with consolidation note",
-    "tracks.md: No change (max-rpm_20260624 already archived in tracks.md from track workflow)",
-    "tech-stack.md: No drift vs package.json (no dependency changes since prior refresh)",
+    "product.md: Refresh marker bumped (manifest-subtitle-access track metrics)",
+    "product.md: Current State metrics 1500/111/52 -> 1568/115/53 (manifest-subtitle-access track added 68 tests, 4 files, 1 archived track)",
+    "product.md: Build size ~3.78 MB -> ~3.8 MB",
+    "product.md: Pre-existing flaky test note updated (subtitleCoordinator proactive-category-detection replaces statsCollector date-rollover)",
+    "patterns.md: No drift (already updated during archive commit 432b9f7 — 7 patterns elevated, footer metrics current)",
+    "tracks.md: No drift (manifest-subtitle-access_20260624 already listed as archived)",
+    "tech-stack.md: No drift vs package.json (no dependency changes)",
     "workflow.md: No drift",
-    "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
+    "beads: Closed 5 open sub-issues for ALT-0j6 (manifest-subtitle-access) — epic already closed. Pre-existing: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues.",
+    "learnings: No new consolidation needed (manifest-subtitle-access learnings already elevated to patterns.md during archive)",
+    "backups: product.md.bak refreshed before edit"
   ],
   "codebaseHealth": {
-    "tests": 1500,
-    "testFiles": 111,
-    "buildSize": "~3.78 MB",
+    "tests": 1568,
+    "testFiles": 115,
+    "buildSize": "~3.8 MB",
     "lintErrors": 5,
-    "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 298,320,352); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged from prior refresh.",
-    "archivedTracks": 52,
+    "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 300,322,354); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged.",
+    "archivedTracks": 53,
     "activeTracks": 0
   },
-  "beadsDrift": "max-rpm epic (ALT-v7e) + sub-issues (ALT-v7e.1, ALT-v7e.2, ALT-v7e.1.1, ALT-v7e.2.1) were OPEN in beads despite conductor track archived/done (commit 1be6b6a) -> synced conductor->beads this cycle (closed). Pre-existing unchanged: audit-v2 (ALT-0gu) and coursera-udemy (ALT-74e) epics remain open with sub-issues."
+  "beadsDrift": "ALT-0j6 (manifest-subtitle-access) had 5 open sub-issues despite conductor track archived -> closed all this cycle. Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived."
 }
