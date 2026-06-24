@@ -157,7 +157,7 @@ describe('createRateLimiter', () => {
       const p4 = limiter.acquire();
       vi.advanceTimersByTime(60_001);
       await p4;
-      expect(limiter.__stateForTest!.window.length).toBeLessThanOrEqual(3);
+      expect(limiter.__stateForTest?.window.length).toBeLessThanOrEqual(3);
     });
   });
 

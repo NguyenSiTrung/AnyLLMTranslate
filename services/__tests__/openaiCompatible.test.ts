@@ -3,7 +3,6 @@ import { OpenAICompatibleService } from '../openaiCompatible';
 import type { ProviderConfig } from '../../types/config';
 import { buildSubtitleSystemPrompt } from '@/services/subtitlePrompt';
 import { PROFILE_PRESETS } from '@/lib/subtitleProfiles';
-import { createRateLimiter } from '@/lib/rateLimiter';
 
 const mockConfig: ProviderConfig = {
   preset: 'custom',
