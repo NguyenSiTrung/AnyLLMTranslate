@@ -145,5 +145,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     llmCategoryDetectionMode: state.llmCategoryDetectionMode,
     enableSmartExcludes: state.enableSmartExcludes,
     pdfSettings: state.pdfSettings,
+    maxRpm: state.maxRpm,
   };
 }

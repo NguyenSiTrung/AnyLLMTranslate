@@ -262,4 +262,45 @@ describe('useSettingsStore', () => {
       expect(state.subtitleSettings.translationTimeout).toBe(45);
     });
   });
+
+  describe('maxRpm — rate limiting setting', () => {
+    it('defaults to 0 (unlimited)', () => {
+      expect(DEFAULT_SETTINGS.maxRpm).toBe(0);
+      expect(DEFAULT_SETTINGS.provider.maxRpm).toBe(0);
+    });
+
+    it('is included in the store state', () => {
+      const state = useSettingsStore.getState();
+      expect(state.maxRpm).toBe(0);
+    });
+
+    it('updateSettings persists maxRpm', async () => {
+      await useSettingsStore.getState().updateSettings({ maxRpm: 30 });
+      const state = useSettingsStore.getState();
+      expect(state.maxRpm).toBe(30);
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'anyllm-translate-settings': expect.objectContaining({ maxRpm: 30 }),
+        }),
+      );
+    });
+
+    it('loadFromStorage preserves maxRpm from stored settings', async () => {
+      mockStorageData['anyllm-translate-settings'] = { maxRpm: 60 };
+      await useSettingsStore.getState().loadFromStorage();
+      expect(useSettingsStore.getState().maxRpm).toBe(60);
+    });
+
+    it('loadFromStorage falls back to default (0) when maxRpm is absent', async () => {
+      mockStorageData['anyllm-translate-settings'] = { theme: 'bubble' };
+      await useSettingsStore.getState().loadFromStorage();
+      expect(useSettingsStore.getState().maxRpm).toBe(0);
+    });
+
+    it('resetToDefaults restores maxRpm to 0', async () => {
+      await useSettingsStore.getState().updateSettings({ maxRpm: 50 });
+      await useSettingsStore.getState().resetToDefaults();
+      expect(useSettingsStore.getState().maxRpm).toBe(0);
+    });
+  });
 });

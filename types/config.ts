@@ -22,6 +22,8 @@ export interface ProviderConfig {
   requiresApiKey: boolean;
   /** Request timeout in milliseconds (default: 60000) */
   requestTimeoutMs?: number;
+  /** Max requests per minute (0 = unlimited). Threaded into the service for RPM limiting. */
+  maxRpm?: number;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
@@ -246,6 +248,8 @@ export interface ExtensionSettings {
   enableSmartExcludes: boolean;
   /** PDF translator auto-open behavior */
   pdfSettings: PdfSettings;
+  /** Max requests per minute to the provider (0 = unlimited, prevents hitting provider rate limits) */
+  maxRpm: number;
 }
 
 /** Provider preset definitions */
@@ -354,6 +358,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     connectionStatus: 'unknown',
     requiresApiKey: false,
     requestTimeoutMs: 60000,
+    maxRpm: 0,
   },
   onboarding: { ...DEFAULT_ONBOARDING_STATE },
   sourceLanguage: 'auto',
@@ -381,6 +386,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   llmCategoryDetectionMode: 'async',
   enableSmartExcludes: true,
   pdfSettings: { ...DEFAULT_PDF_SETTINGS },
+  maxRpm: 0,
 };
 
 /** All available provider presets */
