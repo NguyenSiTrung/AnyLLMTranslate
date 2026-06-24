@@ -166,6 +166,49 @@ describe('OpenAICompatibleService', () => {
       expect(result.error).toContain('Invalid API key');
     });
 
+    it('retries without response_format when provider rejects it (NVIDIA NIM / vLLM)', async () => {
+      // First call: 400 with response_format error (like NVIDIA NIM / vLLM).
+      // Second call: success without response_format in the body.
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: () => Promise.resolve(
+            '{"error":{"message":"\'response_format\' with type \'json_object\' requires a JSON schema. Use \'response_format\' with type \'json_schema\' and provide a schema, or use \'guided_json\' directly with a JSON schema."}}',
+          ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () => Promise.resolve({
+            id: 'chatcmpl-test',
+            choices: [{ message: { role: 'assistant', content: '{"translations":{"p1":"Xin chào"}}' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }),
+          text: () => Promise.resolve(''),
+        });
+      globalThis.fetch = fetchMock;
+
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.translations.get('p1')).toBe('Xin chào');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      // Second call should NOT include response_format in the body.
+      const secondBody = JSON.parse(fetchMock.mock.calls[1][1]?.body as string) as {
+        response_format?: unknown;
+      };
+      expect(secondBody.response_format).toBeUndefined();
+    });
+
     it('includes glossary block in system prompt when glossaryBlock provided', async () => {
       const responseContent = JSON.stringify({ translations: { p1: 'Học máy' } });
       globalThis.fetch = mockFetchResponse(responseContent);

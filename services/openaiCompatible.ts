@@ -368,6 +368,21 @@ Rules:
           }
         }
 
+        // Some providers (e.g. NVIDIA NIM / vLLM) reject
+        // `response_format: { type: 'json_object' }` without a JSON schema.
+        // The system prompt already instructs the model to return JSON, and
+        // parseTranslationResponse() has robust fallback parsing, so retry
+        // once without response_format when we detect this specific error.
+        if (
+          request.response_format &&
+          response.status === 400 &&
+          errorMessage.includes('response_format')
+        ) {
+          const strippedRequest = { ...request };
+          delete strippedRequest.response_format;
+          return this.fetchWithRetry(strippedRequest, maxRetries, attempt);
+        }
+
         // Retry on 5xx or network-like errors, but NOT on 4xx client errors
         const shouldRetry = response.status >= 500 && attempt <= maxRetries;
         if (shouldRetry) {
