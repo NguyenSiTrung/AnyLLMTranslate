@@ -74,18 +74,21 @@ export class HboMaxHandler implements SubtitleHandler {
   }
 
   getManifestPatterns(): SubtitleUrlPattern[] {
-    // Best-guess manifest patterns for HLS/DASH on Max CDN domains.
-    // Correctness pending live confirmation — DOM scraping is retained as fallback.
+    // Max streams HLS/DASH through generic Akamai/Fastly CDN edges whose
+    // hostnames are NOT max.com/hbomax.com (e.g. beam-*.prd.api.hbomax.com,
+    // dl.delivery.mp.microsoft.com, etc.).  Since detect() already confirms
+    // we are on a Max page, match any .m3u8 / .mpd URL — the FetchInterceptor
+    // only calls getManifestPatterns() for the registered handler anyway.
     return [
       {
         platform: 'hbomax',
-        // HLS multivariant or media playlist on Max CDN domains
-        pattern: /https?:\/\/[^/]*(?:max\.com|hbomax\.com|hbo\.com)[^?]*\.m3u8(?:\?|$)/i,
+        // Any HLS multivariant or media playlist URL
+        pattern: /https?:\/\/.+\.m3u8(?:\?|$)/i,
       },
       {
         platform: 'hbomax',
-        // DASH manifest on Max CDN domains
-        pattern: /https?:\/\/[^/]*(?:max\.com|hbomax\.com|hbo\.com)[^?]*\.mpd(?:\?|$)/i,
+        // Any DASH manifest URL
+        pattern: /https?:\/\/.+\.mpd(?:\?|$)/i,
       },
     ];
   }

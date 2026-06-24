@@ -722,6 +722,13 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
 async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<void> {
   if (state.isOverlayMode) return;
 
+  // Tier precedence: DOM (Tier 5) is lowest priority — suppress if a higher-tier
+  // source (manifest, texttrack, mse) has already won or is in-flight.
+  if (shouldSuppressSource('dom')) {
+    console.log('AnyLLMTranslate: Suppressing DOM cues — higher-precedence source already active', state.activeSource);
+    return;
+  }
+
   const epochAtStart = state.navigationEpoch;
   const settings = await loadSettings();
   if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
@@ -1618,9 +1625,29 @@ function startVideoPlaybackWatcher(): () => void {
       state.videoIsPlaying = true;
       console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
       const epoch = state.navigationEpoch;
-      // DOM-sourced platforms (Max) use a different activation path.
       const currentHandler = detectCurrentHandler();
+      // Handlers with manifest patterns (e.g. HBO Max) get a chance at Tier 2
+      // first. If manifest tracks were already discovered, tryAutoActivate will
+      // select one; otherwise it no-ops and DOM cue flow handles activation
+      // naturally when the first SUBTITLE_DOM_CUES message arrives.
+      // Handlers without manifest patterns (pure DOM-only) go straight to
+      // tryAutoActivateForDom (e.g. Youku).
       if (currentHandler?.getDomCueSource) {
+        const hasManifestPatterns =
+          typeof currentHandler.getManifestPatterns === 'function' &&
+          currentHandler.getManifestPatterns().length > 0;
+        if (hasManifestPatterns) {
+          // Try manifest path first; DOM cues will self-activate if manifest misses.
+          tryAutoActivate(epoch).catch((err) => {
+            console.warn('AnyLLMTranslate: Manifest auto-activate on play failed', err);
+          });
+          // Also prime the DOM path in parallel — it will be suppressed by
+          // shouldSuppressSource if manifest wins first.
+          tryAutoActivateForDom().catch((err) => {
+            console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
+          });
+          return;
+        }
         tryAutoActivateForDom().catch((err) => {
           console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
         });
