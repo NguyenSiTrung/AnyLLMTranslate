@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-23 all (subtitle-quality-pipeline + metrics) -->
+<!-- conductor-refresh: 2026-06-24 all (youku + subtitle-quality 5a/5b/6 + metrics) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -511,6 +511,15 @@ Codebase health: 1206 tests passing across 98 files, build ~3.76MB, 0 lint error
 - **`data-val="default"` is Youku's Simplified-Chinese sentinel, not a real code.** Map it to `zh-Hans` in the code map alongside `chs`. (from: youku-subtitles_20260624)
 - **`getByText` (singular) breaks when two platforms share a `methodHint`.** `SUPPORTED_SUBTITLE_SITES` renders from an array map, so adding a site needs no component change — but test fixtures with hardcoded counts (`getByText('DOM cue scraping')` singular, `toHaveLength(5)`) must switch to `getAllByText(...).toHaveLength(2)` and bump counts. The UI is data-driven; only the tests have stale literals. (from: youku-subtitles_20260624)
 
+## Subtitle Quality sub-projects 5a/5b/6 (2026-06-23/24)
+- **Reading-speed timing adaptation extends short cues and compresses long ones.** Pure `lib/subtitleTiming.ts` helper computes a minimum display duration from word count / WPM and clamps cue end time. Wire it into the coordinator's cue-update loop (after translation arrives, before overlay render) — not in the parser or overlay layer. Keeps timing UX concerns at the orchestration seam. (from: subtitle quality sub-project 5a)
+- **Max DOM scraper seek-collapse: open-cue sentinel prevents stale name retention.** When the user seeks backward past the current cue, the DOM scraper's rolling buffer must reset — otherwise a stale proper-noun name persists in the rolling glossary and pollutes subsequent chunks. Use an open-cue sentinel (the currently displayed cue's start time) to detect seek-collapse and clear the buffer. (from: subtitle quality sub-project 5a, commit `589d6e2`)
+- **Line-wrapping uses a dynamic char-per-line budget, not a fixed column count.** `lib/subtitleWrap.ts` derives chars-per-line from overlay width and font size, then greedily wraps. CJK text (no spaces) needs character-based wrapping; Latin text needs word-boundary wrapping. Rendering wrapped lines as `<div>` children in the overlay (not `\n` in a single text node) ensures consistent height and centering. (from: subtitle quality sub-project 5b)
+- **`max-width` as a safety net for wrapping.** Even with dynamic char-per-line budget, set `max-width` on the overlay container so excessively long unbreakable strings (URLs, long CJK runs) don't overflow the player. The wrapping logic handles normal text; `max-width` handles edge cases. (from: subtitle quality sub-project 5b, documented in `c00816e`)
+- **Subtitle cache key must fold in profile/knobs + glossary, and namespace with `subtitle:` prefix.** `lib/subtitleCacheKey.ts` generates `SHA-256('subtitle:' + src + ':' + tgt + ':' + text + ':' + knobsHash + ':' + glossaryHash)`. The `subtitle:` prefix isolates from web-path cache slots (which use `SHA-256(src:tgt:text)`). Different knob settings or glossary state produce separate entries — without this, changing translation style reuses stale cached translations. (from: subtitle quality sub-project 6)
+- **FNV-1a for short-input hashing, SHA-256 for full cache keys.** `hashKnobs()` and `hashGlossary()` use synchronous FNV-1a (32-bit, 8 hex chars) — sufficient for the tiny fixed knob vocabulary and sorted glossary strings. The full cache key uses SHA-256 via `crypto.subtle` for collision resistance over arbitrary-length text. Don't `await crypto.subtle` for sub-100-char inputs where FNV-1a is deterministic and instant. (from: subtitle quality sub-project 6)
+- **Retry with exponential backoff for subtitle chunks.** `lib/subtitleRetry.ts` provides a pure `retryWithBackoff(fn, options)` helper. Failed chunks retry with increasing delay (configurable max retries, base delay, jitter). Wire into the coordinator's chunk-processing loop — on failure, retry the chunk; on final failure, emit `SUBTITLE_CHUNK_FAILED` as an idempotent toast (deduplicated by chunk ID so the same failure doesn't spam toasts). (from: subtitle quality sub-project 6)
+
 ---
-Last refreshed: 2026-06-24T02:10:00+07:00
-Codebase health: 1479 tests passing across 112 files (1 pre-existing date-rollover in statsCollector.test.ts, unmodified), build ~3.78MB, 5 pre-existing lint errors (tracked for follow-up), 51 tracks archived, 0 active tracks
+Last refreshed: 2026-06-24T10:05:00+07:00
+Codebase health: 1482 tests passing across 112 files (1 pre-existing date-rollover in statsCollector.test.ts, unmodified), build ~3.78MB, 5 pre-existing lint errors (tracked for follow-up), 51 tracks archived, 0 active tracks
