@@ -61,11 +61,12 @@ This file tracks all major tracks for the project.
 - ✅ **Codebase Audit v2 — Deep Analysis Fixes & Improvements** (`audit-v2_20260623`) — Archived 2026-06-23. Comprehensive fix of all findings from June 2026 deep analysis: 4 P0 crashes, 8 P1 bugs, 28 P2 issues, 40+ P3 minor items across all modules. 6 phases, 91 total tasks. [View](./conductor/archive/audit-v2_20260623/)
 - ✅ **Coursera & Udemy Subtitle Handler Fixes** (`coursera-udemy-handler-fixes_20260623`) — Archived 2026-06-23. CDN interception, videoId/locale/sprite fixes, domain-anchored detect, parseSubtitles, coordinator isWatchPage cleanup, full handler tests. [View](./conductor/archive/coursera-udemy-handler-fixes_20260623/)
 - ✅ **Youku Subtitle Support** (`youku-subtitles_20260624`) — Archived 2026-06-24. Bilingual subtitle translation for Youku (youku.tv/youku.com/m.youku.com) via DOM cue scraping of the `#subtitle` SVG container. New `YoukuHandler`; `youkuCodeToLanguage()` (11 codes→BCP-47); `cinematic` profile. Generalized `domCueSource.ts` track-switch detection to derive selector + activation attribute from the `DomCueSource` contract (was HBO-Max-hardcoded); `resolveProfile()` made subdomain-aware. Phase 4 (XHR interception) skipped — DOM scraping is the shipped path. 60 new tests. [View](./conductor/archive/youku-subtitles_20260624/)
+- ✅ **Max RPM Rate Limiting** (`max-rpm_20260624`) — Archived 2026-06-24. User-configurable sliding-window RPM rate limiter at the single network chokepoint (`OpenAICompatibleService.fetchWithRetry`). New `lib/rateLimiter.ts` (pure, fake-timer friendly); `maxRpm` on `ExtensionSettings` + `ProviderConfig` (default 0 = unlimited); `initService` bridges top-level `maxRpm` to provider config; Options → Advanced → new "Rate Limiting" card with validated integer input (0-600). 36 new tests. [View](./conductor/archive/max-rpm_20260624/)
 
 ---
 
 ## Active Tracks
 
-- [x] **Max RPM Rate Limiting** (`max-rpm_20260624`) — Feature: user-configurable requests-per-minute limit (sliding window) to avoid hitting provider rate limits. Global, applied at the network chokepoint; OFF by default (`maxRpm: 0` = unlimited). Options → Advanced → new "Rate Limiting" card. [View](./conductor/tracks/max-rpm_20260624/)
+(None — all tracks archived.)
 
 ---
