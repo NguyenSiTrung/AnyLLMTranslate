@@ -66,6 +66,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- 🟡 **Max RPM Rate Limiting** (`max-rpm_20260624`) — Feature: user-configurable requests-per-minute limit (sliding window) to avoid hitting provider rate limits. Global, applied at the network chokepoint; OFF by default (`maxRpm: 0` = unlimited). Options → Advanced → new "Rate Limiting" card. [View](./conductor/tracks/max-rpm_20260624/)
+- [~] **Max RPM Rate Limiting** (`max-rpm_20260624`) — Feature: user-configurable requests-per-minute limit (sliding window) to avoid hitting provider rate limits. Global, applied at the network chokepoint; OFF by default (`maxRpm: 0` = unlimited). Options → Advanced → new "Rate Limiting" card. [View](./conductor/tracks/max-rpm_20260624/)
 
 ---
