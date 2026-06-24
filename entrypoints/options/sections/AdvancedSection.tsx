@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Gauge } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -34,6 +34,8 @@ export function AdvancedSection() {
   const [cacheTTLError, setCacheTTLError] = useState('');
   const [maxCacheSizeError, setMaxCacheSizeError] = useState('');
   const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
+  const [maxRpm, setMaxRpm] = useState(settings.maxRpm ?? 0);
+  const [maxRpmError, setMaxRpmError] = useState('');
 
   const handleExportSettings = useCallback(() => {
     const exportData = {
@@ -61,6 +63,7 @@ export function AdvancedSection() {
       hoverDelay: settings.hoverDelay,
       inlineTranslate: settings.inlineTranslate,
       enableSmartExcludes: settings.enableSmartExcludes,
+      maxRpm: settings.maxRpm,
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -134,7 +137,8 @@ export function AdvancedSection() {
     setCacheTTL(settings.cacheTTLDays);
     setMaxCacheSize(settings.maxCacheSizeMB);
     setMaxBatchChars(settings.maxBatchChars);
-  }, [settings.cacheTTLDays, settings.maxCacheSizeMB, settings.maxBatchChars]);
+    setMaxRpm(settings.maxRpm ?? 0);
+  }, [settings.cacheTTLDays, settings.maxCacheSizeMB, settings.maxBatchChars, settings.maxRpm]);
 
   // Cache configuration handlers
   const handleCacheTTLBlur = useCallback(() => {
@@ -175,6 +179,19 @@ export function AdvancedSection() {
       showSuccess('Max batch characters updated');
     }
   }, [maxBatchChars, settings.maxBatchChars, updateSettings, showSuccess]);
+
+  const handleMaxRpmBlur = useCallback(() => {
+    const value = Number(maxRpm);
+    if (!Number.isInteger(value) || value < 0 || value > 600) {
+      setMaxRpmError('Must be an integer between 0 and 600 (0 = unlimited)');
+      return;
+    }
+    setMaxRpmError('');
+    if (value !== (settings.maxRpm ?? 0)) {
+      updateSettings({ maxRpm: value });
+      showSuccess('Max RPM updated');
+    }
+  }, [maxRpm, settings.maxRpm, updateSettings, showSuccess]);
 
   return (
     <div className="animate-fade-in-up">
@@ -252,8 +269,33 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Context & Intelligence */}
+        {/* Rate Limiting */}
         <div className="animate-stagger" style={stagger(1)}>
+          <Card title="Rate Limiting" icon={<Gauge className="w-3.5 h-3.5" />} variant="bordered">
+            <FieldGroup
+              label="Max requests per minute"
+              description="Limit provider calls per minute to avoid hitting rate limits (0 = unlimited). Leave at 0 for local LLMs like Ollama/LM Studio."
+              htmlFor="max-rpm-input"
+            >
+              <Input
+                id="max-rpm-input"
+                type="number"
+                value={maxRpm}
+                onChange={(e) => setMaxRpm(Number(e.target.value))}
+                onBlur={handleMaxRpmBlur}
+                min={0}
+                max={600}
+                error={maxRpmError}
+              />
+              {maxRpm === 0 && !maxRpmError && (
+                <p className="text-xs text-zinc-500 mt-1">(unlimited)</p>
+              )}
+            </FieldGroup>
+          </Card>
+        </div>
+
+        {/* Context & Intelligence */}
+        <div className="animate-stagger" style={stagger(2)}>
           <Card title="Context & Intelligence" icon={<BrainCircuit className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               <Toggle
@@ -294,7 +336,7 @@ export function AdvancedSection() {
         </div>
 
         {/* PDF Translator */}
-        <div className="animate-stagger" style={stagger(2)}>
+        <div className="animate-stagger" style={stagger(3)}>
           <Card title="PDF Translator" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               <FieldGroup
@@ -365,7 +407,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Data & Developer Tools */}
-        <div className="animate-stagger" style={stagger(3)}>
+        <div className="animate-stagger" style={stagger(4)}>
           <Card title="Data & Developer Tools" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-3 mb-5">
               <Button
@@ -409,7 +451,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Reset */}
-        <div className="animate-stagger" style={stagger(4)}>
+        <div className="animate-stagger" style={stagger(5)}>
           <Button
             id="reset-all-settings-btn"
             variant="danger"

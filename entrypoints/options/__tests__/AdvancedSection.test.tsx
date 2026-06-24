@@ -46,6 +46,7 @@ describe('AdvancedSection - Cache Configuration', () => {
     hoverDelay: 300,
     enableContextAwareTranslation: true,
     enableLLMPageCategoryDetection: false,
+    maxRpm: 0,
   };
 
   beforeEach(() => {
@@ -266,6 +267,7 @@ describe('AdvancedSection - PDF Translator', () => {
     enableContextAwareTranslation: true,
     enableLLMPageCategoryDetection: false,
     pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+    maxRpm: 0,
   };
 
   beforeEach(() => {
@@ -315,5 +317,131 @@ describe('AdvancedSection - PDF Translator', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith({
       pdfSettings: { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] },
     });
+  });
+});
+
+describe('AdvancedSection - Rate Limiting', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+  const mockResetToDefaults = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    maxBatchChars: 2000,
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below',
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: '',
+    debugMode: false,
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+    maxRpm: 0,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      if (typeof selector === 'function') {
+        return selector({ ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      }
+      return { ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+  });
+
+  it('renders the Rate Limiting card with maxRpm input', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('Rate Limiting')).toBeInTheDocument();
+    expect(screen.getByLabelText('Max requests per minute')).toBeInTheDocument();
+  });
+
+  it('renders input with default value 0', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute') as HTMLInputElement;
+    expect(input.value).toBe('0');
+  });
+
+  it('shows (unlimited) hint when value is 0', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('(unlimited)')).toBeInTheDocument();
+  });
+
+  it('writes valid value on blur', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '30' } });
+    fireEvent.blur(input);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ maxRpm: 30 });
+  });
+
+  it('writes 0 (unlimited) on blur', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, maxRpm: 60 };
+      if (typeof selector === 'function') return selector({ ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      return { ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '0' } });
+    fireEvent.blur(input);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ maxRpm: 0 });
+  });
+
+  it('shows error for negative value', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '-1' } });
+    fireEvent.blur(input);
+    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('shows error for value above 600', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '601' } });
+    fireEvent.blur(input);
+    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('shows error for non-integer value', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '3.5' } });
+    fireEvent.blur(input);
+    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it('clears error when user corrects invalid input', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    fireEvent.change(input, { target: { value: '-5' } });
+    fireEvent.blur(input);
+    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: '20' } });
+    fireEvent.blur(input);
+    expect(screen.queryByText('Must be an integer between 0 and 600 (0 = unlimited)')).not.toBeInTheDocument();
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ maxRpm: 20 });
+  });
+
+  it('does not write when value is unchanged', () => {
+    render(<AdvancedSection />);
+    const input = screen.getByLabelText('Max requests per minute');
+    // Value is already 0 in settings, blur without change
+    fireEvent.blur(input);
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
 });
