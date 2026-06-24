@@ -38,6 +38,7 @@ export type BridgeMessageType =
   | 'SUBTITLE_TRACKS_DISCOVERED'
   | 'SUBTITLE_DOM_CUES'
   | 'SUBTITLE_DOM_TRACK_CHANGED'
+  | 'SUBTITLE_TEXTTRACK_CUES'
   | 'SUBTITLE_CONFIG';
 
 /** postMessage payload between worlds */
@@ -107,6 +108,15 @@ export interface SubtitleDomTrackChangedPayload {
 export interface SubtitleConfigPayload {
   /** Translation timeout in milliseconds */
   translationTimeoutMs: number;
+}
+
+/** Payload for SUBTITLE_TEXTTRACK_CUES messages (full track cues from HTML5 TextTrack) */
+export interface SubtitleTextTrackCuesPayload {
+  cues: SubtitleCue[];
+  language: string;
+  label: string;
+  /** URL of the <track> element if available */
+  url?: string;
 }
 
 /** Platform subtitle URL pattern definition */

@@ -47,6 +47,7 @@ vi.mock('@/content/messageBridge', () => ({
   },
   onDomCues: () => () => {},
   onDomTrackChanged: () => () => {},
+  onTextTrackCues: () => () => {},
   sendTranslatedSubtitle: (...args: unknown[]) => { mockSendTranslatedSubtitle(...args); },
 }));
 

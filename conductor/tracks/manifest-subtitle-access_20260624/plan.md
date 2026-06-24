@@ -46,27 +46,32 @@ Four pure, side-effect-free modules — the deterministic core of Tier 2. Sequen
 
 Wire the Phase 1 parsers into the live pipeline: detect manifests in `FetchInterceptor`, fetch+assemble subtitle segments in the background, feed the coordinator, and wire HBO Max as the first consumer. Sequential because Tasks 2/3/4 share `types/subtitle.ts` and `content/subtitleCoordinator.ts`.
 
-- [ ] Task 1: Handler contract extension — `getManifestPatterns?()`
+- [x] Task 1: Handler contract extension — `getManifestPatterns?()`
   - Add optional `getManifestPatterns?(): SubtitleUrlPattern[]` to `SubtitleHandler` interface. Add `getManifestPatternsForCurrentHost()` helper. Add `ManifestSubtitleTrack` type to `types/subtitle.ts`. Register helper in registry.
   <!-- files: inject/subtitleHandlers/registry.ts, types/subtitle.ts -->
+  - Commit: 3538dae
 
-- [ ] Task 2: FetchInterceptor manifest detection (non-blocking)
+- [x] Task 2: FetchInterceptor manifest detection (non-blocking)
   - TDD. Detect manifest content-types (`application/vnd.apple.mpegurl`, `application/x-mpegurl`, `application/dash+xml`) and `.m3u8` / `.mpd` URL extensions. Clone the response (non-blocking pass-through — original always returns immediately). Parse via Phase 1 parsers, emit `SUBTITLE_TRACKS_DISCOVERED` with subtitle playlist URLs. Reuse metadata-detection cloning pattern.
   <!-- files: inject/fetchInterceptor.ts, inject/__tests__/fetchInterceptor.test.ts -->
+  - Commit: 3538dae
 
-- [ ] Task 3: Background fetch-assemble handler
+- [x] Task 3: Background fetch-assemble handler
   - TDD. New `FETCH_MANIFEST_SUBTITLES` message (coordinator → background): given a subtitle playlist URL → fetch playlist (CORS-bypass via existing background allowlist) → fetch each segment → `concatVttSegments` → `parseVtt` → return `SubtitleCue[]`. Reuse existing URL allowlist validation (SSRF mitigation).
   <!-- files: services/background.ts, services/__tests__/background.test.ts -->
+  - Commit: 3538dae
 
-- [ ] Task 4: Coordinator manifest→translate flow
+- [x] Task 4: Coordinator manifest→translate flow
   - TDD. On `SUBTITLE_TRACKS_DISCOVERED` carrying manifest tracks: pick the target-language track (fallback to original), call `FETCH_MANIFEST_SUBTITLES`, feed returned `SubtitleCue[]` into the existing chunked `translateSubtitle` path (same entry point as DOM cues).
   <!-- files: content/subtitleCoordinator.ts, content/__tests__/subtitleCoordinator.test.ts -->
+  - Commit: 3538dae
 
-- [ ] Task 5: HBO Max manifest patterns
+- [x] Task 5: HBO Max manifest patterns
   - Add best-guess `getManifestPatterns()` to `HboMaxHandler` (CDN `.m3u8` / `.mpd` on `*.max.com` / `*.hbomax.com`). DOM scraping retained as fallback for when no manifest is detected. Record pattern correctness as pending live confirmation in learnings.
   <!-- files: inject/subtitleHandlers/hbomax.ts -->
+  - Commit: 3538dae
 
-- [ ] Task: Conductor - User Manual Verification 'Manifest Detection & HBO Max Wiring' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Manifest Detection & HBO Max Wiring' (Protocol in workflow.md)
 
 ## Phase 3: HTML5 TextTrack Cue Reading (Tier 4)
 <!-- execution: sequential -->

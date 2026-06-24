@@ -13,6 +13,7 @@ import type {
   SubtitleTracksDiscoveredPayload,
   SubtitleDomCuesPayload,
   SubtitleDomTrackChangedPayload,
+  SubtitleTextTrackCuesPayload,
 } from '@/types/subtitle';
 
 /**
@@ -78,6 +79,22 @@ export function onDomTrackChanged(
       await handler(payload as SubtitleDomTrackChangedPayload);
     } catch (error) {
       console.warn('AnyLLMTranslate: DOM track changed handler error', error);
+    }
+  });
+}
+
+/**
+ * Listen for full TextTrack cues from the MAIN world (Tier 4).
+ * Returns a cleanup function.
+ */
+export function onTextTrackCues(
+  handler: (payload: SubtitleTextTrackCuesPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_TEXTTRACK_CUES', async (payload) => {
+    try {
+      await handler(payload as SubtitleTextTrackCuesPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: TextTrack cues handler error', error);
     }
   });
 }
