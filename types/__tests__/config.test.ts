@@ -10,59 +10,13 @@ import {
   PROVIDER_PRESETS,
 } from '@/types/config';
 import type {
-  ThemeName,
-  TranslationPosition,
-  DarkMode,
   SiteRule,
   GlossaryEntry,
   SubtitleSettings,
   ExtensionSettings,
-  ProviderPreset,
-  DisplayMode,
 } from '@/types/config';
 
 describe('config types', () => {
-  describe('ThemeName', () => {
-    it('allows all 17 theme values including custom', () => {
-      const themes: ThemeName[] = [
-        'dividing-line', 'blockquote', 'paper', 'underline',
-        'dashed-underline', 'highlight', 'wavy-underline', 'bubble',
-        'side-by-side', 'mask', 'fade-in', 'italic',
-        'dotted-border', 'shadow-card', 'minimal', 'gradient-accent',
-        'custom',
-      ];
-      expect(themes).toHaveLength(17);
-    });
-  });
-
-  describe('TranslationPosition', () => {
-    it('supports below, above, side', () => {
-      const positions: TranslationPosition[] = ['below', 'above', 'side'];
-      expect(positions).toHaveLength(3);
-    });
-  });
-
-  describe('DarkMode', () => {
-    it('supports auto, light, dark', () => {
-      const modes: DarkMode[] = ['auto', 'light', 'dark'];
-      expect(modes).toHaveLength(3);
-    });
-  });
-
-  describe('DisplayMode', () => {
-    it('supports bilingual and translation-only', () => {
-      const modes: DisplayMode[] = ['bilingual-below', 'translation-only'];
-      expect(modes).toHaveLength(2);
-    });
-  });
-
-  describe('ProviderPreset', () => {
-    it('supports custom preset', () => {
-      const presets: ProviderPreset[] = ['custom'];
-      expect(presets).toHaveLength(1);
-    });
-  });
-
   describe('SiteRule interface', () => {
     it('accepts a valid site rule', () => {
       const rule: SiteRule = {

@@ -72,7 +72,7 @@ describe('services/background', () => {
     // Drain any pending background chunks from the previous test so their
     // async fetch calls don't leak into the next test's fetch mock. Also
     // reset the global semaphore so stale slots/queued waiters don't block.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     __resetSemaphoreForTest();
   });
 

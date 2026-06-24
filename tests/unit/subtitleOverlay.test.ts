@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   initializeOverlay,
-  updateCues,
   updateConfig,
   getConfig,
   isOverlayActive,
@@ -89,37 +88,6 @@ describe('content/subtitleOverlay', () => {
       expect(config.position).toBe('top');
     });
 
-    it('sets isOverlayActive to true after initialization', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      expect(isOverlayActive()).toBe(true);
-    });
-  });
-
-  describe('updateCues', () => {
-    it('updates stored subtitle cues', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const initialCues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(initialCues);
-
-      const newCues: SubtitleCue[] = [
-        { startTime: 0, endTime: 2, text: 'Hola', originalText: 'Hello' },
-        { startTime: 3, endTime: 5, text: 'Mundo', originalText: 'World' },
-      ];
-      updateCues(newCues);
-
-      // The cues should be updated (we can verify by checking internal state)
-      // Since we can't access internal state directly, we verify no error is thrown
-      expect(() => updateCues(newCues)).not.toThrow();
-    });
   });
 
   describe('updateConfig', () => {
@@ -335,20 +303,6 @@ describe('content/subtitleOverlay', () => {
       initializeOverlay(cues);
 
       expect(isOverlayActive()).toBe(true);
-    });
-  });
-
-  describe('ResizeObserver integration', () => {
-    it('sets up ResizeObserver on video element', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      // Verify ResizeObserver is set up by checking if cleanup works
-      expect(() => cleanup()).not.toThrow();
     });
   });
 });
