@@ -34,3 +34,28 @@ Relevant patterns from `conductor/patterns.md` primed for this track:
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-24 15:25] - Track Complete: manifest-subtitle-access
+
+### Implementation Summary
+- **Phase 1** (49b34e9): Pure HLS/DASH manifest parsers + VTT segment concat — 44 tests
+- **Phase 2** (3538dae): Manifest detection in FetchInterceptor, background fetch-assemble, HBO Max wiring — coordinator routes .m3u8/.mpd to manifest path
+- **Phase 3** (df4b844): HTML5 TextTrack cue reading — extractTrackCues + SUBTITLE_TEXTTRACK_CUES bridge — 13 tests
+- **Phase 4** (eeb2c1c): MSE SourceBuffer interceptor — addSourceBuffer/appendBuffer monkey-patch — 11 tests
+- **Phase 5** (40d4aa9): Source precedence (manifest > texttrack > mse > dom) with shouldSuppressSource guards
+
+### Key Learnings
+- **HLS attribute parsing**: Quoted and unquoted values need a unified regex `/KEY=(?:"([^"]*)"|([^,]*))/gi` — HLS allows both `URI="path"` and `URI=path` forms
+- **VTT segment concat offset detection**: Without `X-TIMESTAMP-MAP`, segments may restart from 0. Detect by checking if first cue startTime < accumulated timeOffset — only offset if so. With `X-TIMESTAMP-MAP`, times are already absolute (MPEGTS timeline) — no offset needed
+- **DASH mimeType classification**: `application/mp4` alone is ambiguous (could be video/audio/text). Need additional signal: `contentType="text"` attribute or `Role` element with `value="caption"/"subtitle"` to confirm it's a subtitle track
+- **MediaSource/SourceBuffer in jsdom**: Not natively available. Use function constructors with prototype assignment: `function MockMS(){}; MockMS.prototype.addSourceBuffer = ...` — `static prototype` in class syntax is invalid in esbuild
+- **MSE interceptor pattern**: Same idempotent + BFCache-safe teardown as FetchInterceptor — capture originals in instance fields, restore only when identity-equal to own patch. Tagged buffers via `WeakSet<SourceBuffer>` avoids memory leaks
+- **Source precedence design**: A simple `SOURCE_RANK` map + `shouldSuppressSource(newSource)` check at handler entry is sufficient. Reset `activeSource` on track switch / SPA navigation to allow re-resolution. DOM scraping remains unconditional fallback (lowest precedence)
+- **Coordinator test mock updates**: Every new `on*` listener exported from `content/messageBridge.ts` must be added to all 3 coordinator test file mocks (`content/__tests__/subtitleCoordinator.test.ts`, `tests/unit/subtitleCoordinator.test.ts`, `tests/unit/subtitleCoordinatorDom.test.ts`) or the coordinator fails to start
+
+### Gotchas
+- **Pre-existing flaky test**: `subtitleCoordinator.test.ts > proactive category detection` tests sometimes fail in full-suite runs (timing-dependent) but pass in isolation — not introduced by this track
+- **HBO Max manifest patterns are best-guess**: Pattern correctness against live Max CDN traffic is pending live confirmation — DOM scraping remains the fallback path
+- **IMSC1/TTML deep parsing deferred**: MSE interceptor detects non-WebVTT binary content but does not parse IMSC1 — deferred to follow-up
+
+---
