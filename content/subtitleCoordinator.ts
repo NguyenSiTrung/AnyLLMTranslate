@@ -52,6 +52,28 @@ function currentSubtitleProfile(): SubtitleProfile {
   return resolveProfile(window.location.hostname);
 }
 
+/** Source tier precedence rank (lower = higher priority). Used by shouldSuppressSource(). */
+const SOURCE_RANK: Record<string, number> = {
+  manifest: 0,
+  texttrack: 1,
+  mse: 2,
+  dom: 3,
+};
+
+/**
+ * Check whether a new source tier should be suppressed by the currently active source.
+ * Returns true if the new source is lower-precedence than the active one.
+ */
+function shouldSuppressSource(newSource: 'manifest' | 'texttrack' | 'mse' | 'dom'): boolean {
+  if (!state.activeSource) return false;
+  return SOURCE_RANK[newSource] > SOURCE_RANK[state.activeSource];
+}
+
+/** Reset the active source (e.g. on track switch / seek) to allow re-resolution. */
+function resetActiveSource(): void {
+  state.activeSource = null;
+}
+
 /** Coordinator state */
 interface CoordinatorState {
   isOverlayMode: boolean;
@@ -71,6 +93,8 @@ interface CoordinatorState {
   subtitleKnobOverride: Partial<ProfileKnobs> | undefined;
   /** Active subtitle session ID — stale chunks with different IDs are dropped */
   activeSubtitleSessionId: number | null;
+  /** Active subtitle source tier — first full-track source to resolve wins (precedence: manifest > texttrack > mse > dom) */
+  activeSource: 'manifest' | 'texttrack' | 'mse' | 'dom' | null;
   /** Injected <style> hiding the platform's native caption window (null when inactive) */
   captionHideStyle: HTMLStyleElement | null;
   /** DOM-platform: rolling original (source-language) cues from the scraper */
@@ -102,6 +126,7 @@ const state: CoordinatorState = {
   categoryOverride: undefined,
   subtitleKnobOverride: undefined,
   activeSubtitleSessionId: null,
+  activeSource: null,
   captionHideStyle: null,
   domOriginalCues: [],
   domTranslatedCues: [],
@@ -537,6 +562,7 @@ function clearDomTranslationBuffers(): void {
   state.domTranslatedTexts = new Set();
   state.domTranslationMap = new Map();
   state.activeSubtitleSessionId = null;
+  resetActiveSource();
 }
 
 /**
@@ -560,7 +586,8 @@ async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): 
 async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
-  if (state.isOverlayMode) return; // Already active from a higher-precedence source
+  if (shouldSuppressSource('texttrack')) return; // Higher-precedence source already active
+  if (state.isOverlayMode) return; // Already active
 
   console.log('AnyLLMTranslate: TextTrack full cues received', {
     language: payload.language,
@@ -572,6 +599,7 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
 
   // Use the same overlay activation + translation path as manifest-sourced cues
   state.isOverlayMode = true;
+  state.activeSource = 'texttrack';
   console.log('AnyLLMTranslate: Activating overlay mode from TextTrack cues');
 
   let cuesToDisplay = payload.cues;
@@ -720,6 +748,7 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   }
 
   state.isOverlayMode = true;
+  state.activeSource = 'dom';
   console.log('AnyLLMTranslate: Activating overlay from DOM cues (Max)');
 
   // Hide the platform's native caption window so only our overlay shows.
@@ -808,6 +837,7 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
   }
 
   state.isOverlayMode = true;
+  state.activeSource = 'manifest';
   console.log('AnyLLMTranslate: Activating overlay mode from manifest', { cueCount: cues.length });
 
   // Translate cues via the same chunked path
@@ -858,7 +888,8 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
 async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
-  if (state.isOverlayMode) return; // Already active from a higher-precedence source
+  if (shouldSuppressSource('mse')) return; // Higher-precedence source already active
+  if (state.isOverlayMode) return; // Already active
 
   console.log('AnyLLMTranslate: MSE cues received', {
     cueCount: payload.cues.length,
@@ -869,6 +900,7 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
 
   // Use the same overlay activation + translation path
   state.isOverlayMode = true;
+  state.activeSource = 'mse';
   console.log('AnyLLMTranslate: Activating overlay mode from MSE cues');
 
   let cuesToDisplay = payload.cues;
@@ -1302,6 +1334,7 @@ export function resetCoordinatorState(): void {
   state.categoryOverride = undefined;
   state.subtitleKnobOverride = undefined;
   state.activeSubtitleSessionId = null;
+  resetActiveSource();
   state.activeTrackIdentity = null;
   state.fetchedTrackUrls.clear();
   state.translatedCues = null;
