@@ -1,0 +1,32 @@
+{
+  "track_id": "max-rpm_20260624",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2026-06-24T03:36:33Z",
+  "updated_at": "2026-06-24T03:36:33Z",
+  "description": "Feature settings to let users set max RPM (requests per minute) to avoid too many requests to providers that have rate limits",
+  "beads_epic": "ALT-v7e",
+  "beads_tasks": {
+    "phase1": "ALT-v7e.1",
+    "phase1_task1": "ALT-v7e.1.1",
+    "phase1_task2": "ALT-v7e.1.2",
+    "phase2": "ALT-v7e.2",
+    "phase2_task1": "ALT-v7e.2.1",
+    "phase2_task2": "ALT-v7e.2.2",
+    "phase2_task3": "ALT-v7e.2.3",
+    "phase3": "ALT-v7e.3",
+    "phase3_task1": "ALT-v7e.3.1",
+    "phase3_task2": "ALT-v7e.3.2",
+    "phase3_task3": "ALT-v7e.3.3",
+    "phase4": "ALT-v7e.4",
+    "phase4_task1": "ALT-v7e.4.1",
+    "phase4_task2": "ALT-v7e.4.2",
+    "phase4_task3": "ALT-v7e.4.3",
+    "phase5": "ALT-v7e.5",
+    "phase5_task1": "ALT-v7e.5.1",
+    "phase5_task2": "ALT-v7e.5.2"
+  }
+}
