@@ -34,6 +34,10 @@ export class ApiError extends Error {
 export class OpenAICompatibleService implements TranslationService {
   private config: ProviderConfig;
   private rateLimiter: RateLimiter;
+  /** Set to true when the provider rejects `response_format: { type: 'json_object' }`
+   *  (e.g. NVIDIA NIM / vLLM with certain models). Once detected, all subsequent
+   *  requests omit response_format to avoid a wasted failed call on every request. */
+  private responseFormatDisabled = false;
 
   constructor(config: ProviderConfig) {
     this.config = config;
@@ -44,6 +48,20 @@ export class OpenAICompatibleService implements TranslationService {
   updateConfig(config: ProviderConfig): void {
     this.config = config;
     this.rateLimiter.setMaxRpm(config.maxRpm ?? 0);
+    // Reset in case the user switched to a different provider/model that may
+    // support response_format.
+    this.responseFormatDisabled = false;
+  }
+
+  /** Build a chat completion request, conditionally including response_format
+   *  based on whether the provider has rejected it in a prior call. */
+  private buildCompletionRequest(
+    base: Omit<ChatCompletionRequest, 'response_format'>,
+  ): ChatCompletionRequest {
+    if (this.responseFormatDisabled) {
+      return base;
+    }
+    return { ...base, response_format: { type: 'json_object' } };
   }
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
@@ -69,7 +87,7 @@ export class OpenAICompatibleService implements TranslationService {
             );
       const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
-      const completionRequest: ChatCompletionRequest = {
+      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
         model: this.config.model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -77,8 +95,7 @@ export class OpenAICompatibleService implements TranslationService {
         ],
         temperature: this.config.temperature,
         max_tokens: this.config.maxTokens,
-        response_format: { type: 'json_object' },
-      };
+      });
 
       if (isDebugLoggingEnabled()) {
         console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
@@ -141,15 +158,14 @@ export class OpenAICompatibleService implements TranslationService {
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      const completionRequest: ChatCompletionRequest = {
+      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
         model: this.config.model,
         messages: [
           { role: 'user', content: 'Reply with exactly: {"status":"ok"}' },
         ],
         temperature: 0,
         max_tokens: 20,
-        response_format: { type: 'json_object' },
-      };
+      });
 
       const response = await this.fetchCompletion(completionRequest);
       const content = response.choices[0]?.message?.content ?? '';
@@ -180,7 +196,7 @@ Rules:
 
       const userPrompt = `Title: ${pageContext.title || 'N/A'}\nDescription: ${pageContext.description || 'N/A'}\nDomain: ${pageContext.domain || 'N/A'}`;
 
-      const completionRequest: ChatCompletionRequest = {
+      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
         model: this.config.model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -188,8 +204,7 @@ Rules:
         ],
         temperature: 0.1,
         max_tokens: 50,
-        response_format: { type: 'json_object' },
-      };
+      });
 
       const response = await this.fetchCompletion(completionRequest);
       const responseText = response.choices[0]?.message?.content ?? '';
@@ -257,15 +272,14 @@ Rules:
         2,
       )}`;
 
-      const completionRequest: ChatCompletionRequest = {
+      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
         model: this.config.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
         temperature: 0,
-        response_format: { type: 'json_object' },
-      };
+      });
 
       const response = await this.fetchCompletion(completionRequest);
       const responseText = response.choices[0]?.message?.content ?? '';
@@ -373,11 +387,14 @@ Rules:
         // The system prompt already instructs the model to return JSON, and
         // parseTranslationResponse() has robust fallback parsing, so retry
         // once without response_format when we detect this specific error.
+        // The flag is set permanently so all subsequent requests skip
+        // response_format from the start (no wasted failed call every time).
         if (
           request.response_format &&
           response.status === 400 &&
           errorMessage.includes('response_format')
         ) {
+          this.responseFormatDisabled = true;
           const strippedRequest = { ...request };
           delete strippedRequest.response_format;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt);

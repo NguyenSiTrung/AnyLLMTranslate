@@ -202,11 +202,65 @@ describe('OpenAICompatibleService', () => {
       expect(result.translations.get('p1')).toBe('Xin chào');
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
-      // Second call should NOT include response_format in the body.
+      // Second call (retry) should NOT include response_format in the body.
       const secondBody = JSON.parse(fetchMock.mock.calls[1][1]?.body as string) as {
         response_format?: unknown;
       };
       expect(secondBody.response_format).toBeUndefined();
+    });
+
+    it('skips response_format on subsequent requests after first rejection (no wasted failed call)', async () => {
+      // First call: 400 with response_format error.
+      // Second call: success without response_format (retry of first translate).
+      // Third call: success without response_format (second translate — should
+      //   NOT send response_format at all, no wasted 400).
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: () => Promise.resolve(
+            '{"error":{"message":"\'response_format\' with type \'json_object\' requires a JSON schema."}}',
+          ),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () => Promise.resolve({
+            id: 'chatcmpl-test',
+            choices: [{ message: { role: 'assistant', content: '{"translations":{"p1":"Xin chào"}}' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }),
+          text: () => Promise.resolve(''),
+        });
+      globalThis.fetch = fetchMock;
+
+      const service = new OpenAICompatibleService(mockConfig);
+
+      // First translate: 1 failed + 1 retry = 2 calls.
+      const result1 = await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(result1.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      // Second translate: should succeed in 1 call (no wasted 400).
+      const result2 = await service.translate({
+        texts: new Map([['p1', 'World']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(result2.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(3); // only +1, not +2
+
+      // Third call should NOT include response_format.
+      const thirdBody = JSON.parse(fetchMock.mock.calls[2][1]?.body as string) as {
+        response_format?: unknown;
+      };
+      expect(thirdBody.response_format).toBeUndefined();
     });
 
     it('includes glossary block in system prompt when glossaryBlock provided', async () => {
