@@ -16,6 +16,7 @@ import {
   onDomCues,
   onDomTrackChanged,
   onTextTrackCues,
+  onMseCues,
 } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
@@ -33,6 +34,7 @@ import type {
   SubtitleDomCuesPayload,
   SubtitleDomTrackChangedPayload,
   SubtitleTextTrackCuesPayload,
+  SubtitleMseCuesPayload,
 } from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
@@ -849,6 +851,66 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
 }
 
 /**
+ * Handle MSE SourceBuffer cues (Tier 3 — progressive, delta-based).
+ * Feeds new cues into the chunked translate path, mirroring DOM-cue delta handling.
+ * Lowest precedence tier — Phase 5 finalizes precedence.
+ */
+async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
+  if (!isOnWatchPage()) return;
+  if (payload.cues.length === 0) return;
+  if (state.isOverlayMode) return; // Already active from a higher-precedence source
+
+  console.log('AnyLLMTranslate: MSE cues received', {
+    cueCount: payload.cues.length,
+  });
+
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) return;
+
+  // Use the same overlay activation + translation path
+  state.isOverlayMode = true;
+  console.log('AnyLLMTranslate: Activating overlay mode from MSE cues');
+
+  let cuesToDisplay = payload.cues;
+  try {
+    showSubtitleToast('Translating subtitles...', true);
+    const pageContext = await buildSubtitlePageContext();
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues: payload.cues,
+      sourceLanguage: settings.sourceLanguage === 'auto'
+        ? (payload.language || 'en')
+        : settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+      pageContext,
+      profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (response?.success && response.cues) {
+      cuesToDisplay = response.cues;
+      if (response.sessionId !== undefined) {
+        state.activeSubtitleSessionId = response.sessionId;
+      }
+    }
+  } catch (error) {
+    console.warn('AnyLLMTranslate: MSE cue translation error', error);
+  }
+
+  const savedPrefs = await initializeControls();
+  const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
+  initializeOverlay(cuesToDisplay, overlayConfig);
+
+  const textContainer = getOverlayTextContainer();
+  if (textContainer) {
+    state.dragCleanup = enableDragReposition(textContainer);
+  }
+
+  hideSubtitleToast();
+  showSubtitleToast('Subtitles processing...');
+}
+
+/**
  * Fetch subtitle content via background worker (CORS bypass).
  */
 async function fetchSubtitleContent(url: string): Promise<string> {
@@ -1094,6 +1156,8 @@ export function startCoordinator(): () => void {
   const cleanupDomTrackChanged = onDomTrackChanged(handleDomTrackChanged);
   // Listen for full TextTrack cues from MAIN world (Tier 4)
   const cleanupTextTrackCues = onTextTrackCues(handleTextTrackCues);
+  // Listen for MSE SourceBuffer cues from MAIN world (Tier 3)
+  const cleanupMseCues = onMseCues(handleMseCues);
 
   // Proactive DOM track list for popup (Max has no metadata URLs)
   scheduleDomTrackDiscovery();
@@ -1177,6 +1241,7 @@ export function startCoordinator(): () => void {
     cleanupDomCues();
     cleanupDomTrackChanged();
     cleanupTextTrackCues();
+    cleanupMseCues();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);

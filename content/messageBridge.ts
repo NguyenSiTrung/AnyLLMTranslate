@@ -14,6 +14,7 @@ import type {
   SubtitleDomCuesPayload,
   SubtitleDomTrackChangedPayload,
   SubtitleTextTrackCuesPayload,
+  SubtitleMseCuesPayload,
 } from '@/types/subtitle';
 
 /**
@@ -95,6 +96,22 @@ export function onTextTrackCues(
       await handler(payload as SubtitleTextTrackCuesPayload);
     } catch (error) {
       console.warn('AnyLLMTranslate: TextTrack cues handler error', error);
+    }
+  });
+}
+
+/**
+ * Listen for MSE SourceBuffer cues from the MAIN world (Tier 3).
+ * Returns a cleanup function.
+ */
+export function onMseCues(
+  handler: (payload: SubtitleMseCuesPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_MSE_CUES', async (payload) => {
+    try {
+      await handler(payload as SubtitleMseCuesPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: MSE cues handler error', error);
     }
   });
 }

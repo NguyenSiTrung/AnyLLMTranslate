@@ -11,6 +11,7 @@ import { InterceptorRegistry } from '@/inject/interceptorRegistry';
 import { createBridgeSender } from '@/inject/messageBridge';
 import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
+import { MseInterceptor } from '@/inject/mseInterceptor';
 import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost, getManifestPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
@@ -55,9 +56,11 @@ export default defineContentScript({
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
     const fetchInterceptor = new FetchInterceptor(registry, bridge);
+    const mseInterceptor = new MseInterceptor(bridge);
 
     xhrInterceptor.enable();
     fetchInterceptor.enable();
+    mseInterceptor.enable();
 
     // Listen for config messages from the coordinator (ISOLATED world)
     // to update the translation timeout from user settings
@@ -76,6 +79,7 @@ export default defineContentScript({
     window.addEventListener('pagehide', (event: PageTransitionEvent) => {
       xhrInterceptor.disable();
       fetchInterceptor.disable();
+      mseInterceptor.disable();
       if (!event.persisted) {
         // True unload — no further action needed
         return;
@@ -88,6 +92,7 @@ export default defineContentScript({
         // Restored from BFCache — re-enable interceptors
         xhrInterceptor.enable();
         fetchInterceptor.enable();
+        mseInterceptor.enable();
         console.log('[AnyLLMTranslate] Interceptors re-enabled after BFCache restore');
       }
     });

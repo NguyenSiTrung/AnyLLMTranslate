@@ -39,6 +39,7 @@ export type BridgeMessageType =
   | 'SUBTITLE_DOM_CUES'
   | 'SUBTITLE_DOM_TRACK_CHANGED'
   | 'SUBTITLE_TEXTTRACK_CUES'
+  | 'SUBTITLE_MSE_CUES'
   | 'SUBTITLE_CONFIG';
 
 /** postMessage payload between worlds */
@@ -154,6 +155,15 @@ export interface ManifestSubtitleResult {
   cues?: Array<{ startTime: number; endTime: number; text: string }>;
   error?: string;
 }
+
+/** Payload for SUBTITLE_MSE_CUES messages (MSE SourceBuffer hook, Tier 3) */
+export interface SubtitleMseCuesPayload {
+  cues: SubtitleCue[];
+  platform: string;
+  language: string;
+  videoId?: string;
+}
+
 /** Contract for DOM-scraped cue sources (platforms like Max with no VTT URL) */
 export interface DomCueSource {
   /** Selector for the element whose textContent = current cue text */
