@@ -11,7 +11,7 @@ import { InterceptorRegistry } from '@/inject/interceptorRegistry';
 import { createBridgeSender } from '@/inject/messageBridge';
 import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
-import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
+import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost, getManifestPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -49,6 +49,9 @@ export default defineContentScript({
 
     // Register metadata patterns (read-only, non-blocking track discovery)
     registry.registerMetadataPatterns(getMetadataPatternsForCurrentHost());
+
+    // Register manifest patterns (read-only, non-blocking manifest detection)
+    registry.registerManifestPatterns(getManifestPatternsForCurrentHost());
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
     const fetchInterceptor = new FetchInterceptor(registry, bridge);

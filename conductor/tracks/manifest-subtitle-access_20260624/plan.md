@@ -11,30 +11,34 @@ Build order: **T2 (manifest) → T4 (TextTrack) → T3 (MSE)**
 
 Four pure, side-effect-free modules — the deterministic core of Tier 2. Sequential because Tasks 1–3 append to the same `manifestParser.ts` + test file; Task 4 (VTT concat) is independent but kept sequential for simplicity.
 
-- [ ] Task 1: HLS multivariant manifest parser
+- [x] Task 1: HLS multivariant manifest parser
   - TDD. Write `lib/__tests__/manifestParser.test.ts` fixtures covering:
     - `#EXT-X-MEDIA: TYPE=SUBTITLES` with URI / LANGUAGE / NAME / DEFAULT / AUTOSELECT attributes.
     - Relative-URI resolution against a `baseUrl` (protocol/absolute/path-relative).
     - Manifest with no subtitle tracks → `[]`.
   - Implement `parseHlsManifest(body: string, baseUrl: string): { url: string; language: string; label: string; isDefault: boolean }[]` in `lib/manifestParser.ts`.
   <!-- files: lib/manifestParser.ts, lib/__tests__/manifestParser.test.ts -->
+  - Commit: 49b34e9
 
-- [ ] Task 2: HLS subtitle media-playlist parser
+- [x] Task 2: HLS subtitle media-playlist parser
   - TDD. Fixtures covering: `#EXTINF` + `.vtt` segment list, `#EXT-X-MAP` declaration, empty playlist, relative-URI resolution.
   - Implement `parseHlsSubtitlePlaylist(body: string, baseUrl: string): { url: string; duration: number }[]` (append to `lib/manifestParser.ts`).
   <!-- files: lib/manifestParser.ts (append), lib/__tests__/manifestParser.test.ts (append) -->
+  - Commit: 49b34e9
 
-- [ ] Task 3: DASH manifest parser
+- [x] Task 3: DASH manifest parser
   - TDD. XML fixtures: `AdaptationSet` with `mimeType` `text/vtt` / `application/mp4`, `Role` value `caption`/`subtitle`, `Representation` BaseURL + SegmentTemplate, `lang` attribute. Invalid XML → `[]`. Relative-URI resolution.
   - Implement `parseDashManifest(body: string, baseUrl: string): { url: string; language: string }[]` using DOMParser (append to `lib/manifestParser.ts`).
   <!-- files: lib/manifestParser.ts (append), lib/__tests__/manifestParser.test.ts (append) -->
+  - Commit: 49b34e9
 
-- [ ] Task 4: WebVTT segment concatenation
+- [x] Task 4: WebVTT segment concatenation
   - TDD. Fixtures: multiple `WEBVTT`-prefixed segments with `X-TIMESTAMP-MAP=MPEGTS:...,LOCAL:` headers, header dedup, cue time offset continuity across segment boundaries.
   - Implement `concatVttSegments(segments: string[]): string` in `lib/vttSegmentConcat.ts`.
   <!-- files: lib/vttSegmentConcat.ts, lib/__tests__/vttSegmentConcat.test.ts -->
+  - Commit: 49b34e9
 
-- [ ] Task: Conductor - User Manual Verification 'Pure Manifest & VTT Parsers' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Pure Manifest & VTT Parsers' (Protocol in workflow.md)
 
 ## Phase 2: Manifest Detection, Fetch-Assemble, HBO Max Wiring (Tier 2 integration)
 <!-- execution: sequential -->

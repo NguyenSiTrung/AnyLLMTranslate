@@ -115,6 +115,35 @@ export interface SubtitleUrlPattern {
   pattern: RegExp;
   languageExtractor?: (url: URL) => string;
 }
+
+/** Manifest-sourced subtitle track (from HLS/DASH manifest parsing) */
+export interface ManifestSubtitleTrack {
+  /** Subtitle playlist URL (e.g. .m3u8 media playlist or direct .vtt from DASH) */
+  url: string;
+  /** Language code (BCP-47 or ISO 639-1) */
+  language: string;
+  /** Human-readable label */
+  label: string;
+  /** Whether this is the default track */
+  isDefault: boolean;
+  /** Manifest format: 'hls' or 'dash' */
+  format: 'hls' | 'dash';
+  /** Platform identifier */
+  platform: string;
+}
+
+/** Payload for FETCH_MANIFEST_SUBTITLES messages (coordinator → background) */
+export interface FetchManifestSubtitlesMessage {
+  type: 'FETCH_MANIFEST_SUBTITLES';
+  playlistUrl: string;
+}
+
+/** Result of fetching manifest subtitle segments */
+export interface ManifestSubtitleResult {
+  success: boolean;
+  cues?: Array<{ startTime: number; endTime: number; text: string }>;
+  error?: string;
+}
 /** Contract for DOM-scraped cue sources (platforms like Max with no VTT URL) */
 export interface DomCueSource {
   /** Selector for the element whose textContent = current cue text */

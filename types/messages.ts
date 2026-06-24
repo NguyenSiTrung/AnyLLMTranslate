@@ -29,6 +29,7 @@ export type MessageAction =
   | 'translateSubtitle'
   | 'translateSelection'
   | 'FETCH_SUBTITLE'
+  | 'FETCH_MANIFEST_SUBTITLES'
   | 'statusUpdate'
   | 'SUBTITLE_CHUNK_TRANSLATED'
   | 'SUBTITLE_CHUNK_FAILED'
@@ -113,6 +114,12 @@ export interface SetSubtitleKnobOverrideMessage {
 export interface FetchSubtitleMessage {
   action: 'FETCH_SUBTITLE';
   url: string;
+}
+
+/** Manifest subtitle fetch request from content script → background (Tier 2) */
+export interface FetchManifestSubtitlesMessage {
+  action: 'FETCH_MANIFEST_SUBTITLES';
+  playlistUrl: string;
 }
 
 /** Translate selection request from content script → background */
@@ -238,6 +245,7 @@ export type ExtensionMessage =
   | TranslateSubtitleMessage
   | TranslateSelectionMessage
   | FetchSubtitleMessage
+  | FetchManifestSubtitlesMessage
   | StatusUpdateMessage
   | SubtitleChunkTranslatedMessage
   | PrioritizeSubtitleChunkMessage

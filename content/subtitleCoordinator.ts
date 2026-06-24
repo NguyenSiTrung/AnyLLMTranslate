@@ -706,6 +706,86 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
 }
 
 /**
+ * Activate overlay mode from manifest-sourced subtitles (Tier 2).
+ * Fetches the full subtitle track via FETCH_MANIFEST_SUBTITLES (background
+ * fetches the HLS/DASH playlist + segments, assembles into SubtitleCue[]),
+ * then feeds cues into the same chunked translation path.
+ */
+async function activateOverlayModeFromManifest(playlistUrl: string): Promise<void> {
+  if (state.isOverlayMode) return;
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) {
+    cleanupActiveOverlay();
+    return;
+  }
+
+  showSubtitleToast('Fetching subtitle track from manifest...', true);
+
+  let cues: SubtitleCue[];
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'FETCH_MANIFEST_SUBTITLES',
+      playlistUrl,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
+
+    if (!response?.success || !response.cues || response.cues.length === 0) {
+      console.warn('AnyLLMTranslate: Manifest subtitle fetch failed', response?.error);
+      hideSubtitleToast();
+      showSubtitleToast('Failed to fetch manifest subtitles.');
+      return;
+    }
+    cues = response.cues;
+  } catch (error) {
+    console.error('AnyLLMTranslate: Manifest subtitle fetch error', error);
+    hideSubtitleToast();
+    showSubtitleToast('Manifest subtitle fetch error.');
+    return;
+  }
+
+  state.isOverlayMode = true;
+  console.log('AnyLLMTranslate: Activating overlay mode from manifest', { cueCount: cues.length });
+
+  // Translate cues via the same chunked path
+  let cuesToDisplay = cues;
+  try {
+    hideSubtitleToast();
+    showSubtitleToast('Translating subtitles...', true);
+    const pageContext = await buildSubtitlePageContext();
+    const translateResponse = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues,
+      sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
+      pageContext,
+      profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (translateResponse?.success && translateResponse.cues) {
+      cuesToDisplay = translateResponse.cues;
+      if (translateResponse.sessionId !== undefined) {
+        state.activeSubtitleSessionId = translateResponse.sessionId;
+      }
+    }
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Manifest subtitle translation error', error);
+  }
+  // Initialize overlay with controls (same pattern as activateOverlayMode)
+  const savedPrefs = await initializeControls();
+  const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
+
+  initializeOverlay(cuesToDisplay, overlayConfig);
+
+  const textContainer = getOverlayTextContainer();
+  if (textContainer) {
+    state.dragCleanup = enableDragReposition(textContainer);
+  }
+
+  hideSubtitleToast();
+  showSubtitleToast('Subtitles processing...');
+}
+
+/**
  * Fetch subtitle content via background worker (CORS bypass).
  */
 async function fetchSubtitleContent(url: string): Promise<string> {
@@ -1464,6 +1544,17 @@ export async function selectSubtitleTrack(language: string): Promise<void> {
   }
 
   console.log('AnyLLMTranslate: Selecting subtitle track', { language, url: track.url });
+
+  // Manifest-sourced tracks (HLS/DASH) use FETCH_MANIFEST_SUBTITLES to
+  // fetch + assemble the full subtitle track upfront (Tier 2).
+  const lowerUrl = track.url.toLowerCase().split('?')[0];
+  if (lowerUrl.endsWith('.m3u8') || lowerUrl.endsWith('.mpd')) {
+    console.log('AnyLLMTranslate: Manifest-sourced subtitle track detected', { url: track.url });
+    state.fetchedTrackUrls.add(track.url);
+    await activateOverlayModeFromManifest(track.url);
+    return;
+  }
+
   // Task 6.3: Record fetched URL to deduplicate with interceptor flow
   state.fetchedTrackUrls.add(track.url);
   await activateOverlayMode(track.url);

@@ -67,6 +67,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- 🟡 **Manifest/TextTrack/MSE Subtitle Access (Tiers 2/4/3)** (`manifest-subtitle-access_20260624`) — New 2026-06-24. Upgrade DRM/MSE streaming subtitle access (HBO Max + allowlisted Netflix/Amazon/Vimeo) from DOM scraping (Tier 5, current-cue only) to Tier 2 (HLS/DASH manifest parsing), Tier 4 (HTML5 TextTrack cue reading), and Tier 3 (MSE SourceBuffer hooking) so the full subtitle track is available upfront. Build order T2 → T4 → T3. [View](./conductor/tracks/manifest-subtitle-access_20260624/)
+- 🟠 **Manifest/TextTrack/MSE Subtitle Access (Tiers 2/4/3)** (`manifest-subtitle-access_20260624`) — In Progress 2026-06-24. Upgrade DRM/MSE streaming subtitle access (HBO Max + allowlisted Netflix/Amazon/Vimeo) from DOM scraping (Tier 5, current-cue only) to Tier 2 (HLS/DASH manifest parsing), Tier 4 (HTML5 TextTrack cue reading), and Tier 3 (MSE SourceBuffer hooking) so the full subtitle track is available upfront. Build order T2 → T4 → T3. [View](./conductor/tracks/manifest-subtitle-access_20260624/)
 
 ---

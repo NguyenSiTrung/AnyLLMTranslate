@@ -15,6 +15,9 @@ import type {
   PdfDetectedMessage,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
+import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
+import { concatVttSegments } from '@/lib/vttSegmentConcat';
+import { parseWebVTT } from '@/lib/subtitleParser';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { OpenAICompatibleService } from '@/services/openaiCompatible';
@@ -724,6 +727,9 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)akamaized\.net$/,
   /(?:^|\.)linkedin\.com$/,
   /(?:^|\.)licdn\.com$/,
+  /(?:^|\.)max\.com$/,
+  /(?:^|\.)hbomax\.com$/,
+  /(?:^|\.)hbo\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
@@ -807,6 +813,120 @@ async function handleFetchSubtitle(
     }
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
     return { success: false, error: errorMsg };
+  }
+}
+
+/** Handle FETCH_MANIFEST_SUBTITLES — fetch a subtitle playlist + segments, assemble into cues */
+async function handleFetchManifestSubtitles(
+  message: { playlistUrl: string },
+): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+  if (!isAllowedSubtitleUrl(message.playlistUrl)) {
+    return { success: false, error: 'URL not in subtitle allow-list' };
+  }
+
+  try {
+    const lowerUrl = message.playlistUrl.toLowerCase().split('?')[0];
+    const isHls = lowerUrl.endsWith('.m3u8');
+    const isDash = lowerUrl.endsWith('.mpd');
+
+    if (isHls) {
+      // Fetch the subtitle media playlist
+      const playlistResponse = await fetchWithTimeout(message.playlistUrl);
+      if (!playlistResponse.ok) {
+        return { success: false, error: `HTTP ${playlistResponse.status}` };
+      }
+      const playlistBody = await playlistResponse.text();
+
+      // Check if it's a multivariant playlist (contains EXT-X-MEDIA SUBTITLES)
+      // or a media playlist (contains EXTINF segments)
+      if (playlistBody.includes('#EXT-X-MEDIA:') && playlistBody.includes('TYPE=SUBTITLES')) {
+        // Multivariant — extract subtitle playlist URLs, pick the first/default
+        const tracks = parseHlsManifest(playlistBody, message.playlistUrl);
+        if (tracks.length === 0) {
+          return { success: false, error: 'No subtitle tracks in manifest' };
+        }
+        // Use the default track or the first one
+        const track = tracks.find((t) => t.isDefault) ?? tracks[0];
+        // Recursively fetch the subtitle playlist
+        return handleFetchManifestSubtitles({ playlistUrl: track.url });
+      }
+
+      // Media playlist — extract segment URLs
+      const segments = parseHlsSubtitlePlaylist(playlistBody, message.playlistUrl);
+      if (segments.length === 0) {
+        return { success: false, error: 'No segments in subtitle playlist' };
+      }
+
+      // Fetch all segments
+      const segmentBodies: string[] = [];
+      for (const seg of segments) {
+        if (!isAllowedSubtitleUrl(seg.url)) {
+          return { success: false, error: 'Segment URL not in allow-list' };
+        }
+        const segResponse = await fetchWithTimeout(seg.url);
+        if (!segResponse.ok) {
+          return { success: false, error: `Segment fetch failed: HTTP ${segResponse.status}` };
+        }
+        segmentBodies.push(await segResponse.text());
+      }
+
+      // Concatenate + parse
+      const combined = concatVttSegments(segmentBodies);
+      const cues = parseWebVTT(combined);
+      return { success: true, cues };
+    }
+
+    if (isDash) {
+      // DASH manifest — parse for subtitle track URLs
+      const manifestResponse = await fetchWithTimeout(message.playlistUrl);
+      if (!manifestResponse.ok) {
+        return { success: false, error: `HTTP ${manifestResponse.status}` };
+      }
+      const manifestBody = await manifestResponse.text();
+      const tracks = parseDashManifest(manifestBody, message.playlistUrl);
+      if (tracks.length === 0) {
+        return { success: false, error: 'No subtitle tracks in DASH manifest' };
+      }
+
+      // Fetch the first track's VTT file
+      const track = tracks[0];
+      if (!isAllowedSubtitleUrl(track.url)) {
+        return { success: false, error: 'Track URL not in allow-list' };
+      }
+      const trackResponse = await fetchWithTimeout(track.url);
+      if (!trackResponse.ok) {
+        return { success: false, error: `HTTP ${trackResponse.status}` };
+      }
+      const trackBody = await trackResponse.text();
+      const cues = parseWebVTT(trackBody);
+      return { success: true, cues };
+    }
+
+    // Direct VTT/SRT file
+    const response = await fetchWithTimeout(message.playlistUrl);
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+    const body = await response.text();
+    const cues = parseWebVTT(body);
+    return { success: true, cues };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Failed to fetch manifest subtitles';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/** Fetch with 30s timeout (reused by manifest handler) */
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return response;
+  } catch (error) {
+    clearTimeout(timer);
+    throw error;
   }
 }
 
@@ -1005,6 +1125,8 @@ export function handleMessage(
       return handleTranslateSubtitle(message, _sender);
     case 'FETCH_SUBTITLE':
       return handleFetchSubtitle(message);
+    case 'FETCH_MANIFEST_SUBTITLES':
+      return handleFetchManifestSubtitles(message);
     case 'translateSelection':
       return handleTranslateSelection(message);
     case 'restore': {

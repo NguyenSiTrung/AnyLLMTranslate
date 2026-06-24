@@ -29,6 +29,10 @@ export interface SubtitleHandler {
    *  Platforms that intercept URLs return undefined. */
   getDomCueSource?(): DomCueSource;
 
+  /** Get URL patterns for streaming manifests (.m3u8/.mpd) that may contain
+   *  subtitle track references (optional, Tier 2 manifest parsing). */
+  getManifestPatterns?(): SubtitleUrlPattern[];
+
   /** Whether the current page is a video watch page (vs. listing/search).
    *  When absent, callers fall back to hostname-based detection. */
   isWatchPage?(): boolean;
@@ -89,6 +93,17 @@ export function getMetadataPatternsForCurrentHost(): SubtitleUrlPattern[] {
   for (const handler of handlers) {
     if (handler.detect() && handler.getMetadataPatterns) {
       patterns.push(...handler.getMetadataPatterns());
+    }
+  }
+  return patterns;
+}
+
+/** Get all manifest URL patterns from handlers that match the current hostname */
+export function getManifestPatternsForCurrentHost(): SubtitleUrlPattern[] {
+  const patterns: SubtitleUrlPattern[] = [];
+  for (const handler of handlers) {
+    if (handler.detect() && handler.getManifestPatterns) {
+      patterns.push(...handler.getManifestPatterns());
     }
   }
   return patterns;

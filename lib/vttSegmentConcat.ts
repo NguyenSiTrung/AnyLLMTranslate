@@ -148,7 +148,6 @@ export function concatVttSegments(segments: string[]): string {
 
     // Collect NOTE blocks from the body
     const bodyBlocks = segment.split(/\n\n+/);
-    const cueBodyParts: string[] = [];
 
     for (const block of bodyBlocks) {
       const trimmed = block.trim();

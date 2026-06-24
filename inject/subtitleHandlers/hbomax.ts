@@ -73,6 +73,23 @@ export class HboMaxHandler implements SubtitleHandler {
     return [];
   }
 
+  getManifestPatterns(): SubtitleUrlPattern[] {
+    // Best-guess manifest patterns for HLS/DASH on Max CDN domains.
+    // Correctness pending live confirmation — DOM scraping is retained as fallback.
+    return [
+      {
+        platform: 'hbomax',
+        // HLS multivariant or media playlist on Max CDN domains
+        pattern: /https?:\/\/[^/]*(?:max\.com|hbomax\.com|hbo\.com)[^?]*\.m3u8(?:\?|$)/i,
+      },
+      {
+        platform: 'hbomax',
+        // DASH manifest on Max CDN domains
+        pattern: /https?:\/\/[^/]*(?:max\.com|hbomax\.com|hbo\.com)[^?]*\.mpd(?:\?|$)/i,
+      },
+    ];
+  }
+
   transformResponse(_body: string, _contentType: string, _url: string): SubtitleCue[] {
     return [];
   }
