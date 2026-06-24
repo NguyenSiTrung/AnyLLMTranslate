@@ -172,6 +172,7 @@ function cleanupActiveOverlay(): void {
     cleanupOverlay();
     state.isOverlayMode = false;
   }
+  state.activeSource = null;
 }
 
 /** Inject a <style> hiding the platform's native caption window.
@@ -587,7 +588,7 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
   if (shouldSuppressSource('texttrack')) return; // Higher-precedence source already active
-  if (state.isOverlayMode) return; // Already active
+  if (state.isOverlayMode && state.activeSource === 'texttrack') return; // Already active
 
   console.log('AnyLLMTranslate: TextTrack full cues received', {
     language: payload.language,
@@ -601,6 +602,12 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
   state.isOverlayMode = true;
   state.activeSource = 'texttrack';
   console.log('AnyLLMTranslate: Activating overlay mode from TextTrack cues');
+
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
+  }
 
   let cuesToDisplay = payload.cues;
   try {
@@ -683,6 +690,7 @@ async function discoverDomSubtitleTracks(): Promise<void> {
 async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
+  if (shouldSuppressSource('dom')) return; // Suppress DOM updates if higher-tier source is active
 
   if (!state.isOverlayMode) {
     await activateOverlayFromDom(payload);
@@ -813,7 +821,8 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
  * then feeds cues into the same chunked translation path.
  */
 async function activateOverlayModeFromManifest(playlistUrl: string): Promise<void> {
-  if (state.isOverlayMode) return;
+  if (shouldSuppressSource('manifest')) return;
+  if (state.isOverlayMode && state.activeSource === 'manifest') return;
   const settings = await loadSettings();
   if (!settings.subtitleSettings.enabled) {
     cleanupActiveOverlay();
@@ -846,6 +855,13 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
   state.isOverlayMode = true;
   state.activeSource = 'manifest';
   console.log('AnyLLMTranslate: Activating overlay mode from manifest', { cueCount: cues.length });
+
+  // Hide the platform's native caption window if DOM cue source selectors are available.
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
+  }
 
   // Translate cues via the same chunked path
   let cuesToDisplay = cues;
@@ -896,7 +912,7 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
   if (shouldSuppressSource('mse')) return; // Higher-precedence source already active
-  if (state.isOverlayMode) return; // Already active
+  if (state.isOverlayMode && state.activeSource === 'mse') return; // Already active
 
   console.log('AnyLLMTranslate: MSE cues received', {
     cueCount: payload.cues.length,
@@ -909,6 +925,12 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
   state.isOverlayMode = true;
   state.activeSource = 'mse';
   console.log('AnyLLMTranslate: Activating overlay mode from MSE cues');
+
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
+  }
 
   let cuesToDisplay = payload.cues;
   try {
@@ -1374,6 +1396,7 @@ export function resetCoordinatorState(): void {
  * Delegates to the current handler's isWatchPage() when available.
  */
 export function isOnWatchPage(): boolean {
+  if (typeof window === 'undefined') return false;
   // Prefer handler-specific watch page detection
   const handler = detectCurrentHandler();
   if (handler?.isWatchPage) {
@@ -1421,8 +1444,8 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
   const handler = detectCurrentHandler();
   let tracks: AvailableSubtitleTrack[];
 
-  // If payload is from html5 textTrackDiscovery, use it directly
-  if (payload.platform === 'html5' && payload.tracks && Array.isArray(payload.tracks)) {
+  // If tracks are already pre-parsed/discovered (e.g. from manifest or textTrack), use them directly
+  if (payload.tracks && Array.isArray(payload.tracks)) {
     tracks = payload.tracks;
   } else if (handler?.extractAvailableTracks) {
     const rawPayload = payload as unknown as { body?: string; contentType?: string; url?: string };
@@ -1431,9 +1454,6 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
       rawPayload.contentType || 'application/json',
       rawPayload.url || '',
     );
-  } else if (payload.tracks && Array.isArray(payload.tracks)) {
-    // Fallback for other cases
-    tracks = payload.tracks;
   } else {
     return;
   }
@@ -1501,7 +1521,7 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
  *   Pass `state.navigationEpoch` when calling synchronously.
  */
 async function tryAutoActivate(epochAtStart: number): Promise<void> {
-  if (state.isOverlayMode) return;
+  if (state.isOverlayMode && (state.activeSource === 'manifest' || shouldSuppressSource('manifest'))) return;
   if (!isOnWatchPage()) return;
 
   // Only activate if all known tracks belong to a single video
@@ -1720,7 +1740,7 @@ function startVideoPlaybackWatcher(): () => void {
 export async function selectSubtitleTrack(language: string): Promise<void> {
   const track = state.availableTracks.find((t) => t.language === language);
   const handler = detectCurrentHandler();
-  if (handler?.getDomCueSource) {
+  if (handler?.getDomCueSource && !track?.url) {
     if (!track) {
       console.warn('AnyLLMTranslate: No DOM track metadata for', language);
       return;

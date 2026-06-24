@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Capture the onDomCues / onDomTrackChanged handlers so we can invoke them directly.
 let capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 let capturedDomTrackChangedHandler: ((payload: unknown) => Promise<void>) | null = null;
+let capturedTracksDiscoveredHandler: ((payload: unknown) => Promise<void>) | null = null;
 
 /** Invoke the captured DOM cues handler, asserting it was registered. */
 async function invokeDomCuesHandler(payload: unknown): Promise<void> {
@@ -14,7 +15,10 @@ async function invokeDomCuesHandler(payload: unknown): Promise<void> {
 
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: () => () => {},
-  onTracksDiscovered: () => () => {},
+  onTracksDiscovered: (handler: (payload: unknown) => Promise<void>) => {
+    capturedTracksDiscoveredHandler = handler;
+    return () => {};
+  },
   onDomCues: (handler: (payload: unknown) => Promise<void>) => {
     capturedDomCuesHandler = handler;
     return () => {};
@@ -471,5 +475,157 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
     const after = await tryAutoActivateForDom({ manual: true });
     expect(after.activated).toBe(true);
     resetCoordinatorState();
+  });
+
+  describe('manifest and DOM precedence integration', () => {
+    beforeEach(() => {
+      capturedTracksDiscoveredHandler = null;
+      capturedTextTrackCuesHandler = null;
+      capturedMseCuesHandler = null;
+    });
+
+    it('processTracksDiscovered uses payload.tracks directly and selectSubtitleTrack routes to manifest if track has a url', async () => {
+      setLocation('www.max.com', '/video/watch/x/y');
+      
+      const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+      const mockHandler = {
+        platform: 'hbomax',
+        getDomCueSource: () => ({
+          cueSelector: '[data-testid="cueBoxRowTextCue"]',
+          captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+          observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+          readActiveLanguage: () => 'en',
+        }),
+        extractAvailableTracks: vi.fn(() => [
+          { language: 'en', label: 'English', url: undefined, platform: 'hbomax' }
+        ]),
+      };
+      vi.mocked(detectCurrentHandler).mockReturnValue(mockHandler as never);
+
+      const mod = await import('@/content/subtitleCoordinator');
+      mod.startCoordinator();
+
+      expect(capturedTracksDiscoveredHandler).not.toBeNull();
+
+      // 1. Simulate discovery of a manifest track with a URL
+      const manifestTracks = [
+        { language: 'en', label: 'English', url: 'https://cdn.max.com/sub.m3u8', platform: 'hbomax', videoId: 'y' }
+      ];
+      if (capturedTracksDiscoveredHandler) {
+        await capturedTracksDiscoveredHandler({
+          platform: 'hbomax',
+          tracks: manifestTracks,
+          videoId: 'y',
+        });
+      }
+
+      // Assert HboMaxHandler.extractAvailableTracks was NOT called (payload.tracks used directly)
+      expect(mockHandler.extractAvailableTracks).not.toHaveBeenCalled();
+
+      // 2. Select track and verify it attempts manifest fetch rather than falling back to DOM scraping
+      // Mock background response for FETCH_MANIFEST_SUBTITLES
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+        success: true,
+        cues: [{ startTime: 0, endTime: 2, text: 'hello from manifest' }],
+      });
+      // Mock background response for translateSubtitle
+      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+        success: true,
+        cues: [{ startTime: 0, endTime: 2, text: 'translated hello' }],
+      });
+
+      await mod.selectSubtitleTrack('en');
+
+      // Verify FETCH_MANIFEST_SUBTITLES was called, indicating selectSubtitleTrack routed to manifest
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'FETCH_MANIFEST_SUBTITLES', playlistUrl: 'https://cdn.max.com/sub.m3u8' })
+      );
+
+      mod.resetCoordinatorState();
+    });
+
+    it('activateOverlayModeFromManifest overrides DOM overlay and suppresses subsequent DOM cues', async () => {
+      setLocation('www.max.com', '/video/watch/x/y');
+      
+      const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+      const mockHandler = {
+        platform: 'hbomax',
+        getDomCueSource: () => ({
+          cueSelector: '[data-testid="cueBoxRowTextCue"]',
+          captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+          observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+          readActiveLanguage: () => 'en',
+        }),
+      };
+      vi.mocked(detectCurrentHandler).mockReturnValue(mockHandler as never);
+
+      const mod = await import('@/content/subtitleCoordinator');
+      mod.startCoordinator();
+
+      // 1. Activate DOM-sourced overlay first
+      const { initializeOverlay, updateCues } = await import('@/content/subtitleOverlay');
+      vi.mocked(initializeOverlay).mockClear();
+      vi.mocked(updateCues).mockClear();
+
+      // Mock translateSubtitle for DOM cues
+      // Mock chrome.runtime.sendMessage based on action to handle parallel / sequential flows correctly
+      vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (msg: unknown) => {
+        const message = msg as { action?: string; cues?: Array<{ text: string }> };
+        if (message.action === 'translateSubtitle') {
+          if (message.cues?.[0]?.text === 'dom cue') {
+            return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated dom' }] };
+          }
+          return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated manifest' }] };
+        }
+        if (message.action === 'FETCH_MANIFEST_SUBTITLES') {
+          return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'manifest cue' }] };
+        }
+        return { success: true };
+      });
+
+      await invokeDomCuesHandler({
+        cues: [{ startTime: 0, endTime: 2, text: 'dom cue' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+
+      expect(vi.mocked(initializeOverlay)).toHaveBeenCalled();
+
+      // 2. Simulate discovery and activation of manifest track (higher priority)
+      // Directly trigger selectSubtitleTrack with a manifest track
+      const manifestTracks = [
+        { language: 'en', label: 'English', url: 'https://cdn.max.com/sub.m3u8', platform: 'hbomax', videoId: 'y' }
+      ];
+      if (capturedTracksDiscoveredHandler) {
+        await capturedTracksDiscoveredHandler({
+          platform: 'hbomax',
+          tracks: manifestTracks,
+          videoId: 'y',
+        });
+      }
+
+      vi.mocked(initializeOverlay).mockClear();
+      await mod.selectSubtitleTrack('en');
+
+      // Verify initializeOverlay was called again with manifest cues
+      expect(vi.mocked(initializeOverlay)).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'translated manifest' })
+        ]),
+        expect.any(Object)
+      );
+
+      // 3. Verify that subsequent DOM cues are suppressed (shouldSuppressSource('dom') returns true)
+      vi.mocked(updateCues).mockClear();
+      await invokeDomCuesHandler({
+        cues: [{ startTime: 2, endTime: 4, text: 'new dom cue' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+
+      expect(vi.mocked(updateCues)).not.toHaveBeenCalled();
+
+      mod.resetCoordinatorState();
+    });
   });
 });
