@@ -1,27 +1,26 @@
 {
-  "lastRefresh": "2026-06-24T10:05:00+07:00",
+  "lastRefresh": "2026-06-24T11:50:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (youku + subtitle-quality 5a/5b/6 + metrics)",
-    "product.md: Video Subtitle Translation — 3 new feature bullets (reading-speed timing adaptation, line-wrapping in overlay, context-aware subtitle cache & chunk retry)",
-    "product.md: Implementation Status — Subtitle Quality sub-projects 5a/5b/6 entry added (reading-speed timing, line-wrapping, cache key + retry + failure toast)",
-    "product.md: Current State metrics 1354->1482 tests, 107->112 files; archived tracks 50->51; active tracks 1->0 (youku archived)",
-    "patterns.md: 7 new patterns added in 'Subtitle Quality sub-projects 5a/5b/6 (2026-06-23/24)' section (reading-speed timing, seek-collapse sentinel, line-wrapping char-per-line, max-width safety net, subtitle cache key namespacing, FNV-1a vs SHA-256, retry backoff)",
-    "patterns.md: Youku patterns already present from track archive (6 patterns in 'Youku Subtitles & DOM Cue-Source Generalization' section)",
-    "patterns.md: Refresh marker + footer metrics updated (1479->1482 tests)",
-    "tracks.md: No change (youku-subtitles_20260624 already archived in tracks.md from track workflow)",
-    "tech-stack.md: No drift vs package.json (no dependency changes)",
+    "product.md: Refresh marker bumped (max-rpm + response_format retry + test consolidation)",
+    "product.md: Translation Engine — 2 new feature bullets (provider capability self-healing for response_format rejection; user-configurable RPM rate limiting)",
+    "product.md: Implementation Status — 3 new entries (Max RPM Rate Limiting, response_format Auto-Retry & Rejection Memory, Test Suite Consolidation)",
+    "product.md: Current State metrics 1482/112/51 -> 1500/111/52 (net -18 tests from consolidation 8d3c5a7, not a regression)",
+    "patterns.md: 2 new patterns in new 'Provider Capability Self-Healing (2026-06-24)' section (remember per-instance rejection to avoid wasted failed call; recovery vs prevention at the fetchWithRetry chokepoint)",
+    "patterns.md: Footer metrics updated (1518/113/51 -> 1500/111/52) with consolidation note",
+    "tracks.md: No change (max-rpm_20260624 already archived in tracks.md from track workflow)",
+    "tech-stack.md: No drift vs package.json (no dependency changes since prior refresh)",
     "workflow.md: No drift",
     "backups: product.md.bak, patterns.md.bak, tracks.md.bak refreshed before edits"
   ],
   "codebaseHealth": {
-    "tests": 1482,
-    "testFiles": 112,
+    "tests": 1500,
+    "testFiles": 111,
     "buildSize": "~3.78 MB",
     "lintErrors": 5,
     "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 298,320,352); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged from prior refresh.",
-    "archivedTracks": 51,
+    "archivedTracks": 52,
     "activeTracks": 0
   },
-  "beadsDrift": "Unchanged from prior refresh: open ready issues for archived epics audit-v2 and coursera-udemy (ALT-0gu, ALT-74e) with sub-issues. No conductor-side state change to sync this cycle (youku shipped as conductor track and already archived; sub-projects 5a/5b/6 shipped via superpowers workflow)."
+  "beadsDrift": "max-rpm epic (ALT-v7e) + sub-issues (ALT-v7e.1, ALT-v7e.2, ALT-v7e.1.1, ALT-v7e.2.1) were OPEN in beads despite conductor track archived/done (commit 1be6b6a) -> synced conductor->beads this cycle (closed). Pre-existing unchanged: audit-v2 (ALT-0gu) and coursera-udemy (ALT-74e) epics remain open with sub-issues."
 }
