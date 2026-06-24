@@ -48,3 +48,15 @@ The most relevant patterns from `conductor/patterns.md` for this track:
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-24 11:00] - Phase 1-5: Max RPM Rate Limiting
+- **Implemented:** Sliding-window RPM rate limiter (lib/rateLimiter.ts), settings plumbing (maxRpm on ExtensionSettings + ProviderConfig), service integration (acquire() before fetch in fetchWithRetry), Options UI card
+- **Files changed:** lib/rateLimiter.ts, lib/__tests__/rateLimiter.test.ts, types/config.ts, stores/settingsStore.ts, stores/__tests__/settingsStore.test.ts, services/openaiCompatible.ts, services/background.ts, services/__tests__/openaiCompatible.test.ts, entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx
+- **Commits:** f71259b, e83d6fb, f59b4b9, 96a06f3, 6c47c6d
+- **Learnings:**
+  - Patterns: `vi.advanceTimersByTimeAsync()` must be used (not `vi.advanceTimersByTime()`) when concurrent async code creates new timers during the advance — the async variant properly flushes microtasks between timer firings so re-entrant `delay()` calls get their timers fired within the same advance
+  - Gotchas: esbuild parser can fail on inline JSON string literals containing `}` inside object literal contexts — use a variable (e.g. `const content = JSON.stringify(...)`) instead of inlining `content: '{"a":{"b":1}}'` in mock objects
+  - Gotchas: `initService` in background.ts passes `settings.provider` directly to the service — top-level settings fields like `maxRpm` need to be bridged with `const config = { ...settings.provider, maxRpm: settings.maxRpm }`
+  - Context: The Rate Limiting card was inserted between Performance & Caching and Context & Intelligence, requiring stagger index shifts for all subsequent cards
+  - Testing: 36 new tests added (15 rateLimiter + 5 settingsStore + 5 openaiCompatible + 10 AdvancedSection + 1 already counted)
+---
