@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Zap, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Languages, Check, BarChart3, TextCursorInput,
+  Languages, Check, BarChart3, TextCursorInput, Layers,
 } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
 import { GeneralSection } from './sections/GeneralSection';
 import { ProviderSection } from './sections/ProviderSection';
+import { ProvidersSection } from './sections/ProvidersSection';
 import { ThemesSection } from './sections/ThemesSection';
 import { SiteRulesSection } from './sections/SiteRulesSection';
 import { DictionarySection } from './sections/DictionarySection';
@@ -42,6 +43,7 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'TRANSLATION',
     tabs: [
       { id: 'provider', label: 'Provider', icon: Zap },
+      { id: 'providers', label: 'Providers', icon: Layers },
       { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
       { id: 'site-rules', label: 'Site Rules', icon: Globe },
     ],
@@ -159,6 +161,7 @@ export default function App() {
     switch (activeTab) {
       case 'general': return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;
       case 'provider': return <ProviderSection onOpenSetup={() => setShowSetupWizard(true)} />;
+      case 'providers': return <ProvidersSection />;
       case 'themes': return <ThemesSection />;
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;
