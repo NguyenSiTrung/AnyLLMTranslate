@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Languages, Loader2, Server, XCircle, Zap } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
-import type { OnboardingState } from '@/types/config';
+import { syncProviderToPool } from '@/lib/config';
+import type { OnboardingState, ProviderConfig } from '@/types/config';
 import { ProviderCatalogPicker, inferCatalogId } from './components/ProviderCatalogPicker';
 import { ModelPicker } from './components/ModelPicker';
 import { LANGUAGES } from '@/lib/languages';
@@ -38,6 +39,21 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
   const updateProvider = useSettingsStore((s) => s.updateProvider);
   const { error: showError, success: showSuccess } = useToast();
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Update the legacy provider mirror AND keep providers[0] in sync so the
+   * pool coordinator (which reads settings.providers) sees wizard edits
+   * immediately. The wizard's single-provider flow maps to pool[0].
+   */
+  const updateProviderAndPool = useCallback(
+    (patch: Partial<ProviderConfig>) => {
+      updateProvider(patch);
+      updateSettings({
+        providers: syncProviderToPool(settings.providers ?? [], patch),
+      });
+    },
+    [updateProvider, updateSettings, settings.providers],
+  );
 
   const [step, setStep] = useState<WizardStep>(settings.onboarding.lastStep ?? 'welcome');
   const [selectedLanguage, setSelectedLanguage] = useState(settings.targetLanguage);
@@ -179,32 +195,32 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                     compact
                     selectedCatalogId={catalogId}
                     provider={settings.provider}
-                    onSelect={({ patch }) => updateProvider(patch)}
+                    onSelect={({ patch }) => updateProviderAndPool(patch)}
                   />
                   <FieldGroup label="Base URL" htmlFor="setup-base-url">
                     <Input
                       id="setup-base-url"
                       value={settings.provider.baseUrl}
-                      onChange={(e) => updateProvider({ baseUrl: e.target.value, connectionStatus: 'unknown' })}
+                      onChange={(e) => updateProviderAndPool({ baseUrl: e.target.value, connectionStatus: 'unknown' })}
                     />
                   </FieldGroup>
                   <FieldGroup
                     label="API Key"
                     htmlFor="setup-api-key"
-                    description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional for local providers.'}
+                    description={settings.provider.requiresApiKey ? 'Required for this provider.' : 'Optional — leave blank for local providers.'}
                   >
                     <Input
                       id="setup-api-key"
                       type="password"
                       value={settings.provider.apiKey}
-                      onChange={(e) => updateProvider({ apiKey: e.target.value, connectionStatus: 'unknown' })}
+                      onChange={(e) => updateProviderAndPool({ apiKey: e.target.value, connectionStatus: 'unknown' })}
                       placeholder={apiKeyPlaceholder}
                     />
                   </FieldGroup>
                   <ModelPicker
                     inputId="setup-model"
                     provider={settings.provider}
-                    onModelChange={(model) => updateProvider({ model, connectionStatus: 'unknown' })}
+                    onModelChange={(model) => updateProviderAndPool({ model, connectionStatus: 'unknown' })}
                   />
                 </div>
               </Card>

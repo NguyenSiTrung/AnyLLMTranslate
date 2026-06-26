@@ -3,7 +3,7 @@
  * API keys are encrypted at rest via AES-GCM.
  */
 
-import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey } from '@/types/config';
+import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey, ProviderConfig } from '@/types/config';
 import { DEFAULT_SETTINGS, CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
 import { encryptApiKey, decryptApiKeyResult } from './crypto';
@@ -18,15 +18,19 @@ import { BUILT_IN_RULES } from './siteRules';
  *
  * The single migrated key carries the global `maxRpm`. Keys are assigned a
  * stable random id so circuit-breaker state can survive rebuilds.
+ *
+ * We migrate whenever a legacy `provider` object exists (even if its fields
+ * are partial/empty) so the pool is always the source of truth for dispatch —
+ * this preserves backward compatibility with code paths and tests that relied
+ * on a single always-present provider slot.
  */
 function migrateLegacyProviderIntoPool(merged: ExtensionSettings): void {
   if (merged.providers && merged.providers.length > 0) return;
-  const legacy = merged.provider;
-  if (!legacy || (!legacy.baseUrl && !legacy.apiKey && !legacy.model)) {
-    // Truly unconfigured — leave the pool empty (no slot to migrate).
+  if (!merged.provider) {
     merged.providers = [];
     return;
   }
+  const legacy = merged.provider;
   const key: PoolKey = {
     id: generatePoolKeyId(),
     apiKey: legacy.apiKey,
@@ -98,6 +102,76 @@ export const poolIdGenerators = {
   keyId: generatePoolKeyId,
   providerId: generatePoolProviderId,
 };
+
+/**
+ * Mirror a legacy {@link ProviderConfig} partial update into providers[0] so
+ * the pool stays in sync when the setup wizard or legacy ProviderSection edits
+ * the provider fields. If providers[] is empty, seeds a single-provider pool.
+ *
+ * Used by UI paths that still edit `settings.provider` (the legacy mirror) so
+ * the coordinator (which reads `settings.providers`) sees the same config.
+ *
+ * Returns a new providers array (immutably) suitable for `updateSettings`.
+ */
+export function syncProviderToPool(
+  providers: PoolProvider[],
+  providerPatch: Partial<ProviderConfig>,
+  keyPatch?: Partial<PoolKey>,
+): PoolProvider[] {
+  if (providers.length === 0) {
+    const seeded: PoolProvider = {
+      id: generatePoolProviderId(),
+      displayName: providerPatch.displayName ?? 'Custom',
+      baseUrl: providerPatch.baseUrl ?? '',
+      model: providerPatch.model ?? '',
+      requiresApiKey: providerPatch.requiresApiKey ?? false,
+      temperature: providerPatch.temperature ?? 0.3,
+      maxTokens: providerPatch.maxTokens ?? 4096,
+      requestTimeoutMs: providerPatch.requestTimeoutMs ?? 60000,
+      enabled: true,
+      keys: [
+        {
+          id: generatePoolKeyId(),
+          apiKey: providerPatch.apiKey ?? '',
+          maxRpm: providerPatch.maxRpm ?? 0,
+          enabled: true,
+          ...keyPatch,
+        },
+      ],
+    };
+    return [seeded];
+  }
+  // Patch providers[0] (the wizard writes a single provider).
+  const [first, ...rest] = providers;
+  const patchedProvider: PoolProvider = {
+    ...first!,
+    ...(providerPatch.displayName !== undefined ? { displayName: providerPatch.displayName } : {}),
+    ...(providerPatch.baseUrl !== undefined ? { baseUrl: providerPatch.baseUrl } : {}),
+    ...(providerPatch.model !== undefined ? { model: providerPatch.model } : {}),
+    ...(providerPatch.requiresApiKey !== undefined ? { requiresApiKey: providerPatch.requiresApiKey } : {}),
+    ...(providerPatch.temperature !== undefined ? { temperature: providerPatch.temperature } : {}),
+    ...(providerPatch.maxTokens !== undefined ? { maxTokens: providerPatch.maxTokens } : {}),
+    ...(providerPatch.requestTimeoutMs !== undefined ? { requestTimeoutMs: providerPatch.requestTimeoutMs } : {}),
+  };
+  // Patch the first key (apiKey + maxRpm live on the key in the pool model).
+  let patchedKeys = first!.keys;
+  if (
+    (providerPatch.apiKey !== undefined || providerPatch.maxRpm !== undefined || keyPatch) &&
+    patchedKeys.length > 0
+  ) {
+    const [firstKey, ...restKeys] = patchedKeys;
+    patchedKeys = [
+      {
+        ...firstKey!,
+        ...(providerPatch.apiKey !== undefined ? { apiKey: providerPatch.apiKey } : {}),
+        ...(providerPatch.maxRpm !== undefined ? { maxRpm: providerPatch.maxRpm } : {}),
+        ...keyPatch,
+      },
+      ...restKeys,
+    ];
+  }
+  return [{ ...patchedProvider, keys: patchedKeys }, ...rest];
+}
 
 /** Load settings from chrome.storage.local with defaults */
 export async function loadSettings(): Promise<ExtensionSettings> {

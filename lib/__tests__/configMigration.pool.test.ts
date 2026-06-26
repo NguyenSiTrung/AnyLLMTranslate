@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { loadSettings, saveSettings } from '../config';
+import { loadSettings, saveSettings, syncProviderToPool } from '../config';
 import { decryptApiKeyResult, encryptApiKey } from '../crypto';
 import { STORAGE_KEYS } from '../constants';
 import { DEFAULT_SETTINGS, type ExtensionSettings, type PoolProvider } from '@/types/config';
@@ -207,5 +207,80 @@ describe('saveSettings — per-key encryption', () => {
     expect(poolKeyCalls).toHaveLength(0);
     const persisted = mockSet.mock.calls[0]![0] as Record<string, ExtensionSettings>;
     expect(persisted[STORAGE_KEYS.SETTINGS].providers).toEqual([]);
+  });
+});
+
+describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
+  it('seeds a single-provider pool when providers is empty', () => {
+    const result = syncProviderToPool([], {
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-new',
+      model: 'gpt-4o-mini',
+      displayName: 'OpenAI',
+      requiresApiKey: true,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]!.baseUrl).toBe('https://api.openai.com/v1');
+    expect(result[0]!.keys[0]!.apiKey).toBe('sk-new');
+    expect(result[0]!.keys[0]!.enabled).toBe(true);
+  });
+
+  it('patches providers[0] fields in place when providers exists', () => {
+    const existing: PoolProvider = {
+      id: 'p1',
+      displayName: 'Old',
+      baseUrl: 'https://old/v1',
+      model: 'old-model',
+      requiresApiKey: true,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [{ id: 'k1', apiKey: 'old-key', maxRpm: 30, enabled: true }],
+    };
+    const result = syncProviderToPool([existing], {
+      baseUrl: 'https://new/v1',
+      model: 'new-model',
+      apiKey: 'new-key',
+    });
+    expect(result[0]!.baseUrl).toBe('https://new/v1');
+    expect(result[0]!.model).toBe('new-model');
+    expect(result[0]!.keys[0]!.apiKey).toBe('new-key');
+    // Unpatched fields preserved.
+    expect(result[0]!.displayName).toBe('Old');
+    expect(result[0]!.keys[0]!.maxRpm).toBe(30);
+    // Identity preserved.
+    expect(result[0]!.id).toBe('p1');
+  });
+
+  it('updates maxRpm on the first key', () => {
+    const existing: PoolProvider = {
+      id: 'p1',
+      displayName: 'X',
+      baseUrl: 'https://x/v1',
+      model: 'm',
+      requiresApiKey: false,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+    };
+    const result = syncProviderToPool([existing], { maxRpm: 60 });
+    expect(result[0]!.keys[0]!.maxRpm).toBe(60);
+  });
+
+  it('returns the array unchanged when patch is empty and providers exists', () => {
+    const existing: PoolProvider = {
+      id: 'p1',
+      displayName: 'X',
+      baseUrl: 'https://x/v1',
+      model: 'm',
+      requiresApiKey: false,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+    };
+    const result = syncProviderToPool([existing], {});
+    expect(result[0]!.baseUrl).toBe('https://x/v1');
   });
 });
