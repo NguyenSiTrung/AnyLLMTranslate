@@ -305,9 +305,13 @@ describe('useSettingsStore', () => {
   });
 
   describe('providers — multi-provider pool', () => {
-    it('defaults to an empty providers array', () => {
-      expect(DEFAULT_SETTINGS.providers).toEqual([]);
-      expect(useSettingsStore.getState().providers).toEqual([]);
+    it('defaults to a single default pool provider (backward-compat single slot)', () => {
+      // A brand-new install ships with exactly one default pool entry so the
+      // coordinator always has a slot to dispatch to (mirrors legacy behavior).
+      expect(DEFAULT_SETTINGS.providers).toHaveLength(1);
+      expect(DEFAULT_SETTINGS.providers[0]!.keys).toHaveLength(1);
+      // The store seeds from DEFAULT_SETTINGS.
+      expect(useSettingsStore.getState().providers).toHaveLength(1);
     });
 
     it('updateSettings persists providers array', async () => {

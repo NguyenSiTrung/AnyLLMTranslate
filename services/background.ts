@@ -20,7 +20,7 @@ import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
 import { loadSettings, onSettingsChange } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
-import { OpenAICompatibleService } from '@/services/openaiCompatible';
+import { ProviderPoolCoordinator } from '@/services/providerPool';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
@@ -34,7 +34,6 @@ import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore
 import { preScanNames } from '@/services/subtitleNameScanner';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
-import type { ProviderConfig } from '@/types/config';
 import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
 
 /** Priority queue state for active translation sessions */
@@ -107,7 +106,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 const translatedTabSessions = new Set<number>();
 
 /** Active translation service instance */
-let translationService: (TranslationService & { updateConfig(config: ProviderConfig): void }) | null = null;
+/** The active translation service. Under the multi-provider pool this is a
+ *  ProviderPoolCoordinator that round-robins across all enabled (provider, key)
+ *  slots with circuit-breaker failover. Falls back to a bare OpenAICompatibleService
+ *  only if the pool is somehow empty (defensive — should not happen post-migration). */
+let translationService: TranslationService | null = null;
 
 /** Rate-limiting semaphore factory */
 interface SemaphoreWaiter {
@@ -228,20 +231,39 @@ function __getActiveSessionCountForTest(): number {
 /** Track current preset to detect when service type must change */
 let activePreset: string | null = null;
 
-/** Initialize or re-create translation service from settings */
-async function initService(): Promise<TranslationService & { updateConfig(config: ProviderConfig): void }> {
+/**
+ * Initialize or reconfigure the translation service from settings.
+ *
+ * Under the multi-provider pool, this returns a {@link ProviderPoolCoordinator}
+ * that round-robins across all enabled (provider, key) slots with circuit-
+ * breaker failover (FR-6). The coordinator is the single seam: every
+ * translation path (page, subtitle, PDF, selection, hover, inline,
+ * category-detect, glossary preview) calls through here, so the pool covers
+ * them all without per-path changes.
+ *
+ * `rebuild()` preserves member-service instances + circuit-breaker state for
+ * unchanged key identities, so a live settings change (onSettingsChange /
+ * updateSettings message) hot-swaps config without losing rate-limiter windows
+ * or breaker cooldowns.
+ */
+async function initService(): Promise<TranslationService> {
   const settings = await loadSettings();
-  const config = { ...settings.provider, maxRpm: settings.maxRpm };
 
-  // Re-create if preset changed
-  if (translationService && activePreset === config.preset) {
-    translationService.updateConfig(config);
-  } else {
-    translationService = new OpenAICompatibleService(config);
-    activePreset = config.preset;
-  }
+  // Build or rebuild the pool coordinator. The coordinator is the single seam
+  // covering all translation paths; rebuild() preserves member-service
+  // instances + circuit-breaker state for unchanged key identities.
+  const existing = translationService;
+  const coord: ProviderPoolCoordinator =
+    existing instanceof ProviderPoolCoordinator
+      ? existing
+      : new ProviderPoolCoordinator();
+  translationService = coord;
+  coord.rebuild(settings);
 
-  return translationService;
+  // Keep the legacy preset mirror in sync for any backward-compat read paths.
+  activePreset = settings.provider?.preset ?? 'custom';
+
+  return coord;
 }
 
 async function handleTranslate(

@@ -441,7 +441,25 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableSmartExcludes: true,
   pdfSettings: { ...DEFAULT_PDF_SETTINGS },
   maxRpm: 0,
-  providers: [],
+  /**
+   * A brand-new install ships with exactly one default pool provider (mirroring
+   * the legacy single-provider behavior) so the coordinator always has at least
+   * one slot to dispatch to. Existing users get this via loadSettings migration.
+   */
+  providers: [
+    {
+      id: 'p_default',
+      displayName: 'Custom',
+      baseUrl: '',
+      model: '',
+      requiresApiKey: false,
+      temperature: 0.3,
+      maxTokens: 4096,
+      requestTimeoutMs: 60000,
+      enabled: true,
+      keys: [{ id: 'k_default', apiKey: '', maxRpm: 0, enabled: true }],
+    },
+  ],
 };
 
 /** All available provider presets */
