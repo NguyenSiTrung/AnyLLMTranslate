@@ -3,12 +3,101 @@
  * API keys are encrypted at rest via AES-GCM.
  */
 
-import type { ExtensionSettings, SiteRule } from '@/types/config';
+import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey } from '@/types/config';
 import { DEFAULT_SETTINGS, CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
 import { encryptApiKey, decryptApiKeyResult } from './crypto';
 import { deepMerge } from './utils';
 import { BUILT_IN_RULES } from './siteRules';
+
+/**
+ * FR-1 migration: if a stored settings object has a populated legacy `provider`
+ * but an empty `providers[]`, synthesize a single-entry pool from the legacy
+ * provider so existing users see zero behavior change after upgrade. The
+ * legacy `provider` is kept as a read-only mirror.
+ *
+ * The single migrated key carries the global `maxRpm`. Keys are assigned a
+ * stable random id so circuit-breaker state can survive rebuilds.
+ */
+function migrateLegacyProviderIntoPool(merged: ExtensionSettings): void {
+  if (merged.providers && merged.providers.length > 0) return;
+  const legacy = merged.provider;
+  if (!legacy || (!legacy.baseUrl && !legacy.apiKey && !legacy.model)) {
+    // Truly unconfigured — leave the pool empty (no slot to migrate).
+    merged.providers = [];
+    return;
+  }
+  const key: PoolKey = {
+    id: generatePoolKeyId(),
+    apiKey: legacy.apiKey,
+    maxRpm: merged.maxRpm ?? 0,
+    enabled: true,
+  };
+  const poolProvider: PoolProvider = {
+    id: generatePoolProviderId(),
+    displayName: legacy.displayName || 'Custom',
+    baseUrl: legacy.baseUrl,
+    model: legacy.model,
+    requiresApiKey: legacy.requiresApiKey,
+    catalogId: undefined,
+    temperature: legacy.temperature,
+    maxTokens: legacy.maxTokens,
+    requestTimeoutMs: legacy.requestTimeoutMs,
+    enabled: true,
+    keys: [key],
+  };
+  merged.providers = [poolProvider];
+}
+
+/** Decrypt every providers[].keys[].apiKey in place. Undecryptable keys are
+ *  blanked (mirrors the legacy single-key recoverable behavior at config.ts). */
+async function decryptPoolKeys(merged: ExtensionSettings): Promise<void> {
+  if (!merged.providers) return;
+  for (const provider of merged.providers) {
+    if (!provider.keys) continue;
+    for (const key of provider.keys) {
+      const result = await decryptApiKeyResult(key.apiKey);
+      key.apiKey = result.ok ? result.value : '';
+    }
+  }
+}
+
+/** Encrypt every providers[].keys[].apiKey in place. Returns a deep copy so
+ *  the caller's in-memory settings are never mutated with ciphertext. */
+async function encryptPoolKeys(providers: PoolProvider[]): Promise<PoolProvider[]> {
+  const out: PoolProvider[] = [];
+  for (const provider of providers) {
+    const keys: PoolKey[] = [];
+    for (const key of provider.keys ?? []) {
+      keys.push({ ...key, apiKey: await encryptApiKey(key.apiKey) });
+    }
+    out.push({ ...provider, keys });
+  }
+  return out;
+}
+
+/** Stable random id for pool entries (crypto.randomUUID when available). */
+function generatePoolKeyId(): string {
+  try {
+    return `k_${crypto.randomUUID()}`;
+  } catch {
+    return `k_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+function generatePoolProviderId(): string {
+  try {
+    return `p_${crypto.randomUUID()}`;
+  } catch {
+    return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+/** Exported for UI code that creates new pool entries. */
+export const poolIdGenerators = {
+  keyId: generatePoolKeyId,
+  providerId: generatePoolProviderId,
+};
 
 /** Load settings from chrome.storage.local with defaults */
 export async function loadSettings(): Promise<ExtensionSettings> {
@@ -53,6 +142,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.provider.connectionStatus = 'unknown';
     }
 
+    // FR-1: Migrate legacy provider → pool, then decrypt per-key API keys.
+    migrateLegacyProviderIntoPool(merged);
+    await decryptPoolKeys(merged);
+
     // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
     if ((merged.provider.preset as string) === 'ollama') {
       merged.provider.preset = 'custom';
@@ -73,12 +166,15 @@ export async function loadSettings(): Promise<ExtensionSettings> {
 
 /** Save settings to chrome.storage.local */
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
+  // Encrypt per-key API keys (and the legacy mirror key) at rest.
+  const encryptedProviders = await encryptPoolKeys(settings.providers ?? []);
   const encrypted = {
     ...settings,
     provider: {
       ...settings.provider,
       apiKey: await encryptApiKey(settings.provider.apiKey),
     },
+    providers: encryptedProviders,
   };
   await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: encrypted });
 }
