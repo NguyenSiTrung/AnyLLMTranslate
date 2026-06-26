@@ -303,4 +303,90 @@ describe('useSettingsStore', () => {
       expect(useSettingsStore.getState().maxRpm).toBe(0);
     });
   });
+
+  describe('providers — multi-provider pool', () => {
+    it('defaults to an empty providers array', () => {
+      expect(DEFAULT_SETTINGS.providers).toEqual([]);
+      expect(useSettingsStore.getState().providers).toEqual([]);
+    });
+
+    it('updateSettings persists providers array', async () => {
+      await useSettingsStore.getState().updateSettings({
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'OpenAI',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-4o-mini',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, enabled: true }],
+          },
+        ],
+      });
+      const state = useSettingsStore.getState();
+      expect(state.providers).toHaveLength(1);
+      expect(state.providers[0]!.keys[0]!.apiKey).toBe('sk-secret');
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'anyllm-translate-settings': expect.objectContaining({
+            providers: expect.arrayContaining([
+              expect.objectContaining({ id: 'p1' }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('initStorageSync masks each providers[].keys[].apiKey to *** on cross-context change', () => {
+      initStorageSync();
+      const listener = mockListeners[0];
+
+      listener(
+        {
+          'anyllm-translate-settings': {
+            newValue: {
+              providers: [
+                {
+                  id: 'p1',
+                  enabled: true,
+                  keys: [
+                    { id: 'k1', apiKey: 'enc:leak-attempt-1', maxRpm: 30, enabled: true },
+                    { id: 'k2', apiKey: 'enc:leak-attempt-2', maxRpm: 0, enabled: true },
+                  ],
+                },
+              ],
+            },
+            oldValue: DEFAULT_SETTINGS,
+          },
+        },
+        'local',
+      );
+
+      const state = useSettingsStore.getState();
+      // The masked sentinel must replace every key's apiKey so the encrypted
+      // value never briefly flashes in the UI before async decryption.
+      expect(state.providers[0]!.keys[0]!.apiKey).toBe('***');
+      expect(state.providers[0]!.keys[1]!.apiKey).toBe('***');
+    });
+
+    it('initStorageSync leaves an empty providers array untouched', () => {
+      initStorageSync();
+      const listener = mockListeners[0];
+
+      listener(
+        {
+          'anyllm-translate-settings': {
+            newValue: { providers: [] },
+            oldValue: DEFAULT_SETTINGS,
+          },
+        },
+        'local',
+      );
+
+      expect(useSettingsStore.getState().providers).toEqual([]);
+    });
+  });
 });

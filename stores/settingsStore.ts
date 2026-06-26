@@ -92,6 +92,17 @@ export function initStorageSync(): () => void {
     if (merged.provider?.apiKey) {
       merged.provider = { ...merged.provider, apiKey: '***' };
     }
+    // Multi-provider pool: mask EACH providers[].keys[].apiKey so the encrypted
+    // (or plaintext, depending on the writing context) value never flashes in
+    // the UI before the async reload decrypts it in place.
+    if (merged.providers && merged.providers.length > 0) {
+      merged.providers = merged.providers.map((provider) => ({
+        ...provider,
+        keys: (provider.keys ?? []).map((key) =>
+          key.apiKey ? { ...key, apiKey: '***' } : key,
+        ),
+      }));
+    }
     useSettingsStore.setState(merged);
 
     // Async reload to decrypt any encrypted fields (e.g. apiKey)
