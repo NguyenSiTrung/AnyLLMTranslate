@@ -60,17 +60,17 @@ describe('loadSettings — multi-provider pool migration', () => {
     const settings = await loadSettings();
 
     expect(settings.providers).toHaveLength(1);
-    const provider = settings.providers[0]!;
-    expect(provider.baseUrl).toBe('https://api.openai.com/v1');
+    const provider = settings.providers[0];
+    expect(provider?.baseUrl).toBe('https://api.openai.com/v1');
     expect(provider.model).toBe('gpt-4o-mini');
     expect(provider.displayName).toBe('OpenAI');
     expect(provider.enabled).toBe(true);
     expect(provider.keys).toHaveLength(1);
     // The single migrated key carries the global maxRpm and is enabled.
-    expect(provider.keys[0]!.apiKey).toBe('sk-legacy');
-    expect(provider.keys[0]!.maxRpm).toBe(60);
-    expect(provider.keys[0]!.enabled).toBe(true);
-    expect(provider.keys[0]!.id).toBeTruthy();
+    expect(provider.keys[0]?.apiKey).toBe('sk-legacy');
+    expect(provider.keys[0]?.maxRpm).toBe(60);
+    expect(provider.keys[0]?.enabled).toBe(true);
+    expect(provider.keys[0]?.id).toBeTruthy();
   });
 
   it('does NOT resynthesize when providers[] is already populated', async () => {
@@ -92,8 +92,8 @@ describe('loadSettings — multi-provider pool migration', () => {
     const settings = await loadSettings();
 
     expect(settings.providers).toHaveLength(1);
-    expect(settings.providers[0]!.id).toBe('p1');
-    expect(settings.providers[0]!.keys[0]!.apiKey).toBe('plain-key');
+    expect(settings.providers[0]?.id).toBe('p1');
+    expect(settings.providers[0]?.keys[0]?.apiKey).toBe('plain-key');
   });
 
   it('decrypts each providers[].keys[].apiKey individually', async () => {
@@ -120,8 +120,8 @@ describe('loadSettings — multi-provider pool migration', () => {
 
     const settings = await loadSettings();
 
-    expect(settings.providers[0]!.keys[0]!.apiKey).toBe('key-one');
-    expect(settings.providers[0]!.keys[1]!.apiKey).toBe('key-two');
+    expect(settings.providers[0]?.keys[0]?.apiKey).toBe('key-one');
+    expect(settings.providers[0]?.keys[1]?.apiKey).toBe('key-two');
     expect(decryptApiKeyResult).toHaveBeenCalledWith('enc:key-one');
     expect(decryptApiKeyResult).toHaveBeenCalledWith('enc:key-two');
   });
@@ -157,8 +157,8 @@ describe('loadSettings — multi-provider pool migration', () => {
 
     const settings = await loadSettings();
 
-    expect(settings.providers[0]!.keys[0]!.apiKey).toBe('');
-    expect(settings.providers[0]!.keys[1]!.apiKey).toBe('plain-ok');
+    expect(settings.providers[0]?.keys[0]?.apiKey).toBe('');
+    expect(settings.providers[0]?.keys[1]?.apiKey).toBe('plain-ok');
   });
 });
 
@@ -191,10 +191,10 @@ describe('saveSettings — per-key encryption', () => {
 
     expect(encryptApiKey).toHaveBeenCalledWith('plain-one');
     expect(encryptApiKey).toHaveBeenCalledWith('plain-two');
-    const persisted = mockSet.mock.calls[0]![0] as Record<string, ExtensionSettings>;
-    const savedProviders = persisted[STORAGE_KEYS.SETTINGS].providers!;
-    expect(savedProviders[0]!.keys[0]!.apiKey).toBe('enc:plain-one');
-    expect(savedProviders[0]!.keys[1]!.apiKey).toBe('enc:plain-two');
+    const persisted = mockSet.mock.calls[0]?.[0] as Record<string, ExtensionSettings>;
+    const savedProviders = persisted[STORAGE_KEYS.SETTINGS].providers ?? [];
+    expect(savedProviders[0]?.keys[0]?.apiKey).toBe('enc:plain-one');
+    expect(savedProviders[0]?.keys[1]?.apiKey).toBe('enc:plain-two');
   });
 
   it('persists an empty providers array unchanged', async () => {
@@ -205,7 +205,7 @@ describe('saveSettings — per-key encryption', () => {
     const encryptCalls = (encryptApiKey as ReturnType<typeof vi.fn>).mock.calls;
     const poolKeyCalls = encryptCalls.filter((c) => typeof c[0] === 'string' && c[0] !== '');
     expect(poolKeyCalls).toHaveLength(0);
-    const persisted = mockSet.mock.calls[0]![0] as Record<string, ExtensionSettings>;
+    const persisted = mockSet.mock.calls[0]?.[0] as Record<string, ExtensionSettings>;
     expect(persisted[STORAGE_KEYS.SETTINGS].providers).toEqual([]);
   });
 });
@@ -220,9 +220,9 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       requiresApiKey: true,
     });
     expect(result).toHaveLength(1);
-    expect(result[0]!.baseUrl).toBe('https://api.openai.com/v1');
-    expect(result[0]!.keys[0]!.apiKey).toBe('sk-new');
-    expect(result[0]!.keys[0]!.enabled).toBe(true);
+    expect(result[0]?.baseUrl).toBe('https://api.openai.com/v1');
+    expect(result[0]?.keys[0]?.apiKey).toBe('sk-new');
+    expect(result[0]?.keys[0]?.enabled).toBe(true);
   });
 
   it('patches providers[0] fields in place when providers exists', () => {
@@ -242,14 +242,14 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       model: 'new-model',
       apiKey: 'new-key',
     });
-    expect(result[0]!.baseUrl).toBe('https://new/v1');
-    expect(result[0]!.model).toBe('new-model');
-    expect(result[0]!.keys[0]!.apiKey).toBe('new-key');
+    expect(result[0]?.baseUrl).toBe('https://new/v1');
+    expect(result[0]?.model).toBe('new-model');
+    expect(result[0]?.keys[0]?.apiKey).toBe('new-key');
     // Unpatched fields preserved.
-    expect(result[0]!.displayName).toBe('Old');
-    expect(result[0]!.keys[0]!.maxRpm).toBe(30);
+    expect(result[0]?.displayName).toBe('Old');
+    expect(result[0]?.keys[0]?.maxRpm).toBe(30);
     // Identity preserved.
-    expect(result[0]!.id).toBe('p1');
+    expect(result[0]?.id).toBe('p1');
   });
 
   it('updates maxRpm on the first key', () => {
@@ -265,7 +265,7 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
     };
     const result = syncProviderToPool([existing], { maxRpm: 60 });
-    expect(result[0]!.keys[0]!.maxRpm).toBe(60);
+    expect(result[0]?.keys[0]?.maxRpm).toBe(60);
   });
 
   it('returns the array unchanged when patch is empty and providers exists', () => {
@@ -281,6 +281,6 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
     };
     const result = syncProviderToPool([existing], {});
-    expect(result[0]!.baseUrl).toBe('https://x/v1');
+    expect(result[0]?.baseUrl).toBe('https://x/v1');
   });
 });

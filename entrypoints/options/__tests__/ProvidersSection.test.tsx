@@ -139,7 +139,8 @@ describe('ProvidersSection', () => {
     // Two "Enabled" toggles exist (provider + key). Click the key's enable switch.
     const enableSwitches = screen.getAllByRole('switch');
     // The last switch is the key's enabled toggle (provider toggle is first in expanded).
-    fireEvent.click(enableSwitches[enableSwitches.length - 1]!);
+    const keyToggle = enableSwitches[enableSwitches.length - 1];
+    if (keyToggle) fireEvent.click(keyToggle);
 
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({

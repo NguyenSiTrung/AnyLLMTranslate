@@ -309,7 +309,7 @@ describe('useSettingsStore', () => {
       // A brand-new install ships with exactly one default pool entry so the
       // coordinator always has a slot to dispatch to (mirrors legacy behavior).
       expect(DEFAULT_SETTINGS.providers).toHaveLength(1);
-      expect(DEFAULT_SETTINGS.providers[0]!.keys).toHaveLength(1);
+      expect(DEFAULT_SETTINGS.providers[0]?.keys).toHaveLength(1);
       // The store seeds from DEFAULT_SETTINGS.
       expect(useSettingsStore.getState().providers).toHaveLength(1);
     });
@@ -332,7 +332,7 @@ describe('useSettingsStore', () => {
       });
       const state = useSettingsStore.getState();
       expect(state.providers).toHaveLength(1);
-      expect(state.providers[0]!.keys[0]!.apiKey).toBe('sk-secret');
+      expect(state.providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
       expect(chrome.storage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
           'anyllm-translate-settings': expect.objectContaining({
@@ -372,8 +372,8 @@ describe('useSettingsStore', () => {
       const state = useSettingsStore.getState();
       // The masked sentinel must replace every key's apiKey so the encrypted
       // value never briefly flashes in the UI before async decryption.
-      expect(state.providers[0]!.keys[0]!.apiKey).toBe('***');
-      expect(state.providers[0]!.keys[1]!.apiKey).toBe('***');
+      expect(state.providers[0]?.keys[0]?.apiKey).toBe('***');
+      expect(state.providers[0]?.keys[1]?.apiKey).toBe('***');
     });
 
     it('initStorageSync leaves an empty providers array untouched', () => {

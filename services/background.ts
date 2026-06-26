@@ -228,9 +228,6 @@ function __getActiveSessionCountForTest(): number {
   return activeSessions.size;
 }
 
-/** Track current preset to detect when service type must change */
-let activePreset: string | null = null;
-
 /**
  * Initialize or reconfigure the translation service from settings.
  *
@@ -259,9 +256,6 @@ async function initService(): Promise<TranslationService> {
       : new ProviderPoolCoordinator();
   translationService = coord;
   coord.rebuild(settings);
-
-  // Keep the legacy preset mirror in sync for any backward-compat read paths.
-  activePreset = settings.provider?.preset ?? 'custom';
 
   return coord;
 }

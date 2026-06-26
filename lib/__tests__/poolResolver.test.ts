@@ -109,8 +109,8 @@ describe('resolveSlots', () => {
       keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 60, enabled: true, label: 'prod' }],
     });
 
-    const slot = resolveSlots([p])[0]!;
-    expect(slot.providerId).toBe('p1');
+    const slot = resolveSlots([p])[0];
+    expect(slot?.providerId).toBe('p1');
     expect(slot.keyId).toBe('k1');
     expect(slot.providerConfig.baseUrl).toBe('https://api.openai.com/v1');
     expect(slot.providerConfig.model).toBe('gpt-4o');

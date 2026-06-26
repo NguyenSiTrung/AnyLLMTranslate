@@ -11,7 +11,7 @@
  * distributes requests across the pool.
  */
 
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ProviderPoolCoordinator } from '../providerPool';
 import type { TranslationService } from '../base';
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
@@ -136,8 +136,8 @@ describe('ProviderPoolCoordinator — single-seam integration (AC-6)', () => {
     const paras = [{ id: 'p1', text: 'hi' }];
     const r1 = await coord.classifyPdfParagraphs(paras);
     const r2 = await coord.classifyPdfParagraphs(paras);
-    expect(r1.labels.p1).toBe('k1');
-    expect(r2.labels.p1).toBe('k2');
+    expect(r1.labels?.p1).toBe('k1');
+    expect(r2.labels?.p1).toBe('k2');
   });
 
   it('mixed calls share the same rotation cursor (cross-path round-robin)', async () => {

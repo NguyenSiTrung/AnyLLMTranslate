@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createPoolCursor } from '../poolCursor';
 
 describe('createPoolCursor', () => {
@@ -37,7 +37,10 @@ describe('createPoolCursor', () => {
     it('respects stable insertion order across many cycles', () => {
       const cursor = createPoolCursor(4);
       const sequence: number[] = [];
-      for (let i = 0; i < 10; i++) sequence.push(cursor.next()!);
+      for (let i = 0; i < 10; i++) {
+        const idx = cursor.next();
+        if (idx !== null) sequence.push(idx);
+      }
       // 0,1,2,3,0,1,2,3,0,1
       expect(sequence).toEqual([0, 1, 2, 3, 0, 1, 2, 3, 0, 1]);
     });

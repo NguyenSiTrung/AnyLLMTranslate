@@ -143,8 +143,11 @@ export function syncProviderToPool(
   }
   // Patch providers[0] (the wizard writes a single provider).
   const [first, ...rest] = providers;
+  // Guaranteed present: providers.length > 0 was checked above, but ESLint's
+  // no-non-null-assertion can't follow that, so guard explicitly.
+  if (!first) return providers;
   const patchedProvider: PoolProvider = {
-    ...first!,
+    ...first,
     ...(providerPatch.displayName !== undefined ? { displayName: providerPatch.displayName } : {}),
     ...(providerPatch.baseUrl !== undefined ? { baseUrl: providerPatch.baseUrl } : {}),
     ...(providerPatch.model !== undefined ? { model: providerPatch.model } : {}),
@@ -154,7 +157,7 @@ export function syncProviderToPool(
     ...(providerPatch.requestTimeoutMs !== undefined ? { requestTimeoutMs: providerPatch.requestTimeoutMs } : {}),
   };
   // Patch the first key (apiKey + maxRpm live on the key in the pool model).
-  let patchedKeys = first!.keys;
+  let patchedKeys = first.keys;
   if (
     (providerPatch.apiKey !== undefined || providerPatch.maxRpm !== undefined || keyPatch) &&
     patchedKeys.length > 0
@@ -162,7 +165,7 @@ export function syncProviderToPool(
     const [firstKey, ...restKeys] = patchedKeys;
     patchedKeys = [
       {
-        ...firstKey!,
+        ...firstKey,
         ...(providerPatch.apiKey !== undefined ? { apiKey: providerPatch.apiKey } : {}),
         ...(providerPatch.maxRpm !== undefined ? { maxRpm: providerPatch.maxRpm } : {}),
         ...keyPatch,

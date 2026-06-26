@@ -136,3 +136,125 @@ Seeded from `max-rpm_20260624`, `openai-provider-catalog_20260623`, and `langflo
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-26 17:32] - Phase 1 Task 1.1/1.2/1.3: Data Model & Migration
+- **Implemented:** PoolKey/PoolProvider types, providers[] on ExtensionSettings,
+  legacy→pool migration in loadSettings, per-key AES-GCM encryption loop in
+  save/load, initStorageSync nested-key masking, poolIdGenerators export.
+- **Files changed:** types/config.ts, stores/settingsStore.ts, lib/config.ts,
+  lib/__tests__/configMigration.pool.test.ts (new), stores/__tests__/settingsStore.test.ts
+- **Commits:** 1ba2f8b, 3d72931, 484302d
+- **Learnings:**
+  - **Pattern (loadSettings decrypt ordering):** `decryptApiKeyResult` is called
+    once for the legacy `provider.apiKey` *before* the per-key pool loop. When
+    writing tests with `mockResolvedValueOnce`, the FIRST call is the legacy
+    mirror — account for it or the offsets shift by one and k2 gets k1's mock.
+  - **Pattern (saveSettings always encrypts legacy mirror):** `encryptApiKey` is
+    always called ≥1 time (for `provider.apiKey`, even when empty). To assert
+    "no per-key encryption happened on an empty pool", filter mock.calls by
+    non-empty string, don't assert `not.toHaveBeenCalled()`.
+  - **Gotcha (deepMerge + providers):** `deepMerge(DEFAULT_SETTINGS, stored)`
+    merges `providers[]` element-wise by index (arrays are positionally merged,
+    not replaced). The default empty `providers: []` means a stored `[{...}]`
+    becomes `[{...merged with default-empty-obj}]` — fine because PoolProvider
+    fields are scalars/arrays. If a deep nested key were partial, the merge
+    would still work since DEFAULT has no providers to seed from.
+  - **Pattern (pool id stability):** `crypto.randomUUID()` is available in the
+    extension service worker + browser contexts. Wrapped in try/catch with a
+    Date/Math.random fallback for the Vitest jsdom env (no crypto.randomUUID
+    in older Node).
+---
+
+## [2026-06-26 17:37] - Phase 2 Task 2.1/2.2/2.3: Pure Coordination Libraries
+- **Implemented:** lib/poolCursor.ts (round-robin cursor), lib/circuitBreaker.ts
+  (per-key health tracker), lib/poolResolver.ts (flatten + filter pool).
+- **Files changed:** lib/poolCursor.ts, lib/circuitBreaker.ts, lib/poolResolver.ts,
+  + 3 new test files (42 new tests total).
+- **Commits:** c1a8279, 077259a, ae766dd
+- **Learnings:**
+  - **Pattern (injectable clock):** All three pure modules accept `clock?: () => number`
+    (breaker) or an explicit `now` argument (resolver) instead of calling `Date.now()`
+    directly. Tests pass an explicit `now` for determinism — no `vi.useFakeTimers`
+    needed for unit logic (only the eventual coordinator test that exercises
+    `RateLimiter` delays will need fake timers, since rateLimiter owns its own setTimeout).
+  - **Pattern (escalation ladder):** The breaker's cooldown escalates by indexing
+    a fixed `[60s, 120s, 300s]` ladder by `min(consecutiveFailures-1, len-1)` —
+    simpler/safer than `cap * 2^n`. Cap is the last ladder entry.
+  - **Pattern (lazy rejoin):** `isHealthy(id, now)` checks `now >= openUntil` at
+    read time rather than scheduling a setTimeout to clear `open`. This is the
+    NFR-6 SW-restart-safe property — no in-memory timer dependency, just an
+    absolute wall-clock timestamp compared on every read.
+  - **Pattern (auth ≠ escalation):** auth failures set a FIXED long-open (1h) and
+    the credentialInvalid flag, but do NOT increment the rateLimit escalation
+    counter — they're orthogonal failure modes. recordSuccess clears both.
+  - **Gotcha (cursor position preservation):** `setSlotCount(n)` must keep the
+    relative rotation position; modulo the new count so a live rebuild doesn't
+    skew the round-robin (e.g., always dispatching to slot 0 after rebuild).
+  - **Pattern (PoolSlot carries resolved ProviderConfig):** The resolver merges
+    provider fields + the key's apiKey/maxRpm into a ready-to-construct
+    ProviderConfig per slot — the coordinator just maps slot→OpenAICompatibleService
+    without re-deriving config.
+---
+
+## [2026-06-26 17:42] - Phase 3 Task 3.1/3.2/3.3: ProviderPoolCoordinator
+- **Implemented:** services/providerPool.ts — ProviderPoolCoordinator implementing
+  TranslationService (translate, testConnection, detectPageCategory,
+  classifyPdfParagraphs) with round-robin + circuit-breaker failover.
+- **Files changed:** services/providerPool.ts (new), services/__tests__/providerPool.test.ts (new, 19 tests).
+- **Commits:** bc6955e
+- **Learnings:**
+  - **Pattern (ServiceFactory identity arg):** The coordinator's service factory
+    receives `(config, {keyId, providerId})` as a second arg. The production
+    OpenAICompatibleService factory ignores it, but tests inject a stub factory
+    that uses the keyId to register the stub in a Map for later outcome-injection.
+    Without the identity arg, tests can't correlate which slot a member belongs to.
+  - **Pattern (rebuild diff = member reuse):** `rebuild()` diffs new slot keyIds
+    against existing members; shared keyIds KEEP their member instance (breaker
+    state + rate limiter window survive), only new keyIds construct fresh services,
+    removed keyIds are dropped from the Map. This is the FR-6 "preserve breaker
+    state where key identity unchanged" requirement.
+  - **Gotcha (test instrumentation ≠ source of truth):** A test's accumulating
+    `stubs` Map logs every factory call ever made, so `stubs.has('k2')` stays true
+    even after k2 is dropped from the coordinator. Assert current membership via
+    `getAllKeyStatuses()` (the coordinator's live view), NOT via test-local logs.
+  - **Spec-clarification (400 = no failover):** FR-4 says "Other 4xx → error
+    surfaces" — a 400 is request-specific (bad prompt), NOT a slot fault, so the
+    coordinator re-throws immediately WITHOUT opening the breaker or failing over.
+    Only 429/5xx/network/auth trigger failover. The initial test expected k2
+    failover on 400; corrected to expect the 400 to surface.
+  - **Pattern (bounded failover via healthy-slot count):** The failover loop is
+    bounded by `healthy.length` (the count of healthy slots AT DISPATCH TIME),
+    guaranteeing termination. After each failure, recompute `healthySlots()` and
+    bail with PoolExhaustedError if empty — prevents an infinite loop if every
+    slot fails on the same request.
+---
+
+## [2026-06-26 17:50] - Phase 4 Task 4.1/4.2: Background Wiring
+- **Implemented:** initService() returns ProviderPoolCoordinator; error surfacing
+  verified for empty-pool + all-open scenarios.
+- **Files changed:** services/background.ts, types/config.ts (DEFAULT_SETTINGS
+  now seeds one default pool provider), services/__tests__/background.translate.test.ts.
+- **Commits:** be71a10, d5f7609
+- **Learnings:**
+  - **CRITICAL Pattern (default-pool seeding for backward compat):** A brand-new
+    install with DEFAULT_SETTINGS must have at least ONE pool slot or the
+    coordinator throws PoolExhaustedError on every call. The early-return path in
+    `loadSettings` (when no stored settings exist) returns `{...DEFAULT_SETTINGS}`
+    directly, BYPASSING migration. So `DEFAULT_SETTINGS.providers` MUST seed a
+    default provider+key — leaving it empty broke all background tests that rely on
+    a fetch being attempted with default config. The fix: ship one default pool
+    entry mirroring the legacy default provider.
+  - **Pattern (TS narrowing on `let` module vars):** `if (translationService
+    instanceof X) { translationService.method() }` does NOT narrow when
+    `translationService` is a `let` module variable (its type could change between
+    the check and the call due to re-entrancy). Assign to a `const` local first:
+    `const existing = translationService; const coord = existing instanceof X ?
+    existing : new X();` — the const narrows correctly.
+  - **Pattern (error surfacing is free):** PoolExhaustedError propagates through
+    the coordinator's translate() uncaught, and handleTranslate's existing
+    try/catch converts any thrown error into `{success:false, error}`. No new
+    error-surfacing code needed — just tests to verify the path.
+  - **Gotcha (import cleanup):** Removing `new OpenAICompatibleService(...)` from
+    initService left the `OpenAICompatibleService` import + `ProviderConfig` type
+    import unused. ESLint would flag these; remove them when refactoring the seam.
+---

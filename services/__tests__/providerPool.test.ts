@@ -90,6 +90,12 @@ describe('ProviderPoolCoordinator', () => {
   let stubs: Map<string, StubService>;
   let factory: ReturnType<typeof vi.fn>;
 
+  /** Set the next-outcome on a stub (avoids no-non-null-assertion lint). */
+  const setOutcome = (keyId: string, outcome: StubService['nextOutcome']): void => {
+    const stub = stubs.get(keyId);
+    if (stub) stub.nextOutcome = outcome;
+  };
+
   beforeEach(() => {
     clockNow = 1_000_000;
     stubs = new Map();
@@ -141,10 +147,13 @@ describe('ProviderPoolCoordinator', () => {
 
       // New settings: drop k2, add k3.
       const settings = twoKeySettings();
-      settings.providers[0]!.keys = [
-        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-        { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: true },
-      ];
+      const firstProvider = settings.providers[0];
+      if (firstProvider) {
+        firstProvider.keys = [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+          { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: true },
+        ];
+      }
       coord.rebuild(settings);
 
       // k1's member was preserved (factory not re-called for it); k3 is new.
@@ -186,8 +195,8 @@ describe('ProviderPoolCoordinator', () => {
       expect(r1.translations.get('id1')).toBe('from-k1');
       expect(r2.translations.get('id1')).toBe('from-k2');
       expect(r3.translations.get('id1')).toBe('from-k1');
-      expect(stubs.get('k1')!.callCount).toBe(2);
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k1')?.callCount).toBe(2);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
   });
 
@@ -200,23 +209,23 @@ describe('ProviderPoolCoordinator', () => {
       coord.rebuild(twoKeySettings());
 
       // k1 returns 429 on its next call.
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('rate limited', 429),
-      };
+      });
 
       const result = await coord.translate(baseRequest());
 
       // k1 was tried (and failed), then k2 succeeded.
-      expect(stubs.get('k1')!.callCount).toBe(1);
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k1')?.callCount).toBe(1);
+      expect(stubs.get('k2')?.callCount).toBe(1);
       expect(result.success).toBe(true);
       expect(result.translations.get('id1')).toBe('from-k2');
 
       // k1 is now open — the next request must skip it entirely.
       const result2 = await coord.translate(baseRequest());
-      expect(stubs.get('k1')!.callCount).toBe(1); // not retried
-      expect(stubs.get('k2')!.callCount).toBe(2);
+      expect(stubs.get('k1')?.callCount).toBe(1); // not retried
+      expect(stubs.get('k2')?.callCount).toBe(2);
       expect(result2.translations.get('id1')).toBe('from-k2');
     });
 
@@ -227,10 +236,10 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('server error', 503),
-      };
+      });
 
       const result = await coord.translate(baseRequest());
       expect(result.success).toBe(true);
@@ -244,10 +253,10 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('unauthorized', 401),
-      };
+      });
 
       const result = await coord.translate(baseRequest());
       expect(result.success).toBe(true);
@@ -264,24 +273,24 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('rate limited', 429),
-      };
+      });
       await coord.translate(baseRequest()); // k1 opens for 60s
 
       // Reset k1 to success.
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'success',
         result: { success: true, translations: new Map([['id1', 'from-k1']]) },
-      };
+      });
 
       // Advance past the 60s cooldown.
       clockNow += 61_000;
 
       const result = await coord.translate(baseRequest());
       // k1 has rejoined and is the next slot in rotation.
-      expect(stubs.get('k1')!.callCount).toBe(2);
+      expect(stubs.get('k1')?.callCount).toBe(2);
       expect(result.translations.get('id1')).toBe('from-k1');
     });
 
@@ -292,14 +301,14 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('rate limited', 429),
-      };
-      stubs.get('k2')!.nextOutcome = {
+      });
+      setOutcome('k2', {
         kind: 'fail',
         error: new ApiError('server error', 500),
-      };
+      });
 
       await expect(coord.translate(baseRequest())).rejects.toThrow();
     });
@@ -315,15 +324,15 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('bad request', 400),
-      };
+      });
 
       // The 400 surfaces (no failover); k2 is never contacted.
       await expect(coord.translate(baseRequest())).rejects.toThrow(/bad request/);
-      expect(stubs.get('k1')!.callCount).toBe(1);
-      expect(stubs.get('k2')!.callCount).toBe(0);
+      expect(stubs.get('k1')?.callCount).toBe(1);
+      expect(stubs.get('k2')?.callCount).toBe(0);
       // k1 remains healthy — the breaker did not open.
       expect(coord.getKeyStatus('k1').open).toBe(false);
     });
@@ -341,8 +350,8 @@ describe('ProviderPoolCoordinator', () => {
       const r2 = await coord.testConnection();
       expect(r1.success).toBe(true);
       expect(r2.success).toBe(true);
-      expect(stubs.get('k1')!.callCount).toBe(1);
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k1')?.callCount).toBe(1);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
 
     it('testConnection can target a specific keyId (per-key test from UI)', async () => {
@@ -353,8 +362,8 @@ describe('ProviderPoolCoordinator', () => {
       coord.rebuild(twoKeySettings());
 
       await coord.testConnection({ keyId: 'k2' });
-      expect(stubs.get('k1')!.callCount).toBe(0);
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k1')?.callCount).toBe(0);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
 
     it('testConnection on an unknown keyId reports failure', async () => {
@@ -375,14 +384,14 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('rate limited', 429),
-      };
+      });
       const r = await coord.detectPageCategory({ title: 't', description: 'd', domain: 'x.com' });
       expect(r.success).toBe(true);
       expect(r.category).toBe('tech');
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
 
     it('classifyPdfParagraphs delegates with failover', async () => {
@@ -392,13 +401,13 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(twoKeySettings());
 
-      stubs.get('k1')!.nextOutcome = {
+      setOutcome('k1', {
         kind: 'fail',
         error: new ApiError('rate limited', 429),
-      };
+      });
       const r = await coord.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
       expect(r.success).toBe(true);
-      expect(stubs.get('k2')!.callCount).toBe(1);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
   });
 
@@ -416,7 +425,8 @@ describe('ProviderPoolCoordinator', () => {
 
     it('returns disabled for a key that is not enabled', () => {
       const settings = twoKeySettings();
-      settings.providers[0]!.keys[0]!.enabled = false;
+      const key = settings.providers[0]?.keys[0];
+      if (key) key.enabled = false;
       const coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,

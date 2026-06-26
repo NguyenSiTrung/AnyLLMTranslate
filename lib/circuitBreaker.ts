@@ -38,8 +38,6 @@ export interface BreakerSlotState {
   lastFailureKind?: FailureKind;
 }
 
-interface InternalState extends BreakerSlotState {}
-
 /** Configurable breaker parameters (exposed for tests + future tuning). */
 export interface CircuitBreakerOptions {
   /** Clock function — defaults to Date.now. Inject for fake-timer tests. */
@@ -80,9 +78,9 @@ export function createCircuitBreaker(options: CircuitBreakerOptions = {}): Circu
   const authOpenMs = options.authOpenMs ?? DEFAULT_AUTH_OPEN_MS;
   const cap = ladder[ladder.length - 1] ?? baseCooldown;
 
-  const slots = new Map<string, InternalState>();
+  const slots = new Map<string, BreakerSlotState>();
 
-  function getOrCreate(id: string): InternalState {
+  function getOrCreate(id: string): BreakerSlotState {
     let st = slots.get(id);
     if (!st) {
       st = {

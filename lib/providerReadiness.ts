@@ -118,6 +118,18 @@ export function getProviderRecoveryMessage(readiness: ProviderReadiness): Recove
         description: 'Your provider is ready for translation.',
         action: 'Translate page',
       };
+    case 'pool-empty':
+      return {
+        title: 'No providers configured',
+        description: 'Add at least one provider with an API key in the Providers tab to start translating.',
+        action: 'Open Providers settings',
+      };
+    case 'pool-ready':
+      return {
+        title: 'Provider pool ready',
+        description: 'At least one provider key is healthy. Translation requests will rotate across enabled keys.',
+        action: 'Translate page',
+      };
   }
 }
 
@@ -212,22 +224,11 @@ export function getPoolReadinessStatus(settings: ExtensionSettings): ProviderRea
   };
 }
 
-/** Recovery message for the pool-empty readiness state. */
+/**
+ * Recovery message for pool-aware readiness. Delegates to
+ * {@link getProviderRecoveryMessage} (which now covers pool-empty / pool-ready)
+ * so there's a single source of truth for recovery copy.
+ */
 export function getPoolRecoveryMessage(readiness: ProviderReadiness): RecoveryMessage {
-  if (readiness.reason === 'pool-empty') {
-    return {
-      title: 'No providers configured',
-      description: 'Add at least one provider with an API key in the Providers tab to start translating.',
-      action: 'Open Providers settings',
-    };
-  }
-  if (readiness.reason === 'pool-ready') {
-    return {
-      title: 'Provider pool ready',
-      description: 'At least one provider key is healthy. Translation requests will rotate across enabled keys.',
-      action: 'Translate page',
-    };
-  }
-  // Fall back to the legacy recovery messages for any other reason.
   return getProviderRecoveryMessage(readiness);
 }

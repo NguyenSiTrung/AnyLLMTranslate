@@ -286,7 +286,6 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
                     {provider.keys.map((key) => (
                       <KeyRow
                         key={key.id}
-                        provider={provider}
                         poolKey={key}
                         onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
                         onRemove={() => removeKey(provider.id, key.id)}
@@ -339,13 +338,11 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
 
 /** A single API key row within a provider. */
 function KeyRow({
-  provider,
   poolKey,
   onUpdate,
   onRemove,
   onTest,
 }: {
-  provider: PoolProvider;
   poolKey: PoolKey;
   onUpdate: (patch: Partial<PoolKey>) => void;
   onRemove: () => void;

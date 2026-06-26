@@ -197,9 +197,12 @@ export class ProviderPoolCoordinator implements TranslationService {
     try {
       // The member service returns {success, category, error}; we propagate it.
       // Failover only triggers on a thrown error, not on success:false.
-      const result = await this.dispatchWithFailover((service) =>
-        service.detectPageCategory!(pageContext),
-      );
+      const result = await this.dispatchWithFailover((service) => {
+        if (!service.detectPageCategory) {
+          return Promise.resolve({ success: false, error: 'detectPageCategory not supported' });
+        }
+        return service.detectPageCategory(pageContext);
+      });
       return result;
     } catch (error) {
       return { success: false, error: errorMessage(error) };
@@ -210,9 +213,12 @@ export class ProviderPoolCoordinator implements TranslationService {
     paragraphs: Array<{ id: string; text: string }>,
   ): Promise<ClassifyPdfParagraphsResult> {
     try {
-      const result = await this.dispatchWithFailover((service) =>
-        service.classifyPdfParagraphs!(paragraphs),
-      );
+      const result = await this.dispatchWithFailover((service) => {
+        if (!service.classifyPdfParagraphs) {
+          return Promise.resolve({ success: false, error: 'classifyPdfParagraphs not supported', labels: {} } as ClassifyPdfParagraphsResult);
+        }
+        return service.classifyPdfParagraphs(paragraphs);
+      });
       return result;
     } catch (error) {
       return { success: false, error: errorMessage(error), labels: {} };
