@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '@/types/config';
-import type { ProviderConfig } from '@/types/config';
+import type { ProviderConfig, ExtensionSettings } from '@/types/config';
 import {
   getProviderReadiness,
   getProviderRecoveryMessage,
   getConnectionErrorMessage,
+  getPoolReadinessStatus,
+  getPoolRecoveryMessage,
 } from '@/lib/providerReadiness';
 
 function provider(partial: Partial<ProviderConfig>): ProviderConfig {
@@ -112,5 +114,127 @@ describe('provider recovery messages', () => {
 
     expect(message.title).toBe('Model not found');
     expect(message.action).toContain('model');
+  });
+});
+
+describe('getPoolReadinessStatus — multi-provider aggregation', () => {
+  function settings(overrides: Partial<ExtensionSettings> = {}): ExtensionSettings {
+    return { ...DEFAULT_SETTINGS, providers: [], ...overrides };
+  }
+
+  it('returns pool-empty / not-configured when no providers exist', () => {
+    const r = getPoolReadinessStatus(settings({ providers: [] }));
+    expect(r.status).toBe('not-configured');
+    expect(r.reason).toBe('pool-empty');
+    expect(r.canTranslate).toBe(false);
+  });
+
+  it('returns pool-empty when a provider exists but has no enabled key with apiKey', () => {
+    const r = getPoolReadinessStatus(
+      settings({
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://a/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+          },
+        ],
+      }),
+    );
+    expect(r.reason).toBe('pool-empty');
+  });
+
+  it('returns pool-ready / connected when at least one enabled key has apiKey', () => {
+    const r = getPoolReadinessStatus(
+      settings({
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://a/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 0, enabled: true }],
+          },
+        ],
+      }),
+    );
+    expect(r.status).toBe('connected');
+    expect(r.reason).toBe('pool-ready');
+    expect(r.canTranslate).toBe(true);
+  });
+
+  it('skips disabled providers when aggregating', () => {
+    const r = getPoolReadinessStatus(
+      settings({
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://a/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: false, // disabled
+            keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 0, enabled: true }],
+          },
+        ],
+      }),
+    );
+    expect(r.reason).toBe('pool-empty');
+  });
+
+  it('a local (no-api-key) provider with just baseUrl+model is ready', () => {
+    const r = getPoolReadinessStatus(
+      settings({
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'Ollama',
+            baseUrl: 'http://localhost:11434/v1',
+            model: 'llama3',
+            requiresApiKey: false,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+          },
+        ],
+      }),
+    );
+    expect(r.reason).toBe('pool-ready');
+  });
+});
+
+describe('getPoolRecoveryMessage', () => {
+  it('returns a no-providers message for pool-empty', () => {
+    const msg = getPoolRecoveryMessage({
+      status: 'not-configured',
+      reason: 'pool-empty',
+      canTest: false,
+      canTranslate: false,
+    });
+    expect(msg.title).toBe('No providers configured');
+    expect(msg.action).toContain('Providers');
+  });
+
+  it('returns a ready message for pool-ready', () => {
+    const msg = getPoolRecoveryMessage({
+      status: 'connected',
+      reason: 'pool-ready',
+      canTest: true,
+      canTranslate: true,
+    });
+    expect(msg.title).toBe('Provider pool ready');
   });
 });

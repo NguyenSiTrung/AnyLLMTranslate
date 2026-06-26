@@ -1,4 +1,4 @@
-import type { ProviderConfig } from '@/types/config';
+import type { ProviderConfig, ExtensionSettings } from '@/types/config';
 
 export type ProviderReadinessStatus = 'not-configured' | 'untested' | 'connected' | 'failed';
 
@@ -8,7 +8,9 @@ export type ProviderReadinessReason =
   | 'missing-api-key'
   | 'needs-test'
   | 'connected'
-  | 'connection-failed';
+  | 'connection-failed'
+  | 'pool-empty'
+  | 'pool-ready';
 
 export interface ProviderReadiness {
   status: ProviderReadinessStatus;
@@ -171,4 +173,61 @@ export function getConnectionErrorMessage(error?: string): RecoveryMessage {
     description: error || 'The provider returned an unexpected error.',
     action: 'Review your provider settings and try again.',
   };
+}
+
+/**
+ * Pool-aware readiness for the multi-provider world (FR-8 global status).
+ * Aggregates across all enabled (provider, key) pairs:
+ *  - `pool-empty` / not-configured when no enabled key with an apiKey exists.
+ *  - `pool-ready` when at least one enabled key has a baseUrl + model + apiKey.
+ *
+ * This is the readiness the popup recovery card should consult when the pool
+ * is the source of truth (it supersedes the single-provider readiness once the
+ * user has migrated). The legacy {@link getProviderReadiness} is retained for
+ * the ProviderSection which still edits the legacy mirror.
+ */
+export function getPoolReadinessStatus(settings: ExtensionSettings): ProviderReadiness {
+  const providers = settings.providers ?? [];
+  for (const provider of providers) {
+    if (!provider.enabled) continue;
+    if (!provider.baseUrl.trim() || !provider.model.trim()) continue;
+    for (const key of provider.keys ?? []) {
+      if (!key.enabled) continue;
+      if (!provider.requiresApiKey || key.apiKey.trim()) {
+        // At least one dispatchable slot exists.
+        return {
+          status: 'connected',
+          reason: 'pool-ready',
+          canTest: true,
+          canTranslate: true,
+        };
+      }
+    }
+  }
+  return {
+    status: 'not-configured',
+    reason: 'pool-empty',
+    canTest: false,
+    canTranslate: false,
+  };
+}
+
+/** Recovery message for the pool-empty readiness state. */
+export function getPoolRecoveryMessage(readiness: ProviderReadiness): RecoveryMessage {
+  if (readiness.reason === 'pool-empty') {
+    return {
+      title: 'No providers configured',
+      description: 'Add at least one provider with an API key in the Providers tab to start translating.',
+      action: 'Open Providers settings',
+    };
+  }
+  if (readiness.reason === 'pool-ready') {
+    return {
+      title: 'Provider pool ready',
+      description: 'At least one provider key is healthy. Translation requests will rotate across enabled keys.',
+      action: 'Translate page',
+    };
+  }
+  // Fall back to the legacy recovery messages for any other reason.
+  return getProviderRecoveryMessage(readiness);
 }
