@@ -129,7 +129,7 @@ describe('getPoolReadinessStatus — multi-provider aggregation', () => {
     expect(r.canTranslate).toBe(false);
   });
 
-  it('returns pool-empty when a provider exists but has no enabled key with apiKey', () => {
+  it('returns pool-needs-key when a provider exists but has no enabled key with apiKey', () => {
     const r = getPoolReadinessStatus(
       settings({
         providers: [
@@ -147,7 +147,7 @@ describe('getPoolReadinessStatus — multi-provider aggregation', () => {
         ],
       }),
     );
-    expect(r.reason).toBe('pool-empty');
+    expect(r.reason).toBe('pool-needs-key');
   });
 
   it('returns pool-ready / connected when at least one enabled key has apiKey', () => {

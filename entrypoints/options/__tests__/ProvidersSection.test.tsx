@@ -40,10 +40,10 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
   };
 }
 
-function renderSection() {
+function renderSection(onOpenSetup?: ReturnType<typeof vi.fn>) {
   render(
     <ToastProvider>
-      <ProvidersSection />
+      <ProvidersSection onOpenSetup={onOpenSetup} />
     </ToastProvider>,
   );
 }
@@ -64,7 +64,7 @@ describe('ProvidersSection', () => {
   it('shows the empty-state message when no providers exist', () => {
     mockState = { ...DEFAULT_SETTINGS, providers: [], updateSettings };
     renderSection();
-    expect(screen.getByText(/no providers configured/i)).toBeInTheDocument();
+    expect(screen.getByText(/no providers configured\. add one/i)).toBeInTheDocument();
   });
 
   it('expands a provider to reveal its fields on click', () => {
@@ -164,6 +164,100 @@ describe('ProvidersSection', () => {
     fireEvent.click(screen.getByText('OpenAI')); // expand
     fireEvent.click(screen.getByText('Remove provider'));
     expect(screen.getByText('Remove provider?')).toBeInTheDocument();
+  });
+});
+
+describe('ProvidersSection readiness banner', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('shows pool-ready status when a healthy provider key exists', () => {
+    renderSection();
+    expect(screen.getByText(/provider pool ready/i)).toBeInTheDocument();
+  });
+
+  it('shows not-configured guidance when no providers exist', () => {
+    mockState = { ...DEFAULT_SETTINGS, providers: [], updateSettings };
+    renderSection();
+    // Readiness banner shows "No providers configured" as the title
+    expect(screen.getByRole('heading', { level: 3, name: /no providers configured/i })).toBeInTheDocument();
+  });
+
+  it('calls onOpenSetup when the setup guide button is clicked', () => {
+    const onOpenSetup = vi.fn();
+    renderSection(onOpenSetup);
+    fireEvent.click(screen.getByRole('button', { name: /open setup guide/i }));
+    expect(onOpenSetup).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ProvidersSection expanded provider features', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('shows the catalog picker when a provider is expanded', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI')); // expand
+    expect(screen.getByText('Provider template')).toBeInTheDocument();
+  });
+
+  it('shows temperature and max tokens sliders when expanded', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI')); // expand
+    expect(screen.getByText(/temperature/i)).toBeInTheDocument();
+    expect(screen.getByText(/max tokens/i)).toBeInTheDocument();
+  });
+
+  it('updates temperature when the slider changes', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI')); // expand
+    const tempSlider = screen.getByRole('slider', { name: /temperature/i });
+    fireEvent.change(tempSlider, { target: { value: '1.5' } });
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ temperature: 1.5 }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe('ProvidersSection system prompt template', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('renders the system prompt template editor', () => {
+    renderSection();
+    expect(screen.getByText('System Prompt Template')).toBeInTheDocument();
+  });
+
+  it('updates customSystemPrompt when the textarea changes', () => {
+    renderSection();
+    const promptTextarea = document.getElementById('providers-system-prompt') as HTMLTextAreaElement;
+    expect(promptTextarea).toBeTruthy();
+    fireEvent.change(promptTextarea, { target: { value: 'Translate to {{targetLanguage}} please' } });
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ customSystemPrompt: 'Translate to {{targetLanguage}} please' }),
+    );
+  });
+
+  it('resets the prompt to default when Reset button is clicked', () => {
+    renderSection();
+    const resetBtn = screen.getByRole('button', { name: /reset to default/i });
+    fireEvent.click(resetBtn);
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ customSystemPrompt: null }),
+    );
   });
 });
 

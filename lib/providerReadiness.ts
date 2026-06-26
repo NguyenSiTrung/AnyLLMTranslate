@@ -10,6 +10,7 @@ export type ProviderReadinessReason =
   | 'connected'
   | 'connection-failed'
   | 'pool-empty'
+  | 'pool-needs-key'
   | 'pool-ready';
 
 export interface ProviderReadiness {
@@ -124,6 +125,12 @@ export function getProviderRecoveryMessage(readiness: ProviderReadiness): Recove
         description: 'Add at least one provider with an API key in the Providers tab to start translating.',
         action: 'Open Providers settings',
       };
+    case 'pool-needs-key':
+      return {
+        title: 'API key required',
+        description: 'Your provider is configured but needs an API key before it can translate pages.',
+        action: 'Add an API key in the expanded provider card below',
+      };
     case 'pool-ready':
       return {
         title: 'Provider pool ready',
@@ -200,8 +207,21 @@ export function getConnectionErrorMessage(error?: string): RecoveryMessage {
  */
 export function getPoolReadinessStatus(settings: ExtensionSettings): ProviderReadiness {
   const providers = settings.providers ?? [];
-  for (const provider of providers) {
-    if (!provider.enabled) continue;
+  const enabledProviders = providers.filter((p) => p.enabled);
+
+  // No providers at all → pool-empty
+  if (enabledProviders.length === 0) {
+    return {
+      status: 'not-configured',
+      reason: 'pool-empty',
+      canTest: false,
+      canTranslate: false,
+    };
+  }
+
+  // Scan for a fully-dispatchable slot
+  let hasProviderNeedingKey = false;
+  for (const provider of enabledProviders) {
     if (!provider.baseUrl.trim() || !provider.model.trim()) continue;
     for (const key of provider.keys ?? []) {
       if (!key.enabled) continue;
@@ -214,8 +234,23 @@ export function getPoolReadinessStatus(settings: ExtensionSettings): ProviderRea
           canTranslate: true,
         };
       }
+      // Provider is configured (baseUrl + model) but key has no apiKey
+      if (provider.requiresApiKey && !key.apiKey.trim()) {
+        hasProviderNeedingKey = true;
+      }
     }
   }
+
+  // Providers exist but none are dispatchable
+  if (hasProviderNeedingKey) {
+    return {
+      status: 'not-configured',
+      reason: 'pool-needs-key',
+      canTest: false,
+      canTranslate: false,
+    };
+  }
+
   return {
     status: 'not-configured',
     reason: 'pool-empty',

@@ -1,32 +1,40 @@
 /**
  * Providers Section — multi-provider pool manager.
  *
- * Replaces the editing surface of the legacy single ProviderSection for
- * power users. Each provider is a collapsible card (displayName, baseUrl,
- * model, catalog picker, temperature/maxTokens, enabled toggle, delete,
- * "+ Add key"). Each key row has a masked apiKey input, optional label,
- * maxRpm input, enabled toggle, "Test" button, and a live status badge.
+ * Each provider is a collapsible card (displayName, baseUrl, model, catalog
+ * picker, temperature/maxTokens, enabled toggle, delete, "+ Add key"). Each
+ * key row has a masked apiKey input, optional label, maxRpm input, enabled
+ * toggle, "Test" button, and a live status badge.
  *
- * The single-provider / single-key case renders essentially like today's
- * simple form (FR-8). Drives `updateSettings({ providers })`.
+ * Also includes a pool readiness banner and a global system-prompt template
+ * editor (migrated from the legacy single-ProviderSection).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Zap, Plus, Trash2, ChevronDown, KeyRound, Server, AlertTriangle,
+  CheckCircle2, RotateCcw,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
+import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { poolIdGenerators } from '@/lib/config';
 import { getCatalogEntryById, OPENAI_COMPATIBLE_CATALOG } from '@/lib/openAiCompatibleCatalog';
+import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Toggle } from '@/ui/Toggle';
 import { Badge } from '@/ui/Badge';
+import { Slider } from '@/ui/Slider';
 import { useToast } from '@/ui/ToastProvider';
 import { Modal } from '@/ui/Modal';
+import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
+import {
+  DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+  validatePromptTemplate,
+} from '@/services/base';
 import type {
   ExtensionSettings,
   PoolProvider,
@@ -36,6 +44,8 @@ import type {
 import { testConnection } from '@/services/providerTester';
 
 interface ProvidersSectionProps {
+  /** Called when the user clicks "Open setup guide" in the readiness banner. */
+  onOpenSetup?: () => void;
   /** Optional: surface a message bus to query coordinator key status. When
    *  provided, each key row shows a live health badge. Omitted in tests. */
   getKeyStatus?: (keyId: string) => KeyStatusBadge | undefined;
@@ -48,13 +58,29 @@ export interface KeyStatusBadge {
   openUntil?: number;
 }
 
-export function ProvidersSection(_props: ProvidersSectionProps = {}) {
+export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
+  const settings = useSettingsStore();
   const providers = useSettingsStore((s) => s.providers);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const { success: showSuccess, error: showError } = useToast();
   const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
   const [showAddProviderModal, setShowAddProviderModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [draftPrompt, setDraftPrompt] = useState(
+    settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+  );
+
+  // Sync draft when the prompt is reset to null externally (e.g. Reset button).
+  useEffect(() => {
+    if (settings.customSystemPrompt === null) {
+      setDraftPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+    }
+  }, [settings.customSystemPrompt]);
+
+  // Pool readiness banner
+  const poolReadiness = getPoolReadinessStatus(settings);
+  const recoveryMessage = getPoolRecoveryMessage(poolReadiness);
+  const enabledKeyCount = countEnabledKeys(settings);
 
   /** Immutably update the providers array and persist. */
   const commitProviders = useCallback(
@@ -64,7 +90,7 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
     [updateSettings],
   );
 
-  const updateProvider = useCallback(
+  const updateProviderFields = useCallback(
     (providerId: string, patch: Partial<PoolProvider>) => {
       commitProviders(
         providers.map((p) => (p.id === providerId ? { ...p, ...patch } : p)),
@@ -151,6 +177,20 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
     [providers, commitProviders, showSuccess],
   );
 
+  /** Handle catalog picker selection for an existing provider. */
+  const handleCatalogSelect = useCallback(
+    (providerId: string, selection: { patch: Partial<ProviderConfig> }) => {
+      updateProviderFields(providerId, {
+        displayName: selection.patch.displayName,
+        baseUrl: selection.patch.baseUrl,
+        requiresApiKey: selection.patch.requiresApiKey,
+        model: selection.patch.model,
+        catalogId: inferCatalogId(selection.patch.baseUrl ?? ''),
+      });
+    },
+    [updateProviderFields],
+  );
+
   const handleTestKey = useCallback(
     async (provider: PoolProvider, key: PoolKey) => {
       // Build a resolved ProviderConfig for this specific slot and test it.
@@ -177,6 +217,10 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
     [showSuccess, showError],
   );
 
+  const promptValidation = settings.customSystemPrompt
+    ? validatePromptTemplate(settings.customSystemPrompt)
+    : null;
+
   return (
     <div className="animate-fade-in-up">
       <SectionHeader
@@ -187,126 +231,248 @@ export function ProvidersSection(_props: ProvidersSectionProps = {}) {
       />
 
       <div className="space-y-4">
-        {providers.length === 0 && (
-          <Card variant="bordered">
-            <div className="flex items-center gap-3 p-2">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-              <p className="text-sm text-zinc-400">
-                No providers configured. Add one to start translating.
-              </p>
+        {/* Readiness banner */}
+        <div className="animate-stagger" style={stagger(0)}>
+          <Card variant="bordered" className={poolReadiness.canTranslate ? 'border-emerald-500/30' : 'border-amber-500/30'}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${poolReadiness.canTranslate ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                {poolReadiness.canTranslate ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-zinc-100">{recoveryMessage.title}</h3>
+                <p className="text-xs text-zinc-400 mt-1 leading-5">{recoveryMessage.description}</p>
+                <p className="text-xs text-zinc-500 mt-1">Next: {recoveryMessage.action}</p>
+                {enabledKeyCount > 0 && (
+                  <p className="text-xs text-zinc-600 mt-0.5">{enabledKeyCount} enabled key{enabledKeyCount !== 1 ? 's' : ''} across {providers.length} provider{providers.length !== 1 ? 's' : ''}</p>
+                )}
+              </div>
+              {onOpenSetup && (
+                <Button size="sm" variant={poolReadiness.canTranslate ? 'secondary' : 'primary'} onClick={onOpenSetup}>
+                  Open setup guide
+                </Button>
+              )}
             </div>
           </Card>
+        </div>
+
+        {providers.length === 0 && (
+          <div className="animate-stagger" style={stagger(1)}>
+            <Card variant="bordered">
+              <div className="flex items-center gap-3 p-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <p className="text-sm text-zinc-400">
+                  No providers configured. Add one to start translating.
+                </p>
+              </div>
+            </Card>
+          </div>
         )}
 
-        {providers.map((provider) => {
+        {providers.map((provider, idx) => {
           const isExpanded = expandedProviderId === provider.id;
+          const catalogId = provider.catalogId ?? inferCatalogId(provider.baseUrl);
           return (
-            <Card key={provider.id} variant="bordered" className="p-0 overflow-hidden">
-              {/* Provider header (collapsible) */}
-              <button
-                type="button"
-                onClick={() => setExpandedProviderId(isExpanded ? null : provider.id)}
-                className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium text-zinc-300 hover:bg-zinc-800/50 transition-colors cursor-pointer"
-                aria-expanded={isExpanded}
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  <Server className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                  <span className="truncate">{provider.displayName || 'Unnamed provider'}</span>
-                  <Badge variant={provider.enabled ? 'success' : 'info'}>
-                    {provider.enabled ? 'on' : 'off'}
-                  </Badge>
-                  <span className="text-xs text-zinc-500">{provider.keys.length} key{provider.keys.length !== 1 ? 's' : ''}</span>
-                </span>
-                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-              </button>
+            <div key={provider.id} className="animate-stagger" style={stagger(idx + 1)}>
+              <Card variant="bordered" className="p-0 overflow-hidden">
+                {/* Provider header (collapsible) */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedProviderId(isExpanded ? null : provider.id)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium text-zinc-300 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  aria-expanded={isExpanded}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Server className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    <span className="truncate">{provider.displayName || 'Unnamed provider'}</span>
+                    <Badge variant={provider.enabled ? 'success' : 'info'}>
+                      {provider.enabled ? 'on' : 'off'}
+                    </Badge>
+                    <span className="text-xs text-zinc-500">{provider.keys.length} key{provider.keys.length !== 1 ? 's' : ''}</span>
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                </button>
 
-              {isExpanded && (
-                <div className="px-5 pb-5 space-y-4 border-t border-zinc-700/60 pt-4">
-                  {/* Enabled toggle + delete */}
-                  <div className="flex items-center justify-between">
-                    <Toggle
-                      checked={provider.enabled}
-                      onChange={(enabled) => updateProvider(provider.id, { enabled })}
-                      label="Enabled"
+                {isExpanded && (
+                  <div className="px-5 pb-5 space-y-5 border-t border-zinc-700/60 pt-4">
+                    {/* Enabled toggle + delete */}
+                    <div className="flex items-center justify-between gap-4 pt-3 border-t border-zinc-800/60">
+                      <label className="flex items-center gap-3 cursor-pointer select-none group">
+                        <Toggle
+                          checked={provider.enabled}
+                          onChange={(enabled) => updateProviderFields(provider.id, { enabled })}
+                        />
+                        <div>
+                          <span className={`text-sm font-medium transition-colors ${
+                            provider.enabled ? 'text-zinc-100' : 'text-zinc-500'
+                          }`}>
+                            {provider.enabled ? 'Provider enabled' : 'Provider disabled'}
+                          </span>
+                          <p className="text-xs text-zinc-600 mt-0.5">
+                            {provider.enabled ? 'Included in the rotation pool' : 'Excluded from all requests'}
+                          </p>
+                        </div>
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 className="w-3.5 h-3.5" />}
+                        onClick={() => setPendingDeleteId(provider.id)}
+                      >
+                        Remove provider
+                      </Button>
+                    </div>
+
+                    {/* Catalog picker for switching provider template */}
+                    <ProviderCatalogPicker
+                      compact
+                      selectedCatalogId={catalogId}
+                      provider={{
+                        baseUrl: provider.baseUrl,
+                        apiKey: provider.keys[0]?.apiKey ?? '',
+                        model: provider.model,
+                      }}
+                      onSelect={(selection) => handleCatalogSelect(provider.id, selection)}
                     />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<Trash2 className="w-3.5 h-3.5" />}
-                      onClick={() => setPendingDeleteId(provider.id)}
-                    >
-                      Remove provider
-                    </Button>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
+                        <Input
+                          id={`pn-${provider.id}`}
+                          value={provider.displayName}
+                          onChange={(e) => updateProviderFields(provider.id, { displayName: e.target.value })}
+                          placeholder="OpenAI"
+                        />
+                      </FieldGroup>
+                      <FieldGroup label="Model" htmlFor={`pm-${provider.id}`}>
+                        <Input
+                          id={`pm-${provider.id}`}
+                          value={provider.model}
+                          onChange={(e) => updateProviderFields(provider.id, { model: e.target.value })}
+                          placeholder="gpt-4o-mini"
+                          className="font-mono"
+                        />
+                      </FieldGroup>
+                    </div>
+
+                    <FieldGroup label="Base URL" htmlFor={`pu-${provider.id}`}>
                       <Input
-                        id={`pn-${provider.id}`}
-                        value={provider.displayName}
-                        onChange={(e) => updateProvider(provider.id, { displayName: e.target.value })}
-                        placeholder="OpenAI"
-                      />
-                    </FieldGroup>
-                    <FieldGroup label="Model" htmlFor={`pm-${provider.id}`}>
-                      <Input
-                        id={`pm-${provider.id}`}
-                        value={provider.model}
-                        onChange={(e) => updateProvider(provider.id, { model: e.target.value })}
-                        placeholder="gpt-4o-mini"
+                        id={`pu-${provider.id}`}
+                        type="url"
+                        value={provider.baseUrl}
+                        onChange={(e) => updateProviderFields(provider.id, { baseUrl: e.target.value })}
+                        placeholder="https://api.openai.com/v1"
                         className="font-mono"
                       />
                     </FieldGroup>
-                  </div>
 
-                  <FieldGroup label="Base URL" htmlFor={`pu-${provider.id}`}>
-                    <Input
-                      id={`pu-${provider.id}`}
-                      type="url"
-                      value={provider.baseUrl}
-                      onChange={(e) => updateProvider(provider.id, { baseUrl: e.target.value })}
-                      placeholder="https://api.openai.com/v1"
-                      className="font-mono"
-                    />
-                  </FieldGroup>
-
-                  {/* Keys */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase tracking-widest text-zinc-600">API Keys</span>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        icon={<Plus className="w-3.5 h-3.5" />}
-                        onClick={() => addKey(provider.id)}
-                      >
-                        Add key
-                      </Button>
-                    </div>
-                    {provider.keys.map((key) => (
-                      <KeyRow
-                        key={key.id}
-                        poolKey={key}
-                        onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
-                        onRemove={() => removeKey(provider.id, key.id)}
-                        onTest={() => handleTestKey(provider, key)}
+                    {/* Temperature & Max Tokens */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <Slider
+                        id={`pt-${provider.id}`}
+                        label="Temperature"
+                        value={provider.temperature}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        onChange={(v) => updateProviderFields(provider.id, { temperature: v })}
+                        formatValue={(v) => v.toFixed(1)}
+                        minLabel="Precise"
+                        maxLabel="Creative"
                       />
-                    ))}
+                      <Slider
+                        id={`pmt-${provider.id}`}
+                        label="Max Tokens"
+                        value={provider.maxTokens}
+                        min={256}
+                        max={16384}
+                        step={256}
+                        onChange={(v) => updateProviderFields(provider.id, { maxTokens: v })}
+                        minLabel="256"
+                        maxLabel="16384"
+                      />
+                    </div>
+
+                    {/* Keys */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs uppercase tracking-widest text-zinc-600">API Keys</span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Plus className="w-3.5 h-3.5" />}
+                          onClick={() => addKey(provider.id)}
+                        >
+                          Add key
+                        </Button>
+                      </div>
+                      {provider.keys.map((key) => (
+                        <KeyRow
+                          key={key.id}
+                          poolKey={key}
+                          onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
+                          onRemove={() => removeKey(provider.id, key.id)}
+                          onTest={() => handleTestKey(provider, key)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </Card>
+                )}
+              </Card>
+            </div>
           );
         })}
 
         {/* Add provider entry point */}
-        <Button
-          variant="secondary"
-          icon={<Plus className="w-4 h-4" />}
-          onClick={() => setShowAddProviderModal(true)}
-        >
-          Add provider from catalog
-        </Button>
+        <div className="animate-stagger" style={stagger(providers.length + 1)}>
+          <Button
+            variant="secondary"
+            icon={<Plus className="w-4 h-4" />}
+            onClick={() => setShowAddProviderModal(true)}
+          >
+            Add provider from catalog
+          </Button>
+        </div>
+
+        {/* System Prompt Template (global setting) */}
+        <div className="animate-stagger" style={stagger(providers.length + 2)}>
+          <Card title="System Prompt Template" icon={<RotateCcw className="w-3.5 h-3.5" />} variant="bordered">
+            <FieldGroup
+              label="Custom prompt template"
+              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
+              htmlFor="providers-system-prompt"
+            >
+              <textarea
+                id="providers-system-prompt"
+                value={draftPrompt}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftPrompt(val);
+                  updateSettings({ customSystemPrompt: val });
+                }}
+                rows={8}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-1">
+                  {promptValidation && !promptValidation.valid && (
+                    <div className="flex items-center gap-1 text-amber-400 text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>{promptValidation.warnings[0]}</span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
+                  onClick={() => updateSettings({ customSystemPrompt: null })}
+                >
+                  Reset to Default
+                </Button>
+              </div>
+            </FieldGroup>
+          </Card>
+        </div>
       </div>
 
       {/* Add-provider modal */}
@@ -358,7 +524,7 @@ function KeyRow({
   };
 
   return (
-    <div className="rounded-lg border border-zinc-700/60 p-3 space-y-3 bg-zinc-900/40">
+    <div className="rounded-lg border border-zinc-700/60 p-4 space-y-4 bg-zinc-900/40">
       <div className="flex items-center gap-2">
         <KeyRound className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
         <span className="text-xs text-zinc-400 font-mono">{poolKey.label || poolKey.id}</span>
@@ -409,12 +575,18 @@ function KeyRow({
         </FieldGroup>
       </div>
 
-      <div className="flex items-center justify-between">
-        <Toggle
-          checked={poolKey.enabled}
-          onChange={(enabled) => onUpdate({ enabled })}
-          label="Enabled"
-        />
+      <div className="flex items-center justify-between gap-4 pt-3 border-t border-zinc-700/40">
+        <label className="flex items-center gap-3 cursor-pointer select-none">
+          <Toggle
+            checked={poolKey.enabled}
+            onChange={(enabled) => onUpdate({ enabled })}
+          />
+          <span className={`text-sm font-medium transition-colors ${
+            poolKey.enabled ? 'text-zinc-200' : 'text-zinc-500'
+          }`}>
+            {poolKey.enabled ? 'Key active' : 'Key disabled'}
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="secondary" onClick={onTest}>
             Test
