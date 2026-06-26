@@ -68,6 +68,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- 🟡 **Multi-Provider Pool with Round-Robin & Circuit-Breaker Failover** (`multi-provider-pool_20260626`) — New 2026-06-26. Multiple active providers + multiple API keys per provider, round-robin request distribution, per-key RPM, circuit-breaker failover (429/5xx/network → cooldown, 401 → long-open). Coordinator at the single `initService()` seam covers all 7 translation paths. *Link: [./conductor/tracks/multi-provider-pool_20260626/](./conductor/tracks/multi-provider-pool_20260626/)*
+- 🟡 **Multi-Provider Pool with Round-Robin & Circuit-Breaker Failover** (`multi-provider-pool_20260626`) — In Progress 2026-06-26. Multiple active providers + multiple API keys per provider, round-robin request distribution, per-key RPM, circuit-breaker failover (429/5xx/network → cooldown, 401 → long-open). Coordinator at the single `initService()` seam covers all 7 translation paths. *Link: [./conductor/tracks/multi-provider-pool_20260626/](./conductor/tracks/multi-provider-pool_20260626/)*
 
 ---

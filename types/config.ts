@@ -28,6 +28,54 @@ export interface ProviderConfig {
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
 
+/**
+ * A single API key within a pool provider. Each key is an independent rotation
+ * slot: it has its own rate limiter (maxRpm), circuit-breaker state, and
+ * enable flag. The apiKey is AES-GCM encrypted at rest.
+ */
+export interface PoolKey {
+  /** Stable, unique key identifier (used as the circuit-breaker identity). */
+  id: string;
+  /** The API key (encrypted at rest via lib/crypto.ts). */
+  apiKey: string;
+  /** Optional human-readable label shown in the UI. */
+  label?: string;
+  /** Max requests per minute for this key (0 = unlimited). */
+  maxRpm: number;
+  /** Whether this key participates in the rotation pool. */
+  enabled: boolean;
+}
+
+/**
+ * A provider entry in the multi-provider pool. Holds the shared endpoint
+ * config plus an array of {@link PoolKey}s. Each (provider, key) pair is a
+ * rotation slot when both `enabled` flags are true.
+ */
+export interface PoolProvider {
+  /** Stable, unique provider identifier. */
+  id: string;
+  /** Human-readable name shown in the UI. */
+  displayName: string;
+  /** OpenAI-compatible base URL (e.g. https://api.openai.com/v1). */
+  baseUrl: string;
+  /** Model identifier (e.g. gpt-4o-mini). */
+  model: string;
+  /** Whether this provider requires an API key per request. */
+  requiresApiKey: boolean;
+  /** Catalog entry id from OPENAI_COMPATIBLE_CATALOG (for re-selecting the entry). */
+  catalogId?: string;
+  /** Sampling temperature. */
+  temperature: number;
+  /** Max tokens per completion. */
+  maxTokens: number;
+  /** Request timeout in milliseconds (default: 60000). */
+  requestTimeoutMs?: number;
+  /** Whether this provider participates in the rotation pool. */
+  enabled: boolean;
+  /** The pool of API keys for this provider. */
+  keys: PoolKey[];
+}
+
 /** Onboarding flow state for first-run setup */
 export interface OnboardingState {
   /** Setup wizard completed successfully */
@@ -250,6 +298,12 @@ export interface ExtensionSettings {
   pdfSettings: PdfSettings;
   /** Max requests per minute to the provider (0 = unlimited, prevents hitting provider rate limits) */
   maxRpm: number;
+  /**
+   * Multi-provider pool: multiple active providers, each with one or more API
+   * keys, rotated round-robin with circuit-breaker failover. Empty for legacy
+   * users until migrated by loadSettings() (see FR-1 migration rule).
+   */
+  providers: PoolProvider[];
 }
 
 /** Provider preset definitions */
@@ -387,6 +441,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableSmartExcludes: true,
   pdfSettings: { ...DEFAULT_PDF_SETTINGS },
   maxRpm: 0,
+  providers: [],
 };
 
 /** All available provider presets */

@@ -146,5 +146,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableSmartExcludes: state.enableSmartExcludes,
     pdfSettings: state.pdfSettings,
     maxRpm: state.maxRpm,
+    providers: state.providers,
   };
 }
