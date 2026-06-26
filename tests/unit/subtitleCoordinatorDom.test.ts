@@ -479,9 +479,10 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
 
   describe('manifest and DOM precedence integration', () => {
     beforeEach(() => {
+      // Only capturedTracksDiscoveredHandler is registered by this file's
+      // messageBridge mock (onTextTrackCues / onMseCues return no-op cleanups
+      // and capture nothing). Reset the one handler these tests actually invoke.
       capturedTracksDiscoveredHandler = null;
-      capturedTextTrackCuesHandler = null;
-      capturedMseCuesHandler = null;
     });
 
     it('processTracksDiscovered uses payload.tracks directly and selectSubtitleTrack routes to manifest if track has a url', async () => {

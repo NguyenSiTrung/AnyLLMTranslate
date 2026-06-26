@@ -1,27 +1,30 @@
 {
-  "lastRefresh": "2026-06-24T15:55:00+07:00",
+  "lastRefresh": "2026-06-26T09:05:00+07:00",
   "scope": "all",
   "changes": [
-    "product.md: Refresh marker bumped (manifest-subtitle-access track metrics)",
-    "product.md: Current State metrics 1500/111/52 -> 1568/115/53 (manifest-subtitle-access track added 68 tests, 4 files, 1 archived track)",
-    "product.md: Build size ~3.78 MB -> ~3.8 MB",
-    "product.md: Pre-existing flaky test note updated (subtitleCoordinator proactive-category-detection replaces statsCollector date-rollover)",
-    "patterns.md: No drift (already updated during archive commit 432b9f7 — 7 patterns elevated, footer metrics current)",
-    "tracks.md: No drift (manifest-subtitle-access_20260624 already listed as archived)",
-    "tech-stack.md: No drift vs package.json (no dependency changes)",
-    "workflow.md: No drift",
-    "beads: Closed 5 open sub-issues for ALT-0j6 (manifest-subtitle-access) — epic already closed. Pre-existing: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues.",
-    "learnings: No new consolidation needed (manifest-subtitle-access learnings already elevated to patterns.md during archive)",
-    "backups: product.md.bak refreshed before edit"
+    "REGRESSION FIX: tests/unit/subtitleCoordinatorDom.test.ts beforeEach referenced 2 undeclared variables (capturedTextTrackCuesHandler, capturedMseCuesHandler) introduced by hotfix 3940830 -> removed. 2 hard failures -> 0. 1568 -> 1570 tests passing.",
+    "product.md: Refresh marker bumped (hbomax tier-precedence hotfixes + test regression fix).",
+    "product.md: Added 'HBO Max Tier-Precedence Hotfixes' entry to Implementation Status (commits 47debeb + 3940830, shipped on master post-archive).",
+    "product.md: Current State corrected — '1 pre-existing flaky test' was a misdiagnosis; replaced with accurate '0 failing / 0 flaky' + note that the 2 failures were an undeclared-variable regression now fixed.",
+    "patterns.md: Refresh marker bumped (mid-file + header).",
+    "patterns.md: Added new section 'HBO Max Tier-Precedence Hotfixes (2026-06-24)' with 9 elevated patterns (tier-precedence at handler entry, dual-mode handler play routing, manifest CDN edge-domain matching, selectSubtitleTrack track.url gate, processTracksDiscovered platform-gate removal, cleanupActiveOverlay activeSource reset, hide-native-captions in manifest/texttrack/mse paths, window guard in isOnWatchPage, test beforeEach must only reset declared vars).",
+    "patterns.md: Footer + mid-file health lines updated (1568/1-flaky -> 1570/0-flaky).",
+    "tracks.md: No drift (hotfixes shipped directly on master, no track to add).",
+    "tech-stack.md: No drift vs package.json (no dependency changes).",
+    "workflow.md: No drift.",
+    "beads: ALT-z38 (hotfix issue) already created+closed in commit 3940830 — no drift. Pre-existing unchanged: ALT-0gu (audit-v2) + ALT-74e (coursera-udemy) epics remain OPEN despite conductor tracks archived.",
+    "learnings: Hotfix had no dedicated track/learnings.md; 9 patterns consolidated directly into patterns.md this cycle.",
+    "backups: product.md.bak + patterns.md.bak refreshed before edits."
   ],
   "codebaseHealth": {
-    "tests": 1568,
+    "tests": 1570,
     "testFiles": 115,
     "buildSize": "~3.8 MB",
     "lintErrors": 5,
     "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 300,322,354); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged.",
     "archivedTracks": 53,
-    "activeTracks": 0
+    "activeTracks": 0,
+    "failingTests": 0
   },
-  "beadsDrift": "ALT-0j6 (manifest-subtitle-access) had 5 open sub-issues despite conductor track archived -> closed all this cycle. Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived."
+  "beadsDrift": "ALT-z38 (HBO Max hotfix) created+closed in commit 3940830, already synced. No new beads drift this cycle. Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived (flagged in prior refreshes)."
 }
