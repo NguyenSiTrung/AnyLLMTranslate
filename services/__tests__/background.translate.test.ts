@@ -238,3 +238,84 @@ describe('handleTranslate — web-page prompt unchanged by subtitle profiles', (
     expect(systemPrompt).not.toContain('subtitle translator');
   });
 });
+
+describe('handleTranslate — empty-pool / all-open error surfacing', () => {
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null); // force LLM path
+  });
+
+  it('surfaces a { success: false } result when the pool is empty (no fetch attempted)', async () => {
+    // Seed settings with an empty providers pool (all keys disabled).
+    mockStorage['anyllm-translate-settings'] = {
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: false }],
+        },
+      ],
+    };
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = (await handleMessage(
+      buildMsg([{ id: 'p1', text: 'Hello' }]),
+      fakeSender,
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an error when all slots return auth failures (all-open)', async () => {
+    // Two keys, both 401 → the coordinator exhausts the pool and throws.
+    mockStorage['anyllm-translate-settings'] = {
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: () => Promise.resolve(JSON.stringify({ error: { message: 'Invalid API key' } })),
+      }),
+    );
+
+    const result = (await handleMessage(
+      buildMsg([{ id: 'p1', text: 'Hello' }]),
+      fakeSender,
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+});
