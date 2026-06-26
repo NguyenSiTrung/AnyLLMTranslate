@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-26 all (hbomax tier-precedence hotfixes + test regression fix) -->
+<!-- conductor-refresh: 2026-06-26 all (post multi-provider-pool archive — health re-verified: 1675/0 failing, 54 archived) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -174,8 +174,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Multi-Provider Pool with Round-Robin & Circuit-Breaker Failover** (2026-06-26, shipped via conductor workflow): Multiple active providers + multiple API keys per provider; requests distribute round-robin across all enabled, healthy `(provider, key)` slots with per-key RPM (summed throughput ≈ Σ keys' maxRpm) and circuit-breaker failover (429/5xx/network → escalating cooldown 60s→120s→300s; 401/403 → long-open 1h + `credentialInvalid`). New pure libraries `lib/poolCursor.ts` (round-robin cursor), `lib/circuitBreaker.ts` (per-key health, injectable clock, SW-restart-safe), `lib/poolResolver.ts` (flatten + filter pool). `ProviderPoolCoordinator` (`services/providerPool.ts`) implements `TranslationService` at the single `initService()` seam, covering all 7 translation paths; `rebuild()` preserves member instances + breaker state for unchanged key ids. Per-key AES-GCM encryption loop in `loadSettings`/`saveSettings`; legacy single-provider users auto-migrate into `providers[0]`. Options → Providers tab (collapsible per-provider cards, per-key masked inputs + maxRpm + Test + status badge, "+ Add provider from catalog" modal reusing `OPENAI_COMPATIBLE_CATALOG`). Pool-aware `getPoolReadinessStatus()` for popup. `syncProviderToPool()` keeps the setup wizard's legacy-provider edits mirrored into `providers[0]`. 107 new tests across 9 files.
 
 ### Current State
-- 1672 tests passing across 122 files (107 new tests added by the multi-provider pool track; 3 full-suite failures in `subtitleCoordinator.test.ts` are pre-existing cross-file pollution — baseline `ef87d14` also fails 2 in the full suite, and the file passes 38/38 in isolation). Build passing (`wxt build` ✅, ~3.82 MB). 5 lint errors (`no-non-null-assertion` in subtitleCoordinator tests, `no-dynamic-delete` in SubtitlesSection/popup — all pre-existing, at baseline).
-- **0 active tracks**. 53 tracks archived.
+- 1675 tests passing across 122 files (0 failing / 0 flaky on full `pnpm test --run`; the 3 prior "full-suite failures" in `subtitleCoordinator.test.ts` documented at archive time did **not** reproduce on re-verification this cycle). Build passing (`wxt build` ✅, ~3.82 MB). 5 lint errors (`no-non-null-assertion` in subtitleCoordinator tests, `no-dynamic-delete` in SubtitlesSection/popup — all pre-existing, at baseline). 3 pre-existing `tsc` errors in `content/__tests__/subtitleCoordinator.test.ts` (lines 271, 1280, 1338; file untouched since 2026-06-24, baseline — lint is the gate, `tsc` was previously untracked).
+- **0 active tracks**. 54 tracks archived.
 
 ## Out of Scope (Initial Release)
 

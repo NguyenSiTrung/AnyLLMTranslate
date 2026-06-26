@@ -1,30 +1,32 @@
 {
-  "lastRefresh": "2026-06-26T09:05:00+07:00",
+  "lastRefresh": "2026-06-26T18:50:00+07:00",
   "scope": "all",
   "changes": [
-    "REGRESSION FIX: tests/unit/subtitleCoordinatorDom.test.ts beforeEach referenced 2 undeclared variables (capturedTextTrackCuesHandler, capturedMseCuesHandler) introduced by hotfix 3940830 -> removed. 2 hard failures -> 0. 1568 -> 1570 tests passing.",
-    "product.md: Refresh marker bumped (hbomax tier-precedence hotfixes + test regression fix).",
-    "product.md: Added 'HBO Max Tier-Precedence Hotfixes' entry to Implementation Status (commits 47debeb + 3940830, shipped on master post-archive).",
-    "product.md: Current State corrected — '1 pre-existing flaky test' was a misdiagnosis; replaced with accurate '0 failing / 0 flaky' + note that the 2 failures were an undeclared-variable regression now fixed.",
-    "patterns.md: Refresh marker bumped (mid-file + header).",
-    "patterns.md: Added new section 'HBO Max Tier-Precedence Hotfixes (2026-06-24)' with 9 elevated patterns (tier-precedence at handler entry, dual-mode handler play routing, manifest CDN edge-domain matching, selectSubtitleTrack track.url gate, processTracksDiscovered platform-gate removal, cleanupActiveOverlay activeSource reset, hide-native-captions in manifest/texttrack/mse paths, window guard in isOnWatchPage, test beforeEach must only reset declared vars).",
-    "patterns.md: Footer + mid-file health lines updated (1568/1-flaky -> 1570/0-flaky).",
-    "tracks.md: No drift (hotfixes shipped directly on master, no track to add).",
+    "Surgical refresh: only 2 health-line corrections + state-file bump. No structural doc changes, no new patterns (the multi-provider-pool track's own docs(conductor) commit 0f19619 already updated product.md Implementation Status + feature line, and appended the full 9-pattern 'Multi-Provider Pool' section to patterns.md).",
+    "product.md: Refresh marker bumped to 'post multi-provider-pool archive'.",
+    "product.md: Current State corrected — '1672 / 3 full-suite failures' replaced with '1675 passing / 0 failing / 0 flaky' (the 3 failures did NOT reproduce on re-verification this cycle; full `pnpm test --run` = 1675/1675 green). Archived track count 53 -> 54.",
+    "patterns.md: Refresh marker bumped (header).",
+    "patterns.md: Footer health line corrected to '1675 tests / 0 failing / 0 flaky', 53 -> 54 tracks archived.",
+    "NEW this cycle: tsc baseline now tracked — 3 pre-existing tsc errors in content/__tests__/subtitleCoordinator.test.ts (lines 271, 1280, 1338; file untouched since 2026-06-24, baseline). Lint is the gate; tsc was previously untracked. Recorded in product.md Current State + patterns.md footer for honesty.",
     "tech-stack.md: No drift vs package.json (no dependency changes).",
     "workflow.md: No drift.",
-    "beads: ALT-z38 (hotfix issue) already created+closed in commit 3940830 — no drift. Pre-existing unchanged: ALT-0gu (audit-v2) + ALT-74e (coursera-udemy) epics remain OPEN despite conductor tracks archived.",
-    "learnings: Hotfix had no dedicated track/learnings.md; 9 patterns consolidated directly into patterns.md this cycle.",
-    "backups: product.md.bak + patterns.md.bak refreshed before edits."
+    "tracks.md: No drift (multi-provider-pool_20260626 already in archived list from 0f19619).",
+    "learnings: All 9 implementation patterns from multi-provider-pool already elevated to patterns.md by the track's docs commit — nothing new to add/merge this cycle.",
+    "beads: No new drift this cycle (pool track self-contained, bd in stealth mode). Pre-existing unchanged: ALT-0gu (audit-v2) + ALT-74e (coursera-udemy) epics remain OPEN with sub-issues despite conductor tracks archived.",
+    "backups: product.md.bak + patterns.md.bak + refresh_state.json.bak created before edits.",
+    "verification: pnpm compile (3 pre-existing tsc errs, baseline), pnpm lint (5 pre-existing, baseline), pnpm test --run (1675/1675 passed across 122 files), pnpm build (3.82 MB) — all run live this cycle."
   ],
   "codebaseHealth": {
-    "tests": 1570,
-    "testFiles": 115,
-    "buildSize": "~3.8 MB",
+    "tests": 1675,
+    "testFiles": 122,
+    "buildSize": "~3.82 MB",
     "lintErrors": 5,
     "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 300,322,354); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged.",
-    "archivedTracks": 53,
+    "tscErrors": 3,
+    "tscErrorsDetail": "content/__tests__/subtitleCoordinator.test.ts lines 271 (TS18048 'sent' possibly undefined), 1280 + 1338 (TS2345 mock not assignable to null). File untouched since 2026-06-24, baseline — lint is the gate, tsc previously untracked.",
+    "archivedTracks": 54,
     "activeTracks": 0,
     "failingTests": 0
   },
-  "beadsDrift": "ALT-z38 (HBO Max hotfix) created+closed in commit 3940830, already synced. No new beads drift this cycle. Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived (flagged in prior refreshes)."
+  "beadsDrift": "No new beads drift this cycle (pool track self-contained, bd in stealth mode). Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived (flagged in prior refreshes)."
 }
