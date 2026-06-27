@@ -38,6 +38,12 @@ export class OpenAICompatibleService implements TranslationService {
    *  (e.g. NVIDIA NIM / vLLM with certain models). Once detected, all subsequent
    *  requests omit response_format to avoid a wasted failed call on every request. */
   private responseFormatDisabled = false;
+  /** FR-4: the (baseUrl, model) identity the response_format rejection was
+   *  learned against. `updateConfig` only clears {@link responseFormatDisabled}
+   *  when this identity changes, so a pool `rebuild()` that re-applies the SAME
+   *  provider+model (e.g. only maxRpm changed) does NOT forget the learned
+   *  rejection — avoiding a wasted 400 on every request after each rebuild. */
+  private responseFormatIdentity: { baseUrl: string; model: string } | null = null;
 
   constructor(config: ProviderConfig) {
     this.config = config;
@@ -46,11 +52,20 @@ export class OpenAICompatibleService implements TranslationService {
 
   /** Update the provider config (e.g., on settings change) */
   updateConfig(config: ProviderConfig): void {
+    // FR-4: only reset the response_format rejection memory when the provider
+    // identity (baseUrl + model) actually changes. The provider pool's rebuild
+    // calls updateConfig on preserved members even when only peripheral fields
+    // like maxRpm changed — resetting there would re-pay the 400 every time.
+    const identityChanged =
+      !this.responseFormatIdentity ||
+      this.responseFormatIdentity.baseUrl !== config.baseUrl ||
+      this.responseFormatIdentity.model !== config.model;
+    if (identityChanged) {
+      this.responseFormatDisabled = false;
+      this.responseFormatIdentity = null;
+    }
     this.config = config;
     this.rateLimiter.setMaxRpm(config.maxRpm ?? 0);
-    // Reset in case the user switched to a different provider/model that may
-    // support response_format.
-    this.responseFormatDisabled = false;
   }
 
   /** Build a chat completion request, conditionally including response_format
@@ -430,6 +445,12 @@ Rules:
           errorMessage.includes('response_format')
         ) {
           this.responseFormatDisabled = true;
+          // FR-4: remember the (baseUrl, model) this rejection was learned
+          // against so updateConfig only clears it on a real identity change.
+          this.responseFormatIdentity = {
+            baseUrl: this.config.baseUrl,
+            model: this.config.model,
+          };
           const strippedRequest = { ...request };
           delete strippedRequest.response_format;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt);

@@ -476,6 +476,126 @@ describe('OpenAICompatibleService', () => {
       const url = fetchCall[0] as string;
       expect(url).toContain('api.example.com');
     });
+
+    // FR-4 (fixes #3): response_format rejection memory must survive an
+    // updateConfig when baseUrl+model are UNCHANGED (the pool's rebuild calls
+    // updateConfig on preserved members even when nothing relevant changed —
+    // forgetting the flag would re-pay the 400 on every request). The flag
+    // resets ONLY on an actual provider/model switch.
+    describe('FR-4: response_format memory keyed by baseUrl+model', () => {
+      /** First call: 400 response_format rejection. Subsequent: success. */
+      function rejectingThenOkFetch() {
+        return vi
+          .fn()
+          .mockResolvedValueOnce({
+            ok: false,
+            status: 400,
+            statusText: 'Bad Request',
+            text: () =>
+              Promise.resolve(
+                '{"error":{"message":"\'response_format\' requires a JSON schema."}}',
+              ),
+          })
+          .mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () =>
+              Promise.resolve({
+                id: 'test',
+                choices: [
+                  {
+                    message: { role: 'assistant', content: '{"translations":{"p1":"x"}}' },
+                    finish_reason: 'stop',
+                  },
+                ],
+              }),
+            text: () => Promise.resolve(''),
+          });
+      }
+
+      const bodyHasResponseFormat = (call: unknown): boolean => {
+        const init = (call as unknown[])[1] as { body: string };
+        const body = JSON.parse(init.body) as { response_format?: unknown };
+        return body.response_format !== undefined;
+      };
+
+      it('survives updateConfig when baseUrl+model are unchanged (no wasted 400)', async () => {
+        globalThis.fetch = rejectingThenOkFetch();
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+
+        // First translate: 400 → flag learned → retry without response_format.
+        await service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+        // updateConfig with the SAME baseUrl+model (e.g. only maxRpm changed —
+        // exactly what the pool's rebuild does on a rate-limit settings tweak).
+        service.updateConfig({ ...mockConfigWithKey, maxRpm: 30 });
+
+        // Next request: flag MUST still be set → no response_format in body,
+        // and only ONE fetch (no wasted 400 retry).
+        await service.translate({
+          texts: new Map([['p1', 'World']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        const callsAfterSecond = fetchMock.mock.calls.length;
+        const lastBody = bodyHasResponseFormat(fetchMock.mock.calls[callsAfterSecond - 1]);
+        expect(lastBody).toBe(false);
+        // Exactly one fetch for the second translate (flag remembered).
+        expect(fetchMock.mock.calls.length).toBe(3); // 2 (first) + 1 (second)
+      });
+
+      it('resets when the model changes (re-sends response_format)', async () => {
+        globalThis.fetch = rejectingThenOkFetch();
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+
+        // Learn the flag.
+        await service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+
+        // Switch model → flag MUST reset so the new model gets a fair try.
+        service.updateConfig({ ...mockConfigWithKey, model: 'different-model' });
+
+        await service.translate({
+          texts: new Map([['p1', 'World']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+        const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+        // response_format is back in the body (model switch reset the flag).
+        expect(bodyHasResponseFormat(lastCall)).toBe(true);
+      });
+
+      it('resets when the baseUrl changes', async () => {
+        globalThis.fetch = rejectingThenOkFetch();
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        await service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+
+        service.updateConfig({ ...mockConfigWithKey, baseUrl: 'https://other/v1' });
+
+        await service.translate({
+          texts: new Map([['p1', 'World']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+        const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+        expect(bodyHasResponseFormat(lastCall)).toBe(true);
+      });
+    });
   });
 
   describe('subtitle prompt routing', () => {
