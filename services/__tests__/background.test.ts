@@ -3,6 +3,7 @@ import {
   handleMessage,
   __resetSemaphoreForTest,
   __resetTranslationServiceForTest,
+  __resetSettingsCacheForTest,
 } from '../background';
 
 // Mock chrome APIs
@@ -84,6 +85,8 @@ describe('services/background', () => {
     // otherwise leak across test cases — a 429/5xx in one test leaves a key
     // open for the next test, breaking it.
     __resetTranslationServiceForTest();
+    // FR-6: reset the decrypted-settings/signature cache too.
+    __resetSettingsCacheForTest();
   });
 
   describe('handleMessage — translate', () => {

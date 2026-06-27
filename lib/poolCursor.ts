@@ -47,9 +47,12 @@ export function createPoolCursor(slotCount: number): PoolCursor {
     },
     setSlotCount(n: number): void {
       const newCount = Math.max(0, Math.floor(n));
-      // Preserve relative position: take the absolute position modulo the new
-      // count so rotation doesn't jump. We keep `pos` as-is and rely on the
-      // modulo in next()/peek() to wrap correctly.
+      // FR-8 #10: preserve relative position via `pos % newCount`. A full
+      // post-resize cycle still covers every slot once (fair), but the single
+      // request immediately after a resize MAY land on a different absolute
+      // index than it would have pre-resize — that one-request skew is the
+      // accepted trade-off vs a clamped-position scheme. We keep `pos` as-is
+      // and rely on the modulo in next()/peek() to wrap correctly.
       if (newCount === 0) {
         pos = -1;
       } else if (pos < 0) {

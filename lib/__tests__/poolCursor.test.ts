@@ -81,6 +81,36 @@ describe('createPoolCursor', () => {
       cursor.setSlotCount(0);
       expect(cursor.next()).toBeNull();
     });
+
+    // FR-8 #10: cursor fairness on a LIVE slot-count change. The cursor
+    // preserves relative position via `pos % newCount`, so after a resize the
+    // rotation continues to cover every slot fairly over a full cycle (no slot
+    // is permanently starved, no slot is double-hit within one post-resize
+    // cycle). The single request immediately after a resize MAY land on a
+    // different absolute index than it would have pre-resize — that is the
+    // documented, accepted trade-off (a one-request skew is preferable to the
+    // complexity of a clamped-position scheme).
+    it('FR-8 #10: after a live resize, a full cycle still covers every slot once', () => {
+      const cursor = createPoolCursor(3);
+      cursor.next(); // 0
+      cursor.next(); // 1
+      // Live resize: 3 → 2 slots (a key was disabled mid-rotation).
+      cursor.setSlotCount(2);
+      const seen: number[] = [];
+      for (let i = 0; i < 2; i++) seen.push(cursor.next() as number);
+      // A full cycle covers both remaining slots exactly once (fair), though
+      // the starting index may differ from the pre-resize sequence.
+      expect(seen.sort()).toEqual([0, 1]);
+    });
+
+    it('FR-8 #10: after growing, a full cycle covers every slot once', () => {
+      const cursor = createPoolCursor(2);
+      cursor.next(); // 0
+      cursor.setSlotCount(4); // grew by 2 slots
+      const seen: number[] = [];
+      for (let i = 0; i < 4; i++) seen.push(cursor.next() as number);
+      expect(seen.sort()).toEqual([0, 1, 2, 3]);
+    });
   });
 
   describe('peek', () => {

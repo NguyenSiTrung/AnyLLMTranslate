@@ -15,10 +15,11 @@ import type {
   PdfDetectedMessage,
 } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
+import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
-import { loadSettings, onSettingsChange } from '@/lib/config';
+import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { ProviderPoolCoordinator } from '@/services/providerPool';
 import type { TranslationService } from '@/services/base';
@@ -243,19 +244,48 @@ function __getActiveSessionCountForTest(): number {
  * updateSettings message) hot-swaps config without losing rate-limiter windows
  * or breaker cooldowns.
  */
+/**
+ * FR-6: cached decrypted settings + pool signature so the hot translate path
+ * doesn't re-run the AES-GCM decrypt loop or a full pool rebuild on every call.
+ * The cache is invalidated by {@link onSettingsChange} (see initSettingsWatcher).
+ * Signature comparison is O(keys) and allocation-light — safe per-request.
+ */
+let cachedDecryptedSettings: ExtensionSettings | null = null;
+let lastPoolSignature: string | null = null;
+
+/** FR-6 test seam: reset the settings/signature caches between tests. */
+function __resetSettingsCacheForTest(): void {
+  cachedDecryptedSettings = null;
+  lastPoolSignature = null;
+}
+
 async function initService(): Promise<TranslationService> {
-  const settings = await loadSettings();
+  // FR-6 (#8): memoize the decrypted settings so the AES-GCM decrypt loop in
+  // loadSettings doesn't run on every translate call. Invalidated on
+  // onSettingsChange.
+  const settings =
+    cachedDecryptedSettings ?? (await loadSettings());
+  cachedDecryptedSettings = settings;
+
+  // FR-6 (#7): signature-based dirty tracking — only rebuild the pool when the
+  // pool-relevant settings actually changed (vs. on every translate call).
+  const signature = computePoolSignature(settings);
+  const existing = translationService;
+  if (existing instanceof ProviderPoolCoordinator && signature === lastPoolSignature) {
+    // Pool config unchanged since last init — reuse the built coordinator as-is.
+    return existing;
+  }
 
   // Build or rebuild the pool coordinator. The coordinator is the single seam
   // covering all translation paths; rebuild() preserves member-service
   // instances + circuit-breaker state for unchanged key identities.
-  const existing = translationService;
   const coord: ProviderPoolCoordinator =
     existing instanceof ProviderPoolCoordinator
       ? existing
       : new ProviderPoolCoordinator();
   translationService = coord;
   coord.rebuild(settings);
+  lastPoolSignature = signature;
 
   return coord;
 }
@@ -1240,6 +1270,11 @@ export function handleMessage(
 /** Initialize settings change listener */
 export function initSettingsListener(): () => void {
   return onSettingsChange(() => {
+    // FR-6: invalidate the decrypted-settings cache so the next initService
+    // re-reads + re-decrypts (the AES-GCM loop is skipped on the hot path only
+    // when settings are unchanged). The pool signature is also recomputed
+    // inside initService, triggering a rebuild only if pool config changed.
+    cachedDecryptedSettings = null;
     initService();
     // Invalidate debug log cache so subsequent LLM calls observe the new
     // debugMode value without waiting for the 5s TTL to expire.
@@ -1322,6 +1357,7 @@ export {
   __getSubtitleSessionCounterForTest,
   __resetSubtitleSessionCounterForTest,
   __resetTranslationServiceForTest,
+  __resetSettingsCacheForTest,
   MAX_CONCURRENT,
   PDF_MAX_CONCURRENT,
 };

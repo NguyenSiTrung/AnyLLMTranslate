@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { loadSettings, saveSettings, syncProviderToPool } from '../config';
+import { loadSettings, saveSettings, syncProviderToPool, computePoolSignature } from '../config';
 import { decryptApiKeyResult, encryptApiKey } from '../crypto';
 import { STORAGE_KEYS } from '../constants';
 import { DEFAULT_SETTINGS, type ExtensionSettings, type PoolProvider } from '@/types/config';
@@ -282,5 +282,101 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
     };
     const result = syncProviderToPool([existing], {});
     expect(result[0]?.baseUrl).toBe('https://x/v1');
+  });
+});
+
+// FR-6: computePoolSignature powers the hot-path dirty tracking so initService
+// can skip a rebuild when pool-relevant settings are unchanged. The signature
+// must be stable across IRRELEVANT changes (theme, glossary, site rules) and
+// differ on every RELEVANT change (provider config, keys, maxRpm).
+describe('computePoolSignature (FR-6 dirty tracking)', () => {
+  function baseSettings(): ExtensionSettings {
+    return {
+      ...DEFAULT_SETTINGS,
+      maxRpm: 0,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 30, enabled: true },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('is stable when only irrelevant fields change (theme, glossary, site rules)', () => {
+    const a = baseSettings();
+    const b: ExtensionSettings = {
+      ...baseSettings(),
+      theme: 'bubble',
+      glossary: [{ id: 'g1', source: 'x', target: 'y' }],
+      targetLanguage: 'ja',
+      globalExcludeSelectors: ['pre', '.code'],
+    };
+    expect(computePoolSignature(a)).toBe(computePoolSignature(b));
+  });
+
+  /** Clone base settings with the first provider replaced by `patch`. */
+  const withProviderPatch = (patch: Partial<PoolProvider>): ExtensionSettings => ({
+    ...baseSettings(),
+    providers: [{ ...baseSettings().providers[0], ...patch }],
+  });
+
+  /** Clone base settings with the first key of the first provider patched. */
+  const withKeyPatch = (patch: Partial<{ apiKey: string; maxRpm: number; enabled: boolean }>): ExtensionSettings => {
+    const base = baseSettings();
+    const provider = base.providers[0];
+    const firstKey = provider.keys[0];
+    return {
+      ...base,
+      providers: [
+        { ...provider, keys: [{ ...firstKey, ...patch }, ...provider.keys.slice(1)] },
+      ],
+    };
+  };
+
+  it('changes when a provider baseUrl changes', () => {
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withProviderPatch({ baseUrl: 'https://other/v1' })),
+    );
+  });
+
+  it('changes when a key apiKey changes', () => {
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withKeyPatch({ apiKey: 'sk-CHANGED' })),
+    );
+  });
+
+  it('changes when a key maxRpm changes', () => {
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withKeyPatch({ maxRpm: 99 })),
+    );
+  });
+
+  it('changes when a key is enabled/disabled', () => {
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withKeyPatch({ enabled: false })),
+    );
+  });
+
+  it('changes when the top-level maxRpm changes', () => {
+    const a = baseSettings();
+    const b: ExtensionSettings = { ...baseSettings(), maxRpm: 60 };
+    expect(computePoolSignature(a)).not.toBe(computePoolSignature(b));
+  });
+
+  it('changes when the model changes', () => {
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withProviderPatch({ model: 'other-model' })),
+    );
   });
 });

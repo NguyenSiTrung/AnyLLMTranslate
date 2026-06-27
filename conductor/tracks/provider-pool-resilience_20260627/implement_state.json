@@ -1,8 +1,8 @@
 {
-  "current_phase": "Phase 5: Caller Cache Guard + Pool Surface Cleanups",
-  "current_phase_index": 4,
+  "current_phase": "Phase 6: Hot-Path Dirty Tracking",
+  "current_phase_index": 5,
   "current_task_index": 0,
-  "completed_phases": ["Phase 1: Error Contract Repair", "Phase 2: Cursor Over Healthy Pool", "Phase 3: response_format Memory", "Phase 4: Rate-Limiter Timeout Coupling"],
-  "last_updated": "2026-06-27T10:10:00Z",
+  "completed_phases": ["Phase 1: Error Contract Repair", "Phase 2: Cursor Over Healthy Pool", "Phase 3: response_format Memory", "Phase 4: Rate-Limiter Timeout Coupling", "Phase 5: Caller Cache Guard + Pool Surface Cleanups"],
+  "last_updated": "2026-06-27T10:22:00Z",
   "status": "in_progress"
 }

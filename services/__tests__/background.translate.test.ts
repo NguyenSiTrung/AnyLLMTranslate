@@ -6,7 +6,8 @@
  * for each piece, sends only uncached pieces to LLM, and merges results.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleMessage, __resetTranslationServiceForTest } from '../background';
+import { handleMessage, __resetTranslationServiceForTest, __resetSettingsCacheForTest } from '../background';
+import { ProviderPoolCoordinator } from '../providerPool';
 
 // ── Shared mock state ───────────────────────────────────────────────────────
 const mockStorage: Record<string, unknown> = {};
@@ -79,6 +80,8 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
     // Reset the cached pool coordinator (FR-1 made breakers open on real
     // failures; the singleton's cooldowns would otherwise leak across tests).
     __resetTranslationServiceForTest();
+    // FR-6: reset the decrypted-settings/signature cache too.
+    __resetSettingsCacheForTest();
     const mod = await import('@/services/cacheManager');
     getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
     cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
@@ -214,6 +217,8 @@ describe('handleTranslate — web-page prompt unchanged by subtitle profiles', (
   beforeEach(async () => {
     delete mockStorage['anyllm-translate-settings'];
     vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     const mod = await import('@/services/cacheManager');
     getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
     getCachedTranslation.mockResolvedValue(null);
@@ -248,6 +253,10 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
   beforeEach(async () => {
     delete mockStorage['anyllm-translate-settings'];
     vi.clearAllMocks();
+    // FR-6: reset the cached decrypted settings + pool signature so a prior
+    // test's pool config doesn't leak (the cache now persists across calls).
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     const mod = await import('@/services/cacheManager');
     getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
     getCachedTranslation.mockResolvedValue(null); // force LLM path
@@ -381,5 +390,74 @@ describe('handleTranslate — FR-7: do not cache partial back-fills', () => {
     // Exactly one cache write (p1 only — p2 back-fill skipped).
     expect(cacheCalls.length).toBe(1);
     expect((cacheCalls[0] as unknown[])[1]).toBe('Xin chào'); // translated text
+  });
+});
+
+// FR-6 (fixes #7/#8, AC6): the hot translate path must NOT re-run the pool
+// rebuild (or the AES-GCM decrypt loop) when settings are unchanged between
+// calls. Signature-based dirty tracking skips rebuild; memoized decrypted
+// settings skip the decrypt.
+describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    const getCached = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCached.mockResolvedValue(null); // cache miss → forces the LLM/initService path
+  });
+
+  it('does NOT rebuild the pool on the second translate when settings are unchanged', async () => {
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    const rebuildSpy = vi.spyOn(ProviderPoolCoordinator.prototype, 'rebuild');
+
+    // First translate: pool is built (rebuild called once on first init).
+    await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender);
+    const rebuildsAfterFirst = rebuildSpy.mock.calls.length;
+    expect(rebuildsAfterFirst).toBeGreaterThanOrEqual(1);
+
+    // Second translate: settings unchanged → rebuild must NOT be called again.
+    await handleMessage(buildMsg([{ id: 'p1', text: 'World' }]), fakeSender);
+    const rebuildsAfterSecond = rebuildSpy.mock.calls.length;
+    expect(rebuildsAfterSecond).toBe(rebuildsAfterFirst);
+
+    rebuildSpy.mockRestore();
+  });
+
+  it('rebuilds when a pool-relevant setting changes between translates', async () => {
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+    const rebuildSpy = vi.spyOn(ProviderPoolCoordinator.prototype, 'rebuild');
+
+    // First translate with one provider.
+    mockStorage['anyllm-translate-settings'] = {
+      providers: [
+        {
+          id: 'p1', displayName: 'P1', baseUrl: 'https://a/v1', model: 'm',
+          requiresApiKey: false, temperature: 0.3, maxTokens: 4096, enabled: true,
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+        },
+      ],
+    };
+    await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender);
+    const rebuildsAfterFirst = rebuildSpy.mock.calls.length;
+
+    // Change a pool-relevant field (maxRpm) → invalidate + rebuild.
+    __resetSettingsCacheForTest(); // simulate onSettingsChange invalidation
+    mockStorage['anyllm-translate-settings'] = {
+      providers: [
+        {
+          id: 'p1', displayName: 'P1', baseUrl: 'https://a/v1', model: 'm',
+          requiresApiKey: false, temperature: 0.3, maxTokens: 4096, enabled: true,
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 60, enabled: true }],
+        },
+      ],
+    };
+    await handleMessage(buildMsg([{ id: 'p1', text: 'World' }]), fakeSender);
+    const rebuildsAfterSecond = rebuildSpy.mock.calls.length;
+    expect(rebuildsAfterSecond).toBeGreaterThan(rebuildsAfterFirst);
+
+    rebuildSpy.mockRestore();
   });
 });

@@ -241,6 +241,39 @@ export async function loadSettings(): Promise<ExtensionSettings> {
   }
 }
 
+/**
+ * FR-6: compute a cheap signature over the pool-relevant settings so
+ * {@link initService} can skip an expensive `rebuild()` when nothing affecting
+ * pool dispatch changed. Covers every field the member services + rotation
+ * depend on: provider identity, endpoint config, every key's credential +
+ * rate-limit + enabled flag, and the top-level maxRpm. O(keys) — meant to run
+ * on every translate call, so it must be fast and allocation-light.
+ *
+ * Returns a string (JSON of the relevant subset) suitable for `===` comparison.
+ * Two settings objects with identical pool-relevant state produce identical
+ * signatures; a change in any irrelevant field (theme, glossary, site rules)
+ * leaves the signature unchanged.
+ */
+export function computePoolSignature(settings: ExtensionSettings): string {
+  const providers = (settings.providers ?? []).map((p) => ({
+    id: p.id,
+    baseUrl: p.baseUrl,
+    model: p.model,
+    requiresApiKey: p.requiresApiKey,
+    temperature: p.temperature,
+    maxTokens: p.maxTokens,
+    requestTimeoutMs: p.requestTimeoutMs,
+    enabled: p.enabled,
+    keys: (p.keys ?? []).map((k) => ({
+      id: k.id,
+      apiKey: k.apiKey,
+      maxRpm: k.maxRpm,
+      enabled: k.enabled,
+    })),
+  }));
+  return JSON.stringify({ providers, maxRpm: settings.maxRpm ?? 0 });
+}
+
 /** Save settings to chrome.storage.local */
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
   // Encrypt per-key API keys (and the legacy mirror key) at rest.
