@@ -263,6 +263,18 @@ export class ProviderPoolCoordinator implements TranslationService {
    * service's fetchWithRetry) → call → on thrown error, classify + open the
    * breaker for eligible failures, then retry the next healthy slot. Bounded
    * by the count of slots that were healthy at dispatch time.
+   *
+   * FR-3 (cursor over healthy pool): the cursor advances over the HEALTHY
+   * subset's own index space, not the full slots array. Before this fix, the
+   * cursor advanced in [0, slots.length) but indexed the filtered `healthy[]`,
+   * so when any slot was open the indices misaligned and the modulo fallback
+   * skewed distribution / re-selected a failing slot within one failover
+   * chain. Now:
+   *  - `healthy[]` is computed once at dispatch entry.
+   *  - The round-robin cursor advances ONCE per request over healthy-space
+   *    (we snapshot its position into the healthy array).
+   *  - Failover walks the REMAINING healthy slots sequentially (a `tried` set
+   *    guarantees no revisit), recomputing the healthy pool after each open.
    */
   private async dispatchWithFailover<T>(
     call: (service: TranslationService) => Promise<T>,
@@ -282,15 +294,37 @@ export class ProviderPoolCoordinator implements TranslationService {
       );
     }
 
+    // FR-3: the cursor advances over the HEALTHY subset's own index space.
+    // Feed the cursor healthy.length so its modulo wrap matches the array we
+    // index. The cursor advances once PER ATTEMPT (not once per request): on a
+    // failover, each successive attempt calls next() again, so after a dispatch
+    // the cursor sits at the last-attempted slot and the NEXT request rotates
+    // to the slot after it — giving even distribution across requests even when
+    // a previous request consumed multiple slots via failover.
+    this.cursor.setSlotCount(healthy.length);
+
     let lastError: unknown = null;
+    // Track tried key ids so a failover chain never revisits a slot it already
+    // attempted (the failed slot is also now open, but the explicit set makes
+    // the invariant obvious and survives any breaker-clock skew).
+    const tried = new Set<string>();
+
     // Bounded by the healthy count — guarantees termination.
     for (let attempt = 0; attempt < healthy.length; attempt++) {
-      const slotIdx = this.cursor.next();
-      // cursor.next() returns null only when the pool is empty; healthy.length
-      // > 0 guarantees a non-null index here.
-      if (slotIdx === null) break;
-      const slot = healthy[slotIdx] ?? healthy[attempt % healthy.length];
+      // Advance the cursor for each attempt; skip any already-tried slot. No
+      // modulo-fallback: every healthy index is real.
+      let idx = this.cursor.next();
+      if (idx === null) break;
+      let slot = healthy[idx];
+      let probes = 0;
+      while (slot && tried.has(slot.keyId) && probes < healthy.length) {
+        probes++;
+        idx = this.cursor.next();
+        if (idx === null) break;
+        slot = healthy[idx];
+      }
       if (!slot) break;
+      tried.add(slot.keyId);
       const member = this.members.get(slot.keyId);
       if (!member) continue;
 
@@ -305,11 +339,9 @@ export class ProviderPoolCoordinator implements TranslationService {
         if (kind !== 'clientError') {
           // Eligible failure: open the breaker and fail over to the next slot.
           this.breaker.recordFailure(slot.keyId, kind, this.clock());
-          // Recompute the healthy pool for the next iteration (the just-opened
-          // slot is now excluded).
+          // If no healthy slots remain (recomputed), surface the last error.
           const remaining = healthySlots(this.slots, this.breaker, this.clock());
           if (remaining.length === 0) {
-            // No healthy slots left — surface the last error.
             throw new PoolExhaustedError(
               'All provider pool slots failed during this request.',
               lastError,

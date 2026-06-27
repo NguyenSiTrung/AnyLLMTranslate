@@ -97,6 +97,28 @@ function twoKeySettings(): ExtensionSettings {
   return { ...DEFAULT_SETTINGS, providers };
 }
 
+/** Three keys under one provider — for cursor-fairness tests (FR-3, AC2). */
+function threeKeySettings(): ExtensionSettings {
+  const providers: PoolProvider[] = [
+    {
+      id: 'p1',
+      displayName: 'P1',
+      baseUrl: 'https://a/v1',
+      model: 'm',
+      requiresApiKey: true,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [
+        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: true },
+      ],
+    },
+  ];
+  return { ...DEFAULT_SETTINGS, providers };
+}
+
 describe('ProviderPoolCoordinator', () => {
   let clockNow: number;
   let stubs: Map<string, StubService>;
@@ -244,6 +266,97 @@ describe('ProviderPoolCoordinator', () => {
       expect(r3.translations.get('id1')).toBe('from-k1');
       expect(stubs.get('k1')?.callCount).toBe(2);
       expect(stubs.get('k2')?.callCount).toBe(1);
+    });
+  });
+
+  // FR-3 / AC2: cursor must index the HEALTHY pool's own space, not the full
+  // slots array. Before the fix, dispatchWithFailover used
+  // `healthy[cursor.next()]` where the cursor advanced in [0, slots.length) —
+  // when any slot was open, healthy was shorter, indices misaligned, and the
+  // `?? healthy[attempt % healthy.length]` fallback skewed distribution /
+  // re-selected the same failing slot within one failover chain.
+  describe('FR-3: cursor fairness when a slot is open', () => {
+    /** Tag the result with the key that produced it so we can see distribution. */
+    function keyOf(r: { translations: Map<string, string> }): string {
+      const v = r.translations.get('id1') ?? '';
+      return v.replace('from-', '');
+    }
+
+    it('distributes evenly across the 2 healthy slots when k1 is open (3-slot pool)', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(threeKeySettings());
+
+      // Open k1's breaker by making it fail a 429 once (FR-1 makes this work).
+      setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
+      // First translate: cursor lands on k1, it fails → failover to k2.
+      // k1 is now open for the cooldown window.
+      await coord.translate(baseRequest()).catch(() => null);
+      expect(coord.getKeyStatus('k1').open).toBe(true);
+
+      // Reset stubs so only the upcoming distribution counts.
+      const resetStub = (keyId: string): void => {
+        const s = stubs.get(keyId);
+        if (s) s.callCount = 0;
+      };
+      resetStub('k1');
+      resetStub('k2');
+      resetStub('k3');
+
+      // 4 sequential translates with k2/k3 healthy — must distribute evenly
+      // across the 2 healthy slots (2 each), never touching k1, and never
+      // repeating the same slot on consecutive requests (true round-robin).
+      const seen: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        const r = await coord.translate(baseRequest());
+        seen.push(keyOf(r));
+      }
+      // Never dispatched to the open slot.
+      expect(stubs.get('k1')?.callCount).toBe(0);
+      // Even distribution: 2 each across k2 and k3.
+      expect(stubs.get('k2')?.callCount).toBe(2);
+      expect(stubs.get('k3')?.callCount).toBe(2);
+      // No consecutive repeats within the rotation (FR-3 no-skew).
+      for (let i = 1; i < seen.length; i++) {
+        expect(seen[i]).not.toBe(seen[i - 1]);
+      }
+      // Only healthy slots were selected.
+      expect(seen.every((k) => k === 'k2' || k === 'k3')).toBe(true);
+    });
+
+    it('never re-selects the same failing slot within one failover chain', async () => {
+      // 3 slots, k1 fails with 429 on its first call. The failover chain must
+      // walk to k2 (or k3) and succeed — it must NOT loop back to k1.
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(threeKeySettings());
+
+      // Make k1 fail exactly once (counting the call), then succeed — so a
+      // revisit would be detected by a SECOND k1 call count.
+      let k1Failed = false;
+      const k1Stub = stubs.get('k1');
+      if (!k1Stub) throw new Error('k1 stub missing');
+      k1Stub.translate = async () => {
+        k1Stub.callCount++; // mirror the base stub's counter so the call is seen
+        if (!k1Failed) {
+          k1Failed = true;
+          throw new ApiError('rate limited', 429);
+        }
+        return { success: true, translations: new Map([['id1', `from-k1`]]) };
+      };
+
+      // First request: cursor lands on k1, it fails, failover walks to the
+      // next healthy slot and succeeds.
+      const r1 = await coord.translate(baseRequest());
+      expect(r1.success).toBe(true);
+      // The result came from a slot OTHER than k1 (k2 or k3).
+      expect(keyOf(r1)).not.toBe('k1');
+      // k1 was hit exactly once (the failure), not revisited in the chain.
+      expect(stubs.get('k1')?.callCount).toBe(1);
     });
   });
 

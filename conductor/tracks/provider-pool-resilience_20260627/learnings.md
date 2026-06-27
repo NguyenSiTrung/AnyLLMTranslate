@@ -66,3 +66,15 @@ The two structural bugs the pool tests did NOT catch:
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-27 09:50] - Phase 1: Error Contract Repair (FR-1, FR-2)
+- **Implemented:** Services re-throw `ApiError` on transport/auth/rate-limit; `{success:false}` kept for content/parse failures. AC1 integration test (real `OpenAICompatibleService` + mocked `fetch`) proves 429→breaker open→failover.
+- **Files changed:** services/openaiCompatible.ts, services/background.ts, services/__tests__/openaiCompatible.test.ts, services/__tests__/providerPool.integration.test.ts, services/__tests__/background.test.ts
+- **Commit:** 4e2ad47
+- **Learnings:**
+  - **Pattern:** A try/catch that converts EVERY error to a return value defeats downstream error-driven logic (circuit breaker / failover). When a contract relies on THROWN errors, the producer must NOT swallow — wrap only the narrow paths that should return (content/parse), let transport errors propagate.
+  - **Gotcha (critical):** Making the pool open circuit breakers on real failures surfaced a TEST-ISOLATION bug — the `translationService` coordinator is a module singleton whose breaker cooldowns (60s+) leaked across test cases. A 429 in one `background.test.ts` test left a key open for the next, breaking 18 tests. Fix: `__resetTranslationServiceForTest()` in `beforeEach` (mirrors `__resetSemaphoreForTest`). This is a class of bug that ONLY appears when previously-dead error paths become live — expect more like it in Phases 2-5.
+  - **Gotcha:** In a single-provider/multi-key pool, both keys resolve to the SAME endpoint URL (baseUrl comes from the provider, not the key). A fetch mock that discriminates failure by URL can't distinguish k1 from k2 — discriminate by the `Authorization: Bearer <key>` header instead, exactly as the production service sends it.
+  - **Pattern:** The test that would have caught the original bug uses the REAL service with mocked transport, not a throwing stub. "Stub-throwing masked the contract bug" is the headline learning for elevation to patterns.md.
+  - **Context:** `parseTranslationResponse` (services/base.ts:148) throws a plain `Error` (not `ApiError`) on parse failure — that's why translate() now wraps ONLY the parse call in try/catch, keeping `fetchCompletion` unwrapped so its `ApiError` propagates.
+---

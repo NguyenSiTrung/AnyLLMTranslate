@@ -20,7 +20,7 @@ sequential unless marked parallel.
 The structural root cause. Services stop swallowing transport/auth/rate-limit
 errors; they re-throw `ApiError` so the pool's failover actually fires.
 
-- [ ] Task 1.1: Add tests asserting `translate()` throws `ApiError` on 429/5xx/401
+- [x] Task 1.1: Add tests asserting `translate()` throws `ApiError` on 429/5xx/401
   <!-- files: services/__tests__/openaiCompatible.test.ts -->
   - TDD RED: mock `fetch` to return 429 → `translate()` must reject with `ApiError`
     carrying `statusCode === 429`. Same for 503, 401. Currently it resolves
@@ -28,7 +28,7 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
   - Assert `{success:false}` is STILL returned for: empty response, JSON parse
     failure (these are content problems, not transport).
 
-- [ ] Task 1.2: Implement re-throw in `translate()` (and keep content failures as `{success:false}`)
+- [x] Task 1.2: Implement re-throw in `translate()` (and keep content failures as `{success:false}`)
   <!-- files: services/openaiCompatible.ts -->
   - Remove the broad `catch` that converts every error to `{success:false}`.
   - Let `ApiError` (and other thrown transport errors) propagate out of `translate()`.
@@ -37,12 +37,12 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
     that should surface to the user, not fail over — a malformed JSON from key 2
     would likely also fail).
 
-- [ ] Task 1.3: Same treatment for `detectPageCategory()` and `classifyPdfParagraphs()`
+- [x] Task 1.3: Same treatment for `detectPageCategory()` and `classifyPdfParagraphs()`
   <!-- files: services/openaiCompatible.ts, services/__tests__/openaiCompatible.test.ts -->
   - Re-throw `ApiError` on transport/auth/rate-limit; keep `{success:false}` for
     JSON parse failures of an otherwise-200 response.
 
-- [ ] Task 1.4: Audit + update all callers of `service.translate()` for the new throw
+- [x] Task 1.4: Audit + update all callers of `service.translate()` for the new throw
   <!-- files: services/background.ts, services/__tests__/background.translate.test.ts -->
   - Page path (`handleTranslate`): it already wraps in try/catch (line ~380) —
     verify a thrown `ApiError` surfaces cleanly as `{success:false, error}` to the
@@ -55,14 +55,14 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
   - Selection / hover / inline paths: confirm they call through the same
     `service.translate()` and have a catch.
 
-- [ ] Task 1.5: Add the integration test that proves real-service failover works
+- [x] Task 1.5: Add the integration test that proves real-service failover works
   <!-- files: services/__tests__/providerPool.integration.test.ts -->
   - Use the REAL `OpenAICompatibleService` (no throwing stub), mock `global.fetch`
     to return 429 for key 1's URL and 200 for key 2's URL. Assert: key 1 breaker
     opens, result comes from key 2, next request skips key 1. THIS is the test that
     would have caught the original bug.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Error Contract Repair'
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Error Contract Repair'
 
 ---
 
