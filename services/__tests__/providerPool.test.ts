@@ -7,7 +7,7 @@
  */
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { ProviderPoolCoordinator } from '../providerPool';
+import { ProviderPoolCoordinator, PoolExhaustedError } from '../providerPool';
 import { ApiError } from '../openaiCompatible';
 import type { TranslationService } from '../base';
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
@@ -470,7 +470,51 @@ describe('ProviderPoolCoordinator', () => {
         error: new ApiError('server error', 500),
       });
 
-      await expect(coord.translate(baseRequest())).rejects.toThrow();
+      // FR-8 #11: lastError is always a non-null Error carrying a message.
+      try {
+        await coord.translate(baseRequest());
+        throw new Error('expected translate to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(PoolExhaustedError);
+        const exhausted = error as PoolExhaustedError;
+        expect(exhausted.lastError).toBeInstanceOf(Error);
+        expect(exhausted.lastError.message).toBeTruthy();
+        // Reading .lastError.message never throws (no null deref).
+        expect(typeof exhausted.lastError.message).toBe('string');
+      }
+    });
+
+    it('FR-8 #11: all-open-before-dispatch carries a non-null descriptive lastError', async () => {
+      // Open BOTH breakers BEFORE any dispatch this request (no failure
+      // observed in this call). lastError must still be a real Error.
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      // Fail both once to open their breakers.
+      setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
+      setOutcome('k2', { kind: 'fail', error: new ApiError('429', 429) });
+      // First translate opens k1 (failover to k2 which also fails).
+      await coord.translate(baseRequest()).catch(() => null);
+      expect(coord.getKeyStatus('k1').open).toBe(true);
+      expect(coord.getKeyStatus('k2').open).toBe(true);
+
+      // Now BOTH are open before dispatch — no failure observed THIS request.
+      setOutcome('k1', { kind: 'success', result: { success: true, translations: new Map([['id1', 'from-k1']]) } });
+      setOutcome('k2', { kind: 'success', result: { success: true, translations: new Map([['id1', 'from-k2']]) } });
+
+      try {
+        await coord.translate(baseRequest());
+        throw new Error('expected translate to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(PoolExhaustedError);
+        const exhausted = error as PoolExhaustedError;
+        // Non-null descriptive Error — callers can safely read .message.
+        expect(exhausted.lastError).toBeInstanceOf(Error);
+        expect(exhausted.lastError.message.length).toBeGreaterThan(0);
+      }
     });
 
     it('does NOT trip the breaker on a non-4xx-eligible request error (400 surfaces, no failover)', async () => {
@@ -535,6 +579,35 @@ describe('ProviderPoolCoordinator', () => {
 
       const r = await coord.testConnection({ keyId: 'nope' });
       expect(r.success).toBe(false);
+    });
+
+    // FR-8 #12: a keyId-less testConnection must SKIP open (cooling) slots and
+    // dispatch to a healthy one — it routes through dispatchWithFailover, which
+    // filters to healthySlots, so a cooling slot is never tested.
+    it('FR-8 #12: keyId-less testConnection skips open slots', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      // Open k1's breaker (fail a 429).
+      setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
+      await coord.translate(baseRequest()).catch(() => null);
+      expect(coord.getKeyStatus('k1').open).toBe(true);
+      // Reset outcomes + call counts so only the testConnection counts.
+      setOutcome('k1', { kind: 'success', result: { success: true, translations: new Map([['id1', 'from-k1']]) } });
+      setOutcome('k2', { kind: 'success', result: { success: true } });
+      const k1Stub = stubs.get('k1');
+      const k2Stub = stubs.get('k2');
+      if (k1Stub) k1Stub.callCount = 0;
+      if (k2Stub) k2Stub.callCount = 0;
+
+      const r = await coord.testConnection();
+      expect(r.success).toBe(true);
+      // k1 (open) was NOT tested; only a healthy slot was.
+      expect(stubs.get('k1')?.callCount).toBe(0);
+      expect(stubs.get('k2')?.callCount).toBe(1);
     });
 
     it('detectPageCategory delegates with failover', async () => {

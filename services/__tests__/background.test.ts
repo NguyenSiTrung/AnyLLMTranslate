@@ -654,16 +654,43 @@ describe('services/background', () => {
   // Sub-project 6: context-aware cache key + partial guard + chunk retry
   // ==========================================================================
   describe('handleMessage — translateSubtitle (sub-project 6 cache/retry)', () => {
-    it('retries service.translate on a failure then succeeds (3 attempts total)', async () => {
-      // First two fetches fail (server error), third succeeds.
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable', json: () => Promise.resolve({}), text: () => Promise.resolve('') })
-        .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable', json: () => Promise.resolve({}), text: () => Promise.resolve('') })
-        .mockResolvedValueOnce({
+    it('retries service.translate on a failure then succeeds via pool failover (2-key pool)', async () => {
+      // FR-1 + FR-3 ripple: the pool now opens a key's breaker on a 5xx and
+      // fails over. With a single-key pool, a persistent 5xx opens the breaker
+      // and subtitle retry hits the open breaker (no same-key recovery within
+      // cooldown). With a 2-key pool, k1's 5xx opens its breaker and the pool
+      // fails over to k2, which succeeds — exercising the recovery path.
+      mockStorage['anyllm-translate-settings'] = {
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://shared/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [
+              { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+              { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+            ],
+          },
+        ],
+      };
+      // k1 (Bearer sk-1) fails 503; k2 (Bearer sk-2) succeeds. Discriminate by
+      // the Authorization header, exactly as the production service sends it.
+      const fetchMock = vi.fn(async (_url: string, init?: { headers: Record<string, string> }) => {
+        const auth = init?.headers?.['Authorization'] ?? '';
+        if (auth.includes('sk-1')) {
+          return { ok: false, status: 503, statusText: 'Service Unavailable', json: () => Promise.resolve({}), text: () => Promise.resolve('') };
+        }
+        return {
           ok: true, status: 200, statusText: 'OK',
           json: () => Promise.resolve({ id: 'test', choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations: { s1: 'Xin chào' } }) }, finish_reason: 'stop' }] }),
           text: () => Promise.resolve(''),
-        });
+        };
+      });
       vi.stubGlobal('fetch', fetchMock);
 
       const result = await handleMessage(
@@ -676,11 +703,10 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      // With retry: 1 initial + 2 retries, but the LLM call wrapper also has its
-      // own fetchWithRetry (2 retries) on each — so total fetches are higher.
-      // The key assertion: translation eventually succeeded.
+      // Recovery happened via failover: the result succeeded.
       expect(result).toMatchObject({ success: true });
-      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
+      // k1 was attempted (and failed 503), k2 succeeded.
+      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
 
     it('emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries', async () => {

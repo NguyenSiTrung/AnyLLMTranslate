@@ -75,10 +75,15 @@ export interface KeyStatus {
 /**
  * Error thrown when the pool has no healthy slots to dispatch to. Carries the
  * last failure so callers can surface it through existing error paths.
+ *
+ * FR-8 #11: `lastError` is ALWAYS a non-null `Error`. On the "all slots open
+ * before dispatch" path (no failure was observed this request), it carries a
+ * descriptive Error so callers reading `.lastError.message` never throw on
+ * null. Callers may safely do `err.lastError.message`.
  */
 export class PoolExhaustedError extends Error {
-  readonly lastError: unknown;
-  constructor(message: string, lastError: unknown) {
+  readonly lastError: Error;
+  constructor(message: string, lastError: Error) {
     super(message);
     this.name = 'PoolExhaustedError';
     this.lastError = lastError;
@@ -188,6 +193,10 @@ export class ProviderPoolCoordinator implements TranslationService {
     if (opts?.keyId) {
       return this.testSpecificKey(opts.keyId);
     }
+    // FR-8 #12: a keyId-less testConnection routes through dispatchWithFailover,
+    // which filters to healthySlots — so an open (cooling) slot is automatically
+    // skipped and a healthy slot is tested instead. This is the preferred
+    // behavior: "Test all" should never block on a rate-limited key.
     try {
       await this.dispatchWithFailover((service) => service.testConnection());
       return { success: true };
@@ -285,12 +294,15 @@ export class ProviderPoolCoordinator implements TranslationService {
       if (this.slots.length === 0) {
         throw new PoolExhaustedError(
           'Translation pool is empty — no providers configured.',
-          null,
+          new Error('No providers are configured in the pool.'),
         );
       }
       throw new PoolExhaustedError(
         'All provider pool slots are currently open (rate-limited or errored).',
-        null,
+        new Error(
+          `All ${this.slots.length} pool slot(s) are open (rate-limited or errored); ` +
+            'none are eligible for dispatch right now.',
+        ),
       );
     }
 
@@ -303,7 +315,9 @@ export class ProviderPoolCoordinator implements TranslationService {
     // a previous request consumed multiple slots via failover.
     this.cursor.setSlotCount(healthy.length);
 
-    let lastError: unknown = null;
+    let lastError: Error = new Error(
+      'Provider pool dispatch made no attempts (unexpected).',
+    );
     // Track tried key ids so a failover chain never revisits a slot it already
     // attempted (the failed slot is also now open, but the explicit set makes
     // the invariant obvious and survives any breaker-clock skew).
@@ -333,7 +347,9 @@ export class ProviderPoolCoordinator implements TranslationService {
         this.breaker.recordSuccess(slot.keyId);
         return result;
       } catch (error) {
-        lastError = error;
+        // Normalize: lastError is always a real Error (FR-8 #11) so callers
+        // reading .lastError.message never throw.
+        lastError = error instanceof Error ? error : new Error(String(error));
         const statusCode = error instanceof ApiError ? error.statusCode : undefined;
         const kind = this.breaker.classifyFailure(statusCode);
         if (kind !== 'clientError') {

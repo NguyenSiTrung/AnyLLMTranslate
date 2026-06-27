@@ -362,10 +362,31 @@ Rules:
     return { success: true, labels };
   }
 
+  /**
+   * Per-service 5xx retry count. FR-8 #13: this layering is explicitly bounded
+   * and documented. There are two retry layers:
+   *   1. Per-service `fetchWithRetry` (this constant) — retries a transient 5xx
+   *      on the SAME key. Bounded to PER_SERVICE_MAX_RETRIES (currently 1) so a
+   *      provider-wide outage doesn't hammer one key.
+   *   2. Pool `dispatchWithFailover` — on an exhausted same-key retry, opens the
+   *      breaker and walks the remaining healthy keys (bounded by healthy.length).
+   * Worst-case total calls for a provider-wide outage =
+   *   `keys × (1 + PER_SERVICE_MAX_RETRIES)`. With 1 retry and a 3-key pool
+   *   that's 6 calls — failover is the primary recovery; the per-service retry
+   *   smooths single-call transient hiccups without exploding the fan-out.
+   *
+   * NOTE: a higher per-service retry count would multiply the outage fan-out
+   * (keys × attempts) and is why this is kept at 1. The subtitle path's
+   * `withRetry` (lib/subtitleRetry.ts) is a SEPARATE, request-level retry that
+   * sits above the pool — it can still re-enter after a breaker cooldown
+   * expires, but each re-entry is itself bounded by this same layering.
+   */
+  private static readonly PER_SERVICE_MAX_RETRIES = 1;
+
   private async fetchCompletion(
     request: ChatCompletionRequest,
   ): Promise<ChatCompletionResponse> {
-    return this.fetchWithRetry(request, 2);
+    return this.fetchWithRetry(request, OpenAICompatibleService.PER_SERVICE_MAX_RETRIES);
   }
 
   private async fetchWithRetry(

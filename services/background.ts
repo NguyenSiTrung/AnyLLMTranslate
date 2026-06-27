@@ -347,15 +347,23 @@ async function handleTranslate(
       for (const [id, translatedText] of result.translations.entries()) {
         freshResults.push({ id, translatedText });
 
-        // Write each fresh translation back to cache
+        // Write each fresh translation back to cache.
         const piece = uncachedPieces.find((p) => p.id === id);
         if (piece) {
-          await cacheTranslation(
-            piece.text,
-            translatedText,
-            message.sourceLanguage,
-            message.targetLanguage,
-          );
+          // FR-7 (fixes #9): partial-result guard — mirror the subtitle path.
+          // When the LLM omitted this ID, the service back-fills it with the
+          // source text. Never cache that: it would persist source-as-translation
+          // and poison future lookups. (result.partial marks the chunk.)
+          const isBackfilled =
+            result.partial === true && translatedText === piece.text;
+          if (!isBackfilled) {
+            await cacheTranslation(
+              piece.text,
+              translatedText,
+              message.sourceLanguage,
+              message.targetLanguage,
+            );
+          }
         }
       }
 

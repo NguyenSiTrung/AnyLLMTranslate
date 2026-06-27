@@ -6,7 +6,7 @@
  * for each piece, sends only uncached pieces to LLM, and merges results.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleMessage } from '../background';
+import { handleMessage, __resetTranslationServiceForTest } from '../background';
 
 // ── Shared mock state ───────────────────────────────────────────────────────
 const mockStorage: Record<string, unknown> = {};
@@ -76,6 +76,9 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
   beforeEach(async () => {
     delete mockStorage['anyllm-translate-settings'];
     vi.clearAllMocks();
+    // Reset the cached pool coordinator (FR-1 made breakers open on real
+    // failures; the singleton's cooldowns would otherwise leak across tests).
+    __resetTranslationServiceForTest();
     const mod = await import('@/services/cacheManager');
     getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
     cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
@@ -317,5 +320,66 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+});
+
+// FR-7 (fixes #9): the page path must NOT cache a partial back-fill. When the
+// LLM omits an ID, the service back-fills it with the source text and flags
+// `partial`. Caching source-as-translation would poison future lookups.
+describe('handleTranslate — FR-7: do not cache partial back-fills', () => {
+  let cacheTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    const mod = await import('@/services/cacheManager');
+    const getCached = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCached.mockResolvedValue(null); // cache miss for all pieces
+    cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
+  });
+
+  it('does not write a back-filled (source==translated) piece to cache', async () => {
+    // LLM returns ONLY p1's translation and omits p2. The service back-fills p2
+    // with its own source text ("World") and sets partial=true.
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    const result = (await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'Hello' },
+        { id: 'p2', text: 'World' },
+      ]),
+      fakeSender,
+    )) as { success: boolean; results?: Array<{ id: string; translatedText: string }> };
+
+    expect(result.success).toBe(true);
+    // p1 was translated (cached), p2 was back-filled with source (NOT cached).
+    const cachedTexts = cacheTranslation.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(cachedTexts).toContain('Hello'); // p1 cached
+    expect(cachedTexts).not.toContain('World'); // p2 back-fill NOT cached
+
+    // p2's result still carries the back-filled source so nothing is lost.
+    const p2 = result.results?.find((r) => r.id === 'p2');
+    expect(p2?.translatedText).toBe('World');
+  });
+
+  it('caches normally-translated pieces even when the chunk is partial', async () => {
+    // Same partial response, but assert the TRANSLATED piece (p1) IS cached.
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'Hello' },
+        { id: 'p2', text: 'World' },
+      ]),
+      fakeSender,
+    );
+
+    const cacheCalls = cacheTranslation.mock.calls;
+    // Exactly one cache write (p1 only — p2 back-fill skipped).
+    expect(cacheCalls.length).toBe(1);
+    expect((cacheCalls[0] as unknown[])[1]).toBe('Xin chào'); // translated text
   });
 });
