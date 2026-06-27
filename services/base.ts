@@ -16,6 +16,12 @@ export interface TranslationService {
   /** Test the connection to the translation provider */
   testConnection(): Promise<{ success: boolean; error?: string }>;
 
+  /** Reconfigure the service in place from a new config (live-reconfigure on
+   *  settings change). Optional because not every backend holds mutable config,
+   *  but the pool coordinator calls it to keep member services in sync with
+   *  updated provider fields (baseUrl/model/apiKey/maxRpm). */
+  updateConfig?(config: ProviderConfig): void;
+
   /** Detect the page category using LLM */
   detectPageCategory?(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }>;
 

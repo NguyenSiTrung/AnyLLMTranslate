@@ -52,23 +52,75 @@ beforeEach(() => {
 });
 
 describe('popup provider recovery', () => {
-  it('shows setup recovery instead of translate action when provider is empty', async () => {
+  it('shows setup recovery instead of translate action when the pool is empty', async () => {
+    // DEFAULT_SETTINGS ships with a single default provider whose baseUrl/model
+    // are empty → pool-empty → not-configured. The recovery CTA should show.
     render(<App />);
 
-    expect(await screen.findByText(/provider not ready/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no providers configured/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /set up provider/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /translate page/i })).not.toBeInTheDocument();
   });
 
-  it('shows normal translate action when provider is connected', async () => {
+  it('shows normal translate action when the pool has a ready local provider', async () => {
+    // Pool is the source of truth (FR-8): a configured provider with baseUrl +
+    // model and no API-key requirement (local LLM) is ready without a connection
+    // test. The legacy settings.provider mirror is intentionally left at default.
     storedSettings = {
       ...DEFAULT_SETTINGS,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'Ollama',
+          baseUrl: 'http://localhost:11434/v1',
+          model: 'gemma3:4b',
+          requiresApiKey: false,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+        },
+      ],
+      onboarding: { completed: true, skipped: false, lastStep: 'done' },
+    };
+
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: /translate page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no providers configured/i)).not.toBeInTheDocument();
+  });
+
+  it('shows translate action when the multi-provider pool is ready, even with a stale legacy mirror (AnyLLMTranslate-37j)', async () => {
+    // Regression: a user who configures a provider via the Providers tab has a
+    // ready pool (settings.providers[] with an enabled key), but the legacy
+    // settings.provider mirror is left at its default (connectionStatus
+    // 'unknown'). The popup must read pool readiness, not the stale mirror —
+    // otherwise it wrongly shows "Provider not ready" and hides the translate
+    // button despite a healthy pool.
+    storedSettings = {
+      ...DEFAULT_SETTINGS,
+      // Legacy mirror intentionally left empty / untested (mirrors what the
+      // new ProvidersSection writes — it never touches settings.provider).
       provider: {
         ...DEFAULT_SETTINGS.provider,
-        baseUrl: 'http://localhost:11434/v1',
-        model: 'gemma3:4b',
-        connectionStatus: 'success',
+        baseUrl: '',
+        model: '',
+        apiKey: '',
+        connectionStatus: 'unknown',
       },
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'OpenAI',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o-mini',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [{ id: 'k1', apiKey: 'sk-ready', maxRpm: 0, enabled: true }],
+        },
+      ],
       onboarding: { completed: true, skipped: false, lastStep: 'done' },
     };
 

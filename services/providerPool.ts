@@ -149,8 +149,13 @@ export class ProviderPoolCoordinator implements TranslationService {
       const existing = this.members.get(slot.keyId);
       if (existing) {
         // Preserve the member instance (breaker state + rate limiter window).
-        // Update the slot reference in case provider fields changed.
         existing.slot = slot;
+        // Live-reconfigure the member in place so it dispatches with the new
+        // config (baseUrl/model/apiKey/maxRpm). Without this, the member keeps
+        // its original config and every translation request goes out stale
+        // while a per-key Test (which builds a fresh config from the UI) still
+        // succeeds — the bug behind AnyLLMTranslate-bfw.
+        existing.service.updateConfig?.(slot.providerConfig);
       } else {
         this.members.set(slot.keyId, {
           service: this.serviceFactory(slot.providerConfig, {

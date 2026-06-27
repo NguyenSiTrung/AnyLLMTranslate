@@ -23,9 +23,15 @@ interface StubService extends TranslationService {
     | { kind: 'success'; result: TranslationResult }
     | { kind: 'fail'; error: Error };
   callCount: number;
+  /** The config the member currently holds. Updated by updateConfig and at
+   *  construction, so tests can assert rebuild propagates changed config. */
+  config: ProviderConfig;
+  /** Every config handed to updateConfig (excludes the construction config). */
+  updateConfigCalls: ProviderConfig[];
+  updateConfig(config: ProviderConfig): void;
 }
 
-function makeStub(keyId: string): StubService {
+function makeStub(keyId: string, initialConfig: ProviderConfig): StubService {
   const stub: StubService = {
     keyId,
     nextOutcome: {
@@ -33,6 +39,12 @@ function makeStub(keyId: string): StubService {
       result: { success: true, translations: new Map([['id1', `from-${keyId}`]]) },
     },
     callCount: 0,
+    config: initialConfig,
+    updateConfigCalls: [],
+    updateConfig(config: ProviderConfig) {
+      stub.config = config;
+      stub.updateConfigCalls.push(config);
+    },
     async translate(_request: TranslationRequest) {
       stub.callCount++;
       if (stub.nextOutcome.kind === 'fail') throw stub.nextOutcome.error;
@@ -101,7 +113,7 @@ describe('ProviderPoolCoordinator', () => {
     stubs = new Map();
     factory = vi.fn(
       (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
-        const s = makeStub(identity.keyId);
+        const s = makeStub(identity.keyId, config);
         stubs.set(identity.keyId, s);
         return s;
       },
@@ -164,6 +176,41 @@ describe('ProviderPoolCoordinator', () => {
       expect(coord.getAllKeyStatuses()['k2']).toBeUndefined();
       expect(coord.getAllKeyStatuses()['k1']).toBeDefined();
       expect(coord.getAllKeyStatuses()['k3']).toBeDefined();
+    });
+
+    it('rebuild propagates changed config to a preserved member service (FR-6 live-reconfigure)', () => {
+      // Regression for AnyLLMTranslate-bfw: when a provider's fields change but
+      // its key id stays the same, the preserved member service must receive the
+      // NEW config (e.g. a corrected baseUrl/apiKey/model). Otherwise the member
+      // keeps dispatching with stale config — translation fails while a fresh
+      // Test (built from the current UI state) succeeds.
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+      const k1Before = stubs.get('k1');
+      expect(k1Before?.config.baseUrl).toBe('https://a/v1');
+      expect(k1Before?.config.apiKey).toBe('sk-1');
+
+      // Same key ids, but k1's provider got a new baseUrl + apiKey.
+      const updated = twoKeySettings();
+      const firstProvider = updated.providers[0];
+      if (firstProvider) {
+        firstProvider.baseUrl = 'https://new-endpoint/v1';
+        firstProvider.keys = [
+          { id: 'k1', apiKey: 'sk-1-NEW', maxRpm: 0, enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        ];
+      }
+      coord.rebuild(updated);
+
+      const k1After = stubs.get('k1');
+      expect(k1After).toBe(k1Before); // member instance preserved
+      expect(k1After?.updateConfigCalls).toHaveLength(1);
+      expect(k1After?.config.baseUrl).toBe('https://new-endpoint/v1');
+      expect(k1After?.config.apiKey).toBe('sk-1-NEW');
+      expect(factory).toHaveBeenCalledTimes(2); // not re-constructed for k1/k2
     });
   });
 
