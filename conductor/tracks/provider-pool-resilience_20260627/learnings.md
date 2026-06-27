@@ -78,3 +78,16 @@ The two structural bugs the pool tests did NOT catch:
   - **Pattern:** The test that would have caught the original bug uses the REAL service with mocked transport, not a throwing stub. "Stub-throwing masked the contract bug" is the headline learning for elevation to patterns.md.
   - **Context:** `parseTranslationResponse` (services/base.ts:148) throws a plain `Error` (not `ApiError`) on parse failure — that's why translate() now wraps ONLY the parse call in try/catch, keeping `fetchCompletion` unwrapped so its `ApiError` propagates.
 ---
+
+## [2026-06-27 12:10] - Phases 2-6: Cursor, response_format, rate-limit, cache, dirty-tracking
+- **Implemented:** FR-3 (cursor over healthy), FR-4 (response_format memory), FR-5 (rate-limit deadline), FR-7 (cache guard), FR-8 (#10/#11/#12/#13), FR-6 (hot-path dirty tracking).
+- **Files changed:** services/providerPool.ts, services/openaiCompatible.ts, lib/rateLimiter.ts, lib/poolCursor.ts, lib/config.ts, services/background.ts + tests.
+- **Commit:** 3c6035a, c3bf1bf, de6aa11, dd56d20, 27160d8
+- **Learnings:**
+  - **Pattern (cursor advance granularity):** A shared round-robin cursor must advance once PER ATTEMPT (not once per request) when failover is in play. Advancing only once-per-request leaves the cursor at the dispatch start, so after a failover that consumed slots [A,B], the next request re-walks the same prefix (re-hitting B). Per-attempt advance makes the cursor sit at the last-attempted slot → next request rotates evenly past it.
+  - **Pattern (response_format memory identity):** Any "learned flag" that should survive a config re-apply (the pool's rebuild calls updateConfig even on unrelated changes) must be keyed by an IDENTITY of the thing it was learned against, and reset only when that identity changes — NOT on every updateConfig. Here: (baseUrl, model).
+  - **Gotcha (recurring — test isolation under live error paths):** Every phase that made a previously-dead error path LIVE (FR-1 throws, FR-6 persistent caches) surfaced a test-isolation bug where module singletons leaked state across test cases. Each required a `__reset*ForTest()` in beforeEach. Class of bug: "tests passed only because the path was dead." Expect this whenever activating error/caching paths.
+  - **Gotcha (fake timers + deadline promises):** When a promise rejects via fake-timer advancement, attaching the assertion AFTER `advanceTimersByTimeAsync` causes an unhandled rejection (the rejection fires during the advance, before the `await expect().rejects`). Pattern: attach `.catch(e => e)` or `expect(p).rejects...` handler IMMEDIATELY, THEN advance timers.
+  - **Pattern (discriminate multi-key fetch mocks by auth header, not URL):** In a single-provider/multi-key pool, all keys share one endpoint URL. A fetch mock that branches failure by URL can't distinguish keys — branch on the `Authorization: Bearer <key>` header, exactly as the production service sends it.
+  - **Pattern (real-service integration test):** The test that catches contract bugs uses the REAL service with mocked TRANSPORT (fetch), not a throwing stub. Stubs that throw where the real service returns mask the production contract. Always add at least one integration test with the real service + mocked fetch for any error-driven coordination layer.
+---
