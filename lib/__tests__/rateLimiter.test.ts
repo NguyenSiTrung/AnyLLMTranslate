@@ -202,4 +202,65 @@ describe('createRateLimiter', () => {
       expect(true).toBe(true); // Both resolved without hanging
     });
   });
+
+  // FR-5 (fixes #4): acquire() must honor a deadline so a low-maxRpm limiter
+  // under load fails fast instead of hanging past the request's timeout bound.
+  describe('FR-5: acquire(timeoutMs) honors a deadline', () => {
+    it('rejects with a typed error when the wait would exceed the deadline', async () => {
+      const limiter = createRateLimiter(1);
+      // Fill the 1-slot window.
+      await limiter.acquire();
+      // Now at cap — the next acquire would wait ~60s. A 5s deadline must fail.
+      const acquireP = limiter.acquire(5_000);
+      // Attach the assertion handler immediately so the rejection is never
+      // unhandled when timers advance and resolve/reject the promise.
+      const assertion = expect(acquireP).rejects.toThrow();
+      // Advance past the 5s deadline so the wait loop hits its budget.
+      await vi.advanceTimersByTimeAsync(5_001);
+      await assertion;
+    });
+
+    it('rejects with an error whose name identifies it as a rate-limit timeout', async () => {
+      const limiter = createRateLimiter(1);
+      await limiter.acquire();
+      const acquireP = limiter.acquire(1_000);
+      // Catch immediately to avoid an unhandled rejection when timers advance.
+      const handled = acquireP.catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(1_001);
+      const caught = await handled;
+      expect(caught).toBeInstanceOf(Error);
+      expect((caught as Error).name).toBe('RateLimitTimeoutError');
+    });
+
+    it('does NOT wait the full 60s window when the deadline is shorter', async () => {
+      const limiter = createRateLimiter(1);
+      await limiter.acquire();
+      const start = Date.now();
+      const acquireP = limiter.acquire(2_000);
+      // Catch immediately to avoid an unhandled rejection.
+      const handled = acquireP.catch(() => null);
+      // Advance only 2s+1ms — well short of the 60s the window needs.
+      await vi.advanceTimersByTimeAsync(2_001);
+      await handled;
+      // The deadline (2s) elapsed, NOT the 60s window.
+      expect(Date.now() - start).toBeGreaterThanOrEqual(2_000);
+      expect(Date.now() - start).toBeLessThan(60_000);
+    });
+
+    it('resolves normally when a slot frees within the deadline', async () => {
+      const limiter = createRateLimiter(1);
+      await limiter.acquire();
+      // A second acquire with a generous 120s deadline, then advance past the
+      // 60s window so the slot frees — must resolve (record a timestamp).
+      const acquireP = limiter.acquire(120_000);
+      await vi.advanceTimersByTimeAsync(60_001);
+      await acquireP;
+      expect(limiter.__stateForTest?.window.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('unlimited fast-path ignores the deadline (always resolves)', async () => {
+      const limiter = createRateLimiter(0);
+      await expect(limiter.acquire(1)).resolves.toBeUndefined();
+    });
+  });
 });

@@ -373,9 +373,13 @@ Rules:
     maxRetries: number,
     attempt = 1,
   ): Promise<ChatCompletionResponse> {
+    const timeout = this.config.requestTimeoutMs ?? 60000;
     // RPM rate limiting: wait for a slot before starting the request-timeout
-    // clock (so the timeout doesn't fire during the RPM wait).
-    await this.rateLimiter.acquire();
+    // clock (so the timeout doesn't fire during the RPM wait). FR-5: bound the
+    // wait by the request timeout so a low-maxRpm limiter under load fails fast
+    // with a clear RateLimitTimeoutError instead of hanging past the user's
+    // configured bound.
+    await this.rateLimiter.acquire(timeout);
 
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
@@ -403,7 +407,6 @@ Rules:
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
-    const timeout = this.config.requestTimeoutMs ?? 60000;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
 

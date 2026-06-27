@@ -782,7 +782,13 @@ describe('OpenAICompatibleService', () => {
       const fetchSpy = mockTranslateResponse();
       globalThis.fetch = fetchSpy;
 
-      const service = new OpenAICompatibleService({ ...mockConfig, maxRpm: 1 });
+      // FR-5: acquire() is now bounded by requestTimeoutMs. Set it generously
+      // (120s) so the 60s rate-limit wait completes within the deadline.
+      const service = new OpenAICompatibleService({
+        ...mockConfig,
+        maxRpm: 1,
+        requestTimeoutMs: 120_000,
+      });
 
       const p1 = service.translate({
         texts: new Map([['p1', 'Hello']]),
@@ -810,7 +816,12 @@ describe('OpenAICompatibleService', () => {
       const fetchSpy = mockTranslateResponse();
       globalThis.fetch = fetchSpy;
 
-      const service = new OpenAICompatibleService({ ...mockConfig, maxRpm: 0 });
+      // FR-5: acquire() is bounded by requestTimeoutMs — set it generously.
+      const service = new OpenAICompatibleService({
+        ...mockConfig,
+        maxRpm: 0,
+        requestTimeoutMs: 120_000,
+      });
       await service.translate({
         texts: new Map([['p1', 'Hello']]),
         sourceLanguage: 'en',
@@ -818,7 +829,7 @@ describe('OpenAICompatibleService', () => {
       });
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-      service.updateConfig({ ...mockConfig, maxRpm: 1 });
+      service.updateConfig({ ...mockConfig, maxRpm: 1, requestTimeoutMs: 120_000 });
 
       await service.translate({
         texts: new Map([['p1', 'World']]),
