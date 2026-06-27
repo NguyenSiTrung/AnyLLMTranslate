@@ -69,6 +69,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- 🟡 **Provider Pool Resilience — Fix & Harden All Round-Robin / Failover Findings** (`provider-pool-resilience_20260627`) — Critical. Deep analysis found the multi-provider pool's headline feature (multi-key circuit-breaker failover) is dead code in production: `OpenAICompatibleService.translate()` swallows errors into `{success:false}` where the pool expects thrown `ApiError`, and the round-robin cursor indexes the wrong (filtered) array. 13 findings total (2 critical, 2 high, 5 medium, 4 low). [View](./conductor/tracks/provider-pool-resilience_20260627/)
+- 🟢 **Provider Pool Resilience — Fix & Harden All Round-Robin / Failover Findings** (`provider-pool-resilience_20260627`) — COMPLETE. Fixed all 13 findings (2 critical, 2 high, 5 medium, 4 low). Headline fix: the multi-provider pool's multi-key circuit-breaker failover was dead code in production (`OpenAICompatibleService.translate()` swallowed errors into `{success:false}` where the pool expected thrown `ApiError`) — now services re-throw so failover actually fires. Cursor indexes the healthy subset; response_format memory survives rebuild; rate-limit acquire bounded by requestTimeoutMs; hot-path dirty tracking skips rebuild+decrypt; PoolExhaustedError.lastError always non-null; double-retry layering bounded. 1723 tests (+41), 0 regressions. [View](./conductor/tracks/provider-pool-resilience_20260627/)
 
 ---

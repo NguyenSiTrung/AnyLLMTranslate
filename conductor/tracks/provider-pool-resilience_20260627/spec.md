@@ -124,20 +124,20 @@ proposition — multi-key resilience — actually functions in production.
 
 ## Acceptance Criteria
 
-- [ ] AC1: A real `OpenAICompatibleService` 429 from slot 1 opens its breaker and
+- [x] AC1: A real `OpenAICompatibleService` 429 from slot 1 opens its breaker and
   the next request fails over to slot 2 (proven by an integration test with mocked
   `fetch`, not a throwing stub).
-- [ ] AC2: With one slot open in a 3-slot pool, round-robin distributes evenly
+- [x] AC2: With one slot open in a 3-slot pool, round-robin distributes evenly
   across the 2 healthy slots (no same-slot repeats within a request, no index skew).
-- [ ] AC3: After a `response_format` 400, subsequent requests on the same
+- [x] AC3: After a `response_format` 400, subsequent requests on the same
   `(baseUrl, model)` skip `response_format` even after `rebuild()`/`updateConfig`.
-- [ ] AC4: When all slots fail, the surfaced error is non-null and descriptive;
+- [x] AC4: When all slots fail, the surfaced error is non-null and descriptive;
   callers don't throw on `.lastError` access.
-- [ ] AC5: The page translation path never caches a partial back-fill.
-- [ ] AC6: Repeated `translate()` calls without a settings change do NOT re-run
+- [x] AC5: The page translation path never caches a partial back-fill.
+- [x] AC6: Repeated `translate()` calls without a settings change do NOT re-run
   `rebuild()`/`updateConfig()`/full decrypt (asserted in a test).
-- [ ] AC7: `pnpm lint` clean; `pnpm test --run` all green; `wxt build` succeeds.
-- [ ] AC8: No regression in the existing 107 pool tests + page/subtitle paths.
+- [x] AC7: `pnpm lint` clean; `pnpm test --run` all green; `wxt build` succeeds.
+- [x] AC8: No regression in the existing 107 pool tests + page/subtitle paths.
 
 ## Out of Scope
 

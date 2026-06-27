@@ -70,13 +70,13 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 2.1: Tests for even distribution when a slot is open
+- [x] Task 2.1: Tests for even distribution when a slot is open
   <!-- files: services/__tests__/providerPool.test.ts -->
   - RED: 3 slots [k1,k2,k3], open k1's breaker, fire 4 sequential translates.
     Assert the cursor distributes evenly across k2/k3 with no repeats within a
     single request's failover chain and no index-skew selection.
 
-- [ ] Task 2.2: Rework `dispatchWithFailover` to index healthy space
+- [x] Task 2.2: Rework `dispatchWithFailover` to index healthy space
   <!-- files: services/providerPool.ts -->
   - Compute `healthy[]` once. The cursor advances within `[0, healthy.length)`.
   - On failover, iterate the remaining healthy slots (the already-tried one is now
@@ -87,11 +87,11 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
     `healthy.length` for the duration of this dispatch, then it doesn't matter
     because rebuild re-sets it).
 
-- [ ] Task 2.3: Regression — round-robin still alternates with all slots healthy
+- [x] Task 2.3: Regression — round-robin still alternates with all slots healthy
   <!-- files: services/__tests__/providerPool.test.ts -->
   - Existing k1→k2→k1 test must still pass unchanged.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Cursor Over Healthy Pool'
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Cursor Over Healthy Pool'
 
 ---
 
@@ -99,19 +99,19 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 3.1: Test that response_format stays disabled across updateConfig
+- [x] Task 3.1: Test that response_format stays disabled across updateConfig
   <!-- files: services/__tests__/openaiCompatible.test.ts -->
   - RED: trigger a `response_format` 400 → confirm flag set → call `updateConfig`
     with the SAME baseUrl+model → assert the next request body omits
     `response_format` (no wasted 400). Then `updateConfig` with a DIFFERENT model
     → assert it resets and re-sends `response_format`.
 
-- [ ] Task 3.2: Key the flag by baseUrl+model identity
+- [x] Task 3.2: Key the flag by baseUrl+model identity
   <!-- files: services/openaiCompatible.ts -->
   - Track `(baseUrl, model)` the flag was learned against; `updateConfig` only
     resets `responseFormatDisabled` when that identity changes.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: response_format Memory'
+- [x] Task: Conductor - User Manual Verification 'Phase 3: response_format Memory'
 
 ---
 
@@ -119,23 +119,23 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 4.1: Test that acquire() respects a deadline
+- [x] Task 4.1: Test that acquire() respects a deadline
   <!-- files: lib/__tests__/rateLimiter.test.ts -->
   - RED: cap=1, fill the window, call `acquire()` with a short deadline → must
     reject (typed error) instead of waiting indefinitely. Use fake timers to assert
     no wait beyond the deadline.
 
-- [ ] Task 4.2: Add a deadline/budget to `acquire()`
+- [x] Task 4.2: Add a deadline/budget to `acquire()`
   <!-- files: lib/rateLimiter.ts -->
   - `acquire(timeoutMs?: number)` — if the computed wait exceeds the budget,
     reject with a typed `RateLimitTimeoutError`. Keep the unlimited fast-path.
 
-- [ ] Task 4.3: Wire the request timeout into `acquire()` from `fetchWithRetry`
+- [x] Task 4.3: Wire the request timeout into `acquire()` from `fetchWithRetry`
   <!-- files: services/openaiCompatible.ts -->
   - Pass `requestTimeoutMs` as the acquire deadline so a low-`maxRpm` under load
     surfaces a clear error instead of hanging past the user's bound.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Rate-Limiter Timeout Coupling'
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Rate-Limiter Timeout Coupling'
 
 ---
 
@@ -143,29 +143,29 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
 <!-- execution: parallel -->
 <!-- depends: phase1 -->
 
-- [ ] Task 5.1: Page path must not cache partial back-fills (fixes #9)
+- [x] Task 5.1: Page path must not cache partial back-fills (fixes #9)
   <!-- files: services/background.ts, services/__tests__/background.translate.test.ts -->
   - Mirror the subtitle guard: when `result.partial === true` and
     `translatedText === piece.text`, skip the `cacheTranslation()` write.
 
-- [ ] Task 5.2: PoolExhaustedError non-null lastError (fixes #11)
+- [x] Task 5.2: PoolExhaustedError non-null lastError (fixes #11)
   <!-- files: services/providerPool.ts, services/__tests__/providerPool.test.ts -->
   - On the "all open before dispatch" path, set `lastError` to a descriptive Error
     (or make the type `unknown | Error` and document). Ensure callers reading
     `.lastError.message` never throw.
 
-- [ ] Task 5.3: Pool testConnection() skips open slots (fixes #12)
+- [x] Task 5.3: Pool testConnection() skips open slots (fixes #12)
   <!-- files: services/providerPool.ts, services/__tests__/providerPool.test.ts -->
   - A keyId-less testConnection should not land on a cooling slot; route through
     the healthy filter (or document explicitly).
 
-- [ ] Task 5.4: Document + bound the double-retry layering (fixes #13)
+- [x] Task 5.4: Document + bound the double-retry layering (fixes #13)
   <!-- files: services/openaiCompatible.ts, services/providerPool.ts -->
   - Add a comment + a cap so a provider-wide 5xx doesn't fan out to
     `keys × per-service-retries` calls. Consider reducing per-service 5xx retries
     to 1 when the pool has >1 slot (failover is the better recovery). Test the cap.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 5: Caller Cache Guard + Pool Surface Cleanups'
+- [x] Task: Conductor - User Manual Verification 'Phase 5: Caller Cache Guard + Pool Surface Cleanups'
 
 ---
 
@@ -176,29 +176,29 @@ errors; they re-throw `ApiError` so the pool's failover actually fires.
 Independent of Phases 2–5 (touches `initService` seam + settings memoization, not
 the error contract). Can run in parallel with Phases 2–5.
 
-- [ ] Task 6.1: Test that repeated translate() without settings change skips rebuild
+- [x] Task 6.1: Test that repeated translate() without settings change skips rebuild
   <!-- files: services/__tests__/background.translate.test.ts -->
   - RED: spy on the coordinator's `rebuild` / members' `updateConfig`; fire two
     translates without a settings change → assert `rebuild`/`updateConfig` called
     at most once (on first init), not per call.
 
-- [ ] Task 6.2: Signature-based dirty tracking in `initService()`
+- [x] Task 6.2: Signature-based dirty tracking in `initService()`
   <!-- files: services/background.ts -->
   - Compute a cheap signature over the pool-relevant settings (providers[]
     baseUrl/model/key-ids/maxRpm/enabled + top-level maxRpm); only call
     `coord.rebuild()` when the signature changes. `onSettingsChange` bumps it.
 
-- [ ] Task 6.3: Memoize decrypted settings
+- [x] Task 6.3: Memoize decrypted settings
   <!-- files: lib/config.ts, services/background.ts -->
   - Cache the decrypted `ExtensionSettings` with invalidation on
     `onSettingsChange` so the AES-GCM loop doesn't run per translate.
 
-- [ ] Task 6.4: Cursor fairness on live slot-count change (fixes #10)
+- [x] Task 6.4: Cursor fairness on live slot-count change (fixes #10)
   <!-- files: lib/poolCursor.ts, lib/__tests__/poolCursor.test.ts -->
   - Test current modulo behavior under count changes; if a distribution jump is
     observable, clamp to preserve relative position. Document the chosen semantics.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 6: Hot-Path Dirty Tracking'
+- [x] Task: Conductor - User Manual Verification 'Phase 6: Hot-Path Dirty Tracking'
 
 ---
 
@@ -206,20 +206,20 @@ the error contract). Can run in parallel with Phases 2–5.
 <!-- execution: sequential -->
 <!-- depends: phase1, phase2, phase3, phase4, phase5, phase6 -->
 
-- [ ] Task 7.1: Run full quality gates
+- [x] Task 7.1: Run full quality gates
   <!-- files: -->
   - `pnpm lint`, `pnpm test --run` (expect all green, 0 flaky), `wxt build`.
   - Re-run the 107 prior pool tests to confirm no regression.
 
-- [ ] Task 7.2: Update README / product.md provider-pool section accuracy
+- [x] Task 7.2: Update README / product.md provider-pool section accuracy
   <!-- files: README.md, conductor/product.md -->
   - The README claims round-robin + circuit-breaker failover "just works" — after
     this track it actually does. Tighten any wording that implied it worked before.
 
-- [ ] Task 7.3: Capture track learnings + elevate reusable patterns
+- [x] Task 7.3: Capture track learnings + elevate reusable patterns
   <!-- files: conductor/tracks/provider-pool-resilience_20260627/learnings.md, conductor/patterns.md -->
   - Key learning: "stub-throwing masked a production contract bug — always add an
     integration test with the REAL service + mocked transport."
   - Elevate the error-contract pattern + dirty-tracking pattern to patterns.md.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 7: Full Verification & Documentation'
+- [x] Task: Conductor - User Manual Verification 'Phase 7: Full Verification & Documentation'
