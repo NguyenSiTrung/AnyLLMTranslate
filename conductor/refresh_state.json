@@ -1,32 +1,33 @@
 {
-  "lastRefresh": "2026-06-26T18:50:00+07:00",
+  "lastRefresh": "2026-06-27T12:30:00+07:00",
   "scope": "all",
   "changes": [
-    "Surgical refresh: only 2 health-line corrections + state-file bump. No structural doc changes, no new patterns (the multi-provider-pool track's own docs(conductor) commit 0f19619 already updated product.md Implementation Status + feature line, and appended the full 9-pattern 'Multi-Provider Pool' section to patterns.md).",
-    "product.md: Refresh marker bumped to 'post multi-provider-pool archive'.",
-    "product.md: Current State corrected — '1672 / 3 full-suite failures' replaced with '1675 passing / 0 failing / 0 flaky' (the 3 failures did NOT reproduce on re-verification this cycle; full `pnpm test --run` = 1675/1675 green). Archived track count 53 -> 54.",
-    "patterns.md: Refresh marker bumped (header).",
-    "patterns.md: Footer health line corrected to '1675 tests / 0 failing / 0 flaky', 53 -> 54 tracks archived.",
-    "NEW this cycle: tsc baseline now tracked — 3 pre-existing tsc errors in content/__tests__/subtitleCoordinator.test.ts (lines 271, 1280, 1338; file untouched since 2026-06-24, baseline). Lint is the gate; tsc was previously untracked. Recorded in product.md Current State + patterns.md footer for honesty.",
-    "tech-stack.md: No drift vs package.json (no dependency changes).",
+    "Scope: incremental state-sync refresh. Only 1 conductor track archived since the 2026-06-26 cycle: provider-pool-resilience_20260627 (created/completed/archived 2026-06-27, 8 phases). Commit 865c456 already did the heavy lifting (product.md Implementation Status entry + Current State bumped to 1723 tests; full 'Provider Pool Resilience (2026-06-27)' section elevated to patterns.md). This cycle only synced the leftover state markers.",
+    "product.md: refresh marker bumped 2026-06-26/1675/54 -> 2026-06-27/1723/55.",
+    "product.md: Current State '54 tracks archived' -> '55'; test-file count corrected 122 -> 121 (a test file was consolidated in an earlier track).",
+    "patterns.md: refresh marker bumped (header) to 2026-06-27/1723/55.",
+    "patterns.md: footer health line updated to 'Last refreshed 2026-06-27', 1723 tests / 121 files, 55 tracks archived.",
+    "patterns.md: NEW pattern appended to 'Provider Pool Resilience' section — 'Fake-timer + rejecting-promise ordering' (attach .catch / expect().rejects handler BEFORE vi.advanceTimersByTimeAsync, or the rejection fires mid-advance as unhandled). 7th bullet in that section.",
+    "patterns.md: left the old mid-file snapshot at L454-455 (2026-06-23, 1570 tests, 53 tracks) untouched — it is explicitly labeled 'superseded by footer' and serves as a historical record.",
+    "tech-stack.md: No drift vs package.json (no dependency changes this cycle).",
     "workflow.md: No drift.",
-    "tracks.md: No drift (multi-provider-pool_20260626 already in archived list from 0f19619).",
-    "learnings: All 9 implementation patterns from multi-provider-pool already elevated to patterns.md by the track's docs commit — nothing new to add/merge this cycle.",
-    "beads: No new drift this cycle (pool track self-contained, bd in stealth mode). Pre-existing unchanged: ALT-0gu (audit-v2) + ALT-74e (coursera-udemy) epics remain OPEN with sub-issues despite conductor tracks archived.",
+    "tracks.md: No drift (provider-pool-resilience_20260627 already in archived list from archive commit 03ecd94; '55 tracks archived' already correct).",
+    "learnings: The 6 headline resilience patterns were already elevated by commit 865c456. This cycle added 1 additional testing gotcha from the track's Phase 2-6 learnings (fake-timer ordering) that had not made it into patterns.md. No duplicates to merge.",
+    "beads: Synced Conductor -> Beads. Closed 49 orphaned beads tasks for already-archived conductor tracks: rmu.* (provider-pool-resilience, 29 leaf tasks), a8m.* (pdf-download, 13 leaf + epic + 3 phase aggregators force-closed via -f), hza.* (hbomax/youku, 6 tasks). Final open count: 0. Pre-existing 0gu/74e epics noted in prior refreshes are no longer open (already resolved). bd mode = stealth.",
     "backups: product.md.bak + patterns.md.bak + refresh_state.json.bak created before edits.",
-    "verification: pnpm compile (3 pre-existing tsc errs, baseline), pnpm lint (5 pre-existing, baseline), pnpm test --run (1675/1675 passed across 122 files), pnpm build (3.82 MB) — all run live this cycle."
+    "verification: pnpm test --run (1723/1723 passed across 121 files) run live this cycle. bd list = 0 open."
   ],
   "codebaseHealth": {
-    "tests": 1675,
-    "testFiles": 122,
-    "buildSize": "~3.82 MB",
+    "tests": 1723,
+    "testFiles": 121,
+    "buildSize": "~3.81 MB",
     "lintErrors": 5,
-    "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts (lines 300,322,354); no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx (260) and entrypoints/popup/App.tsx (697). Pre-existing, unchanged.",
+    "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts; no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx and entrypoints/popup/App.tsx. Pre-existing, unchanged at baseline.",
     "tscErrors": 3,
     "tscErrorsDetail": "content/__tests__/subtitleCoordinator.test.ts lines 271 (TS18048 'sent' possibly undefined), 1280 + 1338 (TS2345 mock not assignable to null). File untouched since 2026-06-24, baseline — lint is the gate, tsc previously untracked.",
-    "archivedTracks": 54,
+    "archivedTracks": 55,
     "activeTracks": 0,
     "failingTests": 0
   },
-  "beadsDrift": "No new beads drift this cycle (pool track self-contained, bd in stealth mode). Pre-existing unchanged: ALT-0gu (audit-v2) and ALT-74e (coursera-udemy) epics remain open with sub-issues despite conductor tracks archived (flagged in prior refreshes)."
+  "beadsDrift": "Synced Conductor -> Beads this cycle. Closed all 49 orphaned tasks for archived tracks (rmu=provider-pool-resilience, a8m=pdf-download, hza=hbomax/youku). bd list now shows 0 open issues. No remaining drift."
 }
