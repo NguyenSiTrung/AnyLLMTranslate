@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { OpenAICompatibleService } from '../openaiCompatible';
+import { OpenAICompatibleService, ApiError } from '../openaiCompatible';
 import type { ProviderConfig } from '../../types/config';
 import { buildSubtitleSystemPrompt } from '@/services/subtitlePrompt';
 import { PROFILE_PRESETS } from '@/lib/subtitleProfiles';
@@ -147,23 +147,116 @@ describe('OpenAICompatibleService', () => {
       expect(result.error).toBeDefined();
     });
 
-    it('handles HTTP error responses', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        text: () => Promise.resolve('{"error":{"message":"Invalid API key"}}'),
+    // FR-1: transport / auth / rate-limit failures must RE-THROW ApiError so the
+    // provider pool's circuit-breaker + failover actually fires. The old behavior
+    // swallowed every error into {success:false}, which made pool failover dead
+    // code in production (only unit tests with throwing stubs passed).
+    describe('FR-1: re-throws ApiError on transport/auth/rate-limit failures', () => {
+      function httpError(status: number, statusText: string, body = '') {
+        return vi.fn().mockResolvedValue({
+          ok: false,
+          status,
+          statusText,
+          text: () => Promise.resolve(body),
+        });
+      }
+
+      it('throws ApiError(statusCode=429) on a rate-limit response', async () => {
+        globalThis.fetch = httpError(429, 'Too Many Requests');
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        await expect(
+          service.translate({
+            texts: new Map([['p1', 'Hello']]),
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          }),
+        ).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
       });
 
-      const service = new OpenAICompatibleService(mockConfigWithKey);
-      const result = await service.translate({
-        texts: new Map([['p1', 'Hello']]),
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
+      it('throws ApiError(statusCode=503) on a server error', async () => {
+        globalThis.fetch = httpError(503, 'Service Unavailable');
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        await expect(
+          service.translate({
+            texts: new Map([['p1', 'Hello']]),
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          }),
+        ).rejects.toMatchObject({ name: 'ApiError', statusCode: 503 });
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid API key');
+      it('throws ApiError(statusCode=401) on an auth failure', async () => {
+        globalThis.fetch = httpError(
+          401,
+          'Unauthorized',
+          '{"error":{"message":"Invalid API key"}}',
+        );
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        await expect(
+          service.translate({
+            texts: new Map([['p1', 'Hello']]),
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          }),
+        ).rejects.toMatchObject({ name: 'ApiError', statusCode: 401 });
+      });
+
+      it('the thrown error is an ApiError instance carrying statusCode', async () => {
+        globalThis.fetch = httpError(429, 'Too Many Requests');
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        try {
+          await service.translate({
+            texts: new Map([['p1', 'Hello']]),
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          });
+          throw new Error('expected translate to throw');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect((error as ApiError).statusCode).toBe(429);
+        }
+      });
+
+      it('throws ApiError on a network failure (fetch rejects)', async () => {
+        globalThis.fetch = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+        const service = new OpenAICompatibleService(mockConfigWithKey);
+        await expect(
+          service.translate({
+            texts: new Map([['p1', 'Hello']]),
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          }),
+        ).rejects.toThrow();
+      });
+    });
+
+    // FR-1 complement: content/parse failures are NOT transport failures — they
+    // must STILL surface as {success:false} (a malformed JSON from key 2 would
+    // likely also fail, so failover wouldn't help).
+    describe('FR-1: content failures still return {success:false}', () => {
+      it('returns {success:false} for an empty LLM response (not a transport error)', async () => {
+        globalThis.fetch = mockFetchResponse('   ');
+        const service = new OpenAICompatibleService(mockConfig);
+        const result = await service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Empty response');
+      });
+
+      it('returns {success:false} for an unparseable JSON response', async () => {
+        globalThis.fetch = mockFetchResponse('not json at all {{{');
+        const service = new OpenAICompatibleService(mockConfig);
+        const result = await service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        expect(result.success).toBe(false);
+        expect(result.error).toBeDefined();
+      });
     });
 
     it('retries without response_format when provider rejects it (NVIDIA NIM / vLLM)', async () => {
@@ -625,6 +718,90 @@ describe('OpenAICompatibleService', () => {
       await vi.advanceTimersByTimeAsync(60_001);
       await p3;
       expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  // FR-1: detectPageCategory + classifyPdfParagraphs must re-throw ApiError on
+  // transport/auth/rate-limit (so the pool can fail over) while still returning
+  // {success:false} for content/parse failures of an otherwise-200 response.
+  describe('FR-1: detectPageCategory error contract', () => {
+    const ctx = { title: 't', description: 'd', domain: 'x.com' };
+
+    it('re-throws ApiError on a 429', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: () => Promise.resolve(''),
+      });
+      const service = new OpenAICompatibleService(mockConfigWithKey);
+      await expect(service.detectPageCategory(ctx)).rejects.toMatchObject({
+        name: 'ApiError',
+        statusCode: 429,
+      });
+    });
+
+    it('returns {success:false} on a parse failure of a 200 response', async () => {
+      globalThis.fetch = mockFetchResponse('not json {{{');
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.detectPageCategory(ctx);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Failed to parse category');
+    });
+
+    it('returns {success:true, category} on a valid 200 JSON response', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'technology' }));
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.detectPageCategory(ctx);
+      expect(result.success).toBe(true);
+      expect(result.category).toBe('technology');
+    });
+  });
+
+  describe('FR-1: classifyPdfParagraphs error contract', () => {
+    it('re-throws ApiError on a 503 (transport, propagated through batch loop)', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        text: () => Promise.resolve(''),
+      });
+      const service = new OpenAICompatibleService(mockConfigWithKey);
+      await expect(
+        service.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]),
+      ).rejects.toMatchObject({ name: 'ApiError', statusCode: 503 });
+    });
+
+    it('returns {success:false} on a parse failure of a 200 response', async () => {
+      globalThis.fetch = mockFetchResponse('not json {{{');
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Failed to parse classification');
+    });
+
+    it('returns {success:false} on an empty 200 response', async () => {
+      globalThis.fetch = mockFetchResponse('   ');
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Empty response');
+    });
+
+    it('returns labels on a valid 200 response', async () => {
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ labels: { p1: 'prose' } }));
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
+      expect(result.success).toBe(true);
+      expect(result.labels?.p1).toBe('prose');
+    });
+
+    it('short-circuits with {success:true} on an empty paragraph list (no fetch)', async () => {
+      globalThis.fetch = vi.fn();
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.classifyPdfParagraphs([]);
+      expect(result.success).toBe(true);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 });

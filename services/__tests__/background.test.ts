@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleMessage, __resetSemaphoreForTest } from '../background';
+import {
+  handleMessage,
+  __resetSemaphoreForTest,
+  __resetTranslationServiceForTest,
+} from '../background';
 
 // Mock chrome APIs
 const mockStorage: Record<string, unknown> = {};
@@ -74,6 +78,12 @@ describe('services/background', () => {
     // reset the global semaphore so stale slots/queued waiters don't block.
     await new Promise((resolve) => setTimeout(resolve, 10));
     __resetSemaphoreForTest();
+    // Reset the cached provider-pool coordinator. FR-1 made the pool open
+    // circuit breakers on real failures (previously swallowed), and the
+    // coordinator is a module singleton whose breaker cooldowns (60s+) would
+    // otherwise leak across test cases — a 429/5xx in one test leaves a key
+    // open for the next test, breaking it.
+    __resetTranslationServiceForTest();
   });
 
   describe('handleMessage — translate', () => {

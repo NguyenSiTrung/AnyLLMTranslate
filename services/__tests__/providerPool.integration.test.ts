@@ -11,7 +11,7 @@
  * distributes requests across the pool.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProviderPoolCoordinator } from '../providerPool';
 import type { TranslationService } from '../base';
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
@@ -212,3 +212,149 @@ describe('ProviderPoolCoordinator — single-seam integration (AC-6)', () => {
     expect(k2Stub.callCount).toBe(0);
   });
 });
+
+/**
+ * AC1 / NFR-1: the integration test that would have caught the original bug.
+ *
+ * Uses the REAL {@link OpenAICompatibleService} (via the default factory — no
+ * throwing stub) with a mocked `global.fetch` keyed on the request URL. Key 1's
+ * endpoint returns 429; key 2's returns 200. The assertions:
+ *  - the FIRST request fails over from k1 (429 → breaker opens) to k2 and
+ *    succeeds;
+ *  - k1's breaker is open immediately after (getKeyStatus);
+ *  - the NEXT request skips k1 (it's open) and goes straight to k2.
+ *
+ * Before the FR-1 fix, `translate()` swallowed the 429 into `{success:false}`
+ * and the pool called `recordSuccess()` + returned the failure — circuit
+ * breaker never opened, no failover. This test asserts the production contract.
+ */
+describe('AC1/NFR-1: real OpenAICompatibleService failover (mocked fetch)', () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  /**
+   * Mock fetch that returns 429 when the request carries k1's API key
+   * (Authorization: Bearer sk-1) and 200-JSON otherwise. In a real multi-key
+   * pool, the keys differ by credential, not endpoint URL — so we discriminate
+   * on the Authorization header, exactly as the production service sends it.
+   */
+  function failingK1Fetch() {
+    return vi.fn(async (_url: string | URL, init?: Record<string, unknown>) => {
+      const headers = (init?.headers as Record<string, string> | undefined) ?? {};
+      const auth = headers['Authorization'] ?? '';
+      if (auth.includes('sk-1')) {
+        return {
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          text: () => Promise.resolve('{"error":{"message":"rate limited"}}'),
+        };
+      }
+      // Any other key (k2) → success.
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-test',
+            choices: [
+              {
+                message: { role: 'assistant', content: '{"translations":{"p1":"Xin chào"}}' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          }),
+        text: () => Promise.resolve(''),
+      };
+    });
+  }
+
+  /** Two keys under one provider (same endpoint, different credentials) — the
+   *  realistic multi-key setup. */
+  function twoKeyRealSettings(): ExtensionSettings {
+    return {
+      ...DEFAULT_SETTINGS,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://shared-endpoint/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('a real-service 429 from k1 opens the breaker and fails over to k2', async () => {
+    globalThis.fetch = failingK1Fetch();
+    const coord = new ProviderPoolCoordinator({ clock: () => 5_000_000 });
+    coord.rebuild(twoKeyRealSettings());
+
+    const result = await coord.translate({
+      texts: new Map([['p1', 'Hello']]),
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+    });
+
+    // Failover succeeded: result came from k2.
+    expect(result.success).toBe(true);
+    expect(result.translations.get('p1')).toBe('Xin chào');
+
+    // k1's breaker is now OPEN (429 → rateLimit cooldown 60s, openUntil > now).
+    const k1Status = coord.getKeyStatus('k1');
+    expect(k1Status.open).toBe(true);
+    expect(k1Status.openUntil).toBeGreaterThan(5_000_000);
+
+    // k2 stayed healthy.
+    expect(coord.getKeyStatus('k2').open).toBe(false);
+  });
+
+  it('the next request skips the open k1 and dispatches straight to k2', async () => {
+    globalThis.fetch = failingK1Fetch();
+    const coord = new ProviderPoolCoordinator({ clock: () => 5_000_000 });
+    coord.rebuild(twoKeyRealSettings());
+
+    // First request: k1 429 → failover to k2.
+    await coord.translate({
+      texts: new Map([['p1', 'Hello']]),
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+    });
+
+    const fetchSpy = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const callsBefore = fetchSpy.mock.calls.length;
+
+    // Second request: k1 is open, so the cursor should land on k2 only.
+    const r2 = await coord.translate({
+      texts: new Map([['p1', 'World']]),
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+    });
+    expect(r2.success).toBe(true);
+    expect(r2.translations.get('p1')).toBe('Xin chào');
+
+    // Exactly one fetch this request (k1 was skipped — no wasted 429 call).
+    expect(fetchSpy.mock.calls.length).toBe(callsBefore + 1);
+    // And that single call carried k2's credential.
+    const lastInit = fetchSpy.mock.calls[callsBefore][1] as { headers: Record<string, string> };
+    expect(lastInit.headers['Authorization']).toContain('sk-2');
+  });
+});
+

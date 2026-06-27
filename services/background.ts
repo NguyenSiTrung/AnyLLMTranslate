@@ -1285,6 +1285,20 @@ function __resetSubtitleSessionCounterForTest(): void {
   activeSessions.clear();
 }
 
+/**
+ * Reset the cached translation service (provider pool coordinator) for tests.
+ *
+ * The pool coordinator is a module-level singleton that preserves circuit-
+ * breaker cooldowns + rate-limiter windows across `initService()` calls (so a
+ * live settings change hot-swaps config without losing state). That persistence
+ * leaks across test cases: a 429/5xx in one test opens a key's breaker, and the
+ * next test reuses the same coordinator with that key still cooling. Reset here
+ * between tests. Mirrors the `__resetSemaphoreForTest` pattern.
+ */
+function __resetTranslationServiceForTest(): void {
+  translationService = null;
+}
+
 /** Export for testing */
 export {
   initService,
@@ -1299,6 +1313,7 @@ export {
   __getActiveSessionCountForTest,
   __getSubtitleSessionCounterForTest,
   __resetSubtitleSessionCounterForTest,
+  __resetTranslationServiceForTest,
   MAX_CONCURRENT,
   PDF_MAX_CONCURRENT,
 };

@@ -64,96 +64,120 @@ export class OpenAICompatibleService implements TranslationService {
     return { ...base, response_format: { type: 'json_object' } };
   }
 
+  /**
+   * Translate a batch of texts. Error contract (FR-1):
+   *  - Transport / auth / rate-limit / network failures **re-throw** an
+   *    {@link ApiError} (carrying `statusCode`) so the provider pool's circuit
+   *    breaker + failover fires. Without the re-throw, pool failover was dead
+   *    code in production (the pool's `dispatchWithFailover` only reacts to a
+   *    thrown error, not a returned `{success:false}`).
+   *  - Content problems (empty response, unparseable JSON, partial back-fill)
+   *    still return `{success:false}` / `{success:true, partial}` — those are
+   *    request-specific and would likely fail on the next key too, so failover
+   *    wouldn't help.
+   */
   async translate(request: TranslationRequest): Promise<TranslationResult> {
-    try {
-      // Prompt routing (highest precedence first):
-      //  1. preScanSystemPrompt → use verbatim (per-film name-extraction call).
-      //  2. subtitleKnobs       → profile-driven subtitle prompt (customSystemPrompt ignored).
-      //  3. (neither)           → web-page prompt, honoring customSystemPrompt.
-      const systemPrompt = request.preScanSystemPrompt
-        ? request.preScanSystemPrompt
-        : request.subtitleKnobs
-          ? buildSubtitleSystemPrompt(
-              request.targetLanguage,
-              request.subtitleKnobs,
-              request.glossaryBlock,
-              request.rollingGlossaryBlock,
-            )
-          : buildSystemPrompt(
-              request.targetLanguage,
-              request.customSystemPrompt,
-              request.glossaryBlock,
-              request.pageContext,
-            );
-      const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
+    // Prompt routing (highest precedence first):
+    //  1. preScanSystemPrompt → use verbatim (per-film name-extraction call).
+    //  2. subtitleKnobs       → profile-driven subtitle prompt (customSystemPrompt ignored).
+    //  3. (neither)           → web-page prompt, honoring customSystemPrompt.
+    const systemPrompt = request.preScanSystemPrompt
+      ? request.preScanSystemPrompt
+      : request.subtitleKnobs
+        ? buildSubtitleSystemPrompt(
+            request.targetLanguage,
+            request.subtitleKnobs,
+            request.glossaryBlock,
+            request.rollingGlossaryBlock,
+          )
+        : buildSystemPrompt(
+            request.targetLanguage,
+            request.customSystemPrompt,
+            request.glossaryBlock,
+            request.pageContext,
+          );
+    const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
 
-      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
-        model: this.config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: this.config.temperature,
-        max_tokens: this.config.maxTokens,
-      });
+    const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: this.config.temperature,
+      max_tokens: this.config.maxTokens,
+    });
 
-      if (isDebugLoggingEnabled()) {
-        console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
-      }
+    if (isDebugLoggingEnabled()) {
+      console.log('AnyLLMTranslate: LLM Request', { model: this.config.model, systemPrompt, userPrompt });
+    }
 
-      const response = await this.fetchCompletion(completionRequest);
-      const responseText = response.choices[0]?.message?.content ?? '';
+    // fetchWithRetry throws ApiError on transport/auth/rate-limit failures.
+    // We deliberately do NOT wrap it in try/catch — those errors must propagate
+    // to the pool's failover layer (FR-1).
+    const response = await this.fetchCompletion(completionRequest);
+    const responseText = response.choices[0]?.message?.content ?? '';
 
-      if (isDebugLoggingEnabled()) {
-        console.log('AnyLLMTranslate: LLM Response', { responseText });
-      }
+    if (isDebugLoggingEnabled()) {
+      console.log('AnyLLMTranslate: LLM Response', { responseText });
+    }
 
-      if (!responseText.trim()) {
-        return {
-          success: false,
-          translations: new Map(),
-          error: 'Empty response from LLM',
-        };
-      }
+    // --- Content problems below: these return {success:false} (no failover) ---
 
-      const expectedIds = Array.from(request.texts.keys());
-      const translations = parseTranslationResponse(responseText, expectedIds);
-
-      // P2 correctness: when the LLM omits some IDs, fall back to the original
-      // text so callers don't silently drop content (a partial response was
-      // previously reported as success: true with a short map, losing pieces).
-      let partial = false;
-      if (translations.size < expectedIds.length) {
-        partial = true;
-        for (const id of expectedIds) {
-          if (!translations.has(id)) {
-            translations.set(id, request.texts.get(id) ?? '');
-          }
-        }
-      }
-
-      // Subtitle path: extract proper nouns for the rolling glossary.
-      // Web-page path: properNouns stays undefined.
-      const properNouns = request.subtitleKnobs
-        ? extractProperNouns(responseText)
-        : undefined;
-
+    if (!responseText.trim()) {
       return {
-        success: true,
-        translations,
-        // Surfaced for callers/stats that want to distinguish a clean response
-        // from a repaired partial one. Still success (content is not lost).
-        partial,
-        properNouns,
+        success: false,
+        translations: new Map(),
+        error: 'Empty response from LLM',
       };
+    }
+
+    const expectedIds = Array.from(request.texts.keys());
+
+    // Parse is a CONTENT concern, not a transport concern: a malformed JSON from
+    // key 2 would likely also fail to parse, so failover wouldn't help. Wrap
+    // parseTranslationResponse so its thrown Error becomes {success:false}
+    // WITHOUT swallowing the ApiError that fetchCompletion may have already
+    // thrown above (fetchCompletion runs BEFORE this block and is not wrapped).
+    let translations: Map<string, string>;
+    try {
+      translations = parseTranslationResponse(responseText, expectedIds);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown translation error';
+      const message = error instanceof Error ? error.message : 'Failed to parse translation response';
       return {
         success: false,
         translations: new Map(),
         error: message,
       };
     }
+
+    // P2 correctness: when the LLM omits some IDs, fall back to the original
+    // text so callers don't silently drop content (a partial response was
+    // previously reported as success: true with a short map, losing pieces).
+    let partial = false;
+    if (translations.size < expectedIds.length) {
+      partial = true;
+      for (const id of expectedIds) {
+        if (!translations.has(id)) {
+          translations.set(id, request.texts.get(id) ?? '');
+        }
+      }
+    }
+
+    // Subtitle path: extract proper nouns for the rolling glossary.
+    // Web-page path: properNouns stays undefined.
+    const properNouns = request.subtitleKnobs
+      ? extractProperNouns(responseText)
+      : undefined;
+
+    return {
+      success: true,
+      translations,
+      // Surfaced for callers/stats that want to distinguish a clean response
+      // from a repaired partial one. Still success (content is not lost).
+      partial,
+      properNouns,
+    };
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
@@ -181,10 +205,15 @@ export class OpenAICompatibleService implements TranslationService {
     }
   }
 
+  /**
+   * Detect a page's category. Error contract (FR-1):
+   *  - Transport / auth / rate-limit failures re-throw {@link ApiError} so the
+   *    pool can fail over. Only the JSON PARSE of an otherwise-200 response
+   *    returns {success:false} (content problem).
+   */
   async detectPageCategory(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }> {
-    try {
-      const categoryList = PREDEFINED_CATEGORIES.join('\n- ');
-      const systemPrompt = `You are an AI that categorizes web pages.
+    const categoryList = PREDEFINED_CATEGORIES.join('\n- ');
+    const systemPrompt = `You are an AI that categorizes web pages.
 Based on the page title, description, and domain, determine the most appropriate category from the following list:
 - ${categoryList}
 - Other
@@ -194,38 +223,40 @@ Rules:
 - You MUST choose exactly one category from the list above.
 - If you cannot determine the category, return "Other".`;
 
-      const userPrompt = `Title: ${pageContext.title || 'N/A'}\nDescription: ${pageContext.description || 'N/A'}\nDomain: ${pageContext.domain || 'N/A'}`;
+    const userPrompt = `Title: ${pageContext.title || 'N/A'}\nDescription: ${pageContext.description || 'N/A'}\nDomain: ${pageContext.domain || 'N/A'}`;
 
-      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
-        model: this.config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 50,
-      });
+    const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 50,
+    });
 
-      const response = await this.fetchCompletion(completionRequest);
-      const responseText = response.choices[0]?.message?.content ?? '';
-      
-      let parsed;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-        if (jsonMatch?.[1]) {
+    // Transport/auth/rate-limit errors propagate (FR-1) — do NOT wrap fetchCompletion.
+    const response = await this.fetchCompletion(completionRequest);
+    const responseText = response.choices[0]?.message?.content ?? '';
+
+    // Content problem: parse failure of a 200 response returns {success:false}.
+    let parsed: { category?: string };
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (jsonMatch?.[1]) {
+        try {
           parsed = JSON.parse(jsonMatch[1]);
-        } else {
+        } catch {
           return { success: false, error: 'Failed to parse category response' };
         }
+      } else {
+        return { success: false, error: 'Failed to parse category response' };
       }
-      
-      return { success: true, category: parsed.category };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      return { success: false, error: message };
     }
+
+    return { success: true, category: parsed.category };
   }
 
   async classifyPdfParagraphs(
@@ -251,12 +282,15 @@ Rules:
     return { success: true, labels: allLabels };
   }
 
-  /** Classify a single batch of paragraphs (≤50 entries). */
+  /**
+   * Classify a single batch of paragraphs (≤50 entries). Error contract (FR-1):
+   *  - Transport / auth / rate-limit failures re-throw {@link ApiError} (pool
+   *    failover). Only empty-response / parse failures return {success:false}.
+   */
   private async classifyPdfBatch(
     paragraphs: Array<{ id: string; text: string }>,
   ): Promise<ClassifyPdfParagraphsResult> {
-    try {
-      const systemPrompt = `You classify paragraphs extracted from a PDF page.
+    const systemPrompt = `You classify paragraphs extracted from a PDF page.
 For each paragraph id, return exactly one label:
 - "prose": normal sentences or paragraphs of running text that should be translated.
 - "figure": chart axis labels, legend entries, table cell text, diagram annotations, isolated numbers, single-word labels, or any short fragment that is part of a figure, chart, or table and is NOT a full sentence of prose.
@@ -266,50 +300,51 @@ Rules:
 - Mathematical formulas will already have been filtered out by the caller — do not return "math".
 - Respond ONLY with valid JSON in this format: {"labels": {"id1": "prose", "id2": "figure"}}`;
 
-      const userPrompt = `Classify each of the following paragraphs. Respond with the JSON object only.\n\n${JSON.stringify(
-        Object.fromEntries(paragraphs.map((p) => [p.id, p.text])),
-        null,
-        2,
-      )}`;
+    const userPrompt = `Classify each of the following paragraphs. Respond with the JSON object only.\n\n${JSON.stringify(
+      Object.fromEntries(paragraphs.map((p) => [p.id, p.text])),
+      null,
+      2,
+    )}`;
 
-      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
-        model: this.config.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0,
-      });
+    const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0,
+    });
 
-      const response = await this.fetchCompletion(completionRequest);
-      const responseText = response.choices[0]?.message?.content ?? '';
-      if (!responseText.trim()) {
-        return { success: false, error: 'Empty response from LLM' };
-      }
+    // Transport/auth/rate-limit errors propagate (FR-1).
+    const response = await this.fetchCompletion(completionRequest);
+    const responseText = response.choices[0]?.message?.content ?? '';
+    if (!responseText.trim()) {
+      return { success: false, error: 'Empty response from LLM' };
+    }
 
-      let parsed: { labels?: Record<string, string> };
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-        if (jsonMatch?.[1]) {
+    let parsed: { labels?: Record<string, string> };
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+      if (jsonMatch?.[1]) {
+        try {
           parsed = JSON.parse(jsonMatch[1]);
-        } else {
+        } catch {
           return { success: false, error: 'Failed to parse classification response' };
         }
+      } else {
+        return { success: false, error: 'Failed to parse classification response' };
       }
-
-      const rawLabels = parsed.labels ?? {};
-      const labels: Record<string, PdfParagraphLabel> = {};
-      for (const [id, rawLabel] of Object.entries(rawLabels)) {
-        // Normalize: anything that is not explicitly "figure" becomes "prose".
-        labels[id] = rawLabel === 'figure' ? 'figure' : 'prose';
-      }
-      return { success: true, labels };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Classification failed';
-      return { success: false, error: message };
     }
+
+    const rawLabels = parsed.labels ?? {};
+    const labels: Record<string, PdfParagraphLabel> = {};
+    for (const [id, rawLabel] of Object.entries(rawLabels)) {
+      // Normalize: anything that is not explicitly "figure" becomes "prose".
+      labels[id] = rawLabel === 'figure' ? 'figure' : 'prose';
+    }
+    return { success: true, labels };
   }
 
   private async fetchCompletion(
