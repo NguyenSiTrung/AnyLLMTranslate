@@ -23,7 +23,7 @@ import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 import { onMessage } from '@/inject/messageBridge';
-import { resetMaxMpdProcessorState } from '@/inject/maxMpdProcessor';
+import { resetMaxMpdProcessorState, setMpdPreferredLanguage } from '@/inject/maxMpdProcessor';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -66,11 +66,17 @@ export default defineContentScript({
     // Listen for config messages from the coordinator (ISOLATED world)
     // to update the translation timeout from user settings
     onMessage('SUBTITLE_CONFIG', (payload) => {
-      const config = payload as { translationTimeoutMs: number };
+      const config = payload as {
+        translationTimeoutMs?: number;
+        preferredSubtitleLanguage?: string;
+      };
       if (config?.translationTimeoutMs) {
         xhrInterceptor.setTimeout(config.translationTimeoutMs);
         fetchInterceptor.setTimeout(config.translationTimeoutMs);
         console.log('[AnyLLMTranslate] Interceptor timeout updated to', config.translationTimeoutMs, 'ms');
+      }
+      if (config?.preferredSubtitleLanguage !== undefined) {
+        setMpdPreferredLanguage(config.preferredSubtitleLanguage);
       }
     });
 

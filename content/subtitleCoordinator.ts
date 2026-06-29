@@ -1271,26 +1271,39 @@ function scheduleProactiveCategoryDetection(): void {
  * Start the subtitle coordinator.
  * Returns a cleanup function.
  */
+/** Push subtitle settings to MAIN world (interceptors + MPD processor). */
+function pushSubtitleConfigToMainWorld(
+  settings: Awaited<ReturnType<typeof loadSettings>>,
+): void {
+  try {
+    window.postMessage({
+      type: 'SUBTITLE_CONFIG',
+      channel: 'anyllm-translate',
+      requestId: `config-${Date.now()}`,
+      payload: {
+        translationTimeoutMs: (settings.subtitleSettings.translationTimeout ?? 30) * 1000,
+        preferredSubtitleLanguage: settings.subtitleSettings.preferredSubtitleLanguage,
+      },
+    }, window.location.origin);
+  } catch { /* ignore */ }
+}
+
 export function startCoordinator(): () => void {
   console.log('AnyLLMTranslate: Starting subtitle coordinator');
 
   // Task 6.1: Settings are cached lazily in hot paths (handleIntercepted, handleDomCues).
   // Refresh cache on settings changes.
   const settingsChangeListener = () => {
-    loadSettings().then((s) => { state.cachedSettings = s; }).catch(() => {});
+    loadSettings().then((s) => {
+      state.cachedSettings = s;
+      pushSubtitleConfigToMainWorld(s);
+    }).catch(() => {});
   };
   try { chrome.storage.onChanged.addListener(settingsChangeListener); } catch { /* tests may not mock */ }
 
-  // Send SUBTITLE_CONFIG to MAIN world interceptors with the timeout setting
+  // Send SUBTITLE_CONFIG to MAIN world interceptors (timeout + preferred language)
   loadSettings().then((s) => {
-    try {
-      window.postMessage({
-        type: 'SUBTITLE_CONFIG',
-        channel: 'anyllm-translate',
-        requestId: `config-${Date.now()}`,
-        payload: { translationTimeoutMs: (s.subtitleSettings.translationTimeout ?? 30) * 1000 },
-      }, window.location.origin);
-    } catch { /* ignore */ }
+    pushSubtitleConfigToMainWorld(s);
   }).catch(() => {});
 
 

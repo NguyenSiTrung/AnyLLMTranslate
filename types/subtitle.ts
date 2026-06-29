@@ -110,6 +110,8 @@ export interface SubtitleDomTrackChangedPayload {
 export interface SubtitleConfigPayload {
   /** Translation timeout in milliseconds */
   translationTimeoutMs: number;
+  /** Extension preferred subtitle language (e.g. 'en'). 'auto' = use Max active track. */
+  preferredSubtitleLanguage?: string;
 }
 
 /** Payload for SUBTITLE_MANIFEST_CUES (full track from parsed MPD / DASH manifest) */

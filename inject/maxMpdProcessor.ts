@@ -3,6 +3,11 @@
  *
  * Runs in MAIN world when fetch/XHR interceptors detect .mpd responses on Max pages.
  * Deduplicates repeated manifest requests and emits parsed cues to the coordinator.
+ *
+ * Language selection priority:
+ *   1. Extension preferredSubtitleLanguage (from SUBTITLE_CONFIG) — if not 'auto'
+ *   2. Active Max player subtitle (DOM aria-checked track button)
+ *   3. All MPD tracks (only when both above are unset)
  */
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
@@ -21,15 +26,31 @@ import type { SubtitleCue } from '@/types/subtitle';
 const processedMpdUrls = new Set<string>();
 const processedTrackUrls = new Set<string>();
 
+/** Extension preferred language from coordinator (null = 'auto' or unset). */
+let extensionPreferredLanguage: string | null = null;
+
 /** Reset dedup state (e.g. on SPA navigation). Exported for tests. */
 export function resetMaxMpdProcessorState(): void {
   processedMpdUrls.clear();
   processedTrackUrls.clear();
 }
 
+/** Called when coordinator sends SUBTITLE_CONFIG. Exported for tests. */
+export function setMpdPreferredLanguage(lang: string | undefined): void {
+  extensionPreferredLanguage = lang && lang !== 'auto' ? lang : null;
+}
+
+/**
+ * Resolve which language the MPD processor should fetch.
+ * Preferred extension setting wins over Max player active track.
+ */
+export function resolveMpdTargetLanguage(): string {
+  if (extensionPreferredLanguage) return extensionPreferredLanguage;
+  return readMaxActiveSubtitleLanguage();
+}
+
 /**
  * Process an intercepted MPD manifest: extract subtitle tracks, fetch, parse, emit.
- * Prefers the active Max subtitle language from the DOM; skips unavailable CDN tracks quietly.
  */
 export async function processMaxMpdManifest(
   mpdText: string,
@@ -48,56 +69,64 @@ export async function processMaxMpdManifest(
     return;
   }
 
-  const tracks = prioritizeTracksForFetch(extractSubtitleTracks(mpdDoc, mpdUrl));
+  const targetLang = resolveMpdTargetLanguage();
+  const tracks = selectTracksForFetch(extractSubtitleTracks(mpdDoc, mpdUrl), targetLang);
   if (tracks.length === 0) {
-    console.log('AnyLLMTranslate: Max MPD manifest has no subtitle tracks', { url: mpdUrl });
+    console.log('AnyLLMTranslate: Max MPD manifest has no matching subtitle tracks', {
+      url: mpdUrl,
+      targetLanguage: targetLang || undefined,
+      preferredLanguage: extensionPreferredLanguage ?? undefined,
+      activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
+    });
     return;
   }
 
   console.log('AnyLLMTranslate: Max MPD subtitle tracks discovered', {
     mpdUrl,
-    trackCount: tracks.length,
+    targetLanguage: targetLang || undefined,
+    preferredLanguage: extensionPreferredLanguage ?? undefined,
     activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
+    trackCount: tracks.length,
     tracks: tracks.map((t) => ({ language: t.language, url: t.url, mimeType: t.mimeType })),
   });
 
-  const activeLang = readMaxActiveSubtitleLanguage();
   let emitted = false;
 
   for (const track of tracks) {
-    const isPriority = !activeLang || subtitleLanguagesMatch(track.language, activeLang);
-    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, isPriority);
+    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, true);
     if (cues && cues.length > 0) {
       emitted = true;
-      if (isPriority) break;
+      break;
     }
-    // When user has an active language, don't fall back to other languages.
-    if (activeLang && isPriority) break;
+    if (targetLang) break;
   }
 
-  if (!emitted && activeLang) {
-    console.log('AnyLLMTranslate: MPD subtitle track unavailable for active language — DOM fallback', {
-      activeLanguage: activeLang,
+  if (!emitted && targetLang) {
+    console.log('AnyLLMTranslate: MPD subtitle track unavailable for target language — DOM fallback', {
+      targetLanguage: targetLang,
+      preferredLanguage: extensionPreferredLanguage ?? undefined,
+      activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
       mpdUrl,
     });
   }
 }
 
-/** Order tracks: active Max language first, then the rest. */
-export function prioritizeTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
-  const activeLang = readMaxActiveSubtitleLanguage();
-  if (!activeLang) return tracks;
+/**
+ * Select tracks to fetch. When a target language is set, only matching MPD tracks are returned.
+ */
+export function selectTracksForFetch(
+  tracks: MpdSubtitleTrack[],
+  targetLang: string,
+): MpdSubtitleTrack[] {
+  if (!targetLang) return tracks;
 
-  const priority: MpdSubtitleTrack[] = [];
-  const rest: MpdSubtitleTrack[] = [];
-  for (const track of tracks) {
-    if (subtitleLanguagesMatch(track.language, activeLang)) {
-      priority.push(track);
-    } else {
-      rest.push(track);
-    }
-  }
-  return [...priority, ...rest];
+  const matched = tracks.filter((t) => subtitleLanguagesMatch(t.language, targetLang));
+  return matched;
+}
+
+/** @deprecated Use selectTracksForFetch — kept for existing tests. */
+export function prioritizeTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
+  return selectTracksForFetch(tracks, resolveMpdTargetLanguage());
 }
 
 async function fetchAndEmitSubtitleTrack(
@@ -141,7 +170,7 @@ async function fetchAndEmitSubtitleTrack(
 
     if (isPriority) {
       const level = is404 ? 'log' : 'warn';
-      console[level]('AnyLLMTranslate: Active MPD subtitle track unavailable', {
+      console[level]('AnyLLMTranslate: MPD subtitle track unavailable', {
         mpdUrl,
         language: track.language,
         url: track.url,
