@@ -914,6 +914,34 @@ function findChildrenByLocalName(parent: Element, localName: string): Element[] 
 }
 
 /**
+ * Merge missing query params from the intercepted manifest URL onto a resolved
+ * subtitle segment URL. Max's CDN requires manifest-params (and rtype, market,
+ * etc.) on every segment request; RFC 3986 relative resolution drops them.
+ */
+export function mergeManifestQueryParams(resolvedUrl: URL, mpdUrl: string): void {
+  let mpd: URL;
+  try {
+    mpd = new URL(mpdUrl);
+  } catch {
+    return;
+  }
+
+  const mpdParams = mpd.searchParams;
+  if (mpdParams.toString() === '') return;
+
+  const isMaxCdn = MAX_EXTENSIONLESS_MPD_HOST.test(resolvedUrl.hostname);
+  const sameOrigin = resolvedUrl.origin === mpd.origin;
+  if (!isMaxCdn && !sameOrigin) return;
+
+  const existing = resolvedUrl.searchParams;
+  for (const [key, value] of mpdParams) {
+    if (!existing.has(key)) {
+      existing.set(key, value);
+    }
+  }
+}
+
+/**
  * Resolve a subtitle segment URL against the MPD URL. Per RFC 3986, a relative
  * reference with its own path component REPLACES the base URL's query string
  * instead of inheriting it. Max's CDN carries its auth token
@@ -928,11 +956,8 @@ function resolveSubtitleUrl(mediaUrl: string, mpdUrl: string): string | null {
 
   try {
     const resolvedUrl = new URL(resolved);
-    const mpdQueryString = new URL(mpdUrl).search;
-    if (!resolvedUrl.search && mpdQueryString) {
-      resolvedUrl.search = mpdQueryString;
-      return resolvedUrl.href;
-    }
+    mergeManifestQueryParams(resolvedUrl, mpdUrl);
+    return resolvedUrl.href;
   } catch {
     // resolved is not a valid URL — return it as-is (best effort)
   }

@@ -11,6 +11,7 @@ import {
   prioritizeMpdTracksForFetch,
   scoreMpdTrackForFetch,
   isResolvableSubtitleSegmentUrl,
+  mergeManifestQueryParams,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -357,6 +358,18 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
     expect(tracks[0].url).toBe('https://cf.asia.prd.media.max.com/fadb6e8d/subs_en.ttml?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam');
+  });
+
+  it('merges missing manifest-params onto Max CDN URLs that already have other query keys', () => {
+    const mpdUrl = MPD_URL;
+    const segment = new URL(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/2.vtt?rtype=s',
+    );
+    mergeManifestQueryParams(segment, mpdUrl);
+    expect(segment.searchParams.get('rtype')).toBe('s');
+    expect(segment.searchParams.get('manifest-params')).toBe('CAQSATEA');
+    expect(segment.searchParams.get('market')).toBe('apac');
+    expect(segment.searchParams.get('x-wbd-tenant')).toBe('beam');
   });
 
   it('does NOT override a query string already present on an absolute BaseURL', () => {
@@ -861,6 +874,24 @@ Hello`;
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);
     expect(result?.[0]?.url).toBe('https://cdn.example.com/good');
+  });
+});
+
+describe('mergeManifestQueryParams', () => {
+  const mpdUrl =
+    'https://akm.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+
+  it('adds all manifest query keys when segment URL has no query', () => {
+    const segment = new URL('https://gcp.apac-free.prd.media.max.com/apac/uuid/t/3_f384f7/t1/1.vtt');
+    mergeManifestQueryParams(segment, mpdUrl);
+    expect(segment.searchParams.get('manifest-params')).toBe('TOKEN');
+    expect(segment.searchParams.get('rtype')).toBe('s');
+  });
+
+  it('leaves external CDN URLs unchanged when they carry their own query', () => {
+    const segment = new URL('https://other.cdn.com/subs_en.ttml?token=xyz');
+    mergeManifestQueryParams(segment, mpdUrl);
+    expect(segment.search).toBe('?token=xyz');
   });
 });
 

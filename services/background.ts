@@ -860,7 +860,10 @@ async function handleFetchSubtitle(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(message.url, { signal: controller.signal });
+    const response = await fetch(message.url, {
+      signal: controller.signal,
+      headers: { Accept: 'text/vtt,application/ttml+xml,text/plain,*/*;q=0.8' },
+    });
     clearTimeout(timer);
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };

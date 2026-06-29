@@ -20,6 +20,8 @@ const FETCH_TIMEOUT_MS = 35000;
 /** MAIN-world native fetch timeout — Max CDN segments can be slow on cold start. */
 const PAGE_FETCH_TIMEOUT_MS = 15000;
 
+const SUBTITLE_SEGMENT_ACCEPT = 'text/vtt,application/ttml+xml,text/plain,*/*;q=0.8';
+
 /** Page-context fetch (native, not interceptor-patched). Overridable in tests. */
 let pageFetch: typeof fetch = nativeFetch;
 
@@ -128,7 +130,10 @@ async function fallbackPageFetch(url: string): Promise<SubtitleSegmentFetchResul
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAGE_FETCH_TIMEOUT_MS);
   try {
-    const response = await pageFetch(url, { signal: controller.signal });
+    const response = await pageFetch(url, {
+      signal: controller.signal,
+      headers: { Accept: SUBTITLE_SEGMENT_ACCEPT },
+    });
     clearTimeout(timer);
     if (!response.ok) return null;
     const text = await response.text();
