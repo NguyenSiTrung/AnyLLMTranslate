@@ -905,6 +905,9 @@ function isMaxCdnVttSegmentFetchUrl(url: string): boolean {
 /** Detect DASH MPD bodies returned instead of subtitle segments (Max CDN echo). */
 function isDashManifestResponse(body: string, contentType: string): boolean {
   const trimmed = body.trimStart();
+  // Defensive: WebVTT content is never a manifest, even if the CDN mislabels
+  // the Content-Type as application/dash+xml.
+  if (trimmed.startsWith('WEBVTT')) return false;
   if (trimmed.includes('<MPD') && trimmed.includes('urn:mpeg:dash:schema:mpd')) return true;
   if (trimmed.includes('<MPD')) return true;
   if (trimmed.includes('<Period') && trimmed.includes('AdaptationSet')) return true;

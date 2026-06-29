@@ -271,6 +271,15 @@ async function fetchAndEmitSubtitleTrack(
   try {
     const fetchSegment = bridge ? createBridgeSubtitleFetcher(bridge) : undefined;
     const seenManifests = rootMpdBody ? new Set([rootMpdBody]) : undefined;
+    console.log('[AnyLLMTranslate] Fetching MPD subtitle track', {
+      language: track.language,
+      url: track.url,
+      hasSegmentUrls: !!track.segmentUrls,
+      segmentUrlCount: track.segmentUrls?.length,
+      hasSegmentFetch: !!track.segmentFetch,
+      segmentFetchStart: track.segmentFetch?.startNumber,
+      segmentFetchMedia: track.segmentFetch?.media,
+    });
     const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url, {
       segmentUrls: track.segmentUrls,
       segmentFetch: track.segmentFetch,

@@ -369,7 +369,17 @@ async function fetchAndParseSubtitleInternal(
       }
       const text = segment.text;
       const respContentType = segment.contentType;
-      if (isManifestResponse(text, respContentType)) {
+      const isManifest = isManifestResponse(text, respContentType);
+      console.log('[AnyLLMTranslate] Segment fetch response', {
+        url: segmentUrl,
+        status: segment.status,
+        contentType: respContentType,
+        bodyLength: text.length,
+        bodyPreview: text.slice(0, 300),
+        isManifest,
+        nestedDepth,
+      });
+      if (isManifest) {
         const nextSeen = new Set(seenManifests || []);
         const normalizedBody = text.trim();
         if (nextSeen.has(normalizedBody)) {
@@ -417,8 +427,19 @@ async function fetchAndParseNestedMpdSubtitle(
   }
 
   const nestedTracks = extractSubtitleTracks(nestedDoc, mpdUrl);
+  console.log('[AnyLLMTranslate] Nested MPD subtitle tracks', {
+    mpdUrl,
+    nestedDepth,
+    trackCount: nestedTracks.length,
+    tracks: nestedTracks.map((t) => ({ language: t.language, url: t.url })),
+  });
   for (const nestedTrack of nestedTracks) {
-    if (normalizeSubtitleUrl(nestedTrack.url) === normalizeSubtitleUrl(mpdUrl)) continue;
+    if (normalizeSubtitleUrl(nestedTrack.url) === normalizeSubtitleUrl(mpdUrl)) {
+      console.log('[AnyLLMTranslate] Skipping nested track with same URL as parent MPD', {
+        url: nestedTrack.url,
+      });
+      continue;
+    }
 
     try {
       const cues = await fetchAndParseSubtitleInternal(
@@ -803,11 +824,29 @@ async function fetchSegmentBodiesProgressively(
     if (!segmentUrl) break;
 
     const segment = await fetchSegmentResponse(segmentUrl, fetchSegment);
-    if (!segment.ok) break;
+    if (!segment.ok) {
+      console.log('[AnyLLMTranslate] Progressive segment fetch failed, stopping', {
+        url: segmentUrl,
+        status: segment.status,
+        error: segment.error,
+      });
+      break;
+    }
 
     const text = segment.text;
     const respContentType = segment.contentType;
-    if (isManifestResponse(text, respContentType)) {
+    const isManifest = isManifestResponse(text, respContentType);
+    console.log('[AnyLLMTranslate] Progressive segment fetch response', {
+      url: segmentUrl,
+      status: segment.status,
+      contentType: respContentType,
+      bodyLength: text.length,
+      bodyPreview: text.slice(0, 300),
+      isManifest,
+      iteration: i,
+      nestedDepth,
+    });
+    if (isManifest) {
       const nextSeen = new Set(seenManifests || []);
       const normalizedBody = text.trim();
       if (nextSeen.has(normalizedBody)) {
@@ -841,9 +880,13 @@ function isMpdManifestBody(body: string): boolean {
  * treated as a manifest — it is valid subtitle content.
  */
 function isManifestResponse(body: string, contentType: string): boolean {
+  // Defensive: WebVTT content is never a manifest, even if the CDN mislabels
+  // the Content-Type as application/dash+xml.
+  const trimmed = body.trimStart();
+  if (trimmed.startsWith('WEBVTT')) return false;
+
   if (isMpdManifestBody(body)) return true;
 
-  const trimmed = body.trimStart();
   if (trimmed.includes('<MPD')) return true;
   if (trimmed.includes('<Period') && trimmed.includes('AdaptationSet')) return true;
 
