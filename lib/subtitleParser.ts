@@ -5,6 +5,7 @@
  */
 
 import type { SubtitleCue, SubtitleFormat } from '@/types/subtitle';
+import { parseTTML } from '@/lib/ttmlParser';
 
 /**
  * Parse a WebVTT string into an array of SubtitleCue objects.
@@ -197,6 +198,9 @@ export function parseSubtitles(content: string): SubtitleCue[] {
   if (format === 'srt') {
     return parseSRT(content);
   }
+  if (format === 'ttml') {
+    return parseTTML(content);
+  }
   return [];
 }
 
@@ -205,6 +209,15 @@ export function parseSubtitles(content: string): SubtitleCue[] {
  */
 export function detectFormat(content: string): SubtitleFormat | null {
   const stripped = content.replace(/^\uFEFF/, '').trim();
+
+  // TTML / IMSC1
+  if (
+    stripped.startsWith('<?xml') ||
+    stripped.startsWith('<tt') ||
+    stripped.includes('xmlns="http://www.w3.org/ns/ttml"')
+  ) {
+    return 'ttml';
+  }
 
   // WebVTT files start with "WEBVTT"
   if (stripped.startsWith('WEBVTT')) {

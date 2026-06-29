@@ -12,7 +12,10 @@
 
 import type { InterceptorRegistry, UrlMatch } from '@/inject/interceptorRegistry';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
-import type { SubtitleInterceptedPayload } from '@/types/subtitle';
+import type { SubtitleInterceptedPayload, AvailableSubtitleTrack } from '@/types/subtitle';
+import { detectManifestTracks } from '@/lib/manifestParser';
+import { detectMpdRequests } from '@/lib/maxMpdSubtitles';
+import { processMaxMpdManifest } from '@/inject/maxMpdProcessor';
 
 const OriginalXHR = window.XMLHttpRequest;
 
@@ -70,6 +73,16 @@ export class XhrInterceptor {
         (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
       }
 
+      // Check for manifest match (read-only, non-blocking)
+      const manifestMatch = registry.matchManifestUrl(urlString);
+      if (manifestMatch || registry.isManifestUrl(urlString)) {
+        (this as XMLHttpRequest & {
+          __anyllmManifestMatch?: UrlMatch;
+          __anyllmTranslateUrl?: string;
+        }).__anyllmManifestMatch = manifestMatch ?? { platform: 'generic', pattern: /.*/ };
+        (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
+      }
+
       return (originalOpen as (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) => void).apply(this, [method, url, ...args]);
     };
     this.patchedOpen = OriginalXHR.prototype.open as XhrInterceptor['patchedOpen'];
@@ -109,9 +122,42 @@ export class XhrInterceptor {
       const xhr = this as XMLHttpRequest & {
         __anyllmTranslateMatch?: UrlMatch;
         __anyllmMetadataMatch?: UrlMatch;
+        __anyllmManifestMatch?: UrlMatch;
         __anyllmTranslateUrl?: string;
         __anyllmTranslateEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
       };
+
+      // Handle manifest match: non-blocking, read-only pass-through
+      const manifestMatch = xhr.__anyllmManifestMatch;
+      if (manifestMatch && !xhr.__anyllmTranslateMatch && !xhr.__anyllmMetadataMatch) {
+        const manifestListener = () => {
+          if (this.readyState !== 4 || this.status !== 200) return;
+          try {
+            const urlString = xhr.__anyllmTranslateUrl || '';
+            const contentType = this.getResponseHeader('Content-Type') || '';
+            const body = this.responseText;
+            const platform = manifestMatch.platform;
+            const tracks = detectManifestTracks(body, urlString, contentType, platform);
+            if (tracks.length > 0) {
+              bridge.send('SUBTITLE_TRACKS_DISCOVERED', {
+                tracks,
+                platform,
+              });
+              console.log('AnyLLMTranslate: XHR interceptor discovered manifest subtitle tracks', {
+                url: urlString,
+                platform,
+                count: tracks.length,
+              });
+            }
+
+            if (platform === 'hbomax' && detectMpdRequests(urlString)) {
+              processMaxMpdManifest(body, urlString).catch(() => { /* non-blocking */ });
+            }
+          } catch { /* silently ignore parse errors */ }
+        };
+        originalAddEventListener.call(this, 'readystatechange', manifestListener);
+        return originalSend.apply(this, [_body]);
+      }
 
       // Handle metadata match: non-blocking, read-only pass-through
       const metadataMatch = xhr.__anyllmMetadataMatch;

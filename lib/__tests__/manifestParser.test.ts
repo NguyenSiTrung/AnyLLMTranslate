@@ -276,6 +276,27 @@ describe('parseHlsSubtitlePlaylist', () => {
 // ─── DASH Manifest Parser ───────────────────────────────────────────────────
 
 describe('parseDashManifest', () => {
+  it('extracts subtitle AdaptationSet with application/ttml+xml mimeType', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet mimeType="application/ttml+xml" lang="en">
+      <Representation id="s1">
+        <BaseURL>subs_en.ttml</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const result = parseDashManifest(xml, 'https://cdn.example.com/manifest.mpd');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      url: 'https://cdn.example.com/subs_en.ttml',
+      language: 'en',
+    });
+  });
+
   it('extracts subtitle AdaptationSet with text/vtt mimeType', () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT120S">

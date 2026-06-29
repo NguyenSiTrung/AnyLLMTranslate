@@ -19,6 +19,7 @@ import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
+import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { ProviderPoolCoordinator } from '@/services/providerPool';
@@ -952,7 +953,8 @@ async function handleFetchManifestSubtitles(
         return { success: false, error: `HTTP ${trackResponse.status}` };
       }
       const trackBody = await trackResponse.text();
-      const cues = parseWebVTT(trackBody);
+      const contentType = trackResponse.headers.get('Content-Type') ?? '';
+      const cues = parseSubtitleContent(trackBody, contentType, track.url);
       return { success: true, cues };
     }
 
