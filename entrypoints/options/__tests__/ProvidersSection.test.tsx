@@ -260,7 +260,9 @@ describe('ProvidersSection expanded provider features', () => {
 
     // Provider-level test lives in the "Test connection" panel (after sliders).
     const testButtons = screen.getAllByRole('button', { name: /^test$/i });
-    fireEvent.click(testButtons[testButtons.length - 1]!);
+    const providerTestButton = testButtons[testButtons.length - 1];
+    if (!providerTestButton) throw new Error('Expected provider test button');
+    fireEvent.click(providerTestButton);
 
     await waitFor(() => {
       expect(screen.getByText('Reachability')).toBeInTheDocument();
@@ -274,7 +276,8 @@ describe('ProvidersSection expanded provider features', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI'));
 
-    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[0]!;
+    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[0];
+    if (!keyTestButton) throw new Error('Expected key test button');
     fireEvent.click(keyTestButton);
 
     await waitFor(() => {

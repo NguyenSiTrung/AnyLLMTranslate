@@ -5,7 +5,15 @@ import {
   extractSubtitleTracks,
   fetchAndParseSubtitle,
   parseSubtitleContent,
+  fetchRealSubtitleContent,
+  processMpdSubtitleTracks,
 } from '@/lib/maxMpdSubtitles';
+
+function parseTestMpd(xml: string, url: string): Document {
+  const doc = parseMpd(xml, url);
+  if (!doc) throw new Error('Failed to parse MPD');
+  return doc;
+}
 
 describe('detectMpdRequests', () => {
   it('detects .mpd URLs', () => {
@@ -32,10 +40,8 @@ describe('extractSubtitleTracks', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, 'https://cdn.example.com/manifest.mpd');
-    expect(doc).not.toBeNull();
-
-    const tracks = extractSubtitleTracks(doc!, 'https://cdn.example.com/manifest.mpd');
+    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
+    const tracks = extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd');
     expect(tracks).toHaveLength(1);
     expect(tracks[0]).toEqual({
       url: 'https://cdn.example.com/subs_en.ttml',
@@ -56,7 +62,7 @@ describe('extractSubtitleTracks', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, 'https://cdn.example.com/manifest.mpd')!;
+    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
     const tracks = extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd');
     expect(tracks[0].language).toBe('es');
   });
@@ -71,7 +77,7 @@ describe('extractSubtitleTracks', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, 'https://cdn.example.com/manifest.mpd')!;
+    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
     expect(extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd')).toEqual([]);
   });
 });
@@ -129,6 +135,32 @@ Hello`;
     ]);
   });
 
+  it('caps progressive WebVTT fetching when segment count is unknown', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(
+      new Response(`WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Segment ${url.match(/\/(\d+)\.vtt/)?.[1] ?? ''}`, {
+        status: 200,
+        headers: { 'Content-Type': 'text/vtt' },
+      }),
+    )));
+
+    const cues = await fetchAndParseSubtitle('https://cdn.example.com/t/t6/1.vtt', {
+      segmentFetch: {
+        media: 't/t6/$Number$.vtt',
+        startNumber: 1,
+        representationId: 't6',
+        bandwidth: '',
+        mpdUrl: 'https://cdn.example.com/manifest.mpd',
+      },
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(120);
+    expect(cues[0].text).toBe('Segment 1');
+    expect(cues[cues.length - 1].text).toBe('Segment 120');
+  });
+
   it('fetches and concatenates segmented WebVTT tracks', async () => {
     const seg1 = 'WEBVTT\n\n';
     const seg2 = `WEBVTT
@@ -179,6 +211,41 @@ Hello`;
       { start: expect.closeTo(12.34, 3), end: expect.closeTo(15.67, 3), text: 'Hello there' },
     ]);
   });
+
+  it('parses a nested MPD response and fetches its subtitle segment', async () => {
+    const nestedMpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="nested/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Nested subtitle`;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/nested/t6/1.vtt')) {
+        return Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
+      }
+      if (url.includes('subtitle-layer') && !url.includes('/nested/')) {
+        return Promise.resolve(new Response(nestedMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
+      }
+      return Promise.resolve(new Response('', { status: 404 }));
+    }));
+
+    const cues = await fetchAndParseSubtitle('https://cdn.example.com/subtitle-layer?token=abc');
+
+    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subtitle-layer?token=abc');
+    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subtitle-layer/nested/t6/1.vtt?token=abc');
+    expect(cues).toEqual([
+      { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Nested subtitle' },
+    ]);
+  });
 });
 
 // ============================================================================
@@ -204,7 +271,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
     expect(tracks).toHaveLength(1);
     // The resolved URL MUST carry the MPD's auth query string.
@@ -223,7 +290,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
     expect(tracks[0].url).toBe('https://cf.asia.prd.media.max.com/fadb6e8d/subs_en.ttml?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam');
   });
@@ -242,7 +309,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
     expect(tracks[0].url).toBe('https://other.cdn.com/subs_en.ttml?token=xyz');
   });
@@ -264,15 +331,17 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
     expect(tracks).toHaveLength(1);
-    expect(tracks[0].segmentUrls).toEqual([
+    const segmentUrls = tracks[0].segmentUrls;
+    if (!segmentUrls) throw new Error('Expected segment URLs');
+    expect(segmentUrls).toEqual([
       'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
       'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/2.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
       'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/3.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
     ]);
-    expect(tracks[0].url).toBe(tracks[0].segmentUrls![0]);
+    expect(tracks[0].url).toBe(segmentUrls[0]);
   });
 
   it('computes segment URLs from SegmentTemplate duration when SegmentTimeline is absent', () => {
@@ -287,10 +356,12 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
-    expect(tracks[0].segmentUrls).toHaveLength(3);
-    expect(tracks[0].segmentUrls![2]).toContain('/t/t6/3.vtt');
+    const segmentUrls = tracks[0].segmentUrls;
+    if (!segmentUrls) throw new Error('Expected segment URLs');
+    expect(segmentUrls).toHaveLength(3);
+    expect(segmentUrls[2]).toContain('/t/t6/3.vtt');
   });
 
   it('marks tracks for progressive fetch when segment count is unknown', () => {
@@ -305,10 +376,51 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL)!;
+    const doc = parseTestMpd(xml, MPD_URL);
     const tracks = extractSubtitleTracks(doc, MPD_URL);
-    expect(tracks[0].segmentFetch).toBeDefined();
-    expect(tracks[0].segmentFetch!.media).toBe('t/t6/$Number$.vtt');
+    const segmentFetch = tracks[0].segmentFetch;
+    if (!segmentFetch) throw new Error('Expected segment fetch');
+    expect(segmentFetch.media).toBe('t/t6/$Number$.vtt');
+  });
+
+  it('resolves SegmentTemplate URLs under extensionless Max MPD URL paths', () => {
+    const noExtensionMpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, noExtensionMpdUrl);
+    const tracks = extractSubtitleTracks(doc, noExtensionMpdUrl);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe('https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/t6/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam');
+  });
+
+  it('falls back to SegmentTemplate when Representation BaseURL points back to the MPD manifest', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Role value="caption" schemeIdUri="urn:mpeg:dash:role:2011"/>
+      <Representation id="t6" mimeType="text/vtt">
+        <BaseURL>dash.mpd</BaseURL>
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, MPD_URL);
+    const tracks = extractSubtitleTracks(doc, MPD_URL);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe('https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam');
+    expect(tracks[0].segmentFetch).toEqual(expect.objectContaining({ media: 't/t6/$Number$.vtt' }));
   });
 
   it('skips self-referential subtitle URLs that point back to the MPD manifest', () => {
@@ -323,8 +435,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, MPD_URL);
-    if (!doc) throw new Error('Failed to parse MPD');
+    const doc = parseTestMpd(xml, MPD_URL);
     expect(extractSubtitleTracks(doc, MPD_URL)).toEqual([]);
   });
 
@@ -341,8 +452,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, NO_EXT_MPD_URL);
-    if (!doc) throw new Error('Failed to parse MPD');
+    const doc = parseTestMpd(xml, NO_EXT_MPD_URL);
     expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
   });
 
@@ -359,8 +469,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, NO_EXT_MPD_URL);
-    if (!doc) throw new Error('Failed to parse MPD');
+    const doc = parseTestMpd(xml, NO_EXT_MPD_URL);
     expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
   });
 
@@ -377,8 +486,7 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, NO_EXT_MPD_URL);
-    if (!doc) throw new Error('Failed to parse MPD');
+    const doc = parseTestMpd(xml, NO_EXT_MPD_URL);
     expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
   });
 
@@ -395,9 +503,168 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   </Period>
 </MPD>`;
 
-    const doc = parseMpd(xml, plainMpdUrl)!;
+    const doc = parseTestMpd(xml, plainMpdUrl);
     const tracks = extractSubtitleTracks(doc, plainMpdUrl);
     // No query to re-attach — plain relative resolution (existing behavior).
     expect(tracks[0].url).toBe('https://cdn.example.com/subs_en.ttml');
+  });
+});
+
+// ============================================================================
+// fetchRealSubtitleContent — validates fetched track is real subtitle content
+// ============================================================================
+describe('fetchRealSubtitleContent', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns content for a valid TTML subtitle response', async () => {
+    const ttml = `<?xml version="1.0"?>
+<tt xmlns="http://www.w3.org/ns/ttml">
+  <body><div><p begin="00:00:01.000" end="00:00:02.000">Hi</p></div></body>
+</tt>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(ttml, { status: 200, headers: { 'Content-Type': 'application/ttml+xml' } }),
+    ));
+
+    const result = await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain('<tt ');
+    expect(result?.contentType).toBe('application/ttml+xml');
+  });
+
+  it('returns null when response is a DASH MPD manifest', async () => {
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period><AdaptationSet mimeType="application/ttml+xml" lang="en">
+    <Representation id="s1"><BaseURL>subs_en.ttml</BaseURL></Representation>
+  </AdaptationSet></Period>
+</MPD>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
+    ));
+
+    const result = await fetchRealSubtitleContent('https://cdn.example.com/track');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when response is a manifest with Period+AdaptationSet but no DASH namespace', async () => {
+    const manifest = `<?xml version="1.0"?>
+<MPD>
+  <Period><AdaptationSet lang="en"><Representation id="s1"/></AdaptationSet></Period>
+</MPD>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(manifest, { status: 200, headers: { 'Content-Type': 'text/xml' } }),
+    ));
+
+    const result = await fetchRealSubtitleContent('https://cdn.example.com/track');
+    expect(result).toBeNull();
+  });
+
+  it('returns null on HTTP error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('', { status: 404 }),
+    ));
+
+    const result = await fetchRealSubtitleContent('https://cdn.example.com/missing.ttml');
+    expect(result).toBeNull();
+  });
+
+  it('returns null on fetch exception', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const result = await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
+    expect(result).toBeNull();
+  });
+
+  it('does not send credentials (Max CDN auth is URL-token-based, not cookie-based)', async () => {
+    const ttml = '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0s" end="1s">Hi</p></div></body></tt>';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(ttml, { status: 200, headers: { 'Content-Type': 'application/ttml+xml' } }),
+    ));
+
+    await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
+    // credentials: 'include' would force a credentialed CORS request, which Max's
+    // CDN rejects (it returns ACAO: *), breaking every subtitle segment fetch.
+    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs.ttml');
+  });
+});
+
+// ============================================================================
+// processMpdSubtitleTracks — batch validation of MPD subtitle tracks
+// ============================================================================
+describe('processMpdSubtitleTracks', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns validated content for tracks with real subtitle data', async () => {
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Hello`;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } })),
+    ));
+
+    const tracks = [
+      { url: 'https://cdn.example.com/1.vtt', language: 'en' },
+      { url: 'https://cdn.example.com/2.vtt', language: 'es' },
+    ];
+
+    const result = await processMpdSubtitleTracks(tracks);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(2);
+  });
+
+  it('returns null when all tracks return manifests', async () => {
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
+    ));
+
+    const tracks = [
+      { url: 'https://cdn.example.com/track1', language: 'en' },
+    ];
+
+    const result = await processMpdSubtitleTracks(tracks);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for empty track list', async () => {
+    const result = await processMpdSubtitleTracks([]);
+    expect(result).toBeNull();
+  });
+
+  it('mixes valid and invalid tracks, returns only valid ones', async () => {
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Hello`;
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/good')) {
+        return Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
+      }
+      return Promise.resolve(new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
+    }));
+
+    const tracks = [
+      { url: 'https://cdn.example.com/bad', language: 'en' },
+      { url: 'https://cdn.example.com/good', language: 'es' },
+    ];
+
+    const result = await processMpdSubtitleTracks(tracks);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(1);
+    expect(result?.[0]?.url).toBe('https://cdn.example.com/good');
   });
 });

@@ -31,6 +31,7 @@ vi.mock('@/content/messageBridge', () => ({
     capturedManifestCuesHandler = handler;
     return () => {};
   },
+  onMpdProcessing: () => () => {},
   sendTranslatedSubtitle: vi.fn(),
 }));
 

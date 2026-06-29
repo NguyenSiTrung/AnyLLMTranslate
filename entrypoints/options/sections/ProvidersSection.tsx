@@ -65,7 +65,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const settings = useSettingsStore();
   const providers = useSettingsStore((s) => s.providers);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const { success: showSuccess, error: showError } = useToast();
+  const { success: showSuccess } = useToast();
   const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
   const [showAddProviderModal, setShowAddProviderModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);

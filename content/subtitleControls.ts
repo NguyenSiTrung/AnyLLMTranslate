@@ -12,6 +12,7 @@
 
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { updateConfig, getConfig } from '@/content/subtitleOverlay';
+import { isContextInvalidated } from '@/lib/utils';
 
 /** Storage key for subtitle preferences */
 const STORAGE_KEY = 'anyllm-translate-subtitle-prefs';
@@ -49,12 +50,17 @@ let dragState: DragState = {
  * Load preferences from chrome.storage.local.
  */
 export async function loadPreferences(): Promise<OverlayConfig> {
+  if (isContextInvalidated()) {
+    return { ...DEFAULT_PREFS };
+  }
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const prefs = result[STORAGE_KEY];
     return prefs ? { ...DEFAULT_PREFS, ...prefs } : { ...DEFAULT_PREFS };
   } catch (error) {
-    console.warn('AnyLLMTranslate: Failed to load subtitle preferences', error);
+    if (!isContextInvalidated()) {
+      console.warn('AnyLLMTranslate: Failed to load subtitle preferences', error);
+    }
     return { ...DEFAULT_PREFS };
   }
 }
@@ -63,10 +69,13 @@ export async function loadPreferences(): Promise<OverlayConfig> {
  * Save preferences to chrome.storage.local.
  */
 export async function savePreferences(config: OverlayConfig): Promise<void> {
+  if (isContextInvalidated()) return;
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: config });
   } catch (error) {
-    console.warn('AnyLLMTranslate: Failed to save subtitle preferences', error);
+    if (!isContextInvalidated()) {
+      console.warn('AnyLLMTranslate: Failed to save subtitle preferences', error);
+    }
   }
 }
 

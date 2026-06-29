@@ -30,3 +30,19 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, source: 
   }
   return result as T;
 }
+
+/**
+ * Detects if the Chrome extension's context has been invalidated.
+ * Returns true if the background service worker was updated/reloaded.
+ */
+export function isContextInvalidated(): boolean {
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+    return false;
+  }
+  try {
+    return !chrome.runtime || !chrome.runtime.id;
+  } catch {
+    return true;
+  }
+}
+

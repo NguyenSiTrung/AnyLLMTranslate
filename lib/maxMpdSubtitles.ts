@@ -38,13 +38,24 @@ export interface MpdSubtitleTrack {
   mimeType?: string;
 }
 
+/** Optional segment fetcher (e.g. background CORS bypass from MAIN world). */
+export type SubtitleSegmentFetchFn = (url: string) => Promise<{
+  ok: boolean;
+  status: number;
+  text: string;
+  contentType: string;
+}>;
+
 export interface FetchAndParseSubtitleOptions {
   segmentUrls?: string[];
   segmentFetch?: SegmentFetchTemplate;
+  fetchSegment?: SubtitleSegmentFetchFn;
 }
 
 /** Safety cap for segmented WebVTT fetches (HBO Max can list thousands of segments). */
 const MAX_SEGMENT_FETCH_COUNT = 3000;
+const MAX_PROGRESSIVE_SEGMENT_FETCH_COUNT = 120;
+const MAX_NESTED_MPD_DEPTH = 3;
 
 /** Returns true when the URL points to a DASH manifest (.mpd). */
 export function detectMpdRequests(url: string): boolean {
@@ -114,15 +125,125 @@ export async function fetchAndParseSubtitle(
   url: string,
   options?: string[] | FetchAndParseSubtitleOptions,
 ): Promise<ParsedSubtitleCue[]> {
+  return fetchAndParseSubtitleInternal(url, options, 0, undefined);
+}
+
+/** Result of a validated subtitle content fetch (not a manifest). */
+export interface FetchedSubtitleContent {
+  url: string;
+  content: string;
+  contentType: string;
+}
+
+/**
+ * Fetch a subtitle track URL and validate the response is real subtitle content
+ * (not another DASH MPD manifest). Returns null when the response is a manifest
+ * or the fetch fails, so callers can skip to the next track or fall back to DOM.
+ *
+ * NOTE: do NOT send `credentials: 'include'`. Max's CDN authenticates via the
+ * auth token embedded in the URL query string (manifest-params=...), not via
+ * cookies. Sending credentials forces a credentialed CORS request, which Max's
+ * CDN rejects (it returns `Access-Control-Allow-Origin: *`, which is forbidden
+ * with credentials) — so every subtitle segment fails with net::ERR_FAILED and
+ * the extension falls back to the DOM-cue path.
+ */
+export async function fetchRealSubtitleContent(
+  trackUrl: string,
+  _mpdUrl?: string,
+): Promise<FetchedSubtitleContent | null> {
+  try {
+    const res = await fetch(trackUrl);
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get('Content-Type') ?? '';
+    const text = await res.text();
+
+    if (isManifestResponse(text, contentType)) {
+      console.warn('[AnyLLMTranslate] Track returned another manifest. Skipping.', trackUrl);
+      return null;
+    }
+
+    return { url: trackUrl, content: text, contentType };
+  } catch (err) {
+    console.error('[AnyLLMTranslate] Failed to fetch subtitle track:', err);
+    return null;
+  }
+}
+
+/**
+ * Process subtitle tracks found in an MPD: fetch each, validate it is real
+ * subtitle content (not another manifest), and return the valid ones.
+ * Returns null when no tracks yielded real content, signalling DOM fallback.
+ */
+export async function processMpdSubtitleTracks(
+  tracks: MpdSubtitleTrack[],
+  mpdUrl?: string,
+): Promise<FetchedSubtitleContent[] | null> {
+  const validTracks: FetchedSubtitleContent[] = [];
+
+  for (const track of tracks) {
+    const result = await fetchRealSubtitleContent(track.url, mpdUrl);
+    if (result) {
+      console.log('[AnyLLMTranslate] Successfully fetched real subtitle content', {
+        language: track.language,
+        length: result.content.length,
+      });
+      validTracks.push(result);
+    }
+  }
+
+  if (validTracks.length > 0) {
+    console.log('[AnyLLMTranslate] Got', validTracks.length, 'real subtitle tracks');
+    return validTracks;
+  }
+
+  console.log('[AnyLLMTranslate] No direct subtitle content found. Using DOM fallback.');
+  return null;
+}
+
+async function fetchSegmentResponse(
+  segmentUrl: string,
+  fetchSegment?: SubtitleSegmentFetchFn,
+): Promise<{ ok: boolean; status: number; text: string; contentType: string }> {
+  if (fetchSegment) {
+    const r = await fetchSegment(segmentUrl);
+    return { ok: r.ok, status: r.status, text: r.text, contentType: r.contentType };
+  }
+  const response = await fetch(segmentUrl);
+  const text = await response.text();
+  return {
+    ok: response.ok,
+    status: response.status,
+    text,
+    contentType: response.headers.get('Content-Type') ?? '',
+  };
+}
+
+async function fetchAndParseSubtitleInternal(
+  url: string,
+  options: string[] | FetchAndParseSubtitleOptions | undefined,
+  nestedDepth: number,
+  fetchSegment?: SubtitleSegmentFetchFn,
+): Promise<ParsedSubtitleCue[]> {
   const resolvedOptions: FetchAndParseSubtitleOptions = Array.isArray(options)
     ? { segmentUrls: options }
     : (options ?? {});
+  const segmentFetcher = resolvedOptions.fetchSegment ?? fetchSegment;
 
   let bodies: string[] = [];
   let contentType = '';
 
   if (resolvedOptions.segmentFetch) {
-    bodies = await fetchSegmentBodiesProgressively(resolvedOptions.segmentFetch);
+    const progressive = await fetchSegmentBodiesProgressively(
+      resolvedOptions.segmentFetch,
+      nestedDepth,
+      segmentFetcher,
+    );
+    if (progressive.kind === 'cues') {
+      return progressive.cues;
+    }
+    bodies = progressive.bodies;
+    contentType = progressive.contentType;
   } else {
     const urls =
       resolvedOptions.segmentUrls && resolvedOptions.segmentUrls.length > 0
@@ -130,17 +251,18 @@ export async function fetchAndParseSubtitle(
         : [url];
 
     for (const segmentUrl of urls) {
-      const response = await fetch(segmentUrl);
-      if (!response.ok) {
-        throw new Error(`Subtitle fetch failed: HTTP ${response.status}`);
+      const segment = await fetchSegmentResponse(segmentUrl, segmentFetcher);
+      if (!segment.ok) {
+        throw new Error(`Subtitle fetch failed: HTTP ${segment.status}`);
       }
-      const text = await response.text();
-      if (isMpdManifestBody(text)) {
-        throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
+      const text = segment.text;
+      const respContentType = segment.contentType;
+      if (isManifestResponse(text, respContentType)) {
+        return fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, segmentFetcher);
       }
       bodies.push(text);
       if (!contentType) {
-        contentType = response.headers.get('Content-Type') ?? '';
+        contentType = respContentType;
       }
     }
   }
@@ -159,13 +281,53 @@ export async function fetchAndParseSubtitle(
   }));
 }
 
+async function fetchAndParseNestedMpdSubtitle(
+  mpdText: string,
+  mpdUrl: string,
+  nestedDepth: number,
+  fetchSegment?: SubtitleSegmentFetchFn,
+): Promise<ParsedSubtitleCue[]> {
+  if (nestedDepth >= MAX_NESTED_MPD_DEPTH) {
+    throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
+  }
+
+  const nestedDoc = parseMpd(mpdText, mpdUrl);
+  if (!nestedDoc) {
+    throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
+  }
+
+  const nestedTracks = extractSubtitleTracks(nestedDoc, mpdUrl);
+  for (const nestedTrack of nestedTracks) {
+    if (normalizeSubtitleUrl(nestedTrack.url) === normalizeSubtitleUrl(mpdUrl)) continue;
+
+    try {
+      const cues = await fetchAndParseSubtitleInternal(
+        nestedTrack.url,
+        {
+          segmentUrls: nestedTrack.segmentUrls,
+          segmentFetch: nestedTrack.segmentFetch,
+          fetchSegment,
+        },
+        nestedDepth + 1,
+        fetchSegment,
+      );
+      if (cues.length > 0) return cues;
+    } catch (err) {
+      console.error('DEBUG Nested Fetch Error:', err);
+      // Try the next nested track before giving up to DOM fallback.
+    }
+  }
+
+  throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
+}
+
 /** Parse subtitle body text into cues (VTT, SRT, or TTML). */
 export function parseSubtitleContent(
   body: string,
   contentType: string,
   url: string,
 ): { startTime: number; endTime: number; text: string }[] {
-  if (isMpdManifestBody(body)) {
+  if (isManifestResponse(body, contentType)) {
     return [];
   }
 
@@ -234,8 +396,9 @@ function buildRepresentationSegmentUrls(
       joinMediaPaths(adaptationBaseUrl, baseUrlEl.textContent.trim()),
       baseUrl,
     );
-    if (!resolved || isSelfReferentialSubtitleUrl(resolved, baseUrl)) return null;
-    return { urls: [resolved] };
+    if (resolved && !isSelfReferentialSubtitleUrl(resolved, baseUrl)) {
+      return { urls: [resolved] };
+    }
   }
 
   const segmentListUrls = buildSegmentListUrls(rep, adaptationSet, baseUrl, adaptationBaseUrl);
@@ -430,10 +593,17 @@ function joinMediaPaths(prefix: string | undefined, media: string): string {
   return `${normalizedPrefix}${normalizedMedia}`;
 }
 
+type ProgressiveSegmentResult =
+  | { kind: 'bodies'; bodies: string[]; contentType: string }
+  | { kind: 'cues'; cues: ParsedSubtitleCue[] };
+
 async function fetchSegmentBodiesProgressively(
   template: SegmentFetchTemplate,
-): Promise<string[]> {
+  nestedDepth: number,
+  fetchSegment?: SubtitleSegmentFetchFn,
+): Promise<ProgressiveSegmentResult> {
   const bodies: string[] = [];
+  let contentType = '';
   const context: TemplateContext = {
     media: template.media,
     startNumber: template.startNumber,
@@ -443,25 +613,63 @@ async function fetchSegmentBodiesProgressively(
     adaptationBaseUrl: template.adaptationBaseUrl,
   };
 
-  for (let i = 0; i < MAX_SEGMENT_FETCH_COUNT; i++) {
+  for (let i = 0; i < MAX_PROGRESSIVE_SEGMENT_FETCH_COUNT; i++) {
     const segmentUrl = buildTemplatedSegmentUrl(context, template.startNumber + i);
     if (!segmentUrl) break;
 
-    const response = await fetch(segmentUrl);
-    if (!response.ok) break;
+    const segment = await fetchSegmentResponse(segmentUrl, fetchSegment);
+    if (!segment.ok) break;
 
-    const text = await response.text();
-    if (isMpdManifestBody(text)) break;
+    const text = segment.text;
+    const respContentType = segment.contentType;
+    if (isManifestResponse(text, respContentType)) {
+      const nestedCues = await fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, fetchSegment);
+      if (nestedCues.length > 0) {
+        return { kind: 'cues', cues: nestedCues };
+      }
+      break;
+    }
 
     bodies.push(text);
+    if (!contentType) contentType = respContentType;
   }
 
-  return bodies;
+  return { kind: 'bodies', bodies, contentType };
 }
 
 function isMpdManifestBody(body: string): boolean {
   const trimmed = body.trimStart();
   return trimmed.includes('<MPD') && trimmed.includes('urn:mpeg:dash:schema:mpd');
+}
+
+/**
+ * Detect manifest responses using both body content and Content-Type header.
+ * Catches DASH MPDs that omit the namespace URI, as well as responses
+ * served with a dash+xml content-type. TTML (application/ttml+xml) is NOT
+ * treated as a manifest — it is valid subtitle content.
+ */
+function isManifestResponse(body: string, contentType: string): boolean {
+  if (isMpdManifestBody(body)) return true;
+
+  const trimmed = body.trimStart();
+  if (trimmed.includes('<MPD')) return true;
+  if (trimmed.includes('<Period') && trimmed.includes('AdaptationSet')) return true;
+
+  const ct = contentType.toLowerCase();
+  if (ct.includes('dash+xml') && !ct.includes('ttml')) return true;
+
+  return false;
+}
+
+function normalizeSubtitleUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.href.replace(/\/$/, '');
+  } catch {
+    return url.split('?')[0].split('#')[0].replace(/\/$/, '');
+  }
 }
 
 function isSelfReferentialSubtitleUrl(trackUrl: string, mpdUrl: string): boolean {
@@ -475,6 +683,16 @@ function isSelfReferentialSubtitleUrl(trackUrl: string, mpdUrl: string): boolean
 
     // If they resolve to the same path (ignoring trailing slash and query params)
     if (track.origin === mpd.origin && trackPath === mpdPath) {
+      return true;
+    }
+
+    const mpdLastSegment = mpdPath.slice(mpdPath.lastIndexOf('/') + 1);
+    if (
+      mpdLastSegment &&
+      !mpdLastSegment.includes('.') &&
+      track.origin === mpd.origin &&
+      trackPath === `${mpdPath}/${mpdLastSegment}`
+    ) {
       return true;
     }
 
@@ -532,15 +750,22 @@ function resolveSubtitleUrl(mediaUrl: string, mpdUrl: string): string | null {
   return resolved;
 }
 
-/** MPD-relative URL base (directory containing the .mpd file, without query/hash). */
+/** MPD-relative URL base, preserving extensionless Max manifest paths as directories. */
 function mpdResolveBase(mpdUrl: string): string | null {
   try {
     const url = new URL(mpdUrl);
     url.search = '';
     url.hash = '';
+    if (url.pathname.endsWith('/')) {
+      return url.href;
+    }
+
     const slash = url.pathname.lastIndexOf('/');
-    if (slash >= 0) {
+    const lastSegment = slash >= 0 ? url.pathname.slice(slash + 1) : url.pathname;
+    if (lastSegment.includes('.')) {
       url.pathname = url.pathname.slice(0, slash + 1);
+    } else if (url.pathname !== '/') {
+      url.pathname = `${url.pathname}/`;
     }
     return url.href;
   } catch {

@@ -130,4 +130,15 @@ describe('subtitle URL allow-list hardening', () => {
     );
     expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
   });
+
+  it('accepts Max APAC media CDN hostname', async () => {
+    const result = await handleMessage(
+      {
+        action: 'FETCH_SUBTITLE',
+        url: 'https://cf.asia.prd.media.max.com/segment.vtt?manifest-params=token',
+      },
+      fakeSender(),
+    );
+    expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
+  });
 });

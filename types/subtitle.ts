@@ -41,6 +41,9 @@ export type BridgeMessageType =
   | 'SUBTITLE_TEXTTRACK_CUES'
   | 'SUBTITLE_MSE_CUES'
   | 'SUBTITLE_MANIFEST_CUES'
+  | 'SUBTITLE_MPD_PROCESSING'
+  | 'SUBTITLE_FETCH_REQUEST'
+  | 'SUBTITLE_FETCH_RESPONSE'
   | 'SUBTITLE_CONFIG';
 
 /** postMessage payload between worlds */
@@ -112,6 +115,15 @@ export interface SubtitleConfigPayload {
   translationTimeoutMs: number;
   /** Extension preferred subtitle language (e.g. 'en'). 'auto' = use Max active track. */
   preferredSubtitleLanguage?: string;
+}
+
+/** Payload for SUBTITLE_MPD_PROCESSING (Max MPD fetch started / finished in MAIN world) */
+export interface SubtitleMpdProcessingPayload {
+  mpdUrl: string;
+  platform: string;
+  status: 'started' | 'complete';
+  /** Set when status is 'complete' — whether parsed cues were emitted */
+  success?: boolean;
 }
 
 /** Payload for SUBTITLE_MANIFEST_CUES (full track from parsed MPD / DASH manifest) */

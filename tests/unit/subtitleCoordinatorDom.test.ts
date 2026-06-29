@@ -30,6 +30,7 @@ vi.mock('@/content/messageBridge', () => ({
   onTextTrackCues: () => () => {},
   onMseCues: () => () => {},
   onManifestCues: () => () => {},
+  onMpdProcessing: () => () => {},
   sendTranslatedSubtitle: vi.fn(),
 }));
 
@@ -152,6 +153,35 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
       platform: 'hbomax',
       language: 'en',
     });
+    const { initializeOverlay } = await import('@/content/subtitleOverlay');
+    expect(vi.mocked(initializeOverlay)).not.toHaveBeenCalled();
+    mod.resetCoordinatorState();
+  });
+
+  it('handleDomCues does not activate DOM before play when HBO Max MPD pipeline is available', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+    vi.mocked(detectCurrentHandler).mockReturnValue({
+      platform: 'hbomax',
+      getManifestPatterns: () => [{ platform: 'hbomax', pattern: /\.mpd/i }],
+      getDomCueSource: () => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      }),
+      isWatchPage: () => true,
+    } as never);
+
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+
+    await invokeDomCuesHandler({
+      cues: [{ startTime: 0, endTime: 2, text: 'preview caption' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+
     const { initializeOverlay } = await import('@/content/subtitleOverlay');
     expect(vi.mocked(initializeOverlay)).not.toHaveBeenCalled();
     mod.resetCoordinatorState();

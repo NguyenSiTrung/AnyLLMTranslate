@@ -16,6 +16,7 @@ import type {
   SubtitleTextTrackCuesPayload,
   SubtitleMseCuesPayload,
   SubtitleManifestCuesPayload,
+  SubtitleMpdProcessingPayload,
 } from '@/types/subtitle';
 
 /**
@@ -113,6 +114,21 @@ export function onManifestCues(
       await handler(payload as SubtitleManifestCuesPayload);
     } catch (error) {
       console.warn('AnyLLMTranslate: Manifest cues handler error', error);
+    }
+  });
+}
+
+/**
+ * Listen for Max MPD processing lifecycle from MAIN world (fetch/parse in flight).
+ */
+export function onMpdProcessing(
+  handler: (payload: SubtitleMpdProcessingPayload) => void,
+): () => void {
+  return onMessage('SUBTITLE_MPD_PROCESSING', (payload) => {
+    try {
+      handler(payload as SubtitleMpdProcessingPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: MPD processing handler error', error);
     }
   });
 }

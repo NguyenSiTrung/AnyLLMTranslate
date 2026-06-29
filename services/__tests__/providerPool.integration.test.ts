@@ -246,35 +246,29 @@ describe('AC1/NFR-1: real OpenAICompatibleService failover (mocked fetch)', () =
    * on the Authorization header, exactly as the production service sends it.
    */
   function failingK1Fetch() {
-    return vi.fn(async (_url: string | URL, init?: Record<string, unknown>) => {
-      const headers = (init?.headers as Record<string, string> | undefined) ?? {};
-      const auth = headers['Authorization'] ?? '';
+    return vi.fn(async (_url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const auth = new Headers(init?.headers).get('Authorization') ?? '';
       if (auth.includes('sk-1')) {
-        return {
-          ok: false,
+        return new Response('{"error":{"message":"rate limited"}}', {
           status: 429,
           statusText: 'Too Many Requests',
-          text: () => Promise.resolve('{"error":{"message":"rate limited"}}'),
-        };
+        });
       }
       // Any other key (k2) → success.
-      return {
-        ok: true,
+      return new Response(JSON.stringify({
+        id: 'chatcmpl-test',
+        choices: [
+          {
+            message: { role: 'assistant', content: '{"translations":{"p1":"Xin chào"}}' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      }), {
         status: 200,
         statusText: 'OK',
-        json: () =>
-          Promise.resolve({
-            id: 'chatcmpl-test',
-            choices: [
-              {
-                message: { role: 'assistant', content: '{"translations":{"p1":"Xin chào"}}' },
-                finish_reason: 'stop',
-              },
-            ],
-            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-          }),
-        text: () => Promise.resolve(''),
-      };
+        headers: { 'Content-Type': 'application/json' },
+      });
     });
   }
 

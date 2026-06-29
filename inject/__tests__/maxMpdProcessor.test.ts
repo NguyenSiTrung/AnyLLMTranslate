@@ -106,7 +106,7 @@ describe('processMaxMpdManifest', () => {
     await processMaxMpdManifest(mpd, 'https://cdn.example.com/manifest.mpd', bridge);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/en.vtt');
+    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/en.vtt', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_MANIFEST_CUES',
       expect.objectContaining({ language: 'en-US' }),
@@ -161,7 +161,7 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
 
     await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest.mpd', bridge);
 
-    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml');
+    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(logSpy).toHaveBeenCalledWith(
       'AnyLLMTranslate: Max MPD subtitles parsed',
       expect.objectContaining({ cueCount: 1 }),

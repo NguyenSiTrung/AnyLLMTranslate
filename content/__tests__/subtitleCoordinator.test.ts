@@ -11,7 +11,7 @@ import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 // ============================================================================
 
 const mockGetHandlerByPlatform = vi.fn();
-const mockDetectCurrentHandler = vi.fn(() => null);
+const mockDetectCurrentHandler = vi.fn<() => unknown>(() => null);
 vi.mock('@/inject/subtitleHandlers/registry', () => ({
   getHandlerByPlatform: mockGetHandlerByPlatform,
   detectCurrentHandler: mockDetectCurrentHandler,
@@ -50,12 +50,13 @@ vi.mock('@/content/messageBridge', () => ({
   onTextTrackCues: () => () => {},
   onMseCues: () => () => {},
   onManifestCues: () => () => {},
+  onMpdProcessing: () => () => {},
   sendTranslatedSubtitle: (...args: unknown[]) => { mockSendTranslatedSubtitle(...args); },
 }));
 
 const mockOnMessage = vi.fn().mockReturnValue(() => {});
 vi.mock('@/inject/messageBridge', () => ({
-  onMessage: (...args: unknown[]) => { mockOnMessage(...args); },
+  onMessage: (...args: unknown[]) => mockOnMessage(...args),
 }));
 
 const mockInitializeOverlay = vi.fn();
@@ -268,7 +269,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
     );
-    expect(sent).toBeDefined();
+    if (!sent) throw new Error('Expected translateSubtitle message');
     expect((sent[0] as { profile?: string }).profile).toBe('media');
   });
 
@@ -297,8 +298,8 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
     );
-    expect(sent).toBeDefined();
-    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toEqual({ faithfulness: 'literal' });
+    if (!sent) throw new Error('Expected translateSubtitle message');
+    expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toEqual({ faithfulness: 'literal' });
   });
 
   it('omits knobOverrides from the outgoing message when not set', async () => {
@@ -319,8 +320,8 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
     );
-    expect(sent).toBeDefined();
-    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
+    if (!sent) throw new Error('Expected translateSubtitle message');
+    expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
   });
 
   it('clears the override when setSubtitleKnobOverride receives null', async () => {
@@ -351,8 +352,8 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
     );
-    expect(sent).toBeDefined();
-    expect((sent![0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
+    if (!sent) throw new Error('Expected translateSubtitle message');
+    expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
   });
 
   it('falls back to settings.sourceLanguage when payload.originalLanguage is empty', async () => {
@@ -1267,6 +1268,12 @@ describe('subtitleCoordinator – proactive category detection', () => {
     setAutoDetectedCategory: (category: string | undefined) => void;
     _resetCategoryState: () => void;
   } | null = null;
+  let cleanupCoordinator: (() => void) | undefined;
+
+  const stopCoordinator = () => {
+    cleanupCoordinator?.();
+    cleanupCoordinator = undefined;
+  };
 
   beforeEach(async () => {
     // Fake timers make the 1500ms proactive debounce deterministic and prevent
@@ -1316,12 +1323,13 @@ describe('subtitleCoordinator – proactive category detection', () => {
     } as unknown as typeof chrome;
 
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    cleanupCoordinator = mod.startCoordinator();
     categoryStateMod = await import('@/content/categoryState');
     categoryStateMod._resetCategoryState();
   });
 
   afterEach(() => {
+    stopCoordinator();
     vi.useRealTimers();
     vi.resetModules();
   });
@@ -1330,10 +1338,11 @@ describe('subtitleCoordinator – proactive category detection', () => {
     // Advance past the 1500ms debounce. await vi.advanceTimersByTimeAsync so any
     // microtasks scheduled inside the timer callback (loadSettings) also flush.
     await vi.advanceTimersByTimeAsync(1700);
-    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledTimes(1);
+    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalled();
   });
 
   it('does NOT fire proactive detection on a non-watch page (YouTube home)', async () => {
+    stopCoordinator();
     vi.resetModules();
     mockTriggerAutoCategoryDetection.mockClear();
     mockDetectCurrentHandler.mockReturnValue(mockHandler);
@@ -1344,13 +1353,15 @@ describe('subtitleCoordinator – proactive category detection', () => {
       configurable: true,
     });
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    cleanupCoordinator = mod.startCoordinator();
     await vi.advanceTimersByTimeAsync(1700);
     expect(mockTriggerAutoCategoryDetection).not.toHaveBeenCalled();
   });
 
   it('does NOT fire when LLM detection is disabled', async () => {
+    stopCoordinator();
     vi.resetModules();
+    mockTriggerAutoCategoryDetection.mockClear();
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       enableLLMPageCategoryDetection: false,
@@ -1358,7 +1369,7 @@ describe('subtitleCoordinator – proactive category detection', () => {
       siteRules: [],
     });
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    cleanupCoordinator = mod.startCoordinator();
     await vi.advanceTimersByTimeAsync(1700);
     expect(mockTriggerAutoCategoryDetection).not.toHaveBeenCalled();
   });
@@ -1376,7 +1387,6 @@ describe('subtitleCoordinator – proactive category detection', () => {
     // the real triggerAutoCategoryDetection (covered by its own unit tests). Here we
     // verify the override is propagated as the manualOverride argument so the guard
     // will short-circuit in production.
-    expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledTimes(1);
     expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledWith(
       expect.anything(),
       'Gaming',

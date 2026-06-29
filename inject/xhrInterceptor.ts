@@ -12,7 +12,7 @@
 
 import type { InterceptorRegistry, UrlMatch } from '@/inject/interceptorRegistry';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
-import type { SubtitleInterceptedPayload, AvailableSubtitleTrack } from '@/types/subtitle';
+import type { SubtitleInterceptedPayload } from '@/types/subtitle';
 import { detectManifestTracks } from '@/lib/manifestParser';
 import { detectMpdRequests } from '@/lib/maxMpdSubtitles';
 import { processMaxMpdManifest } from '@/inject/maxMpdProcessor';

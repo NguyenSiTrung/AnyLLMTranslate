@@ -257,7 +257,9 @@ export function SubtitlesSection() {
   const handleKnobChange = (knob: KnobKey, value: string) => {
     const next = { ...overrides };
     if (value === 'auto') {
-      delete next[knob];
+      const { [knob]: _removed, ...rest } = next;
+      handleUpdate({ knobOverrides: rest });
+      return;
     } else {
       (next as Record<string, string>)[knob] = value;
     }

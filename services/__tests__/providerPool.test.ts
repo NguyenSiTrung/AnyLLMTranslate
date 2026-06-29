@@ -597,7 +597,7 @@ describe('ProviderPoolCoordinator', () => {
       expect(coord.getKeyStatus('k1').open).toBe(true);
       // Reset outcomes + call counts so only the testConnection counts.
       setOutcome('k1', { kind: 'success', result: { success: true, translations: new Map([['id1', 'from-k1']]) } });
-      setOutcome('k2', { kind: 'success', result: { success: true } });
+      setOutcome('k2', { kind: 'success', result: { success: true, translations: new Map([['id1', 'from-k2']]) } });
       const k1Stub = stubs.get('k1');
       const k2Stub = stubs.get('k2');
       if (k1Stub) k1Stub.callCount = 0;

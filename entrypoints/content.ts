@@ -40,11 +40,13 @@ import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
+import { isContextInvalidated } from '@/lib/utils';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
 let allPieces: TranslationPiece[] = [];
 let coordinatorCleanup: (() => void) | null = null;
+let _beforeUnloadCleanup: (() => void) | null = null;
 let activeRequests = 0;
 /** Monotonically increasing translation session id.
  *  Bumped on startTranslation and stopTranslation so that in-flight
@@ -453,6 +455,7 @@ async function initInteractionFeatures(): Promise<void> {
  *  Exported for unit testing (normally invoked by the content script's main()). */
 export function setupMessageListener(): void {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (isContextInvalidated()) return;
     if (message.action === 'startTranslation') {
       startTranslation();
     } else if (message.action === 'stopTranslation') {
@@ -525,6 +528,58 @@ export function setupMessageListener(): void {
   });
 }
 
+function destroyZombie(): void {
+  console.log('[AnyLLMTranslate] Extension context invalidated — cleaning up zombified content script');
+
+  if (viewportObserver) {
+    try { viewportObserver.disconnect(); } catch {}
+    viewportObserver = null;
+  }
+  if (mutationWatcher) {
+    try { mutationWatcher.stop(); } catch {}
+    mutationWatcher = null;
+  }
+  if (coordinatorCleanup) {
+    try { coordinatorCleanup(); } catch {}
+    coordinatorCleanup = null;
+  }
+  if (_beforeUnloadCleanup) {
+    try { _beforeUnloadCleanup(); } catch {}
+    _beforeUnloadCleanup = null;
+  }
+  if (_textSelectionCleanup) {
+    try { _textSelectionCleanup(); } catch {}
+    _textSelectionCleanup = null;
+  }
+  if (_hoverTranslateCleanup) {
+    try { _hoverTranslateCleanup(); } catch {}
+    _hoverTranslateCleanup = null;
+  }
+  if (_keyboardShortcutsCleanup) {
+    try { _keyboardShortcutsCleanup(); } catch {}
+    _keyboardShortcutsCleanup = null;
+  }
+  if (_inlineTranslateCleanup) {
+    try { _inlineTranslateCleanup(); } catch {}
+    _inlineTranslateCleanup = null;
+  }
+  if (_storageChangeListener) {
+    try {
+      chrome.storage.onChanged.removeListener(_storageChangeListener);
+    } catch {}
+    _storageChangeListener = null;
+  }
+
+  // Clear UI / translations
+  try { removeAllTranslations(); } catch {}
+  try { removeAllSectionTranslations(); } catch {}
+  try { clearHoverCache(); } catch {}
+  try { hideAutoTranslateNotification(); } catch {}
+
+  allPieces = [];
+  activeRequests = 0;
+}
+
 // Content script definition for WXT
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -585,11 +640,21 @@ export default defineContentScript({
       });
     }
 
+    // Sentinel check for context invalidation (e.g. reload or update)
+    const sentinelInterval = setInterval(() => {
+      if (isContextInvalidated()) {
+        clearInterval(sentinelInterval);
+        destroyZombie();
+      }
+    }, 1000);
+
     // Flush pending cache LRU updates on page unload
-    window.addEventListener('beforeunload', () => {
-      flushLruUpdates().catch(() => {});
-      chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
-      chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
+    const beforeUnloadListener = () => {
+      try {
+        flushLruUpdates().catch(() => {});
+        chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
+        chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
+      } catch { /* ignore since context might be invalidated */ }
       if (coordinatorCleanup) {
         coordinatorCleanup();
         coordinatorCleanup = null;
@@ -611,10 +676,20 @@ export default defineContentScript({
         _inlineTranslateCleanup = null;
       }
       if (_storageChangeListener) {
-        chrome.storage.onChanged.removeListener(_storageChangeListener);
+        try {
+          chrome.storage.onChanged.removeListener(_storageChangeListener);
+        } catch {}
         _storageChangeListener = null;
       }
-    });
+      clearInterval(sentinelInterval);
+    };
+
+    window.addEventListener('beforeunload', beforeUnloadListener);
+    _beforeUnloadCleanup = () => {
+      window.removeEventListener('beforeunload', beforeUnloadListener);
+      clearInterval(sentinelInterval);
+    };
+
     console.log('[AnyLLMTranslate] Content script loaded');
   },
 });

@@ -790,6 +790,7 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)hbo\.com$/,
   /(?:^|\.)delivery\.mp\.microsoft\.com$/,
   /(?:^|\.)media\.max\.com$/,
+  /(?:^|\.)prd\.media\.max\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
@@ -948,8 +949,9 @@ async function handleFetchManifestSubtitles(
         return { success: false, error: 'No subtitle tracks in DASH manifest' };
       }
 
-      const track = message.preferredLanguage
-        ? tracks.find((t) => subtitleLanguagesMatch(t.language, message.preferredLanguage!)) ?? tracks[0]
+      const preferredLanguage = message.preferredLanguage;
+      const track = preferredLanguage
+        ? tracks.find((t) => subtitleLanguagesMatch(t.language, preferredLanguage)) ?? tracks[0]
         : tracks[0];
       if (!isAllowedSubtitleUrl(track.url)) {
         return { success: false, error: 'Track URL not in allow-list' };

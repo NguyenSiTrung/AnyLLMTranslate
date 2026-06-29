@@ -692,9 +692,10 @@ export default function App() {
   }, [settings]);
 
   const handleTabKnob = useCallback(async (knob: keyof ProfileKnobs, value: string) => {
-    const next = { ...tabOverrides };
+    let next = { ...tabOverrides };
     if (value === 'auto') {
-      delete next[knob];
+      const { [knob]: _removed, ...rest } = next;
+      next = rest;
     } else {
       (next as Record<string, string>)[knob] = value;
     }

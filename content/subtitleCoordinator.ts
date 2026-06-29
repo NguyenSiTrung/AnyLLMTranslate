@@ -18,6 +18,7 @@ import {
   onTextTrackCues,
   onMseCues,
   onManifestCues,
+  onMpdProcessing,
 } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
@@ -47,6 +48,7 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
+import { startSubtitleFetchRelay } from '@/inject/maxMpdSubtitleFetch';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -63,6 +65,30 @@ const SOURCE_RANK: Record<string, number> = {
   dom: 3,
 };
 
+/** Wait for Max MPD fetch/parse before falling back to DOM cues on play. */
+const MAX_MPD_DOM_GRACE_MS = 8000;
+/** Force DOM fallback if MPD stays in-flight (segment fetch) beyond this. */
+const MAX_MPD_IN_FLIGHT_CAP_MS = 45_000;
+
+/** True when the current page uses HBO Max DASH MPD subtitle discovery (Tier 2). */
+function hbomaxUsesMpdSubtitlePipeline(): boolean {
+  const handler = detectCurrentHandler();
+  if (!handler || handler.platform !== 'hbomax') return false;
+  return (
+    typeof handler.getManifestPatterns === 'function' &&
+    handler.getManifestPatterns().length > 0
+  );
+}
+
+/** Start (or extend) the DOM deferral window while Max MPD may still deliver cues.
+ *  Does not set mpdProcessingInFlight — only SUBTITLE_MPD_PROCESSING started does. */
+function armMpdDomGraceWindow(): void {
+  const until = Date.now() + MAX_MPD_DOM_GRACE_MS;
+  if (until > state.mpdGraceUntil) {
+    state.mpdGraceUntil = until;
+  }
+}
+
 /**
  * Check whether a new source tier should be suppressed by the currently active source.
  * Returns true if the new source is lower-precedence than the active one.
@@ -75,6 +101,92 @@ function shouldSuppressSource(newSource: 'manifest' | 'texttrack' | 'mse' | 'dom
 /** Reset the active source (e.g. on track switch / seek) to allow re-resolution. */
 function resetActiveSource(): void {
   state.activeSource = null;
+}
+
+/** True when URL is the top-level DASH manifest (not a leaf subtitle segment). */
+function isRootDashManifestUrl(url: string): boolean {
+  const lower = url.toLowerCase().split('?')[0].split('#')[0];
+  return lower.endsWith('.mpd');
+}
+
+function mpdInFlightExceededCap(): boolean {
+  if (!state.mpdProcessingInFlight || state.mpdProcessingStartedAt === 0) return false;
+  return Date.now() - state.mpdProcessingStartedAt > MAX_MPD_IN_FLIGHT_CAP_MS;
+}
+
+function clearMpdDomFallbackTimer(): void {
+  if (state.mpdDomFallbackTimer !== null) {
+    clearTimeout(state.mpdDomFallbackTimer);
+    state.mpdDomFallbackTimer = null;
+  }
+}
+
+function shouldDeferDomForMpd(): boolean {
+  if (mpdInFlightExceededCap()) {
+    state.mpdProcessingInFlight = false;
+    state.mpdGraceUntil = 0;
+    return false;
+  }
+  if (state.mpdProcessingInFlight) return true;
+  return Date.now() < state.mpdGraceUntil;
+}
+
+function scheduleMpdDomFallbackRetry(): void {
+  if (state.isOverlayMode || state.activeSource === 'manifest') return;
+  if (!state.pendingDomCuesPayload) return;
+  clearMpdDomFallbackTimer();
+  const delay = state.mpdProcessingInFlight
+    ? Math.min(
+      MAX_MPD_IN_FLIGHT_CAP_MS,
+      Math.max(500, state.mpdGraceUntil - Date.now()),
+    )
+    : Math.max(0, state.mpdGraceUntil - Date.now());
+  state.mpdDomFallbackTimer = setTimeout(() => {
+    state.mpdDomFallbackTimer = null;
+    void flushPendingDomCuesAfterMpd();
+  }, delay + 50);
+}
+
+async function flushPendingDomCuesAfterMpd(): Promise<void> {
+  if (state.isOverlayMode || state.activeSource === 'manifest') {
+    state.pendingDomCuesPayload = null;
+    return;
+  }
+  if (shouldDeferDomForMpd()) {
+    scheduleMpdDomFallbackRetry();
+    return;
+  }
+  const payload = state.pendingDomCuesPayload;
+  if (!payload || payload.cues.length === 0) return;
+  state.pendingDomCuesPayload = null;
+  console.log('AnyLLMTranslate: Max MPD did not activate overlay — using DOM subtitles');
+  await handleDomCues(payload);
+}
+
+function handleMpdProcessing(payload: { status: string; success?: boolean }): void {
+  if (payload.status === 'started') {
+    state.mpdProcessingInFlight = true;
+    state.mpdProcessingStartedAt = Date.now();
+    state.mpdGraceUntil = Date.now() + MAX_MPD_DOM_GRACE_MS;
+    return;
+  }
+  state.mpdProcessingInFlight = false;
+  state.mpdProcessingStartedAt = 0;
+  if (payload.success) {
+    state.mpdGraceUntil = 0;
+    state.pendingDomCuesPayload = null;
+    clearMpdDomFallbackTimer();
+    return;
+  }
+  state.mpdGraceUntil = 0;
+  void flushPendingDomCuesAfterMpd();
+}
+
+async function waitForMpdGraceIfNeeded(): Promise<void> {
+  while (state.mpdProcessingInFlight || Date.now() < state.mpdGraceUntil) {
+    if (state.activeSource === 'manifest' && state.isOverlayMode) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
 }
 
 /** Coordinator state */
@@ -116,6 +228,16 @@ interface CoordinatorState {
   activeTrackIdentity: string | null;
   /** URLs already fetched via selectSubtitleTrack (dedup with interceptor flow) */
   fetchedTrackUrls: Set<string>;
+  /** True while MAIN-world Max MPD processor is fetching/parsing */
+  mpdProcessingInFlight: boolean;
+  /** DOM tier deferred until this timestamp (ms) while MPD may still succeed */
+  mpdGraceUntil: number;
+  /** Timestamp when SUBTITLE_MPD_PROCESSING started (for in-flight cap). */
+  mpdProcessingStartedAt: number;
+  /** Latest DOM cue batch held while MPD may still win (Max). */
+  pendingDomCuesPayload: SubtitleDomCuesPayload | null;
+  /** One-shot timer to activate DOM after grace when MPD does not deliver. */
+  mpdDomFallbackTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const state: CoordinatorState = {
@@ -139,6 +261,11 @@ const state: CoordinatorState = {
   cachedSettings: null,
   activeTrackIdentity: null,
   fetchedTrackUrls: new Set(),
+  mpdProcessingInFlight: false,
+  mpdGraceUntil: 0,
+  mpdProcessingStartedAt: 0,
+  pendingDomCuesPayload: null,
+  mpdDomFallbackTimer: null,
 };
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
@@ -720,6 +847,22 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   if (payload.cues.length === 0) return;
   if (shouldSuppressSource('dom')) return; // Suppress DOM updates if higher-tier source is active
 
+  // Max: never activate from DOM before play — wait for MPD (Tier 2) or play-time fallback.
+  if (
+    !state.isOverlayMode &&
+    hbomaxUsesMpdSubtitlePipeline() &&
+    !state.videoIsPlaying
+  ) {
+    return;
+  }
+
+  if (!state.isOverlayMode && shouldDeferDomForMpd()) {
+    state.pendingDomCuesPayload = payload;
+    scheduleMpdDomFallbackRetry();
+    console.log('AnyLLMTranslate: Deferring DOM cues — Max MPD fetch/parse in progress');
+    return;
+  }
+
   if (!state.isOverlayMode) {
     await activateOverlayFromDom(payload);
     return;
@@ -757,6 +900,10 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
  */
 async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<void> {
   if (state.isOverlayMode) return;
+  if (shouldDeferDomForMpd()) {
+    console.log('AnyLLMTranslate: Deferring DOM activation — Max MPD fetch/parse in progress');
+    return;
+  }
 
   // Tier precedence: DOM (Tier 5) is lowest priority — suppress if a higher-tier
   // source (manifest, texttrack, mse) has already won or is in-flight.
@@ -939,7 +1086,7 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
 
   const preferredLanguage = settings.subtitleSettings.preferredSubtitleLanguage;
   let cues: SubtitleCue[];
-  let resolvedLanguage = '';
+  let resolvedLanguage: string;
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'FETCH_MANIFEST_SUBTITLES',
@@ -986,6 +1133,9 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
   ) {
     return;
   }
+
+  state.mpdProcessingInFlight = false;
+  state.mpdGraceUntil = 0;
 
   const activated = await activateOverlayFromManifestCues(
     payload.cues,
@@ -1255,7 +1405,8 @@ function scheduleProactiveCategoryDetection(): void {
     proactiveCategoryDetectionTimer = null;
     if (!isOnWatchPage()) return;
     void (async () => {
-      const settings = await loadSettings();
+      const settings = await loadSettings().catch(() => null);
+      if (!settings) return;
       if (!settings.enableContextAwareTranslation) return;
       if (!settings.enableLLMPageCategoryDetection) return;
       // state.categoryOverride and the singleton are checked inside the helper.
@@ -1328,6 +1479,8 @@ export function startCoordinator(): () => void {
   const cleanupMseCues = onMseCues(handleMseCues);
   // Listen for MPD-parsed manifest cues from MAIN world (Tier 2)
   const cleanupManifestCues = onManifestCues(handleManifestCues);
+  const cleanupMpdProcessing = onMpdProcessing(handleMpdProcessing);
+  const cleanupSubtitleFetchRelay = startSubtitleFetchRelay();
 
   // Proactive DOM track list for popup (Max has no metadata URLs)
   scheduleDomTrackDiscovery();
@@ -1413,6 +1566,8 @@ export function startCoordinator(): () => void {
     cleanupTextTrackCues();
     cleanupMseCues();
     cleanupManifestCues();
+    cleanupMpdProcessing();
+    cleanupSubtitleFetchRelay();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
@@ -1476,6 +1631,11 @@ export function resetCoordinatorState(): void {
   resetActiveSource();
   state.activeTrackIdentity = null;
   state.fetchedTrackUrls.clear();
+  state.mpdProcessingInFlight = false;
+  state.mpdGraceUntil = 0;
+  state.mpdProcessingStartedAt = 0;
+  state.pendingDomCuesPayload = null;
+  clearMpdDomFallbackTimer();
   state.translatedCues = null;
   state.cachedSettings = null;
   if (state.discoverDebounceTimer !== null) {
@@ -1608,6 +1768,16 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
     videoId: incomingVideoId,
   });
 
+  // HBO Max: manifest tracks from MPD imply MPD processor may still be fetching TTML/VTT.
+  // Arm grace before DOM captions can auto-activate (pre-play preview cues).
+  if (
+    payload.platform === 'hbomax' &&
+    hbomaxUsesMpdSubtitlePipeline() &&
+    state.activeSource !== 'manifest'
+  ) {
+    armMpdDomGraceWindow();
+  }
+
   // Notify popup/UI about available tracks
   chrome.runtime.sendMessage({
     action: 'SUBTITLE_TRACKS_AVAILABLE',
@@ -1667,6 +1837,10 @@ async function tryAutoActivate(epochAtStart: number): Promise<{ activated: boole
       (t) => subtitleLanguagesMatch(t.language, preferredLang),
     );
     if (preferred?.url) {
+      if (isRootDashManifestUrl(preferred.url)) {
+        console.log('AnyLLMTranslate: Skipping auto-activate on root DASH manifest — waiting for MPD processor');
+        return { activated: false, reason: 'root mpd — use MPD processor' };
+      }
       console.log('AnyLLMTranslate: Auto-activating preferred subtitle track on play', preferredLang);
       await selectSubtitleTrack(preferred.language);
       if (state.activeSource === 'manifest') {
@@ -1766,42 +1940,50 @@ function startVideoPlaybackWatcher(): () => void {
     const playHandler = () => {
       if (state.videoIsPlaying) return;
       state.videoIsPlaying = true;
-      console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
+
       const epoch = state.navigationEpoch;
-      const currentHandler = detectCurrentHandler();
-      // Handlers with manifest patterns (e.g. HBO Max) get a chance at Tier 2
-      // first. If manifest tracks were already discovered, tryAutoActivate will
-      // select one; otherwise it no-ops and DOM cue flow handles activation
-      // naturally when the first SUBTITLE_DOM_CUES message arrives.
-      // Handlers without manifest patterns (pure DOM-only) go straight to
-      // tryAutoActivateForDom (e.g. Youku).
-      if (currentHandler?.getDomCueSource) {
-        const hasManifestPatterns =
-          typeof currentHandler.getManifestPatterns === 'function' &&
-          currentHandler.getManifestPatterns().length > 0;
-        if (hasManifestPatterns) {
-          // Manifest first (Tier 2), then DOM fallback (Tier 5) if manifest misses.
-          void (async () => {
+      // Yield to the event loop (200ms macrotask delay) so any in-flight postMessage events
+      // (like manifest discovery or MPD started status) can register in the coordinator first.
+      setTimeout(async () => {
+        if (state.navigationEpoch !== epoch) return; // User navigated away
+
+        console.log('AnyLLMTranslate: Video play detected — attempting auto-activate');
+        const currentHandler = detectCurrentHandler();
+        // Handlers with manifest patterns (e.g. HBO Max) get a chance at Tier 2
+        // first. If manifest tracks were already discovered, tryAutoActivate will
+        // select one; otherwise it no-ops and DOM cue flow handles activation
+        // naturally when the first SUBTITLE_DOM_CUES message arrives.
+        // Handlers without manifest patterns (pure DOM-only) go straight to
+        // tryAutoActivateForDom (e.g. Youku).
+        if (currentHandler?.getDomCueSource) {
+          const hasManifestPatterns =
+            typeof currentHandler.getManifestPatterns === 'function' &&
+            currentHandler.getManifestPatterns().length > 0;
+          if (hasManifestPatterns) {
+            // Manifest first (Tier 2), then DOM fallback (Tier 5) if manifest misses.
             try {
               const manifestResult = await tryAutoActivate(epoch);
               if (!manifestResult.activated && state.activeSource !== 'manifest') {
-                await tryAutoActivateForDom();
+                await waitForMpdGraceIfNeeded();
+                if (state.activeSource !== 'manifest' && !state.isOverlayMode) {
+                  await tryAutoActivateForDom();
+                }
               }
             } catch (err) {
               console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
               await tryAutoActivateForDom().catch(() => {});
             }
-          })();
+            return;
+          }
+          tryAutoActivateForDom().catch((err) => {
+            console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
+          });
           return;
         }
-        tryAutoActivateForDom().catch((err) => {
-          console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
+        tryAutoActivate(epoch).catch((err) => {
+          console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
         });
-        return;
-      }
-      tryAutoActivate(epoch).catch((err) => {
-        console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
-      });
+      }, 200);
     };
 
     const pauseHandler = () => {

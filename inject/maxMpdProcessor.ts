@@ -11,6 +11,7 @@
  */
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
+import { createBridgeSubtitleFetcher } from '@/inject/maxMpdSubtitleFetch';
 import {
   detectMpdRequests,
   parseMpd,
@@ -63,9 +64,22 @@ export async function processMaxMpdManifest(
   if (processedMpdUrls.has(normalizedMpdUrl)) return;
   processedMpdUrls.add(normalizedMpdUrl);
 
-  const mpdDoc = parseMpd(mpdText, mpdUrl);
+  try {
+    bridge?.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl,
+      platform: 'hbomax',
+      status: 'started',
+    });
+
+    const mpdDoc = parseMpd(mpdText, mpdUrl);
   if (!mpdDoc) {
     console.warn('AnyLLMTranslate: Failed to parse Max MPD manifest', { url: mpdUrl });
+    bridge?.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl,
+      platform: 'hbomax',
+      status: 'complete',
+      success: false,
+    });
     return;
   }
 
@@ -77,6 +91,12 @@ export async function processMaxMpdManifest(
       targetLanguage: targetLang || undefined,
       preferredLanguage: extensionPreferredLanguage ?? undefined,
       activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
+    });
+    bridge?.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl,
+      platform: 'hbomax',
+      status: 'complete',
+      success: false,
     });
     return;
   }
@@ -113,6 +133,25 @@ export async function processMaxMpdManifest(
       mpdUrl,
     });
   }
+
+    bridge?.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl,
+      platform: 'hbomax',
+      status: 'complete',
+      success: emitted,
+    });
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Max MPD processor failed', {
+      mpdUrl,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    bridge?.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl,
+      platform: 'hbomax',
+      status: 'complete',
+      success: false,
+    });
+  }
 }
 
 /**
@@ -143,9 +182,11 @@ async function fetchAndEmitSubtitleTrack(
   if (processedTrackUrls.has(normalizedTrackUrl)) return null;
 
   try {
+    const fetchSegment = bridge ? createBridgeSubtitleFetcher(bridge) : undefined;
     const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url, {
       segmentUrls: track.segmentUrls,
       segmentFetch: track.segmentFetch,
+      fetchSegment,
     });
     const subtitleCues: SubtitleCue[] = cues.map((cue) => ({
       startTime: cue.start,
