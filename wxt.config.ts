@@ -11,6 +11,12 @@ export default defineConfig({
     name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
     permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms'],
+    host_permissions: [
+      '*://*.prd.media.max.com/*',
+      '*://*.media.max.com/*',
+      '*://*.hbomax.com/*',
+      '*://*.max.com/*',
+    ],
     // PDF.js worker + standard fonts/cmaps are bundled under assets/ via Vite ?url imports.
     // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.
     web_accessible_resources: [

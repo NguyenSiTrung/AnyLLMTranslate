@@ -34,10 +34,10 @@ export function resetMaxVttSegmentCapture(): void {
 
 /** Register representation → language mappings from a parsed MPD manifest. */
 export function registerMpdRepresentationLanguages(
-  tracks: Array<{ language: string; url: string }>,
+  tracks: Array<{ language: string; url: string; representationId?: string }>,
 ): void {
   for (const track of tracks) {
-    const repId = extractRepresentationId(track.url);
+    const repId = track.representationId ?? extractRepresentationId(track.url);
     if (repId && track.language) {
       representationLanguages.set(repId, track.language);
     }
@@ -68,7 +68,6 @@ export function captureMaxVttSegment(
   if (targetLang && language && !languagesMatch(language, targetLang)) {
     return;
   }
-  if (targetLang && !language) return;
 
   const newCues = parseWebVTT(body).map((cue) => ({
     startTime: cue.startTime,

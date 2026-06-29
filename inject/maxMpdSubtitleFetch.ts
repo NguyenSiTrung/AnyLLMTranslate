@@ -13,6 +13,7 @@ export interface SubtitleSegmentFetchResult {
   status: number;
   text: string;
   contentType: string;
+  error?: string;
 }
 
 const FETCH_TIMEOUT_MS = 35000;
@@ -21,6 +22,9 @@ const PAGE_FETCH_TIMEOUT_MS = 15000;
 
 /** Page-context fetch (native, not interceptor-patched). Overridable in tests. */
 let pageFetch: typeof fetch = nativeFetch;
+
+/** Optional relay override for unit tests (skips postMessage round-trip). */
+let relayFetchOverride: ((url: string) => Promise<SubtitleSegmentFetchResult>) | null = null;
 
 /** @internal Test hook — restore with resetPageFetchForTests(). */
 export function setPageFetchForTests(fetchFn: typeof fetch): void {
@@ -32,6 +36,18 @@ export function resetPageFetchForTests(): void {
   pageFetch = nativeFetch;
 }
 
+/** @internal Test hook — bypass ISOLATED relay in unit tests. */
+export function setRelayFetchForTests(
+  fetchFn: ((url: string) => Promise<SubtitleSegmentFetchResult>) | null,
+): void {
+  relayFetchOverride = fetchFn;
+}
+
+/** @internal Test hook */
+export function resetRelayFetchForTests(): void {
+  relayFetchOverride = null;
+}
+
 /**
  * Fetch a subtitle URL via postMessage to the ISOLATED coordinator.
  * Falls back to page fetch when the bridge does not respond (e.g. unit tests).
@@ -40,9 +56,11 @@ export function createBridgeSubtitleFetcher(
   bridge: MessageBridgeSender,
 ): (url: string) => Promise<SubtitleSegmentFetchResult> {
   return async (url: string) => {
+    const relayResult = await relaySubtitleFetch(bridge, url);
+    if (relayResult.ok) return relayResult;
     const pageResult = await fallbackPageFetch(url);
-    if (pageResult && pageResult.ok) return pageResult;
-    return relaySubtitleFetch(bridge, url);
+    if (pageResult?.ok) return pageResult;
+    return relayResult;
   };
 }
 
@@ -50,6 +68,9 @@ function relaySubtitleFetch(
   bridge: MessageBridgeSender,
   url: string,
 ): Promise<SubtitleSegmentFetchResult> {
+  if (relayFetchOverride) {
+    return relayFetchOverride(url);
+  }
   return new Promise((resolve) => {
     const requestId = bridge.send('SUBTITLE_FETCH_REQUEST', { url });
     let settled = false;
@@ -85,12 +106,13 @@ function relaySubtitleFetch(
           status: 0,
           text: '',
           contentType: '',
+          error: payload?.error ?? 'fetch failed',
         });
       }
     };
 
     const timer = setTimeout(() => {
-      finish({ ok: false, status: 0, text: '', contentType: '' });
+      finish({ ok: false, status: 0, text: '', contentType: '', error: 'relay timed out' });
     }, FETCH_TIMEOUT_MS);
 
     const cleanup = () => {

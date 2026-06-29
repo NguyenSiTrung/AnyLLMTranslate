@@ -10,6 +10,7 @@ import {
   resetMaxMpdSubtitleFetchDiagnostics,
   prioritizeMpdTracksForFetch,
   scoreMpdTrackForFetch,
+  isResolvableSubtitleSegmentUrl,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -860,5 +861,33 @@ Hello`;
     expect(result).not.toBeNull();
     expect(result).toHaveLength(1);
     expect(result?.[0]?.url).toBe('https://cdn.example.com/good');
+  });
+});
+
+describe('isResolvableSubtitleSegmentUrl', () => {
+  const mpdUrl =
+    'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+
+  it('accepts real WebVTT segment URLs', () => {
+    expect(isResolvableSubtitleSegmentUrl(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/t/caa516/t3/8.vtt?manifest-params=TOKEN',
+      mpdUrl,
+    )).toBe(true);
+    expect(isResolvableSubtitleSegmentUrl(
+      'https://gcp.apac-free.prd.media.max.com/apac/34babf11/t/3_f384f7/t1/1.vtt?manifest-params=TOKEN',
+      mpdUrl,
+    )).toBe(true);
+  });
+
+  it('rejects manifest-echo and Period BaseURL-only URLs', () => {
+    expect(isResolvableSubtitleSegmentUrl(mpdUrl, mpdUrl)).toBe(false);
+    expect(isResolvableSubtitleSegmentUrl(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/?manifest-params=TOKEN',
+      mpdUrl,
+    )).toBe(false);
+    expect(isResolvableSubtitleSegmentUrl(
+      'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/?manifest-params=TOKEN',
+      mpdUrl,
+    )).toBe(false);
   });
 });

@@ -46,6 +46,7 @@ export type SubtitleSegmentFetchFn = (url: string) => Promise<{
   status: number;
   text: string;
   contentType: string;
+  error?: string;
 }>;
 
 export interface FetchAndParseSubtitleOptions {
@@ -290,10 +291,16 @@ export async function processMpdSubtitleTracks(
 async function fetchSegmentResponse(
   segmentUrl: string,
   fetchSegment?: SubtitleSegmentFetchFn,
-): Promise<{ ok: boolean; status: number; text: string; contentType: string }> {
+): Promise<{ ok: boolean; status: number; text: string; contentType: string; error?: string }> {
   if (fetchSegment) {
     const r = await fetchSegment(segmentUrl);
-    return { ok: r.ok, status: r.status, text: r.text, contentType: r.contentType };
+    return {
+      ok: r.ok,
+      status: r.status,
+      text: r.text,
+      contentType: r.contentType,
+      error: r.error,
+    };
   }
   const response = await fetch(segmentUrl);
   const text = await response.text();
@@ -341,7 +348,8 @@ async function fetchAndParseSubtitleInternal(
     for (const segmentUrl of urls) {
       const segment = await fetchSegmentResponse(segmentUrl, segmentFetcher);
       if (!segment.ok) {
-        throw new Error(`Subtitle fetch failed: HTTP ${segment.status}`);
+        const detail = segment.error ?? `HTTP ${segment.status}`;
+        throw new Error(`Subtitle fetch failed: ${detail}`);
       }
       const text = segment.text;
       const respContentType = segment.contentType;
@@ -837,6 +845,19 @@ function normalizeSubtitleUrl(url: string): string {
     return parsed.href.replace(/\/$/, '');
   } catch {
     return url.split('?')[0].split('#')[0].replace(/\/$/, '');
+  }
+}
+
+/** True when a resolved track URL points at a real subtitle segment file. */
+export function isResolvableSubtitleSegmentUrl(trackUrl: string, mpdUrl?: string): boolean {
+  try {
+    const path = new URL(trackUrl).pathname.toLowerCase();
+    const lastSegment = path.split('/').filter(Boolean).pop() ?? '';
+    if (!/\.(vtt|ttml)$/.test(lastSegment)) return false;
+    if (mpdUrl && isSelfReferentialSubtitleUrl(trackUrl, mpdUrl)) return false;
+    return true;
+  } catch {
+    return false;
   }
 }
 

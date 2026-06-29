@@ -17,6 +17,7 @@ import {
   parseMpd,
   extractSubtitleTracks,
   fetchAndParseSubtitle,
+  isResolvableSubtitleSegmentUrl,
   prioritizeMpdTracksForFetch,
   type ParsedSubtitleCue,
   type MpdSubtitleTrack,
@@ -84,7 +85,11 @@ export async function processMaxMpdManifest(
     const mpdDoc = parseMpd(mpdText, mpdUrl);
     if (mpdDoc) {
       registerMpdRepresentationLanguages(
-        extractSubtitleTracks(mpdDoc, mpdUrl).map((t) => ({ language: t.language, url: t.url })),
+        extractSubtitleTracks(mpdDoc, mpdUrl).map((t) => ({
+          language: t.language,
+          url: t.url,
+          representationId: t.segmentFetch?.representationId,
+        })),
       );
     }
     return;
@@ -117,10 +122,17 @@ export async function processMaxMpdManifest(
   const targetLang = resolveMpdTargetLanguage();
   const allTracks = extractSubtitleTracks(mpdDoc, mpdUrl);
   registerMpdRepresentationLanguages(
-    allTracks.map((t) => ({ language: t.language, url: t.url })),
+    allTracks.map((t) => ({
+      language: t.language,
+      url: t.url,
+      representationId: t.segmentFetch?.representationId,
+    })),
   );
-  const tracks = dedupeTracksByUrl(
-    prioritizeMpdTracksForFetch(selectTracksForFetch(allTracks, targetLang)),
+  const tracks = filterFetchableMpdTracks(
+    dedupeTracksByUrl(
+      prioritizeMpdTracksForFetch(selectTracksForFetch(allTracks, targetLang)),
+    ),
+    mpdUrl,
   );
   if (tracks.length === 0) {
     console.log('AnyLLMTranslate: Max MPD manifest has no matching subtitle tracks', {
@@ -213,6 +225,14 @@ export function selectTracksForFetch(
 /** @deprecated Use selectTracksForFetch — kept for existing tests. */
 export function prioritizeTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
   return selectTracksForFetch(tracks, resolveMpdTargetLanguage());
+}
+
+/** Drop manifest-echo and other non-segment URLs before fetch. */
+export function filterFetchableMpdTracks(
+  tracks: MpdSubtitleTrack[],
+  mpdUrl: string,
+): MpdSubtitleTrack[] {
+  return tracks.filter((track) => isResolvableSubtitleSegmentUrl(track.url, mpdUrl));
 }
 
 /** Collapse duplicate resolved URLs (multiple AdaptationSets can map to the same segment). */
@@ -311,8 +331,11 @@ function normalizeUrl(url: string): string {
     const parsed = new URL(url);
     parsed.search = '';
     parsed.hash = '';
+    if (parsed.pathname !== '/' && parsed.href.endsWith('/')) {
+      return parsed.href.slice(0, -1);
+    }
     return parsed.href;
   } catch {
-    return url.split('?')[0].split('#')[0];
+    return url.split('?')[0].split('#')[0].replace(/\/$/, '');
   }
 }

@@ -6,8 +6,15 @@ import {
   setMpdPreferredLanguage,
   resolveMpdTargetLanguage,
   dedupeTracksByUrl,
+  filterFetchableMpdTracks,
 } from '@/inject/maxMpdProcessor';
-import { resetPageFetchForTests, setPageFetchForTests } from '@/inject/maxMpdSubtitleFetch';
+import {
+  resetPageFetchForTests,
+  resetRelayFetchForTests,
+  setPageFetchForTests,
+  setRelayFetchForTests,
+  type SubtitleSegmentFetchResult,
+} from '@/inject/maxMpdSubtitleFetch';
 import type { MpdSubtitleTrack } from '@/lib/maxMpdSubtitles';
 
 const MPD_WITH_TTML = `<?xml version="1.0"?>
@@ -52,6 +59,28 @@ describe('resolveMpdTargetLanguage', () => {
   });
 });
 
+describe('filterFetchableMpdTracks', () => {
+  const mpdUrl =
+    'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN';
+
+  it('drops manifest-echo URLs and keeps real VTT segments', () => {
+    const tracks = [
+      { url: mpdUrl, language: 'en-US' },
+      {
+        url: 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/t/caa516/t3/8.vtt?manifest-params=TOKEN',
+        language: 'en-US',
+      },
+      {
+        url: 'https://gcp.apac-free.prd.media.max.com/apac/abc/?manifest-params=TOKEN',
+        language: 'en-US',
+      },
+    ];
+    const filtered = filterFetchableMpdTracks(tracks, mpdUrl);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].url).toContain('/t/caa516/t3/8.vtt');
+  });
+});
+
 describe('dedupeTracksByUrl', () => {
   it('removes tracks that resolve to the same segment URL', () => {
     const tracks = [
@@ -82,10 +111,27 @@ describe('selectTracksForFetch', () => {
   });
 });
 
+async function responseToRelayResult(response: Response): Promise<SubtitleSegmentFetchResult> {
+  if (!response.ok) {
+    return { ok: false, status: response.status, text: '', contentType: '', error: `HTTP ${response.status}` };
+  }
+  return {
+    ok: true,
+    status: response.status,
+    text: await response.text(),
+    contentType: response.headers.get('Content-Type') ?? '',
+  };
+}
+
+function installRelayFromFetchMock(fetchMock: ReturnType<typeof vi.fn>): void {
+  setRelayFetchForTests(async (url: string) => responseToRelayResult(await fetchMock(url)));
+}
+
 describe('processMaxMpdManifest', () => {
   beforeEach(() => {
     resetMaxMpdProcessorState();
     resetPageFetchForTests();
+    resetRelayFetchForTests();
     setMpdPreferredLanguage(undefined);
     document.body.innerHTML = '';
     vi.restoreAllMocks();
@@ -104,6 +150,7 @@ describe('processMaxMpdManifest', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     setPageFetchForTests(fetchMock as typeof fetch);
+    installRelayFromFetchMock(fetchMock);
     const bridge = { send: vi.fn(() => 'req-1') };
 
     const mpd = `<?xml version="1.0"?>
@@ -121,7 +168,7 @@ describe('processMaxMpdManifest', () => {
     await processMaxMpdManifest(mpd, 'https://cdn.example.com/manifest.mpd', bridge);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/en.vtt', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/en.vtt');
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_MANIFEST_CUES',
       expect.objectContaining({ language: 'en-US' }),
@@ -144,6 +191,7 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
     });
     vi.stubGlobal('fetch', fetchMock);
     setPageFetchForTests(fetchMock as typeof fetch);
+    installRelayFromFetchMock(fetchMock);
     const bridge = { send: vi.fn(() => 'req-1') };
 
     const mpd = `<?xml version="1.0"?>
@@ -176,10 +224,11 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
     );
     vi.stubGlobal('fetch', fetchMock);
     setPageFetchForTests(fetchMock as typeof fetch);
+    installRelayFromFetchMock(fetchMock);
 
     await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest.mpd', bridge);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml');
     expect(logSpy).toHaveBeenCalledWith(
       'AnyLLMTranslate: Max MPD subtitles parsed',
       expect.objectContaining({ cueCount: 1 }),
@@ -197,6 +246,7 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
     );
     vi.stubGlobal('fetch', fetchMock);
     setPageFetchForTests(fetchMock as typeof fetch);
+    installRelayFromFetchMock(fetchMock);
 
     resetMaxMpdProcessorState();
 
