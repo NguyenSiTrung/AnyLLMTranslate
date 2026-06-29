@@ -198,9 +198,11 @@ Hello from player`;
       bridge,
     );
 
-    const call = bridge.send.mock.calls[0];
-    const cues = call?.[1]?.cues as Array<{ startTime: number }>;
+    const sendPayload = (bridge.send.mock.calls[0] as unknown as
+      | [string, { cues: Array<{ startTime: number }> }]
+      | undefined)?.[1];
+    const cues = sendPayload?.cues;
     // Same startTime → deduped, not doubled
-    expect(cues.filter((c) => c.startTime === 1)).toHaveLength(1);
+    expect(cues?.filter((c) => c.startTime === 1)).toHaveLength(1);
   });
 });

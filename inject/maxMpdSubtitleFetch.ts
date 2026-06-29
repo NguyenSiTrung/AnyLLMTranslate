@@ -59,6 +59,27 @@ export function createBridgeSubtitleFetcher(
 ): (url: string) => Promise<SubtitleSegmentFetchResult> {
   return async (url: string) => {
     const relayResult = await relaySubtitleFetch(bridge, url);
+
+    // Max VTT segment URLs sometimes return a DASH MPD from the extension
+    // background relay (the CDN may require the page's own auth context).
+    // When the relay hands back a manifest for a Max VTT segment, try the
+    // page-context fetch and prefer a real subtitle response.
+    if (
+      relayResult.ok &&
+      isMaxCdnVttSegmentUrl(url) &&
+      isDashManifestContent(relayResult.text, relayResult.contentType)
+    ) {
+      const pageResult = await fallbackPageFetch(url);
+      if (
+        pageResult?.ok &&
+        !isDashManifestContent(pageResult.text, pageResult.contentType)
+      ) {
+        return pageResult;
+      }
+      // Page fetch also returned a manifest (or failed); keep the relay result
+      // so the MPD processor can still follow the nested-MPD chain.
+    }
+
     if (relayResult.ok) return relayResult;
     const pageResult = await fallbackPageFetch(url);
     if (pageResult?.ok) return pageResult;

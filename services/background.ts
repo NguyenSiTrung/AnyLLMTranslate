@@ -853,7 +853,7 @@ function isPrivateHost(host: string): boolean {
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
 async function handleFetchSubtitle(
   message: FetchSubtitleMessage,
-): Promise<{ success: boolean; content?: string; error?: string }> {
+): Promise<{ success: boolean; content?: string; contentType?: string; error?: string }> {
   if (!isAllowedSubtitleUrl(message.url)) {
     return { success: false, error: 'URL not in subtitle allow-list' };
   }

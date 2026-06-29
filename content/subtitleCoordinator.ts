@@ -1980,7 +1980,7 @@ function startVideoPlaybackWatcher(): () => void {
               const manifestResult = await tryAutoActivate(epoch);
               if (!manifestResult.activated && state.activeSource !== 'manifest') {
                 await waitForMpdGraceIfNeeded();
-                if (state.activeSource !== 'manifest' && !state.isOverlayMode) {
+                if (!state.isOverlayMode) {
                   await tryAutoActivateForDom();
                 }
               }
