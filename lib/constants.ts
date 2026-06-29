@@ -32,6 +32,13 @@ export const INLINE_ELEMENTS = new Set([
 /** Maximum characters per translation piece before splitting */
 export const MAX_PIECE_CHARS = 1000;
 
+/**
+ * Cue count per LLM translation call (background chunks cues into batches of
+ * this size). Shared so the overlay's playback-position priority dedup can
+ * compute the same chunk boundaries as the background without drifting.
+ */
+export const SUBTITLE_CHUNK_SIZE = 25;
+
 /** Pieces at or below this character count use compact inline display (parenthetical)
  *  instead of block-level themed display — prevents space explosion on short content */
 export const SHORT_PIECE_THRESHOLD = 80;

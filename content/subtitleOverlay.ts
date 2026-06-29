@@ -15,6 +15,7 @@ import type { SubtitleCue } from '@/types/subtitle';
 import type { SubtitleFontSizeMode } from '@/types/config';
 import { requiredReadDuration } from '@/lib/subtitleTiming';
 import { lineBudgetForCue, wrapSubtitleText } from '@/lib/subtitleWrap';
+import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 
 /** Overlay configuration options */
 export interface OverlayConfig {
@@ -51,6 +52,10 @@ interface OverlayState {
   config: OverlayConfig;
   isAttached: boolean;
   resizeObserver: ResizeObserver | null;
+  /** Start index of the last chunk we asked the background to prioritize.
+   *  Dedupes PRIORITIZE_SUBTITLE_CHUNK so we send at most one message per
+   *  chunk-boundary crossing during playback. */
+  lastPrioritizedChunk: number;
 }
 
 const overlayState: OverlayState = {
@@ -61,6 +66,7 @@ const overlayState: OverlayState = {
   config: { ...DEFAULT_CONFIG },
   isAttached: false,
   resizeObserver: null,
+  lastPrioritizedChunk: -1,
 };
 
 /** Tracked fullscreen reposition timeouts — cleared on cleanup to prevent leaks. */
@@ -389,6 +395,26 @@ function updateDisplayedText(cueIndex: number): void {
 }
 
 /**
+ * Ask the background to move the chunk containing `cueIndex` to the front of
+ * its translation queue. Deduplicated per chunk-boundary crossing so playback
+ * triggers at most one message per 25-cue chunk (~once per 50-100s of video),
+ * keeping overhead negligible. The background's setPriority is a no-op for
+ * chunks that are already translated or already at the queue front.
+ */
+function requestChunkPriority(cueIndex: number): void {
+  if (cueIndex < 0) return;
+  const chunkStart = Math.floor(cueIndex / SUBTITLE_CHUNK_SIZE) * SUBTITLE_CHUNK_SIZE;
+  if (chunkStart === overlayState.lastPrioritizedChunk) return;
+  overlayState.lastPrioritizedChunk = chunkStart;
+  chrome.runtime.sendMessage({
+    action: 'PRIORITIZE_SUBTITLE_CHUNK',
+    cueIndex,
+  }).catch(() => {
+    // Ignore background script not listening errors
+  });
+}
+
+/**
  * Handle video timeupdate event to sync subtitles.
  */
 function handleTimeUpdate(): void {
@@ -401,6 +427,9 @@ function handleTimeUpdate(): void {
   if (activeCueIndex !== overlayState.currentCueIndex) {
     overlayState.currentCueIndex = activeCueIndex;
     updateDisplayedText(activeCueIndex);
+    // Prioritize the chunk covering the current playback position so the LLM
+    // queue catches up to wherever the viewer actually is, not just cue 0.
+    requestChunkPriority(activeCueIndex);
   }
 }
 
@@ -413,15 +442,7 @@ function handleSeeked(): void {
 
   const currentTime = overlayState.video.currentTime;
   const activeCueIndex = findActiveCue(currentTime);
-
-  if (activeCueIndex !== -1) {
-    chrome.runtime.sendMessage({
-      action: 'PRIORITIZE_SUBTITLE_CHUNK',
-      cueIndex: activeCueIndex,
-    }).catch(() => {
-      // Ignore background script not listening errors
-    });
-  }
+  requestChunkPriority(activeCueIndex);
 }
 
 /**
@@ -529,6 +550,7 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
   overlayState.cues = cues;
   overlayState.config = { ...DEFAULT_CONFIG, ...config };
   overlayState.currentCueIndex = -1;
+  overlayState.lastPrioritizedChunk = -1;
 
   // Create and position overlay
   overlayState.overlay = createOverlay();
@@ -563,6 +585,7 @@ export function updateCues(cues: SubtitleCue[]): void {
   if (!wasSameRef) {
     // New array reference — force re-evaluation
     overlayState.currentCueIndex = -1;
+    overlayState.lastPrioritizedChunk = -1;
   }
 
   // Update display immediately if video is playing
@@ -630,6 +653,7 @@ export function cleanup(): void {
   overlayState.video = null;
   overlayState.cues = [];
   overlayState.currentCueIndex = -1;
+  overlayState.lastPrioritizedChunk = -1;
   overlayState.isAttached = false;
 }
 

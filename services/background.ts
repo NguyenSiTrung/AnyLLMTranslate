@@ -20,6 +20,7 @@ import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
 import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
+import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
@@ -187,8 +188,9 @@ const semaphore = createSemaphore(MAX_CONCURRENT, MAX_QUEUE, QUEUE_TIMEOUT_MS);
 const acquireSemaphore = semaphore.acquire;
 const releaseSemaphore = semaphore.release;
 
-/** Chunk size for progressive subtitle translation (cues per LLM call). */
-const CHUNK_SIZE = 25;
+/** Chunk size for progressive subtitle translation (cues per LLM call).
+ *  Shared with the overlay via lib/constants so chunk-boundary math stays in sync. */
+const CHUNK_SIZE = SUBTITLE_CHUNK_SIZE;
 
 /** Dedicated PDF semaphore: max 2 concurrent, queue 6 — isolated from page/subtitle */
 const PDF_MAX_CONCURRENT = 2;

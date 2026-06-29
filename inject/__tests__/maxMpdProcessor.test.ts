@@ -113,6 +113,42 @@ describe('processMaxMpdManifest', () => {
     );
   });
 
+  it('tries the next same-language track when the first returns zero cues', async () => {
+    setMpdPreferredLanguage('en');
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('t6')) {
+        return Promise.resolve(new Response('WEBVTT\n\n', { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
+      }
+      if (url.includes('t7')) {
+        return Promise.resolve(new Response(`WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
+      }
+      return Promise.resolve(new Response('', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const bridge = { send: vi.fn(() => 'req-1') };
+
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6"><BaseURL>https://cdn.example.com/t6.vtt</BaseURL></Representation>
+      <Representation id="t7"><BaseURL>https://cdn.example.com/t7.vtt</BaseURL></Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    await processMaxMpdManifest(mpd, 'https://cdn.example.com/manifest.mpd', bridge);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bridge.send).toHaveBeenCalledWith(
+      'SUBTITLE_MANIFEST_CUES',
+      expect.objectContaining({ cues: expect.arrayContaining([expect.objectContaining({ text: 'Hello' })]) }),
+    );
+  });
+
   it('fetches subtitle tracks and emits bridge message', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const bridge = { send: vi.fn(() => 'req-1') };

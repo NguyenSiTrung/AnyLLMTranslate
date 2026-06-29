@@ -28,6 +28,23 @@ const MOCK_CUES = [
   { startTime: 2, endTime: 4, text: 'Thế giới', originalText: 'World' },
 ];
 
+/**
+ * Build a cue array spanning at least two chunks (chunk size = 25, see
+ * lib/constants.ts SUBTITLE_CHUNK_SIZE). Each cue is 2s long.
+ */
+function buildMultiChunkCueArray(count: number): typeof MOCK_CUES {
+  const cues = [];
+  for (let i = 0; i < count; i++) {
+    cues.push({
+      startTime: i * 2,
+      endTime: i * 2 + 2,
+      text: `Line ${i} translated`,
+      originalText: `Line ${i}`,
+    });
+  }
+  return cues;
+}
+
 beforeEach(() => {
   resetOverlayState();
   document.body.innerHTML = '<video src="test.mp4"></video>';
@@ -438,5 +455,125 @@ describe('subtitleOverlay — line wrapping (sub-project 5b)', () => {
     // textContent renders the string literally; no <b> element is created.
     expect(translatedEl.querySelectorAll('b').length).toBe(0);
     expect(translatedEl.textContent).toContain('<b>not bold</b>');
+  });
+});
+
+// ============================================================================
+// Playback-position chunk prioritization
+// ============================================================================
+describe('subtitleOverlay — playback-position chunk priority', () => {
+  let sendMessage: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    sendMessage = vi.fn().mockResolvedValue(undefined);
+    // jsdom has no chrome runtime — stub it so the overlay can send
+    // PRIORITIZE_SUBTITLE_CHUNK during playback.
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+  });
+
+  /** Advance playback to the time of cue `index` and fire timeupdate. */
+  function playToCue(cues: typeof MOCK_CUES, index: number): void {
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => cues[index].startTime + 0.1,
+    });
+    video.dispatchEvent(new Event('timeupdate'));
+  }
+
+  it('sends PRIORITIZE_SUBTITLE_CHUNK for the active cue during playback', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+    const cues = buildMultiChunkCueArray(30); // spans chunks 0 and 25+
+    const video = document.querySelector('video') as HTMLVideoElement;
+
+    initializeOverlay(cues, {}, video);
+    // No message on init — only when a cue becomes active.
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    // Play to cue 25 (start of the second chunk).
+    playToCue(cues, 25);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'PRIORITIZE_SUBTITLE_CHUNK',
+        cueIndex: 25,
+      }),
+    );
+  });
+
+  it('dedupes messages within the same chunk (no repeat on every cue)', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+    const cues = buildMultiChunkCueArray(30);
+    const video = document.querySelector('video') as HTMLVideoElement;
+
+    initializeOverlay(cues, {}, video);
+
+    // First cue of the second chunk fires a message.
+    playToCue(cues, 25);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    // Subsequent cues within the same chunk must NOT re-fire.
+    playToCue(cues, 26);
+    playToCue(cues, 27);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    // Crossing into the next chunk boundary re-enables sending. Here we cross
+    // from chunk [25,50) — there's no third chunk in a 30-cue array, so jump
+    // back to chunk 0 to verify a chunk-boundary crossing still sends.
+    playToCue(cues, 0);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        action: 'PRIORITIZE_SUBTITLE_CHUNK',
+        cueIndex: 0,
+      }),
+    );
+  });
+
+  it('fires priority on seek to a new chunk', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+    const cues = buildMultiChunkCueArray(30);
+    const video = document.querySelector('video') as HTMLVideoElement;
+
+    initializeOverlay(cues, {}, video);
+
+    // Seek into cue 25.
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => cues[25].startTime + 0.1,
+    });
+    video.dispatchEvent(new Event('seeked'));
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'PRIORITIZE_SUBTITLE_CHUNK',
+        cueIndex: 25,
+      }),
+    );
+
+    // Seeking within the same chunk is deduped.
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => cues[26].startTime + 0.1,
+    });
+    video.dispatchEvent(new Event('seeked'));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets the dedup tracker when a fresh overlay is initialized', () => {
+    document.body.innerHTML = '<video src="test.mp4"></video>';
+    const cues = buildMultiChunkCueArray(30);
+    const video = document.querySelector('video') as HTMLVideoElement;
+
+    initializeOverlay(cues, {}, video);
+    playToCue(cues, 25);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    // A new overlay/session must be able to re-prioritize the same chunk.
+    initializeOverlay(cues, {}, video);
+    playToCue(cues, 25);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 });

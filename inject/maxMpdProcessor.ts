@@ -87,7 +87,12 @@ export async function processMaxMpdManifest(
     preferredLanguage: extensionPreferredLanguage ?? undefined,
     activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
     trackCount: tracks.length,
-    tracks: tracks.map((t) => ({ language: t.language, url: t.url, mimeType: t.mimeType })),
+    tracks: tracks.map((t) => ({
+      language: t.language,
+      url: t.url,
+      mimeType: t.mimeType,
+      segmentCount: t.segmentUrls?.length ?? (t.segmentFetch ? 'progressive' : 1),
+    })),
   });
 
   let emitted = false;
@@ -98,7 +103,6 @@ export async function processMaxMpdManifest(
       emitted = true;
       break;
     }
-    if (targetLang) break;
   }
 
   if (!emitted && targetLang) {
@@ -137,10 +141,12 @@ async function fetchAndEmitSubtitleTrack(
 ): Promise<SubtitleCue[] | null> {
   const normalizedTrackUrl = normalizeUrl(track.url);
   if (processedTrackUrls.has(normalizedTrackUrl)) return null;
-  processedTrackUrls.add(normalizedTrackUrl);
 
   try {
-    const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url);
+    const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url, {
+      segmentUrls: track.segmentUrls,
+      segmentFetch: track.segmentFetch,
+    });
     const subtitleCues: SubtitleCue[] = cues.map((cue) => ({
       startTime: cue.start,
       endTime: cue.end,
@@ -151,25 +157,30 @@ async function fetchAndEmitSubtitleTrack(
       mpdUrl,
       language: track.language,
       url: track.url,
+      segmentCount: track.segmentUrls?.length ?? (track.segmentFetch ? 'progressive' : 1),
       cueCount: subtitleCues.length,
     });
 
-    if (bridge && subtitleCues.length > 0) {
-      bridge.send('SUBTITLE_MANIFEST_CUES', {
-        cues: subtitleCues,
-        platform: 'hbomax',
-        language: track.language,
-        url: track.url,
-      });
+    if (subtitleCues.length > 0) {
+      processedTrackUrls.add(normalizedTrackUrl);
+      if (bridge) {
+        bridge.send('SUBTITLE_MANIFEST_CUES', {
+          cues: subtitleCues,
+          platform: 'hbomax',
+          language: track.language,
+          url: track.url,
+        });
+      }
     }
 
     return subtitleCues;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const is404 = message.includes('404');
+    const isMpdError = message.includes('returned MPD manifest');
 
     if (isPriority) {
-      const level = is404 ? 'log' : 'warn';
+      const level = (is404 || isMpdError) ? 'log' : 'warn';
       console[level]('AnyLLMTranslate: MPD subtitle track unavailable', {
         mpdUrl,
         language: track.language,
