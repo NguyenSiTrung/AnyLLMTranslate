@@ -870,10 +870,15 @@ async function handleFetchSubtitle(
     }
     const content = await response.text();
     const contentType = response.headers.get('Content-Type') ?? '';
-    if (isDashManifestResponse(content, contentType)) {
+    // Max CDN VTT segment URLs often return a nested DASH MPD; the MPD processor
+    // follows that chain in MAIN world — do not reject here or nested parsing never runs.
+    if (
+      isDashManifestResponse(content, contentType) &&
+      !isMaxCdnVttSegmentFetchUrl(message.url)
+    ) {
       return { success: false, error: 'response is a DASH manifest, not subtitle content' };
     }
-    return { success: true, content };
+    return { success: true, content, contentType };
   } catch (error) {
     clearTimeout(timer);
     if (error instanceof Error && error.name === 'AbortError') {
@@ -881,6 +886,19 @@ async function handleFetchSubtitle(
     }
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
     return { success: false, error: errorMsg };
+  }
+}
+
+/** Max CDN WebVTT segment URLs — may legitimately return nested DASH manifests. */
+function isMaxCdnVttSegmentFetchUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    if (!/(?:^|\.)prd\.media\.max\.com$/i.test(parsed.hostname)) return false;
+    const lastSegment = parsed.pathname.split('/').filter(Boolean).pop() ?? '';
+    return /\.vtt$/i.test(lastSegment);
+  } catch {
+    return false;
   }
 }
 

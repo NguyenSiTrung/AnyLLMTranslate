@@ -6,7 +6,7 @@
 import { onMessage, sendMessage } from '@/inject/messageBridge';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import { nativeFetch } from '@/inject/nativeFetch';
-import { isDashManifestContent } from '@/lib/maxMpdSubtitles';
+import { isDashManifestContent, isMaxCdnVttSegmentUrl } from '@/lib/maxMpdSubtitles';
 
 export interface SubtitleSegmentFetchResult {
   ok: boolean;
@@ -138,7 +138,7 @@ async function fallbackPageFetch(url: string): Promise<SubtitleSegmentFetchResul
     if (!response.ok) return null;
     const text = await response.text();
     const contentType = response.headers.get('Content-Type') ?? '';
-    if (isDashManifestContent(text, contentType)) {
+    if (isDashManifestContent(text, contentType) && !isMaxCdnVttSegmentUrl(url)) {
       return null;
     }
     return {
@@ -165,11 +165,15 @@ export function startSubtitleFetchRelay(): () => void {
       const response = await chrome.runtime.sendMessage({
         action: 'FETCH_SUBTITLE',
         url,
-      }) as { success?: boolean; content?: string; error?: string };
+      }) as { success?: boolean; content?: string; contentType?: string; error?: string };
       if (response?.success && response.content !== undefined) {
         sendMessage(
           'SUBTITLE_FETCH_RESPONSE',
-          { success: true, content: response.content, contentType: 'text/plain' },
+          {
+            success: true,
+            content: response.content,
+            contentType: response.contentType ?? 'text/plain',
+          },
           requestId,
         );
       } else {

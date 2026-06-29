@@ -236,6 +236,62 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
     expect(bridge.send).toHaveBeenCalled();
   });
 
+  it('follows nested DASH manifests returned by Max CDN VTT segment URLs', async () => {
+    setMpdPreferredLanguage('en');
+    const nestedMpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet mimeType="text/vtt" lang="en-US">
+      <Representation id="t6">
+        <SegmentTemplate media="nested/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Hello`;
+
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/nested/t6/1.vtt')) {
+        return Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
+      }
+      if (url.includes('/t/caa516/t3/8.vtt')) {
+        return Promise.resolve(new Response(nestedMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
+      }
+      return Promise.resolve(new Response('', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    setPageFetchForTests(fetchMock as typeof fetch);
+    installRelayFromFetchMock(fetchMock);
+    const bridge = { send: vi.fn(() => 'req-1') };
+
+    const mpdUrl =
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period id="29960" start="PT29.960S">
+    <AdaptationSet lang="en-US" contentType="text">
+      <Representation id="t3" mimeType="text/vtt">
+        <SegmentTemplate startNumber="8" media="t/caa516/t3/$Number$.vtt">
+          <SegmentTimeline><S t="6698800" d="734679"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    await processMaxMpdManifest(mpd, mpdUrl, bridge);
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/t/caa516/t3/8.vtt'));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/nested/t6/1.vtt'));
+    expect(bridge.send).toHaveBeenCalledWith(
+      'SUBTITLE_MANIFEST_CUES',
+      expect.objectContaining({ cues: expect.arrayContaining([expect.objectContaining({ text: 'Hello' })]) }),
+    );
+  });
+
   it('skips processing duplicate manifest bodies', async () => {
     const bridge = { send: vi.fn(() => 'req-1') };
     const fetchMock = vi.fn().mockResolvedValue(

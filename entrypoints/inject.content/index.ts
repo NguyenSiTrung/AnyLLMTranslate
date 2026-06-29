@@ -65,12 +65,17 @@ export default defineContentScript({
 
     // Listen for config messages from the coordinator (ISOLATED world)
     // to update the translation timeout from user settings
+    let lastTranslationTimeoutMs: number | undefined;
     onMessage('SUBTITLE_CONFIG', (payload) => {
       const config = payload as {
         translationTimeoutMs?: number;
         preferredSubtitleLanguage?: string;
       };
-      if (config?.translationTimeoutMs) {
+      if (
+        config?.translationTimeoutMs &&
+        config.translationTimeoutMs !== lastTranslationTimeoutMs
+      ) {
+        lastTranslationTimeoutMs = config.translationTimeoutMs;
         xhrInterceptor.setTimeout(config.translationTimeoutMs);
         fetchInterceptor.setTimeout(config.translationTimeoutMs);
         console.log('[AnyLLMTranslate] Interceptor timeout updated to', config.translationTimeoutMs, 'ms');

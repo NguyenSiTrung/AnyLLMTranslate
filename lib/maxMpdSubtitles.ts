@@ -85,6 +85,22 @@ function logCircularManifestReference(context: 'segment' | 'progressive'): void 
 /** Max CDN serves top-level DASH manifests at extensionless authenticated paths. */
 const MAX_EXTENSIONLESS_MPD_HOST = /(?:^|\.)prd\.media\.max\.com$/i;
 
+/**
+ * True when the URL is a Max CDN WebVTT segment request.
+ * These endpoints may return a nested DASH MPD instead of VTT; callers must follow the chain.
+ */
+export function isMaxCdnVttSegmentUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    if (!MAX_EXTENSIONLESS_MPD_HOST.test(parsed.hostname)) return false;
+    const lastSegment = parsed.pathname.split('/').filter(Boolean).pop() ?? '';
+    return /\.vtt$/i.test(lastSegment);
+  } catch {
+    return false;
+  }
+}
+
 /** Returns true when the URL points to a DASH manifest (.mpd or Max CDN manifest path). */
 export function detectMpdRequests(url: string): boolean {
   if (!url) return false;

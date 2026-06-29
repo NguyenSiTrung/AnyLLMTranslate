@@ -12,6 +12,7 @@ import {
   scoreMpdTrackForFetch,
   isResolvableSubtitleSegmentUrl,
   mergeManifestQueryParams,
+  isMaxCdnVttSegmentUrl,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -19,6 +20,24 @@ function parseTestMpd(xml: string, url: string): Document {
   if (!doc) throw new Error('Failed to parse MPD');
   return doc;
 }
+
+describe('isMaxCdnVttSegmentUrl', () => {
+  it('matches Max CDN WebVTT segment URLs', () => {
+    expect(isMaxCdnVttSegmentUrl(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/8.vtt?manifest-params=TOKEN',
+    )).toBe(true);
+    expect(isMaxCdnVttSegmentUrl(
+      'https://gcp.apac-free.prd.media.max.com/apac/uuid/t/3_f384f7/t1/1.vtt',
+    )).toBe(true);
+  });
+
+  it('rejects top-level manifests and non-Max hosts', () => {
+    expect(isMaxCdnVttSegmentUrl(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN',
+    )).toBe(false);
+    expect(isMaxCdnVttSegmentUrl('https://cdn.cloudfront.net/en.vtt')).toBe(false);
+  });
+});
 
 describe('detectMpdRequests', () => {
   it('detects .mpd URLs', () => {
