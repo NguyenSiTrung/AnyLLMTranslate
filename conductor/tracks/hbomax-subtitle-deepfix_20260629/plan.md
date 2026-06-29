@@ -58,24 +58,24 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 22: Add VTT segment capture append flow tests
+- [x] Task 22: Add VTT segment capture append flow tests
   - Test: same representation emits `append: true` on second segment.
   - Test: different representation after lock is silently dropped (before fix) / emitted (after fix).
   - Test: `mergeCues` deduplicates by `startTime`.
   <!-- files: inject/__tests__/maxVttSegmentCapture.test.ts -->
 
-- [ ] Task 23: Conductor - User Manual Verification 'Test Coverage'
+- [x] Task 23: Conductor - User Manual Verification 'Test Coverage'
   - Run `npx vitest run inject/__tests__/maxVttSegmentCapture.test.ts` and confirm all pass.
 
 ## Phase 6: Full Regression & Cleanup
 <!-- execution: sequential -->
 <!-- depends: phase1, phase2, phase3, phase4, phase5 -->
 
-- [ ] Task 24: Run full test suite, lint, and build
-  - `npx vitest run` (all 1723+ tests must pass)
-  - `npx eslint .` (no new lint errors)
-  - `npx wxt build` (build must succeed)
+- [x] Task 24: Run full test suite, lint, and build
+  - `npx vitest run` (all 1831 tests pass, up from 1723 baseline)
+  - `npx eslint .` (no new lint errors — 14 pre-existing `no-empty` in content.ts)
+  - `npx wxt build` (build succeeds, 3.86 MB)
   <!-- files: (none — verification only) -->
 
-- [ ] Task 25: Conductor - User Manual Verification 'Full Regression & Cleanup'
+- [x] Task 25: Conductor - User Manual Verification 'Full Regression & Cleanup'
   - Confirm all tests, lint, and build pass. Capture learnings.
