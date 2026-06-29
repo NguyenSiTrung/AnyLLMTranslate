@@ -70,6 +70,10 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_None. 55 tracks archived._
+---
+
+## [ ] Track: HBO Max Subtitle Deep Analysis Fixes
+*Link: [./conductor/tracks/hbomax-subtitle-deepfix_20260629/](./conductor/tracks/hbomax-subtitle-deepfix_20260629/)*
+*Priority: Critical | Type: Bug | 14 issues across VTT capture, memory, robustness, dead code, and code quality*
 
 ---
