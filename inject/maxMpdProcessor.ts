@@ -181,6 +181,8 @@ async function fetchAndEmitSubtitleTrack(
   const normalizedTrackUrl = normalizeUrl(track.url);
   if (processedTrackUrls.has(normalizedTrackUrl)) return null;
 
+  processedTrackUrls.add(normalizedTrackUrl);
+
   try {
     const fetchSegment = bridge ? createBridgeSubtitleFetcher(bridge) : undefined;
     const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url, {
@@ -203,7 +205,6 @@ async function fetchAndEmitSubtitleTrack(
     });
 
     if (subtitleCues.length > 0) {
-      processedTrackUrls.add(normalizedTrackUrl);
       if (bridge) {
         bridge.send('SUBTITLE_MANIFEST_CUES', {
           cues: subtitleCues,

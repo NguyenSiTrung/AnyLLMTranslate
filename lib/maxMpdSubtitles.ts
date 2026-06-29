@@ -263,7 +263,7 @@ async function fetchAndParseSubtitleInternal(
         const nextSeen = new Set(seenManifests || []);
         const normalizedBody = text.trim();
         if (nextSeen.has(normalizedBody)) {
-          console.warn('[AnyLLMTranslate] Circular manifest reference detected. Skipping.');
+          console.log('[AnyLLMTranslate] Circular manifest reference detected. Skipping.');
           return [];
         }
         nextSeen.add(normalizedBody);
@@ -638,7 +638,7 @@ async function fetchSegmentBodiesProgressively(
       const nextSeen = new Set(seenManifests || []);
       const normalizedBody = text.trim();
       if (nextSeen.has(normalizedBody)) {
-        console.warn('[AnyLLMTranslate] Circular manifest reference detected in progressive fetch. Skipping.');
+        console.log('[AnyLLMTranslate] Circular manifest reference detected in progressive fetch. Skipping.');
         break;
       }
       nextSeen.add(normalizedBody);
