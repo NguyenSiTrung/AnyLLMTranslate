@@ -866,6 +866,10 @@ async function handleFetchSubtitle(
       return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
     const content = await response.text();
+    const contentType = response.headers.get('Content-Type') ?? '';
+    if (isDashManifestResponse(content, contentType)) {
+      return { success: false, error: 'response is a DASH manifest, not subtitle content' };
+    }
     return { success: true, content };
   } catch (error) {
     clearTimeout(timer);
@@ -875,6 +879,16 @@ async function handleFetchSubtitle(
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
     return { success: false, error: errorMsg };
   }
+}
+
+/** Detect DASH MPD bodies returned instead of subtitle segments (Max CDN echo). */
+function isDashManifestResponse(body: string, contentType: string): boolean {
+  const trimmed = body.trimStart();
+  if (trimmed.includes('<MPD') && trimmed.includes('urn:mpeg:dash:schema:mpd')) return true;
+  if (trimmed.includes('<MPD')) return true;
+  if (trimmed.includes('<Period') && trimmed.includes('AdaptationSet')) return true;
+  const ct = contentType.toLowerCase();
+  return ct.includes('dash+xml') && !ct.includes('ttml');
 }
 
 /** Handle FETCH_MANIFEST_SUBTITLES — fetch a subtitle playlist + segments, assemble into cues */

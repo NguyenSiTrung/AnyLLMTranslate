@@ -7,6 +7,7 @@ import {
   parseSubtitleContent,
   fetchRealSubtitleContent,
   processMpdSubtitleTracks,
+  resetMaxMpdSubtitleFetchDiagnostics,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -21,9 +22,23 @@ describe('detectMpdRequests', () => {
     expect(detectMpdRequests('https://cdn.example.com/manifest.mpd?token=abc')).toBe(true);
   });
 
+  it('detects extensionless Max CDN manifest URLs with manifest-params', () => {
+    expect(detectMpdRequests(
+      'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    )).toBe(true);
+  });
+
   it('rejects non-MPD URLs', () => {
     expect(detectMpdRequests('https://cdn.example.com/video.m3u8')).toBe(false);
+    expect(detectMpdRequests('https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt')).toBe(false);
+    expect(detectMpdRequests('https://cf.asia.prd.media.max.com/fadb6e8d?rtype=s')).toBe(false);
     expect(detectMpdRequests('')).toBe(false);
+  });
+
+  it('rejects Max CDN WebVTT segment URLs even when manifest-params is present', () => {
+    expect(detectMpdRequests(
+      'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/2_ada795/t0/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    )).toBe(false);
   });
 });
 
@@ -100,6 +115,7 @@ describe('parseSubtitleContent', () => {
 describe('fetchAndParseSubtitle', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetMaxMpdSubtitleFetchDiagnostics();
   });
 
   it('progressively fetches WebVTT segments until HTTP 404', async () => {
@@ -245,6 +261,31 @@ Nested subtitle`;
     expect(cues).toEqual([
       { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Nested subtitle' },
     ]);
+  });
+
+  it('fails fast when segment echoes the root MPD body via seenManifests seed', async () => {
+    const rootMpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(rootMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cues = await fetchAndParseSubtitle('https://cdn.example.com/fadb6e8d/t/t6/1.vtt?token=abc', {
+      seenManifests: new Set([rootMpd.trim()]),
+    });
+
+    expect(cues).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('handles circular nested MPD manifests gracefully without infinite looping', async () => {
@@ -401,6 +442,53 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     const segmentFetch = tracks[0].segmentFetch;
     if (!segmentFetch) throw new Error('Expected segment fetch');
     expect(segmentFetch.media).toBe('t/t6/$Number$.vtt');
+  });
+
+  it('resolves SegmentTemplate with startNumber > 1 under dash.mpd paths', () => {
+    const dashMpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9/dash.mpd?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet id="11" lang="en-US" contentType="text">
+      <Representation mimeType="text/vtt" id="t3">
+        <SegmentTemplate startNumber="8" media="t/caa516/t3/$Number$.vtt">
+          <SegmentTimeline><S t="6698800" d="734679"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, dashMpdUrl);
+    const tracks = extractSubtitleTracks(doc, dashMpdUrl);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9/t/caa516/t3/8.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+  });
+
+  it('resolves HBO Max APAC real MPD subtitle segments under extensionless manifest URL', () => {
+    const mpdUrl = 'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet id="7" lang="en-US" contentType="text">
+      <Representation mimeType="text/vtt" id="t0" bandwidth="24">
+        <SegmentTemplate timescale="1000" startNumber="1" media="t/2_ada795/t0/$Number$.vtt">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, mpdUrl);
+    const tracks = extractSubtitleTracks(doc, mpdUrl);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe(
+      'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/2_ada795/t0/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+    expect(tracks[0].url).not.toBe(mpdUrl);
   });
 
   it('resolves SegmentTemplate URLs under extensionless Max MPD URL paths', () => {

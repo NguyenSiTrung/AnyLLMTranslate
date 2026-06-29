@@ -5,6 +5,8 @@
 
 import { onMessage, sendMessage } from '@/inject/messageBridge';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
+import { nativeFetch } from '@/inject/nativeFetch';
+import { isDashManifestContent } from '@/lib/maxMpdSubtitles';
 
 export interface SubtitleSegmentFetchResult {
   ok: boolean;
@@ -14,8 +16,21 @@ export interface SubtitleSegmentFetchResult {
 }
 
 const FETCH_TIMEOUT_MS = 35000;
-/** Abort MAIN-world page fetch early if it stalls (page may wrap fetch). */
-const PAGE_FETCH_TIMEOUT_MS = 5000;
+/** MAIN-world native fetch timeout — Max CDN segments can be slow on cold start. */
+const PAGE_FETCH_TIMEOUT_MS = 15000;
+
+/** Page-context fetch (native, not interceptor-patched). Overridable in tests. */
+let pageFetch: typeof fetch = nativeFetch;
+
+/** @internal Test hook — restore with resetPageFetchForTests(). */
+export function setPageFetchForTests(fetchFn: typeof fetch): void {
+  pageFetch = fetchFn;
+}
+
+/** @internal Test hook */
+export function resetPageFetchForTests(): void {
+  pageFetch = nativeFetch;
+}
 
 /**
  * Fetch a subtitle URL via postMessage to the ISOLATED coordinator.
@@ -91,19 +106,19 @@ async function fallbackPageFetch(url: string): Promise<SubtitleSegmentFetchResul
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PAGE_FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await pageFetch(url, { signal: controller.signal });
     clearTimeout(timer);
     if (!response.ok) return null;
     const text = await response.text();
-    // Reject manifest responses — the relay / background fetch handles them
-    if (text.includes('<MPD') || text.includes('urn:mpeg:dash:schema:mpd')) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    if (isDashManifestContent(text, contentType)) {
       return null;
     }
     return {
       ok: true,
       status: response.status,
       text,
-      contentType: response.headers.get('Content-Type') ?? '',
+      contentType,
     };
   } catch {
     clearTimeout(timer);

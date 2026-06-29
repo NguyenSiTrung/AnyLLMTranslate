@@ -47,6 +47,11 @@ export class HboMaxHandler implements SubtitleHandler {
         // Any DASH manifest URL
         pattern: /https?:\/\/.+\.mpd(?:\?|$)/i,
       },
+      {
+        platform: 'hbomax',
+        // Max CDN extensionless manifests: single asset-id path segment before query
+        pattern: /https?:\/\/[^/]*prd\.media\.max\.com\/[^/?]+?\?manifest-params=/i,
+      },
     ];
   }
 

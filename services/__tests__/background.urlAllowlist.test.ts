@@ -141,4 +141,22 @@ describe('subtitle URL allow-list hardening', () => {
     );
     expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
   });
+
+  it('rejects DASH manifest bodies from FETCH_SUBTITLE (Max CDN echo)', async () => {
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period/></MPD>`;
+    fetchMock.mockResolvedValueOnce(
+      new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
+    );
+
+    const result = await handleMessage(
+      {
+        action: 'FETCH_SUBTITLE',
+        url: 'https://akm.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt?manifest-params=token',
+      },
+      fakeSender(),
+    );
+
+    expect(result).toEqual({ success: false, error: 'response is a DASH manifest, not subtitle content' });
+  });
 });

@@ -23,6 +23,11 @@ import {
 import { readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import type { SubtitleCue } from '@/types/subtitle';
+import {
+  registerMpdRepresentationLanguages,
+  resetMaxVttSegmentCapture,
+  setVttCapturePreferredLanguage,
+} from '@/inject/maxVttSegmentCapture';
 
 const processedMpdUrls = new Set<string>();
 const processedTrackUrls = new Set<string>();
@@ -36,11 +41,13 @@ export function resetMaxMpdProcessorState(): void {
   processedMpdUrls.clear();
   processedTrackUrls.clear();
   processedMpdBodies.clear();
+  resetMaxVttSegmentCapture();
 }
 
 /** Called when coordinator sends SUBTITLE_CONFIG. Exported for tests. */
 export function setMpdPreferredLanguage(lang: string | undefined): void {
   extensionPreferredLanguage = lang && lang !== 'auto' ? lang : null;
+  setVttCapturePreferredLanguage(lang);
 }
 
 /**
@@ -73,6 +80,12 @@ export async function processMaxMpdManifest(
       url: mpdUrl,
       reason: alreadyProcessedUrl ? 'duplicate-url' : 'duplicate-body-content'
     });
+    const mpdDoc = parseMpd(mpdText, mpdUrl);
+    if (mpdDoc) {
+      registerMpdRepresentationLanguages(
+        extractSubtitleTracks(mpdDoc, mpdUrl).map((t) => ({ language: t.language, url: t.url })),
+      );
+    }
     return;
   }
 
@@ -101,7 +114,11 @@ export async function processMaxMpdManifest(
   }
 
   const targetLang = resolveMpdTargetLanguage();
-  const tracks = selectTracksForFetch(extractSubtitleTracks(mpdDoc, mpdUrl), targetLang);
+  const allTracks = extractSubtitleTracks(mpdDoc, mpdUrl);
+  registerMpdRepresentationLanguages(
+    allTracks.map((t) => ({ language: t.language, url: t.url })),
+  );
+  const tracks = dedupeTracksByUrl(selectTracksForFetch(allTracks, targetLang));
   if (tracks.length === 0) {
     console.log('AnyLLMTranslate: Max MPD manifest has no matching subtitle tracks', {
       url: mpdUrl,
@@ -134,8 +151,10 @@ export async function processMaxMpdManifest(
 
   let emitted = false;
 
+  const rootMpdBody = normalizedMpdText;
+
   for (const track of tracks) {
-    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, true);
+    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, true, rootMpdBody);
     if (cues && cues.length > 0) {
       emitted = true;
       break;
@@ -193,23 +212,47 @@ export function prioritizeTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitl
   return selectTracksForFetch(tracks, resolveMpdTargetLanguage());
 }
 
+/** Collapse duplicate resolved URLs (multiple AdaptationSets can map to the same segment). */
+export function dedupeTracksByUrl(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
+  const seen = new Set<string>();
+  const result: MpdSubtitleTrack[] = [];
+  for (const track of tracks) {
+    const key = normalizeUrl(track.url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(track);
+  }
+  return result;
+}
+
 async function fetchAndEmitSubtitleTrack(
   track: MpdSubtitleTrack,
   mpdUrl: string,
   bridge?: MessageBridgeSender,
   isPriority = true,
+  rootMpdBody?: string,
 ): Promise<SubtitleCue[] | null> {
   const normalizedTrackUrl = normalizeUrl(track.url);
   if (processedTrackUrls.has(normalizedTrackUrl)) return null;
+  if (normalizedTrackUrl === normalizeUrl(mpdUrl)) {
+    console.log('AnyLLMTranslate: Skipping self-referential MPD subtitle track URL', {
+      mpdUrl,
+      language: track.language,
+      url: track.url,
+    });
+    return null;
+  }
 
   processedTrackUrls.add(normalizedTrackUrl);
 
   try {
     const fetchSegment = bridge ? createBridgeSubtitleFetcher(bridge) : undefined;
+    const seenManifests = rootMpdBody ? new Set([rootMpdBody]) : undefined;
     const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url, {
       segmentUrls: track.segmentUrls,
       segmentFetch: track.segmentFetch,
       fetchSegment,
+      seenManifests,
     });
     const subtitleCues: SubtitleCue[] = cues.map((cue) => ({
       startTime: cue.start,

@@ -11,8 +11,12 @@ import type { SubtitleInterceptedPayload } from '@/types/subtitle';
 import { detectManifestTracks } from '@/lib/manifestParser';
 import { detectMpdRequests } from '@/lib/maxMpdSubtitles';
 import { processMaxMpdManifest } from '@/inject/maxMpdProcessor';
+import { captureMaxVttSegment, isMaxVttSegmentUrl } from '@/inject/maxVttSegmentCapture';
+import { nativeFetch } from '@/inject/nativeFetch';
 
-const originalFetch = window.fetch.bind(window);
+const originalFetch = nativeFetch;
+
+export { nativeFetch };
 
 export class FetchInterceptor {
   private enabled = false;
@@ -110,7 +114,13 @@ export class FetchInterceptor {
       const match = registry.matchUrl(urlString);
 
       if (!match) {
-        return originalFetch(input, init);
+        const response = await originalFetch(input, init);
+        if (response.ok && isMaxVttSegmentUrl(urlString)) {
+          response.clone().text().then((body) => {
+            captureMaxVttSegment(urlString, body, bridge);
+          }).catch(() => { /* non-blocking */ });
+        }
+        return response;
       }
 
       // This is a subtitle request

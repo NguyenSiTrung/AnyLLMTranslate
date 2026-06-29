@@ -133,6 +133,8 @@ export interface SubtitleManifestCuesPayload {
   language: string;
   url: string;
   videoId?: string;
+  /** When true, merge into an already-active manifest overlay (progressive VTT capture). */
+  append?: boolean;
 }
 
 /** Payload for SUBTITLE_TEXTTRACK_CUES messages (full track cues from HTML5 TextTrack) */

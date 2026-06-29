@@ -5,7 +5,9 @@ import {
   selectTracksForFetch,
   setMpdPreferredLanguage,
   resolveMpdTargetLanguage,
+  dedupeTracksByUrl,
 } from '@/inject/maxMpdProcessor';
+import { resetPageFetchForTests, setPageFetchForTests } from '@/inject/maxMpdSubtitleFetch';
 import type { MpdSubtitleTrack } from '@/lib/maxMpdSubtitles';
 
 const MPD_WITH_TTML = `<?xml version="1.0"?>
@@ -50,6 +52,17 @@ describe('resolveMpdTargetLanguage', () => {
   });
 });
 
+describe('dedupeTracksByUrl', () => {
+  it('removes tracks that resolve to the same segment URL', () => {
+    const tracks = [
+      { url: 'https://cdn.example.com/en.vtt?token=a', language: 'en-US' },
+      { url: 'https://cdn.example.com/en.vtt?token=b', language: 'en-US' },
+      { url: 'https://cdn.example.com/es.vtt', language: 'es' },
+    ];
+    expect(dedupeTracksByUrl(tracks)).toHaveLength(2);
+  });
+});
+
 describe('selectTracksForFetch', () => {
   const tracks: MpdSubtitleTrack[] = [
     { url: 'https://cdn.example.com/zh.vtt', language: 'zh-Hans-SG' },
@@ -72,6 +85,7 @@ describe('selectTracksForFetch', () => {
 describe('processMaxMpdManifest', () => {
   beforeEach(() => {
     resetMaxMpdProcessorState();
+    resetPageFetchForTests();
     setMpdPreferredLanguage(undefined);
     document.body.innerHTML = '';
     vi.restoreAllMocks();
@@ -89,6 +103,7 @@ describe('processMaxMpdManifest', () => {
       return Promise.resolve(new Response('', { status: 404 }));
     });
     vi.stubGlobal('fetch', fetchMock);
+    setPageFetchForTests(fetchMock as typeof fetch);
     const bridge = { send: vi.fn(() => 'req-1') };
 
     const mpd = `<?xml version="1.0"?>
@@ -128,6 +143,7 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
       return Promise.resolve(new Response('', { status: 404 }));
     });
     vi.stubGlobal('fetch', fetchMock);
+    setPageFetchForTests(fetchMock as typeof fetch);
     const bridge = { send: vi.fn(() => 'req-1') };
 
     const mpd = `<?xml version="1.0"?>
@@ -152,16 +168,18 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
   it('fetches subtitle tracks and emits bridge message', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const bridge = { send: vi.fn(() => 'req-1') };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn().mockResolvedValue(
       new Response(TTML_BODY, {
         status: 200,
         headers: { 'Content-Type': 'application/ttml+xml' },
       }),
-    ));
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    setPageFetchForTests(fetchMock as typeof fetch);
 
     await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest.mpd', bridge);
 
-    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(logSpy).toHaveBeenCalledWith(
       'AnyLLMTranslate: Max MPD subtitles parsed',
       expect.objectContaining({ cueCount: 1 }),
@@ -171,12 +189,14 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
 
   it('skips processing duplicate manifest bodies', async () => {
     const bridge = { send: vi.fn(() => 'req-1') };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn().mockResolvedValue(
       new Response(TTML_BODY, {
         status: 200,
         headers: { 'Content-Type': 'application/ttml+xml' },
       }),
-    ));
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    setPageFetchForTests(fetchMock as typeof fetch);
 
     resetMaxMpdProcessorState();
 

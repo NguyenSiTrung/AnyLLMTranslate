@@ -46,6 +46,24 @@ describe('HboMaxHandler', () => {
     });
   });
 
+  describe('getManifestPatterns', () => {
+    const patterns = () => handler.getManifestPatterns().map((p) => p.pattern);
+
+    it('matches extensionless Max CDN manifest URLs', () => {
+      const re = patterns().find((p) => p.source.includes('manifest-params'));
+      expect(re?.test(
+        'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s',
+      )).toBe(true);
+    });
+
+    it('does not match Max CDN WebVTT segment URLs', () => {
+      const re = patterns().find((p) => p.source.includes('manifest-params'));
+      expect(re?.test(
+        'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/2_ada795/t0/1.vtt?manifest-params=TOKEN',
+      )).toBe(false);
+    });
+  });
+
   describe('transformResponse', () => {
     it('returns empty array (never called for DOM source)', () => {
       expect(handler.transformResponse('anything', 'text/vtt', 'https://max.com/x')).toEqual([]);

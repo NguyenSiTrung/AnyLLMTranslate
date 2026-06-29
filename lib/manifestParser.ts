@@ -6,7 +6,7 @@
  * coordinator can fetch the full subtitle track upfront (Tier 2 access).
  */
 
-import { parseMpd, extractSubtitleTracks } from '@/lib/maxMpdSubtitles';
+import { parseMpd, extractSubtitleTracks, detectMpdRequests } from '@/lib/maxMpdSubtitles';
 import type { AvailableSubtitleTrack } from '@/types/subtitle';
 
 /** Parsed HLS subtitle track from a multivariant playlist */
@@ -136,7 +136,7 @@ export function detectManifestTracks(
     ct === 'application/x-mpegurl' ||
     lowerUrl.endsWith('.m3u8');
 
-  const isDash = ct === 'application/dash+xml' || lowerUrl.endsWith('.mpd');
+  const isDash = ct === 'application/dash+xml' || lowerUrl.endsWith('.mpd') || detectMpdRequests(url);
 
   if (isHls) {
     const tracks = parseHlsManifest(body, url);

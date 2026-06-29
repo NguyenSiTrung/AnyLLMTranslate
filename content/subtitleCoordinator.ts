@@ -106,7 +106,17 @@ function resetActiveSource(): void {
 /** True when URL is the top-level DASH manifest (not a leaf subtitle segment). */
 function isRootDashManifestUrl(url: string): boolean {
   const lower = url.toLowerCase().split('?')[0].split('#')[0];
-  return lower.endsWith('.mpd');
+  if (lower.endsWith('.vtt') || lower.endsWith('.ttml')) return false;
+  if (lower.endsWith('.mpd')) return true;
+  try {
+    const parsed = new URL(url);
+    if (!/(?:^|\.)prd\.media\.max\.com$/i.test(parsed.hostname)) return false;
+    if (!parsed.search.includes('manifest-params')) return false;
+    const pathSegments = parsed.pathname.split('/').filter(Boolean);
+    return pathSegments.length === 1;
+  } catch {
+    return false;
+  }
 }
 
 function mpdInFlightExceededCap(): boolean {
@@ -1136,6 +1146,11 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
 
   state.mpdProcessingInFlight = false;
   state.mpdGraceUntil = 0;
+
+  if (payload.append && state.isOverlayMode && state.activeSource === 'manifest') {
+    updateCues(payload.cues);
+    return;
+  }
 
   const activated = await activateOverlayFromManifestCues(
     payload.cues,

@@ -50,18 +50,63 @@ export interface FetchAndParseSubtitleOptions {
   segmentUrls?: string[];
   segmentFetch?: SegmentFetchTemplate;
   fetchSegment?: SubtitleSegmentFetchFn;
+  /** Pre-seed with known MPD bodies (e.g. root manifest) to fail fast on CDN echo. */
+  seenManifests?: Set<string>;
 }
 
 /** Safety cap for segmented WebVTT fetches (HBO Max can list thousands of segments). */
 const MAX_SEGMENT_FETCH_COUNT = 3000;
 const MAX_PROGRESSIVE_SEGMENT_FETCH_COUNT = 120;
 const MAX_NESTED_MPD_DEPTH = 3;
+const MAX_CIRCULAR_MANIFEST_LOGS = 3;
+let circularManifestLogCount = 0;
 
-/** Returns true when the URL points to a DASH manifest (.mpd). */
+/** Reset circular-manifest log dedup (for tests). */
+export function resetMaxMpdSubtitleFetchDiagnostics(): void {
+  circularManifestLogCount = 0;
+}
+
+function logCircularManifestReference(context: 'segment' | 'progressive'): void {
+  circularManifestLogCount += 1;
+  if (circularManifestLogCount > MAX_CIRCULAR_MANIFEST_LOGS) return;
+  const suffix = circularManifestLogCount === MAX_CIRCULAR_MANIFEST_LOGS
+    ? ' (further occurrences suppressed)'
+    : '';
+  if (context === 'progressive') {
+    console.log(`[AnyLLMTranslate] Circular manifest reference detected in progressive fetch. Skipping.${suffix}`);
+  } else {
+    console.log(`[AnyLLMTranslate] Circular manifest reference detected. Skipping.${suffix}`);
+  }
+}
+
+/** Max CDN serves top-level DASH manifests at extensionless authenticated paths. */
+const MAX_EXTENSIONLESS_MPD_HOST = /(?:^|\.)prd\.media\.max\.com$/i;
+
+/** Returns true when the URL points to a DASH manifest (.mpd or Max CDN manifest path). */
 export function detectMpdRequests(url: string): boolean {
   if (!url) return false;
   const lower = url.toLowerCase().split('?')[0].split('#')[0];
-  return lower.endsWith('.mpd');
+  if (lower.endsWith('.mpd')) return true;
+  // Subtitle segment files carry manifest-params too — never treat them as MPD.
+  if (lower.endsWith('.vtt') || lower.endsWith('.ttml')) return false;
+
+  try {
+    const parsed = new URL(url);
+    if (!MAX_EXTENSIONLESS_MPD_HOST.test(parsed.hostname)) return false;
+    if (!parsed.search.includes('manifest-params')) return false;
+    // Extensionless top-level manifests are a single asset id before the query.
+    const pathSegments = parsed.pathname.split('/').filter(Boolean);
+    return pathSegments.length === 1;
+  } catch {
+    // ignore invalid URLs
+  }
+
+  return false;
+}
+
+/** True when response body/content-type is a DASH MPD manifest (not subtitle text). */
+export function isDashManifestContent(body: string, contentType = ''): boolean {
+  return isManifestResponse(body, contentType);
 }
 
 /**
@@ -125,7 +170,16 @@ export async function fetchAndParseSubtitle(
   url: string,
   options?: string[] | FetchAndParseSubtitleOptions,
 ): Promise<ParsedSubtitleCue[]> {
-  return fetchAndParseSubtitleInternal(url, options, 0, undefined);
+  const resolvedOptions: FetchAndParseSubtitleOptions = Array.isArray(options)
+    ? { segmentUrls: options }
+    : (options ?? {});
+  return fetchAndParseSubtitleInternal(
+    url,
+    resolvedOptions,
+    0,
+    resolvedOptions.fetchSegment,
+    resolvedOptions.seenManifests,
+  );
 }
 
 /** Result of a validated subtitle content fetch (not a manifest). */
@@ -263,7 +317,7 @@ async function fetchAndParseSubtitleInternal(
         const nextSeen = new Set(seenManifests || []);
         const normalizedBody = text.trim();
         if (nextSeen.has(normalizedBody)) {
-          console.log('[AnyLLMTranslate] Circular manifest reference detected. Skipping.');
+          logCircularManifestReference('segment');
           return [];
         }
         nextSeen.add(normalizedBody);
@@ -638,7 +692,7 @@ async function fetchSegmentBodiesProgressively(
       const nextSeen = new Set(seenManifests || []);
       const normalizedBody = text.trim();
       if (nextSeen.has(normalizedBody)) {
-        console.log('[AnyLLMTranslate] Circular manifest reference detected in progressive fetch. Skipping.');
+        logCircularManifestReference('progressive');
         break;
       }
       nextSeen.add(normalizedBody);

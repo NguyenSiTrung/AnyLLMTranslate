@@ -16,6 +16,7 @@ import type { SubtitleInterceptedPayload } from '@/types/subtitle';
 import { detectManifestTracks } from '@/lib/manifestParser';
 import { detectMpdRequests } from '@/lib/maxMpdSubtitles';
 import { processMaxMpdManifest } from '@/inject/maxMpdProcessor';
+import { captureMaxVttSegment, isMaxVttSegmentUrl } from '@/inject/maxVttSegmentCapture';
 
 const OriginalXHR = window.XMLHttpRequest;
 
@@ -80,6 +81,10 @@ export class XhrInterceptor {
           __anyllmManifestMatch?: UrlMatch;
           __anyllmTranslateUrl?: string;
         }).__anyllmManifestMatch = manifestMatch ?? { platform: 'generic', pattern: /.*/ };
+        (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
+      }
+
+      if (isMaxVttSegmentUrl(urlString)) {
         (this as XMLHttpRequest & { __anyllmTranslateUrl?: string }).__anyllmTranslateUrl = urlString;
       }
 
@@ -185,6 +190,16 @@ export class XhrInterceptor {
       const match = xhr.__anyllmTranslateMatch;
 
       if (!match) {
+        const urlString = xhr.__anyllmTranslateUrl || '';
+        if (isMaxVttSegmentUrl(urlString)) {
+          const vttListener = () => {
+            if (this.readyState !== 4 || this.status !== 200) return;
+            try {
+              captureMaxVttSegment(urlString, this.responseText, bridge);
+            } catch { /* non-blocking */ }
+          };
+          originalAddEventListener.call(this, 'readystatechange', vttListener);
+        }
         return originalSend.apply(this, [_body]);
       }
 
