@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Languages, Loader2, Server, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, Languages, Loader2, Server, Zap } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
 import { syncProviderToPool } from '@/lib/config';
 import type { OnboardingState, ProviderConfig } from '@/types/config';
 import { ProviderCatalogPicker, inferCatalogId } from './components/ProviderCatalogPicker';
+import { ConnectionTestProgressList } from './components/ConnectionTestProgressList';
 import { ModelPicker } from './components/ModelPicker';
 import { LANGUAGES } from '@/lib/languages';
 import { testConnection } from '@/services/providerTester';
@@ -238,18 +239,13 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
                   <Button onClick={handleTestConnection} loading={isTesting} icon={!isTesting ? <Zap className="w-4 h-4" /> : undefined}>
                     {isTesting ? 'Testing...' : 'Test connection'}
                   </Button>
-                  {testProgress.length > 0 && (
-                    <div className="space-y-2" aria-live="polite">
-                      {testProgress.map((progressStep) => (
-                        <div key={progressStep.name} className="flex items-center gap-2 text-sm">
-                          {progressStep.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-red-400" />}
-                          <span className="capitalize text-zinc-300">{progressStep.name}</span>
-                          <span className="ml-auto text-xs text-zinc-500">{progressStep.latencyMs}ms</span>
-                        </div>
-                      ))}
-                    </div>
+                  <ConnectionTestProgressList steps={testProgress} isTesting={isTesting} />
+                  {isTesting && testProgress.length === 0 && (
+                    <p className="text-sm text-zinc-400">
+                      <Loader2 className="inline w-4 h-4 animate-spin mr-2" />
+                      Starting connection test...
+                    </p>
                   )}
-                  {isTesting && <p className="text-sm text-zinc-400"><Loader2 className="inline w-4 h-4 animate-spin mr-2" />Checking provider...</p>}
                   {testResult?.overall && <p className="text-sm text-emerald-400 font-medium">Connection successful.</p>}
                   {testResult && !testResult.overall && (
                     <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">

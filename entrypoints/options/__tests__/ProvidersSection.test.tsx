@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProvidersSection, getPoolReadiness, countEnabledKeys } from '../sections/ProvidersSection';
 import { ToastProvider } from '@/ui/ToastProvider';
 import type { ExtensionSettings, PoolProvider } from '@/types/config';
@@ -21,8 +21,26 @@ vi.mock('@/stores/settingsStore', () => ({
     selector ? selector(mockState) : mockState,
 }));
 
+const { testConnection } = vi.hoisted(() => ({
+  testConnection: vi.fn(async (_config, onProgress) => {
+    onProgress?.({ name: 'ping', success: true, latencyMs: 10 }, 0);
+    onProgress?.({ name: 'models', success: true, latencyMs: 12, data: ['gpt-4o-mini'] }, 1);
+    onProgress?.({ name: 'translation', success: true, latencyMs: 20, data: 'Xin chào' }, 2);
+    return {
+      overall: true,
+      steps: [
+        { name: 'ping', success: true, latencyMs: 10 },
+        { name: 'models', success: true, latencyMs: 12 },
+        { name: 'translation', success: true, latencyMs: 20 },
+      ],
+      models: ['gpt-4o-mini'],
+      totalLatencyMs: 42,
+    };
+  }),
+}));
+
 vi.mock('@/services/providerTester', () => ({
-  testConnection: vi.fn(async () => ({ overall: true, steps: [] })),
+  testConnection,
 }));
 
 function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
@@ -210,6 +228,34 @@ describe('ProvidersSection expanded provider features', () => {
     fireEvent.click(screen.getByText('OpenAI')); // expand
     expect(screen.getByText(/temperature/i)).toBeInTheDocument();
     expect(screen.getByText(/max tokens/i)).toBeInTheDocument();
+  });
+
+  it('shows step-by-step progress while testing provider connection', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+
+    const providerTestButton = screen.getAllByRole('button', { name: /^test$/i })[0];
+    fireEvent.click(providerTestButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Reachability')).toBeInTheDocument();
+      expect(screen.getByText('Model listing')).toBeInTheDocument();
+      expect(screen.getByText('Translation')).toBeInTheDocument();
+    });
+    expect(testConnection).toHaveBeenCalled();
+  });
+
+  it('shows step-by-step progress while testing a key', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+
+    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[1];
+    fireEvent.click(keyTestButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Key connection successful.')).toBeInTheDocument();
+    });
+    expect(testConnection).toHaveBeenCalled();
   });
 
   it('updates temperature when the slider changes', () => {

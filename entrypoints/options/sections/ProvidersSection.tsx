@@ -13,7 +13,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   Zap, Plus, Trash2, ChevronDown, KeyRound, Server, AlertTriangle,
-  CheckCircle2, RotateCcw,
+  CheckCircle2, RotateCcw, Loader2,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -21,6 +21,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { poolIdGenerators } from '@/lib/config';
 import { getCatalogEntryById, OPENAI_COMPATIBLE_CATALOG } from '@/lib/openAiCompatibleCatalog';
 import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
+import { ConnectionTestProgressList } from '../components/ConnectionTestProgressList';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
@@ -30,7 +31,7 @@ import { Badge } from '@/ui/Badge';
 import { Slider } from '@/ui/Slider';
 import { useToast } from '@/ui/ToastProvider';
 import { Modal } from '@/ui/Modal';
-import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
+import { getConnectionErrorMessage, getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -42,6 +43,7 @@ import type {
   ProviderConfig,
 } from '@/types/config';
 import { testConnection } from '@/services/providerTester';
+import type { ConnectionTestResult, ConnectionTestStep } from '@/services/providerTester';
 
 interface ProvidersSectionProps {
   /** Called when the user clicks "Open setup guide" in the readiness banner. */
@@ -189,32 +191,6 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
       });
     },
     [updateProviderFields],
-  );
-
-  const handleTestKey = useCallback(
-    async (provider: PoolProvider, key: PoolKey) => {
-      // Build a resolved ProviderConfig for this specific slot and test it.
-      const config: ProviderConfig = {
-        preset: 'custom',
-        baseUrl: provider.baseUrl,
-        apiKey: key.apiKey,
-        model: provider.model,
-        temperature: provider.temperature,
-        maxTokens: provider.maxTokens,
-        displayName: provider.displayName,
-        requiresApiKey: provider.requiresApiKey,
-        requestTimeoutMs: provider.requestTimeoutMs,
-        maxRpm: key.maxRpm,
-      };
-      const result = await testConnection(config, undefined, 'vi');
-      if (result.overall) {
-        showSuccess(`Key "${key.label || 'key'}" is healthy`);
-      } else {
-        const failed = result.steps.find((s) => !s.success);
-        showError(`Key test failed: ${failed?.error ?? 'unknown error'}`);
-      }
-    },
-    [showSuccess, showError],
   );
 
   const promptValidation = settings.customSystemPrompt
@@ -392,6 +368,11 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                       />
                     </div>
 
+                    <ProviderConnectionTest
+                      provider={provider}
+                      targetLanguage={settings.targetLanguage}
+                    />
+
                     {/* Keys */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -408,10 +389,11 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                       {provider.keys.map((key) => (
                         <KeyRow
                           key={key.id}
+                          provider={provider}
                           poolKey={key}
+                          targetLanguage={settings.targetLanguage}
                           onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
                           onRemove={() => removeKey(provider.id, key.id)}
-                          onTest={() => handleTestKey(provider, key)}
                         />
                       ))}
                     </div>
@@ -502,20 +484,152 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   );
 }
 
+function buildProviderConfig(provider: PoolProvider, key: PoolKey): ProviderConfig {
+  return {
+    preset: 'custom',
+    baseUrl: provider.baseUrl,
+    apiKey: key.apiKey,
+    model: provider.model,
+    temperature: provider.temperature,
+    maxTokens: provider.maxTokens,
+    displayName: provider.displayName,
+    requiresApiKey: provider.requiresApiKey,
+    requestTimeoutMs: provider.requestTimeoutMs,
+    maxRpm: key.maxRpm,
+  };
+}
+
+function canRunConnectionTest(provider: PoolProvider, key?: PoolKey): boolean {
+  if (!provider.baseUrl.trim() || !provider.model.trim()) return false;
+  if (key) {
+    return !provider.requiresApiKey || Boolean(key.apiKey.trim());
+  }
+  return provider.keys.some((k) => !provider.requiresApiKey || Boolean(k.apiKey.trim()));
+}
+
+function useConnectionTest(targetLanguage: string) {
+  const { success: showSuccess, error: showError } = useToast();
+  const [isTesting, setIsTesting] = useState(false);
+  const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+
+  const runTest = useCallback(async (config: ProviderConfig, successLabel: string) => {
+    setIsTesting(true);
+    setTestResult(null);
+    setTestProgress([]);
+
+    const result = await testConnection(config, (step) => {
+      setTestProgress((prev) => [...prev, step]);
+    }, targetLanguage);
+
+    setTestResult(result);
+    setIsTesting(false);
+
+    if (result.overall) {
+      showSuccess(successLabel);
+    } else {
+      const failed = result.steps.find((s) => !s.success);
+      const message = getConnectionErrorMessage(failed?.error);
+      showError(`${message.title}: ${message.action}`);
+    }
+
+    return result;
+  }, [showSuccess, showError, targetLanguage]);
+
+  return { isTesting, testProgress, testResult, runTest };
+}
+
+/** Provider-level connection test using the first key with credentials. */
+function ProviderConnectionTest({
+  provider,
+  targetLanguage,
+}: {
+  provider: PoolProvider;
+  targetLanguage: string;
+}) {
+  const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
+  const testKey = provider.keys.find((k) => !provider.requiresApiKey || k.apiKey.trim());
+  const canTest = testKey ? canRunConnectionTest(provider, testKey) : false;
+  const failedStep = testResult?.steps.find((s) => !s.success);
+  const failedMessage = getConnectionErrorMessage(failedStep?.error);
+
+  const handleTest = async () => {
+    if (!testKey) return;
+    await runTest(buildProviderConfig(provider, testKey), `${provider.displayName || 'Provider'} connection verified`);
+  };
+
+  return (
+    <div className="rounded-lg border border-zinc-700/60 p-4 space-y-3 bg-zinc-900/30">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">Test connection</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Validates reachability, model listing, and a sample translation.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={isTesting}
+          disabled={!canTest}
+          icon={!isTesting ? <Zap className="w-3.5 h-3.5" /> : undefined}
+          onClick={handleTest}
+        >
+          {isTesting ? 'Testing...' : 'Test'}
+        </Button>
+      </div>
+      {!canTest && (
+        <p className="text-xs text-zinc-500">
+          Add a base URL, model, and API key before testing.
+        </p>
+      )}
+      <ConnectionTestProgressList steps={testProgress} isTesting={isTesting} />
+      {isTesting && testProgress.length === 0 && (
+        <p className="text-xs text-zinc-400">
+          <Loader2 className="inline w-3.5 h-3.5 animate-spin mr-1.5" />
+          Starting connection test...
+        </p>
+      )}
+      {testResult?.overall && (
+        <p className="text-xs text-emerald-400 font-medium">Connection successful.</p>
+      )}
+      {testResult && !testResult.overall && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+          <p className="text-xs font-medium text-red-300">{failedMessage.title}</p>
+          <p className="text-xs text-red-200/80 mt-1">{failedMessage.action}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A single API key row within a provider. */
 function KeyRow({
+  provider,
   poolKey,
+  targetLanguage,
   onUpdate,
   onRemove,
-  onTest,
 }: {
+  provider: PoolProvider;
   poolKey: PoolKey;
+  targetLanguage: string;
   onUpdate: (patch: Partial<PoolKey>) => void;
   onRemove: () => void;
-  onTest: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [maxRpmDraft, setMaxRpmDraft] = useState(String(poolKey.maxRpm));
+  const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
+  const canTest = canRunConnectionTest(provider, poolKey);
+  const failedStep = testResult?.steps.find((s) => !s.success);
+  const failedMessage = getConnectionErrorMessage(failedStep?.error);
+
+  const handleTest = async () => {
+    await runTest(
+      buildProviderConfig(provider, poolKey),
+      `Key "${poolKey.label || 'key'}" is healthy`,
+    );
+  };
 
   const commitMaxRpm = () => {
     const n = Math.max(0, Math.min(600, Math.floor(Number(maxRpmDraft) || 0)));
@@ -588,8 +702,14 @@ function KeyRow({
           </span>
         </label>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={onTest}>
-            Test
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={isTesting}
+            disabled={!canTest}
+            onClick={handleTest}
+          >
+            {isTesting ? 'Testing...' : 'Test'}
           </Button>
           <Button
             variant="ghost"
@@ -601,6 +721,17 @@ function KeyRow({
           </Button>
         </div>
       </div>
+
+      <ConnectionTestProgressList steps={testProgress} isTesting={isTesting} />
+      {testResult && !testResult.overall && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+          <p className="text-xs font-medium text-red-300">{failedMessage.title}</p>
+          <p className="text-xs text-red-200/80 mt-1">{failedMessage.action}</p>
+        </div>
+      )}
+      {testResult?.overall && (
+        <p className="text-xs text-emerald-400 font-medium">Key connection successful.</p>
+      )}
     </div>
   );
 }
