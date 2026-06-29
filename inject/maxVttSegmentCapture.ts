@@ -6,6 +6,7 @@
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import { parseWebVTT } from '@/lib/subtitleParser';
+import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import type { SubtitleCue } from '@/types/subtitle';
 
 const MAX_VTT_SEGMENT_URL =
@@ -30,6 +31,15 @@ export function resetMaxVttSegmentCapture(): void {
   cueBuffers.clear();
   emittedRepresentation = null;
   preferredLanguage = null;
+}
+
+/**
+ * Reset only the emission lock and cue buffers (keep language mappings + preferred).
+ * Called on mid-session track switch so the new track's VTT segments can be emitted.
+ */
+export function resetMaxVttSegmentCaptureLock(): void {
+  cueBuffers.clear();
+  emittedRepresentation = null;
 }
 
 /** Register representation → language mappings from a parsed MPD manifest. */
@@ -58,14 +68,14 @@ export function captureMaxVttSegment(
   bridge: MessageBridgeSender,
 ): void {
   if (!isMaxVttSegmentUrl(url)) return;
-  if (!body || (!body.includes('WEBVTT') && !body.trimStart().startsWith('WEBVTT'))) return;
+  if (!body || !body.trimStart().startsWith('WEBVTT')) return;
 
   const repId = extractRepresentationId(url);
   if (!repId) return;
 
   const language = representationLanguages.get(repId) ?? '';
   const targetLang = preferredLanguage;
-  if (targetLang && language && !languagesMatch(language, targetLang)) {
+  if (targetLang && language && !subtitleLanguagesMatch(language, targetLang)) {
     return;
   }
 
@@ -120,9 +130,4 @@ function mergeCues(existing: SubtitleCue[], incoming: SubtitleCue[]): SubtitleCu
   for (const cue of existing) byStart.set(cue.startTime, cue);
   for (const cue of incoming) byStart.set(cue.startTime, cue);
   return Array.from(byStart.values()).sort((a, b) => a.startTime - b.startTime);
-}
-
-function languagesMatch(a: string, b: string): boolean {
-  const norm = (lang: string) => lang.toLowerCase().split('-')[0];
-  return norm(a) === norm(b);
 }

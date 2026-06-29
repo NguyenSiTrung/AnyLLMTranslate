@@ -66,6 +66,7 @@ export function normalizeSubtitleLanguage(lang: string): string {
 /**
  * Returns true when two language tags refer to the same subtitle track.
  * Matches exact tags, primary subtags (en-US ↔ en), and script variants (zh-Hans-SG ↔ zh-Hans).
+ * Does NOT match when both tags carry different script subtags (zh-Hans ↔ zh-Hant).
  */
 export function subtitleLanguagesMatch(a: string, b: string): boolean {
   if (!a || !b) return false;
@@ -74,14 +75,21 @@ export function subtitleLanguagesMatch(a: string, b: string): boolean {
   const normB = normalizeSubtitleLanguage(b);
   if (normA === normB) return true;
 
-  // Primary language subtag (en-us → en)
-  const primaryA = normA.split('-')[0];
-  const primaryB = normB.split('-')[0];
-  if (primaryA === primaryB) return true;
-
-  // Script-inclusive prefix (zh-hans-sg ↔ zh-hans)
   const partsA = normA.split('-');
   const partsB = normB.split('-');
+
+  // Script subtag is the 2nd part when it is exactly 4 chars (ISO 15924: Hans, Hant).
+  const hasScriptA = partsA.length >= 2 && partsA[1].length === 4;
+  const hasScriptB = partsB.length >= 2 && partsB[1].length === 4;
+
+  // When both tags carry script subtags that differ, they are NOT the same
+  // (zh-Hans ↔ zh-Hant must not match even though primary subtag is zh).
+  if (hasScriptA && hasScriptB && partsA[1] !== partsB[1]) return false;
+
+  // Primary language subtag (en-us → en)
+  if (partsA[0] === partsB[0]) return true;
+
+  // Script-inclusive prefix (zh-hans-sg ↔ zh-hans)
   if (partsA.length >= 2 && partsB.length >= 2) {
     const scriptA = `${partsA[0]}-${partsA[1]}`;
     const scriptB = `${partsB[0]}-${partsB[1]}`;

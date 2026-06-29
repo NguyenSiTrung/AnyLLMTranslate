@@ -3,25 +3,25 @@
 ## Phase 1: VTT Segment Capture Functional Fixes (High Priority)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Write failing test — VTT capture emits after track switch reset
+- [x] Task 1: Write failing test — VTT capture emits after track switch reset
   - Add test in `inject/__tests__/maxVttSegmentCapture.test.ts` that registers a representation, captures segments (sets `emittedRepresentation`), then calls a new `resetMaxVttSegmentCaptureLock()` and captures segments from a DIFFERENT representation — assert the second representation's cues are emitted.
   <!-- files: inject/__tests__/maxVttSegmentCapture.test.ts -->
 
-- [ ] Task 2: Implement `resetMaxVttSegmentCaptureLock()` and wire track-switch reset
+- [x] Task 2: Implement `resetMaxVttSegmentCaptureLock()` and wire track-switch reset
   - Export a new `resetMaxVttSegmentCaptureLock()` that clears `emittedRepresentation` and `cueBuffers` (but NOT `representationLanguages` or `preferredLanguage`).
   - Call it from `resetMaxMpdProcessorState()` path or add a dedicated track-switch hook in the inject entrypoint's `SUBTITLE_DOM_TRACK_CHANGED` listener.
   <!-- files: inject/maxVttSegmentCapture.ts, inject/maxMpdProcessor.ts -->
 
-- [ ] Task 3: Write failing test — zh-Hans does not match zh-Hant in VTT capture
+- [x] Task 3: Write failing test — zh-Hans does not match zh-Hant in VTT capture
   - Add test that registers a `zh-Hant` representation, sets preferred to `zh-Hans`, and asserts the segment is NOT emitted (currently it would be, due to primary-subtag-only matching).
   <!-- files: inject/__tests__/maxVttSegmentCapture.test.ts -->
 
-- [ ] Task 4: Replace local `languagesMatch` with shared `subtitleLanguagesMatch`
+- [x] Task 4: Replace local `languagesMatch` with shared `subtitleLanguagesMatch`
   - Import `subtitleLanguagesMatch` from `@/lib/subtitleLanguageMatch` in `maxVttSegmentCapture.ts`.
   - Remove the local `languagesMatch` function.
   <!-- files: inject/maxVttSegmentCapture.ts -->
 
-- [ ] Task 5: Conductor - User Manual Verification 'VTT Segment Capture Functional Fixes'
+- [x] Task 5: Conductor - User Manual Verification 'VTT Segment Capture Functional Fixes'
   - Run `npx vitest run inject/__tests__/maxVttSegmentCapture.test.ts` and confirm all tests pass.
 
 ## Phase 2: Robustness Fixes (Medium Priority)
