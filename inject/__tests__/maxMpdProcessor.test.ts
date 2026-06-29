@@ -168,4 +168,27 @@ Hello`, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
     );
     expect(bridge.send).toHaveBeenCalled();
   });
+
+  it('skips processing duplicate manifest bodies', async () => {
+    const bridge = { send: vi.fn(() => 'req-1') };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(TTML_BODY, {
+        status: 200,
+        headers: { 'Content-Type': 'application/ttml+xml' },
+      }),
+    ));
+
+    resetMaxMpdProcessorState();
+
+    // First process
+    await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest-1.mpd', bridge);
+    expect(bridge.send).toHaveBeenCalledWith('SUBTITLE_MPD_PROCESSING', expect.objectContaining({ status: 'started' }));
+
+    // Reset bridge spy
+    bridge.send.mockClear();
+
+    // Second process with DIFFERENT URL but SAME body content
+    await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest-2.mpd', bridge);
+    expect(bridge.send).not.toHaveBeenCalled(); // Skipped by body content deduplication
+  });
 });

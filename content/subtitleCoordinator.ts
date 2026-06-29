@@ -68,7 +68,7 @@ const SOURCE_RANK: Record<string, number> = {
 /** Wait for Max MPD fetch/parse before falling back to DOM cues on play. */
 const MAX_MPD_DOM_GRACE_MS = 8000;
 /** Force DOM fallback if MPD stays in-flight (segment fetch) beyond this. */
-const MAX_MPD_IN_FLIGHT_CAP_MS = 45_000;
+const MAX_MPD_IN_FLIGHT_CAP_MS = 15_000;
 
 /** True when the current page uses HBO Max DASH MPD subtitle discovery (Tier 2). */
 function hbomaxUsesMpdSubtitlePipeline(): boolean {

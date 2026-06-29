@@ -26,6 +26,7 @@ import type { SubtitleCue } from '@/types/subtitle';
 
 const processedMpdUrls = new Set<string>();
 const processedTrackUrls = new Set<string>();
+const processedMpdBodies = new Set<string>();
 
 /** Extension preferred language from coordinator (null = 'auto' or unset). */
 let extensionPreferredLanguage: string | null = null;
@@ -34,6 +35,7 @@ let extensionPreferredLanguage: string | null = null;
 export function resetMaxMpdProcessorState(): void {
   processedMpdUrls.clear();
   processedTrackUrls.clear();
+  processedMpdBodies.clear();
 }
 
 /** Called when coordinator sends SUBTITLE_CONFIG. Exported for tests. */
@@ -61,8 +63,23 @@ export async function processMaxMpdManifest(
   if (!detectMpdRequests(mpdUrl)) return;
 
   const normalizedMpdUrl = normalizeUrl(mpdUrl);
-  if (processedMpdUrls.has(normalizedMpdUrl)) return;
+  const normalizedMpdText = mpdText.trim();
+
+  const alreadyProcessedUrl = processedMpdUrls.has(normalizedMpdUrl);
+  const alreadyProcessedBody = processedMpdBodies.has(normalizedMpdText);
+
+  if (alreadyProcessedUrl || alreadyProcessedBody) {
+    console.log('[AnyLLMTranslate] Skipping already processed Max MPD manifest', {
+      url: mpdUrl,
+      reason: alreadyProcessedUrl ? 'duplicate-url' : 'duplicate-body-content'
+    });
+    return;
+  }
+
   processedMpdUrls.add(normalizedMpdUrl);
+  processedMpdBodies.add(normalizedMpdText);
+
+  console.log('[AnyLLMTranslate] Max MPD parse started', { url: mpdUrl });
 
   try {
     bridge?.send('SUBTITLE_MPD_PROCESSING', {
@@ -134,6 +151,8 @@ export async function processMaxMpdManifest(
     });
   }
 
+    console.log('[AnyLLMTranslate] Max MPD parse finished/cleared', { url: mpdUrl, success: emitted });
+
     bridge?.send('SUBTITLE_MPD_PROCESSING', {
       mpdUrl,
       platform: 'hbomax',
@@ -141,10 +160,12 @@ export async function processMaxMpdManifest(
       success: emitted,
     });
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.warn('AnyLLMTranslate: Max MPD processor failed', {
       mpdUrl,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMsg,
     });
+    console.log('[AnyLLMTranslate] Max MPD parse finished/cleared', { url: mpdUrl, success: false, reason: errorMsg });
     bridge?.send('SUBTITLE_MPD_PROCESSING', {
       mpdUrl,
       platform: 'hbomax',
