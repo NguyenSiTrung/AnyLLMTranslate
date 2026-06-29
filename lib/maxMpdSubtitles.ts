@@ -224,6 +224,7 @@ async function fetchAndParseSubtitleInternal(
   options: string[] | FetchAndParseSubtitleOptions | undefined,
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
+  seenManifests?: Set<string>,
 ): Promise<ParsedSubtitleCue[]> {
   const resolvedOptions: FetchAndParseSubtitleOptions = Array.isArray(options)
     ? { segmentUrls: options }
@@ -238,6 +239,7 @@ async function fetchAndParseSubtitleInternal(
       resolvedOptions.segmentFetch,
       nestedDepth,
       segmentFetcher,
+      seenManifests,
     );
     if (progressive.kind === 'cues') {
       return progressive.cues;
@@ -258,7 +260,14 @@ async function fetchAndParseSubtitleInternal(
       const text = segment.text;
       const respContentType = segment.contentType;
       if (isManifestResponse(text, respContentType)) {
-        return fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, segmentFetcher);
+        const nextSeen = new Set(seenManifests || []);
+        const normalizedBody = text.trim();
+        if (nextSeen.has(normalizedBody)) {
+          console.warn('[AnyLLMTranslate] Circular manifest reference detected. Skipping.');
+          return [];
+        }
+        nextSeen.add(normalizedBody);
+        return fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, segmentFetcher, nextSeen);
       }
       bodies.push(text);
       if (!contentType) {
@@ -286,6 +295,7 @@ async function fetchAndParseNestedMpdSubtitle(
   mpdUrl: string,
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
+  seenManifests?: Set<string>,
 ): Promise<ParsedSubtitleCue[]> {
   if (nestedDepth >= MAX_NESTED_MPD_DEPTH) {
     throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
@@ -310,6 +320,7 @@ async function fetchAndParseNestedMpdSubtitle(
         },
         nestedDepth + 1,
         fetchSegment,
+        seenManifests,
       );
       if (cues.length > 0) return cues;
     } catch (err) {
@@ -601,6 +612,7 @@ async function fetchSegmentBodiesProgressively(
   template: SegmentFetchTemplate,
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
+  seenManifests?: Set<string>,
 ): Promise<ProgressiveSegmentResult> {
   const bodies: string[] = [];
   let contentType = '';
@@ -623,7 +635,14 @@ async function fetchSegmentBodiesProgressively(
     const text = segment.text;
     const respContentType = segment.contentType;
     if (isManifestResponse(text, respContentType)) {
-      const nestedCues = await fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, fetchSegment);
+      const nextSeen = new Set(seenManifests || []);
+      const normalizedBody = text.trim();
+      if (nextSeen.has(normalizedBody)) {
+        console.warn('[AnyLLMTranslate] Circular manifest reference detected in progressive fetch. Skipping.');
+        break;
+      }
+      nextSeen.add(normalizedBody);
+      const nestedCues = await fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, fetchSegment, nextSeen);
       if (nestedCues.length > 0) {
         return { kind: 'cues', cues: nestedCues };
       }

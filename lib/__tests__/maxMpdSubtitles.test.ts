@@ -246,6 +246,26 @@ Nested subtitle`;
       { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Nested subtitle' },
     ]);
   });
+
+  it('handles circular nested MPD manifests gracefully without infinite looping', async () => {
+    const circularMpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet mimeType="application/ttml+xml" lang="en">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="nested/t6/$Number$.vtt" startNumber="1"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+      return Promise.resolve(new Response(circularMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
+    }));
+
+    await expect(fetchAndParseSubtitle('https://cdn.example.com/circular?token=abc'))
+      .rejects.toThrow('Subtitle fetch returned MPD manifest instead of subtitle content');
+  });
 });
 
 // ============================================================================
