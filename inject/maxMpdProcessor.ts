@@ -5,6 +5,7 @@
  * Deduplicates repeated manifest requests and logs parsed cues to the console.
  */
 
+import type { MessageBridgeSender } from '@/inject/messageBridge';
 import {
   detectMpdRequests,
   parseMpd,
@@ -13,6 +14,7 @@ import {
   type ParsedSubtitleCue,
   type MpdSubtitleTrack,
 } from '@/lib/maxMpdSubtitles';
+import type { SubtitleCue } from '@/types/subtitle';
 
 const processedMpdUrls = new Set<string>();
 const processedTrackUrls = new Set<string>();
@@ -27,7 +29,11 @@ export function resetMaxMpdProcessorState(): void {
  * Process an intercepted MPD manifest: extract subtitle tracks, fetch, parse, log.
  * Safe to call multiple times — duplicate MPD and track URLs are skipped.
  */
-export async function processMaxMpdManifest(mpdText: string, mpdUrl: string): Promise<void> {
+export async function processMaxMpdManifest(
+  mpdText: string,
+  mpdUrl: string,
+  bridge?: MessageBridgeSender,
+): Promise<void> {
   if (!detectMpdRequests(mpdUrl)) return;
 
   const normalizedMpdUrl = normalizeUrl(mpdUrl);
@@ -53,24 +59,43 @@ export async function processMaxMpdManifest(mpdText: string, mpdUrl: string): Pr
   });
 
   for (const track of tracks) {
-    await fetchAndLogSubtitleTrack(track, mpdUrl);
+    await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge);
   }
 }
 
-async function fetchAndLogSubtitleTrack(track: MpdSubtitleTrack, mpdUrl: string): Promise<void> {
+async function fetchAndEmitSubtitleTrack(
+  track: MpdSubtitleTrack,
+  mpdUrl: string,
+  bridge?: MessageBridgeSender,
+): Promise<void> {
   const normalizedTrackUrl = normalizeUrl(track.url);
   if (processedTrackUrls.has(normalizedTrackUrl)) return;
   processedTrackUrls.add(normalizedTrackUrl);
 
   try {
     const cues: ParsedSubtitleCue[] = await fetchAndParseSubtitle(track.url);
+    const subtitleCues: SubtitleCue[] = cues.map((cue) => ({
+      startTime: cue.start,
+      endTime: cue.end,
+      text: cue.text,
+    }));
+
     console.log('AnyLLMTranslate: Max MPD subtitles parsed', {
       mpdUrl,
       language: track.language,
       url: track.url,
-      cueCount: cues.length,
-      cues,
+      cueCount: subtitleCues.length,
+      cues: subtitleCues,
     });
+
+    if (bridge && subtitleCues.length > 0) {
+      bridge.send('SUBTITLE_MANIFEST_CUES', {
+        cues: subtitleCues,
+        platform: 'hbomax',
+        language: track.language,
+        url: track.url,
+      });
+    }
   } catch (error) {
     console.warn('AnyLLMTranslate: Failed to fetch/parse Max subtitle track', {
       mpdUrl,

@@ -23,6 +23,7 @@ vi.mock('@/content/messageBridge', () => ({
   onDomTrackChanged: vi.fn(() => vi.fn()),
   onTextTrackCues: vi.fn(() => vi.fn()),
   onMseCues: vi.fn(() => vi.fn()),
+  onManifestCues: vi.fn(() => vi.fn()),
   sendTranslatedSubtitle: vi.fn(),
 }));
 

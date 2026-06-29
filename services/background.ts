@@ -785,6 +785,7 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)max\.com$/,
   /(?:^|\.)hbomax\.com$/,
   /(?:^|\.)hbo\.com$/,
+  /(?:^|\.)delivery\.mp\.microsoft\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
@@ -873,8 +874,8 @@ async function handleFetchSubtitle(
 
 /** Handle FETCH_MANIFEST_SUBTITLES — fetch a subtitle playlist + segments, assemble into cues */
 async function handleFetchManifestSubtitles(
-  message: { playlistUrl: string },
-): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string }> {
+  message: { playlistUrl: string; preferredLanguage?: string },
+): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; language?: string }> {
   if (!isAllowedSubtitleUrl(message.playlistUrl)) {
     return { success: false, error: 'URL not in subtitle allow-list' };
   }
@@ -943,8 +944,9 @@ async function handleFetchManifestSubtitles(
         return { success: false, error: 'No subtitle tracks in DASH manifest' };
       }
 
-      // Fetch the first track's VTT file
-      const track = tracks[0];
+      const track = message.preferredLanguage
+        ? tracks.find((t) => t.language === message.preferredLanguage) ?? tracks[0]
+        : tracks[0];
       if (!isAllowedSubtitleUrl(track.url)) {
         return { success: false, error: 'Track URL not in allow-list' };
       }
@@ -955,16 +957,17 @@ async function handleFetchManifestSubtitles(
       const trackBody = await trackResponse.text();
       const contentType = trackResponse.headers.get('Content-Type') ?? '';
       const cues = parseSubtitleContent(trackBody, contentType, track.url);
-      return { success: true, cues };
+      return { success: true, cues, language: track.language };
     }
 
-    // Direct VTT/SRT file
+    // Direct VTT/SRT/TTML file
     const response = await fetchWithTimeout(message.playlistUrl);
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` };
     }
     const body = await response.text();
-    const cues = parseWebVTT(body);
+    const contentType = response.headers.get('Content-Type') ?? '';
+    const cues = parseSubtitleContent(body, contentType, message.playlistUrl);
     return { success: true, cues };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch manifest subtitles';

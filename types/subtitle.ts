@@ -40,6 +40,7 @@ export type BridgeMessageType =
   | 'SUBTITLE_DOM_TRACK_CHANGED'
   | 'SUBTITLE_TEXTTRACK_CUES'
   | 'SUBTITLE_MSE_CUES'
+  | 'SUBTITLE_MANIFEST_CUES'
   | 'SUBTITLE_CONFIG';
 
 /** postMessage payload between worlds */
@@ -109,6 +110,15 @@ export interface SubtitleDomTrackChangedPayload {
 export interface SubtitleConfigPayload {
   /** Translation timeout in milliseconds */
   translationTimeoutMs: number;
+}
+
+/** Payload for SUBTITLE_MANIFEST_CUES (full track from parsed MPD / DASH manifest) */
+export interface SubtitleManifestCuesPayload {
+  cues: SubtitleCue[];
+  platform: string;
+  language: string;
+  url: string;
+  videoId?: string;
 }
 
 /** Payload for SUBTITLE_TEXTTRACK_CUES messages (full track cues from HTML5 TextTrack) */

@@ -25,8 +25,9 @@ describe('processMaxMpdManifest', () => {
     vi.restoreAllMocks();
   });
 
-  it('fetches subtitle tracks and logs parsed cues', async () => {
+  it('fetches subtitle tracks, logs parsed cues, and emits bridge message', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const bridge = { send: vi.fn(() => 'req-1') };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response(TTML_BODY, {
         status: 200,
@@ -34,14 +35,23 @@ describe('processMaxMpdManifest', () => {
       }),
     ));
 
-    await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest.mpd');
+    await processMaxMpdManifest(MPD_WITH_TTML, 'https://cdn.example.com/manifest.mpd', bridge);
 
     expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs_en.ttml');
     expect(logSpy).toHaveBeenCalledWith(
       'AnyLLMTranslate: Max MPD subtitles parsed',
       expect.objectContaining({
         cueCount: 1,
-        cues: [{ start: expect.closeTo(12.34, 3), end: expect.closeTo(15.67, 3), text: 'Hello there' }],
+        cues: [expect.objectContaining({ text: 'Hello there' })],
+      }),
+    );
+    expect(bridge.send).toHaveBeenCalledWith(
+      'SUBTITLE_MANIFEST_CUES',
+      expect.objectContaining({
+        platform: 'hbomax',
+        language: 'en',
+        url: 'https://cdn.example.com/subs_en.ttml',
+        cues: [expect.objectContaining({ text: 'Hello there', startTime: expect.closeTo(12.34, 3) })],
       }),
     );
   });

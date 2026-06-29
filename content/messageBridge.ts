@@ -15,6 +15,7 @@ import type {
   SubtitleDomTrackChangedPayload,
   SubtitleTextTrackCuesPayload,
   SubtitleMseCuesPayload,
+  SubtitleManifestCuesPayload,
 } from '@/types/subtitle';
 
 /**
@@ -96,6 +97,22 @@ export function onTextTrackCues(
       await handler(payload as SubtitleTextTrackCuesPayload);
     } catch (error) {
       console.warn('AnyLLMTranslate: TextTrack cues handler error', error);
+    }
+  });
+}
+
+/**
+ * Listen for manifest-parsed full-track cues from the MAIN world (Tier 2).
+ * Returns a cleanup function.
+ */
+export function onManifestCues(
+  handler: (payload: SubtitleManifestCuesPayload) => Promise<void>,
+): () => void {
+  return onMessage('SUBTITLE_MANIFEST_CUES', async (payload) => {
+    try {
+      await handler(payload as SubtitleManifestCuesPayload);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: Manifest cues handler error', error);
     }
   });
 }

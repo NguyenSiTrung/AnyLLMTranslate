@@ -17,6 +17,7 @@ import {
   onDomTrackChanged,
   onTextTrackCues,
   onMseCues,
+  onManifestCues,
 } from '@/content/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
@@ -35,6 +36,7 @@ import type {
   SubtitleDomTrackChangedPayload,
   SubtitleTextTrackCuesPayload,
   SubtitleMseCuesPayload,
+  SubtitleManifestCuesPayload,
 } from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
@@ -395,7 +397,8 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
  * Activate overlay mode with fetched subtitles.
  */
 async function activateOverlayMode(subtitleUrl: string, content?: string): Promise<void> {
-  if (state.isOverlayMode) return;
+  if (state.isOverlayMode && state.activeSource === 'manifest') return;
+  preemptLowerTierOverlay();
 
   const settings = await loadSettings();
   if (!settings.subtitleSettings.enabled) {
@@ -422,7 +425,15 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   }
 
   state.isOverlayMode = true;
-  console.log('AnyLLMTranslate: Activating overlay fallback mode');
+  state.activeSource = 'manifest';
+  state.fetchedTrackUrls.add(subtitleUrl);
+  console.log('AnyLLMTranslate: Activating overlay from manifest track URL');
+
+  const handler = detectCurrentHandler();
+  const domSource = handler?.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
+  }
 
   // FR-5: Translate cues before handing to overlay
   let cuesToDisplay = cues;
@@ -564,6 +575,22 @@ function clearDomTranslationBuffers(): void {
   state.domTranslationMap = new Map();
   state.activeSubtitleSessionId = null;
   resetActiveSource();
+}
+
+/** Tear down a lower-precedence overlay so manifest tier can take over. */
+function preemptLowerTierOverlay(): void {
+  if (!state.isOverlayMode) return;
+  if (state.activeSource === 'dom') {
+    state.domOriginalCues = [];
+    state.domTranslatedCues = [];
+    state.domTranslatedTexts = new Set();
+    state.domTranslationMap = new Map();
+    state.activeSubtitleSessionId = null;
+  }
+  if (state.dragCleanup) {
+    state.dragCleanup();
+    state.dragCleanup = null;
+  }
 }
 
 /**
@@ -815,64 +842,52 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
 }
 
 /**
- * Activate overlay mode from manifest-sourced subtitles (Tier 2).
- * Fetches the full subtitle track via FETCH_MANIFEST_SUBTITLES (background
- * fetches the HLS/DASH playlist + segments, assembles into SubtitleCue[]),
- * then feeds cues into the same chunked translation path.
+ * Activate overlay from pre-parsed manifest cues (Tier 2).
+ * Shared by MPD processor bridge messages and background manifest fetch.
  */
-async function activateOverlayModeFromManifest(playlistUrl: string): Promise<void> {
-  if (shouldSuppressSource('manifest')) return;
-  if (state.isOverlayMode && state.activeSource === 'manifest') return;
+async function activateOverlayFromManifestCues(
+  cues: SubtitleCue[],
+  language: string,
+  trackUrl?: string,
+): Promise<boolean> {
+  if (shouldSuppressSource('manifest')) return false;
+  if (state.isOverlayMode && state.activeSource === 'manifest') return false;
+  if (cues.length === 0) return false;
+
   const settings = await loadSettings();
   if (!settings.subtitleSettings.enabled) {
     cleanupActiveOverlay();
-    return;
+    return false;
   }
 
-  showSubtitleToast('Fetching subtitle track from manifest...', true);
-
-  let cues: SubtitleCue[];
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: 'FETCH_MANIFEST_SUBTITLES',
-      playlistUrl,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string };
-
-    if (!response?.success || !response.cues || response.cues.length === 0) {
-      console.warn('AnyLLMTranslate: Manifest subtitle fetch failed', response?.error);
-      hideSubtitleToast();
-      showSubtitleToast('Failed to fetch manifest subtitles.');
-      return;
-    }
-    cues = response.cues;
-  } catch (error) {
-    console.error('AnyLLMTranslate: Manifest subtitle fetch error', error);
-    hideSubtitleToast();
-    showSubtitleToast('Manifest subtitle fetch error.');
-    return;
-  }
+  preemptLowerTierOverlay();
 
   state.isOverlayMode = true;
   state.activeSource = 'manifest';
-  console.log('AnyLLMTranslate: Activating overlay mode from manifest', { cueCount: cues.length });
+  if (trackUrl) state.fetchedTrackUrls.add(trackUrl);
+  console.log('AnyLLMTranslate: Activating overlay mode from manifest', {
+    cueCount: cues.length,
+    language,
+    url: trackUrl,
+  });
 
-  // Hide the platform's native caption window if DOM cue source selectors are available.
   const handler = detectCurrentHandler();
   const domSource = handler?.getDomCueSource?.();
   if (domSource) {
     hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
   }
 
-  // Translate cues via the same chunked path
   let cuesToDisplay = cues;
   try {
-    hideSubtitleToast();
     showSubtitleToast('Translating subtitles...', true);
     const pageContext = await buildSubtitlePageContext();
+    const sourceLanguage = settings.sourceLanguage === 'auto'
+      ? (language || 'en')
+      : settings.sourceLanguage;
     const translateResponse = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
       cues,
-      sourceLanguage: settings.sourceLanguage,
+      sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
       profile: currentSubtitleProfile(),
@@ -888,10 +903,9 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
   } catch (error) {
     console.warn('AnyLLMTranslate: Manifest subtitle translation error', error);
   }
-  // Initialize overlay with controls (same pattern as activateOverlayMode)
+
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-
   initializeOverlay(cuesToDisplay, overlayConfig);
 
   const textContainer = getOverlayTextContainer();
@@ -901,6 +915,85 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
+  return true;
+}
+
+/**
+ * Activate overlay mode from manifest-sourced subtitles (Tier 2).
+ * Fetches the full subtitle track via FETCH_MANIFEST_SUBTITLES (background
+ * fetches the HLS/DASH playlist + segments, assembles into SubtitleCue[]),
+ * then feeds cues into the same chunked translation path.
+ */
+async function activateOverlayModeFromManifest(playlistUrl: string): Promise<void> {
+  if (shouldSuppressSource('manifest')) return;
+  if (state.isOverlayMode && state.activeSource === 'manifest') return;
+
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) {
+    cleanupActiveOverlay();
+    return;
+  }
+
+  showSubtitleToast('Fetching subtitle track from manifest...', true);
+
+  const preferredLanguage = settings.subtitleSettings.preferredSubtitleLanguage;
+  let cues: SubtitleCue[];
+  let resolvedLanguage = '';
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'FETCH_MANIFEST_SUBTITLES',
+      playlistUrl,
+      preferredLanguage: preferredLanguage && preferredLanguage !== 'auto' ? preferredLanguage : undefined,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; language?: string };
+
+    if (!response?.success || !response.cues || response.cues.length === 0) {
+      console.warn('AnyLLMTranslate: Manifest subtitle fetch failed', response?.error);
+      hideSubtitleToast();
+      showSubtitleToast('Failed to fetch manifest subtitles.');
+      return;
+    }
+    cues = response.cues;
+    resolvedLanguage = response.language ?? '';
+  } catch (error) {
+    console.error('AnyLLMTranslate: Manifest subtitle fetch error', error);
+    hideSubtitleToast();
+    showSubtitleToast('Manifest subtitle fetch error.');
+    return;
+  }
+
+  hideSubtitleToast();
+  await activateOverlayFromManifestCues(cues, resolvedLanguage, playlistUrl);
+}
+
+/**
+ * Handle full manifest-parsed cues from MAIN world MPD processor (Tier 2).
+ */
+async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise<void> {
+  if (!isOnWatchPage()) return;
+  if (payload.cues.length === 0) return;
+  if (shouldSuppressSource('manifest')) return;
+
+  const settings = await loadSettings();
+  if (!settings.subtitleSettings.enabled) return;
+
+  const preferred = settings.subtitleSettings.preferredSubtitleLanguage;
+  if (
+    preferred &&
+    preferred !== 'auto' &&
+    payload.language &&
+    payload.language !== preferred
+  ) {
+    return;
+  }
+
+  const activated = await activateOverlayFromManifestCues(
+    payload.cues,
+    payload.language,
+    payload.url,
+  );
+  if (activated) {
+    state.videoIsPlaying = true;
+  }
 }
 
 /**
@@ -1219,6 +1312,8 @@ export function startCoordinator(): () => void {
   const cleanupTextTrackCues = onTextTrackCues(handleTextTrackCues);
   // Listen for MSE SourceBuffer cues from MAIN world (Tier 3)
   const cleanupMseCues = onMseCues(handleMseCues);
+  // Listen for MPD-parsed manifest cues from MAIN world (Tier 2)
+  const cleanupManifestCues = onManifestCues(handleManifestCues);
 
   // Proactive DOM track list for popup (Max has no metadata URLs)
   scheduleDomTrackDiscovery();
@@ -1303,6 +1398,7 @@ export function startCoordinator(): () => void {
     cleanupDomTrackChanged();
     cleanupTextTrackCues();
     cleanupMseCues();
+    cleanupManifestCues();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);
@@ -1520,9 +1616,14 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
  * @param epochAtStart - navigationEpoch captured before any async call.
  *   Pass `state.navigationEpoch` when calling synchronously.
  */
-async function tryAutoActivate(epochAtStart: number): Promise<void> {
-  if (state.isOverlayMode && (state.activeSource === 'manifest' || shouldSuppressSource('manifest'))) return;
-  if (!isOnWatchPage()) return;
+async function tryAutoActivate(epochAtStart: number): Promise<{ activated: boolean; reason: string }> {
+  if (state.isOverlayMode && state.activeSource === 'manifest') {
+    return { activated: true, reason: 'manifest already active' };
+  }
+  if (shouldSuppressSource('manifest')) {
+    return { activated: false, reason: 'manifest suppressed' };
+  }
+  if (!isOnWatchPage()) return { activated: false, reason: 'not a watch page' };
 
   // Only activate if all known tracks belong to a single video
   const knownVideoIds = new Set(
@@ -1532,28 +1633,34 @@ async function tryAutoActivate(epochAtStart: number): Promise<void> {
     console.log('AnyLLMTranslate: Skipping auto-activate — tracks from multiple videos', {
       videoIds: [...knownVideoIds],
     });
-    return;
+    return { activated: false, reason: 'multiple videos' };
   }
 
   const settings = await loadSettings();
-  if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
+  if (state.navigationEpoch !== epochAtStart) return { activated: false, reason: 'stale navigation' };
 
   // Per-site toggle: skip auto-activate for disabled platforms
   const currentHandler = detectCurrentHandler();
   if (currentHandler && isSiteDisabled(currentHandler.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
-    return;
+    return { activated: false, reason: 'site disabled' };
   }
 
   const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
-  if (settings.subtitleSettings?.enabled && autoActivate && preferredLang && !state.isOverlayMode) {
+  if (settings.subtitleSettings?.enabled && autoActivate && preferredLang) {
     const preferred = state.availableTracks.find((t) => t.language === preferredLang);
     if (preferred?.url) {
       console.log('AnyLLMTranslate: Auto-activating preferred subtitle track on play', preferredLang);
       await selectSubtitleTrack(preferredLang);
+      if (state.activeSource === 'manifest') {
+        return { activated: true, reason: `manifest track ${preferredLang}` };
+      }
+      return { activated: false, reason: 'manifest track selection failed' };
     }
   }
+
+  return { activated: false, reason: 'no manifest track with URL' };
 }
 
 /**
@@ -1657,15 +1764,18 @@ function startVideoPlaybackWatcher(): () => void {
           typeof currentHandler.getManifestPatterns === 'function' &&
           currentHandler.getManifestPatterns().length > 0;
         if (hasManifestPatterns) {
-          // Try manifest path first; DOM cues will self-activate if manifest misses.
-          tryAutoActivate(epoch).catch((err) => {
-            console.warn('AnyLLMTranslate: Manifest auto-activate on play failed', err);
-          });
-          // Also prime the DOM path in parallel — it will be suppressed by
-          // shouldSuppressSource if manifest wins first.
-          tryAutoActivateForDom().catch((err) => {
-            console.warn('AnyLLMTranslate: DOM auto-activate on play failed', err);
-          });
+          // Manifest first (Tier 2), then DOM fallback (Tier 5) if manifest misses.
+          void (async () => {
+            try {
+              const manifestResult = await tryAutoActivate(epoch);
+              if (!manifestResult.activated && state.activeSource !== 'manifest') {
+                await tryAutoActivateForDom();
+              }
+            } catch (err) {
+              console.warn('AnyLLMTranslate: Auto-activate on play failed', err);
+              await tryAutoActivateForDom().catch(() => {});
+            }
+          })();
           return;
         }
         tryAutoActivateForDom().catch((err) => {
@@ -1777,19 +1887,32 @@ export async function selectSubtitleTrack(language: string): Promise<void> {
  */
 export async function manualActivateSubtitles(): Promise<void> {
   const handler = detectCurrentHandler();
+  const tracks = getAvailableTracks();
+  const settings = await loadSettings();
+  const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
+
+  const urlTrack = tracks.find(
+    (t) => t.url && (
+      !preferredLang ||
+      preferredLang === 'auto' ||
+      t.language === preferredLang
+    ),
+  );
+  if (urlTrack) {
+    await selectSubtitleTrack(urlTrack.language);
+    if (state.activeSource === 'manifest') return;
+  }
+
   if (handler?.getDomCueSource) {
     await tryAutoActivateForDom({ manual: true });
     return;
   }
 
-  const tracks = getAvailableTracks();
   if (tracks.length === 0) {
     console.warn('AnyLLMTranslate: No subtitle tracks available for manual activation');
     return;
   }
 
-  const settings = await loadSettings();
-  const preferredLang = settings.subtitleSettings?.preferredSubtitleLanguage;
   const preferred = tracks.find((t) => t.language === preferredLang);
   const trackToSelect = preferred ?? tracks[0];
   if (trackToSelect) {

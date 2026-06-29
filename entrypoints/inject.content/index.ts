@@ -23,6 +23,7 @@ import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 import { onMessage } from '@/inject/messageBridge';
+import { resetMaxMpdProcessorState } from '@/inject/maxMpdProcessor';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -77,6 +78,7 @@ export default defineContentScript({
     // re-enable when it's restored. Non-persisted pagehide means the page is
     // truly unloading, so we also disable to restore prototypes.
     window.addEventListener('pagehide', (event: PageTransitionEvent) => {
+      resetMaxMpdProcessorState();
       xhrInterceptor.disable();
       fetchInterceptor.disable();
       mseInterceptor.disable();

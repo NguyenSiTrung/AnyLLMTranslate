@@ -99,7 +99,7 @@ export class FetchInterceptor {
 
             // Max: fetch and parse TTML subtitle tracks from DASH manifests
             if (platform === 'hbomax' && detectMpdRequests(urlString)) {
-              processMaxMpdManifest(body, urlString).catch(() => { /* non-blocking */ });
+              processMaxMpdManifest(body, urlString, bridge).catch(() => { /* non-blocking */ });
             }
           }).catch(() => { /* silently ignore clone read errors */ });
         }
