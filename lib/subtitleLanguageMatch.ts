@@ -4,7 +4,7 @@
  */
 
 /** ISO 639-2 (3-letter) to ISO 639-1 (2-letter) language code mapping. */
-const ISO_639_2_TO_1: Record<string, string> = {
+export const ISO_639_2_TO_1: Record<string, string> = {
   eng: 'en',
   zho: 'zh',
   chi: 'zh',

@@ -33,7 +33,8 @@ import {
 
 const processedMpdUrls = new Set<string>();
 const processedTrackUrls = new Set<string>();
-const processedMpdBodies = new Set<string>();
+/** FNV-1a hashes of processed MPD bodies (bounded — 8 hex chars each vs full body strings). */
+const processedMpdBodyHashes = new Set<string>();
 
 /** Extension preferred language from coordinator (null = 'auto' or unset). */
 let extensionPreferredLanguage: string | null = null;
@@ -42,7 +43,7 @@ let extensionPreferredLanguage: string | null = null;
 export function resetMaxMpdProcessorState(): void {
   processedMpdUrls.clear();
   processedTrackUrls.clear();
-  processedMpdBodies.clear();
+  processedMpdBodyHashes.clear();
   resetMaxVttSegmentCapture();
 }
 
@@ -75,7 +76,8 @@ export async function processMaxMpdManifest(
   const normalizedMpdText = mpdText.trim();
 
   const alreadyProcessedUrl = processedMpdUrls.has(normalizedMpdUrl);
-  const alreadyProcessedBody = processedMpdBodies.has(normalizedMpdText);
+  const bodyHash = fnv1aHex(normalizedMpdText);
+  const alreadyProcessedBody = processedMpdBodyHashes.has(bodyHash);
 
   if (alreadyProcessedUrl || alreadyProcessedBody) {
     console.log('[AnyLLMTranslate] Skipping already processed Max MPD manifest', {
@@ -96,7 +98,7 @@ export async function processMaxMpdManifest(
   }
 
   processedMpdUrls.add(normalizedMpdUrl);
-  processedMpdBodies.add(normalizedMpdText);
+  processedMpdBodyHashes.add(bodyHash);
 
   console.log('[AnyLLMTranslate] Max MPD parse started', { url: mpdUrl });
 
@@ -169,7 +171,7 @@ export async function processMaxMpdManifest(
   const rootMpdBody = normalizedMpdText;
 
   for (const track of tracks) {
-    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, true, rootMpdBody);
+    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, rootMpdBody);
     if (cues && cues.length > 0) {
       emitted = true;
       break;
@@ -252,7 +254,6 @@ async function fetchAndEmitSubtitleTrack(
   track: MpdSubtitleTrack,
   mpdUrl: string,
   bridge?: MessageBridgeSender,
-  isPriority = true,
   rootMpdBody?: string,
 ): Promise<SubtitleCue[] | null> {
   const normalizedTrackUrl = normalizeUrl(track.url);
@@ -316,21 +317,13 @@ async function fetchAndEmitSubtitleTrack(
     const message = error instanceof Error ? error.message : String(error);
     const is404 = message.includes('404');
     const isMpdError = message.includes('returned MPD manifest');
-
-    if (isPriority) {
-      const level = (is404 || isMpdError) ? 'log' : 'warn';
-      console[level]('AnyLLMTranslate: MPD subtitle track unavailable', {
-        mpdUrl,
-        language: track.language,
-        url: track.url,
-        error: message,
-      });
-    } else {
-      console.log('AnyLLMTranslate: Skipping unavailable MPD subtitle track', {
-        language: track.language,
-        error: message,
-      });
-    }
+    const level = (is404 || isMpdError) ? 'log' : 'warn';
+    console[level]('AnyLLMTranslate: MPD subtitle track unavailable', {
+      mpdUrl,
+      language: track.language,
+      url: track.url,
+      error: message,
+    });
     return null;
   }
 }
@@ -347,4 +340,14 @@ function normalizeUrl(url: string): string {
   } catch {
     return url.split('?')[0].split('#')[0].replace(/\/$/, '');
   }
+}
+
+/** 32-bit FNV-1a → 8-hex-char string. Bounded dedup for MPD body content. */
+function fnv1aHex(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
 }

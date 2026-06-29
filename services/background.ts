@@ -19,7 +19,7 @@ import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
-import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
+import { parseSubtitleContent, isManifestResponse, isMaxCdnVttSegmentUrl } from '@/lib/maxMpdSubtitles';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
@@ -873,8 +873,8 @@ async function handleFetchSubtitle(
     // Max CDN VTT segment URLs often return a nested DASH MPD; the MPD processor
     // follows that chain in MAIN world — do not reject here or nested parsing never runs.
     if (
-      isDashManifestResponse(content, contentType) &&
-      !isMaxCdnVttSegmentFetchUrl(message.url)
+      isManifestResponse(content, contentType) &&
+      !isMaxCdnVttSegmentUrl(message.url)
     ) {
       return { success: false, error: 'response is a DASH manifest, not subtitle content' };
     }
@@ -887,32 +887,6 @@ async function handleFetchSubtitle(
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch subtitle';
     return { success: false, error: errorMsg };
   }
-}
-
-/** Max CDN WebVTT segment URLs — may legitimately return nested DASH manifests. */
-function isMaxCdnVttSegmentFetchUrl(url: string): boolean {
-  if (!url) return false;
-  try {
-    const parsed = new URL(url);
-    if (!/(?:^|\.)prd\.media\.max\.com$/i.test(parsed.hostname)) return false;
-    const lastSegment = parsed.pathname.split('/').filter(Boolean).pop() ?? '';
-    return /\.vtt$/i.test(lastSegment);
-  } catch {
-    return false;
-  }
-}
-
-/** Detect DASH MPD bodies returned instead of subtitle segments (Max CDN echo). */
-function isDashManifestResponse(body: string, contentType: string): boolean {
-  const trimmed = body.trimStart();
-  // Defensive: WebVTT content is never a manifest, even if the CDN mislabels
-  // the Content-Type as application/dash+xml.
-  if (trimmed.startsWith('WEBVTT')) return false;
-  if (trimmed.includes('<MPD') && trimmed.includes('urn:mpeg:dash:schema:mpd')) return true;
-  if (trimmed.includes('<MPD')) return true;
-  if (trimmed.includes('<Period') && trimmed.includes('AdaptationSet')) return true;
-  const ct = contentType.toLowerCase();
-  return ct.includes('dash+xml') && !ct.includes('ttml');
 }
 
 /** Handle FETCH_MANIFEST_SUBTITLES — fetch a subtitle playlist + segments, assemble into cues */

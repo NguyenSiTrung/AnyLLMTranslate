@@ -5,14 +5,13 @@ import {
   extractSubtitleTracks,
   fetchAndParseSubtitle,
   parseSubtitleContent,
-  fetchRealSubtitleContent,
-  processMpdSubtitleTracks,
   resetMaxMpdSubtitleFetchDiagnostics,
   prioritizeMpdTracksForFetch,
   scoreMpdTrackForFetch,
   isResolvableSubtitleSegmentUrl,
   mergeManifestQueryParams,
   isMaxCdnVttSegmentUrl,
+  isManifestResponse,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -737,162 +736,35 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   });
 });
 
-// ============================================================================
-// fetchRealSubtitleContent — validates fetched track is real subtitle content
-// ============================================================================
-describe('fetchRealSubtitleContent', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
+describe('isManifestResponse', () => {
+  it('detects DASH MPD with namespace', () => {
+    expect(isManifestResponse(
+      '<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>',
+      '',
+    )).toBe(true);
   });
 
-  it('returns content for a valid TTML subtitle response', async () => {
-    const ttml = `<?xml version="1.0"?>
-<tt xmlns="http://www.w3.org/ns/ttml">
-  <body><div><p begin="00:00:01.000" end="00:00:02.000">Hi</p></div></body>
-</tt>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(ttml, { status: 200, headers: { 'Content-Type': 'application/ttml+xml' } }),
-    ));
-
-    const result = await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
-    expect(result).not.toBeNull();
-    expect(result?.content).toContain('<tt ');
-    expect(result?.contentType).toBe('application/ttml+xml');
+  it('detects DASH MPD without namespace', () => {
+    expect(isManifestResponse(
+      '<MPD><Period><AdaptationSet/></Period></MPD>',
+      '',
+    )).toBe(true);
   });
 
-  it('returns null when response is a DASH MPD manifest', async () => {
-    const mpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period><AdaptationSet mimeType="application/ttml+xml" lang="en">
-    <Representation id="s1"><BaseURL>subs_en.ttml</BaseURL></Representation>
-  </AdaptationSet></Period>
-</MPD>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
-    ));
-
-    const result = await fetchRealSubtitleContent('https://cdn.example.com/track');
-    expect(result).toBeNull();
+  it('detects manifest via content-type', () => {
+    expect(isManifestResponse('not a manifest body', 'application/dash+xml')).toBe(true);
   });
 
-  it('returns null when response is a manifest with Period+AdaptationSet but no DASH namespace', async () => {
-    const manifest = `<?xml version="1.0"?>
-<MPD>
-  <Period><AdaptationSet lang="en"><Representation id="s1"/></AdaptationSet></Period>
-</MPD>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(manifest, { status: 200, headers: { 'Content-Type': 'text/xml' } }),
-    ));
-
-    const result = await fetchRealSubtitleContent('https://cdn.example.com/track');
-    expect(result).toBeNull();
+  it('does not treat WEBVTT as manifest even with dash+xml content-type', () => {
+    expect(isManifestResponse('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi', 'application/dash+xml')).toBe(false);
   });
 
-  it('returns null on HTTP error', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response('', { status: 404 }),
-    ));
-
-    const result = await fetchRealSubtitleContent('https://cdn.example.com/missing.ttml');
-    expect(result).toBeNull();
+  it('does not treat TTML as manifest', () => {
+    expect(isManifestResponse('<tt xmlns="http://www.w3.org/ns/ttml"></tt>', 'application/ttml+xml')).toBe(false);
   });
 
-  it('returns null on fetch exception', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
-
-    const result = await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
-    expect(result).toBeNull();
-  });
-
-  it('does not send credentials (Max CDN auth is URL-token-based, not cookie-based)', async () => {
-    const ttml = '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0s" end="1s">Hi</p></div></body></tt>';
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(ttml, { status: 200, headers: { 'Content-Type': 'application/ttml+xml' } }),
-    ));
-
-    await fetchRealSubtitleContent('https://cdn.example.com/subs.ttml');
-    // credentials: 'include' would force a credentialed CORS request, which Max's
-    // CDN rejects (it returns ACAO: *), breaking every subtitle segment fetch.
-    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subs.ttml');
-  });
-});
-
-// ============================================================================
-// processMpdSubtitleTracks — batch validation of MPD subtitle tracks
-// ============================================================================
-describe('processMpdSubtitleTracks', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('returns validated content for tracks with real subtitle data', async () => {
-    const vtt = `WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Hello`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
-      Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } })),
-    ));
-
-    const tracks = [
-      { url: 'https://cdn.example.com/1.vtt', language: 'en' },
-      { url: 'https://cdn.example.com/2.vtt', language: 'es' },
-    ];
-
-    const result = await processMpdSubtitleTracks(tracks);
-    expect(result).not.toBeNull();
-    expect(result).toHaveLength(2);
-  });
-
-  it('returns null when all tracks return manifests', async () => {
-    const mpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
-    ));
-
-    const tracks = [
-      { url: 'https://cdn.example.com/track1', language: 'en' },
-    ];
-
-    const result = await processMpdSubtitleTracks(tracks);
-    expect(result).toBeNull();
-  });
-
-  it('returns null for empty track list', async () => {
-    const result = await processMpdSubtitleTracks([]);
-    expect(result).toBeNull();
-  });
-
-  it('mixes valid and invalid tracks, returns only valid ones', async () => {
-    const vtt = `WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Hello`;
-    const mpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/good')) {
-        return Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      return Promise.resolve(new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
-    }));
-
-    const tracks = [
-      { url: 'https://cdn.example.com/bad', language: 'en' },
-      { url: 'https://cdn.example.com/good', language: 'es' },
-    ];
-
-    const result = await processMpdSubtitleTracks(tracks);
-    expect(result).not.toBeNull();
-    expect(result).toHaveLength(1);
-    expect(result?.[0]?.url).toBe('https://cdn.example.com/good');
+  it('returns false for plain subtitle content', () => {
+    expect(isManifestResponse('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi', 'text/vtt')).toBe(false);
   });
 });
 

@@ -199,9 +199,7 @@ export function concatVttSegments(segments: string[]): string {
 
     // Update timeOffset to the end of the last cue in this segment
     if (cues.length > 0) {
-      const lastCue = needsOffset
-        ? allCues[allCues.length - 1]
-        : allCues[allCues.length - 1];
+      const lastCue = allCues[allCues.length - 1];
       timeOffset = lastCue.endTime;
     }
 

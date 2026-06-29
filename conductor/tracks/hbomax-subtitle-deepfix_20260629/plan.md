@@ -27,82 +27,29 @@
 ## Phase 2: Robustness Fixes (Medium Priority)
 <!-- execution: sequential -->
 
-- [ ] Task 6: Write failing test — processedMpdBodies is bounded
-  - Add test that processes multiple large MPD bodies and asserts the internal dedup set size stays bounded (not equal to the number of full bodies stored).
-  <!-- files: inject/__tests__/maxMpdProcessor.test.ts -->
-
-- [ ] Task 7: Replace processedMpdBodies with FNV-1a hash dedup
-  - Add a simple FNV-1a hash function (or reuse existing `lib/subtitleCacheKey.ts` FNV-1a if exported).
-  - Store hashes in `processedMpdBodies` instead of full body strings.
-  - Update the duplicate-skip path to hash the incoming body before comparison.
-  <!-- files: inject/maxMpdProcessor.ts -->
-
-- [ ] Task 8: Write failing test — nested MPD fetch respects overall deadline
-  - Add test that simulates slow segment fetches (delayed responses) and asserts the nested chain aborts after the deadline, returning partial or empty results instead of hanging.
-  <!-- files: lib/__tests__/maxMpdSubtitles.test.ts -->
-
-- [ ] Task 9: Add overall deadline to nested MPD fetch chain
-  - Thread a `deadlineMs` parameter through `fetchAndParseSubtitleInternal`, `fetchAndParseNestedMpdSubtitle`, and `fetchSegmentBodiesProgressively`.
-  - Check `Date.now() > deadline` before each fetch; break/throw if exceeded.
-  - Default deadline: 30s from the initial call.
-  <!-- files: lib/maxMpdSubtitles.ts -->
-
-- [ ] Task 10: Write failing test — readMaxActiveSubtitleLanguage handles localized labels
-  - Add test with a button carrying `aria-label="Inglés"` and a `lang="en"` attribute; assert the function returns `'en'`.
-  - Add test with an unknown label like `"Filipino"` and assert it falls back to ISO 639-1 `"fil"` via a reverse lookup.
-  <!-- files: lib/__tests__/maxSubtitleLanguages.test.ts -->
-
-- [ ] Task 11: Improve readMaxActiveSubtitleLanguage with attribute fallback and ISO 639-2→1
-  - Check for `lang` or `data-language` attribute on the button first.
-  - Add a reverse ISO 639-2→1 lookup for unknown labels (reuse the map from `subtitleLanguageMatch.ts`).
-  - Add common localized label variants for top languages.
-  <!-- files: lib/maxSubtitleLanguages.ts -->
-
-- [ ] Task 12: Conductor - User Manual Verification 'Robustness Fixes'
-  - Run `npx vitest run inject/__tests__/maxMpdProcessor.test.ts lib/__tests__/maxMpdSubtitles.test.ts lib/__tests__/maxSubtitleLanguages.test.ts` and confirm all pass.
+- [x] Task 6: Write failing test — processedMpdBodies is bounded
+- [x] Task 7: Replace processedMpdBodies with FNV-1a hash dedup
+- [x] Task 8: Write failing test — nested MPD fetch respects overall deadline
+- [x] Task 9: Add overall deadline to nested MPD fetch chain
+- [x] Task 10: Write failing test — readMaxActiveSubtitleLanguage handles localized labels
+- [x] Task 11: Improve readMaxActiveSubtitleLanguage with attribute fallback and ISO 639-2→1
+- [x] Task 12: Conductor - User Manual Verification 'Robustness Fixes'
 
 ## Phase 3: Code Consolidation & Dead Code Removal (Low Priority)
 <!-- execution: sequential -->
 
-- [ ] Task 13: Consolidate manifest detection into single exported function
-  - Export `isDashManifestContent()` (already exists in `maxMpdSubtitles.ts`) as the single source of truth.
-  - Update `services/background.ts` to import and use it instead of the private `isDashManifestResponse`.
-  - Remove `isDashManifestResponse` and `isMpdManifestBody` (internal helper, fold into `isManifestResponse`).
-  <!-- files: lib/maxMpdSubtitles.ts, services/background.ts -->
-
-- [ ] Task 14: Remove dead code — fetchRealSubtitleContent and processMpdSubtitleTracks
-  - Remove both functions from `lib/maxMpdSubtitles.ts`.
-  - Remove their tests from `lib/__tests__/maxMpdSubtitles.test.ts`.
-  - Remove any imports that become unused.
-  <!-- files: lib/maxMpdSubtitles.ts, lib/__tests__/maxMpdSubtitles.test.ts -->
-
-- [ ] Task 15: Deduplicate Max CDN VTT URL checker
-  - Remove `isMaxCdnVttSegmentFetchUrl` from `services/background.ts`.
-  - Import `isMaxCdnVttSegmentUrl` from `lib/maxMpdSubtitles.ts` and use it in `handleFetchSubtitle`.
-  <!-- files: services/background.ts -->
-
-- [ ] Task 16: Conductor - User Manual Verification 'Code Consolidation & Dead Code Removal'
-  - Run `npx vitest run lib/__tests__/maxMpdSubtitles.test.ts services/__tests__/background.urlAllowlist.test.ts` and confirm all pass.
+- [x] Task 13: Consolidate manifest detection into single exported function
+- [x] Task 14: Remove dead code — fetchRealSubtitleContent and processMpdSubtitleTracks
+- [x] Task 15: Deduplicate Max CDN VTT URL checker
+- [x] Task 16: Conductor - User Manual Verification 'Code Consolidation & Dead Code Removal'
 
 ## Phase 4: Low-Priority Code Quality Fixes
 <!-- execution: parallel -->
 
-- [ ] Task 17: Remove dead `isPriority` parameter from fetchAndEmitSubtitleTrack
-  - Remove `isPriority` param and simplify the error log level to always use `warn` for 404/MPD errors and `log` for others.
-  - Update the single call site.
-  <!-- files: inject/maxMpdProcessor.ts -->
-
-- [ ] Task 18: Fix redundant ternary in concatVttSegments
-  - Simplify `needsOffset ? allCues[...] : allCues[...]` to `allCues[allCues.length - 1]`.
-  <!-- files: lib/vttSegmentConcat.ts -->
-
-- [ ] Task 19: Fix redundant WEBVTT check in captureMaxVttSegment
-  - Change the guard to `if (!body || !body.trimStart().startsWith('WEBVTT')) return;`.
-  <!-- files: inject/maxVttSegmentCapture.ts -->
-
-- [ ] Task 20: Preserve bodies on nested MPD dead-end in progressive fetch
-  - In `fetchSegmentBodiesProgressively`, if nested MPD yields 0 cues, return accumulated `bodies` instead of breaking with empty array.
-  <!-- files: lib/maxMpdSubtitles.ts -->
+- [x] Task 17: Remove dead `isPriority` parameter from fetchAndEmitSubtitleTrack
+- [x] Task 18: Fix redundant ternary in concatVttSegments
+- [x] Task 19: Fix redundant WEBVTT check in captureMaxVttSegment
+- [x] Task 20: Preserve bodies on nested MPD dead-end in progressive fetch
 
 - [ ] Task 21: Conductor - User Manual Verification 'Low-Priority Code Quality Fixes'
   - Run full test suite and lint to confirm no regressions.

@@ -62,6 +62,8 @@ const MAX_SEGMENT_FETCH_COUNT = 3000;
 const MAX_PROGRESSIVE_SEGMENT_FETCH_COUNT = 120;
 const MAX_NESTED_MPD_DEPTH = 3;
 const MAX_CIRCULAR_MANIFEST_LOGS = 3;
+/** Default overall deadline for the nested MPD fetch chain (30s). */
+const DEFAULT_FETCH_DEADLINE_MS = 30_000;
 let circularManifestLogCount = 0;
 
 /** Reset circular-manifest log dedup (for tests). */
@@ -222,86 +224,15 @@ export async function fetchAndParseSubtitle(
   const resolvedOptions: FetchAndParseSubtitleOptions = Array.isArray(options)
     ? { segmentUrls: options }
     : (options ?? {});
+  const deadline = Date.now() + DEFAULT_FETCH_DEADLINE_MS;
   return fetchAndParseSubtitleInternal(
     url,
     resolvedOptions,
     0,
     resolvedOptions.fetchSegment,
     resolvedOptions.seenManifests,
+    deadline,
   );
-}
-
-/** Result of a validated subtitle content fetch (not a manifest). */
-export interface FetchedSubtitleContent {
-  url: string;
-  content: string;
-  contentType: string;
-}
-
-/**
- * Fetch a subtitle track URL and validate the response is real subtitle content
- * (not another DASH MPD manifest). Returns null when the response is a manifest
- * or the fetch fails, so callers can skip to the next track or fall back to DOM.
- *
- * NOTE: do NOT send `credentials: 'include'`. Max's CDN authenticates via the
- * auth token embedded in the URL query string (manifest-params=...), not via
- * cookies. Sending credentials forces a credentialed CORS request, which Max's
- * CDN rejects (it returns `Access-Control-Allow-Origin: *`, which is forbidden
- * with credentials) — so every subtitle segment fails with net::ERR_FAILED and
- * the extension falls back to the DOM-cue path.
- */
-export async function fetchRealSubtitleContent(
-  trackUrl: string,
-  _mpdUrl?: string,
-): Promise<FetchedSubtitleContent | null> {
-  try {
-    const res = await fetch(trackUrl);
-    if (!res.ok) return null;
-
-    const contentType = res.headers.get('Content-Type') ?? '';
-    const text = await res.text();
-
-    if (isManifestResponse(text, contentType)) {
-      console.warn('[AnyLLMTranslate] Track returned another manifest. Skipping.', trackUrl);
-      return null;
-    }
-
-    return { url: trackUrl, content: text, contentType };
-  } catch (err) {
-    console.error('[AnyLLMTranslate] Failed to fetch subtitle track:', err);
-    return null;
-  }
-}
-
-/**
- * Process subtitle tracks found in an MPD: fetch each, validate it is real
- * subtitle content (not another manifest), and return the valid ones.
- * Returns null when no tracks yielded real content, signalling DOM fallback.
- */
-export async function processMpdSubtitleTracks(
-  tracks: MpdSubtitleTrack[],
-  mpdUrl?: string,
-): Promise<FetchedSubtitleContent[] | null> {
-  const validTracks: FetchedSubtitleContent[] = [];
-
-  for (const track of tracks) {
-    const result = await fetchRealSubtitleContent(track.url, mpdUrl);
-    if (result) {
-      console.log('[AnyLLMTranslate] Successfully fetched real subtitle content', {
-        language: track.language,
-        length: result.content.length,
-      });
-      validTracks.push(result);
-    }
-  }
-
-  if (validTracks.length > 0) {
-    console.log('[AnyLLMTranslate] Got', validTracks.length, 'real subtitle tracks');
-    return validTracks;
-  }
-
-  console.log('[AnyLLMTranslate] No direct subtitle content found. Using DOM fallback.');
-  return null;
 }
 
 async function fetchSegmentResponse(
@@ -334,7 +265,11 @@ async function fetchAndParseSubtitleInternal(
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
   seenManifests?: Set<string>,
+  deadline?: number,
 ): Promise<ParsedSubtitleCue[]> {
+  if (deadline && Date.now() > deadline) {
+    return [];
+  }
   const resolvedOptions: FetchAndParseSubtitleOptions = Array.isArray(options)
     ? { segmentUrls: options }
     : (options ?? {});
@@ -349,6 +284,7 @@ async function fetchAndParseSubtitleInternal(
       nestedDepth,
       segmentFetcher,
       seenManifests,
+      deadline,
     );
     if (progressive.kind === 'cues') {
       return progressive.cues;
@@ -362,6 +298,7 @@ async function fetchAndParseSubtitleInternal(
         : [url];
 
     for (const segmentUrl of urls) {
+      if (deadline && Date.now() > deadline) break;
       const segment = await fetchSegmentResponse(segmentUrl, segmentFetcher);
       if (!segment.ok) {
         const detail = segment.error ?? `HTTP ${segment.status}`;
@@ -387,7 +324,7 @@ async function fetchAndParseSubtitleInternal(
           return [];
         }
         nextSeen.add(normalizedBody);
-        return fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, segmentFetcher, nextSeen);
+        return fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, segmentFetcher, nextSeen, deadline);
       }
       bodies.push(text);
       if (!contentType) {
@@ -416,7 +353,11 @@ async function fetchAndParseNestedMpdSubtitle(
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
   seenManifests?: Set<string>,
+  deadline?: number,
 ): Promise<ParsedSubtitleCue[]> {
+  if (deadline && Date.now() > deadline) {
+    return [];
+  }
   if (nestedDepth >= MAX_NESTED_MPD_DEPTH) {
     throw new Error('Subtitle fetch returned MPD manifest instead of subtitle content');
   }
@@ -452,6 +393,7 @@ async function fetchAndParseNestedMpdSubtitle(
         nestedDepth + 1,
         fetchSegment,
         seenManifests,
+        deadline,
       );
       if (cues.length > 0) return cues;
     } catch (err) {
@@ -806,6 +748,7 @@ async function fetchSegmentBodiesProgressively(
   nestedDepth: number,
   fetchSegment?: SubtitleSegmentFetchFn,
   seenManifests?: Set<string>,
+  deadline?: number,
 ): Promise<ProgressiveSegmentResult> {
   const bodies: string[] = [];
   let contentType = '';
@@ -820,6 +763,7 @@ async function fetchSegmentBodiesProgressively(
   };
 
   for (let i = 0; i < MAX_PROGRESSIVE_SEGMENT_FETCH_COUNT; i++) {
+    if (deadline && Date.now() > deadline) break;
     const segmentUrl = buildTemplatedSegmentUrl(context, template.startNumber + i);
     if (!segmentUrl) break;
 
@@ -854,11 +798,12 @@ async function fetchSegmentBodiesProgressively(
         break;
       }
       nextSeen.add(normalizedBody);
-      const nestedCues = await fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, fetchSegment, nextSeen);
+      const nestedCues = await fetchAndParseNestedMpdSubtitle(text, segmentUrl, nestedDepth, fetchSegment, nextSeen, deadline);
       if (nestedCues.length > 0) {
         return { kind: 'cues', cues: nestedCues };
       }
-      break;
+      // Nested MPD yielded 0 cues — preserve accumulated bodies instead of discarding.
+      continue;
     }
 
     bodies.push(text);
@@ -879,7 +824,7 @@ function isMpdManifestBody(body: string): boolean {
  * served with a dash+xml content-type. TTML (application/ttml+xml) is NOT
  * treated as a manifest — it is valid subtitle content.
  */
-function isManifestResponse(body: string, contentType: string): boolean {
+export function isManifestResponse(body: string, contentType: string): boolean {
   // Defensive: WebVTT content is never a manifest, even if the CDN mislabels
   // the Content-Type as application/dash+xml.
   const trimmed = body.trimStart();
