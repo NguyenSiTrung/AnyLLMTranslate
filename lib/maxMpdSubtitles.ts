@@ -23,6 +23,8 @@ export interface SegmentFetchTemplate {
   representationId: string;
   bandwidth: string;
   mpdUrl: string;
+  /** Period-level BaseURL from the parent Period (HBO Max APAC CDN). */
+  periodBaseUrl?: string;
   adaptationBaseUrl?: string;
 }
 
@@ -160,6 +162,36 @@ export function extractSubtitleTracks(mpdXml: Document, baseUrl: string): MpdSub
   }
 
   return tracks;
+}
+
+/**
+ * Prefer main-content subtitle tracks over short lead-in Period segments.
+ * HBO Max multi-Period manifests list a ~30s Period 0 (startNumber=1) and
+ * longer Periods with startNumber>1 for the rest of the presentation.
+ */
+export function prioritizeMpdTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
+  return [...tracks].sort((a, b) => scoreMpdTrackForFetch(b) - scoreMpdTrackForFetch(a));
+}
+
+/** @internal Scoring helper exported for tests. */
+export function scoreMpdTrackForFetch(track: MpdSubtitleTrack): number {
+  let score = 0;
+  const start = inferSegmentStartNumber(track);
+  if (start > 1) score += start * 100;
+  if (track.segmentUrls && track.segmentUrls.length > 1) {
+    score += track.segmentUrls.length * 10;
+  }
+  return score;
+}
+
+function inferSegmentStartNumber(track: MpdSubtitleTrack): number {
+  if (track.segmentFetch?.startNumber) return track.segmentFetch.startNumber;
+  const match = track.url.match(/\/(\d+)\.vtt(?:\?|$)/i);
+  if (match) {
+    const n = parseInt(match[1], 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 1;
 }
 
 /**
@@ -453,12 +485,14 @@ function buildRepresentationSegmentUrls(
   baseUrl: string,
   mpdXml: Document,
 ): BuiltRepresentationSegments | null {
+  const periodBaseUrl = getPeriodBaseUrl(adaptationSet);
   const adaptationBaseUrl = getDirectChildBaseUrl(adaptationSet);
+  const mediaBaseUrl = getEffectiveMediaBaseUrl(periodBaseUrl, adaptationBaseUrl, baseUrl);
 
   const baseUrlEl = rep.querySelector('BaseURL');
   if (baseUrlEl?.textContent?.trim()) {
     const resolved = resolveSubtitleUrl(
-      joinMediaPaths(adaptationBaseUrl, baseUrlEl.textContent.trim()),
+      joinMediaPaths(mediaBaseUrl, baseUrlEl.textContent.trim()),
       baseUrl,
     );
     if (resolved && !isSelfReferentialSubtitleUrl(resolved, baseUrl)) {
@@ -466,7 +500,7 @@ function buildRepresentationSegmentUrls(
     }
   }
 
-  const segmentListUrls = buildSegmentListUrls(rep, adaptationSet, baseUrl, adaptationBaseUrl);
+  const segmentListUrls = buildSegmentListUrls(rep, adaptationSet, baseUrl, mediaBaseUrl);
   if (segmentListUrls) {
     return { urls: segmentListUrls };
   }
@@ -483,6 +517,7 @@ function buildRepresentationSegmentUrls(
     rep,
     adaptationSet,
     baseUrl,
+    periodBaseUrl,
     adaptationBaseUrl,
   );
   const segmentCount = resolveSegmentCount(segmentTemplate, mpdXml);
@@ -498,6 +533,7 @@ function buildRepresentationSegmentUrls(
         representationId: templateContext.representationId,
         bandwidth: templateContext.bandwidth,
         mpdUrl: baseUrl,
+        periodBaseUrl: templateContext.periodBaseUrl,
         adaptationBaseUrl: templateContext.adaptationBaseUrl,
       },
     };
@@ -519,6 +555,7 @@ interface TemplateContext {
   representationId: string;
   bandwidth: string;
   mpdUrl: string;
+  periodBaseUrl?: string;
   adaptationBaseUrl?: string;
 }
 
@@ -527,6 +564,7 @@ function createTemplateContext(
   rep: Element,
   adaptationSet: Element,
   mpdUrl: string,
+  periodBaseUrl?: string,
   adaptationBaseUrl?: string,
 ): TemplateContext {
   return {
@@ -535,13 +573,19 @@ function createTemplateContext(
     representationId: rep.getAttribute('id') ?? '',
     bandwidth: rep.getAttribute('bandwidth') ?? '',
     mpdUrl,
+    periodBaseUrl,
     adaptationBaseUrl: adaptationBaseUrl ?? getDirectChildBaseUrl(adaptationSet),
   };
 }
 
 function buildTemplatedSegmentUrl(context: TemplateContext, number: number): string | null {
   const mediaPath = applySegmentTemplate(context.media, context, number);
-  return resolveSubtitleUrl(joinMediaPaths(context.adaptationBaseUrl, mediaPath), context.mpdUrl);
+  const mediaBase = getEffectiveMediaBaseUrl(
+    context.periodBaseUrl,
+    context.adaptationBaseUrl,
+    context.mpdUrl,
+  );
+  return resolveSubtitleUrl(joinMediaPaths(mediaBase, mediaPath), context.mpdUrl);
 }
 
 function applySegmentTemplate(media: string, context: TemplateContext, number: number): string {
@@ -555,7 +599,7 @@ function buildSegmentListUrls(
   rep: Element,
   adaptationSet: Element,
   baseUrl: string,
-  adaptationBaseUrl?: string,
+  mediaBaseUrl?: string,
 ): string[] | null {
   const segmentList =
     rep.querySelector('SegmentList') ?? adaptationSet.querySelector('SegmentList');
@@ -565,7 +609,7 @@ function buildSegmentListUrls(
   for (const segmentUrlEl of Array.from(segmentList.querySelectorAll('SegmentURL'))) {
     const media = segmentUrlEl.getAttribute('media');
     if (!media) continue;
-    const resolved = resolveSubtitleUrl(joinMediaPaths(adaptationBaseUrl, media), baseUrl);
+    const resolved = resolveSubtitleUrl(joinMediaPaths(mediaBaseUrl, media), baseUrl);
     if (!resolved || isSelfReferentialSubtitleUrl(resolved, baseUrl)) continue;
     urls.push(resolved);
   }
@@ -650,6 +694,56 @@ function getDirectChildBaseUrl(element: Element): string | undefined {
   return undefined;
 }
 
+/** Walk up from an AdaptationSet to its enclosing Period BaseURL. */
+function getPeriodBaseUrl(adaptationSet: Element): string | undefined {
+  let parent: Element | null = adaptationSet.parentElement;
+  while (parent) {
+    if (parent.localName === 'Period') {
+      return getDirectChildBaseUrl(parent);
+    }
+    parent = parent.parentElement;
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the base used to join SegmentTemplate / BaseURL media paths.
+ * Period BaseURL wins (HBO Max APAC uses a different CDN host per Period).
+ */
+function getEffectiveMediaBaseUrl(
+  periodBaseUrl: string | undefined,
+  adaptationBaseUrl: string | undefined,
+  mpdUrl: string,
+): string {
+  const mpdBase = mpdResolveBase(mpdUrl) ?? mpdUrl;
+
+  const period = periodBaseUrl?.trim();
+  if (period) {
+    if (/^https?:\/\//i.test(period)) {
+      return period.endsWith('/') ? period : `${period}/`;
+    }
+    try {
+      return new URL(period, mpdBase).href;
+    } catch {
+      // fall through
+    }
+  }
+
+  const adaptation = adaptationBaseUrl?.trim();
+  if (adaptation) {
+    if (/^https?:\/\//i.test(adaptation)) {
+      return adaptation.endsWith('/') ? adaptation : `${adaptation}/`;
+    }
+    try {
+      return new URL(adaptation, mpdBase).href;
+    } catch {
+      // fall through
+    }
+  }
+
+  return mpdBase;
+}
+
 function joinMediaPaths(prefix: string | undefined, media: string): string {
   if (!prefix) return media;
   if (/^https?:\/\//i.test(media)) return media;
@@ -676,6 +770,7 @@ async function fetchSegmentBodiesProgressively(
     representationId: template.representationId,
     bandwidth: template.bandwidth,
     mpdUrl: template.mpdUrl,
+    periodBaseUrl: template.periodBaseUrl,
     adaptationBaseUrl: template.adaptationBaseUrl,
   };
 

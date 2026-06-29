@@ -8,6 +8,8 @@ import {
   fetchRealSubtitleContent,
   processMpdSubtitleTracks,
   resetMaxMpdSubtitleFetchDiagnostics,
+  prioritizeMpdTracksForFetch,
+  scoreMpdTrackForFetch,
 } from '@/lib/maxMpdSubtitles';
 
 function parseTestMpd(xml: string, url: string): Document {
@@ -444,6 +446,48 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     expect(segmentFetch.media).toBe('t/t6/$Number$.vtt');
   });
 
+  it('resolves multi-Period manifest: Period BaseURL for lead-in, MPD host for main content', () => {
+    const mpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period id="0" duration="PT29.96S">
+    <BaseURL>https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/</BaseURL>
+    <AdaptationSet lang="en-US" contentType="text">
+      <Representation id="t1" mimeType="text/vtt">
+        <SegmentTemplate startNumber="1" media="t/3_f384f7/t1/$Number$.vtt">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period id="29960" start="PT29.960S">
+    <AdaptationSet lang="en-US" contentType="text">
+      <Representation id="t3" mimeType="text/vtt">
+        <SegmentTemplate startNumber="8" media="t/caa516/t3/$Number$.vtt">
+          <SegmentTimeline><S t="6698800" d="734679"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, mpdUrl);
+    const tracks = extractSubtitleTracks(doc, mpdUrl);
+    expect(tracks).toHaveLength(2);
+
+    const leadIn = tracks.find((t) => t.url.includes('3_f384f7'));
+    const main = tracks.find((t) => t.url.includes('caa516'));
+    expect(leadIn?.url).toBe(
+      'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/t/3_f384f7/t1/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+    expect(main?.url).toBe(
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/t/caa516/t3/8.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+
+    const sorted = prioritizeMpdTracksForFetch(tracks);
+    expect(sorted[0].url).toBe(main?.url);
+  });
+
   it('resolves SegmentTemplate with startNumber > 1 under dash.mpd paths', () => {
     const dashMpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9/dash.mpd?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
     const xml = `<?xml version="1.0"?>
@@ -465,6 +509,48 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     expect(tracks[0].url).toBe(
       'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9/t/caa516/t3/8.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
     );
+  });
+
+  it('resolves Period BaseURL on a different CDN host (HBO Max APAC Period 0)', () => {
+    const mpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const periodBase = 'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period id="0" duration="PT29.96S">
+    <BaseURL>${periodBase}</BaseURL>
+    <AdaptationSet id="8" lang="en-US" contentType="text">
+      <Representation mimeType="text/vtt" id="t1" bandwidth="22">
+        <SegmentTemplate timescale="1000" startNumber="1" media="t/3_f384f7/t1/$Number$.vtt">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const doc = parseTestMpd(xml, mpdUrl);
+    const tracks = extractSubtitleTracks(doc, mpdUrl);
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe(
+      'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/t/3_f384f7/t1/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+    expect(tracks[0].url).not.toContain('gcp.asia.prd.media.max.com/fadb6e8d');
+  });
+
+  it('prefers main-content tracks with startNumber > 1 over Period-0 lead-in', () => {
+    const leadIn = {
+      url: 'https://gcp.apac-free.prd.media.max.com/apac/abc/t/3_f384f7/t1/1.vtt?token=a',
+      language: 'en-US',
+      segmentFetch: { media: 't/3_f384f7/t1/$Number$.vtt', startNumber: 1, representationId: 't1', bandwidth: '', mpdUrl: 'https://cdn.example.com/manifest.mpd' },
+    };
+    const main = {
+      url: 'https://gcp.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/8.vtt?token=a',
+      language: 'en-US',
+      segmentFetch: { media: 't/caa516/t3/$Number$.vtt', startNumber: 8, representationId: 't3', bandwidth: '', mpdUrl: 'https://cdn.example.com/manifest.mpd' },
+    };
+    const sorted = prioritizeMpdTracksForFetch([leadIn, main]);
+    expect(sorted[0].url).toBe(main.url);
+    expect(scoreMpdTrackForFetch(main)).toBeGreaterThan(scoreMpdTrackForFetch(leadIn));
   });
 
   it('resolves HBO Max APAC real MPD subtitle segments under extensionless manifest URL', () => {

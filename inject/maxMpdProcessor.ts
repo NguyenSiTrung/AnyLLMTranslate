@@ -17,6 +17,7 @@ import {
   parseMpd,
   extractSubtitleTracks,
   fetchAndParseSubtitle,
+  prioritizeMpdTracksForFetch,
   type ParsedSubtitleCue,
   type MpdSubtitleTrack,
 } from '@/lib/maxMpdSubtitles';
@@ -118,7 +119,9 @@ export async function processMaxMpdManifest(
   registerMpdRepresentationLanguages(
     allTracks.map((t) => ({ language: t.language, url: t.url })),
   );
-  const tracks = dedupeTracksByUrl(selectTracksForFetch(allTracks, targetLang));
+  const tracks = dedupeTracksByUrl(
+    prioritizeMpdTracksForFetch(selectTracksForFetch(allTracks, targetLang)),
+  );
   if (tracks.length === 0) {
     console.log('AnyLLMTranslate: Max MPD manifest has no matching subtitle tracks', {
       url: mpdUrl,
