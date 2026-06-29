@@ -39,8 +39,17 @@ const { testConnection } = vi.hoisted(() => ({
   }),
 }));
 
+const { listProviderModels } = vi.hoisted(() => ({
+  listProviderModels: vi.fn(async () => ({
+    success: true,
+    models: ['gpt-4o-mini', 'gpt-4o'],
+    latencyMs: 15,
+  })),
+}));
+
 vi.mock('@/services/providerTester', () => ({
   testConnection,
+  listProviderModels,
 }));
 
 function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
@@ -223,6 +232,21 @@ describe('ProvidersSection expanded provider features', () => {
     expect(screen.getByText('Provider template')).toBeInTheDocument();
   });
 
+  it('shows browse models control when a provider is expanded', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+
+    expect(screen.getByRole('button', { name: /browse models/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /browse models/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('gpt-4o-mini')).toBeInTheDocument();
+      expect(screen.getByText('gpt-4o')).toBeInTheDocument();
+    });
+    expect(listProviderModels).toHaveBeenCalled();
+  });
+
   it('shows temperature and max tokens sliders when expanded', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI')); // expand
@@ -234,8 +258,9 @@ describe('ProvidersSection expanded provider features', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI'));
 
-    const providerTestButton = screen.getAllByRole('button', { name: /^test$/i })[0];
-    fireEvent.click(providerTestButton);
+    // Provider-level test lives in the "Test connection" panel (after sliders).
+    const testButtons = screen.getAllByRole('button', { name: /^test$/i });
+    fireEvent.click(testButtons[testButtons.length - 1]!);
 
     await waitFor(() => {
       expect(screen.getByText('Reachability')).toBeInTheDocument();
@@ -249,7 +274,7 @@ describe('ProvidersSection expanded provider features', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI'));
 
-    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[1];
+    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[0]!;
     fireEvent.click(keyTestButton);
 
     await waitFor(() => {

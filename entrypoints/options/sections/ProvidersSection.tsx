@@ -22,6 +22,7 @@ import { poolIdGenerators } from '@/lib/config';
 import { getCatalogEntryById, OPENAI_COMPATIBLE_CATALOG } from '@/lib/openAiCompatibleCatalog';
 import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
 import { ConnectionTestProgressList } from '../components/ConnectionTestProgressList';
+import { ModelPicker } from '../components/ModelPicker';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
@@ -310,25 +311,14 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                       onSelect={(selection) => handleCatalogSelect(provider.id, selection)}
                     />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
-                        <Input
-                          id={`pn-${provider.id}`}
-                          value={provider.displayName}
-                          onChange={(e) => updateProviderFields(provider.id, { displayName: e.target.value })}
-                          placeholder="OpenAI"
-                        />
-                      </FieldGroup>
-                      <FieldGroup label="Model" htmlFor={`pm-${provider.id}`}>
-                        <Input
-                          id={`pm-${provider.id}`}
-                          value={provider.model}
-                          onChange={(e) => updateProviderFields(provider.id, { model: e.target.value })}
-                          placeholder="gpt-4o-mini"
-                          className="font-mono"
-                        />
-                      </FieldGroup>
-                    </div>
+                    <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
+                      <Input
+                        id={`pn-${provider.id}`}
+                        value={provider.displayName}
+                        onChange={(e) => updateProviderFields(provider.id, { displayName: e.target.value })}
+                        placeholder="OpenAI"
+                      />
+                    </FieldGroup>
 
                     <FieldGroup label="Base URL" htmlFor={`pu-${provider.id}`}>
                       <Input
@@ -340,6 +330,42 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                         className="font-mono"
                       />
                     </FieldGroup>
+
+                    {/* Keys — placed before model picker so Browse models can use credentials */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs uppercase tracking-widest text-zinc-600">API Keys</span>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Plus className="w-3.5 h-3.5" />}
+                          onClick={() => addKey(provider.id)}
+                        >
+                          Add key
+                        </Button>
+                      </div>
+                      {provider.keys.map((key) => (
+                        <KeyRow
+                          key={key.id}
+                          provider={provider}
+                          poolKey={key}
+                          targetLanguage={settings.targetLanguage}
+                          onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
+                          onRemove={() => removeKey(provider.id, key.id)}
+                        />
+                      ))}
+                    </div>
+
+                    <ModelPicker
+                      inputId={`pm-${provider.id}`}
+                      provider={buildProviderConfig(provider, getCredentialKey(provider) ?? provider.keys[0] ?? {
+                        id: '',
+                        apiKey: '',
+                        maxRpm: 0,
+                        enabled: true,
+                      })}
+                      onModelChange={(model) => updateProviderFields(provider.id, { model })}
+                    />
 
                     {/* Temperature & Max Tokens */}
                     <div className="grid grid-cols-2 gap-4">
@@ -372,31 +398,6 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                       provider={provider}
                       targetLanguage={settings.targetLanguage}
                     />
-
-                    {/* Keys */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-widest text-zinc-600">API Keys</span>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<Plus className="w-3.5 h-3.5" />}
-                          onClick={() => addKey(provider.id)}
-                        >
-                          Add key
-                        </Button>
-                      </div>
-                      {provider.keys.map((key) => (
-                        <KeyRow
-                          key={key.id}
-                          provider={provider}
-                          poolKey={key}
-                          targetLanguage={settings.targetLanguage}
-                          onUpdate={(patch) => updateKey(provider.id, key.id, patch)}
-                          onRemove={() => removeKey(provider.id, key.id)}
-                        />
-                      ))}
-                    </div>
                   </div>
                 )}
               </Card>
@@ -484,6 +485,10 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   );
 }
 
+function getCredentialKey(provider: PoolProvider): PoolKey | undefined {
+  return provider.keys.find((k) => !provider.requiresApiKey || k.apiKey.trim());
+}
+
 function buildProviderConfig(provider: PoolProvider, key: PoolKey): ProviderConfig {
   return {
     preset: 'custom',
@@ -548,7 +553,7 @@ function ProviderConnectionTest({
   targetLanguage: string;
 }) {
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
-  const testKey = provider.keys.find((k) => !provider.requiresApiKey || k.apiKey.trim());
+  const testKey = getCredentialKey(provider);
   const canTest = testKey ? canRunConnectionTest(provider, testKey) : false;
   const failedStep = testResult?.steps.find((s) => !s.success);
   const failedMessage = getConnectionErrorMessage(failedStep?.error);
