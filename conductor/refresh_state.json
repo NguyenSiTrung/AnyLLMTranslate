@@ -1,33 +1,33 @@
 {
-  "lastRefresh": "2026-06-27T12:30:00+07:00",
+  "lastRefresh": "2026-06-29T18:45:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: incremental state-sync refresh. Only 1 conductor track archived since the 2026-06-26 cycle: provider-pool-resilience_20260627 (created/completed/archived 2026-06-27, 8 phases). Commit 865c456 already did the heavy lifting (product.md Implementation Status entry + Current State bumped to 1723 tests; full 'Provider Pool Resilience (2026-06-27)' section elevated to patterns.md). This cycle only synced the leftover state markers.",
-    "product.md: refresh marker bumped 2026-06-26/1675/54 -> 2026-06-27/1723/55.",
-    "product.md: Current State '54 tracks archived' -> '55'; test-file count corrected 122 -> 121 (a test file was consolidated in an earlier track).",
-    "patterns.md: refresh marker bumped (header) to 2026-06-27/1723/55.",
-    "patterns.md: footer health line updated to 'Last refreshed 2026-06-27', 1723 tests / 121 files, 55 tracks archived.",
-    "patterns.md: NEW pattern appended to 'Provider Pool Resilience' section — 'Fake-timer + rejecting-promise ordering' (attach .catch / expect().rejects handler BEFORE vi.advanceTimersByTimeAsync, or the rejection fires mid-advance as unhandled). 7th bullet in that section.",
+    "Scope: incremental state-sync refresh. Only 1 conductor track archived since the 2026-06-27 cycle: hbomax-subtitle-deepfix_20260629 (created/completed/archived 2026-06-29, 6 phases, 14 issues fixed). Commits 09d2aac...4ce1f76.",
+    "product.md: refresh marker bumped 2026-06-27/1723/55 -> 2026-06-29/1831/56.",
+    "product.md: NEW Implementation Status entry added for 'HBO Max Subtitle Deep Analysis Fixes' (Archived 2026-06-29) — VTT capture track-switch lock reset, shared subtitleLanguagesMatch with script-subtag guard (zh-Hans != zh-Hant), FNV-1a hash dedup for bounded MPD body memory, 30s nested MPD fetch deadline, localized label handling, manifest detection consolidation, dead code removal, Max CDN URL checker dedup, code quality fixes, progressive fetch body preservation. 108 new tests (1831 total).",
+    "product.md: Current State bumped 1723/121/55 -> 1831/129/56.",
+    "patterns.md: refresh marker bumped (header) to 2026-06-29/1831/56.",
+    "patterns.md: footer health line updated to 'Last refreshed 2026-06-29', 1831 tests / 129 files, 56 tracks archived. The 4 headline patterns from hbomax-subtitle-deepfix were already elevated by the archive commit (4ce1f76). No new patterns to add this cycle.",
     "patterns.md: left the old mid-file snapshot at L454-455 (2026-06-23, 1570 tests, 53 tracks) untouched — it is explicitly labeled 'superseded by footer' and serves as a historical record.",
     "tech-stack.md: No drift vs package.json (no dependency changes this cycle).",
     "workflow.md: No drift.",
-    "tracks.md: No drift (provider-pool-resilience_20260627 already in archived list from archive commit 03ecd94; '55 tracks archived' already correct).",
-    "learnings: The 6 headline resilience patterns were already elevated by commit 865c456. This cycle added 1 additional testing gotcha from the track's Phase 2-6 learnings (fake-timer ordering) that had not made it into patterns.md. No duplicates to merge.",
-    "beads: Synced Conductor -> Beads. Closed 49 orphaned beads tasks for already-archived conductor tracks: rmu.* (provider-pool-resilience, 29 leaf tasks), a8m.* (pdf-download, 13 leaf + epic + 3 phase aggregators force-closed via -f), hza.* (hbomax/youku, 6 tasks). Final open count: 0. Pre-existing 0gu/74e epics noted in prior refreshes are no longer open (already resolved). bd mode = stealth.",
+    "tracks.md: No drift (hbomax-subtitle-deepfix_20260629 already in archived list from archive commit 4ce1f76; '56 tracks archived' now correct).",
+    "learnings: The 4 headline patterns from hbomax-subtitle-deepfix were already elevated to patterns.md by the archive commit. No additional patterns needed extraction. No cross-track duplicates to merge.",
+    "beads: Synced Conductor -> Beads. Closed 88 orphaned beads tasks for already-archived conductor tracks: ALT-1rx.* (hbomax-subtitle-deepfix, 26 tasks), ALT-0gu.* (audit-v2, 62 tasks), ALT-74e.* (coursera-udemy, 12 tasks). Final open count: 0. bd mode = stealth.",
     "backups: product.md.bak + patterns.md.bak + refresh_state.json.bak created before edits.",
-    "verification: pnpm test --run (1723/1723 passed across 121 files) run live this cycle. bd list = 0 open."
+    "verification: pnpm test --run (1831/1831 passed across 129 files) run live this cycle. bd list = 0 open."
   ],
   "codebaseHealth": {
-    "tests": 1723,
-    "testFiles": 121,
+    "tests": 1831,
+    "testFiles": 129,
     "buildSize": "~3.81 MB",
     "lintErrors": 5,
     "lintErrorsDetail": "3x no-non-null-assertion in content/__tests__/subtitleCoordinator.test.ts; no-dynamic-delete in entrypoints/options/sections/SubtitlesSection.tsx and entrypoints/popup/App.tsx. Pre-existing, unchanged at baseline.",
     "tscErrors": 3,
     "tscErrorsDetail": "content/__tests__/subtitleCoordinator.test.ts lines 271 (TS18048 'sent' possibly undefined), 1280 + 1338 (TS2345 mock not assignable to null). File untouched since 2026-06-24, baseline — lint is the gate, tsc previously untracked.",
-    "archivedTracks": 55,
+    "archivedTracks": 56,
     "activeTracks": 0,
     "failingTests": 0
   },
-  "beadsDrift": "Synced Conductor -> Beads this cycle. Closed all 49 orphaned tasks for archived tracks (rmu=provider-pool-resilience, a8m=pdf-download, hza=hbomax/youku). bd list now shows 0 open issues. No remaining drift."
+  "beadsDrift": "Synced Conductor -> Beads this cycle. Closed all 88 orphaned tasks for archived tracks (ALT-1rx=hbomax-subtitle-deepfix 26 tasks, ALT-0gu=audit-v2 62 tasks, ALT-74e=coursera-udemy 12 tasks). bd list now shows 0 open issues. No remaining drift."
 }

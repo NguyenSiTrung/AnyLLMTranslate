@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-27 all (post provider-pool-resilience archive — health re-verified: 1723/0 failing across 121 files, 55 archived) -->
+<!-- conductor-refresh: 2026-06-29 all (post hbomax-subtitle-deepfix archive — health re-verified: 1831/0 failing across 129 files, 56 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -549,8 +549,8 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **Test `beforeEach` blocks must only reset variables that are actually declared.** A copy-pasted `beforeEach` referencing `capturedTextTrackCuesHandler`/`capturedMseCuesHandler` — never declared and never captured (the file's `messageBridge` mock returns no-op cleanups for `onTextTrackCues`/`onMseCues`) — threw `ReferenceError` and failed every test in the `describe` block. When a mock factory doesn't *capture* a handler (it returns a no-op teardown), there is nothing to reset — reference only the handlers your mock actually captures. (from: hbomax tier-precedence hotfix test-regression fix, 2026-06-26)
 
 ---
-Last refreshed: 2026-06-27T12:30:00+07:00
-Codebase health: 1723 tests passing across 121 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1675 after the provider-pool-resilience track added 41 tests across 6 files — net file count 122→121 reflects a prior test-file consolidation), build ~3.81MB, 5 pre-existing lint errors at baseline (lint is the gate), 3 pre-existing `tsc` errors in subtitleCoordinator.test.ts previously untracked, 55 tracks archived, 0 active tracks
+Last refreshed: 2026-06-29T18:40:00+07:00
+Codebase health: 1831 tests passing across 129 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1723 after the hbomax-subtitle-deepfix track added 108 tests), build ~3.81MB, 5 pre-existing lint errors at baseline (lint is the gate), 3 pre-existing `tsc` errors in subtitleCoordinator.test.ts previously untracked, 56 tracks archived, 0 active tracks
 
 ## Multi-Provider Pool (2026-06-26)
 - **Round-robin coordinator at the single `initService()` seam:** A `ProviderPoolCoordinator implements TranslationService` returned by `initService()` covers all 7 translation paths (page, subtitle, PDF, selection, hover, inline, category-detect) in one place — no per-path changes. The coordinator holds one `OpenAICompatibleService` per enabled `(provider, key)` slot and delegates per call with round-robin + failover. (from: multi-provider-pool_20260626, 2026-06-26)
