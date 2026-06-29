@@ -20,6 +20,7 @@ import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
 import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
+import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { ProviderPoolCoordinator } from '@/services/providerPool';
@@ -786,6 +787,7 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)hbomax\.com$/,
   /(?:^|\.)hbo\.com$/,
   /(?:^|\.)delivery\.mp\.microsoft\.com$/,
+  /(?:^|\.)media\.max\.com$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {
@@ -945,7 +947,7 @@ async function handleFetchManifestSubtitles(
       }
 
       const track = message.preferredLanguage
-        ? tracks.find((t) => t.language === message.preferredLanguage) ?? tracks[0]
+        ? tracks.find((t) => subtitleLanguagesMatch(t.language, message.preferredLanguage!)) ?? tracks[0]
         : tracks[0];
       if (!isAllowedSubtitleUrl(track.url)) {
         return { success: false, error: 'Track URL not in allow-list' };

@@ -46,6 +46,7 @@ import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
+import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -981,7 +982,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     preferred &&
     preferred !== 'auto' &&
     payload.language &&
-    payload.language !== preferred
+    !subtitleLanguagesMatch(payload.language, preferred)
   ) {
     return;
   }
@@ -1649,10 +1650,12 @@ async function tryAutoActivate(epochAtStart: number): Promise<{ activated: boole
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
   if (settings.subtitleSettings?.enabled && autoActivate && preferredLang) {
-    const preferred = state.availableTracks.find((t) => t.language === preferredLang);
+    const preferred = state.availableTracks.find(
+      (t) => subtitleLanguagesMatch(t.language, preferredLang),
+    );
     if (preferred?.url) {
       console.log('AnyLLMTranslate: Auto-activating preferred subtitle track on play', preferredLang);
-      await selectSubtitleTrack(preferredLang);
+      await selectSubtitleTrack(preferred.language);
       if (state.activeSource === 'manifest') {
         return { activated: true, reason: `manifest track ${preferredLang}` };
       }
@@ -1715,7 +1718,7 @@ export async function tryAutoActivateForDom(options?: {
     !options?.manual &&
     preferred &&
     preferred !== 'auto' &&
-    activeLang !== preferred
+    !subtitleLanguagesMatch(activeLang, preferred)
   ) {
     return { activated: false, reason: `active language ${activeLang} != preferred ${preferred}` };
   }
@@ -1848,7 +1851,7 @@ function startVideoPlaybackWatcher(): () => void {
  * Proactively fetch and translate a specific subtitle track by language.
  */
 export async function selectSubtitleTrack(language: string): Promise<void> {
-  const track = state.availableTracks.find((t) => t.language === language);
+  const track = state.availableTracks.find((t) => subtitleLanguagesMatch(t.language, language));
   const handler = detectCurrentHandler();
   if (handler?.getDomCueSource && !track?.url) {
     if (!track) {
@@ -1895,7 +1898,7 @@ export async function manualActivateSubtitles(): Promise<void> {
     (t) => t.url && (
       !preferredLang ||
       preferredLang === 'auto' ||
-      t.language === preferredLang
+      subtitleLanguagesMatch(t.language, preferredLang)
     ),
   );
   if (urlTrack) {

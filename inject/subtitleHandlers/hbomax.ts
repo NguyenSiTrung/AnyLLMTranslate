@@ -5,50 +5,7 @@ import type {
   DomCueSource,
 } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
-
-/** Max aria-label → ISO 639-1 / BCP-47 code. Covers observed track labels. */
-const LABEL_TO_LANGUAGE: Record<string, string> = {
-  English: 'en',
-  'Chinese (Simplified)': 'zh-Hans',
-  'Chinese (Traditional)': 'zh-Hant',
-  Indonesian: 'id',
-  Malay: 'ms',
-  Thai: 'th',
-  Spanish: 'es',
-  Vietnamese: 'vi',
-  French: 'fr',
-  German: 'de',
-  Italian: 'it',
-  Japanese: 'ja',
-  Korean: 'ko',
-  Portuguese: 'pt',
-  'Portuguese (Brazil)': 'pt-BR',
-  Russian: 'ru',
-  Arabic: 'ar',
-  Hindi: 'hi',
-  Polish: 'pl',
-  Turkish: 'tr',
-  Dutch: 'nl',
-  Danish: 'da',
-  Finnish: 'fi',
-  Swedish: 'sv',
-  Norwegian: 'no',
-  'Norwegian Bokmål': 'nb',
-  Czech: 'cs',
-  Hungarian: 'hu',
-  Greek: 'el',
-  Hebrew: 'he',
-  Romanian: 'ro',
-  Catalan: 'ca',
-  Ukrainian: 'uk',
-  Bulgarian: 'bg',
-  Croatian: 'hr',
-  Slovak: 'sk',
-  Slovenian: 'sl',
-  Estonian: 'et',
-  Latvian: 'lv',
-  Lithuanian: 'lt',
-};
+import { MAX_LABEL_TO_LANGUAGE, readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
 
 export class HboMaxHandler implements SubtitleHandler {
   readonly platform = 'hbomax';
@@ -113,7 +70,7 @@ export class HboMaxHandler implements SubtitleHandler {
     for (const btn of buttons) {
       const label = btn.getAttribute('aria-label') || '';
       if (!label || label.toLowerCase() === 'off') continue;
-      const language = LABEL_TO_LANGUAGE[label] ?? label.toLowerCase();
+      const language = MAX_LABEL_TO_LANGUAGE[label] ?? label.toLowerCase();
       tracks.push({
         language,
         label,
@@ -142,17 +99,7 @@ export class HboMaxHandler implements SubtitleHandler {
 
   /** Read the active track's language from the aria-checked button. */
   private readActiveLanguage(): string {
-    const buttons = document.querySelectorAll<HTMLButtonElement>(
-      '[data-testid="player-ux-text-track-button"]',
-    );
-    for (const btn of buttons) {
-      if (btn.getAttribute('aria-checked') === 'true') {
-        const label = btn.getAttribute('aria-label') || '';
-        if (!label || label.toLowerCase() === 'off') return '';
-        return LABEL_TO_LANGUAGE[label] ?? label.toLowerCase();
-      }
-    }
-    return '';
+    return readMaxActiveSubtitleLanguage();
   }
 
   /** Extract videoId from /video/watch/<id>/... path. */

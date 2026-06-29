@@ -1,8 +1,8 @@
 /**
- * Max MPD subtitle processor — fetches and parses TTML tracks from intercepted manifests.
+ * Max MPD subtitle processor — fetches and parses subtitle tracks from intercepted manifests.
  *
  * Runs in MAIN world when fetch/XHR interceptors detect .mpd responses on Max pages.
- * Deduplicates repeated manifest requests and logs parsed cues to the console.
+ * Deduplicates repeated manifest requests and emits parsed cues to the coordinator.
  */
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
@@ -14,6 +14,8 @@ import {
   type ParsedSubtitleCue,
   type MpdSubtitleTrack,
 } from '@/lib/maxMpdSubtitles';
+import { readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
+import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import type { SubtitleCue } from '@/types/subtitle';
 
 const processedMpdUrls = new Set<string>();
@@ -26,8 +28,8 @@ export function resetMaxMpdProcessorState(): void {
 }
 
 /**
- * Process an intercepted MPD manifest: extract subtitle tracks, fetch, parse, log.
- * Safe to call multiple times — duplicate MPD and track URLs are skipped.
+ * Process an intercepted MPD manifest: extract subtitle tracks, fetch, parse, emit.
+ * Prefers the active Max subtitle language from the DOM; skips unavailable CDN tracks quietly.
  */
 export async function processMaxMpdManifest(
   mpdText: string,
@@ -46,7 +48,7 @@ export async function processMaxMpdManifest(
     return;
   }
 
-  const tracks = extractSubtitleTracks(mpdDoc, mpdUrl);
+  const tracks = prioritizeTracksForFetch(extractSubtitleTracks(mpdDoc, mpdUrl));
   if (tracks.length === 0) {
     console.log('AnyLLMTranslate: Max MPD manifest has no subtitle tracks', { url: mpdUrl });
     return;
@@ -55,21 +57,57 @@ export async function processMaxMpdManifest(
   console.log('AnyLLMTranslate: Max MPD subtitle tracks discovered', {
     mpdUrl,
     trackCount: tracks.length,
+    activeLanguage: readMaxActiveSubtitleLanguage() || undefined,
     tracks: tracks.map((t) => ({ language: t.language, url: t.url, mimeType: t.mimeType })),
   });
 
+  const activeLang = readMaxActiveSubtitleLanguage();
+  let emitted = false;
+
   for (const track of tracks) {
-    await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge);
+    const isPriority = !activeLang || subtitleLanguagesMatch(track.language, activeLang);
+    const cues = await fetchAndEmitSubtitleTrack(track, mpdUrl, bridge, isPriority);
+    if (cues && cues.length > 0) {
+      emitted = true;
+      if (isPriority) break;
+    }
+    // When user has an active language, don't fall back to other languages.
+    if (activeLang && isPriority) break;
   }
+
+  if (!emitted && activeLang) {
+    console.log('AnyLLMTranslate: MPD subtitle track unavailable for active language — DOM fallback', {
+      activeLanguage: activeLang,
+      mpdUrl,
+    });
+  }
+}
+
+/** Order tracks: active Max language first, then the rest. */
+export function prioritizeTracksForFetch(tracks: MpdSubtitleTrack[]): MpdSubtitleTrack[] {
+  const activeLang = readMaxActiveSubtitleLanguage();
+  if (!activeLang) return tracks;
+
+  const priority: MpdSubtitleTrack[] = [];
+  const rest: MpdSubtitleTrack[] = [];
+  for (const track of tracks) {
+    if (subtitleLanguagesMatch(track.language, activeLang)) {
+      priority.push(track);
+    } else {
+      rest.push(track);
+    }
+  }
+  return [...priority, ...rest];
 }
 
 async function fetchAndEmitSubtitleTrack(
   track: MpdSubtitleTrack,
   mpdUrl: string,
   bridge?: MessageBridgeSender,
-): Promise<void> {
+  isPriority = true,
+): Promise<SubtitleCue[] | null> {
   const normalizedTrackUrl = normalizeUrl(track.url);
-  if (processedTrackUrls.has(normalizedTrackUrl)) return;
+  if (processedTrackUrls.has(normalizedTrackUrl)) return null;
   processedTrackUrls.add(normalizedTrackUrl);
 
   try {
@@ -85,7 +123,6 @@ async function fetchAndEmitSubtitleTrack(
       language: track.language,
       url: track.url,
       cueCount: subtitleCues.length,
-      cues: subtitleCues,
     });
 
     if (bridge && subtitleCues.length > 0) {
@@ -96,13 +133,27 @@ async function fetchAndEmitSubtitleTrack(
         url: track.url,
       });
     }
+
+    return subtitleCues;
   } catch (error) {
-    console.warn('AnyLLMTranslate: Failed to fetch/parse Max subtitle track', {
-      mpdUrl,
-      language: track.language,
-      url: track.url,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const message = error instanceof Error ? error.message : String(error);
+    const is404 = message.includes('404');
+
+    if (isPriority) {
+      const level = is404 ? 'log' : 'warn';
+      console[level]('AnyLLMTranslate: Active MPD subtitle track unavailable', {
+        mpdUrl,
+        language: track.language,
+        url: track.url,
+        error: message,
+      });
+    } else {
+      console.log('AnyLLMTranslate: Skipping unavailable MPD subtitle track', {
+        language: track.language,
+        error: message,
+      });
+    }
+    return null;
   }
 }
 

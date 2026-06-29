@@ -59,7 +59,7 @@ export function extractSubtitleTracks(mpdXml: Document, baseUrl: string): MpdSub
     const representations = adaptationSet.querySelectorAll('Representation');
 
     for (const rep of Array.from(representations)) {
-      const url = extractRepresentationUrl(rep, baseUrl);
+      const url = extractRepresentationUrl(rep, adaptationSet, baseUrl);
       if (!url) continue;
       tracks.push({ url, language: lang, mimeType });
     }
@@ -131,23 +131,49 @@ function isSubtitleAdaptationSet(adaptationSet: Element): boolean {
   return hasSubtitleRole && mimeType !== 'video/mp4' && mimeType !== 'audio/mp4';
 }
 
-function extractRepresentationUrl(rep: Element, baseUrl: string): string | null {
+function extractRepresentationUrl(
+  rep: Element,
+  adaptationSet: Element,
+  baseUrl: string,
+): string | null {
   const baseUrlEl = rep.querySelector('BaseURL');
   if (baseUrlEl?.textContent?.trim()) {
-    return resolveUrl(baseUrlEl.textContent.trim(), baseUrl);
+    return resolveUrl(baseUrlEl.textContent.trim(), mpdResolveBase(baseUrl));
   }
 
-  const segmentTemplate = rep.querySelector('SegmentTemplate');
+  const segmentTemplate =
+    rep.querySelector('SegmentTemplate') ?? adaptationSet.querySelector('SegmentTemplate');
   if (segmentTemplate) {
     const media = segmentTemplate.getAttribute('media');
     if (media) {
       const startNumber = segmentTemplate.getAttribute('startNumber') ?? '1';
-      const url = media.replace(/\$Number\$/, startNumber);
-      return resolveUrl(url, baseUrl);
+      const representationId = rep.getAttribute('id') ?? '';
+      const bandwidth = rep.getAttribute('bandwidth') ?? '';
+      const url = media
+        .replace(/\$RepresentationID\$/g, representationId)
+        .replace(/\$Bandwidth\$/g, bandwidth)
+        .replace(/\$Number\$/g, startNumber);
+      return resolveUrl(url, mpdResolveBase(baseUrl));
     }
   }
 
   return null;
+}
+
+/** MPD-relative URL base (directory containing the .mpd file, without query). */
+function mpdResolveBase(mpdUrl: string): string {
+  try {
+    const url = new URL(mpdUrl);
+    url.search = '';
+    url.hash = '';
+    const slash = url.pathname.lastIndexOf('/');
+    if (slash >= 0) {
+      url.pathname = url.pathname.slice(0, slash + 1);
+    }
+    return url.href;
+  } catch {
+    return mpdUrl;
+  }
 }
 
 function resolveUrl(url: string, baseUrl: string): string {

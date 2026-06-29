@@ -183,6 +183,31 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     expect(updateCues).not.toHaveBeenCalled();
   });
 
+  it('accepts MPD language variants matching preferred (zh-Hans-SG ↔ zh-Hans)', async () => {
+    loadSettingsMock.mockResolvedValue({
+      ...JSON.parse(JSON.stringify(baseSettings)),
+      subtitleSettings: {
+        ...baseSettings.subtitleSettings,
+        preferredSubtitleLanguage: 'zh-Hans',
+      },
+    });
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator, isInOverlayMode } = await import('@/content/subtitleCoordinator');
+    const { initializeOverlay } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'zh-Hans-SG',
+      url: 'https://cdn.example.com/subs_zh.ttml',
+      cues: [{ startTime: 1, endTime: 2, text: '你好' }],
+    });
+
+    expect(isInOverlayMode()).toBe(true);
+    expect(initializeOverlay).toHaveBeenCalled();
+  });
+
   it('ignores non-preferred manifest language when preferred is set', async () => {
     setLocation('play.hbomax.com', '/video/watch/abc/def');
     const { startCoordinator, isInOverlayMode } = await import('@/content/subtitleCoordinator');
