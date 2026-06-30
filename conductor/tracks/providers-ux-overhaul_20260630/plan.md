@@ -38,7 +38,7 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 2: Catalog Get-Key Links (A2)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Add `getKeyUrl` field to `OpenAiCompatibleCatalogEntry` + populate real URLs
+- [x] Task 1: Add `getKeyUrl` field to `OpenAiCompatibleCatalogEntry` + populate real URLs
   - Add optional `getKeyUrl?: string` to the interface in `lib/openAiCompatibleCatalog.ts`.
   - Populate per entry: openrouter `https://openrouter.ai/keys`, groq `https://console.groq.com/keys`,
     nvidia-nim `https://build.nvidia.com/models/api-key`, together `https://api.together.xyz/settings/api-keys`,
@@ -47,12 +47,12 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `lib/openAiCompatibleCatalog.ts`, `lib/__tests__/openAiCompatibleCatalog.test.ts`
   - **Done:** field present; URLs set for keyed entries; data tests assert presence.
 
-- [ ] Task 2: Add `getKeyUrlForProvider(baseUrl)` helper + tests
+- [x] Task 2: Add `getKeyUrlForProvider(baseUrl)` helper + tests
   - Pure helper that infers the catalog entry from a base URL and returns its `getKeyUrl` (or undefined).
   - **Files:** `lib/openAiCompatibleCatalog.ts`, `lib/__tests__/openAiCompatibleCatalog.test.ts`
   - **Done:** helper resolves correct URL for known providers; undefined for unknown/keyless.
 
-- [ ] Task: Conductor - User Manual Verification 'Catalog Get-Key Links' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Catalog Get-Key Links' (Protocol in workflow.md)
 
 ---
 

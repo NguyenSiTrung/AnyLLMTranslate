@@ -12,6 +12,8 @@ export interface OpenAiCompatibleCatalogEntry {
   placeholder?: string;
   defaultModel?: string;
   supportsModelListing: boolean;
+  /** URL to obtain or manage API keys for this provider (omitted for keyless). */
+  getKeyUrl?: string;
 }
 
 export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
@@ -24,6 +26,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: 'sk-or-...',
     defaultModel: 'openai/gpt-4o-mini',
     supportsModelListing: true,
+    getKeyUrl: 'https://openrouter.ai/keys',
   },
   {
     id: 'nvidia-nim',
@@ -34,6 +37,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: 'nvapi-...',
     defaultModel: 'meta/llama-3.1-8b-instruct',
     supportsModelListing: true,
+    getKeyUrl: 'https://build.nvidia.com/models/api-key',
   },
   {
     id: 'groq',
@@ -44,6 +48,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: 'gsk_...',
     defaultModel: 'llama-3.1-8b-instant',
     supportsModelListing: true,
+    getKeyUrl: 'https://console.groq.com/keys',
   },
   {
     id: 'together',
@@ -54,6 +59,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: '...',
     defaultModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
     supportsModelListing: true,
+    getKeyUrl: 'https://api.together.xyz/settings/api-keys',
   },
   {
     id: 'fireworks',
@@ -64,6 +70,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: 'fw_...',
     defaultModel: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
     supportsModelListing: true,
+    getKeyUrl: 'https://fireworks.ai/api-keys',
   },
   {
     id: 'mistral',
@@ -74,6 +81,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     placeholder: '...',
     defaultModel: 'mistral-small-latest',
     supportsModelListing: true,
+    getKeyUrl: 'https://console.mistral.ai/api-keys/',
   },
   {
     id: 'ollama',
@@ -119,4 +127,22 @@ export function filterCatalog(
 
 export function getCatalogEntryById(id: string): OpenAiCompatibleCatalogEntry | undefined {
   return OPENAI_COMPATIBLE_CATALOG.find((e) => e.id === id);
+}
+
+/**
+ * Resolve the "Get API key" URL for a provider by matching its base URL
+ * against the catalog. Returns `undefined` for unknown or keyless providers
+ * (Ollama, LM Studio, Custom).
+ */
+export function getKeyUrlForProvider(baseUrl: string): string | undefined {
+  const normalized = baseUrl.trim().replace(/\/+$/, '');
+  if (!normalized) return undefined;
+  for (const entry of OPENAI_COMPATIBLE_CATALOG) {
+    if (!entry.getKeyUrl) continue;
+    const entryUrl = entry.baseUrl.replace(/\/+$/, '');
+    if (entryUrl && (normalized === entryUrl || normalized.startsWith(entryUrl + '/'))) {
+      return entry.getKeyUrl;
+    }
+  }
+  return undefined;
 }
