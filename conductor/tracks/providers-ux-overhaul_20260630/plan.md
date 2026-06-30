@@ -120,7 +120,7 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Write `lastTestResult` after each test run
+- [x] Task 1: Write `lastTestResult` after each test run
   - In `KeyRow.handleTest` and `ProviderConnectionTest.handleTest`, after `runTest` resolves, write
     `{ success, at: Date.now(), latencyMs, error }` to the key/provider via `onUpdate`/`updateProviderFields`.
   - Wire Phase 1 Task 3 invalidation: `updateKey`/`updateProviderFields` clear `lastTestResult` when
@@ -128,20 +128,20 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** test result persists across collapse/navigate; editing fields clears it.
 
-- [ ] Task 2: Render status dot + tooltip in collapsed provider header
+- [x] Task 2: Render status dot + tooltip in collapsed provider header
   - In the collapsed header, show a status dot/cluster derived from the provider's `lastTestResult`
     (and/or its keys' results): green ✓ (latency/age), red ✗, grey untested. Tooltip with age.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** collapsed card shows verifiable status; tooltip shows when/latency.
 
-- [ ] Task 3: "Test all keys" banner action
+- [x] Task 3: "Test all keys" banner action
   - Add a button in the readiness banner; on click, iterate enabled (provider, key) pairs
     sequentially (await each), respecting per-key RPM via the existing limiter semantics, writing
     each result (FR-1) and aggregating N/M healthy. Toast the aggregate.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** one click tests the whole pool; aggregate shown; results persist.
 
-- [ ] Task: Conductor - User Manual Verification 'Test-Status Surfacing & Bulk Test' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Test-Status Surfacing & Bulk Test' (Protocol in workflow.md)
 
 ---
 

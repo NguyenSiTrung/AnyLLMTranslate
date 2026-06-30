@@ -34,6 +34,7 @@ import { Slider } from '@/ui/Slider';
 import { useToast } from '@/ui/ToastProvider';
 import { Modal } from '@/ui/Modal';
 import { getConnectionErrorMessage, getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
+import { applyProviderPatch, applyKeyPatch, formatTestResultAge } from '@/lib/poolTestStatus';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -43,6 +44,7 @@ import type {
   PoolProvider,
   PoolKey,
   ProviderConfig,
+  KeyTestResult,
 } from '@/types/config';
 import { testConnection } from '@/services/providerTester';
 import type { ConnectionTestResult, ConnectionTestStep } from '@/services/providerTester';
@@ -70,6 +72,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const [expandedProviderIds, setExpandedProviderIds] = useState<Set<string>>(new Set());
   const [showAddProviderModal, setShowAddProviderModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isBulkTesting, setIsBulkTesting] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState(
     settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   );
@@ -97,7 +100,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const updateProviderFields = useCallback(
     (providerId: string, patch: Partial<PoolProvider>) => {
       commitProviders(
-        providers.map((p) => (p.id === providerId ? { ...p, ...patch } : p)),
+        providers.map((p) => (p.id === providerId ? applyProviderPatch(p, patch) : p)),
       );
     },
     [providers, commitProviders],
@@ -110,7 +113,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
           p.id === providerId
             ? {
                 ...p,
-                keys: p.keys.map((k) => (k.id === keyId ? { ...k, ...patch } : k)),
+                keys: p.keys.map((k) => (k.id === keyId ? applyKeyPatch(k, patch) : k)),
               }
             : p,
         ),
@@ -213,6 +216,62 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
     setExpandedProviderIds(new Set());
   }, []);
 
+  /** Test all enabled (provider, key) pairs sequentially and aggregate results. */
+  const handleTestAll = useCallback(async () => {
+    const slots: { providerId: string; keyId: string; config: ProviderConfig }[] = [];
+    for (const p of providers) {
+      if (!p.enabled) continue;
+      for (const k of p.keys) {
+        if (!k.enabled) continue;
+        if (p.requiresApiKey && !k.apiKey.trim()) continue;
+        slots.push({
+          providerId: p.id,
+          keyId: k.id,
+          config: buildProviderConfig(p, k),
+        });
+      }
+    }
+    if (slots.length === 0) return;
+
+    setIsBulkTesting(true);
+    let healthy = 0;
+    const testResults: { providerId: string; keyId: string; result: KeyTestResult }[] = [];
+
+    for (const slot of slots) {
+      try {
+        const result = await testConnection(slot.config, undefined, settings.targetLanguage);
+        const keyResult: KeyTestResult = {
+          success: result.overall,
+          at: Date.now(),
+          latencyMs: result.totalLatencyMs,
+          error: result.overall ? undefined : result.steps.find((s) => !s.success)?.error,
+        };
+        testResults.push({ providerId: slot.providerId, keyId: slot.keyId, result: keyResult });
+        if (result.overall) healthy++;
+      } catch {
+        testResults.push({
+          providerId: slot.providerId,
+          keyId: slot.keyId,
+          result: { success: false, at: Date.now(), error: 'Test failed' },
+        });
+      }
+    }
+
+    // Write all results to the pool model.
+    const resultsByKey = new Map(testResults.map((r) => [r.keyId, r.result]));
+    commitProviders(
+      providers.map((p) => ({
+        ...p,
+        keys: p.keys.map((k) =>
+          resultsByKey.has(k.id) ? { ...k, lastTestResult: resultsByKey.get(k.id) } : k,
+        ),
+      })),
+    );
+
+    setIsBulkTesting(false);
+    showSuccess(`Test complete: ${healthy}/${slots.length} key${slots.length !== 1 ? 's' : ''} healthy`);
+  }, [providers, settings.targetLanguage, commitProviders, showSuccess]);
+
   const toggleProvider = useCallback((providerId: string) => {
     setExpandedProviderIds((prev) => {
       const next = new Set(prev);
@@ -270,6 +329,17 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                   Open setup guide
                 </Button>
               )}
+              {enabledKeyCount > 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={isBulkTesting}
+                  icon={!isBulkTesting ? <Zap className="w-3.5 h-3.5" /> : undefined}
+                  onClick={handleTestAll}
+                >
+                  {isBulkTesting ? 'Testing...' : 'Test all keys'}
+                </Button>
+              )}
             </div>
           </Card>
         </div>
@@ -315,6 +385,20 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                       {provider.enabled ? 'on' : 'off'}
                     </Badge>
                     <span className="text-xs text-zinc-500">{provider.keys.length} key{provider.keys.length !== 1 ? 's' : ''}</span>
+                    {(() => {
+                      const status = getProviderTestStatus(provider);
+                      if (status.state === 'untested') return null;
+                      const color = status.state === 'healthy' ? 'bg-emerald-500' : 'bg-red-500';
+                      const label = status.state === 'healthy' ? 'Verified' : 'Failed';
+                      const age = status.result ? formatTestResultAge(status.result) : '';
+                      return (
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full ${color}`}
+                          title={`${label}${age ? ` (${age})` : ''}`}
+                          aria-label={`${label}${age ? ` ${age}` : ''}`}
+                        />
+                      );
+                    })()}
                   </span>
                   <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                 </button>
@@ -452,6 +536,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                     <ProviderConnectionTest
                       provider={provider}
                       targetLanguage={settings.targetLanguage}
+                      onTestComplete={(result) => updateProviderFields(provider.id, { lastTestResult: result })}
                     />
                   </div>
                 )}
@@ -567,6 +652,23 @@ function canRunConnectionTest(provider: PoolProvider, key?: PoolKey): boolean {
   return provider.keys.some((k) => !provider.requiresApiKey || Boolean(k.apiKey.trim()));
 }
 
+/** Aggregate test status for a provider from its keys' lastTestResult. */
+function getProviderTestStatus(provider: PoolProvider): { state: 'healthy' | 'failed' | 'untested'; result?: KeyTestResult } {
+  const testedKeys = provider.keys.filter((k) => k.lastTestResult);
+  if (testedKeys.length === 0 && !provider.lastTestResult) {
+    return { state: 'untested' };
+  }
+  const anySuccess = testedKeys.some((k) => k.lastTestResult?.success);
+  const allFailed = testedKeys.length > 0 && testedKeys.every((k) => k.lastTestResult?.success === false);
+  if (anySuccess) {
+    return { state: 'healthy', result: testedKeys.find((k) => k.lastTestResult?.success)?.lastTestResult };
+  }
+  if (allFailed) {
+    return { state: 'failed', result: testedKeys[0]?.lastTestResult };
+  }
+  return { state: 'untested' };
+}
+
 function useConnectionTest(targetLanguage: string) {
   const { success: showSuccess, error: showError } = useToast();
   const [isTesting, setIsTesting] = useState(false);
@@ -603,9 +705,11 @@ function useConnectionTest(targetLanguage: string) {
 function ProviderConnectionTest({
   provider,
   targetLanguage,
+  onTestComplete,
 }: {
   provider: PoolProvider;
   targetLanguage: string;
+  onTestComplete?: (result: KeyTestResult) => void;
 }) {
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
   const testKey = getCredentialKey(provider);
@@ -615,7 +719,13 @@ function ProviderConnectionTest({
 
   const handleTest = async () => {
     if (!testKey) return;
-    await runTest(buildProviderConfig(provider, testKey), `${provider.displayName || 'Provider'} connection verified`);
+    const result = await runTest(buildProviderConfig(provider, testKey), `${provider.displayName || 'Provider'} connection verified`);
+    onTestComplete?.({
+      success: result.overall,
+      at: Date.now(),
+      latencyMs: result.totalLatencyMs,
+      error: result.overall ? undefined : failedStep?.error,
+    });
   };
 
   return (
@@ -689,10 +799,18 @@ function KeyRow({
   const getKeyUrl = getKeyUrlForProvider(provider.baseUrl);
 
   const handleTest = async () => {
-    await runTest(
+    const result = await runTest(
       buildProviderConfig(provider, poolKey),
       `Key "${poolKey.label || 'key'}" is healthy`,
     );
+    onUpdate({
+      lastTestResult: {
+        success: result.overall,
+        at: Date.now(),
+        latencyMs: result.totalLatencyMs,
+        error: result.overall ? undefined : result.steps.find((s) => !s.success)?.error,
+      },
+    });
   };
 
   const commitMaxRpm = () => {

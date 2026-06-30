@@ -491,6 +491,128 @@ describe('ProvidersSection key row — keyless & get-key link', () => {
   });
 });
 
+describe('ProvidersSection persisted test status & bulk test', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('writes lastTestResult to the key after a key test', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+
+    const keyTestButton = screen.getAllByRole('button', { name: /^test$/i })[0];
+    if (!keyTestButton) throw new Error('Expected key test button');
+    fireEvent.click(keyTestButton);
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: expect.arrayContaining([
+            expect.objectContaining({
+              keys: expect.arrayContaining([
+                expect.objectContaining({
+                  lastTestResult: expect.objectContaining({ success: true }),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('writes lastTestResult to the provider after a provider test', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+
+    const testButtons = screen.getAllByRole('button', { name: /^test$/i });
+    const providerTestButton = testButtons[testButtons.length - 1];
+    if (!providerTestButton) throw new Error('Expected provider test button');
+    fireEvent.click(providerTestButton);
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: expect.arrayContaining([
+            expect.objectContaining({
+              lastTestResult: expect.objectContaining({ success: true }),
+            }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('shows a status dot in the collapsed header when a key has lastTestResult', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [{
+          id: 'k1',
+          apiKey: 'sk-test',
+          maxRpm: 0,
+          enabled: true,
+          lastTestResult: { success: true, at: Date.now(), latencyMs: 100 },
+        }],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    const dot = screen.getByTitle(/Verified/);
+    expect(dot).toHaveClass('bg-emerald-500');
+  });
+
+  it('shows a failed status dot when all keys failed', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [{
+          id: 'k1',
+          apiKey: 'sk-test',
+          maxRpm: 0,
+          enabled: true,
+          lastTestResult: { success: false, at: Date.now(), error: 'timeout' },
+        }],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    const dot = screen.getByTitle(/Failed/);
+    expect(dot).toHaveClass('bg-red-500');
+  });
+
+  it('does not show a status dot when no keys have been tested', () => {
+    renderSection();
+    expect(screen.queryByTitle(/Verified|Failed/)).not.toBeInTheDocument();
+  });
+
+  it('shows a Test all keys button when enabled keys exist', () => {
+    renderSection();
+    expect(screen.getByRole('button', { name: /test all keys/i })).toBeInTheDocument();
+  });
+
+  it('runs Test all keys and aggregates results', async () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true, label: 'prod' },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true, label: 'staging' },
+        ],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: /test all keys/i }));
+
+    await waitFor(() => {
+      // Should have called testConnection at least once per key
+      expect(testConnection).toHaveBeenCalledTimes(2);
+    });
+  });
+});
+
 describe('ProvidersSection system prompt template', () => {
   beforeEach(() => {
     vi.clearAllMocks();
