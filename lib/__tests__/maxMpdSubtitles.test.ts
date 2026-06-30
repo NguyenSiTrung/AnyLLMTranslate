@@ -1,14 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   detectMpdRequests,
   parseMpd,
   extractSubtitleTracks,
-  fetchAndParseSubtitle,
   parseSubtitleContent,
-  resetMaxMpdSubtitleFetchDiagnostics,
-  prioritizeMpdTracksForFetch,
-  scoreMpdTrackForFetch,
-  isResolvableSubtitleSegmentUrl,
   mergeManifestQueryParams,
   isMaxCdnVttSegmentUrl,
   isManifestResponse,
@@ -119,7 +114,7 @@ describe('extractSubtitleTracks', () => {
   });
 });
 
-describe('parseSubtitleContent', () => {
+describe('parseSubtitleContent — TTML parsing', () => {
   it('parses TTML content', () => {
     const ttml = `<?xml version="1.0"?>
 <tt xmlns="http://www.w3.org/ns/ttml">
@@ -131,203 +126,6 @@ describe('parseSubtitleContent', () => {
     const cues = parseSubtitleContent(ttml, 'application/ttml+xml', 'https://cdn.example.com/subs.ttml');
     expect(cues).toHaveLength(1);
     expect(cues[0].text).toBe('Hi');
-  });
-});
-
-describe('fetchAndParseSubtitle', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    resetMaxMpdSubtitleFetchDiagnostics();
-  });
-
-  it('progressively fetches WebVTT segments until HTTP 404', async () => {
-    const seg1 = 'WEBVTT\n\n';
-    const seg2 = `WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Hello`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/1.vtt')) {
-        return Promise.resolve(new Response(seg1, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      if (url.includes('/2.vtt')) {
-        return Promise.resolve(new Response(seg2, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      return Promise.resolve(new Response('', { status: 404 }));
-    }));
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/t/t6/1.vtt', {
-      segmentFetch: {
-        media: 't/t6/$Number$.vtt',
-        startNumber: 1,
-        representationId: 't6',
-        bandwidth: '',
-        mpdUrl: 'https://cdn.example.com/manifest.mpd',
-      },
-    });
-
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(cues).toEqual([
-      { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Hello' },
-    ]);
-  });
-
-  it('caps progressive WebVTT fetching when segment count is unknown', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => Promise.resolve(
-      new Response(`WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Segment ${url.match(/\/(\d+)\.vtt/)?.[1] ?? ''}`, {
-        status: 200,
-        headers: { 'Content-Type': 'text/vtt' },
-      }),
-    )));
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/t/t6/1.vtt', {
-      segmentFetch: {
-        media: 't/t6/$Number$.vtt',
-        startNumber: 1,
-        representationId: 't6',
-        bandwidth: '',
-        mpdUrl: 'https://cdn.example.com/manifest.mpd',
-      },
-    });
-
-    expect(fetch).toHaveBeenCalledTimes(120);
-    expect(cues[0].text).toBe('Segment 1');
-    expect(cues[cues.length - 1].text).toBe('Segment 120');
-  });
-
-  it('fetches and concatenates segmented WebVTT tracks', async () => {
-    const seg1 = 'WEBVTT\n\n';
-    const seg2 = `WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Hello`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/1.vtt')) {
-        return Promise.resolve(new Response(seg1, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      if (url.includes('/2.vtt')) {
-        return Promise.resolve(new Response(seg2, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      return Promise.resolve(new Response('', { status: 404 }));
-    }));
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/t/t6/1.vtt', {
-      segmentUrls: [
-        'https://cdn.example.com/t/t6/1.vtt',
-        'https://cdn.example.com/t/t6/2.vtt',
-      ],
-    });
-
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(cues).toEqual([
-      { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Hello' },
-    ]);
-  });
-
-  it('fetches and parses subtitle file', async () => {
-    const ttml = `<?xml version="1.0"?>
-<tt xmlns="http://www.w3.org/ns/ttml">
-  <body><div>
-    <p begin="00:00:12.340" end="00:00:15.670">Hello there</p>
-  </div></body>
-</tt>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(ttml, {
-        status: 200,
-        headers: { 'Content-Type': 'application/ttml+xml' },
-      }),
-    ));
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/subs.ttml');
-    expect(cues).toEqual([
-      { start: expect.closeTo(12.34, 3), end: expect.closeTo(15.67, 3), text: 'Hello there' },
-    ]);
-  });
-
-  it('parses a nested MPD response and fetches its subtitle segment', async () => {
-    const nestedMpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet contentType="text" lang="en-US">
-      <Representation id="t6" mimeType="text/vtt">
-        <SegmentTemplate media="nested/t6/$Number$.vtt" startNumber="1"/>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-    const vtt = `WEBVTT
-
-00:00:01.000 --> 00:00:02.000
-Nested subtitle`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/nested/t6/1.vtt')) {
-        return Promise.resolve(new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }));
-      }
-      if (url.includes('subtitle-layer') && !url.includes('/nested/')) {
-        return Promise.resolve(new Response(nestedMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
-      }
-      return Promise.resolve(new Response('', { status: 404 }));
-    }));
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/subtitle-layer?token=abc');
-
-    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subtitle-layer?token=abc');
-    expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/subtitle-layer/nested/t6/1.vtt?token=abc');
-    expect(cues).toEqual([
-      { start: expect.closeTo(1, 3), end: expect.closeTo(2, 3), text: 'Nested subtitle' },
-    ]);
-  });
-
-  it('fails fast when segment echoes the root MPD body via seenManifests seed', async () => {
-    const rootMpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet contentType="text" lang="en-US">
-      <Representation id="t6" mimeType="text/vtt">
-        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1"/>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(rootMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const cues = await fetchAndParseSubtitle('https://cdn.example.com/fadb6e8d/t/t6/1.vtt?token=abc', {
-      seenManifests: new Set([rootMpd.trim()]),
-    });
-
-    expect(cues).toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('handles circular nested MPD manifests gracefully without infinite looping', async () => {
-    const circularMpd = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet mimeType="application/ttml+xml" lang="en">
-      <Representation id="t6" mimeType="text/vtt">
-        <SegmentTemplate media="nested/t6/$Number$.vtt" startNumber="1"/>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
-      return Promise.resolve(new Response(circularMpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }));
-    }));
-
-    await expect(fetchAndParseSubtitle('https://cdn.example.com/circular?token=abc'))
-      .rejects.toThrow('Subtitle fetch returned MPD manifest instead of subtitle content');
   });
 });
 
@@ -515,9 +313,6 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     expect(main?.url).toBe(
       'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/t/caa516/t3/8.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
     );
-
-    const sorted = prioritizeMpdTracksForFetch(tracks);
-    expect(sorted[0].url).toBe(main?.url);
   });
 
   it('resolves SegmentTemplate with startNumber > 1 under dash.mpd paths', () => {
@@ -567,22 +362,6 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
       'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/t/3_f384f7/t1/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
     );
     expect(tracks[0].url).not.toContain('gcp.asia.prd.media.max.com/fadb6e8d');
-  });
-
-  it('prefers main-content tracks with startNumber > 1 over Period-0 lead-in', () => {
-    const leadIn = {
-      url: 'https://gcp.apac-free.prd.media.max.com/apac/abc/t/3_f384f7/t1/1.vtt?token=a',
-      language: 'en-US',
-      segmentFetch: { media: 't/3_f384f7/t1/$Number$.vtt', startNumber: 1, representationId: 't1', bandwidth: '', mpdUrl: 'https://cdn.example.com/manifest.mpd' },
-    };
-    const main = {
-      url: 'https://gcp.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/8.vtt?token=a',
-      language: 'en-US',
-      segmentFetch: { media: 't/caa516/t3/$Number$.vtt', startNumber: 8, representationId: 't3', bandwidth: '', mpdUrl: 'https://cdn.example.com/manifest.mpd' },
-    };
-    const sorted = prioritizeMpdTracksForFetch([leadIn, main]);
-    expect(sorted[0].url).toBe(main.url);
-    expect(scoreMpdTrackForFetch(main)).toBeGreaterThan(scoreMpdTrackForFetch(leadIn));
   });
 
   it('resolves HBO Max APAC real MPD subtitle segments under extensionless manifest URL', () => {
@@ -783,33 +562,5 @@ describe('mergeManifestQueryParams', () => {
     const segment = new URL('https://other.cdn.com/subs_en.ttml?token=xyz');
     mergeManifestQueryParams(segment, mpdUrl);
     expect(segment.search).toBe('?token=xyz');
-  });
-});
-
-describe('isResolvableSubtitleSegmentUrl', () => {
-  const mpdUrl =
-    'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
-
-  it('accepts real WebVTT segment URLs', () => {
-    expect(isResolvableSubtitleSegmentUrl(
-      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/t/caa516/t3/8.vtt?manifest-params=TOKEN',
-      mpdUrl,
-    )).toBe(true);
-    expect(isResolvableSubtitleSegmentUrl(
-      'https://gcp.apac-free.prd.media.max.com/apac/34babf11/t/3_f384f7/t1/1.vtt?manifest-params=TOKEN',
-      mpdUrl,
-    )).toBe(true);
-  });
-
-  it('rejects manifest-echo and Period BaseURL-only URLs', () => {
-    expect(isResolvableSubtitleSegmentUrl(mpdUrl, mpdUrl)).toBe(false);
-    expect(isResolvableSubtitleSegmentUrl(
-      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b/?manifest-params=TOKEN',
-      mpdUrl,
-    )).toBe(false);
-    expect(isResolvableSubtitleSegmentUrl(
-      'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/?manifest-params=TOKEN',
-      mpdUrl,
-    )).toBe(false);
   });
 });

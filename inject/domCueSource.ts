@@ -10,7 +10,7 @@
 
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import { OPEN_CUE_END_SENTINEL } from '@/lib/subtitleTiming';
-import { resetMaxVttSegmentCaptureLock } from '@/inject/maxVttSegmentCapture';
+import { resetMaxVttPerformanceCaptureLock } from '@/inject/maxVttPerformanceCapture';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
@@ -215,7 +215,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
         if (target.matches(trackSwitchSelector) && target.getAttribute(trackAttr) === 'true') {
           console.log(`[AnyLLMTranslate] ${handler.platform} subtitle track changed — resetting DOM cue buffer`);
           resetBuffer();
-          resetMaxVttSegmentCaptureLock();
+          resetMaxVttPerformanceCaptureLock();
           bridge.send('SUBTITLE_DOM_TRACK_CHANGED', {
             platform: handler.platform,
             language: domSource.readActiveLanguage(),

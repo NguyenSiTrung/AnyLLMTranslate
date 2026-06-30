@@ -23,7 +23,7 @@ import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 import { onMessage } from '@/inject/messageBridge';
-import { resetMaxMpdProcessorState, setMpdPreferredLanguage } from '@/inject/maxMpdProcessor';
+import { startMaxVttPerformanceCapture, resetMaxVttPerformanceCapture } from '@/inject/maxVttPerformanceCapture';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -80,16 +80,19 @@ export default defineContentScript({
         fetchInterceptor.setTimeout(config.translationTimeoutMs);
         console.log('[AnyLLMTranslate] Interceptor timeout updated to', config.translationTimeoutMs, 'ms');
       }
-      if (config?.preferredSubtitleLanguage !== undefined) {
-        setMpdPreferredLanguage(config.preferredSubtitleLanguage);
-      }
     });
+
+    // Performance-API VTT capture lifecycle (Max). Started only for hbomax;
+    // stored so BFCache teardown/restore can stop and restart it.
+    let perfCaptureCleanup: (() => void) | null = null;
 
     // Handle BFCache lifecycle: disable interceptors when page goes into BFCache,
     // re-enable when it's restored. Non-persisted pagehide means the page is
     // truly unloading, so we also disable to restore prototypes.
     window.addEventListener('pagehide', (event: PageTransitionEvent) => {
-      resetMaxMpdProcessorState();
+      resetMaxVttPerformanceCapture();
+      perfCaptureCleanup?.();
+      perfCaptureCleanup = null;
       xhrInterceptor.disable();
       fetchInterceptor.disable();
       mseInterceptor.disable();
@@ -106,6 +109,9 @@ export default defineContentScript({
         xhrInterceptor.enable();
         fetchInterceptor.enable();
         mseInterceptor.enable();
+        if (perfCaptureCleanup === null && detectCurrentHandler()?.platform === 'hbomax') {
+          perfCaptureCleanup = startMaxVttPerformanceCapture(bridge);
+        }
         console.log('[AnyLLMTranslate] Interceptors re-enabled after BFCache restore');
       }
     });
@@ -134,6 +140,22 @@ export default defineContentScript({
         startDom();
       }
       console.log('[AnyLLMTranslate] DOM cue source started for', currentHandler.platform);
+    }
+
+    // Start Performance-API VTT capture for Max (primary subtitle source).
+    // Max's player fetches VTT through a worker/MSE channel invisible to the
+    // fetch/XHR monkey-patches; the Resource Timing API observes those loads
+    // and a page-context fetch retrieves them with the page's own auth.
+    if (currentHandler?.platform === 'hbomax') {
+      const startPerf = () => {
+        perfCaptureCleanup = startMaxVttPerformanceCapture(bridge);
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startPerf);
+      } else {
+        startPerf();
+      }
+      console.log('[AnyLLMTranslate] Max VTT Performance-API capture started');
     }
   },
 });

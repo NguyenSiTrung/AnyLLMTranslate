@@ -48,7 +48,6 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
-import { startSubtitleFetchRelay } from '@/inject/maxMpdSubtitleFetch';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -1495,7 +1494,6 @@ export function startCoordinator(): () => void {
   // Listen for MPD-parsed manifest cues from MAIN world (Tier 2)
   const cleanupManifestCues = onManifestCues(handleManifestCues);
   const cleanupMpdProcessing = onMpdProcessing(handleMpdProcessing);
-  const cleanupSubtitleFetchRelay = startSubtitleFetchRelay();
 
   // Proactive DOM track list for popup (Max has no metadata URLs)
   scheduleDomTrackDiscovery();
@@ -1582,7 +1580,6 @@ export function startCoordinator(): () => void {
     cleanupMseCues();
     cleanupManifestCues();
     cleanupMpdProcessing();
-    cleanupSubtitleFetchRelay();
     cleanupNavWatcher();
     cleanupPlaybackWatcher();
     chrome.runtime.onMessage.removeListener(handleExtensionMessage);

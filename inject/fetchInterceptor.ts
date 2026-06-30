@@ -9,9 +9,6 @@ import type { InterceptorRegistry } from '@/inject/interceptorRegistry';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleInterceptedPayload } from '@/types/subtitle';
 import { detectManifestTracks } from '@/lib/manifestParser';
-import { detectMpdRequests } from '@/lib/maxMpdSubtitles';
-import { processMaxMpdManifest } from '@/inject/maxMpdProcessor';
-import { captureMaxVttSegment, isMaxVttSegmentUrl } from '@/inject/maxVttSegmentCapture';
 import { nativeFetch } from '@/inject/nativeFetch';
 
 const originalFetch = nativeFetch;
@@ -100,11 +97,6 @@ export class FetchInterceptor {
                 count: tracks.length,
               });
             }
-
-            // Max: fetch and parse TTML subtitle tracks from DASH manifests
-            if (platform === 'hbomax' && detectMpdRequests(urlString)) {
-              processMaxMpdManifest(body, urlString, bridge).catch(() => { /* non-blocking */ });
-            }
           }).catch(() => { /* silently ignore clone read errors */ });
         }
         return response; // Always pass through immediately — never block playback
@@ -115,11 +107,6 @@ export class FetchInterceptor {
 
       if (!match) {
         const response = await originalFetch(input, init);
-        if (response.ok && isMaxVttSegmentUrl(urlString)) {
-          response.clone().text().then((body) => {
-            captureMaxVttSegment(urlString, body, bridge);
-          }).catch(() => { /* non-blocking */ });
-        }
         return response;
       }
 
