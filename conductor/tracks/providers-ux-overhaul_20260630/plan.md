@@ -148,26 +148,26 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 6: Readiness Banner, Empty State & System Prompt (B4, B5, C2, C5)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Relabel System Prompt editor + swap title icon
+- [x] Task 1: Relabel System Prompt editor + swap title icon
   - Change card title to "Global System Prompt (advanced)"; replace `RotateCcw` title icon with
     `FileText`. Keep the per-card "Reset to Default" button's `RotateCcw` (that action is correct).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** title/icon no longer imply a reset action.
 
-- [ ] Task 2: Replace inline empty card with `EmptyState` primitive + inline CTA
+- [x] Task 2: Replace inline empty card with `EmptyState` primitive + inline CTA
   - Swap the `providers.length === 0` amber card (`ProvidersSection.tsx:235-246`) for the
     `ui/EmptyState.tsx` primitive with an inline primary "Add provider" action (opens the modal).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** empty state is centered, action-inline; still test-asserted.
 
-- [ ] Task 3: Max RPM cap hint + banner "Next:" microcopy
+- [x] Task 3: Max RPM cap hint + banner "Next:" microcopy
   - Add helper text to the Max RPM field ("Cap is 600 RPM; 0 = unlimited").
   - Refactor the readiness banner "Next: {action}" line: drop the prefix or convert actionable
     `recoveryMessage.action` into a real CTA button where applicable.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** cap is surfaced; banner copy reads naturally.
 
-- [ ] Task: Conductor - User Manual Verification 'Readiness Banner, Empty State & System Prompt' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Readiness Banner, Empty State & System Prompt' (Protocol in workflow.md)
 
 ---
 

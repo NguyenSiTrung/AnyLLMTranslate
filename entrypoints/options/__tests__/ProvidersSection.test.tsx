@@ -94,6 +94,14 @@ describe('ProvidersSection', () => {
     expect(screen.getByText(/no providers configured\. add one/i)).toBeInTheDocument();
   });
 
+  it('shows an inline add-provider CTA in the empty state', () => {
+    mockState = { ...DEFAULT_SETTINGS, providers: [], updateSettings };
+    renderSection();
+    // Both the empty-state CTA and the bottom button share the same label.
+    const addButtons = screen.getAllByRole('button', { name: /add provider from catalog/i });
+    expect(addButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('expands a provider to reveal its fields on click', () => {
     renderSection();
     // The provider row button toggles expansion.
@@ -313,6 +321,12 @@ describe('ProvidersSection readiness banner', () => {
     renderSection(onOpenSetup);
     fireEvent.click(screen.getByRole('button', { name: /open setup guide/i }));
     expect(onOpenSetup).toHaveBeenCalledOnce();
+  });
+
+  it('does not prefix the banner action with "Next:"', () => {
+    renderSection();
+    // The action text should appear without the "Next:" prefix
+    expect(screen.queryByText(/Next:/)).not.toBeInTheDocument();
   });
 });
 
@@ -621,7 +635,7 @@ describe('ProvidersSection system prompt template', () => {
 
   it('renders the system prompt template editor', () => {
     renderSection();
-    expect(screen.getByText('System Prompt Template')).toBeInTheDocument();
+    expect(screen.getByText('Global System Prompt (advanced)')).toBeInTheDocument();
   });
 
   it('updates customSystemPrompt when the textarea changes', () => {

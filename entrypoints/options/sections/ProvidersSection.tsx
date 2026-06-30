@@ -33,6 +33,7 @@ import { Badge } from '@/ui/Badge';
 import { Slider } from '@/ui/Slider';
 import { useToast } from '@/ui/ToastProvider';
 import { Modal } from '@/ui/Modal';
+import { EmptyState } from '@/ui/EmptyState';
 import { getConnectionErrorMessage, getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import { applyProviderPatch, applyKeyPatch, formatTestResultAge } from '@/lib/poolTestStatus';
 import {
@@ -319,7 +320,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
               <div className="min-w-0 flex-1">
                 <h3 className="text-sm font-semibold text-zinc-100">{recoveryMessage.title}</h3>
                 <p className="text-xs text-zinc-400 mt-1 leading-5">{recoveryMessage.description}</p>
-                <p className="text-xs text-zinc-500 mt-1">Next: {recoveryMessage.action}</p>
+                <p className="text-xs text-zinc-500 mt-1">{recoveryMessage.action}</p>
                 {enabledKeyCount > 0 && (
                   <p className="text-xs text-zinc-600 mt-0.5">{enabledKeyCount} enabled key{enabledKeyCount !== 1 ? 's' : ''} across {providers.length} provider{providers.length !== 1 ? 's' : ''}</p>
                 )}
@@ -347,12 +348,12 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
         {providers.length === 0 && (
           <div className="animate-stagger" style={stagger(1)}>
             <Card variant="bordered">
-              <div className="flex items-center gap-3 p-2">
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-                <p className="text-sm text-zinc-400">
-                  No providers configured. Add one to start translating.
-                </p>
-              </div>
+              <EmptyState
+                icon={<Server className="w-8 h-8" />}
+                message="No providers configured. Add one to start translating."
+                actionLabel="Add provider from catalog"
+                onAction={() => setShowAddProviderModal(true)}
+              />
             </Card>
           </div>
         )}
@@ -558,7 +559,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
 
         {/* System Prompt Template (global setting) */}
         <div className="animate-stagger" style={stagger(providers.length + 2)}>
-          <Card title="System Prompt Template" icon={<RotateCcw className="w-3.5 h-3.5" />} variant="bordered">
+          <Card title="Global System Prompt (advanced)" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
             <FieldGroup
               label="Custom prompt template"
               description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
