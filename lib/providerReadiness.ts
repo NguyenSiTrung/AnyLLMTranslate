@@ -140,8 +140,19 @@ export function getProviderRecoveryMessage(readiness: ProviderReadiness): Recove
   }
 }
 
-export function getConnectionErrorMessage(error?: string): RecoveryMessage {
+export function getConnectionErrorMessage(
+  error?: string,
+  step?: 'ping' | 'models' | 'translation',
+): RecoveryMessage {
   const normalized = (error ?? '').toLowerCase();
+
+  if (step === 'models' || normalized.includes('failed to list models')) {
+    return {
+      title: 'Model listing unavailable',
+      description: 'Reachability may still work — this provider does not expose GET /models or the path is wrong.',
+      action: 'Confirm the base URL ends with /v1 (not /v1/chat/completions). You can type the model ID manually.',
+    };
+  }
 
   if (normalized.includes('timeout') || normalized.includes('timed out')) {
     return {
@@ -184,11 +195,29 @@ export function getConnectionErrorMessage(error?: string): RecoveryMessage {
     'invalid model',
     'unknown model',
   ];
-  if (normalized.includes('404') || MODEL_ERROR_PATTERNS.some((p) => normalized.includes(p))) {
+  if (MODEL_ERROR_PATTERNS.some((p) => normalized.includes(p))) {
     return {
       title: 'Model not found',
       description: 'The configured model was not accepted by the provider.',
       action: 'Choose a model returned by the provider or check the model name.',
+    };
+  }
+
+  if (normalized.includes('404')) {
+    return {
+      title: step === 'translation' ? 'Translation request rejected' : 'Invalid API URL',
+      description: error || 'The provider returned HTTP 404.',
+      action: step === 'translation'
+        ? 'Verify the model ID is enabled on your NVIDIA account and matches the curl command exactly.'
+        : 'Check the base URL ends with /v1 (no trailing slash, no /chat/completions suffix).',
+    };
+  }
+
+  if (normalized.includes('empty completion')) {
+    return {
+      title: 'Model returned no text',
+      description: 'The provider accepted the request but returned an empty response.',
+      action: 'For reasoning/VLM models (e.g. diffusiongemma), increase max tokens or try a text-only model like meta/llama-3.1-8b-instruct.',
     };
   }
 

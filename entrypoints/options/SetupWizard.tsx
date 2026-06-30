@@ -107,7 +107,7 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
       showSuccess('Provider connection verified.');
     } else {
       const failedStep = result.steps.find((s) => !s.success);
-      const message = getConnectionErrorMessage(failedStep?.error);
+      const message = getConnectionErrorMessage(failedStep?.error, failedStep?.name);
       showError(`${message.title}: ${message.action}`);
     }
   };
@@ -121,7 +121,7 @@ export function SetupWizard({ open, onClose, onTranslateCurrentPage }: SetupWiza
   };
 
   const failedStep = testResult?.steps.find((s) => !s.success);
-  const failedMessage = getConnectionErrorMessage(failedStep?.error);
+  const failedMessage = getConnectionErrorMessage(failedStep?.error, failedStep?.name);
 
   return (
     <div
