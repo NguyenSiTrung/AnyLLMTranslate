@@ -24,14 +24,14 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `lib/config.ts`, `lib/__tests__/configMigration.pool.test.ts`
   - **Done:** a saved `lastTestResult` round-trips through storage; merge does not drop it.
 
-- [ ] Task 3: Pure invalidation helper `invalidateTestResult`
+- [x] Task 3: Pure invalidation helper `invalidateTestResult`
   - New pure helper in `lib/providerReadiness.ts` (or a small `lib/poolTestStatus.ts`) that returns a
     cleared `lastTestResult` when `baseUrl`/`model`/`apiKey` changes. Injectable clock not needed.
   - Comparator: given old + new provider/key, return `true` if the credential fields changed.
   - **Files:** `lib/providerReadiness.ts` (or new `lib/poolTestStatus.ts`), corresponding test file.
   - **Done:** unit tests cover all three change triggers + no-op when unchanged.
 
-- [ ] Task: Conductor - User Manual Verification 'Persisted Test-Status Data Model' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Persisted Test-Status Data Model' (Protocol in workflow.md)
 
 ---
 
