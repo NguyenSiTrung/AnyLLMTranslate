@@ -159,6 +159,19 @@ export function getConnectionErrorMessage(error?: string): RecoveryMessage {
     };
   }
 
+  // Trailing slash / wrong path often yields "404 page not found" — not a model ID issue.
+  if (
+    normalized.includes('page not found') ||
+    normalized.includes('cannot post') ||
+    normalized.includes('not found on the server')
+  ) {
+    return {
+      title: 'Invalid API URL',
+      description: 'The request reached the host but the API path was not found.',
+      action: 'Check the base URL (no trailing slash), e.g. https://integrate.api.nvidia.com/v1',
+    };
+  }
+
   // P2: use specific model-related patterns instead of bare 'model', which
   // matched unrelated errors containing the word (e.g. "rate model exceeded").
   const MODEL_ERROR_PATTERNS = [

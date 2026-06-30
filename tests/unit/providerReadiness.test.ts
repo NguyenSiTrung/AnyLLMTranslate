@@ -115,6 +115,13 @@ describe('provider recovery messages', () => {
     expect(message.title).toBe('Model not found');
     expect(message.action).toContain('model');
   });
+
+  it('maps endpoint 404 page-not-found to base URL guidance', () => {
+    const message = getConnectionErrorMessage('HTTP 404: 404 page not found');
+
+    expect(message.title).toBe('Invalid API URL');
+    expect(message.action).toContain('base URL');
+  });
 });
 
 describe('getPoolReadinessStatus — multi-provider aggregation', () => {
