@@ -10,7 +10,7 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 1: Persisted Test-Status Data Model (A1, D1)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Add `lastTestResult` field to `PoolKey` & `PoolProvider` types
+- [x] Task 1: Add `lastTestResult` field to `PoolKey` & `PoolProvider` types
   - Define type `KeyTestResult = { success: boolean; at: number; latencyMs?: number; error?: string }`.
   - Add optional `lastTestResult?: KeyTestResult` to `PoolKey` and `PoolProvider` in `types/config.ts`.
   - Update `DEFAULT_SETTINGS.providers[0].keys[0]` (no lastTestResult by default).

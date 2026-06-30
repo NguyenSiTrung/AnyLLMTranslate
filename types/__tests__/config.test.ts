@@ -14,6 +14,9 @@ import type {
   GlossaryEntry,
   SubtitleSettings,
   ExtensionSettings,
+  PoolKey,
+  PoolProvider,
+  KeyTestResult,
 } from '@/types/config';
 
 describe('config types', () => {
@@ -200,6 +203,72 @@ describe('config types', () => {
         expect(preset.displayName).toBeTruthy();
         expect(typeof preset.requiresApiKey).toBe('boolean');
       }
+    });
+  });
+
+  describe('KeyTestResult & pool lastTestResult', () => {
+    it('KeyTestResult type accepts a full result', () => {
+      const result: KeyTestResult = {
+        success: true,
+        at: 1700000000000,
+        latencyMs: 240,
+      };
+      expect(result.success).toBe(true);
+      expect(result.at).toBe(1700000000000);
+      expect(result.latencyMs).toBe(240);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('KeyTestResult type accepts a failed result with error', () => {
+      const result: KeyTestResult = {
+        success: false,
+        at: 1700000000000,
+        error: '401 Unauthorized',
+      };
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('401 Unauthorized');
+      expect(result.latencyMs).toBeUndefined();
+    });
+
+    it('PoolKey has optional lastTestResult', () => {
+      const key: PoolKey = {
+        id: 'k1',
+        apiKey: 'sk-...',
+        maxRpm: 0,
+        enabled: true,
+      };
+      expect(key.lastTestResult).toBeUndefined();
+      const keyWithResult: PoolKey = {
+        ...key,
+        lastTestResult: { success: true, at: Date.now(), latencyMs: 100 },
+      };
+      expect(keyWithResult.lastTestResult?.success).toBe(true);
+    });
+
+    it('PoolProvider has optional lastTestResult', () => {
+      const provider: PoolProvider = {
+        id: 'p1',
+        displayName: 'Test',
+        baseUrl: 'https://api.test.com/v1',
+        model: 'm',
+        requiresApiKey: true,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        keys: [],
+      };
+      expect(provider.lastTestResult).toBeUndefined();
+      const providerWithResult: PoolProvider = {
+        ...provider,
+        lastTestResult: { success: false, at: Date.now(), error: 'timeout' },
+      };
+      expect(providerWithResult.lastTestResult?.success).toBe(false);
+    });
+
+    it('DEFAULT_SETTINGS.providers[0].keys[0] has no lastTestResult by default', () => {
+      const defaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
+      expect(defaultKey).toBeDefined();
+      expect(defaultKey?.lastTestResult).toBeUndefined();
     });
   });
 });

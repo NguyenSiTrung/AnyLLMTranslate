@@ -8,6 +8,21 @@ import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 /** Provider preset identifiers */
 export type ProviderPreset = 'custom';
 
+/**
+ * Persisted connection-test outcome for a pool key or provider. Stored in
+ * plaintext (carries no secret) so it survives card collapse, tab navigation,
+ * and extension reload. Invalidation: editing baseUrl/model/apiKey clears it.
+ */
+export interface KeyTestResult {
+  success: boolean;
+  /** Epoch ms when the test was run. */
+  at: number;
+  /** Round-trip latency in milliseconds (when available). */
+  latencyMs?: number;
+  /** Error message from a failed test (undefined on success). */
+  error?: string;
+}
+
 /** Provider configuration for OpenAI-compatible APIs */
 export interface ProviderConfig {
   preset: ProviderPreset;
@@ -44,6 +59,8 @@ export interface PoolKey {
   maxRpm: number;
   /** Whether this key participates in the rotation pool. */
   enabled: boolean;
+  /** Persisted last connection-test result (survives collapse/reload). */
+  lastTestResult?: KeyTestResult;
 }
 
 /**
@@ -74,6 +91,8 @@ export interface PoolProvider {
   enabled: boolean;
   /** The pool of API keys for this provider. */
   keys: PoolKey[];
+  /** Persisted last provider-level connection-test result. */
+  lastTestResult?: KeyTestResult;
 }
 
 /** Onboarding flow state for first-run setup */
