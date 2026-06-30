@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-29 all (post hbomax-subtitle-deepfix archive — health re-verified: 1831/0 failing across 129 files, 56 archived) -->
+<!-- conductor-refresh: 2026-06-30 all (post providers-ux-overhaul archive — health re-verified: 1903/0 failing across 131 files, 57 archived) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -176,8 +176,8 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **HBO Max Subtitle Deep Analysis Fixes** (Archived 2026-06-29, shipped via conductor workflow, commits `09d2aac`...`4ce1f76`): Fixed all 14 issues from HBO Max subtitle deep analysis. VTT capture track-switch lock reset (`resetMaxVttSegmentCaptureLock`), shared `subtitleLanguagesMatch` with script-subtag guard (zh-Hans ≠ zh-Hant via 4-char ISO 15924 check), FNV-1a hash dedup for `processedMpdBodies` (bounded memory during long viewing sessions), 30s deadline on nested MPD fetch chain, localized label handling for `readMaxActiveSubtitleLanguage`, manifest detection consolidation (single `isManifestResponse`), dead code removal (`fetchRealSubtitleContent`, `processMpdSubtitleTracks` + their tests), Max CDN URL checker dedup (`isMaxCdnVttSegmentUrl`), code quality fixes (dead `isPriority` param, redundant ternary in `concatVttSegments`, redundant WEBVTT check in `captureMaxVttSegment`), progressive fetch preserves bodies on nested MPD dead-end. VTT append/track-switch/mergeCues tests added. 108 new tests (1831 total).
 
 ### Current State
-- 1831 tests passing across 129 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1723 baseline after the hbomax-subtitle-deepfix track added 108 tests). Build passing (`wxt build` ✅, ~3.81 MB). 5 lint errors (`no-non-null-assertion` in subtitleCoordinator tests, `no-dynamic-delete` in SubtitlesSection/popup — all pre-existing, at baseline). 3 pre-existing `tsc` errors in `content/__tests__/subtitleCoordinator.test.ts` (lines 271, 1280, 1338; file untouched since 2026-06-24, baseline — lint is the gate, `tsc` was previously untracked).
-- **0 active tracks**. 56 tracks archived.
+- 1903 tests passing across 131 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1831 baseline after the providers-ux-overhaul track added 72 tests). Build passing (`wxt build` ✅, ~3.87 MB). 14 lint errors (`no-empty` in `entrypoints/content.ts` `destroyZombie()` empty catch blocks — intentional, introduced by commit `edf23b0` for extension-context-invalidated cleanup; previous 5 `no-non-null-assertion`/`no-dynamic-delete` errors resolved). `tsc` clean (0 errors — previous 3 subtitleCoordinator.test.ts errors resolved).
+- **0 active tracks**. 57 tracks archived.
 
 ## Out of Scope (Initial Release)
 

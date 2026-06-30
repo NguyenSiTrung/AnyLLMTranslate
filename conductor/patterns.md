@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-29 all (post hbomax-subtitle-deepfix archive — health re-verified: 1831/0 failing across 129 files, 56 archived) -->
+<!-- conductor-refresh: 2026-06-30 all (post providers-ux-overhaul archive — health re-verified: 1903/0 failing across 131 files, 57 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -550,7 +550,7 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 
 ---
 Last refreshed: 2026-06-29T18:40:00+07:00
-Codebase health: 1831 tests passing across 129 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1723 after the hbomax-subtitle-deepfix track added 108 tests), build ~3.81MB, 5 pre-existing lint errors at baseline (lint is the gate), 3 pre-existing `tsc` errors in subtitleCoordinator.test.ts previously untracked, 56 tracks archived, 0 active tracks
+Codebase health: 1903 tests passing across 131 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1831 after the providers-ux-overhaul track added 72 tests), build ~3.87MB, 14 lint errors (`no-empty` in content.ts `destroyZombie` — intentional empty catch blocks; previous 5 `no-non-null-assertion`/`no-dynamic-delete` resolved), `tsc` clean (0 errors — previous 3 resolved), 57 tracks archived, 0 active tracks
 
 ## Multi-Provider Pool (2026-06-26)
 - **Round-robin coordinator at the single `initService()` seam:** A `ProviderPoolCoordinator implements TranslationService` returned by `initService()` covers all 7 translation paths (page, subtitle, PDF, selection, hover, inline, category-detect) in one place — no per-path changes. The coordinator holds one `OpenAICompatibleService` per enabled `(provider, key)` slot and delegates per call with round-robin + failover. (from: multi-provider-pool_20260626, 2026-06-26)
