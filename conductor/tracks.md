@@ -72,3 +72,16 @@ This file tracks all major tracks for the project.
 ## Active Tracks
 
 ---
+
+## [ ] Track: Providers Tab UI/UX Overhaul
+*Link: [./conductor/tracks/providers-ux-overhaul_20260630/](./conductor/tracks/providers-ux-overhaul_20260630/)*
+*Priority: 🟠 High · Status: new · Created: 2026-06-30*
+
+Resolve all 13 findings from the Settings→Providers deep analysis: persisted connection-test
+status (survives collapse/navigate), catalog "Get API key" links, multi-expand accordion, bulk
+"Test all keys", keyless-field hiding + single reveal control, double-border/disabled-visual
+fixes, System Prompt relabel, EmptyState primitive, Max RPM cap hint, banner microcopy, and
+accessibility (aria-controls/region pairing). 8 sequential phases (most changes touch
+`ProvidersSection.tsx`).
+
+---
