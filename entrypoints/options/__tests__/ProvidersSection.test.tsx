@@ -85,7 +85,8 @@ describe('ProvidersSection', () => {
     renderSection();
     expect(screen.getByText('Providers')).toBeInTheDocument();
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    expect(screen.getByText('1 key')).toBeInTheDocument();
+    // Key count is now rendered as an icon + number cluster
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('shows the empty-state message when no providers exist', () => {
@@ -195,6 +196,14 @@ describe('ProvidersSection', () => {
     expect(screen.getByText('Add provider from catalog', { selector: 'h3' })).toBeInTheDocument();
   });
 
+  it('uses distinct Done/Cancel labels in the add-provider modal (no dual Close)', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('Add provider from catalog'));
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('button', { name: 'Close' })).toHaveLength(0);
+  });
+
   it('prompts for confirmation when removing a provider', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI')); // expand
@@ -271,6 +280,21 @@ describe('ProvidersSection multi-expand accordion', () => {
     // Collapse only Alpha
     fireEvent.click(screen.getByText('Alpha'));
     expect(screen.getAllByText('Base URL')).toHaveLength(1);
+  });
+
+  it('pairs header and panel with aria-controls and role=region', () => {
+    renderSection();
+    const header = screen.getByText('Alpha').closest('button');
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(header).toHaveAttribute('aria-controls');
+
+    fireEvent.click(screen.getByText('Alpha'));
+
+    const panelId = header?.getAttribute('aria-controls');
+    const panel = document.getElementById(panelId ?? '');
+    expect(panel).not.toBeNull();
+    expect(panel).toHaveAttribute('role', 'region');
+    expect(panel).toHaveAttribute('aria-labelledby', header?.getAttribute('id') ?? '');
   });
 });
 

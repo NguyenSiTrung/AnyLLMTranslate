@@ -385,7 +385,10 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                     <Badge variant={provider.enabled ? 'success' : 'info'}>
                       {provider.enabled ? 'on' : 'off'}
                     </Badge>
-                    <span className="text-xs text-zinc-500">{provider.keys.length} key{provider.keys.length !== 1 ? 's' : ''}</span>
+                    <span className="flex items-center gap-0.5 text-xs text-zinc-500">
+                      <KeyRound className="w-3 h-3" />
+                      {provider.keys.length}
+                    </span>
                     {(() => {
                       const status = getProviderTestStatus(provider);
                       if (status.state === 'untested') return null;
@@ -964,8 +967,8 @@ function AddProviderModal({
     <Modal
       title="Add provider from catalog"
       message={catalogBody}
-      confirmLabel="Close"
-      cancelLabel="Close"
+      confirmLabel="Done"
+      cancelLabel="Cancel"
       onConfirm={onClose}
       onCancel={onClose}
     />

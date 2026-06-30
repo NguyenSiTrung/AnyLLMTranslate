@@ -174,13 +174,13 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 7: Accessibility & Final Polish (C4, D2, D3, D4)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Provider header/panel ARIA pairing
+- [x] Task 1: Provider header/panel ARIA pairing
   - Add `id` to the expanded panel, `aria-controls={id}` on the header button, `role="region"` +
     `aria-labelledby` on the panel (currently only `aria-expanded` exists).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** screen readers pair header ↔ panel; axe-clean.
 
-- [ ] Task 2: Key-count cluster + AddProviderModal relabel + banner CTA alignment
+- [x] Task 2: Key-count cluster + AddProviderModal relabel + banner CTA alignment
   - Render the collapsed-header key count as a small icon+badge cluster for scannability.
   - In `AddProviderModal`, drop the dual "Close"/"Close" footer; use a single dismiss affordance
     (or a dedicated layout without confirm/cancel).
@@ -188,7 +188,7 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** modal is unambiguous; CTAs coherent; key count scannable.
 
-- [ ] Task: Conductor - User Manual Verification 'Accessibility & Final Polish' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Accessibility & Final Polish' (Protocol in workflow.md)
 
 ---
 
