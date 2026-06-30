@@ -66,22 +66,10 @@ This file tracks all major tracks for the project.
 - ✅ **Multi-Provider Pool with Round-Robin & Circuit-Breaker Failover** (`multi-provider-pool_20260626`) — Archived 2026-06-26. Multiple active providers + multiple API keys per provider; round-robin distribution across enabled `(provider, key)` slots with per-key RPM (summed throughput) and circuit-breaker failover (429/5xx/network → escalating cooldown 60s→120s→300s; 401/403 → long-open 1h + `credentialInvalid`). New pure libs `lib/poolCursor.ts`, `lib/circuitBreaker.ts`, `lib/poolResolver.ts`; `ProviderPoolCoordinator` at the single `initService()` seam covers all 7 translation paths; `rebuild()` preserves breaker state for unchanged key ids; per-key AES-GCM encryption loop; legacy single-provider users auto-migrate into `providers[0]`; Options → Providers tab (collapsible per-provider cards, per-key masked inputs + maxRpm + Test + status badge, "+ Add provider from catalog"); `syncProviderToPool()` wizard bridge; `getPoolReadinessStatus()` popup aggregation. 107 new tests. [View](./conductor/archive/multi-provider-pool_20260626/)
 - ✅ **Provider Pool Resilience** (`provider-pool-resilience_20260627`) — Archived 2026-06-27. Fixed all 13 findings from a deep analysis of the pool pipeline. Headline fix: the multi-key circuit-breaker failover shipped in `multi-provider-pool_20260626` was **dead code in production** — `OpenAICompatibleService.translate()` swallowed errors into `{success:false}` where the pool's `dispatchWithFailover` only reacts to a **thrown** `ApiError` (the 107 unit tests passed only because stubs threw where the real service never did). Services now re-throw `ApiError` on transport/auth/rate-limit failures. Plus: cursor advances over the healthy subset (was indexing full slots array); `response_format` memory keyed by `(baseUrl, model)` survives rebuild; rate-limit `acquire()` bounded by `requestTimeoutMs` (typed `RateLimitTimeoutError`); hot-path dirty tracking skips rebuild + AES-GCM decrypt when settings unchanged (`computePoolSignature`); page path guards partial-back-fill cache writes; `PoolExhaustedError.lastError` always non-null; `testConnection()` skips open slots; double-retry layering bounded. The integration test that would have caught the original bug uses the REAL service with mocked fetch. 41 new tests across 6 files (1723 total). [View](./conductor/archive/provider-pool-resilience_20260627/)
 - ✅ **HBO Max Subtitle Deep Analysis Fixes** (`hbomax-subtitle-deepfix_20260629`) — Archived 2026-06-29. Fixed all 14 issues from HBO Max subtitle deep analysis: VTT capture track-switch lock reset, shared `subtitleLanguagesMatch` with script-subtag guard (zh-Hans ≠ zh-Hant), FNV-1a hash dedup for bounded memory, 30s nested MPD fetch deadline, localized label handling, manifest detection consolidation, dead code removal, Max CDN URL checker dedup, code quality fixes (redundant ternary/WEBVTT check, dead `isPriority` param), progressive fetch body preservation, VTT append/mergeCues tests. 108 new tests (1831 total). [View](./conductor/archive/hbomax-subtitle-deepfix_20260629/)
+- ✅ **Providers Tab UI/UX Overhaul** (`providers-ux-overhaul_20260630`) — Archived 2026-06-30. Resolved all 13 findings from Settings→Providers deep analysis: persisted connection-test status (KeyTestResult on PoolKey/PoolProvider, survives collapse/reload), catalog get-key links (getKeyUrl + getKeyUrlForProvider), multi-expand accordion (Set + expand/collapse-all), bulk "Test all keys" (sequential + N/M aggregate), keyless-field hiding + single reveal control, double-border/disabled-visual fixes, System Prompt relabel (FileText icon), EmptyState primitive, Max RPM cap hint, banner microcopy, ARIA header/panel pairing. New `lib/poolTestStatus.ts` pure helpers. 72 new tests (1903 total). [View](./conductor/archive/providers-ux-overhaul_20260630/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: Providers Tab UI/UX Overhaul
-*Link: [./conductor/tracks/providers-ux-overhaul_20260630/](./conductor/tracks/providers-ux-overhaul_20260630/)*
-*Priority: 🟠 High · Status: new · Created: 2026-06-30*
-
-Resolve all 13 findings from the Settings→Providers deep analysis: persisted connection-test
-status (survives collapse/navigate), catalog "Get API key" links, multi-expand accordion, bulk
-"Test all keys", keyless-field hiding + single reveal control, double-border/disabled-visual
-fixes, System Prompt relabel, EmptyState primitive, Max RPM cap hint, banner microcopy, and
-accessibility (aria-controls/region pairing). 8 sequential phases (most changes touch
-`ProvidersSection.tsx`).
 
 ---
