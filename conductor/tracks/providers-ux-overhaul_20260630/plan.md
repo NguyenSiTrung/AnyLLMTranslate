@@ -59,26 +59,26 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 3: Provider Card Interaction & Visuals (A3, B1, B3)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Multi-expand accordion
+- [x] Task 1: Multi-expand accordion
   - Replace `expandedProviderId: string | null` with `expandedProviderIds: Set<string>` in
     `ProvidersSection.tsx`. Header click toggles membership.
   - Add "Expand all" / "Collapse all" buttons near the `SectionHeader` (show only when providers.length > 1).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** two cards can be open at once; expand/collapse-all toggles all.
 
-- [ ] Task 2: Remove stacked double hairline border
+- [x] Task 2: Remove stacked double hairline border
   - In the expanded panel, remove the redundant inner `border-t border-zinc-800/60` on the
     enabled-toggle row (`ProvidersSection.tsx:275`) — keep one divider under the header.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** single clean divider under the provider header.
 
-- [ ] Task 3: Distinct styling for disabled providers in collapsed header
+- [x] Task 3: Distinct styling for disabled providers in collapsed header
   - When `!provider.enabled`, dim the collapsed header (`opacity-60` / muted server icon) so the
     state reads at a glance (badge `info` variant is too subtle alone).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** disabled card visually distinct from enabled; still legible.
 
-- [ ] Task: Conductor - User Manual Verification 'Provider Card Interaction & Visuals' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Provider Card Interaction & Visuals' (Protocol in workflow.md)
 
 ---
 

@@ -13,7 +13,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   Zap, Plus, Trash2, ChevronDown, KeyRound, Server, AlertTriangle,
-  CheckCircle2, RotateCcw, Loader2,
+  CheckCircle2, RotateCcw, Loader2, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -66,7 +66,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const providers = useSettingsStore((s) => s.providers);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const { success: showSuccess } = useToast();
-  const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
+  const [expandedProviderIds, setExpandedProviderIds] = useState<Set<string>>(new Set());
   const [showAddProviderModal, setShowAddProviderModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [draftPrompt, setDraftPrompt] = useState(
@@ -151,9 +151,13 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const removeProvider = useCallback(
     (providerId: string) => {
       commitProviders(providers.filter((p) => p.id !== providerId));
-      if (expandedProviderId === providerId) setExpandedProviderId(null);
+      setExpandedProviderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(providerId);
+        return next;
+      });
     },
-    [providers, commitProviders, expandedProviderId],
+    [providers, commitProviders],
   );
 
   const addProviderFromCatalog = useCallback(
@@ -173,7 +177,7 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
         keys: [{ id: poolIdGenerators.keyId(), apiKey: '', maxRpm: 0, enabled: true }],
       };
       commitProviders([...providers, newProvider]);
-      setExpandedProviderId(newProvider.id);
+      setExpandedProviderIds((prev) => new Set(prev).add(newProvider.id));
       setShowAddProviderModal(false);
       showSuccess(`Added ${newProvider.displayName}`);
     },
@@ -194,6 +198,26 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
     [updateProviderFields],
   );
 
+  const expandAll = useCallback(() => {
+    setExpandedProviderIds(new Set(providers.map((p) => p.id)));
+  }, [providers]);
+
+  const collapseAll = useCallback(() => {
+    setExpandedProviderIds(new Set());
+  }, []);
+
+  const toggleProvider = useCallback((providerId: string) => {
+    setExpandedProviderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(providerId)) {
+        next.delete(providerId);
+      } else {
+        next.add(providerId);
+      }
+      return next;
+    });
+  }, []);
+
   const promptValidation = settings.customSystemPrompt
     ? validatePromptTemplate(settings.customSystemPrompt)
     : null;
@@ -206,6 +230,17 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
         icon={<Zap className="w-4 h-4" />}
         accentColor="amber"
       />
+
+      {providers.length > 1 && (
+        <div className="flex items-center gap-2 -mt-2">
+          <Button size="sm" variant="ghost" icon={<ChevronsUpDown className="w-3.5 h-3.5" />} onClick={expandAll}>
+            Expand all
+          </Button>
+          <Button size="sm" variant="ghost" icon={<ChevronsDownUp className="w-3.5 h-3.5" />} onClick={collapseAll}>
+            Collapse all
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Readiness banner */}
@@ -246,7 +281,9 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
         )}
 
         {providers.map((provider, idx) => {
-          const isExpanded = expandedProviderId === provider.id;
+          const isExpanded = expandedProviderIds.has(provider.id);
+          const panelId = `provider-panel-${provider.id}`;
+          const headerId = `provider-header-${provider.id}`;
           const catalogId = provider.catalogId ?? inferCatalogId(provider.baseUrl);
           return (
             <div key={provider.id} className="animate-stagger" style={stagger(idx + 1)}>
@@ -254,12 +291,18 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                 {/* Provider header (collapsible) */}
                 <button
                   type="button"
-                  onClick={() => setExpandedProviderId(isExpanded ? null : provider.id)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium text-zinc-300 hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  id={headerId}
+                  onClick={() => toggleProvider(provider.id)}
+                  className={`w-full flex items-center justify-between px-5 py-4 text-sm font-medium transition-colors cursor-pointer ${
+                    provider.enabled
+                      ? 'text-zinc-300 hover:bg-zinc-800/50'
+                      : 'text-zinc-500 hover:bg-zinc-800/30 opacity-60'
+                  }`}
                   aria-expanded={isExpanded}
+                  aria-controls={panelId}
                 >
                   <span className="flex items-center gap-2 min-w-0">
-                    <Server className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    <Server className={`w-3.5 h-3.5 shrink-0 ${provider.enabled ? 'text-zinc-500' : 'text-zinc-600'}`} />
                     <span className="truncate">{provider.displayName || 'Unnamed provider'}</span>
                     <Badge variant={provider.enabled ? 'success' : 'info'}>
                       {provider.enabled ? 'on' : 'off'}
@@ -270,9 +313,14 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                 </button>
 
                 {isExpanded && (
-                  <div className="px-5 pb-5 space-y-5 border-t border-zinc-700/60 pt-4">
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={headerId}
+                    className="px-5 pb-5 space-y-5 border-t border-zinc-700/60 pt-4"
+                  >
                     {/* Enabled toggle + delete */}
-                    <div className="flex items-center justify-between gap-4 pt-3 border-t border-zinc-800/60">
+                    <div className="flex items-center justify-between gap-4 pt-3">
                       <label className="flex items-center gap-3 cursor-pointer select-none group">
                         <Toggle
                           checked={provider.enabled}

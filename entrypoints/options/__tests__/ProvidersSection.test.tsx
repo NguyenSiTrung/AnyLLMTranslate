@@ -194,6 +194,101 @@ describe('ProvidersSection', () => {
   });
 });
 
+describe('ProvidersSection multi-expand accordion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [
+        makeProvider({ id: 'p1', displayName: 'Alpha' }),
+        makeProvider({ id: 'p2', displayName: 'Beta', keys: [{ id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true }] }),
+      ],
+      updateSettings,
+    };
+  });
+
+  it('shows Expand all / Collapse all buttons when > 1 provider', () => {
+    renderSection();
+    expect(screen.getByRole('button', { name: /expand all/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /collapse all/i })).toBeInTheDocument();
+  });
+
+  it('does not show Expand all / Collapse all when only 1 provider', () => {
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+    renderSection();
+    expect(screen.queryByRole('button', { name: /expand all/i })).not.toBeInTheDocument();
+  });
+
+  it('expands multiple providers simultaneously', () => {
+    renderSection();
+    // Both collapsed initially
+    expect(screen.queryByText('Base URL')).not.toBeInTheDocument();
+
+    // Expand first
+    fireEvent.click(screen.getByText('Alpha'));
+    expect(screen.getByText('Base URL')).toBeInTheDocument();
+
+    // Expand second — first should still be expanded
+    fireEvent.click(screen.getByText('Beta'));
+    // Two Base URL labels should exist (one per provider)
+    expect(screen.getAllByText('Base URL')).toHaveLength(2);
+  });
+
+  it('collapse all collapses every provider', () => {
+    renderSection();
+    // Expand both
+    fireEvent.click(screen.getByText('Alpha'));
+    fireEvent.click(screen.getByText('Beta'));
+    expect(screen.getAllByText('Base URL')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse all/i }));
+    expect(screen.queryByText('Base URL')).not.toBeInTheDocument();
+  });
+
+  it('expand all opens every provider', () => {
+    renderSection();
+    expect(screen.queryByText('Base URL')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /expand all/i }));
+    expect(screen.getAllByText('Base URL')).toHaveLength(2);
+  });
+
+  it('collapses a single provider on re-click without affecting others', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('Alpha'));
+    fireEvent.click(screen.getByText('Beta'));
+    expect(screen.getAllByText('Base URL')).toHaveLength(2);
+
+    // Collapse only Alpha
+    fireEvent.click(screen.getByText('Alpha'));
+    expect(screen.getAllByText('Base URL')).toHaveLength(1);
+  });
+});
+
+describe('ProvidersSection disabled provider visuals', () => {
+  it('renders a disabled provider header with dimmed styling', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({ enabled: false, displayName: 'Disabled Prov' })],
+      updateSettings,
+    };
+    renderSection();
+    const header = screen.getByText('Disabled Prov').closest('button');
+    expect(header).toHaveClass('opacity-60');
+  });
+
+  it('renders an enabled provider header without dimmed styling', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({ enabled: true, displayName: 'Enabled Prov' })],
+      updateSettings,
+    };
+    renderSection();
+    const header = screen.getByText('Enabled Prov').closest('button');
+    expect(header).not.toHaveClass('opacity-60');
+  });
+});
+
 describe('ProvidersSection readiness banner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
