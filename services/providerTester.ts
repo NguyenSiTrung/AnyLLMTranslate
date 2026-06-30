@@ -7,15 +7,6 @@
 
 import type { ProviderConfig } from '@/types/config';
 
-/** Strip trailing slashes so `${baseUrl}/chat/completions` never becomes `//chat`. */
-export function normalizeProviderBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '');
-}
-
-function providerUrl(baseUrl: string, path: string): string {
-  return `${normalizeProviderBaseUrl(baseUrl)}${path}`;
-}
-
 /** Individual test step result */
 export interface ConnectionTestStep {
   name: 'ping' | 'models' | 'translation';
@@ -103,14 +94,13 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(providerUrl(config.baseUrl, '/chat/completions'), {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: config.model,
         messages: [{ role: 'user', content: 'Hello' }],
-        // Reasoning / VLM models (e.g. NVIDIA diffusiongemma) need >1 token.
-        max_tokens: 32,
+        max_tokens: 1,
       }),
       signal: controller.signal,
     });
@@ -182,7 +172,7 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(providerUrl(config.baseUrl, '/models'), {
+    const response = await fetch(`${config.baseUrl}/models`, {
       method: 'GET',
       headers,
       signal: controller.signal,
@@ -237,7 +227,7 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(providerUrl(config.baseUrl, '/chat/completions'), {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -249,7 +239,7 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
           },
           { role: 'user', content: 'Hello, how are you today?' },
         ],
-        max_tokens: 256,
+        max_tokens: 100,
         temperature: 0.3,
       }),
       signal: controller.signal,

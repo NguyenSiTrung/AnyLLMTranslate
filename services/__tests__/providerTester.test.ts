@@ -138,28 +138,6 @@ describe('testConnection', () => {
     expect(result.models).toEqual([]);
   });
 
-  it('normalizes trailing slash on baseUrl to avoid double-slash 404', async () => {
-    const capturedUrls: string[] = [];
-
-    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : (url as URL).toString();
-      capturedUrls.push(urlStr);
-      if (urlStr.includes('/models')) {
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      return new Response(
-        JSON.stringify({ choices: [{ message: { content: 'ok' } }] }),
-        { status: 200 },
-      );
-    }) as typeof fetch;
-
-    await testConnection({ ...mockConfig, baseUrl: 'http://localhost:11434/v1/' });
-
-    expect(capturedUrls.some((u) => u.includes('/v1//'))).toBe(false);
-    expect(capturedUrls.some((u) => u.endsWith('/v1/chat/completions'))).toBe(true);
-    expect(capturedUrls.some((u) => u.endsWith('/v1/models'))).toBe(true);
-  });
-
   it('includes API key in Authorization header when provided', async () => {
     const configWithKey = { ...mockConfig, apiKey: 'sk-test123' };
     let capturedHeaders: Record<string, string> = {};
