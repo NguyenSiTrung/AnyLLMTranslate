@@ -196,9 +196,9 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 <!-- execution: sequential -->
 <!-- depends: phase1, phase2, phase3, phase4, phase5, phase6, phase7 -->
 
-- [ ] Task 1: Full quality gates — `pnpm test` + `pnpm lint` + build green
+- [x] Task 1: Full quality gates — `pnpm test` + `pnpm lint` + build green
   - Run the complete suite; resolve any regressions; confirm no TypeScript errors.
   - **Files:** (verification only)
   - **Done:** all tests pass; lint clean; `pnpm build` succeeds.
 
-- [ ] Task: Conductor - User Manual Verification 'Final Verification' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Final Verification' (Protocol in workflow.md)

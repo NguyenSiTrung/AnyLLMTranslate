@@ -73,7 +73,7 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [~] Track: Providers Tab UI/UX Overhaul
+## [x] Track: Providers Tab UI/UX Overhaul
 *Link: [./conductor/tracks/providers-ux-overhaul_20260630/](./conductor/tracks/providers-ux-overhaul_20260630/)*
 *Priority: 🟠 High · Status: new · Created: 2026-06-30*
 

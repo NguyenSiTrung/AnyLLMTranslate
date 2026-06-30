@@ -83,3 +83,17 @@ relevant archived tracks), plus `conductor/patterns.md`.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-06-30 12:10] - Track Complete: Providers Tab UI/UX Overhaul
+
+- **Implemented:** All 13 findings resolved across 8 phases. KeyTestResult type added to pool model, pure invalidation helpers (poolTestStatus.ts), catalog getKeyUrl links, multi-expand accordion, single reveal control, keyless-field hiding, status dots in collapsed headers, bulk "Test all keys", EmptyState primitive, System Prompt relabel, ARIA pairing, key-count cluster, AddProviderModal relabel.
+- **Files changed:** types/config.ts, lib/poolTestStatus.ts (new), lib/openAiCompatibleCatalog.ts, entrypoints/options/sections/ProvidersSection.tsx, + 4 test files
+- **Commits:** b5c579d, 6a5705b, 3dc0097, c617da5, 65982c5, d2db814, 2826e11, 512d581, 66dac64
+- **Tests:** 1903 total (72 new), 0 failing. Lint clean on changed files. Build passing (3.87 MB). tsc clean.
+- **Learnings:**
+  - **Pattern:** `applyProviderPatch`/`applyKeyPatch` in poolTestStatus.ts follow the codebase's pure-helper-at-seams pattern. Wire them into `updateProviderFields`/`updateKey` callbacks so invalidation is automatic on every edit.
+  - **Gotcha:** The Input component's built-in password eye toggle has `aria-label="Show password"`/`"Hide password"` — use `getByLabelText` in tests, not `getByText('Show')`.
+  - **Gotcha:** `getByTitle` does exact string matching — when the title includes dynamic content (age string), use regex `getByTitle(/Verified/)`.
+  - **Pattern:** `requestAnimationFrame` + `data-key-id` selector is a clean way to scroll a newly added list item into view without complex ref management in a `.map()` context.
+  - **Context:** The Modal component always renders both confirm and cancel buttons. For non-confirmation modals (pickers), use distinct labels (`Done`/`Cancel`) rather than duplicate (`Close`/`Close`).
+---
