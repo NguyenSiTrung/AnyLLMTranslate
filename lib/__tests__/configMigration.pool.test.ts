@@ -208,6 +208,83 @@ describe('saveSettings — per-key encryption', () => {
     const persisted = mockSet.mock.calls[0]?.[0] as Record<string, ExtensionSettings>;
     expect(persisted[STORAGE_KEYS.SETTINGS].providers).toEqual([]);
   });
+
+  it('preserves lastTestResult through saveSettings (not encrypted, spread-copied)', async () => {
+    const testResult = { success: true, at: 1700000000000, latencyMs: 240 };
+    const settings = baseSettings({
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          lastTestResult: { success: true, at: 1700000000000, latencyMs: 500 },
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'plain-key',
+              maxRpm: 0,
+              enabled: true,
+              lastTestResult: testResult,
+            },
+          ],
+        },
+      ],
+    });
+
+    await saveSettings(settings);
+
+    const persisted = mockSet.mock.calls[0]?.[0] as Record<string, ExtensionSettings>;
+    const savedProvider = persisted[STORAGE_KEYS.SETTINGS].providers[0];
+    // lastTestResult is preserved (spread-copied), apiKey is encrypted.
+    expect(savedProvider?.lastTestResult).toEqual({ success: true, at: 1700000000000, latencyMs: 500 });
+    expect(savedProvider?.keys[0]?.lastTestResult).toEqual(testResult);
+    expect(savedProvider?.keys[0]?.apiKey).toBe('enc:plain-key');
+    // encryptApiKey was called only on apiKey, never on lastTestResult fields.
+    const encryptCalls = (encryptApiKey as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(encryptCalls).not.toContain(1700000000000);
+  });
+
+  it('preserves lastTestResult through loadSettings (deep-merge + decrypt)', async () => {
+    const stored = baseSettings({
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          lastTestResult: { success: false, at: 1700000000001, error: 'timeout' },
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'enc:my-key',
+              maxRpm: 0,
+              enabled: true,
+              lastTestResult: { success: true, at: 1700000000002, latencyMs: 120 },
+            },
+          ],
+        },
+      ],
+    });
+
+    mockGet.mockResolvedValue({ [STORAGE_KEYS.SETTINGS]: stored });
+
+    const settings = await loadSettings();
+
+    const provider = settings.providers[0];
+    expect(provider?.lastTestResult).toEqual({ success: false, at: 1700000000001, error: 'timeout' });
+    expect(provider?.keys[0]?.lastTestResult).toEqual({ success: true, at: 1700000000002, latencyMs: 120 });
+    // apiKey was decrypted, lastTestResult was not touched by decrypt.
+    expect(provider?.keys[0]?.apiKey).toBe('my-key');
+  });
 });
 
 describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {

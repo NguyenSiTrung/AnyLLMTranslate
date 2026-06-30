@@ -18,7 +18,7 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `types/config.ts`, `types/__tests__/config.test.ts`
   - **Done:** type compiles; new field optional; default unaffected.
 
-- [ ] Task 2: Migration-tolerant encrypt/decrypt + deep-merge for `lastTestResult`
+- [x] Task 2: Migration-tolerant encrypt/decrypt + deep-merge for `lastTestResult`
   - Extend `lib/config.ts` deep-merge to preserve `lastTestResult` across `loadSettings`/`updateSettings`/`onSettingsChange`.
   - Ensure `lastTestResult` is NOT encrypted (it carries no secret) — keep it out of the `encryptPoolKeys`/`decryptPoolKeys` loops.
   - **Files:** `lib/config.ts`, `lib/__tests__/configMigration.pool.test.ts`
