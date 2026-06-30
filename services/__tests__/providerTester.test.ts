@@ -3,13 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  extractCompletionText,
-  listProviderModels,
-  normalizeProviderBaseUrl,
-  parseProviderErrorBody,
-  testConnection,
-} from '@/services/providerTester';
+import { listProviderModels, testConnection } from '@/services/providerTester';
 import type { ProviderConfig } from '@/types/config';
 import type { ConnectionTestProgress } from '@/services/providerTester';
 
@@ -123,7 +117,7 @@ describe('testConnection', () => {
     expect(result.steps[0].error).toContain('Connection refused');
   });
 
-  it('succeeds overall when models fail but ping and translation pass', async () => {
+  it('continues when models fail but ping succeeds', async () => {
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
       const urlStr = typeof url === 'string' ? url : (url as URL).toString();
       if (urlStr.includes('/models')) {
@@ -137,43 +131,11 @@ describe('testConnection', () => {
 
     const result = await testConnection(mockConfig);
 
-    expect(result.overall).toBe(true);
+    expect(result.overall).toBe(false);
     expect(result.steps).toHaveLength(3);
     expect(result.steps[1].name).toBe('models');
     expect(result.steps[1].success).toBe(false);
     expect(result.models).toEqual([]);
-  });
-
-  it('fails ping when HTTP 200 returns an empty completion', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }),
-    ) as typeof fetch;
-
-    const result = await testConnection(mockConfig);
-
-    expect(result.overall).toBe(false);
-    expect(result.steps[0].success).toBe(false);
-    expect(result.steps[0].error).toContain('empty completion');
-  });
-
-  it('accepts reasoning-field completions from VLM models', () => {
-    const text = extractCompletionText({
-      choices: [{ message: { content: '', reasoning: 'OK' } }],
-    });
-    expect(text).toBe('OK');
-  });
-
-  it('strips /chat/completions suffix from pasted base URLs', () => {
-    expect(normalizeProviderBaseUrl('https://integrate.api.nvidia.com/v1/chat/completions/'))
-      .toBe('https://integrate.api.nvidia.com/v1');
-  });
-
-  it('parses JSON provider error bodies', () => {
-    const msg = parseProviderErrorBody(
-      '{"error":{"message":"model not found"}}',
-      404,
-    );
-    expect(msg).toBe('model not found');
   });
 
   it('normalizes trailing slash on baseUrl to avoid double-slash 404', async () => {
@@ -247,8 +209,8 @@ describe('testConnection', () => {
 
     expect(result.overall).toBe(false);
     expect(result.steps[0].error).toContain('HTTP 500');
-    // Provider error bodies are truncated to 300 chars (+ status prefix)
-    expect((result.steps[0].error ?? '').length).toBeLessThan(320);
+    // Pings error message is truncated to 200 chars
+    expect((result.steps[0].error ?? '').length).toBeLessThan(300);
   });
 
   it('reports total latency as sum of all step latencies', async () => {

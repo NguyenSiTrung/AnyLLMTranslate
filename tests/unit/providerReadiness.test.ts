@@ -120,17 +120,7 @@ describe('provider recovery messages', () => {
     const message = getConnectionErrorMessage('HTTP 404: 404 page not found');
 
     expect(message.title).toBe('Invalid API URL');
-    expect(message.action).toContain('/v1');
-  });
-
-  it('maps model listing failures to listing guidance, not model ID guidance', () => {
-    const message = getConnectionErrorMessage(
-      'HTTP 404: Failed to list models — page not found',
-      'models',
-    );
-
-    expect(message.title).toBe('Model listing unavailable');
-    expect(message.action).toContain('/v1');
+    expect(message.action).toContain('base URL');
   });
 });
 

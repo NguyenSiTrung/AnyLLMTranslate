@@ -534,7 +534,7 @@ function useConnectionTest(targetLanguage: string) {
       showSuccess(successLabel);
     } else {
       const failed = result.steps.find((s) => !s.success);
-      const message = getConnectionErrorMessage(failed?.error, failed?.name);
+      const message = getConnectionErrorMessage(failed?.error);
       showError(`${message.title}: ${message.action}`);
     }
 
@@ -556,7 +556,7 @@ function ProviderConnectionTest({
   const testKey = getCredentialKey(provider);
   const canTest = testKey ? canRunConnectionTest(provider, testKey) : false;
   const failedStep = testResult?.steps.find((s) => !s.success);
-  const failedMessage = getConnectionErrorMessage(failedStep?.error, failedStep?.name);
+  const failedMessage = getConnectionErrorMessage(failedStep?.error);
 
   const handleTest = async () => {
     if (!testKey) return;
@@ -600,16 +600,8 @@ function ProviderConnectionTest({
       )}
       {testResult && !testResult.overall && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-          {failedStep && (
-            <p className="text-xs text-red-200/60 mb-1">
-              Failed at: {failedStep.name === 'ping' ? 'Reachability' : failedStep.name === 'models' ? 'Model listing' : 'Translation'}
-            </p>
-          )}
           <p className="text-xs font-medium text-red-300">{failedMessage.title}</p>
           <p className="text-xs text-red-200/80 mt-1">{failedMessage.action}</p>
-          {failedStep?.error && (
-            <p className="text-xs text-red-200/50 mt-2 font-mono break-all">{failedStep.error}</p>
-          )}
         </div>
       )}
     </div>
@@ -635,7 +627,7 @@ function KeyRow({
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
   const canTest = canRunConnectionTest(provider, poolKey);
   const failedStep = testResult?.steps.find((s) => !s.success);
-  const failedMessage = getConnectionErrorMessage(failedStep?.error, failedStep?.name);
+  const failedMessage = getConnectionErrorMessage(failedStep?.error);
 
   const handleTest = async () => {
     await runTest(
@@ -738,16 +730,8 @@ function KeyRow({
       <ConnectionTestProgressList steps={testProgress} isTesting={isTesting} />
       {testResult && !testResult.overall && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-          {failedStep && (
-            <p className="text-xs text-red-200/60 mb-1">
-              Failed at: {failedStep.name === 'ping' ? 'Reachability' : failedStep.name === 'models' ? 'Model listing' : 'Translation'}
-            </p>
-          )}
           <p className="text-xs font-medium text-red-300">{failedMessage.title}</p>
           <p className="text-xs text-red-200/80 mt-1">{failedMessage.action}</p>
-          {failedStep?.error && (
-            <p className="text-xs text-red-200/50 mt-2 font-mono break-all">{failedStep.error}</p>
-          )}
         </div>
       )}
       {testResult?.overall && (

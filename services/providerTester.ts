@@ -1,64 +1,19 @@
 /**
  * Provider Connection Tester — validates provider connectivity in 3 steps.
- * Step 1: Simple ping (minimal request, check 200 + non-empty completion)
- * Step 2: Model listing (GET /v1/models) — optional, does not block overall success
+ * Step 1: Simple ping (minimal request, check 200)
+ * Step 2: Model listing (GET /v1/models)
  * Step 3: Translation test (translate sample, measure latency)
  */
 
 import type { ProviderConfig } from '@/types/config';
 
-/** Strip trailing slashes and accidental full-endpoint paths from pasted curl URLs. */
+/** Strip trailing slashes so `${baseUrl}/chat/completions` never becomes `//chat`. */
 export function normalizeProviderBaseUrl(baseUrl: string): string {
-  let url = baseUrl.trim().replace(/\/+$/, '');
-  url = url.replace(/\/chat\/completions$/i, '');
-  return url.replace(/\/+$/, '');
+  return baseUrl.trim().replace(/\/+$/, '');
 }
 
 function providerUrl(baseUrl: string, path: string): string {
   return `${normalizeProviderBaseUrl(baseUrl)}${path}`;
-}
-
-type ProviderErrorBody = {
-  error?: { message?: string };
-  message?: string;
-};
-
-type CompletionMessage = {
-  content?: string | null;
-  reasoning?: string | null;
-};
-
-/** Parse provider JSON/text error bodies into a human-readable message. */
-export function parseProviderErrorBody(text: string, status: number): string {
-  const trimmed = text.trim();
-  if (!trimmed) return `HTTP ${status}`;
-  try {
-    const json = JSON.parse(trimmed) as ProviderErrorBody;
-    if (json.error?.message) return json.error.message;
-    if (json.message) return json.message;
-  } catch {
-    // fall through to raw text
-  }
-  return trimmed.slice(0, 300);
-}
-
-/** Extract assistant text from content or reasoning (NVIDIA VLMs / reasoning models). */
-export function extractCompletionText(json: {
-  choices?: Array<{ message?: CompletionMessage }>;
-  error?: { message?: string };
-}): string | undefined {
-  if (json.error?.message) return undefined;
-  const msg = json.choices?.[0]?.message;
-  if (!msg) return undefined;
-  const content = (msg.content ?? '').trim();
-  if (content) return content;
-  const reasoning = (msg.reasoning ?? '').trim();
-  return reasoning || undefined;
-}
-
-/** Extra request hints for reasoning/VLM models (ignored by most text-only LLMs). */
-function reasoningModelHints(): Record<string, unknown> {
-  return { chat_template_kwargs: { thinking: false } };
 }
 
 /** Individual test step result */
@@ -107,7 +62,7 @@ export async function testConnection(
     };
   }
 
-  // Step 2: Model listing (optional — many endpoints omit GET /models)
+  // Step 2: Model listing
   const modelsStep = await testModelListing(config);
   steps.push(modelsStep);
   onProgress?.(modelsStep, 1);
@@ -126,8 +81,7 @@ export async function testConnection(
   }
 
   return {
-    // Reachability + translation are required; model listing is best-effort.
-    overall: pingStep.success && translationStep.success,
+    overall: steps.every((s) => s.success),
     steps,
     models,
     translationSample,
@@ -135,7 +89,7 @@ export async function testConnection(
   };
 }
 
-/** Step 1: Send minimal request to verify API is reachable and model responds */
+/** Step 1: Send minimal request to verify API is reachable */
 async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
   const start = performance.now();
   try {
@@ -154,49 +108,23 @@ async function testPing(config: ProviderConfig): Promise<ConnectionTestStep> {
       headers,
       body: JSON.stringify({
         model: config.model,
-        messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
-        max_tokens: 64,
-        ...reasoningModelHints(),
+        messages: [{ role: 'user', content: 'Hello' }],
+        // Reasoning / VLM models (e.g. NVIDIA diffusiongemma) need >1 token.
+        max_tokens: 32,
       }),
       signal: controller.signal,
     });
     clearTimeout(timer);
 
     const latencyMs = Math.round(performance.now() - start);
-    const responseText = await response.text().catch(() => '');
 
     if (!response.ok) {
-      const detail = parseProviderErrorBody(responseText, response.status);
+      const errorText = await response.text().catch(() => 'Unknown error');
       return {
         name: 'ping',
         success: false,
         latencyMs,
-        error: `HTTP ${response.status}: ${detail}`,
-      };
-    }
-
-    let json: { choices?: Array<{ message?: CompletionMessage }>; error?: { message?: string } };
-    try {
-      json = JSON.parse(responseText) as typeof json;
-    } catch {
-      return {
-        name: 'ping',
-        success: false,
-        latencyMs,
-        error: 'Reachability check returned non-JSON response',
-      };
-    }
-
-    const text = extractCompletionText(json);
-    if (!text) {
-      const apiError = json.error?.message;
-      return {
-        name: 'ping',
-        success: false,
-        latencyMs,
-        error: apiError
-          ? `Reachability check failed: ${apiError}`
-          : 'Reachability check returned an empty completion — verify the model ID',
+        error: `HTTP ${response.status}: ${errorText.slice(0, 200)}`,
       };
     }
 
@@ -264,12 +192,11 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
     const latencyMs = Math.round(performance.now() - start);
 
     if (!response.ok) {
-      const detail = parseProviderErrorBody(await response.text().catch(() => ''), response.status);
       return {
         name: 'models',
         success: false,
         latencyMs,
-        error: `HTTP ${response.status}: Failed to list models — ${detail}`,
+        error: `HTTP ${response.status}: Failed to list models`,
       };
     }
 
@@ -308,7 +235,7 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60000);
+    const timer = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(providerUrl(config.baseUrl, '/chat/completions'), {
       method: 'POST',
@@ -322,61 +249,38 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
           },
           { role: 'user', content: 'Hello, how are you today?' },
         ],
-        max_tokens: 1024,
+        max_tokens: 256,
         temperature: 0.3,
-        ...reasoningModelHints(),
       }),
       signal: controller.signal,
     });
     clearTimeout(timer);
 
     const latencyMs = Math.round(performance.now() - start);
-    const responseText = await response.text().catch(() => '');
 
     if (!response.ok) {
-      const detail = parseProviderErrorBody(responseText, response.status);
       return {
         name: 'translation',
         success: false,
         latencyMs,
-        error: `HTTP ${response.status}: ${detail}`,
+        error: `HTTP ${response.status}: Translation test failed`,
       };
     }
 
-    let json: { choices?: Array<{ message?: CompletionMessage }>; error?: { message?: string } };
-    try {
-      json = JSON.parse(responseText) as typeof json;
-    } catch {
-      return {
-        name: 'translation',
-        success: false,
-        latencyMs,
-        error: 'Translation test returned non-JSON response',
-      };
-    }
-
-    const content = extractCompletionText(json);
-    if (!content) {
-      const apiError = json.error?.message;
-      return {
-        name: 'translation',
-        success: false,
-        latencyMs,
-        error: apiError
-          ? `Translation test failed: ${apiError}`
-          : 'Translation test returned an empty completion',
-      };
-    }
+    const json = await response.json() as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const content = json.choices?.[0]?.message?.content ?? '';
 
     return {
       name: 'translation',
       success: true,
       latencyMs,
-      data: content,
+      data: content.trim(),
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { name: 'translation', success: false, latencyMs: Math.round(performance.now() - start), error: 'Translation test timed out after 60s' };
+      return { name: 'translation', success: false, latencyMs: Math.round(performance.now() - start), error: 'Translation test timed out after 30s' };
     }
     return {
       name: 'translation',
