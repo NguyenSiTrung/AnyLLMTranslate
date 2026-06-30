@@ -152,12 +152,13 @@ describe('ProvidersSection', () => {
     );
   });
 
-  it('reveals and hides the API key via the Show/Hide button', () => {
+  it('reveals and hides the API key via the Input eye toggle', () => {
     renderSection();
     fireEvent.click(screen.getByText('OpenAI')); // expand
-    const showBtn = screen.getByText('Show');
+    // The Input component has a built-in eye toggle with aria-label
+    const showBtn = screen.getByLabelText('Show password');
     fireEvent.click(showBtn);
-    expect(screen.getByText('Hide')).toBeInTheDocument();
+    expect(screen.getByLabelText('Hide password')).toBeInTheDocument();
   });
 
   it('toggles a key enabled state', () => {
@@ -394,6 +395,99 @@ describe('ProvidersSection expanded provider features', () => {
         ]),
       }),
     );
+  });
+});
+
+describe('ProvidersSection key row — keyless & get-key link', () => {
+  it('shows "No key required" for a keyless provider (Ollama)', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        requiresApiKey: false,
+        displayName: 'Ollama',
+        baseUrl: 'http://localhost:11434/v1',
+        keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Ollama'));
+    expect(screen.getByText('No key required for this provider')).toBeInTheDocument();
+  });
+
+  it('shows a Get-a-key link for a keyed catalog provider (OpenRouter)', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'OpenRouter',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        catalogId: 'openrouter',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('OpenRouter'));
+    const link = screen.getByText('Get a key');
+    expect(link).toBeInTheDocument();
+    expect(link.closest('a')).toHaveAttribute('href', 'https://openrouter.ai/keys');
+  });
+
+  it('does not show a Get-a-key link for unknown base URLs', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Custom Prov',
+        baseUrl: 'https://api.unknown.com/v1',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Custom Prov'));
+    expect(screen.queryByText('Get a key')).not.toBeInTheDocument();
+  });
+
+  it('uses the catalog placeholder for the API key input', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        catalogId: 'groq',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Groq'));
+    expect(screen.getByPlaceholderText('gsk_...')).toBeInTheDocument();
+  });
+
+  it('shows a disabled-Test reason hint when API key is empty', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    expect(screen.getByText('Enter an API key to test this key.')).toBeInTheDocument();
+  });
+
+  it('does not show the key Test hint for keyless providers', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        requiresApiKey: false,
+        displayName: 'Ollama',
+        baseUrl: 'http://localhost:11434/v1',
+        keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Ollama'));
+    expect(screen.queryByText('Enter an API key to test this key.')).not.toBeInTheDocument();
   });
 });
 

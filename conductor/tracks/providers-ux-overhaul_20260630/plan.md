@@ -85,13 +85,13 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
 ## Phase 4: Key Row & API-Key Field (A5, B2, C1, C3)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Remove duplicate API-key reveal control
+- [x] Task 1: Remove duplicate API-key reveal control
   - Drop the custom Show/Hide `Button` in `KeyRow` (`ProvidersSection.tsx:665-671`); rely on the
     `Input`'s built-in eye toggle (`Input.tsx:44-53`). Remove the now-unused `revealed` state.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** single reveal control (Input eye); show/hide still toggles masking.
 
-- [ ] Task 2: Hide key field when `requiresApiKey=false` + catalog placeholder
+- [x] Task 2: Hide key field when `requiresApiKey=false` + catalog placeholder
   - In `KeyRow`, render a disabled "No key required for this provider" note instead of the key
     `FieldGroup` when `!provider.requiresApiKey`.
   - When the field IS shown, drive the placeholder from the catalog entry's `placeholder`
@@ -101,18 +101,18 @@ cause file-ownership conflicts). Phase 1 (data model) precedes Phase 5 (status s
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`, `entrypoints/options/__tests__/ProvidersSection.test.tsx`
   - **Done:** Ollama shows "No key required"; OpenRouter shows its placeholder + get-key link.
 
-- [ ] Task 3: Inline reason hint under disabled key Test button
+- [x] Task 3: Inline reason hint under disabled key Test button
   - When the key Test button is disabled (`!canTest`), show a hint line ("Enter an API key to test
     this key") mirroring the provider-level hint at `ProvidersSection.tsx:586-590`.
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** disabled Test explains why; keyless providers don't show the hint.
 
-- [ ] Task 4: Scroll newly added key into view
+- [x] Task 4: Scroll newly added key into view
   - After `addKey`, scroll the new `KeyRow` into view (ref + `scrollIntoView({ block: 'nearest' })`).
   - **Files:** `entrypoints/options/sections/ProvidersSection.tsx`
   - **Done:** clicking "+ Add key" brings the new row into view.
 
-- [ ] Task: Conductor - User Manual Verification 'Key Row & API-Key Field' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Key Row & API-Key Field' (Protocol in workflow.md)
 
 ---
 

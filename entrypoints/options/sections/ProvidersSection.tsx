@@ -14,12 +14,13 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   Zap, Plus, Trash2, ChevronDown, KeyRound, Server, AlertTriangle,
   CheckCircle2, RotateCcw, Loader2, ChevronsDownUp, ChevronsUpDown,
+  ExternalLink, FileText,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { poolIdGenerators } from '@/lib/config';
-import { getCatalogEntryById, OPENAI_COMPATIBLE_CATALOG } from '@/lib/openAiCompatibleCatalog';
+import { getCatalogEntryById, getKeyUrlForProvider, OPENAI_COMPATIBLE_CATALOG } from '@/lib/openAiCompatibleCatalog';
 import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
 import { ConnectionTestProgressList } from '../components/ConnectionTestProgressList';
 import { ModelPicker } from '../components/ModelPicker';
@@ -120,8 +121,9 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
 
   const addKey = useCallback(
     (providerId: string) => {
+      const newKeyId = poolIdGenerators.keyId();
       const newKey: PoolKey = {
-        id: poolIdGenerators.keyId(),
+        id: newKeyId,
         apiKey: '',
         maxRpm: 0,
         enabled: true,
@@ -131,6 +133,11 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
           p.id === providerId ? { ...p, keys: [...p.keys, newKey] } : p,
         ),
       );
+      // Scroll the new key row into view after the DOM updates.
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-key-id="${newKeyId}"]`);
+        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
     },
     [providers, commitProviders],
   );
@@ -670,12 +677,16 @@ function KeyRow({
   onUpdate: (patch: Partial<PoolKey>) => void;
   onRemove: () => void;
 }) {
-  const [revealed, setRevealed] = useState(false);
   const [maxRpmDraft, setMaxRpmDraft] = useState(String(poolKey.maxRpm));
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
   const canTest = canRunConnectionTest(provider, poolKey);
   const failedStep = testResult?.steps.find((s) => !s.success);
   const failedMessage = getConnectionErrorMessage(failedStep?.error);
+
+  const catalogId = provider.catalogId ?? inferCatalogId(provider.baseUrl);
+  const catalogEntry = getCatalogEntryById(catalogId);
+  const keyPlaceholder = catalogEntry?.placeholder ?? 'sk-...';
+  const getKeyUrl = getKeyUrlForProvider(provider.baseUrl);
 
   const handleTest = async () => {
     await runTest(
@@ -691,7 +702,7 @@ function KeyRow({
   };
 
   return (
-    <div className="rounded-lg border border-zinc-700/60 p-4 space-y-4 bg-zinc-900/40">
+    <div data-key-id={poolKey.id} className="rounded-lg border border-zinc-700/60 p-4 space-y-4 bg-zinc-900/40">
       <div className="flex items-center gap-2">
         <KeyRound className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
         <span className="text-xs text-zinc-400 font-mono">{poolKey.label || poolKey.id}</span>
@@ -700,25 +711,32 @@ function KeyRow({
         </Badge>
       </div>
 
-      <FieldGroup label="API key" htmlFor={`pk-${poolKey.id}`}>
-        <div className="flex gap-2">
+      {provider.requiresApiKey ? (
+        <FieldGroup label="API key" htmlFor={`pk-${poolKey.id}`}>
           <Input
             id={`pk-${poolKey.id}`}
-            type={revealed ? 'text' : 'password'}
+            type="password"
             value={poolKey.apiKey}
             onChange={(e) => onUpdate({ apiKey: e.target.value })}
-            placeholder="sk-..."
+            placeholder={keyPlaceholder}
             className="font-mono"
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setRevealed(!revealed)}
-          >
-            {revealed ? 'Hide' : 'Show'}
-          </Button>
+          {getKeyUrl && (
+            <a
+              href={getKeyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
+            >
+              Get a key <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </FieldGroup>
+      ) : (
+        <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 px-3 py-2">
+          <p className="text-xs text-zinc-500">No key required for this provider</p>
         </div>
-      </FieldGroup>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <FieldGroup label="Label (optional)" htmlFor={`pl-${poolKey.id}`}>
@@ -738,6 +756,7 @@ function KeyRow({
             value={maxRpmDraft}
             onChange={(e) => setMaxRpmDraft(e.target.value)}
             onBlur={commitMaxRpm}
+            hint="Cap is 600 RPM; 0 = unlimited"
           />
         </FieldGroup>
       </div>
@@ -774,6 +793,12 @@ function KeyRow({
           </Button>
         </div>
       </div>
+
+      {provider.requiresApiKey && !canTest && !isTesting && (
+        <p className="text-xs text-zinc-500">
+          Enter an API key to test this key.
+        </p>
+      )}
 
       <ConnectionTestProgressList steps={testProgress} isTesting={isTesting} />
       {testResult && !testResult.overall && (
