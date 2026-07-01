@@ -229,6 +229,14 @@ interface CoordinatorState {
   domTranslatedTexts: Set<string>;
   /** DOM-platform: persistent map of originalText → translatedText across batches */
   domTranslationMap: Map<string, string>;
+  /** Manifest-platform (HBOMax progressive VTT): rolling original (source) cues from capture */
+  manifestOriginalCues: SubtitleCue[];
+  /** Manifest-platform: rebuilt bilingual cues shown in the overlay (originalText + translated/fallback) */
+  manifestTranslatedCues: SubtitleCue[];
+  /** Manifest-platform: set of original cue texts already sent for translation (dedup) */
+  manifestTranslatedTexts: Set<string>;
+  /** Manifest-platform: persistent map of originalText → translatedText across appended segments */
+  manifestTranslationMap: Map<string, string>;
   /** Translated cues array (merged from chunk deltas) for overlay display */
   translatedCues: SubtitleCue[] | null;
   /** Cached settings to avoid loadSettings() in hot paths */
@@ -266,6 +274,10 @@ const state: CoordinatorState = {
   domTranslatedCues: [],
   domTranslatedTexts: new Set(),
   domTranslationMap: new Map(),
+  manifestOriginalCues: [],
+  manifestTranslatedCues: [],
+  manifestTranslatedTexts: new Set(),
+  manifestTranslationMap: new Map(),
   translatedCues: null,
   cachedSettings: null,
   activeTrackIdentity: null,
@@ -714,6 +726,107 @@ function clearDomTranslationBuffers(): void {
   resetActiveSource();
 }
 
+// ── Manifest-tier (HBOMax progressive VTT capture) delta translation ─────────
+// Mirrors the DOM-tier machinery above. HBO Max serves subtitles as multiple
+// VTT segments fetched progressively; each appended segment's new cue texts
+// are translated as a delta against this persistent map, with per-cue
+// fallback to the original text until a translation arrives.
+
+/**
+ * Replace the rolling manifest original-cue buffer with the latest from MAIN
+ * world. The Performance-API capture sends the FULL accumulated buffer each
+ * append (deduped by startTime), so a wholesale replace keeps timing
+ * authoritative — identical to the DOM tier's contract. Returns the list of
+ * NEW cue texts not yet sent for translation.
+ */
+function mergeManifestOriginalCues(incoming: SubtitleCue[]): string[] {
+  const newTexts: string[] = [];
+  state.manifestOriginalCues = incoming.map((c) => ({ ...c }));
+  for (const cue of incoming) {
+    if (!state.manifestTranslatedTexts.has(cue.text)) {
+      newTexts.push(cue.text);
+      state.manifestTranslatedTexts.add(cue.text);
+    }
+  }
+  return newTexts;
+}
+
+/**
+ * Rebuild manifestTranslatedCues from manifestOriginalCues using the persistent
+ * translation map. Each cue carries originalText (source) + text (translated,
+ * or source if not yet translated) — graceful per-cue fallback.
+ */
+function rebuildManifestTranslatedCues(): void {
+  const built = state.manifestOriginalCues.map((cue) => ({
+    startTime: cue.startTime,
+    endTime: cue.endTime,
+    text: state.manifestTranslationMap.get(cue.text) ?? cue.text,
+    originalText: cue.text,
+  }));
+  state.manifestTranslatedCues = adaptCueTimings(built);
+}
+
+/**
+ * Translate the given new source cue texts and merge into the overlay.
+ * Sends a translateSubtitle request for the delta only, accumulating into
+ * the persistent manifestTranslationMap. Failure is graceful (log + return):
+ * the overlay keeps whatever the last rebuild produced (original text
+ * fallback), so a failed append delta never blanks the overlay.
+ */
+async function translateManifestCueTexts(
+  newTexts: string[],
+  sourceLanguage: string,
+  targetLanguage: string,
+  pageContext: PageContext | undefined,
+  sessionId: number | null,
+): Promise<void> {
+  if (newTexts.length === 0) return;
+  const cuesToTranslate: SubtitleCue[] = newTexts.map((text, i) => ({
+    startTime: i,
+    endTime: i + 1,
+    text,
+  }));
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues: cuesToTranslate,
+      sourceLanguage,
+      targetLanguage,
+      pageContext,
+      profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
+      sessionId: sessionId ?? undefined,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (!response?.success || !response.cues) {
+      console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
+      return;
+    }
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
+    }
+    // Accumulate translations in the persistent map so previous segments'
+    // translations are preserved across rebuilds and appends.
+    response.cues.forEach((c) => {
+      state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
+    });
+    rebuildManifestTranslatedCues();
+    updateCues(state.manifestTranslatedCues);
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
+  }
+}
+
+/** Clear manifest-platform translation buffers without tearing down the overlay shell. */
+function clearManifestTranslationBuffers(): void {
+  state.manifestOriginalCues = [];
+  state.manifestTranslatedCues = [];
+  state.manifestTranslatedTexts = new Set();
+  state.manifestTranslationMap = new Map();
+  state.activeSubtitleSessionId = null;
+  resetActiveSource();
+}
+
 /** Tear down a lower-precedence overlay so manifest tier can take over. */
 function preemptLowerTierOverlay(): void {
   if (!state.isOverlayMode) return;
@@ -722,6 +835,13 @@ function preemptLowerTierOverlay(): void {
     state.domTranslatedCues = [];
     state.domTranslatedTexts = new Set();
     state.domTranslationMap = new Map();
+    state.activeSubtitleSessionId = null;
+  }
+  if (state.activeSource === 'manifest') {
+    state.manifestOriginalCues = [];
+    state.manifestTranslatedCues = [];
+    state.manifestTranslatedTexts = new Set();
+    state.manifestTranslationMap = new Map();
     state.activeSubtitleSessionId = null;
   }
   if (state.dragCleanup) {
@@ -1034,41 +1154,39 @@ async function activateOverlayFromManifestCues(
     hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
   }
 
-  let cuesToDisplay = cues;
-  try {
-    showSubtitleToast('Translating subtitles...', true);
-    const pageContext = await buildSubtitlePageContext();
-    const sourceLanguage = settings.sourceLanguage === 'auto'
-      ? (language || 'en')
-      : settings.sourceLanguage;
-    const translateResponse = await chrome.runtime.sendMessage({
-      action: 'translateSubtitle',
-      cues,
-      sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      pageContext,
-      profile: currentSubtitleProfile(),
-      knobOverrides: state.subtitleKnobOverride,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
-
-    if (translateResponse?.success && translateResponse.cues) {
-      cuesToDisplay = translateResponse.cues;
-      if (translateResponse.sessionId !== undefined) {
-        state.activeSubtitleSessionId = translateResponse.sessionId;
-      }
-    }
-  } catch (error) {
-    console.warn('AnyLLMTranslate: Manifest subtitle translation error', error);
-  }
+  // Seed the rolling manifest buffers with the first segment. rebuildManifest-
+  // TranslatedCues maps through the (empty) translation map, so the overlay
+  // initially shows original text as fallback — identical to DOM activation.
+  // The first delta translation below upgrades chunk 0 in place.
+  mergeManifestOriginalCues(cues);
+  rebuildManifestTranslatedCues();
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  initializeOverlay(cuesToDisplay, overlayConfig);
+  initializeOverlay(state.manifestTranslatedCues, overlayConfig);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
     state.dragCleanup = enableDragReposition(textContainer);
   }
+
+  showSubtitleToast('Translating subtitles...', true);
+  const pageContext = await buildSubtitlePageContext();
+  const sourceLanguage = settings.sourceLanguage === 'auto'
+    ? (language || 'en')
+    : settings.sourceLanguage;
+
+  // Translate the first delta (all cue texts seen so far). On success the
+  // manifestTranslationMap is populated and the overlay upgrades to
+  // translated text for the initial chunk. This mirrors translateDomCueTexts.
+  const newTexts = [...state.manifestTranslatedTexts];
+  await translateManifestCueTexts(
+    newTexts,
+    sourceLanguage,
+    settings.targetLanguage,
+    pageContext,
+    null,
+  );
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
@@ -1147,7 +1265,33 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
   state.mpdGraceUntil = 0;
 
   if (payload.append && state.isOverlayMode && state.activeSource === 'manifest') {
-    updateCues(payload.cues);
+    // Progressive VTT capture (HBOMax): a new segment arrived. Merge into the
+    // rolling original buffer, rebuild + push to the overlay immediately so
+    // new cues show (with original-text fallback), then translate the delta.
+    // Mirrors handleDomCues steady-state (delta-only translation against a
+    // persistent map). Previously this branch called updateCues(payload.cues)
+    // directly, which overwrote the overlay with raw untranslated source text.
+    const newTexts = mergeManifestOriginalCues(payload.cues);
+    // Always rebuild + push, even when no new texts — timing corrections on
+    // prior cues must reach findActiveCue().
+    rebuildManifestTranslatedCues();
+    updateCues(state.manifestTranslatedCues);
+    if (newTexts.length === 0) return;
+
+    // Use cached settings in the hot path (consistent with DOM tier).
+    const appendSettings = state.cachedSettings ?? settings;
+    if (!state.cachedSettings) state.cachedSettings = settings;
+    const sourceLanguage = appendSettings.sourceLanguage === 'auto'
+      ? (payload.language || 'en')
+      : appendSettings.sourceLanguage;
+    const pageContext = await buildSubtitlePageContext();
+    await translateManifestCueTexts(
+      newTexts,
+      sourceLanguage,
+      appendSettings.targetLanguage,
+      pageContext,
+      state.activeSubtitleSessionId,
+    );
     return;
   }
 
@@ -1527,10 +1671,29 @@ export function startCoordinator(): () => void {
       }
       // Handle chunk delta format (chunkStart + chunkCues)
       if (msg.chunkCues && msg.chunkStart !== undefined) {
-        mergeTranslatedChunk(msg.chunkStart, msg.chunkCues);
+        // Manifest tier (HBOMax progressive VTT) uses the text-keyed map
+        // model — route chunk deltas through it so appended segments are
+        // translated incrementally. Other tiers keep the offset-based merge.
+        if (state.activeSource === 'manifest') {
+          for (const c of msg.chunkCues) {
+            state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
+          }
+          rebuildManifestTranslatedCues();
+          updateCues(state.manifestTranslatedCues);
+        } else {
+          mergeTranslatedChunk(msg.chunkStart, msg.chunkCues);
+        }
       } else if (msg.cues) {
         // Fallback: full array format (backward compat)
-        updateTranslatedCues(msg.cues);
+        if (state.activeSource === 'manifest') {
+          for (const c of msg.cues) {
+            state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
+          }
+          rebuildManifestTranslatedCues();
+          updateCues(state.manifestTranslatedCues);
+        } else {
+          updateTranslatedCues(msg.cues);
+        }
       }
     }
     // Sub-project 6: a background chunk failed all retries. Surface a
@@ -1670,6 +1833,7 @@ export function resetCoordinatorState(): void {
   clearTranslatedSections();
   restoreNativeCaptions();
   clearDomTranslationBuffers();
+  clearManifestTranslationBuffers();
 }
 
 /**

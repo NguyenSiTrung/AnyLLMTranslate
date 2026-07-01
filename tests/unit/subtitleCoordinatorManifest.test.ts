@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 let capturedManifestCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 let capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let capturedExtensionMessageHandler: ((msg: unknown) => void) | null = null;
 
 async function invokeManifestCuesHandler(payload: unknown): Promise<void> {
   expect(capturedManifestCuesHandler).not.toBeNull();
@@ -14,6 +15,13 @@ async function invokeDomCuesHandler(payload: unknown): Promise<void> {
   expect(capturedDomCuesHandler).not.toBeNull();
   if (capturedDomCuesHandler) {
     await capturedDomCuesHandler(payload);
+  }
+}
+
+function invokeExtensionMessage(msg: unknown): void {
+  expect(capturedExtensionMessageHandler).not.toBeNull();
+  if (capturedExtensionMessageHandler) {
+    capturedExtensionMessageHandler(msg);
   }
 }
 
@@ -97,6 +105,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     document.body.innerHTML = '';
     capturedManifestCuesHandler = null;
     capturedDomCuesHandler = null;
+    capturedExtensionMessageHandler = null;
     loadSettingsMock.mockReset();
     loadSettingsMock.mockResolvedValue(JSON.parse(JSON.stringify(baseSettings)));
     detectCurrentHandlerMock.mockReset();
@@ -129,7 +138,10 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
           }
           return Promise.resolve({ success: true });
         }),
-        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+        onMessage: {
+          addListener: (h: (msg: unknown) => void) => { capturedExtensionMessageHandler = h; },
+          removeListener: () => { capturedExtensionMessageHandler = null; },
+        },
       },
       storage: { onChanged: { addListener: vi.fn(), removeListener: vi.fn() } },
     } as unknown as typeof chrome;
@@ -138,7 +150,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
   it('activates manifest overlay from SUBTITLE_MANIFEST_CUES', async () => {
     setLocation('play.hbomax.com', '/video/watch/abc/def');
     const { startCoordinator, isInOverlayMode } = await import('@/content/subtitleCoordinator');
-    const { initializeOverlay } = await import('@/content/subtitleOverlay');
+    const { initializeOverlay, updateCues } = await import('@/content/subtitleOverlay');
 
     startCoordinator();
 
@@ -150,12 +162,19 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     });
 
     expect(isInOverlayMode()).toBe(true);
-    expect(initializeOverlay).toHaveBeenCalledWith(
+    // Map-based activation seeds the overlay with original-text fallback
+    // (DOM-tier parity), then upgrades via updateCues once the delta resolves.
+    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    expect(lastCues).toBeDefined();
+    expect(lastCues).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ text: 'Hello (vi)' }),
+        expect.objectContaining({ text: 'Hello (vi)', originalText: 'Hello' }),
       ]),
-      expect.any(Object),
     );
+    // initializeOverlay is still called once to mount the overlay shell.
+    expect(initializeOverlay).toHaveBeenCalledTimes(1);
   });
 
   it('manifest cues suppress subsequent DOM cues', async () => {
@@ -173,6 +192,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     });
 
     const initCalls = vi.mocked(initializeOverlay).mock.calls.length;
+    vi.mocked(updateCues).mockClear();
 
     await invokeDomCuesHandler({
       platform: 'hbomax',
@@ -180,8 +200,170 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
       cues: [{ startTime: 5, endTime: 6, text: 'DOM line' }],
     });
 
+    // DOM tier is suppressed — no new overlay mount, no DOM-driven cue updates.
     expect(vi.mocked(initializeOverlay).mock.calls.length).toBe(initCalls);
     expect(updateCues).not.toHaveBeenCalled();
+  });
+
+  it('append segment translates the new cue delta (not raw source)', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    // First segment → activation.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
+    });
+
+    vi.mocked(updateCues).mockClear();
+
+    // Appended segment: the capture module sends the FULL accumulated buffer
+    // (existing + new cues), deduped by startTime.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'first cue' }, // already known
+        { startTime: 3, endTime: 4, text: 'second cue' }, // NEW delta
+      ],
+      append: true,
+    });
+
+    // The last updateCues must carry TRANSLATED text for the appended cue,
+    // not the raw source 'second cue'. (The pre-fix bug passed raw source.)
+    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    expect(lastCues).toBeDefined();
+    const appended = lastCues.find((c) => c.originalText === 'second cue');
+    expect(appended).toBeDefined();
+    expect(appended?.text).toBe('second cue (vi)');
+  });
+
+  it('append segment preserves earlier translations in the persistent map', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
+    });
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'first cue' },
+        { startTime: 3, endTime: 4, text: 'second cue' },
+      ],
+      append: true,
+    });
+
+    // After the append, the first cue must still show its translation — the
+    // manifestTranslationMap persists across appends.
+    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    const first = lastCues.find((c) => c.originalText === 'first cue');
+    expect(first?.text).toBe('first cue (vi)');
+  });
+
+  it('appended cue falls back to original text until its translation resolves', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
+    });
+
+    // Make the append delta translation FAIL so its new cue stays in the
+    // original-text fallback (the map is never populated for it).
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
+      success: false,
+      error: 'simulated delta failure',
+    });
+
+    vi.mocked(updateCues).mockClear();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'first cue' },
+        { startTime: 3, endTime: 4, text: 'untranslated cue' },
+      ],
+      append: true,
+    });
+
+    // The failed delta leaves the new cue showing its ORIGINAL text as
+    // graceful fallback, while the already-translated first cue keeps its
+    // translation from the persistent map.
+    const cuesAfterAppend = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    const untranslated = cuesAfterAppend.find((c) => c.originalText === 'untranslated cue');
+    expect(untranslated?.text).toBe('untranslated cue'); // fallback to original
+    const first = cuesAfterAppend.find((c) => c.originalText === 'first cue');
+    expect(first?.text).toBe('first cue (vi)');
+  });
+
+  it('SUBTITLE_CHUNK_TRANSLATED populates the manifest map and rebuilds', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    // Activate with two cues whose translations differ from chunk deltas.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'alpha' },
+        { startTime: 3, endTime: 4, text: 'beta' },
+      ],
+    });
+
+    vi.mocked(updateCues).mockClear();
+
+    // Simulate the background sending a translated chunk delta for cue 1.
+    invokeExtensionMessage({
+      action: 'SUBTITLE_CHUNK_TRANSLATED',
+      chunkStart: 1,
+      sessionId: 42,
+      chunkCues: [
+        { startTime: 3, endTime: 4, text: 'beta (chunk)', originalText: 'beta' },
+      ],
+    });
+
+    // Manifest tier routes chunk deltas through the map: the overlay should
+    // reflect the chunk's translation for 'beta'.
+    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    expect(lastCues).toBeDefined();
+    const beta = lastCues.find((c) => c.originalText === 'beta');
+    expect(beta?.text).toBe('beta (chunk)');
   });
 
   it('accepts MPD language variants matching preferred (zh-Hans-SG ↔ zh-Hans)', async () => {

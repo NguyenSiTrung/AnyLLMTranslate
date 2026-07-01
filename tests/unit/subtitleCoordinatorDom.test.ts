@@ -604,10 +604,13 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
       vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (msg: unknown) => {
         const message = msg as { action?: string; cues?: Array<{ text: string }> };
         if (message.action === 'translateSubtitle') {
-          if (message.cues?.[0]?.text === 'dom cue') {
-            return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated dom' }] };
+          // Echo originalText back so the manifest/DOM translation maps key
+          // correctly (the real background always sets originalText).
+          const src = message.cues?.map((c) => c.text) ?? [];
+          if (src[0] === 'dom cue') {
+            return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated dom', originalText: 'dom cue' }] };
           }
-          return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated manifest' }] };
+          return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'translated manifest', originalText: 'manifest cue' }] };
         }
         if (message.action === 'FETCH_MANIFEST_SUBTITLES') {
           return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'manifest cue' }] };
@@ -637,14 +640,25 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
       }
 
       vi.mocked(initializeOverlay).mockClear();
+      vi.mocked(updateCues).mockClear();
       await mod.selectSubtitleTrack('en');
 
-      // Verify initializeOverlay was called again with manifest cues
+      // Manifest activation re-mounts the overlay (original-text fallback at
+      // seed time), then upgrades to translated text via updateCues.
       expect(vi.mocked(initializeOverlay)).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ text: 'translated manifest' })
+          expect.objectContaining({ originalText: 'manifest cue' })
         ]),
         expect.any(Object)
+      );
+      const manifestCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+        text: string; originalText?: string;
+      }> | undefined;
+      expect(manifestCues).toBeDefined();
+      expect(manifestCues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'translated manifest', originalText: 'manifest cue' })
+        ])
       );
 
       // 3. Verify that subsequent DOM cues are suppressed (shouldSuppressSource('dom') returns true)
