@@ -453,7 +453,7 @@ async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
   sender?: chrome.runtime.MessageSender,
 ): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number }> {
-  const sessionId = ++subtitleSessionCounter;
+  const sessionId = message.sessionId ?? ++subtitleSessionCounter;
   // P1 semaphore bypass fix: previously a single acquire/release wrapped the
   // whole function, but the async chunk loop runs AFTER this function returns —
   // so releaseSemaphore() fired while background chunks were still translating,

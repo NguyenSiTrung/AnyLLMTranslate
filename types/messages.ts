@@ -101,6 +101,8 @@ export interface TranslateSubtitleMessage {
    *  Partial<ProfileKnobs> — set knobs override the profile/global layers.
    *  Undefined when no per-tab override is active. */
   knobOverrides?: Partial<ProfileKnobs>;
+  /** Unique session ID to track progressive chunk translation. */
+  sessionId?: number;
 }
 
 /** Popup → content: set or clear the active tab's per-subtitle translation-style override. */
