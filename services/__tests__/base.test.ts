@@ -2,7 +2,7 @@
  * Tests for base service — system prompt building and validation.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildSystemPrompt,
   validatePromptTemplate,
@@ -207,6 +207,35 @@ describe('parseTranslationResponse', () => {
 
   it('throws on invalid JSON', () => {
     expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
+  });
+
+  it('handles trailing commas in JSON (common LLM output error)', () => {
+    const response = '{"translations": {"id1": "Hello", "id2": "World",}}';
+    const result = parseTranslationResponse(response, ['id1', 'id2']);
+    expect(result.get('id1')).toBe('Hello');
+    expect(result.get('id2')).toBe('World');
+  });
+
+  it('handles trailing commas in nested objects', () => {
+    const response = '{"translations": {"id1": "Hello",}, "properNouns": {"name": "translated",},}';
+    const result = parseTranslationResponse(response, ['id1']);
+    expect(result.get('id1')).toBe('Hello');
+  });
+
+  it('handles trailing commas inside markdown code blocks', () => {
+    const response = '```json\n{"translations": {"id1": "Hello",}}\n```';
+    const result = parseTranslationResponse(response, ['id1']);
+    expect(result.get('id1')).toBe('Hello');
+  });
+
+  it('logs raw response on parse failure for diagnostics', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => parseTranslationResponse('totally not json at all', ['id1'])).toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'AnyLLMTranslate: Failed to parse translation response as JSON. Raw response:',
+      expect.any(String),
+    );
+    warnSpy.mockRestore();
   });
 
   it('preserves expected ID order regardless of response key order (Phase 3.2)', () => {

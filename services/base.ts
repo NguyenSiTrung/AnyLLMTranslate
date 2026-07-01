@@ -144,6 +144,27 @@ export function buildUserPrompt(
 ${JSON.stringify(entries, null, 2)}`;
 }
 
+/** Attempt JSON.parse with lenient pre-processing: removes trailing commas
+ *  (a very common LLM output error) before falling back to the native parser.
+ *  Returns the parsed object or null if parsing fails. */
+function tryParseJson(text: string): Record<string, unknown> | null {
+  // Fast path: strict JSON.parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Lenient: remove trailing commas (e.g. {"a":1,} -> {"a":1})
+    const sanitized = text
+      .replace(/,\s*([}\]])/g, '$1')
+      .trim();
+    if (sanitized === text) return null; // no trailing commas found
+    try {
+      return JSON.parse(sanitized);
+    } catch {
+      return null;
+    }
+  }
+}
+
 /** Parse the JSON response from the LLM */
 export function parseTranslationResponse(
   responseText: string,
@@ -158,37 +179,31 @@ export function parseTranslationResponse(
     .replace(/<think>[\s\S]*$/g, '')
     .trim();
 
-  let parsed: Record<string, unknown> | null = null;
+  // Strategy 1: Try to parse as JSON directly (with trailing-comma leniency)
+  let parsed: Record<string, unknown> | null = tryParseJson(cleanText);
 
-  // Strategy 1: Try to parse as JSON directly
-  try {
-    parsed = JSON.parse(cleanText);
-  } catch {
-    // Strategy 2: Try to extract JSON from markdown code blocks
+  // Strategy 2: Try to extract JSON from markdown code blocks
+  if (!parsed) {
     const jsonMatch = cleanText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (jsonMatch?.[1]) {
-      try {
-        parsed = JSON.parse(jsonMatch[1]);
-      } catch {
-        // Fallthrough to strategy 3
-      }
+      parsed = tryParseJson(jsonMatch[1]);
     }
-    
-    // Strategy 3: Try to find the outermost object braces
-    if (!parsed) {
-      const firstBrace = cleanText.indexOf('{');
-      const lastBrace = cleanText.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        try {
-          parsed = JSON.parse(cleanText.substring(firstBrace, lastBrace + 1));
-        } catch {
-          // Failed all parsing strategies
-        }
-      }
+  }
+
+  // Strategy 3: Try to find the outermost object braces
+  if (!parsed) {
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      parsed = tryParseJson(cleanText.substring(firstBrace, lastBrace + 1));
     }
   }
 
   if (!parsed) {
+    // Log the raw response (truncated) so the user/developer can see what the
+    // LLM actually returned - essential for diagnosing parse failures.
+    const preview = cleanText.length > 500 ? cleanText.slice(0, 500) + '…' : cleanText;
+    console.warn('AnyLLMTranslate: Failed to parse translation response as JSON. Raw response:', preview);
     throw new Error('Failed to parse translation response as JSON');
   }
 
