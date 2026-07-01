@@ -721,7 +721,7 @@ describe('services/background', () => {
         }));
 
         let settled = false;
-        const promise = handleMessage(
+        const handlePromise = handleMessage(
           {
             action: 'translateSubtitle',
             cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
@@ -729,7 +729,12 @@ describe('services/background', () => {
             targetLanguage: 'vi',
           },
           { tab: { id: 1 } } as chrome.runtime.MessageSender,
-        ).finally(() => {
+        );
+        expect(handlePromise).toBeDefined();
+        if (!handlePromise) {
+          throw new Error('handlePromise is undefined');
+        }
+        const promise = handlePromise.finally(() => {
           settled = true;
         });
 
