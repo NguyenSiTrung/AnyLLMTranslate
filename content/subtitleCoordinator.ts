@@ -856,7 +856,12 @@ function preemptLowerTierOverlay(): void {
 async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): Promise<void> {
   console.log('AnyLLMTranslate: DOM subtitle track changed — clearing translation state');
   cancelBackgroundSubtitleSession();
+  // Track-switch fires regardless of which tier is currently active (Max's
+  // aria-checked observer doesn't know about our tier precedence), so clear
+  // both DOM and manifest buffers — otherwise the manifest tier's persistent
+  // translationMap/translatedTexts Set from the OLD track survive the switch.
   clearDomTranslationBuffers();
+  clearManifestTranslationBuffers();
   if (state.isOverlayMode) {
     updateCues([]);
   }

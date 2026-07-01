@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 let capturedManifestCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 let capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let capturedDomTrackChangedHandler: ((payload: unknown) => Promise<void>) | null = null;
 let capturedExtensionMessageHandler: ((msg: unknown) => void) | null = null;
 
 async function invokeManifestCuesHandler(payload: unknown): Promise<void> {
@@ -32,7 +33,10 @@ vi.mock('@/content/messageBridge', () => ({
     capturedDomCuesHandler = handler;
     return () => {};
   },
-  onDomTrackChanged: () => () => {},
+  onDomTrackChanged: (handler: (payload: unknown) => Promise<void>) => {
+    capturedDomTrackChangedHandler = handler;
+    return () => {};
+  },
   onTextTrackCues: () => () => {},
   onMseCues: () => () => {},
   onManifestCues: (handler: (payload: unknown) => Promise<void>) => {
@@ -105,6 +109,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     document.body.innerHTML = '';
     capturedManifestCuesHandler = null;
     capturedDomCuesHandler = null;
+    capturedDomTrackChangedHandler = null;
     capturedExtensionMessageHandler = null;
     loadSettingsMock.mockReset();
     loadSettingsMock.mockResolvedValue(JSON.parse(JSON.stringify(baseSettings)));
@@ -405,5 +410,47 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     });
 
     expect(isInOverlayMode()).toBe(false);
+  });
+
+  it('SUBTITLE_DOM_TRACK_CHANGED clears manifest translation buffers so old-track text is not redundantly resent', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
+    });
+
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+
+    expect(capturedDomTrackChangedHandler).not.toBeNull();
+    if (capturedDomTrackChangedHandler) {
+      await capturedDomTrackChangedHandler({ platform: 'hbomax', language: 'en' });
+    }
+
+    // Re-activate the manifest tier for the newly-switched track (still
+    // preferred-language 'en', e.g. switching from "English" to "English
+    // [CC]") with an entirely NEW cue text. Re-activation always resends the
+    // full manifestTranslatedTexts Set (not just this call's delta) — if the
+    // switch left the OLD track's 'first cue' in that Set, it gets
+    // redundantly resent alongside the new track's own cue.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en2.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'new track cue' }],
+    });
+
+    const translateCall = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      ([msg]) => (msg as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(translateCall).toBeDefined();
+    const sentTexts = (translateCall?.[0] as unknown as { cues: { text: string }[] }).cues.map((c) => c.text);
+    expect(sentTexts).toEqual(['new track cue']);
+    expect(sentTexts).not.toContain('first cue');
   });
 });

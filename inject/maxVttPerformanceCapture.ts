@@ -4,10 +4,22 @@
  * Max's player fetches VTT segments through a channel (Web Worker / MSE) that
  * window.fetch / XMLHttpRequest monkey-patching cannot observe. The Resource
  * Timing API, however, observes every resource load regardless of the
- * initiating execution context. Polling performance.getEntriesByType('resource')
- * surfaces the player's VTT segment URLs; a page-context fetch then retrieves
- * them with the page's own auth context (which the extension background relay
- * lacked — the previous MPD pipeline's root failure).
+ * initiating execution context. A PerformanceObserver on 'resource' entries
+ * surfaces the player's VTT segment URLs the instant they're recorded; a
+ * page-context fetch then retrieves them with the page's own auth context
+ * (which the extension background relay lacked — the previous MPD pipeline's
+ * root failure).
+ *
+ * PerformanceObserver (event-driven, `buffered: true`) is used instead of
+ * polling performance.getEntriesByType(): polling on an interval both adds up
+ * to one interval's worth of latency per segment (noticeable right after a
+ * seek, when the player fetches a fresh segment for the new position) and
+ * races against the page calling performance.clearResourceTimings() — video
+ * pages commonly clear the resource-timing buffer periodically, and a seek's
+ * network burst makes hitting the 250-entry buffer cap during that window
+ * more likely. A cleared entry that our poll hadn't read yet is lost forever.
+ * PerformanceObserver instead delivers each entry via its callback at record
+ * time, before the buffer can be cleared out from under it.
  *
  * Emits parsed cues into the rank-0 SUBTITLE_MANIFEST_CUES channel and drives
  * the existing MPD→DOM grace window via SUBTITLE_MPD_PROCESSING lifecycle msgs.
@@ -22,7 +34,6 @@ import type { SubtitleCue } from '@/types/subtitle';
 const MAX_VTT_RESOURCE_URL =
   /https?:\/\/[^/]*prd\.media\.max\.com\/.+\.vtt(?:\?|$)/i;
 
-const POLL_INTERVAL_MS = 1500;
 /** Give up + fall back to DOM if no VTT segment surfaces within this window. */
 const MAX_VTT_CAPTURE_DEADLINE_MS = 15_000;
 /** Page-context fetch timeout per VTT segment. */
@@ -31,7 +42,21 @@ const PAGE_FETCH_TIMEOUT_MS = 15_000;
 /** Page-context fetch (native, not interceptor-patched). Overridable in tests. */
 let pageFetch: typeof fetch = nativeFetch;
 
-let pollInterval: ReturnType<typeof setInterval> | null = null;
+/** PerformanceObserver constructor — overridable in tests (jsdom has none). */
+let ObserverCtor: typeof PerformanceObserver | undefined =
+  typeof PerformanceObserver !== 'undefined' ? PerformanceObserver : undefined;
+
+/** @internal Test hook — restore with resetPerformanceObserverCtorForTests(). */
+export function setPerformanceObserverCtorForTests(ctor: typeof PerformanceObserver): void {
+  ObserverCtor = ctor;
+}
+
+/** @internal Test hook */
+export function resetPerformanceObserverCtorForTests(): void {
+  ObserverCtor = typeof PerformanceObserver !== 'undefined' ? PerformanceObserver : undefined;
+}
+
+let perfObserver: PerformanceObserver | null = null;
 let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
 
 const seenUrls = new Set<string>();
@@ -57,9 +82,9 @@ export function isMaxCdnVttUrl(url: string): boolean {
   return MAX_VTT_RESOURCE_URL.test(url);
 }
 
-/** Full reset (SPA navigation / BFCache / teardown). Stops the poller. */
+/** Full reset (SPA navigation / BFCache / teardown). Stops the observer. */
 export function resetMaxVttPerformanceCapture(): void {
-  stopPoller();
+  stopObserver();
   seenUrls.clear();
   cueBuffer = [];
   emittedTrack = null;
@@ -68,7 +93,7 @@ export function resetMaxVttPerformanceCapture(): void {
 }
 
 /**
- * Reset only the emission lock + cue buffer (keep the poller running).
+ * Reset only the emission lock + cue buffer (keep the observer running).
  * Called on mid-session track switch so the new track's segments emit fresh.
  */
 export function resetMaxVttPerformanceCaptureLock(): void {
@@ -80,13 +105,13 @@ export function resetMaxVttPerformanceCaptureLock(): void {
 
 /** @internal Exposed for tests. */
 export function isPerformanceCaptureRunning(): boolean {
-  return pollInterval !== null;
+  return perfObserver !== null;
 }
 
-function stopPoller(): void {
-  if (pollInterval !== null) {
-    clearInterval(pollInterval);
-    pollInterval = null;
+function stopObserver(): void {
+  if (perfObserver !== null) {
+    perfObserver.disconnect();
+    perfObserver = null;
   }
   if (deadlineTimer !== null) {
     clearTimeout(deadlineTimer);
@@ -95,18 +120,15 @@ function stopPoller(): void {
 }
 
 /**
- * Start polling the Resource Timing API for Max VTT segments.
- * Returns a cleanup that fully stops + resets the poller.
+ * Start observing the Resource Timing API for Max VTT segments.
+ * Returns a cleanup that fully stops + resets the observer.
  */
 export function startMaxVttPerformanceCapture(bridge: MessageBridgeSender): () => void {
-  if (pollInterval !== null) return () => resetMaxVttPerformanceCapture();
+  if (perfObserver !== null) return () => resetMaxVttPerformanceCapture();
 
-  // Defensive: environments without Resource Timing (jsdom, older browsers).
-  if (
-    typeof performance === 'undefined' ||
-    typeof performance.getEntriesByType !== 'function'
-  ) {
-    console.log('AnyLLMTranslate: Performance API unavailable — Max VTT capture disabled');
+  // Defensive: environments without PerformanceObserver (jsdom, older browsers).
+  if (!ObserverCtor) {
+    console.log('AnyLLMTranslate: PerformanceObserver unavailable — Max VTT capture disabled');
     return () => {};
   }
 
@@ -131,22 +153,31 @@ export function startMaxVttPerformanceCapture(bridge: MessageBridgeSender): () =
     }
   }, MAX_VTT_CAPTURE_DEADLINE_MS);
 
-  pollInterval = setInterval(() => {
-    void pollOnce(bridge);
-  }, POLL_INTERVAL_MS);
+  try {
+    perfObserver = new ObserverCtor((list) => {
+      void handleEntries(list.getEntries(), bridge);
+    });
+    // buffered: true replays resource entries recorded before this observer
+    // attached (e.g. segments the player already fetched during startup).
+    perfObserver.observe({ type: 'resource', buffered: true });
+  } catch (err) {
+    console.log('AnyLLMTranslate: Failed to start Max VTT PerformanceObserver', err);
+    perfObserver = null;
+    if (deadlineTimer !== null) {
+      clearTimeout(deadlineTimer);
+      deadlineTimer = null;
+    }
+    return () => {};
+  }
 
-  console.log('AnyLLMTranslate: Max VTT Performance-API capture started');
+  console.log('AnyLLMTranslate: Max VTT PerformanceObserver capture started');
   return () => resetMaxVttPerformanceCapture();
 }
 
-async function pollOnce(bridge: MessageBridgeSender): Promise<void> {
-  let entries: PerformanceEntry[];
-  try {
-    entries = performance.getEntriesByType('resource');
-  } catch {
-    return;
-  }
-
+async function handleEntries(
+  entries: readonly PerformanceEntry[],
+  bridge: MessageBridgeSender,
+): Promise<void> {
   const newUrls: string[] = [];
   for (const entry of entries) {
     const url = entry.name;

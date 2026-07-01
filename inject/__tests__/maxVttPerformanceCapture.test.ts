@@ -7,37 +7,70 @@ import {
   isPerformanceCaptureRunning,
   setPageFetchForTests,
   resetPageFetchForTests,
+  setPerformanceObserverCtorForTests,
+  resetPerformanceObserverCtorForTests,
 } from '@/inject/maxVttPerformanceCapture';
 
-// ---- Resource Timing stub (jsdom has none) ---------------------------------
+// ---- Fake PerformanceObserver (jsdom has none) ------------------------------
+// Mirrors real PerformanceObserver semantics closely enough for these tests:
+// - `observe({ buffered: true })` synchronously replays whatever the test has
+//   set as the "buffered" resource entries (via setResourceUrls).
+// - `deliverNewEntries()` simulates the browser calling back with entries
+//   recorded *after* observation started (a new segment fetch mid-session).
+// - `disconnect()` removes the instance so later deliveries are silently
+//   ignored, matching a disconnected observer.
+type ObserverCallback = (list: { getEntries: () => PerformanceEntry[] }) => void;
 
-let resourceEntries: { name: string }[] = [];
+class FakePerformanceObserver {
+  static instances: FakePerformanceObserver[] = [];
+  private readonly cb: ObserverCallback;
+
+  constructor(cb: ObserverCallback) {
+    this.cb = cb;
+    FakePerformanceObserver.instances.push(this);
+  }
+
+  observe(_init: PerformanceObserverInit): void {
+    this.cb({ getEntries: () => toEntries(resourceEntries) });
+  }
+
+  disconnect(): void {
+    const idx = FakePerformanceObserver.instances.indexOf(this);
+    if (idx !== -1) FakePerformanceObserver.instances.splice(idx, 1);
+  }
+
+  takeRecords(): PerformanceEntry[] {
+    return [];
+  }
+
+  static reset(): void {
+    FakePerformanceObserver.instances = [];
+  }
+}
+
+function toEntries(urls: string[]): PerformanceEntry[] {
+  return urls.map((name) => ({ name })) as unknown as PerformanceEntry[];
+}
+
+/** Simulate the browser delivering newly-recorded resource entries to all active observers. */
+function deliverNewEntries(urls: string[]): void {
+  const entries = toEntries(urls);
+  for (const inst of FakePerformanceObserver.instances) {
+    (inst as unknown as { cb: ObserverCallback }).cb({ getEntries: () => entries });
+  }
+}
+
+/** Flush the microtask queue enough times for the async capture chain to settle. */
+async function flush(times = 10): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    await Promise.resolve();
+  }
+}
+
+let resourceEntries: string[] = [];
 
 function setResourceUrls(urls: string[]): void {
-  resourceEntries = urls.map((name) => ({ name }));
-}
-
-function installPerformanceStub(): void {
-  Object.defineProperty(globalThis, 'performance', {
-    configurable: true,
-    writable: true,
-    value: {
-      getEntriesByType: vi.fn(() => resourceEntries),
-    },
-  });
-}
-
-function restorePerformance(): void {
-  // vitest/jsdom exposes a real performance object; delete our override so the
-  // next test starts clean. Reinstall a fresh stub only via installPerformanceStub.
-  Object.defineProperty(globalThis, 'performance', {
-    configurable: true,
-    writable: true,
-    value: {
-      getEntriesByType: () => [],
-    },
-  });
-  resourceEntries = [];
+  resourceEntries = urls;
 }
 
 // ---- bridge mock (typed so mock.calls is [string, unknown][]) --------------
@@ -96,17 +129,20 @@ Morning, Gino.`;
 
 describe('maxVttPerformanceCapture', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    installPerformanceStub();
+    FakePerformanceObserver.reset();
+    setPerformanceObserverCtorForTests(
+      FakePerformanceObserver as unknown as typeof PerformanceObserver,
+    );
     setActiveLanguage('English');
   });
 
   afterEach(() => {
     resetMaxVttPerformanceCapture();
     resetPageFetchForTests();
-    restorePerformance();
+    resetPerformanceObserverCtorForTests();
     vi.useRealTimers();
     document.body.innerHTML = '';
+    resourceEntries = [];
   });
 
   it('detects Max CDN WebVTT resource URLs', () => {
@@ -127,7 +163,7 @@ describe('maxVttPerformanceCapture', () => {
       platform: 'hbomax',
     }));
 
-    await vi.advanceTimersByTimeAsync(1500); // first poll tick
+    await flush(); // buffered entries delivered synchronously by observe(); flush the async capture chain
 
     const cuesCall = bridge.send.mock.calls.find(
       ([type]) => type === 'SUBTITLE_MANIFEST_CUES',
@@ -158,13 +194,12 @@ describe('maxVttPerformanceCapture', () => {
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
-
-    await vi.advanceTimersByTimeAsync(1500); // capture SEG_2 (full emit)
+    await flush(); // capture SEG_2 (full emit)
     bridge.send.mockClear();
 
-    // Player fetches the next segment → Resource Timing surfaces it.
-    setResourceUrls([SEG_2, SEG_3]);
-    await vi.advanceTimersByTimeAsync(1500); // capture SEG_3 (append)
+    // Player fetches the next segment → the observer's callback fires with it.
+    deliverNewEntries([SEG_3]);
+    await flush(); // capture SEG_3 (append)
 
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_MANIFEST_CUES',
@@ -179,11 +214,12 @@ describe('maxVttPerformanceCapture', () => {
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
-    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
 
-    // Same URL is deduped by seenUrls, so a second tick emits nothing.
+    // Same URL is deduped by seenUrls, so a repeated delivery emits nothing.
     bridge.send.mockClear();
-    await vi.advanceTimersByTimeAsync(1500);
+    deliverNewEntries([SEG_2]);
+    await flush();
     expect(bridge.send).not.toHaveBeenCalledWith('SUBTITLE_MANIFEST_CUES', expect.anything());
   });
 
@@ -196,7 +232,7 @@ describe('maxVttPerformanceCapture', () => {
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
-    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
 
     // Only SEG_2 (t3) emitted; SEG_OTHER (t5) dropped because t3 is locked.
     const cuesCalls = bridge.send.mock.calls.filter(([t]) => t === 'SUBTITLE_MANIFEST_CUES');
@@ -213,13 +249,13 @@ describe('maxVttPerformanceCapture', () => {
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
-    await vi.advanceTimersByTimeAsync(1500); // t3 emits
+    await flush(); // t3 emits
 
     // Track switch resets the lock; new track t5 can now emit.
     resetMaxVttPerformanceCaptureLock();
-    setResourceUrls([SEG_OTHER]);
     bridge.send.mockClear();
-    await vi.advanceTimersByTimeAsync(1500);
+    deliverNewEntries([SEG_OTHER]);
+    await flush();
 
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_MANIFEST_CUES',
@@ -228,6 +264,7 @@ describe('maxVttPerformanceCapture', () => {
   });
 
   it('sends complete(success:false) when no VTT surfaces before the deadline', async () => {
+    vi.useFakeTimers();
     setResourceUrls([]); // player never fetches a VTT segment
     setPageFetchForTests(makeFetch(new Map()));
 
@@ -235,7 +272,7 @@ describe('maxVttPerformanceCapture', () => {
     startMaxVttPerformanceCapture(bridge);
 
     // No cues yet.
-    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
     expect(bridge.send).not.toHaveBeenCalledWith('SUBTITLE_MPD_PROCESSING', expect.objectContaining({
       status: 'complete',
     }));
@@ -248,20 +285,22 @@ describe('maxVttPerformanceCapture', () => {
     }));
   });
 
-  it('resetMaxVttPerformanceCapture stops the poller', async () => {
+  it('resetMaxVttPerformanceCapture stops the observer', async () => {
     setResourceUrls([SEG_2]);
     setPageFetchForTests(makeFetch(new Map([[SEG_2, VTT_2]])));
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
+    await flush(); // let the initial buffered capture settle before resetting
     expect(isPerformanceCaptureRunning()).toBe(true);
 
     resetMaxVttPerformanceCapture();
     expect(isPerformanceCaptureRunning()).toBe(false);
 
-    // Ticking after reset emits nothing.
+    // Delivering entries after reset emits nothing — the observer was disconnected.
     bridge.send.mockClear();
-    await vi.advanceTimersByTimeAsync(3000);
+    deliverNewEntries([SEG_2]);
+    await flush();
     expect(bridge.send).not.toHaveBeenCalled();
   });
 
@@ -272,8 +311,21 @@ describe('maxVttPerformanceCapture', () => {
 
     const bridge = makeBridge();
     startMaxVttPerformanceCapture(bridge);
-    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
 
     expect(bridge.send).not.toHaveBeenCalledWith('SUBTITLE_MANIFEST_CUES', expect.anything());
   });
+
+  it('falls back to a no-op when PerformanceObserver is unavailable', () => {
+    resetPerformanceObserverCtorForTests();
+    setPerformanceObserverCtorForTests(undefined as unknown as typeof PerformanceObserver);
+
+    const bridge = makeBridge();
+    const cleanup = startMaxVttPerformanceCapture(bridge);
+
+    expect(isPerformanceCaptureRunning()).toBe(false);
+    expect(bridge.send).not.toHaveBeenCalled();
+    expect(() => cleanup()).not.toThrow();
+  });
 });
+
