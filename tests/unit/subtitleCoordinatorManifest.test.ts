@@ -210,6 +210,40 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     expect(updateCues).not.toHaveBeenCalled();
   });
 
+  it('re-seeds manifest cues when tier is already active (non-append VTT restart)', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { initializeOverlay, updateCues } = await import('@/content/subtitleOverlay');
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
+    });
+
+    const initCallsBefore = vi.mocked(initializeOverlay).mock.calls.length;
+    vi.mocked(updateCues).mockClear();
+
+    // VTT capture restart (e.g. BFCache restore) sends a fresh non-append buffer
+    // while the manifest tier is still marked active.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 10, endTime: 12, text: 'restarted cue' }],
+    });
+
+    expect(vi.mocked(initializeOverlay).mock.calls.length).toBe(initCallsBefore);
+    expect(updateCues).toHaveBeenCalled();
+    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
+      text: string; originalText?: string;
+    }>;
+    expect(lastCues?.find((c) => c.originalText === 'restarted cue')?.text).toBe('restarted cue (vi)');
+  });
+
   it('append segment translates the new cue delta (not raw source)', async () => {
     setLocation('play.hbomax.com', '/video/watch/abc/def');
     const { startCoordinator } = await import('@/content/subtitleCoordinator');

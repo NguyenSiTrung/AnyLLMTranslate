@@ -574,23 +574,24 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
 
 /**
  * Update the subtitle cues (e.g., after translation).
- * Task 6.5: Only reset currentCueIndex if the cue array reference actually changed.
- * If the same array is updated in place, keep currentCueIndex and let handleTimeUpdate
- * check if the active cue content changed.
+ * Always refreshes the on-screen text for the active cue — a translation can
+ * land in-place on the same array at the same index, which handleTimeUpdate
+ * alone would skip because the index did not change.
  */
 export function updateCues(cues: SubtitleCue[]): void {
-  const wasSameRef = overlayState.cues === cues;
+  const previousIndex = overlayState.currentCueIndex;
   overlayState.cues = cues;
 
-  if (!wasSameRef) {
-    // New array reference — force re-evaluation
-    overlayState.currentCueIndex = -1;
-    overlayState.lastPrioritizedChunk = -1;
-  }
+  if (!overlayState.video) return;
 
-  // Update display immediately if video is playing
-  if (overlayState.video) {
-    handleTimeUpdate();
+  const activeCueIndex = findActiveCue(overlayState.video.currentTime);
+  const indexChanged = activeCueIndex !== previousIndex;
+  overlayState.currentCueIndex = activeCueIndex;
+  updateDisplayedText(activeCueIndex);
+
+  if (indexChanged) {
+    overlayState.lastPrioritizedChunk = -1;
+    requestChunkPriority(activeCueIndex);
   }
 }
 

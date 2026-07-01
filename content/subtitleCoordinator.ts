@@ -1360,32 +1360,58 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
   state.mpdProcessingInFlight = false;
   state.mpdGraceUntil = 0;
 
-  if (payload.append && state.isOverlayMode && state.activeSource === 'manifest') {
-    // Progressive VTT capture (HBOMax): a new segment arrived. Merge into the
-    // rolling original buffer, rebuild + push to the overlay immediately so
-    // new cues show (with original-text fallback), then translate the delta.
-    // Mirrors handleDomCues steady-state (delta-only translation against a
-    // persistent map). Previously this branch called updateCues(payload.cues)
-    // directly, which overwrote the overlay with raw untranslated source text.
+  if (state.isOverlayMode && state.activeSource === 'manifest') {
+    if (payload.append) {
+      // Progressive VTT capture (HBOMax): a new segment arrived. Merge into the
+      // rolling original buffer, rebuild + push to the overlay immediately so
+      // new cues show (with original-text fallback), then translate the delta.
+      // Mirrors handleDomCues steady-state (delta-only translation against a
+      // persistent map). Previously this branch called updateCues(payload.cues)
+      // directly, which overwrote the overlay with raw untranslated source text.
+      const newTexts = mergeManifestOriginalCues(payload.cues);
+      // Always rebuild + push, even when no new texts — timing corrections on
+      // prior cues must reach findActiveCue().
+      rebuildManifestTranslatedCues();
+      updateCues(state.manifestTranslatedCues);
+      state.playbackAnchorTime = null;
+      if (newTexts.length === 0) return;
+
+      // Use cached settings in the hot path (consistent with DOM tier).
+      const appendSettings = state.cachedSettings ?? settings;
+      if (!state.cachedSettings) state.cachedSettings = settings;
+      const sourceLanguage = appendSettings.sourceLanguage === 'auto'
+        ? (payload.language || 'en')
+        : appendSettings.sourceLanguage;
+      const pageContext = await buildSubtitlePageContext();
+      await translateManifestCueTexts(
+        newTexts,
+        sourceLanguage,
+        appendSettings.targetLanguage,
+        pageContext,
+        state.activeSubtitleSessionId,
+      );
+      return;
+    }
+
+    // Fresh non-append emission while manifest tier is still active (VTT capture
+    // restart after BFCache restore, or track switch before activeSource reset).
+    // Re-seed the rolling buffer without tearing down the overlay shell.
     const newTexts = mergeManifestOriginalCues(payload.cues);
-    // Always rebuild + push, even when no new texts — timing corrections on
-    // prior cues must reach findActiveCue().
     rebuildManifestTranslatedCues();
     updateCues(state.manifestTranslatedCues);
     state.playbackAnchorTime = null;
     if (newTexts.length === 0) return;
 
-    // Use cached settings in the hot path (consistent with DOM tier).
-    const appendSettings = state.cachedSettings ?? settings;
+    const reseedSettings = state.cachedSettings ?? settings;
     if (!state.cachedSettings) state.cachedSettings = settings;
-    const sourceLanguage = appendSettings.sourceLanguage === 'auto'
+    const sourceLanguage = reseedSettings.sourceLanguage === 'auto'
       ? (payload.language || 'en')
-      : appendSettings.sourceLanguage;
+      : reseedSettings.sourceLanguage;
     const pageContext = await buildSubtitlePageContext();
     await translateManifestCueTexts(
       newTexts,
       sourceLanguage,
-      appendSettings.targetLanguage,
+      reseedSettings.targetLanguage,
       pageContext,
       state.activeSubtitleSessionId,
     );

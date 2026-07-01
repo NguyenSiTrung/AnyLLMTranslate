@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   initializeOverlay,
+  updateCues,
   updateConfig,
   getConfig,
   isOverlayActive,
@@ -211,6 +212,31 @@ describe('content/subtitleOverlay', () => {
       expect(isOverlayActive()).toBe(false);
       const config = getConfig();
       expect(config.fontSize).toBe(20); // Default value
+    });
+  });
+
+  describe('updateCues', () => {
+    it('refreshes displayed text when the same cue array is mutated in place', () => {
+      const video = document.createElement('video');
+      video.src = 'test.mp4';
+      document.body.appendChild(video);
+
+      const cues: SubtitleCue[] = [
+        { startTime: 0, endTime: 4, text: 'Hello', originalText: 'Hello' },
+      ];
+      initializeOverlay(cues, {}, video);
+
+      Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
+      video.dispatchEvent(new Event('timeupdate'));
+
+      const translatedEl = () =>
+        document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
+      expect(translatedEl()?.textContent).toBe('Hello');
+
+      cues[0].text = 'Xin chào';
+      updateCues(cues);
+
+      expect(translatedEl()?.textContent).toBe('Xin chào');
     });
   });
 
