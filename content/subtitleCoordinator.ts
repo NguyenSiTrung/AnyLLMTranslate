@@ -896,6 +896,20 @@ function handleVideoSeeked(event?: Event): void {
   // Real seek: update the anchor for the next comparisons
   lastVideoTimes.set(video, currentTime);
 
+  // If we are in manifest mode, check if the seeked time is covered by the current cues.
+  // This prevents startup seeks or local scrubbing from clearing already loaded cues
+  // when the player won't re-fetch the segment.
+  if (state.activeSource === 'manifest' && state.manifestOriginalCues.length > 0) {
+    const firstCue = state.manifestOriginalCues[0];
+    const lastCue = state.manifestOriginalCues[state.manifestOriginalCues.length - 1];
+    // Allow a small padding/grace window of 2 seconds at the boundaries
+    if (currentTime >= firstCue.startTime - 2 && currentTime <= lastCue.endTime + 2) {
+      console.log('AnyLLMTranslate: Seek is within current manifest cue range — keeping cues');
+      state.playbackAnchorTime = currentTime;
+      return;
+    }
+  }
+
   if (seekResetTimer !== null) {
     clearTimeout(seekResetTimer);
   }

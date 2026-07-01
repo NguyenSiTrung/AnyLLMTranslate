@@ -639,7 +639,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     vi.mocked(chrome.runtime.sendMessage).mockClear();
     vi.mocked(mockSendMessage).mockClear();
 
-    video.currentTime = 100;
+    video.currentTime = 150;
     video.dispatchEvent(new Event('seeked'));
     await new Promise((r) => setTimeout(r, 300));
 
@@ -711,6 +711,44 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     const sentTexts = (translateCall?.[0] as unknown as { cues: { text: string }[] }).cues.map((c) => c.text);
     expect(sentTexts.indexOf('near current')).toBeLessThan(sentTexts.indexOf('past A'));
     expect(sentTexts.slice(0, 3)).toEqual(['near current', 'future A', 'future B']);
+
+    video.remove();
+  });
+
+  it('retains manifest cues when seeking within the loaded range', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+    const { sendMessage: mockSendMessage } = await import('@/inject/messageBridge');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 50, writable: true, configurable: true });
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    // Activate overlay with cues covering range [10, 100]
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 10, endTime: 11, text: 'cue A' },
+        { startTime: 99, endTime: 100, text: 'cue B' },
+      ],
+    });
+
+    vi.mocked(updateCues).mockClear();
+    vi.mocked(mockSendMessage).mockClear();
+
+    // Seek to 80 (inside range [10, 100])
+    video.currentTime = 80;
+    video.dispatchEvent(new Event('seeked'));
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Cues should not be cleared, and SUBTITLE_SEEK_RESET should not be sent
+    expect(updateCues).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalledWith('SUBTITLE_SEEK_RESET', expect.anything());
 
     video.remove();
   });
