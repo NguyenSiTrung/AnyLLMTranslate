@@ -861,6 +861,9 @@ function clearManifestTranslationBuffers(): void {
 let seekResetTimer: ReturnType<typeof setTimeout> | null = null;
 const SEEK_RESET_DEBOUNCE_MS = 200;
 
+/** Store the last known currentTime for each video element to filter out micro-seeks. */
+const lastVideoTimes = new WeakMap<HTMLVideoElement, number>();
+
 /**
  * Handle a video seek event. Clears the manifest and DOM cue buffers so the
  * overlay only shows cues for the new playback position, while preserving the
@@ -873,8 +876,25 @@ const SEEK_RESET_DEBOUNCE_MS = 200;
  * position are not skipped, and the next SUBTITLE_MANIFEST_CUES message
  * carries only the new position's cues.
  */
-function handleVideoSeeked(): void {
+function handleVideoSeeked(event?: Event): void {
   if (!state.isOverlayMode) return;
+
+  const video = (event?.currentTarget as HTMLVideoElement) || document.querySelector('video');
+  if (!video) return;
+
+  const lastTime = lastVideoTimes.get(video);
+  const currentTime = video.currentTime;
+  if (lastTime !== undefined) {
+    const diff = Math.abs(currentTime - lastTime);
+    if (diff < 1.5) {
+      // Ignored micro-seek/small sync adjustment
+      lastVideoTimes.set(video, currentTime);
+      return;
+    }
+  }
+
+  // Real seek: update the anchor for the next comparisons
+  lastVideoTimes.set(video, currentTime);
 
   if (seekResetTimer !== null) {
     clearTimeout(seekResetTimer);
@@ -2235,7 +2255,10 @@ export async function tryAutoActivateForDom(options?: {
 function startVideoPlaybackWatcher(): () => void {
   const watchedVideos = new WeakSet<HTMLVideoElement>();
   /** Store references to remove listeners on cleanup */
-  const listenerMap = new Map<HTMLVideoElement, { play: () => void; pause: () => void }>();
+  const listenerMap = new Map<
+    HTMLVideoElement,
+    { play: () => void; pause: () => void; timeupdate: () => void }
+  >();
 
   const attachPlayListener = (video: HTMLVideoElement) => {
     if (watchedVideos.has(video)) return;
@@ -2295,10 +2318,27 @@ function startVideoPlaybackWatcher(): () => void {
       // Only SPA navigation (resetCoordinatorState) should clear it.
     };
 
+    const timeupdateHandler = () => {
+      const lastTime = lastVideoTimes.get(video) ?? video.currentTime;
+      const diff = Math.abs(video.currentTime - lastTime);
+      if (diff < 1.5) {
+        lastVideoTimes.set(video, video.currentTime);
+      }
+    };
+
     video.addEventListener('play', playHandler);
     video.addEventListener('pause', pauseHandler);
     video.addEventListener('seeked', handleVideoSeeked);
-    listenerMap.set(video, { play: playHandler, pause: pauseHandler });
+    video.addEventListener('timeupdate', timeupdateHandler);
+
+    // Initialize the last known time
+    lastVideoTimes.set(video, video.currentTime);
+
+    listenerMap.set(video, {
+      play: playHandler,
+      pause: pauseHandler,
+      timeupdate: timeupdateHandler,
+    });
   };
 
   const scanForVideos = () => {
@@ -2338,11 +2378,12 @@ function startVideoPlaybackWatcher(): () => void {
 
   return () => {
     observer.disconnect();
-    // Remove all play/pause/seeked listeners on cleanup
+    // Remove all play/pause/seeked/timeupdate listeners on cleanup
     for (const [video, handlers] of listenerMap) {
       video.removeEventListener('play', handlers.play);
       video.removeEventListener('pause', handlers.pause);
       video.removeEventListener('seeked', handleVideoSeeked);
+      video.removeEventListener('timeupdate', handlers.timeupdate);
     }
     listenerMap.clear();
     if (seekResetTimer !== null) {

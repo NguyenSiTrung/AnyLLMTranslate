@@ -516,6 +516,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     vi.mocked(mockSendMessage).mockClear();
 
     // Simulate user seeking to a new position.
+    Object.defineProperty(video, 'currentTime', { value: 10, writable: true, configurable: true });
     video.dispatchEvent(new Event('seeked'));
 
     // Wait for the 200ms debounce to fire.
@@ -572,7 +573,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     const { sendMessage: mockSendMessage } = await import('@/inject/messageBridge');
 
     const video = document.createElement('video');
-    Object.defineProperty(video, 'currentTime', { value: 100, writable: true, configurable: true });
+    Object.defineProperty(video, 'currentTime', { value: 50, writable: true, configurable: true });
     document.body.appendChild(video);
 
     startCoordinator();
@@ -638,6 +639,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     vi.mocked(chrome.runtime.sendMessage).mockClear();
     vi.mocked(mockSendMessage).mockClear();
 
+    video.currentTime = 100;
     video.dispatchEvent(new Event('seeked'));
     await new Promise((r) => setTimeout(r, 300));
 
@@ -670,7 +672,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     const { startCoordinator } = await import('@/content/subtitleCoordinator');
 
     const video = document.createElement('video');
-    Object.defineProperty(video, 'currentTime', { value: 100, writable: true, configurable: true });
+    Object.defineProperty(video, 'currentTime', { value: 50, writable: true, configurable: true });
     document.body.appendChild(video);
 
     startCoordinator();
@@ -684,6 +686,7 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
 
     vi.mocked(chrome.runtime.sendMessage).mockClear();
 
+    video.currentTime = 100;
     video.dispatchEvent(new Event('seeked'));
     await new Promise((r) => setTimeout(r, 300));
 
