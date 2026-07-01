@@ -531,4 +531,150 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     // Clean up the video element.
     video.remove();
   });
+
+  it('seek re-queues in-flight texts cancelled before translation completed', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { sendMessage: mockSendMessage } = await import('@/inject/messageBridge');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 100, writable: true, configurable: true });
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    let appendResolve!: () => void;
+    const appendGate = new Promise<void>((resolve) => {
+      appendResolve = resolve;
+    });
+    let translateCalls = 0;
+
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation((...args: unknown[]) => {
+      const msg = args[0] as { action: string; cues?: { text: string }[] };
+      if (msg.action === 'translateSubtitle' && msg.cues) {
+        translateCalls += 1;
+        const cues = msg.cues;
+        if (translateCalls === 1) {
+          return Promise.resolve({
+            success: true,
+            cues: cues.map((c, i) => ({
+              startTime: i,
+              endTime: i + 1,
+              text: `${c.text} (vi)`,
+              originalText: c.text,
+            })),
+            sessionId: 42,
+          });
+        }
+        return appendGate.then(() => ({
+          success: true,
+          cues: cues.map((c, i) => ({
+            startTime: i,
+            endTime: i + 1,
+            text: `${c.text} (vi)`,
+            originalText: c.text,
+          })),
+          sessionId: 43,
+        }));
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'opening cue' }],
+    });
+
+    const appendPromise = invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'opening cue' },
+        { startTime: 100, endTime: 101, text: 'stuck in-flight cue' },
+      ],
+      append: true,
+    });
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(translateCalls).toBe(2);
+
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+    vi.mocked(mockSendMessage).mockClear();
+
+    video.dispatchEvent(new Event('seeked'));
+    await new Promise((r) => setTimeout(r, 300));
+
+    appendResolve();
+
+    await appendPromise;
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 100, endTime: 101, text: 'stuck in-flight cue' },
+      ],
+      append: true,
+    });
+
+    const translateCall = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      ([msg]) => (msg as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(translateCall).toBeDefined();
+    const sentTexts = (translateCall?.[0] as unknown as { cues: { text: string }[] }).cues.map((c) => c.text);
+    expect(sentTexts).toEqual(['stuck in-flight cue']);
+
+    video.remove();
+  });
+
+  it('append after seek prioritizes translation from current playback position forward', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 100, writable: true, configurable: true });
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'bootstrap' }],
+    });
+
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+
+    video.dispatchEvent(new Event('seeked'));
+    await new Promise((r) => setTimeout(r, 300));
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 10, endTime: 11, text: 'past A' },
+        { startTime: 20, endTime: 21, text: 'past B' },
+        { startTime: 100, endTime: 101, text: 'near current' },
+        { startTime: 110, endTime: 111, text: 'future A' },
+        { startTime: 120, endTime: 121, text: 'future B' },
+      ],
+      append: true,
+    });
+
+    const translateCall = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      ([msg]) => (msg as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(translateCall).toBeDefined();
+    const sentTexts = (translateCall?.[0] as unknown as { cues: { text: string }[] }).cues.map((c) => c.text);
+    expect(sentTexts.indexOf('near current')).toBeLessThan(sentTexts.indexOf('past A'));
+    expect(sentTexts.slice(0, 3)).toEqual(['near current', 'future A', 'future B']);
+
+    video.remove();
+  });
 });

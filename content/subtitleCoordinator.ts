@@ -49,6 +49,10 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
+import {
+  reconcilePendingTranslatedTexts,
+  sortCueTextsByPlaybackPriority,
+} from '@/lib/subtitleTranslationPriority';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -256,6 +260,8 @@ interface CoordinatorState {
   pendingDomCuesPayload: SubtitleDomCuesPayload | null;
   /** One-shot timer to activate DOM after grace when MPD does not deliver. */
   mpdDomFallbackTimer: ReturnType<typeof setTimeout> | null;
+  /** Playback time captured on seek — anchors translation priority until the next segment. */
+  playbackAnchorTime: number | null;
 }
 
 const state: CoordinatorState = {
@@ -288,7 +294,20 @@ const state: CoordinatorState = {
   mpdProcessingStartedAt: 0,
   pendingDomCuesPayload: null,
   mpdDomFallbackTimer: null,
+  playbackAnchorTime: null,
 };
+
+/** Current video time for translation ordering (seek anchor wins over live time). */
+function getPlaybackTimeForTranslation(): number {
+  if (state.playbackAnchorTime !== null) {
+    return state.playbackAnchorTime;
+  }
+  const video = document.querySelector('video');
+  if (video && Number.isFinite(video.currentTime)) {
+    return video.currentTime;
+  }
+  return 0;
+}
 
 function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
   const fontFamilyMap: Record<SubtitleSettings['fontFamily'], string> = {
@@ -681,7 +700,12 @@ async function translateDomCueTexts(
   sessionId: number | null,
 ): Promise<void> {
   if (newTexts.length === 0) return;
-  const cuesToTranslate: SubtitleCue[] = newTexts.map((text, i) => ({
+  const orderedTexts = sortCueTextsByPlaybackPriority(
+    newTexts,
+    state.domOriginalCues,
+    getPlaybackTimeForTranslation(),
+  );
+  const cuesToTranslate: SubtitleCue[] = orderedTexts.map((text, i) => ({
     startTime: i,
     endTime: i + 1,
     text,
@@ -782,7 +806,12 @@ async function translateManifestCueTexts(
   sessionId: number | null,
 ): Promise<void> {
   if (newTexts.length === 0) return;
-  const cuesToTranslate: SubtitleCue[] = newTexts.map((text, i) => ({
+  const orderedTexts = sortCueTextsByPlaybackPriority(
+    newTexts,
+    state.manifestOriginalCues,
+    getPlaybackTimeForTranslation(),
+  );
+  const cuesToTranslate: SubtitleCue[] = orderedTexts.map((text, i) => ({
     startTime: i,
     endTime: i + 1,
     text,
@@ -856,19 +885,27 @@ function handleVideoSeeked(): void {
 
     console.log('AnyLLMTranslate: Video seek settled — resetting cue buffers for new position');
 
+    const video = document.querySelector('video');
+    if (video && Number.isFinite(video.currentTime)) {
+      state.playbackAnchorTime = video.currentTime;
+    }
+
     // Tell the MAIN-world capture module to reset its buffer + seenUrls.
     sendMessage('SUBTITLE_SEEK_RESET', { platform: 'hbomax' });
 
-    // Clear manifest cue buffers but KEEP manifestTranslationMap and
-    // manifestTranslatedTexts as caches — cues already translated will show
-    // translated immediately when the new segment arrives.
+    // Clear manifest cue buffers but KEEP manifestTranslationMap as a cache —
+    // cues already translated show translated immediately when the new segment
+    // arrives. Reconcile manifestTranslatedTexts so in-flight texts cancelled
+    // below can be re-queued (the set tracks "sent for translation", not cache).
     state.manifestOriginalCues = [];
     state.manifestTranslatedCues = [];
+    reconcilePendingTranslatedTexts(state.manifestTranslatedTexts, state.manifestTranslationMap);
 
     // Also clear DOM cue buffers (DOM tier will receive fresh cues from the
     // MAIN world scraper for the new position).
     state.domOriginalCues = [];
     state.domTranslatedCues = [];
+    reconcilePendingTranslatedTexts(state.domTranslatedTexts, state.domTranslationMap);
 
     // Cancel any in-flight background translation session — its results would
     // be for the old position's cues and are no longer needed.
@@ -1335,6 +1372,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     // prior cues must reach findActiveCue().
     rebuildManifestTranslatedCues();
     updateCues(state.manifestTranslatedCues);
+    state.playbackAnchorTime = null;
     if (newTexts.length === 0) return;
 
     // Use cached settings in the hot path (consistent with DOM tier).
@@ -1869,6 +1907,7 @@ export function resetCoordinatorState(): void {
   state.mpdGraceUntil = 0;
   state.mpdProcessingStartedAt = 0;
   state.pendingDomCuesPayload = null;
+  state.playbackAnchorTime = null;
   clearMpdDomFallbackTimer();
   if (seekResetTimer !== null) {
     clearTimeout(seekResetTimer);
