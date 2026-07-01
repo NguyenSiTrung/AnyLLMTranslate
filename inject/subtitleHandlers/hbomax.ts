@@ -5,7 +5,7 @@ import type {
   DomCueSource,
 } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
-import { MAX_LABEL_TO_LANGUAGE, readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
+import { normalizeMaxSubtitleLanguage, readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
 
 export class HboMaxHandler implements SubtitleHandler {
   readonly platform = 'hbomax';
@@ -75,7 +75,10 @@ export class HboMaxHandler implements SubtitleHandler {
     for (const btn of buttons) {
       const label = btn.getAttribute('aria-label') || '';
       if (!label || label.toLowerCase() === 'off') continue;
-      const language = MAX_LABEL_TO_LANGUAGE[label] ?? label.toLowerCase();
+      const language = normalizeMaxSubtitleLanguage(
+        label,
+        btn.getAttribute('lang') || btn.getAttribute('data-language'),
+      );
       tracks.push({
         language,
         label,

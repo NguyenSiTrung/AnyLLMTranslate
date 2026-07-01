@@ -43,7 +43,14 @@ export function parseWebVTT(vtt: string): SubtitleCue[] {
 
     // Skip NOTE and STYLE blocks (WebVTT block types that aren't cues)
     const firstLine = trimmed.split('\n')[0].trim();
-    if (firstLine === 'NOTE' || firstLine === 'STYLE' || firstLine === 'REGION') continue;
+    if (
+      firstLine === 'NOTE' ||
+      firstLine.startsWith('NOTE ') ||
+      firstLine === 'STYLE' ||
+      firstLine.startsWith('STYLE ') ||
+      firstLine === 'REGION' ||
+      firstLine.startsWith('REGION ')
+    ) continue;
 
     const cue = parseVttCueBlock(trimmed);
     if (cue) cues.push(cue);
@@ -108,7 +115,9 @@ function parseVttCueBlock(block: string): SubtitleCue | null {
   // Anonymous <v> tags (no name) are stripped but produce no voice.
   const voiceMatch = rawText.match(/^<v(?:\s+([^>]+))?>/i);
   const voice = voiceMatch?.[1]?.trim();
-  const text = voiceMatch ? rawText.slice(voiceMatch[0].length).trim() : rawText;
+  const text = voiceMatch
+    ? rawText.slice(voiceMatch[0].length).replace(/<\/v>\s*$/i, '').trim()
+    : rawText;
 
   return {
     startTime,

@@ -114,6 +114,19 @@ describe('HboMaxHandler', () => {
       expect(tracks[0].language).toBe('es');
       expect(tracks[0].label).toBe('Spanish');
     });
+
+    it('uses the same localized label normalization as active-language detection', () => {
+      vi.stubGlobal('location', { hostname: 'play.hbomax.com', pathname: '/video/watch/abc/def' });
+      document.body.innerHTML = `
+        <button data-testid="player-ux-text-track-button" aria-label="Inglés" aria-checked="true"></button>
+        <button data-testid="player-ux-text-track-button" aria-label="Português (Brasil)" aria-checked="false"></button>
+      `;
+
+      const tracks = handler.extractAvailableTracks('', 'application/json', '');
+
+      expect(tracks.map((t) => t.language)).toEqual(['en', 'pt-BR']);
+      expect(handler.getDomCueSource().readActiveLanguage()).toBe('en');
+    });
   });
 
   describe('getDomCueSource', () => {

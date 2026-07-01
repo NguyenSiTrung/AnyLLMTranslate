@@ -576,6 +576,71 @@ describe('subtitleCoordinator — Max activation precondition (tryAutoActivateFo
       mod.resetCoordinatorState();
     });
 
+    it('prefers a URL-backed manifest track over an earlier DOM-only language match', async () => {
+      setLocation('www.max.com', '/video/watch/x/y');
+
+      const { detectCurrentHandler } = await import('@/inject/subtitleHandlers/registry');
+      vi.mocked(detectCurrentHandler).mockReturnValue({
+        platform: 'hbomax',
+        getDomCueSource: () => ({
+          cueSelector: '[data-testid="cueBoxRowTextCue"]',
+          captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+          observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+          readActiveLanguage: () => 'en',
+        }),
+      } as never);
+
+      const mod = await import('@/content/subtitleCoordinator');
+      mod.startCoordinator();
+
+      if (capturedTracksDiscoveredHandler) {
+        await capturedTracksDiscoveredHandler({
+          platform: 'hbomax',
+          tracks: [
+            { language: 'en', label: 'English', url: undefined, platform: 'hbomax', videoId: 'y' },
+          ],
+          videoId: 'y',
+        });
+        await capturedTracksDiscoveredHandler({
+          platform: 'hbomax',
+          tracks: [
+            { language: 'en-US', label: 'English', url: 'https://cdn.max.com/en-us.mpd', platform: 'hbomax', videoId: 'y' },
+          ],
+          videoId: 'y',
+        });
+      }
+
+      vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (msg: unknown) => {
+        const message = msg as { action?: string; cues?: Array<{ text: string }> };
+        if (message.action === 'FETCH_MANIFEST_SUBTITLES') {
+          return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'manifest cue' }], language: 'en-US' };
+        }
+        if (message.action === 'translateSubtitle') {
+          return {
+            success: true,
+            cues: message.cues?.map((c, i) => ({
+              startTime: i,
+              endTime: i + 1,
+              text: `${c.text} (vi)`,
+              originalText: c.text,
+            })),
+          };
+        }
+        return { success: true };
+      });
+
+      await mod.selectSubtitleTrack('en');
+
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: 'https://cdn.max.com/en-us.mpd',
+        }),
+      );
+
+      mod.resetCoordinatorState();
+    });
+
     it('activateOverlayModeFromManifest overrides DOM overlay and suppresses subsequent DOM cues', async () => {
       setLocation('www.max.com', '/video/watch/x/y');
       

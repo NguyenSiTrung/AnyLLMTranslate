@@ -299,8 +299,13 @@ function extractTrackId(url: string): string | null {
 }
 
 function mergeCues(existing: SubtitleCue[], incoming: SubtitleCue[]): SubtitleCue[] {
-  const byStart = new Map<number, SubtitleCue>();
-  for (const cue of existing) byStart.set(cue.startTime, cue);
-  for (const cue of incoming) byStart.set(cue.startTime, cue);
-  return Array.from(byStart.values()).sort((a, b) => a.startTime - b.startTime);
+  const byIdentity = new Map<string, SubtitleCue>();
+  const keyFor = (cue: SubtitleCue) => `${cue.startTime}|${cue.endTime}|${cue.text}`;
+  for (const cue of existing) byIdentity.set(keyFor(cue), cue);
+  for (const cue of incoming) byIdentity.set(keyFor(cue), cue);
+  return Array.from(byIdentity.values()).sort((a, b) =>
+    a.startTime - b.startTime ||
+    a.endTime - b.endTime ||
+    a.text.localeCompare(b.text),
+  );
 }

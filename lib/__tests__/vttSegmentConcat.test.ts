@@ -65,12 +65,33 @@ describe('concatVttSegments', () => {
 
     const result = concatVttSegments([seg1, seg2]);
 
-    // Both cues should be present with their original times (within the same
-    // MPEGTS timeline, the LOCAL times are already absolute — no offset needed)
     expect(result).toContain('First');
     expect(result).toContain('Second');
-    expect(result).toContain('00:00:00.000 --> 00:00:02.000');
     expect(result).toContain('00:00:10.000 --> 00:00:12.000');
+    expect(result).toContain('00:00:20.000 --> 00:00:22.000');
+  });
+
+  it('normalizes cue times from MPEGTS when timestamp-map local time restarts', () => {
+    const seg1 = [
+      'WEBVTT',
+      'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:900000',
+      '',
+      '00:00:00.000 --> 00:00:02.000',
+      'First',
+    ].join('\n');
+
+    const seg2 = [
+      'WEBVTT',
+      'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:1080000',
+      '',
+      '00:00:00.000 --> 00:00:02.000',
+      'Second',
+    ].join('\n');
+
+    const result = concatVttSegments([seg1, seg2]);
+
+    expect(result).toContain('00:00:10.000 --> 00:00:12.000\nFirst');
+    expect(result).toContain('00:00:12.000 --> 00:00:14.000\nSecond');
   });
 
   it('offsets cue times when segment times restart from zero without X-TIMESTAMP-MAP', () => {

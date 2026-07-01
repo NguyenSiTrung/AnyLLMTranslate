@@ -532,49 +532,49 @@ function destroyZombie(): void {
   console.log('[AnyLLMTranslate] Extension context invalidated — cleaning up zombified content script');
 
   if (viewportObserver) {
-    try { viewportObserver.disconnect(); } catch {}
+    try { viewportObserver.disconnect(); } catch { /* noop */ }
     viewportObserver = null;
   }
   if (mutationWatcher) {
-    try { mutationWatcher.stop(); } catch {}
+    try { mutationWatcher.stop(); } catch { /* noop */ }
     mutationWatcher = null;
   }
   if (coordinatorCleanup) {
-    try { coordinatorCleanup(); } catch {}
+    try { coordinatorCleanup(); } catch { /* noop */ }
     coordinatorCleanup = null;
   }
   if (_beforeUnloadCleanup) {
-    try { _beforeUnloadCleanup(); } catch {}
+    try { _beforeUnloadCleanup(); } catch { /* noop */ }
     _beforeUnloadCleanup = null;
   }
   if (_textSelectionCleanup) {
-    try { _textSelectionCleanup(); } catch {}
+    try { _textSelectionCleanup(); } catch { /* noop */ }
     _textSelectionCleanup = null;
   }
   if (_hoverTranslateCleanup) {
-    try { _hoverTranslateCleanup(); } catch {}
+    try { _hoverTranslateCleanup(); } catch { /* noop */ }
     _hoverTranslateCleanup = null;
   }
   if (_keyboardShortcutsCleanup) {
-    try { _keyboardShortcutsCleanup(); } catch {}
+    try { _keyboardShortcutsCleanup(); } catch { /* noop */ }
     _keyboardShortcutsCleanup = null;
   }
   if (_inlineTranslateCleanup) {
-    try { _inlineTranslateCleanup(); } catch {}
+    try { _inlineTranslateCleanup(); } catch { /* noop */ }
     _inlineTranslateCleanup = null;
   }
   if (_storageChangeListener) {
     try {
       chrome.storage.onChanged.removeListener(_storageChangeListener);
-    } catch {}
+    } catch { /* noop */ }
     _storageChangeListener = null;
   }
 
   // Clear UI / translations
-  try { removeAllTranslations(); } catch {}
-  try { removeAllSectionTranslations(); } catch {}
-  try { clearHoverCache(); } catch {}
-  try { hideAutoTranslateNotification(); } catch {}
+  try { removeAllTranslations(); } catch { /* noop */ }
+  try { removeAllSectionTranslations(); } catch { /* noop */ }
+  try { clearHoverCache(); } catch { /* noop */ }
+  try { hideAutoTranslateNotification(); } catch { /* noop */ }
 
   allPieces = [];
   activeRequests = 0;
@@ -678,7 +678,7 @@ export default defineContentScript({
       if (_storageChangeListener) {
         try {
           chrome.storage.onChanged.removeListener(_storageChangeListener);
-        } catch {}
+        } catch { /* noop */ }
         _storageChangeListener = null;
       }
       clearInterval(sentinelInterval);

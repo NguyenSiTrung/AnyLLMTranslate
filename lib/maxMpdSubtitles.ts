@@ -7,18 +7,10 @@
 
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { parseTTML } from '@/lib/ttmlParser';
+import type { SubtitleSegmentFetchTemplate } from '@/types/subtitle';
 
 /** Template for progressively fetching numbered WebVTT segments. */
-export interface SegmentFetchTemplate {
-  media: string;
-  startNumber: number;
-  representationId: string;
-  bandwidth: string;
-  mpdUrl: string;
-  /** Period-level BaseURL from the parent Period (HBO Max APAC CDN). */
-  periodBaseUrl?: string;
-  adaptationBaseUrl?: string;
-}
+export type SegmentFetchTemplate = SubtitleSegmentFetchTemplate;
 
 /** Subtitle track discovered inside a DASH MPD manifest. */
 export interface MpdSubtitleTrack {
@@ -302,6 +294,27 @@ function buildTemplatedSegmentUrl(context: TemplateContext, number: number): str
     context.mpdUrl,
   );
   return resolveSubtitleUrl(joinMediaPaths(mediaBase, mediaPath), context.mpdUrl);
+}
+
+/** Resolve a numbered segment URL from persisted SegmentTemplate metadata. */
+export function resolveSegmentFetchUrl(
+  template: SegmentFetchTemplate,
+  number: number,
+): string | null {
+  const resolved = buildTemplatedSegmentUrl(
+    {
+      media: template.media,
+      startNumber: template.startNumber,
+      representationId: template.representationId,
+      bandwidth: template.bandwidth,
+      mpdUrl: template.mpdUrl,
+      periodBaseUrl: template.periodBaseUrl,
+      adaptationBaseUrl: template.adaptationBaseUrl,
+    },
+    number,
+  );
+  if (!resolved || isSelfReferentialSubtitleUrl(resolved, template.mpdUrl)) return null;
+  return resolved;
 }
 
 function applySegmentTemplate(media: string, context: TemplateContext, number: number): string {

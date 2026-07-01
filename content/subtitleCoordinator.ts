@@ -726,6 +726,9 @@ async function translateDomCueTexts(
       console.warn('AnyLLMTranslate: DOM cue delta translation failed', response?.error);
       return;
     }
+    if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
+      return;
+    }
     if (response.sessionId !== undefined) {
       state.activeSubtitleSessionId = response.sessionId;
     }
@@ -830,6 +833,9 @@ async function translateManifestCueTexts(
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
+      return;
+    }
+    if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
       return;
     }
     if (response.sessionId !== undefined) {
@@ -940,6 +946,7 @@ function handleVideoSeeked(event?: Event): void {
     state.domOriginalCues = [];
     state.domTranslatedCues = [];
     reconcilePendingTranslatedTexts(state.domTranslatedTexts, state.domTranslationMap);
+    resetActiveSource();
 
     // Cancel any in-flight background translation session — its results would
     // be for the old position's cues and are no longer needed.
@@ -1125,6 +1132,10 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   if (!state.isOverlayMode) {
     await activateOverlayFromDom(payload);
     return;
+  }
+
+  if (!state.activeSource) {
+    state.activeSource = 'dom';
   }
 
   // Already active — merge new cues (updates timing of all cues).
@@ -1394,7 +1405,8 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
   state.mpdProcessingInFlight = false;
   state.mpdGraceUntil = 0;
 
-  if (state.isOverlayMode && state.activeSource === 'manifest') {
+  if (state.isOverlayMode && (state.activeSource === 'manifest' || (!state.activeSource && payload.append))) {
+    state.activeSource = 'manifest';
     if (payload.append) {
       // Progressive VTT capture (HBOMax): a new segment arrived. Merge into the
       // rolling original buffer, rebuild + push to the overlay immediately so
@@ -1816,7 +1828,6 @@ export function startCoordinator(): () => void {
       // Drop stale chunks from old subtitle sessions
       const chunkSessionId = (message as { sessionId?: number }).sessionId;
       if (
-        state.activeSubtitleSessionId !== null &&
         chunkSessionId !== undefined &&
         chunkSessionId !== state.activeSubtitleSessionId
       ) {
@@ -2171,9 +2182,10 @@ async function tryAutoActivate(epochAtStart: number): Promise<{ activated: boole
   const autoActivate = settings.subtitleSettings?.autoActivateSubtitles;
 
   if (settings.subtitleSettings?.enabled && autoActivate && preferredLang) {
-    const preferred = state.availableTracks.find(
+    const preferredMatches = state.availableTracks.filter(
       (t) => subtitleLanguagesMatch(t.language, preferredLang),
     );
+    const preferred = preferredMatches.find((t) => t.url) ?? preferredMatches[0];
     if (preferred?.url) {
       if (isRootDashManifestUrl(preferred.url)) {
         console.log('AnyLLMTranslate: Skipping auto-activate on root DASH manifest — waiting for MPD processor');
@@ -2411,7 +2423,8 @@ function startVideoPlaybackWatcher(): () => void {
  * Proactively fetch and translate a specific subtitle track by language.
  */
 export async function selectSubtitleTrack(language: string): Promise<void> {
-  const track = state.availableTracks.find((t) => subtitleLanguagesMatch(t.language, language));
+  const matchingTracks = state.availableTracks.filter((t) => subtitleLanguagesMatch(t.language, language));
+  const track = matchingTracks.find((t) => t.url) ?? matchingTracks[0];
   const handler = detectCurrentHandler();
   if (handler?.getDomCueSource && !track?.url) {
     if (!track) {

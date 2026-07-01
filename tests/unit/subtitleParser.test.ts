@@ -66,6 +66,18 @@ world`;
     expect(cues[0].voice).toBe('John');
     expect(cues[0].text).toBe('Hello\nworld');
   });
+
+  it('strips the closing voice tag from display text', () => {
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:03.000
+<v John>Hello world</v>`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].voice).toBe('John');
+    expect(cues[0].text).toBe('Hello world');
+  });
 });
 
 describe('parseSRT — no voice tags', () => {
@@ -183,6 +195,21 @@ Valid cue`;
 NOTE
 This is a comment block
 spanning multiple lines
+
+1
+00:00:01.000 --> 00:00:04.000
+Actual cue`;
+
+    const cues = parseWebVTT(vtt);
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe('Actual cue');
+  });
+
+  it('skips NOTE blocks with inline note text', () => {
+    const vtt = `WEBVTT
+
+NOTE Max generated segment metadata
+variant=t6
 
 1
 00:00:01.000 --> 00:00:04.000

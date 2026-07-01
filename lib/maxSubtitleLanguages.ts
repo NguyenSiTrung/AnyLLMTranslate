@@ -58,22 +58,20 @@ export function readMaxActiveSubtitleLanguage(): string {
       const label = btn.getAttribute('aria-label') || '';
       if (!label || label.toLowerCase() === 'off') return '';
 
-      // 1. Check for explicit lang/data-language attribute on the button.
       const attrLang = btn.getAttribute('lang') || btn.getAttribute('data-language');
-      if (attrLang) return normalizeLanguageCode(attrLang);
-
-      // 2. Check the English label map.
-      if (MAX_LABEL_TO_LANGUAGE[label]) return MAX_LABEL_TO_LANGUAGE[label];
-
-      // 3. Check localized label variants.
-      const localized = LOCALIZED_LABEL_TO_LANGUAGE[label];
-      if (localized) return localized;
-
-      // 4. Fallback: lowercased label as-is.
-      return normalizeLanguageCode(label.toLowerCase());
+      return normalizeMaxSubtitleLanguage(label, attrLang);
     }
   }
   return '';
+}
+
+/** Normalize a Max subtitle button label/metadata to a comparable language tag. */
+export function normalizeMaxSubtitleLanguage(label: string, attrLang?: string | null): string {
+  if (attrLang) return normalizeLanguageCode(attrLang);
+  if (MAX_LABEL_TO_LANGUAGE[label]) return MAX_LABEL_TO_LANGUAGE[label];
+  const localized = LOCALIZED_LABEL_TO_LANGUAGE[label];
+  if (localized) return localized;
+  return normalizeLanguageCode(label.toLowerCase());
 }
 
 /** Normalize a language code: convert ISO 639-2 → 639-1 if known. */

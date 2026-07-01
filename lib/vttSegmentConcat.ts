@@ -18,6 +18,12 @@ function parseVttTime(h: string | undefined, m: string, s: string, ms: string): 
   return (h ? parseInt(h, 10) : 0) * 3600 + parseInt(m, 10) * 60 + parseInt(s, 10) + parseInt(ms, 10) / 1000;
 }
 
+function parseVttTimestamp(value: string): number | null {
+  const match = value.match(/(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})/);
+  if (!match) return null;
+  return parseVttTime(match[1], match[2], match[3], match[4]);
+}
+
 /** Format seconds into VTT timestamp (HH:MM:SS.mmm) */
 function formatVttTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -39,8 +45,34 @@ interface CueBlock {
   hasTimestampMap: boolean;
 }
 
+interface TimestampMap {
+  local: number;
+  mpegts: number;
+}
+
+function parseTimestampMap(segment: string): TimestampMap | null {
+  const line = segment.split('\n').find((l) => l.trim().startsWith('X-TIMESTAMP-MAP='));
+  if (!line) return null;
+  const local = line.match(/LOCAL:([^,\s]+)/i)?.[1];
+  const mpegts = line.match(/MPEGTS:(\d+)/i)?.[1];
+  if (!local || !mpegts) return null;
+  const localSeconds = parseVttTimestamp(local);
+  const mpegtsSeconds = parseInt(mpegts, 10) / 90_000;
+  if (localSeconds === null || !Number.isFinite(mpegtsSeconds)) return null;
+  return { local: localSeconds, mpegts: mpegtsSeconds };
+}
+
+function retimeCueText(cueText: string, startTime: number, endTime: number): string {
+  const lines = cueText.split('\n');
+  const timingLine = lines[0];
+  const textLines = lines.slice(1);
+  const restOfTiming = timingLine.replace(TIMING_LINE_RE, '');
+  const newTimingLine = `${formatVttTime(startTime)} --> ${formatVttTime(endTime)}${restOfTiming}`;
+  return [newTimingLine, ...textLines].join('\n');
+}
+
 /** Parse a VTT segment body (without WEBVTT header) into cue blocks */
-function parseSegment(body: string, hasTimestampMap: boolean): CueBlock[] {
+function parseSegment(body: string, timestampOffset: number | null): CueBlock[] {
   const cues: CueBlock[] = [];
   const blocks = body.split(/\n\n+/);
 
@@ -50,7 +82,14 @@ function parseSegment(body: string, hasTimestampMap: boolean): CueBlock[] {
 
     const firstLine = trimmed.split('\n')[0].trim();
     // Skip non-cue blocks
-    if (firstLine === 'NOTE' || firstLine === 'STYLE' || firstLine === 'REGION') continue;
+    if (
+      firstLine === 'NOTE' ||
+      firstLine.startsWith('NOTE ') ||
+      firstLine === 'STYLE' ||
+      firstLine.startsWith('STYLE ') ||
+      firstLine === 'REGION' ||
+      firstLine.startsWith('REGION ')
+    ) continue;
 
     // Find the timing line
     const lines = trimmed.split('\n');
@@ -67,18 +106,23 @@ function parseSegment(body: string, hasTimestampMap: boolean): CueBlock[] {
     const match = lines[timingLineIndex].match(TIMING_LINE_RE);
     if (!match) continue;
 
-    const startTime = parseVttTime(match[1], match[2], match[3], match[4]);
-    const endTime = parseVttTime(match[5], match[6], match[7], match[8]);
+    let startTime = parseVttTime(match[1], match[2], match[3], match[4]);
+    let endTime = parseVttTime(match[5], match[6], match[7], match[8]);
 
     // Preserve everything: timing line (minus offset, to be re-applied) + text lines
     const textLines = lines.slice(timingLineIndex + 1);
-    const timingLine = lines[timingLineIndex];
+    let timingLine = lines[timingLineIndex];
+    if (timestampOffset !== null) {
+      startTime += timestampOffset;
+      endTime += timestampOffset;
+      timingLine = retimeCueText(timingLine, startTime, endTime);
+    }
 
     cues.push({
       text: [timingLine, ...textLines].join('\n'),
       startTime,
       endTime,
-      hasTimestampMap,
+      hasTimestampMap: timestampOffset !== null,
     });
   }
 
@@ -108,8 +152,8 @@ export function concatVttSegments(segments: string[]): string {
     segment = segment.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     if (!segment.trim()) continue;
 
-    // Check for X-TIMESTAMP-MAP
-    const hasTimestampMap = /X-TIMESTAMP-MAP=/.test(segment);
+    const timestampMap = parseTimestampMap(segment);
+    const timestampOffset = timestampMap ? timestampMap.mpegts - timestampMap.local : null;
 
     // Remove WEBVTT header (everything up to and including first blank line
     // after the WEBVTT line, plus any X-TIMESTAMP-MAP lines)
@@ -153,17 +197,17 @@ export function concatVttSegments(segments: string[]): string {
       const trimmed = block.trim();
       if (!trimmed) continue;
       const firstLine = trimmed.split('\n')[0].trim();
-      if (firstLine === 'NOTE') {
+      if (firstLine === 'NOTE' || firstLine.startsWith('NOTE ')) {
         allNoteBlocks.push(trimmed);
       }
     }
 
     // Parse cue blocks from this segment
-    const cues = parseSegment(segment, hasTimestampMap);
+    const cues = parseSegment(segment, timestampOffset);
 
     // Determine if we need to offset this segment's cues
     let needsOffset = false;
-    if (firstSegmentProcessed && !hasTimestampMap && cues.length > 0) {
+    if (firstSegmentProcessed && timestampOffset === null && cues.length > 0) {
       // If the first cue starts at or near 0, it's a restart — needs offset
       if (cues[0].startTime < timeOffset) {
         needsOffset = true;
@@ -174,14 +218,8 @@ export function concatVttSegments(segments: string[]): string {
       if (needsOffset) {
         const newStart = cue.startTime + timeOffset;
         const newEnd = cue.endTime + timeOffset;
-        // Reconstruct the timing line with offset times
-        const lines = cue.text.split('\n');
-        const timingLine = lines[0];
-        const textLines = lines.slice(1);
-        const restOfTiming = timingLine.replace(TIMING_LINE_RE, '');
-        const newTimingLine = `${formatVttTime(newStart)} --> ${formatVttTime(newEnd)}${restOfTiming}`;
         allCues.push({
-          text: [newTimingLine, ...textLines].join('\n'),
+          text: retimeCueText(cue.text, newStart, newEnd),
           startTime: newStart,
           endTime: newEnd,
           hasTimestampMap: cue.hasTimestampMap,

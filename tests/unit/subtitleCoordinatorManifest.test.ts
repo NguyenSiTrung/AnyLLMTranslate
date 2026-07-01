@@ -567,6 +567,85 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     video.remove();
   });
 
+  it('seek reset permits DOM fallback when no fresh manifest cues arrive', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 0, writable: true, configurable: true });
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'manifest before seek' }],
+    });
+
+    vi.mocked(updateCues).mockClear();
+
+    video.currentTime = 100;
+    video.dispatchEvent(new Event('seeked'));
+    await new Promise((r) => setTimeout(r, 300));
+
+    vi.mocked(updateCues).mockClear();
+
+    await invokeDomCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      cues: [{ startTime: 100, endTime: 101, text: 'DOM after seek' }],
+    });
+
+    const firstDomUpdate = vi.mocked(updateCues).mock.calls.find(
+      ([cues]) => Array.isArray(cues) && cues.some((c) => c.originalText === 'DOM after seek'),
+    )?.[0] as Array<{ text: string; originalText?: string }> | undefined;
+    expect(firstDomUpdate).toBeDefined();
+    expect(firstDomUpdate?.find((c) => c.originalText === 'DOM after seek')?.text).toBe('DOM after seek');
+
+    video.remove();
+  });
+
+  it('drops stale background chunks after a seek cancels the active subtitle session', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { value: 0, writable: true, configurable: true });
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [{ startTime: 1, endTime: 2, text: 'manifest before seek' }],
+    });
+
+    video.currentTime = 100;
+    video.dispatchEvent(new Event('seeked'));
+    await new Promise((r) => setTimeout(r, 300));
+
+    vi.mocked(updateCues).mockClear();
+
+    invokeExtensionMessage({
+      action: 'SUBTITLE_CHUNK_TRANSLATED',
+      chunkStart: 0,
+      sessionId: 42,
+      chunkCues: [
+        { startTime: 1, endTime: 2, text: 'stale chunk (vi)', originalText: 'manifest before seek' },
+      ],
+    });
+
+    expect(updateCues).not.toHaveBeenCalled();
+
+    video.remove();
+  });
+
   it('seek re-queues in-flight texts cancelled before translation completed', async () => {
     setLocation('play.hbomax.com', '/video/watch/abc/def');
     const { startCoordinator } = await import('@/content/subtitleCoordinator');

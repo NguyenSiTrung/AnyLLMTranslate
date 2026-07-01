@@ -224,6 +224,38 @@ describe('maxVttPerformanceCapture', () => {
     expect(bridge.send).not.toHaveBeenCalledWith('SUBTITLE_MANIFEST_CUES', expect.anything());
   });
 
+  it('keeps distinct cues that share a start time but differ by end time or text', async () => {
+    const overlapping = `WEBVTT
+
+00:12:04.040 --> 00:12:06.200
+Overlapping speaker`;
+    setResourceUrls([SEG_2]);
+    setPageFetchForTests(makeFetch(new Map([
+      [SEG_2, VTT_2],
+      [SEG_3, overlapping],
+    ])));
+
+    const bridge = makeBridge();
+    startMaxVttPerformanceCapture(bridge);
+    await flush();
+
+    bridge.send.mockClear();
+    deliverNewEntries([SEG_3]);
+    await flush();
+
+    const appendCall = bridge.send.mock.calls.find(
+      ([type, payload]) => type === 'SUBTITLE_MANIFEST_CUES' && (payload as { append?: boolean }).append,
+    );
+    expect(appendCall).toBeTruthy();
+    const cues = (appendCall?.[1] as { cues?: { startTime: number; endTime: number; text: string }[] }).cues ?? [];
+    expect(cues.filter((c) => c.startTime === 724.04)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ endTime: 725.72, text: "Sorry about that. I'm so sorry." }),
+        expect.objectContaining({ endTime: 726.2, text: 'Overlapping speaker' }),
+      ]),
+    );
+  });
+
   it('drops segments from a different track while locked onto one', async () => {
     setResourceUrls([SEG_2, SEG_OTHER]);
     setPageFetchForTests(makeFetch(new Map([

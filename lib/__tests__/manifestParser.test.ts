@@ -379,10 +379,44 @@ describe('parseDashManifest', () => {
 
     const result = parseDashManifest(xml, 'https://cdn.example.com/manifest.mpd');
 
-    // With SegmentTemplate, we extract the template URL pattern (first segment)
+    // With SegmentTemplate, preserve every concrete segment URL so the
+    // background can assemble the full subtitle track instead of fetching only
+    // the first segment.
     expect(result).toHaveLength(1);
     expect(result[0].language).toBe('de');
-    expect(result[0].url).toContain('subs_de_');
+    expect(result[0].url).toBe('https://cdn.example.com/subs_de_1.vtt');
+    expect((result[0] as { segmentUrls?: string[] }).segmentUrls).toEqual([
+      'https://cdn.example.com/subs_de_1.vtt',
+      'https://cdn.example.com/subs_de_2.vtt',
+      'https://cdn.example.com/subs_de_3.vtt',
+      'https://cdn.example.com/subs_de_4.vtt',
+      'https://cdn.example.com/subs_de_5.vtt',
+      'https://cdn.example.com/subs_de_6.vtt',
+    ]);
+  });
+
+  it('preserves SegmentTemplate progressive fetch metadata when segment count is unknown', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet mimeType="text/vtt" lang="en-US">
+      <Representation id="t6">
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="8"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const result = parseDashManifest(xml, 'https://cdn.example.com/dash.mpd?manifest-params=token');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].url).toBe('https://cdn.example.com/t/t6/8.vtt?manifest-params=token');
+    expect((result[0] as { segmentFetch?: { media: string; startNumber: number } }).segmentFetch).toEqual(
+      expect.objectContaining({
+        media: 't/t6/$Number$.vtt',
+        startNumber: 8,
+      }),
+    );
   });
 
   it('resolves relative BaseURLs', () => {

@@ -122,6 +122,7 @@ export interface FetchSubtitleMessage {
 export interface FetchManifestSubtitlesMessage {
   action: 'FETCH_MANIFEST_SUBTITLES';
   playlistUrl: string;
+  preferredLanguage?: string;
 }
 
 /** Translate selection request from content script → background */

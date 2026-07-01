@@ -19,7 +19,13 @@ import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
-import { parseSubtitleContent, isManifestResponse, isMaxCdnVttSegmentUrl } from '@/lib/maxMpdSubtitles';
+import {
+  parseSubtitleContent,
+  isManifestResponse,
+  isMaxCdnVttSegmentUrl,
+  detectMpdRequests,
+  resolveSegmentFetchUrl,
+} from '@/lib/maxMpdSubtitles';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
@@ -39,6 +45,8 @@ import { preScanNames } from '@/services/subtitleNameScanner';
 import { incrementStats, recordDailyStats } from '@/services/statsCollector';
 import { invalidateDebugCache } from '@/services/debugLog';
 import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
+
+const MAX_PROGRESSIVE_DASH_SEGMENTS = 500;
 
 /** Priority queue state for active translation sessions */
 interface TranslationSession {
@@ -900,7 +908,7 @@ async function handleFetchManifestSubtitles(
   try {
     const lowerUrl = message.playlistUrl.toLowerCase().split('?')[0];
     const isHls = lowerUrl.endsWith('.m3u8');
-    const isDash = lowerUrl.endsWith('.mpd');
+    const isDash = lowerUrl.endsWith('.mpd') || detectMpdRequests(message.playlistUrl);
 
     if (isHls) {
       // Fetch the subtitle media playlist
@@ -968,6 +976,29 @@ async function handleFetchManifestSubtitles(
       if (!isAllowedSubtitleUrl(track.url)) {
         return { success: false, error: 'Track URL not in allow-list' };
       }
+
+      if (track.segmentUrls && track.segmentUrls.length > 1) {
+        const segmentResult = await fetchDashSegmentBodies(track.segmentUrls);
+        if (!segmentResult.success) {
+          return { success: false, error: segmentResult.error };
+        }
+        const combined = concatVttSegments(segmentResult.bodies);
+        const cues = parseSubtitleContent(combined, 'text/vtt', track.segmentUrls[0]);
+        return { success: true, cues, language: track.language };
+      }
+
+      if (track.segmentFetch) {
+        const segmentResult = await fetchProgressiveDashSegments(track.segmentFetch);
+        if (!segmentResult.success) {
+          return { success: false, error: segmentResult.error };
+        }
+        const body = segmentResult.bodies.length > 1
+          ? concatVttSegments(segmentResult.bodies)
+          : segmentResult.bodies[0];
+        const cues = parseSubtitleContent(body, 'text/vtt', track.url);
+        return { success: true, cues, language: track.language };
+      }
+
       const trackResponse = await fetchWithTimeout(track.url);
       if (!trackResponse.ok) {
         return { success: false, error: `HTTP ${trackResponse.status}` };
@@ -991,6 +1022,58 @@ async function handleFetchManifestSubtitles(
     const errorMsg = error instanceof Error ? error.message : 'Failed to fetch manifest subtitles';
     return { success: false, error: errorMsg };
   }
+}
+
+async function fetchDashSegmentBodies(
+  urls: string[],
+): Promise<{ success: true; bodies: string[] } | { success: false; error: string }> {
+  const bodies: string[] = [];
+  for (const url of urls) {
+    if (!isAllowedSubtitleUrl(url)) {
+      return { success: false, error: 'Segment URL not in allow-list' };
+    }
+    const response = await fetchWithTimeout(url);
+    if (!response.ok) {
+      return { success: false, error: `Segment fetch failed: HTTP ${response.status}` };
+    }
+    bodies.push(await response.text());
+  }
+  return { success: true, bodies };
+}
+
+async function fetchProgressiveDashSegments(
+  template: NonNullable<ReturnType<typeof parseDashManifest>[number]['segmentFetch']>,
+): Promise<{ success: true; bodies: string[] } | { success: false; error: string }> {
+  const bodies: string[] = [];
+  for (
+    let number = template.startNumber;
+    number < template.startNumber + MAX_PROGRESSIVE_DASH_SEGMENTS;
+    number++
+  ) {
+    const url = resolveSegmentFetchUrl(template, number);
+    if (!url) break;
+    if (!isAllowedSubtitleUrl(url)) {
+      return { success: false, error: 'Segment URL not in allow-list' };
+    }
+    const response = await fetchWithTimeout(url);
+    if (!response.ok) {
+      if (bodies.length > 0 && (response.status === 404 || response.status === 410)) {
+        break;
+      }
+      return { success: false, error: `Segment fetch failed: HTTP ${response.status}` };
+    }
+    const body = await response.text();
+    const contentType = response.headers.get('Content-Type') ?? '';
+    if (isManifestResponse(body, contentType)) {
+      if (bodies.length > 0) break;
+      return { success: false, error: 'Segment response is a DASH manifest, not subtitle content' };
+    }
+    bodies.push(body);
+  }
+  if (bodies.length === 0) {
+    return { success: false, error: 'No DASH subtitle segments fetched' };
+  }
+  return { success: true, bodies };
 }
 
 /** Fetch with 30s timeout (reused by manifest handler) */

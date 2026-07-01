@@ -2,6 +2,7 @@
  * Tests: subtitle URL allow-list hardening.
  *
  * Phase 4 of subtitle-reliability-hardening.
+ * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -180,5 +181,62 @@ describe('subtitle URL allow-list hardening', () => {
     );
 
     expect(result).toEqual({ success: false, error: 'response is a DASH manifest, not subtitle content' });
+  });
+
+  it('FETCH_MANIFEST_SUBTITLES fetches every DASH SegmentTimeline subtitle segment', async () => {
+    const mpdUrl = 'https://cf.asia.prd.media.max.com/fadb6e8d/dash.mpd?manifest-params=token';
+    const seg1 = 'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt?manifest-params=token';
+    const seg2 = 'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/2.vtt?manifest-params=token';
+    const mpd = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1">
+          <SegmentTimeline>
+            <S t="0" d="4000" r="1"/>
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(mpd, { status: 200, headers: { 'Content-Type': 'application/dash+xml' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response('WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nFirst', {
+          status: 200,
+          headers: { 'Content-Type': 'text/vtt' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nSecond', {
+          status: 200,
+          headers: { 'Content-Type': 'text/vtt' },
+        }),
+      );
+
+    const result = await handleMessage(
+      {
+        action: 'FETCH_MANIFEST_SUBTITLES',
+        playlistUrl: mpdUrl,
+        preferredLanguage: 'en',
+      },
+      fakeSender(),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(mpdUrl, expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(seg1, expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(seg2, expect.anything());
+    expect(result).toEqual({
+      success: true,
+      language: 'en-US',
+      cues: [
+        expect.objectContaining({ text: 'First' }),
+        expect.objectContaining({ text: 'Second' }),
+      ],
+    });
   });
 });
