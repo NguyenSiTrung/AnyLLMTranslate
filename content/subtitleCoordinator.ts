@@ -20,6 +20,7 @@ import {
   onManifestCues,
   onMpdProcessing,
 } from '@/content/messageBridge';
+import { sendMessage } from '@/inject/messageBridge';
 import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { clearTranslatedSections } from '@/content/sectionTranslate';
@@ -825,6 +826,59 @@ function clearManifestTranslationBuffers(): void {
   state.manifestTranslationMap = new Map();
   state.activeSubtitleSessionId = null;
   resetActiveSource();
+}
+
+/** Debounce timer for seek-initiated buffer resets (coalesces rapid scrubbing). */
+let seekResetTimer: ReturnType<typeof setTimeout> | null = null;
+const SEEK_RESET_DEBOUNCE_MS = 200;
+
+/**
+ * Handle a video seek event. Clears the manifest and DOM cue buffers so the
+ * overlay only shows cues for the new playback position, while preserving the
+ * translation maps as caches (cues already translated from earlier viewing
+ * show translated immediately when the new segment arrives — only truly new
+ * texts need translation, minimizing the untranslated window).
+ *
+ * Also sends SUBTITLE_SEEK_RESET to the MAIN-world capture module so its
+ * `seenUrls` and `cueBuffer` are cleared: segments re-fetched for the new
+ * position are not skipped, and the next SUBTITLE_MANIFEST_CUES message
+ * carries only the new position's cues.
+ */
+function handleVideoSeeked(): void {
+  if (!state.isOverlayMode) return;
+
+  if (seekResetTimer !== null) {
+    clearTimeout(seekResetTimer);
+  }
+  seekResetTimer = setTimeout(() => {
+    seekResetTimer = null;
+    if (!state.isOverlayMode) return;
+
+    console.log('AnyLLMTranslate: Video seek settled — resetting cue buffers for new position');
+
+    // Tell the MAIN-world capture module to reset its buffer + seenUrls.
+    sendMessage('SUBTITLE_SEEK_RESET', { platform: 'hbomax' });
+
+    // Clear manifest cue buffers but KEEP manifestTranslationMap and
+    // manifestTranslatedTexts as caches — cues already translated will show
+    // translated immediately when the new segment arrives.
+    state.manifestOriginalCues = [];
+    state.manifestTranslatedCues = [];
+
+    // Also clear DOM cue buffers (DOM tier will receive fresh cues from the
+    // MAIN world scraper for the new position).
+    state.domOriginalCues = [];
+    state.domTranslatedCues = [];
+
+    // Cancel any in-flight background translation session — its results would
+    // be for the old position's cues and are no longer needed.
+    cancelBackgroundSubtitleSession();
+    state.activeSubtitleSessionId = null;
+
+    // Clear the overlay so stale cues from the old position don't show during
+    // the brief window before the new position's segment arrives.
+    updateCues([]);
+  }, SEEK_RESET_DEBOUNCE_MS);
 }
 
 /** Tear down a lower-precedence overlay so manifest tier can take over. */
@@ -1816,6 +1870,10 @@ export function resetCoordinatorState(): void {
   state.mpdProcessingStartedAt = 0;
   state.pendingDomCuesPayload = null;
   clearMpdDomFallbackTimer();
+  if (seekResetTimer !== null) {
+    clearTimeout(seekResetTimer);
+    seekResetTimer = null;
+  }
   state.translatedCues = null;
   state.cachedSettings = null;
   if (state.discoverDebounceTimer !== null) {
@@ -2174,6 +2232,7 @@ function startVideoPlaybackWatcher(): () => void {
 
     video.addEventListener('play', playHandler);
     video.addEventListener('pause', pauseHandler);
+    video.addEventListener('seeked', handleVideoSeeked);
     listenerMap.set(video, { play: playHandler, pause: pauseHandler });
   };
 
@@ -2214,12 +2273,17 @@ function startVideoPlaybackWatcher(): () => void {
 
   return () => {
     observer.disconnect();
-    // Remove all play/pause listeners on cleanup
+    // Remove all play/pause/seeked listeners on cleanup
     for (const [video, handlers] of listenerMap) {
       video.removeEventListener('play', handlers.play);
       video.removeEventListener('pause', handlers.pause);
+      video.removeEventListener('seeked', handleVideoSeeked);
     }
     listenerMap.clear();
+    if (seekResetTimer !== null) {
+      clearTimeout(seekResetTimer);
+      seekResetTimer = null;
+    }
   };
 }
 

@@ -23,7 +23,7 @@ import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 import { onMessage } from '@/inject/messageBridge';
-import { startMaxVttPerformanceCapture, resetMaxVttPerformanceCapture } from '@/inject/maxVttPerformanceCapture';
+import { startMaxVttPerformanceCapture, resetMaxVttPerformanceCapture, resetMaxVttCaptureForSeek } from '@/inject/maxVttPerformanceCapture';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -80,6 +80,15 @@ export default defineContentScript({
         fetchInterceptor.setTimeout(config.translationTimeoutMs);
         console.log('[AnyLLMTranslate] Interceptor timeout updated to', config.translationTimeoutMs, 'ms');
       }
+    });
+
+    // Seek reset: coordinator (ISOLATED world) signals that the user seeked
+    // to a new playback position. Clear the capture buffer + seenUrls so
+    // segments re-fetched for the new position are captured (not skipped)
+    // and the next SUBTITLE_MANIFEST_CUES carries only the new cues.
+    onMessage('SUBTITLE_SEEK_RESET', () => {
+      resetMaxVttCaptureForSeek();
+      console.log('[AnyLLMTranslate] Max VTT capture reset for seek');
     });
 
     // Performance-API VTT capture lifecycle (Max). Started only for hbomax;

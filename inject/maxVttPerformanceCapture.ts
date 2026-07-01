@@ -103,6 +103,24 @@ export function resetMaxVttPerformanceCaptureLock(): void {
   activeCaptureUrl = '';
 }
 
+/**
+ * Seek reset: clear `seenUrls` and `cueBuffer` but keep the observer running
+ * and `emittedTrack` set. Called when the coordinator detects a video seek
+ * (via SUBTITLE_SEEK_RESET bridge message) so that:
+ *   1. VTT segments re-fetched for the new position are NOT skipped (seenUrls
+ *      would otherwise suppress them), and
+ *   2. The next SUBTITLE_MANIFEST_CUES message carries ONLY the new
+ *      position's cues (cueBuffer would otherwise still hold old cues that
+ *      merge with the new ones, polluting the coordinator's overlay).
+ * `emittedTrack` is preserved because a seek does not change the subtitle
+ * track — keeping it ensures the next segment goes through the append path
+ * (lighter than re-activating the overlay from scratch).
+ */
+export function resetMaxVttCaptureForSeek(): void {
+  seenUrls.clear();
+  cueBuffer = [];
+}
+
 /** @internal Exposed for tests. */
 export function isPerformanceCaptureRunning(): boolean {
   return perfObserver !== null;

@@ -453,4 +453,82 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     expect(sentTexts).toEqual(['new track cue']);
     expect(sentTexts).not.toContain('first cue');
   });
+
+  it('seek clears manifest cue buffers but preserves translation cache — cached cues show translated immediately', async () => {
+    setLocation('play.hbomax.com', '/video/watch/abc/def');
+    const { startCoordinator } = await import('@/content/subtitleCoordinator');
+    const { updateCues } = await import('@/content/subtitleOverlay');
+    const { sendMessage: mockSendMessage } = await import('@/inject/messageBridge');
+
+    // Create a video element so startVideoPlaybackWatcher attaches seeked listener.
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+
+    startCoordinator();
+
+    // Activate manifest overlay with initial cues (both get translated).
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 1, endTime: 2, text: 'old cue A' },
+        { startTime: 3, endTime: 4, text: 'old cue B' },
+      ],
+    });
+
+    // Both cues are now in manifestTranslationMap: 'old cue A' → 'old cue A (vi)', etc.
+    vi.mocked(updateCues).mockClear();
+    vi.mocked(mockSendMessage).mockClear();
+
+    // Simulate user seeking to a new position.
+    video.dispatchEvent(new Event('seeked'));
+
+    // Wait for the 200ms debounce to fire.
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Overlay was cleared so stale cues from the old position don't show.
+    expect(updateCues).toHaveBeenCalledWith([]);
+
+    // SUBTITLE_SEEK_RESET was sent to the MAIN-world capture module.
+    expect(mockSendMessage).toHaveBeenCalledWith('SUBTITLE_SEEK_RESET', expect.anything());
+
+    vi.mocked(updateCues).mockClear();
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
+
+    // New segment arrives after seek — includes a cached cue and a new cue.
+    await invokeManifestCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cdn.example.com/subs_en.vtt',
+      cues: [
+        { startTime: 10, endTime: 11, text: 'old cue A' }, // cached — should show translated
+        { startTime: 12, endTime: 13, text: 'new seek cue' }, // new — needs translation
+      ],
+      append: true,
+    });
+
+    // The first updateCues after the append shows cached translations + fallback
+    // for new text (before the delta translation resolves).
+    const firstAppendCues = vi.mocked(updateCues).mock.calls.find(
+      ([cues]) => Array.isArray(cues) && cues.length > 0,
+    )?.[0] as Array<{ text: string; originalText?: string }> | undefined;
+    expect(firstAppendCues).toBeDefined();
+    const cachedInitial = firstAppendCues?.find((c) => c.originalText === 'old cue A');
+    expect(cachedInitial?.text).toBe('old cue A (vi)'); // translated from cache
+    const freshInitial = firstAppendCues?.find((c) => c.originalText === 'new seek cue');
+    expect(freshInitial?.text).toBe('new seek cue'); // original fallback
+
+    // Only the new text should be sent for translation (delta), not the cached one.
+    const translateCall = vi.mocked(chrome.runtime.sendMessage).mock.calls.find(
+      ([msg]) => (msg as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(translateCall).toBeDefined();
+    const sentTexts = (translateCall?.[0] as unknown as { cues: { text: string }[] }).cues.map((c) => c.text);
+    expect(sentTexts).toEqual(['new seek cue']);
+    expect(sentTexts).not.toContain('old cue A');
+
+    // Clean up the video element.
+    video.remove();
+  });
 });

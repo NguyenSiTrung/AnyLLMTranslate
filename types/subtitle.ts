@@ -44,7 +44,8 @@ export type BridgeMessageType =
   | 'SUBTITLE_MPD_PROCESSING'
   | 'SUBTITLE_FETCH_REQUEST'
   | 'SUBTITLE_FETCH_RESPONSE'
-  | 'SUBTITLE_CONFIG';
+  | 'SUBTITLE_CONFIG'
+  | 'SUBTITLE_SEEK_RESET';
 
 /** postMessage payload between worlds */
 export interface BridgeMessage<T = unknown> {

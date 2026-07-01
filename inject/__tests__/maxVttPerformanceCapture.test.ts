@@ -3,6 +3,7 @@ import {
   startMaxVttPerformanceCapture,
   resetMaxVttPerformanceCapture,
   resetMaxVttPerformanceCaptureLock,
+  resetMaxVttCaptureForSeek,
   isMaxCdnVttUrl,
   isPerformanceCaptureRunning,
   setPageFetchForTests,
@@ -326,6 +327,38 @@ describe('maxVttPerformanceCapture', () => {
     expect(isPerformanceCaptureRunning()).toBe(false);
     expect(bridge.send).not.toHaveBeenCalled();
     expect(() => cleanup()).not.toThrow();
+  });
+
+  it('resetMaxVttCaptureForSeek clears seenUrls + cueBuffer but keeps observer running and emittedTrack', async () => {
+    setResourceUrls([SEG_2]);
+    setPageFetchForTests(makeFetch(new Map([[SEG_2, VTT_2], [SEG_3, VTT_3]])));
+
+    const bridge = makeBridge();
+    startMaxVttPerformanceCapture(bridge);
+    await flush(); // capture SEG_2 (full emit, locks onto t3)
+    expect(isPerformanceCaptureRunning()).toBe(true);
+
+    resetMaxVttCaptureForSeek();
+
+    // Observer still running — ready to capture segments for the new position.
+    expect(isPerformanceCaptureRunning()).toBe(true);
+
+    // SEG_2 URL was in seenUrls before the reset. After reset, re-delivering
+    // it should NOT be skipped (seenUrls was cleared).
+    bridge.send.mockClear();
+    deliverNewEntries([SEG_2]);
+    await flush();
+
+    // The re-captured SEG_2 should emit as an append (emittedTrack preserved).
+    const cuesCalls = bridge.send.mock.calls.filter(([t]) => t === 'SUBTITLE_MANIFEST_CUES');
+    expect(cuesCalls).toHaveLength(1);
+    const payload = cuesCalls[0][1] as { append?: boolean; cues?: { text: string }[] };
+    expect(payload.append).toBe(true);
+    // cueBuffer was cleared, so only the re-captured segment's cues are present
+    // (not merged with old cues from before the seek).
+    expect(payload.cues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ text: "Sorry about that. I'm so sorry." }),
+    ]));
   });
 });
 
