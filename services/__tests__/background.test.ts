@@ -713,29 +713,42 @@ describe('services/background', () => {
     });
 
     it('emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries', async () => {
-      // Every fetch fails — chunk 0 (synchronous) fails, request returns
-      // success:false. We assert the failure path does not throw and the tab
-      // message infrastructure is reachable.
-      // NOTE: real backoff (fetchWithRetry + withRetry) makes this slow — give
-      // it headroom beyond the default 5s timeout.
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: false, status: 500, statusText: 'Server Error',
-        json: () => Promise.resolve({}), text: () => Promise.resolve(''),
-      }));
+      vi.useFakeTimers();
+      try {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+          ok: false, status: 500, statusText: 'Server Error',
+          json: () => Promise.resolve({}), text: () => Promise.resolve(''),
+        }));
 
-      const result = await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
+        let settled = false;
+        const promise = handleMessage(
+          {
+            action: 'translateSubtitle',
+            cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+            sourceLanguage: 'en',
+            targetLanguage: 'vi',
+          },
+          { tab: { id: 1 } } as chrome.runtime.MessageSender,
+        ).finally(() => {
+          settled = true;
+        });
 
-      // First chunk fails all retries -> overall failure.
-      expect(result).toMatchObject({ success: false });
-    }, 30000);
+        // Loop and advance timers until handleMessage settles (with a safety cap of 30 steps)
+        let steps = 0;
+        while (!settled && steps < 30) {
+          steps++;
+          await vi.advanceTimersByTimeAsync(500);
+          await new Promise((resolve) => process.nextTick(resolve));
+        }
+
+        const result = await promise;
+
+        // First chunk fails all retries -> overall failure.
+        expect(result).toMatchObject({ success: false });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
 
     it('does not cache a partial (source-back-filled) translation', async () => {
       // The LLM returns a translation where the cue text is back-filled with
