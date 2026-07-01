@@ -10,7 +10,22 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['entrypoints/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
+      ['entrypoints/**/*.test.{ts,tsx}', 'jsdom'],
+      ['content/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
+      ['content/**/*.test.{ts,tsx}', 'jsdom'],
+      ['tests/**/*.test.{ts,tsx}', 'jsdom'],
+      ['inject/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
+      ['styles/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
+      ['lib/**/__tests__/domUtils.test.ts', 'jsdom'],
+      ['lib/**/__tests__/manifestParser.test.ts', 'jsdom'],
+      ['lib/**/__tests__/maxMpdSubtitles.test.ts', 'jsdom'],
+      ['lib/**/__tests__/maxSubtitleLanguages.test.ts', 'jsdom'],
+      ['lib/**/__tests__/performance.test.ts', 'jsdom'],
+      ['lib/**/__tests__/ttmlParser.test.ts', 'jsdom'],
+    ],
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/__tests__/**/*.test.{ts,tsx}', '**/*.test.{ts,tsx}'],
     coverage: {
