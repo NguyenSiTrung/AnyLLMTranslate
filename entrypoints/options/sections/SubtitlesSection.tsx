@@ -558,22 +558,25 @@ export function SubtitlesSection() {
                 {visibleSites.map((site) => {
                   const disabled = (subtitleSettings.disabledSubtitleSites ?? []).includes(site.platform);
                   return (
-                    <div key={site.platform} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-                      <div>
+                    <div key={site.platform} className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0 flex-1">
                         <div className="text-sm text-zinc-200">{site.name}</div>
-                        <div className="text-xs text-zinc-500">{site.methodHint}</div>
+                        <div className="text-xs text-zinc-500 mt-0.5">{site.methodHint}</div>
                       </div>
-                      <Toggle
-                        id={`subtitle-site-${site.platform}`}
-                        checked={!disabled}
-                        onChange={(checked) => {
-                          const current = subtitleSettings.disabledSubtitleSites ?? [];
-                          const updated = checked
-                            ? current.filter((p) => p !== site.platform)
-                            : [...current, site.platform];
-                          handleUpdate({ disabledSubtitleSites: updated });
-                        }}
-                      />
+                      <div className="shrink-0 pt-0.5">
+                        <Toggle
+                          id={`subtitle-site-${site.platform}`}
+                          ariaLabel={`${site.name} subtitles`}
+                          checked={!disabled}
+                          onChange={(checked) => {
+                            const current = subtitleSettings.disabledSubtitleSites ?? [];
+                            const updated = checked
+                              ? current.filter((p) => p !== site.platform)
+                              : [...current, site.platform];
+                            handleUpdate({ disabledSubtitleSites: updated });
+                          }}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -594,19 +597,26 @@ export function SubtitlesSection() {
                 </div>
               )}
 
-              {/* Generic handler — separate standalone toggle (its own boolean
-                  setting, not the per-site disable array). It is the
-                  lowest-priority fallback that auto-detects subtitles on any
-                  site with a video element when no specific handler matches. */}
-              <div className="border-t border-zinc-800/50 pt-4 mt-2">
-                <Toggle
-                  id="subtitle-generic-handler-toggle"
-                  checked={subtitleSettings.enableGenericSubtitleHandler}
-                  onChange={(checked) => handleUpdate({ enableGenericSubtitleHandler: checked })}
-                  label="Generic Subtitle Detection"
-                  description="Auto-detect and translate subtitles on unsupported sites with a video element (broad .vtt/.srt/.ttml interception + DOM fallback). Platform-specific handlers always take precedence."
-                  disabled={isDisabled}
-                />
+              {/* Generic handler — same row layout as platform sites; separate
+                  boolean setting, not the per-site disable array. */}
+              <div className="flex items-start justify-between gap-4 py-2.5 border-t border-zinc-800/50">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-zinc-200">Generic Subtitle Detection</div>
+                  <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                    Auto-detect and translate subtitles on unsupported sites with a video element
+                    (broad .vtt/.srt/.ttml interception + DOM fallback). Platform-specific handlers
+                    always take precedence.
+                  </div>
+                </div>
+                <div className="shrink-0 pt-0.5">
+                  <Toggle
+                    id="subtitle-generic-handler-toggle"
+                    ariaLabel="Generic Subtitle Detection"
+                    checked={subtitleSettings.enableGenericSubtitleHandler}
+                    onChange={(checked) => handleUpdate({ enableGenericSubtitleHandler: checked })}
+                    disabled={isDisabled}
+                  />
+                </div>
               </div>
             </div>
           </Card>
