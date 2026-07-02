@@ -218,6 +218,50 @@ export function parseSubtitles(content: string): SubtitleCue[] {
 }
 
 /**
+ * Lightweight content-validation guard for the generic subtitle handler.
+ *
+ * The generic handler intercepts by URL extension (`.vtt`, `.srt`, `.ttml`) and
+ * path keywords, which can produce false positives (chapter markers, video
+ * description files, app manifests served as `.vtt`/`.xml`). This guard rejects
+ * such payloads before translation by requiring real subtitle structure: a VTT
+ * header, SRT timing lines, or a TTML root element.
+ *
+ * It is intentionally cheap (a few regex/`startsWith` checks, no full parse) so
+ * it can run on every intercepted response body. `detectFormat()` already
+ * recognises the same markers, but the generic handler calls this first so it
+ * can short-circuit with an empty cue array (skipping the LLM round-trip) when
+ * the body is not actually a subtitle.
+ */
+export function validateSubtitleContent(content: string): boolean {
+  if (!content) return false;
+  const stripped = content.replace(/^\uFEFF/, '').trim();
+  if (!stripped) return false;
+
+  // TTML / IMSC1 — XML root element or namespace.
+  if (
+    stripped.startsWith('<?xml') ||
+    stripped.startsWith('<tt') ||
+    stripped.includes('xmlns="http://www.w3.org/ns/ttml"')
+  ) {
+    return true;
+  }
+
+  // WebVTT — must start with the WEBVTT magic header.
+  if (stripped.startsWith('WEBVTT')) {
+    return true;
+  }
+
+  // SRT — a sequence-number line followed (after optional blank lines) by a
+  // `HH:MM:SS,mmm --> ...` timing line. The comma-separated milliseconds
+  // distinguishes SRT from VTT (period).
+  if (/^\d+\s*\n/.test(stripped) && /-->/.test(stripped) && /\d{2}:\d{2}:\d{2},\d{3}/.test(stripped)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Detect whether content is WebVTT or SRT format.
  */
 export function detectFormat(content: string): SubtitleFormat | null {

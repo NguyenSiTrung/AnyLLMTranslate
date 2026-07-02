@@ -198,6 +198,12 @@ export interface SubtitleSettings {
   /** Platform identifiers disabled by the user (opt-out model; empty = all enabled) */
   disabledSubtitleSites: string[];
   /**
+   * Whether the generic subtitle handler (last-resort fallback that intercepts
+   * subtitles on any site with a `<video>` element) is registered. Default on.
+   * Independent from `disabledSubtitleSites` (which targets specific platforms).
+   */
+  enableGenericSubtitleHandler: boolean;
+  /**
    * Per-knob global translation-style overrides. Only set knobs override the
    * resolved profile preset; absent knobs inherit. Undefined/empty == no
    * override == today's behavior. Consumed in services/background.ts via
@@ -349,6 +355,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   preferredSubtitleLanguage: 'en',
   autoActivateSubtitles: false,
   disabledSubtitleSites: [],
+  enableGenericSubtitleHandler: true,
   knobOverrides: {},
 };
 
