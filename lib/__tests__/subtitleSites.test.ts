@@ -7,11 +7,11 @@ import { SUPPORTED_SUBTITLE_SITES, isSiteDisabled } from '@/lib/subtitleSites';
 import { DEFAULT_SUBTITLE_SETTINGS } from '@/types/config';
 
 describe('SUPPORTED_SUBTITLE_SITES', () => {
-  it('contains exactly 9 platforms', () => {
-    expect(SUPPORTED_SUBTITLE_SITES).toHaveLength(9);
+  it('contains exactly 10 platforms (9 specific + generic fallback)', () => {
+    expect(SUPPORTED_SUBTITLE_SITES).toHaveLength(10);
   });
 
-  it('includes youtube, udemy, coursera, linkedin, hbomax, youku, wetv', () => {
+  it('lists specific platforms first, generic fallback last', () => {
     const platforms = SUPPORTED_SUBTITLE_SITES.map((s) => s.platform);
     expect(platforms).toEqual([
       'youtube',
@@ -23,7 +23,14 @@ describe('SUPPORTED_SUBTITLE_SITES', () => {
       'netflix',
       'disneyplus',
       'wetv',
+      'generic',
     ]);
+  });
+
+  it('generic entry is the auto-detect fallback', () => {
+    const generic = SUPPORTED_SUBTITLE_SITES.find((s) => s.platform === 'generic');
+    expect(generic).toBeDefined();
+    expect(generic!.methodHint).toContain('Auto-detect');
   });
 
   it('each entry has platform, name, and methodHint', () => {

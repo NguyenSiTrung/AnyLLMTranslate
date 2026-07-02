@@ -24,6 +24,10 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
   { platform: 'netflix', name: 'Netflix', methodHint: 'JSON.parse + nflxvideo CDN' },
   { platform: 'disneyplus', name: 'Disney+', methodHint: 'JSON.parse + VTT fetch' },
   { platform: 'wetv', name: 'WeTV', methodHint: 'XHR interception (.vtt)' },
+  // Generic fallback handler — listed LAST. It is the lowest-priority handler
+  // (activates only when no specific handler detects the host) and is gated by
+  // its own enableGenericSubtitleHandler toggle, NOT the per-site disable array.
+  { platform: 'generic', name: 'Generic (Auto-detect)', methodHint: 'Auto-detect (any site with video)' },
 ] as const;
 
 /**

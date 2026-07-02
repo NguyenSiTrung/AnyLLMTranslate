@@ -310,4 +310,52 @@ describe('SubtitlesSection', () => {
       expect(udemyToggle?.getAttribute('aria-checked')).toBe('true');
     });
   });
+
+  describe('generic subtitle detection toggle', () => {
+    it('renders the Generic Subtitle Detection toggle', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Generic Subtitle Detection')).toBeInTheDocument();
+    });
+
+    it('renders the generic toggle checked by default', () => {
+      render(<SubtitlesSection />);
+      const toggle = document.getElementById('subtitle-generic-handler-toggle');
+      expect(toggle).toBeInTheDocument();
+      expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('reflects enableGenericSubtitleHandler=false as unchecked', () => {
+      mockState.subtitleSettings = {
+        ...baseSubtitleSettings,
+        enableGenericSubtitleHandler: false,
+      };
+
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') {
+          return selector(mockState);
+        }
+        return mockState;
+      });
+
+      render(<SubtitlesSection />);
+      const toggle = document.getElementById('subtitle-generic-handler-toggle');
+      expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('calls updateSettings when the generic toggle is clicked', () => {
+      render(<SubtitlesSection />);
+      const toggle = screen.getByRole('switch', { name: 'Generic Subtitle Detection' });
+      toggle.click();
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ subtitleSettings: expect.objectContaining({ enableGenericSubtitleHandler: false }) }),
+      );
+    });
+
+    it('does NOT render a per-site toggle for generic (separate setting)', () => {
+      render(<SubtitlesSection />);
+      // The generic entry is filtered out of the per-site loop, so its per-site
+      // id should not exist; only the dedicated generic-handler toggle exists.
+      expect(document.getElementById('subtitle-site-generic')).toBeNull();
+    });
+  });
 });

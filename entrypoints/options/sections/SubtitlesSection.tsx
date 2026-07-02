@@ -543,7 +543,7 @@ export function SubtitlesSection() {
           <Card title="Supported Sites" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
             <div className={`${isDisabled ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-200`}>
               <div className="divide-y divide-zinc-800/50">
-                {SUPPORTED_SUBTITLE_SITES.map((site) => {
+                {SUPPORTED_SUBTITLE_SITES.filter((site) => site.platform !== 'generic').map((site) => {
                   const disabled = (subtitleSettings.disabledSubtitleSites ?? []).includes(site.platform);
                   return (
                     <div key={site.platform} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
@@ -565,6 +565,21 @@ export function SubtitlesSection() {
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Generic handler — separate standalone toggle (its own boolean
+                  setting, not the per-site disable array). It is the
+                  lowest-priority fallback that auto-detects subtitles on any
+                  site with a video element when no specific handler matches. */}
+              <div className="border-t border-zinc-800/50 pt-4 mt-2">
+                <Toggle
+                  id="subtitle-generic-handler-toggle"
+                  checked={subtitleSettings.enableGenericSubtitleHandler}
+                  onChange={(checked) => handleUpdate({ enableGenericSubtitleHandler: checked })}
+                  label="Generic Subtitle Detection"
+                  description="Auto-detect and translate subtitles on unsupported sites with a video element (broad .vtt/.srt/.ttml interception + DOM fallback). Platform-specific handlers always take precedence."
+                  disabled={isDisabled}
+                />
               </div>
             </div>
           </Card>
