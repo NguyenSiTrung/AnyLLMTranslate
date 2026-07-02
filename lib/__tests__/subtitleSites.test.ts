@@ -7,13 +7,13 @@ import { SUPPORTED_SUBTITLE_SITES, isSiteDisabled } from '@/lib/subtitleSites';
 import { DEFAULT_SUBTITLE_SETTINGS } from '@/types/config';
 
 describe('SUPPORTED_SUBTITLE_SITES', () => {
-  it('contains exactly 6 platforms', () => {
-    expect(SUPPORTED_SUBTITLE_SITES).toHaveLength(6);
+  it('contains exactly 8 platforms', () => {
+    expect(SUPPORTED_SUBTITLE_SITES).toHaveLength(8);
   });
 
   it('includes youtube, udemy, coursera, linkedin, hbomax, youku', () => {
     const platforms = SUPPORTED_SUBTITLE_SITES.map((s) => s.platform);
-    expect(platforms).toEqual(['youtube', 'udemy', 'coursera', 'linkedin', 'hbomax', 'youku']);
+    expect(platforms).toEqual(['youtube', 'udemy', 'coursera', 'linkedin', 'hbomax', 'youku', 'netflix', 'disneyplus']);
   });
 
   it('each entry has platform, name, and methodHint', () => {

@@ -19,6 +19,9 @@ import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
+import { NetflixHandler } from '@/inject/subtitleHandlers/netflix';
+import { DisneyPlusHandler } from '@/inject/subtitleHandlers/disneyplus';
+import { installJsonParseSubtitleHook } from '@/inject/jsonParseSubtitleHook';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
@@ -40,10 +43,17 @@ export default defineContentScript({
        new LinkedInHandler(),
        new HboMaxHandler(),
        new YoukuHandler(),
+       new NetflixHandler(),
+       new DisneyPlusHandler(),
      ]);
 
     const registry = new InterceptorRegistry();
     const bridge = createBridgeSender();
+
+    installJsonParseSubtitleHook(
+      [new NetflixHandler(), new DisneyPlusHandler()],
+      bridge,
+    );
 
     // Register patterns only for handlers that detect the current host
     // (avoids cross-platform false positives on non-target domains)

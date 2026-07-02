@@ -38,3 +38,6 @@ __pycache__
 .dolt/
 *.db
 .beads-credential-key
+
+# Reference / vendored extension code (not part of this repo)
+ImmersiveTransalteExtensionCode/

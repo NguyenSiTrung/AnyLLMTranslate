@@ -36,6 +36,9 @@ export interface SubtitleHandler {
   /** Whether the current page is a video watch page (vs. listing/search).
    *  When absent, callers fall back to hostname-based detection. */
   isWatchPage?(): boolean;
+
+  /** Extract tracks from a value already parsed via JSON.parse (Netflix, Disney+). */
+  extractTracksFromParsedJson?(value: unknown): AvailableSubtitleTrack[];
 }
 
 /** Handler registry — auto-detects platform by hostname and routes to the right handler */

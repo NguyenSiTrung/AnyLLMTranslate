@@ -48,6 +48,8 @@ export const DOMAIN_PROFILE_MAP: Record<string, SubtitleProfile> = {
   'coursera.org': 'educational',
   'linkedin.com': 'educational',
   'youtube.com': 'media',
+  'netflix.com': 'cinematic',
+  'disneyplus.com': 'cinematic',
   'max.com': 'cinematic',
   'hbomax.com': 'cinematic',
   'youku.tv': 'cinematic',
