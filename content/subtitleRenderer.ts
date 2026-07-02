@@ -16,6 +16,7 @@ import {
   updateCues,
   cleanup as cleanupOverlay,
 } from '@/content/subtitleOverlay';
+import { NativeTrackRenderer } from '@/content/nativeTrackRenderer';
 
 export interface SubtitleDisplayConfig {
   displayMode?: 'bilingual' | 'translation-only';
@@ -62,12 +63,13 @@ export function canRenderNatively(video: HTMLVideoElement): boolean {
 }
 
 /**
- * Returns a native renderer if supported, else the overlay fallback.
- *
- * Native branch is added in Task 7; for now (Task 6) this always returns the
- * overlay renderer so the coordinator can be migrated onto the interface first.
+ * Returns a native renderer if supported, else the overlay fallback (D3).
+ * Capability is checked per-video: a browser with VTTCue + addTextTrack gets
+ * native rendering; otherwise the legacy custom overlay is used.
  */
 export function createRenderer(video: HTMLVideoElement): SubtitleRenderer {
-  // Task 7: if (canRenderNatively(video)) return new NativeTrackRenderer();
+  if (canRenderNatively(video)) {
+    return new NativeTrackRenderer();
+  }
   return new OverlayRenderer();
 }
