@@ -496,6 +496,14 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       return;
     }
 
+    // Generic handler toggle: when the generic handler intercepted this payload
+    // but the user disabled "Generic subtitle detection", pass the original
+    // through (always-respond pattern). Specific platforms are unaffected.
+    if (platform === 'generic' && settings.subtitleSettings.enableGenericSubtitleHandler === false) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
+
     const handler = getHandlerByPlatform(platform);
     if (!handler) {
       sendTranslatedSubtitle({ requestId, vttContent: body });
@@ -1332,6 +1340,12 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
 
   const handlerForCheck = detectCurrentHandler();
   if (handlerForCheck && isSiteDisabled(handlerForCheck.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
+    return;
+  }
+
+  // Generic handler DOM-scraping toggle: suppress DOM activation when the
+  // user disabled "Generic subtitle detection" on a site the generic handler owns.
+  if (handlerForCheck?.platform === 'generic' && settings.subtitleSettings.enableGenericSubtitleHandler === false) {
     return;
   }
 
@@ -2375,6 +2389,11 @@ export async function tryAutoActivateForDom(options?: {
   // Per-site toggle: skip auto-activate for disabled platforms
   if (handler && isSiteDisabled(handler.platform, settings.subtitleSettings.disabledSubtitleSites ?? [])) {
     return { activated: false, reason: 'site disabled by user' };
+  }
+
+  // Generic handler toggle: skip auto-activate when "Generic subtitle detection" is off.
+  if (handler.platform === 'generic' && settings.subtitleSettings.enableGenericSubtitleHandler === false) {
+    return { activated: false, reason: 'generic handler disabled' };
   }
 
   // Precondition: Max's caption overlay must be present and visible.

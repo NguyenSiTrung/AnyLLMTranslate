@@ -38,6 +38,7 @@ import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
+import { GenericSubtitleHandler } from '@/inject/subtitleHandlers/generic';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -590,7 +591,11 @@ export default defineContentScript({
     if ((window as unknown as Record<string, unknown>).__anyllmTranslateInitialized) return;
     (window as unknown as Record<string, unknown>).__anyllmTranslateInitialized = true;
 
-    // Register platform handlers for isolated world
+    // Register platform handlers for isolated world.
+    // GenericSubtitleHandler is registered LAST so platform-specific handlers
+    // win first-match-wins in detectCurrentHandler(). Its activation is gated
+    // on enableGenericSubtitleHandler in the coordinator (settings are not yet
+    // loaded here).
     registerSubtitleHandlers([
       new YouTubeHandler(),
       new UdemyHandler(),
@@ -599,6 +604,7 @@ export default defineContentScript({
       new HboMaxHandler(),
       new YoukuHandler(),
       new WetvHandler(),
+      new GenericSubtitleHandler(),
     ]);
 
     setupMessageListener();
