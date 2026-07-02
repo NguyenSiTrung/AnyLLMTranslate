@@ -847,12 +847,75 @@ function applyTranslatedCueBatchToMap(
   }
 }
 
+/** Minimum sub-batch size for progressive halving retry. */
+const MANIFEST_MIN_SUBBATCH_SIZE = 5;
+
+/**
+ * Send a single batch of cue texts to the background for translation and merge
+ * the result into the manifest translation map + overlay. Returns true on
+ * success, false on failure. Handles session-cancellation detection by
+ * comparing the response sessionId against the current active session.
+ */
+async function translateManifestBatch(
+  batchTexts: string[],
+  sourceLanguage: string,
+  targetLanguage: string,
+  pageContext: PageContext | undefined,
+  skipFilmPreScan: boolean,
+): Promise<boolean> {
+  const cuesToTranslate: SubtitleCue[] = batchTexts.map((text, i) => ({
+    startTime: i,
+    endTime: i + 1,
+    text,
+  }));
+  const activeSessionId = state.activeSubtitleSessionId;
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      cues: cuesToTranslate,
+      sourceLanguage,
+      targetLanguage,
+      pageContext,
+      profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
+      sessionId: activeSessionId ?? undefined,
+      skipFilmPreScan,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (!response?.success || !response.cues) {
+      console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
+      return false;
+    }
+    // Seek-cancellation detection: if the active session changed (seek reset
+    // cancelled the session and a new one was started), drop this stale result.
+    if (
+      activeSessionId !== null &&
+      response.sessionId !== undefined &&
+      response.sessionId !== state.activeSubtitleSessionId &&
+      state.activeSubtitleSessionId !== null
+    ) {
+      console.log('AnyLLMTranslate: Dropping stale manifest batch (session changed)');
+      return true; // Not a failure — just stale; don't sub-batch retry
+    }
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
+    }
+    applyTranslatedCueBatchToMap(state.manifestTranslationMap, response.cues);
+    rebuildManifestTranslatedCues();
+    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+    return true;
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
+    return false;
+  }
+}
+
 async function translateManifestCueTexts(
   newTexts: string[],
   sourceLanguage: string,
   targetLanguage: string,
   pageContext: PageContext | undefined,
-  sessionId: number | null,
+  _sessionId: number | null,
 ): Promise<void> {
   if (newTexts.length === 0) return;
   const orderedTexts = sortCueTextsByPlaybackPriority(
@@ -866,39 +929,66 @@ async function translateManifestCueTexts(
   // whole request; smaller batches also return faster for the first overlay update.
   for (let offset = 0; offset < orderedTexts.length; offset += SUBTITLE_CHUNK_SIZE) {
     const batchTexts = orderedTexts.slice(offset, offset + SUBTITLE_CHUNK_SIZE);
-    const cuesToTranslate: SubtitleCue[] = batchTexts.map((text, i) => ({
-      startTime: i,
-      endTime: i + 1,
-      text,
-    }));
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: 'translateSubtitle',
-        cues: cuesToTranslate,
-        sourceLanguage,
-        targetLanguage,
-        pageContext,
-        profile: currentSubtitleProfile(),
-        knobOverrides: state.subtitleKnobOverride,
-        sessionId: sessionId ?? undefined,
-        skipFilmPreScan: offset > 0 || state.manifestTranslationMap.size > 0,
-      }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+    const skipFilmPreScan = offset > 0 || state.manifestTranslationMap.size > 0;
 
-      if (!response?.success || !response.cues) {
-        console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
-        continue;
+    const ok = await translateManifestBatch(
+      batchTexts,
+      sourceLanguage,
+      targetLanguage,
+      pageContext,
+      skipFilmPreScan,
+    );
+    if (ok) continue;
+
+    // Progressive halving retry: when a full batch fails (typically JSON parse
+    // error on a large batch after seek), split into smaller sub-batches and
+    // retry each independently. Smaller batches are far more likely to get a
+    // valid JSON response from the LLM, and a single bad text won't sink the
+    // entire segment's translation.
+    let subSize = Math.floor(SUBTITLE_CHUNK_SIZE / 2);
+    let remaining = batchTexts;
+    let anySubOk = false;
+    while (subSize >= MANIFEST_MIN_SUBBATCH_SIZE && remaining.length > 0) {
+      const subBatches: string[][] = [];
+      for (let i = 0; i < remaining.length; i += subSize) {
+        subBatches.push(remaining.slice(i, i + subSize));
       }
-      if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
-        return;
+      remaining = [];
+      for (const sub of subBatches) {
+        const subOk = await translateManifestBatch(
+          sub,
+          sourceLanguage,
+          targetLanguage,
+          pageContext,
+          true,
+        );
+        if (!subOk) {
+          remaining.push(...sub);
+        } else {
+          anySubOk = true;
+        }
       }
-      if (response.sessionId !== undefined) {
-        state.activeSubtitleSessionId = response.sessionId;
+      subSize = Math.floor(subSize / 2);
+    }
+
+    // Final attempt: translate remaining failed texts one-by-one. Even a single
+    // text is sometimes rejected by the LLM (e.g. empty-ish strings); skip
+    // those silently rather than blocking the rest of the segment.
+    if (remaining.length > 0) {
+      for (const text of remaining) {
+        await translateManifestBatch(
+          [text],
+          sourceLanguage,
+          targetLanguage,
+          pageContext,
+          true,
+        );
       }
-      applyTranslatedCueBatchToMap(state.manifestTranslationMap, response.cues);
-      rebuildManifestTranslatedCues();
-      state.activeRenderer?.updateCues(state.manifestTranslatedCues);
-    } catch (error) {
-      console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
+    }
+
+    if (!anySubOk && remaining.length === batchTexts.length) {
+      // Entire batch failed even after sub-batch retry — the warning was already
+      // logged by translateManifestBatch. No additional action needed.
     }
   }
 }

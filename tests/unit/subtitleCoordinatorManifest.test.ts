@@ -333,11 +333,14 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
       cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
     });
 
-    // Make the append delta translation FAIL so its new cue stays in the
-    // original-text fallback (the map is never populated for it).
-    vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
-      success: false,
-      error: 'simulated delta failure',
+    // Make ALL append delta translation calls FAIL so the new cue stays in
+    // the original-text fallback (the map is never populated for it). The
+    // sub-batch retry exhausts every halving level + single-text attempts.
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation((msg: { action: string }) => {
+      if (msg.action === 'translateSubtitle') {
+        return Promise.resolve({ success: false, error: 'simulated persistent failure' });
+      }
+      return Promise.resolve({ success: true });
     });
 
     vi.mocked(updateCues).mockClear();
