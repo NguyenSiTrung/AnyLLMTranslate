@@ -18,6 +18,9 @@ export interface MpdSubtitleTrack {
   url: string;
   /** All segment URLs when the track uses SegmentTemplate + SegmentTimeline. */
   segmentUrls?: string[];
+  /** Presentation-time offset (ms) parallel to segmentUrls; absolute cues when
+   *  undefined. Populated by buildRepresentationSegmentUrls. */
+  segmentOffsetsMs?: number[];
   /** Progressive numbered-segment fetch when total count is unknown. */
   segmentFetch?: SegmentFetchTemplate;
   language: string;
@@ -116,6 +119,7 @@ export function extractSubtitleTracks(mpdXml: Document, baseUrl: string): MpdSub
       tracks.push({
         url: built.urls[0],
         segmentUrls: built.urls.length > 1 ? built.urls : undefined,
+        segmentOffsetsMs: built.offsetsMs,
         segmentFetch: built.segmentFetch,
         language: lang,
         mimeType,
@@ -156,6 +160,8 @@ export function parseSubtitleContent(
 
 interface BuiltRepresentationSegments {
   urls: string[];
+  /** Presentation-time offset (ms) parallel to urls. */
+  offsetsMs: number[];
   segmentFetch?: SegmentFetchTemplate;
 }
 
@@ -204,13 +210,13 @@ function buildRepresentationSegmentUrls(
       baseUrl,
     );
     if (resolved && !isSelfReferentialSubtitleUrl(resolved, baseUrl)) {
-      return { urls: [resolved] };
+      return { urls: [resolved], offsetsMs: [0] };
     }
   }
 
   const segmentListUrls = buildSegmentListUrls(rep, adaptationSet, baseUrl, mediaBaseUrl);
   if (segmentListUrls) {
-    return { urls: segmentListUrls };
+    return { urls: segmentListUrls, offsetsMs: segmentListUrls.map(() => 0) };
   }
 
   const segmentTemplate =
@@ -235,6 +241,7 @@ function buildRepresentationSegmentUrls(
     if (!firstUrl || isSelfReferentialSubtitleUrl(firstUrl, baseUrl)) return null;
     return {
       urls: [firstUrl],
+      offsetsMs: [0],
       segmentFetch: {
         media: templateContext.media,
         startNumber: templateContext.startNumber,
@@ -254,7 +261,13 @@ function buildRepresentationSegmentUrls(
     urls.push(resolved);
   }
 
-  return urls.length > 0 ? { urls } : null;
+  const timelineOffsets = computeSegmentOffsetsMs(segmentTemplate);
+  const offsetsMs =
+    timelineOffsets.length === urls.length
+      ? timelineOffsets
+      : urls.map(() => 0);
+
+  return urls.length > 0 ? { urls, offsetsMs } : null;
 }
 
 interface TemplateContext {
@@ -386,6 +399,52 @@ function countSegmentsFromTimeline(segmentTemplate: Element): number {
   }
 
   return count;
+}
+
+/**
+ * Compute the DASH presentation-time offset (ms) for each <S> segment in a
+ * SegmentTimeline, parallel to the segment URL order produced by
+ * buildRepresentationSegmentUrls. Returns [] when there is no timeline.
+ *
+ * Each <S> may carry a `t` (absolute presentation time in timescale units) and
+ * a `d` (duration); `r` repeats the segment `r` more times. When `t` is absent
+ * the timeline continues from the previous segment's end. This is the
+ * authoritative source for converting segment-relative WebVTT cue timestamps
+ * into absolute timeline times.
+ */
+function computeSegmentOffsetsMs(segmentTemplate: Element): number[] {
+  const timeline = findChildByLocalName(segmentTemplate, 'SegmentTimeline');
+  if (!timeline) return [];
+
+  const timescale = parseInt(segmentTemplate.getAttribute('timescale') ?? '1', 10);
+  if (!Number.isFinite(timescale) || timescale <= 0) return [];
+
+  const offsets: number[] = [];
+  let currentTime = 0;
+  let first = true;
+
+  for (const s of findChildrenByLocalName(timeline, 'S')) {
+    const tAttr = s.getAttribute('t');
+    if (tAttr !== null) {
+      const t = parseInt(tAttr, 10);
+      if (Number.isFinite(t)) currentTime = t;
+    } else if (first) {
+      currentTime = 0;
+    }
+    first = false;
+
+    const d = parseInt(s.getAttribute('d') ?? '0', 10);
+    const rAttr = s.getAttribute('r');
+    const repeat = rAttr !== null ? parseInt(rAttr, 10) : 0;
+    if (!Number.isFinite(repeat) || repeat < 0 || !Number.isFinite(d)) continue;
+
+    for (let k = 0; k <= repeat; k++) {
+      offsets.push((currentTime / timescale) * 1000);
+      currentTime += d;
+    }
+  }
+
+  return offsets;
 }
 
 function getPresentationDuration(mpdXml: Document): number | null {

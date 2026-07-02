@@ -21,6 +21,7 @@ export default defineConfig({
       ['styles/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
       ['lib/**/__tests__/domUtils.test.ts', 'jsdom'],
       ['lib/**/__tests__/manifestParser.test.ts', 'jsdom'],
+      ['lib/**/__tests__/dashSegmentOffsets.test.ts', 'jsdom'],
       ['lib/**/__tests__/maxMpdSubtitles.test.ts', 'jsdom'],
       ['lib/**/__tests__/maxSubtitleLanguages.test.ts', 'jsdom'],
       ['lib/**/__tests__/performance.test.ts', 'jsdom'],

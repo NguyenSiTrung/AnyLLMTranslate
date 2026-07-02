@@ -75,11 +75,14 @@ describe('extractSubtitleTracks', () => {
     const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
     const tracks = extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd');
     expect(tracks).toHaveLength(1);
-    expect(tracks[0]).toEqual({
+    // toMatchObject (not toEqual) so additive MpdSubtitleTrack fields don't
+    // make this brittle; the meaningful structural fields are asserted here.
+    expect(tracks[0]).toMatchObject({
       url: 'https://cdn.example.com/subs_en.ttml',
       language: 'en',
       mimeType: 'application/ttml+xml',
     });
+    expect(tracks[0].segmentOffsetsMs).toEqual([0]);
   });
 
   it('extracts contentType=text AdaptationSets', () => {
