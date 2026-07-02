@@ -6,6 +6,7 @@ import type {
 } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
 import { normalizeMaxSubtitleLanguage, readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
+import { parseSubtitles } from '@/lib/subtitleParser';
 
 export class HboMaxHandler implements SubtitleHandler {
   readonly platform = 'hbomax';
@@ -26,8 +27,16 @@ export class HboMaxHandler implements SubtitleHandler {
   }
 
   getPatterns(): SubtitleUrlPattern[] {
-    // Max renders captions into the DOM — no URL interception.
-    return [];
+    // Immersive Translate hbomax rule: type webvtt, subtitleUrlRegExp \.vtt$,
+    // enableHookDownload (overlay/out-of-band — not in-player VTT swap; IT notes
+    // self-hosted responses desync timelines). Fetch/XHR intercept on Max CDN .vtt.
+    return [
+      {
+        platform: 'hbomax',
+        pattern: /\.vtt(?:\?|$)/i,
+        languageExtractor: (url) => this.languageFromVttUrl(url.pathname),
+      },
+    ];
   }
 
   getManifestPatterns(): SubtitleUrlPattern[] {
@@ -55,8 +64,11 @@ export class HboMaxHandler implements SubtitleHandler {
     ];
   }
 
-  transformResponse(_body: string, _contentType: string, _url: string): SubtitleCue[] {
-    return [];
+  transformResponse(body: string, _contentType: string, url: string): SubtitleCue[] {
+    // DASH segment VTT may use segment-relative times; MPD/manifest path applies
+    // offsets when available. This path mirrors IT hook-download for progressive cues.
+    void url;
+    return parseSubtitles(body);
   }
 
   extractAvailableTracks(
@@ -114,5 +126,13 @@ export class HboMaxHandler implements SubtitleHandler {
   private extractVideoId(): string | undefined {
     const match = window.location.pathname.match(/\/video\/watch\/([^/]+)/);
     return match?.[1];
+  }
+
+  /** Best-effort language from Max CDN VTT path (e.g. .../t/<trackId>/3.vtt). */
+  private languageFromVttUrl(pathname: string): string {
+    const active = readMaxActiveSubtitleLanguage();
+    if (active) return active;
+    const seg = pathname.match(/\/t\/([^/]+)\//);
+    return seg?.[1] ?? '';
   }
 }

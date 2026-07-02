@@ -41,8 +41,15 @@ describe('HboMaxHandler', () => {
   });
 
   describe('getPatterns', () => {
-    it('returns empty array (no URL interception)', () => {
-      expect(handler.getPatterns()).toEqual([]);
+    it('matches .vtt URLs (Immersive Translate webvtt rule)', () => {
+      const patterns = handler.getPatterns();
+      expect(patterns).toHaveLength(1);
+      expect(
+        patterns[0].pattern.test(
+          'https://akm.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/2.vtt?manifest-params=x',
+        ),
+      ).toBe(true);
+      expect(patterns[0].pattern.test('https://play.max.com/api/foo')).toBe(false);
     });
   });
 
@@ -65,8 +72,14 @@ describe('HboMaxHandler', () => {
   });
 
   describe('transformResponse', () => {
-    it('returns empty array (never called for DOM source)', () => {
-      expect(handler.transformResponse('anything', 'text/vtt', 'https://max.com/x')).toEqual([]);
+    it('parses WebVTT bodies', () => {
+      const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Line`;
+      const cues = handler.transformResponse(vtt, 'text/vtt', 'https://cdn/1.vtt');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Line');
     });
   });
 

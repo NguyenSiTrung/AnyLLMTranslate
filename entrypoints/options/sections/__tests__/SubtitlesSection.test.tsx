@@ -267,7 +267,7 @@ describe('SubtitlesSection', () => {
       const xhrHints = screen.getAllByText('XHR interception');
       expect(xhrHints.length).toBeGreaterThanOrEqual(3);
       expect(screen.getByText('Fetch interception')).toBeInTheDocument();
-      expect(screen.getByText('DOM cue scraping')).toBeInTheDocument();
+      expect(screen.getByText('VTT intercept + MPD/DOM fallback')).toBeInTheDocument();
       expect(screen.getByText('Fetch ASS + DOM fallback')).toBeInTheDocument();
       expect(screen.getByText('XHR interception (.vtt)')).toBeInTheDocument();
     });

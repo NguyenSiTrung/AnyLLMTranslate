@@ -19,7 +19,7 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
   { platform: 'udemy', name: 'Udemy', methodHint: 'XHR interception' },
   { platform: 'coursera', name: 'Coursera', methodHint: 'XHR interception' },
   { platform: 'linkedin', name: 'LinkedIn Learning', methodHint: 'Fetch interception' },
-  { platform: 'hbomax', name: 'HBO Max', methodHint: 'DOM cue scraping' },
+  { platform: 'hbomax', name: 'HBO Max', methodHint: 'VTT intercept + MPD/DOM fallback' },
   { platform: 'youku', name: 'Youku', methodHint: 'Fetch ASS + DOM fallback' },
   { platform: 'netflix', name: 'Netflix', methodHint: 'JSON.parse + nflxvideo CDN' },
   { platform: 'disneyplus', name: 'Disney+', methodHint: 'JSON.parse + VTT fetch' },
