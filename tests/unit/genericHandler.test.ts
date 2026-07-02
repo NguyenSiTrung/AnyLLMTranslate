@@ -88,7 +88,9 @@ describe('GenericSubtitleHandler — static behaviour', () => {
     it('languageExtractor derives code from query params and filename', () => {
       const vttPattern = handler.getPatterns()[0]; // .vtt pattern
       const extractor = vttPattern.languageExtractor;
-      expect(extractor?.(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
+      expect(extractor).toBeDefined();
+      if (!extractor) return; // narrow for TS — asserted above at runtime
+      expect(extractor(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
       expect(extractor(new URL('https://x/sub.vtt?language=fr'))).toBe('fr');
       expect(extractor(new URL('https://x/sub.vtt?locale=ja_JP'))).toBe('ja-jp');
       expect(extractor(new URL('https://x/movie_en.vtt'))).toBe('en');

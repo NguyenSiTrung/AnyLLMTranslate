@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-30 all (post providers-ux-overhaul archive — health re-verified: 1903/0 failing across 131 files, 57 archived) -->
+<!-- conductor-refresh: 2026-07-02 all (post generic-subtitle-handler archive — health re-verified: 2014/0 failing across 140 files, 58 archived; eslint ignores fixed for vendored ImmersiveTransalteExtensionCode/, tsc clean) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -549,8 +549,8 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **Test `beforeEach` blocks must only reset variables that are actually declared.** A copy-pasted `beforeEach` referencing `capturedTextTrackCuesHandler`/`capturedMseCuesHandler` — never declared and never captured (the file's `messageBridge` mock returns no-op cleanups for `onTextTrackCues`/`onMseCues`) — threw `ReferenceError` and failed every test in the `describe` block. When a mock factory doesn't *capture* a handler (it returns a no-op teardown), there is nothing to reset — reference only the handlers your mock actually captures. (from: hbomax tier-precedence hotfix test-regression fix, 2026-06-26)
 
 ---
-Last refreshed: 2026-06-29T18:40:00+07:00
-Codebase health: 1903 tests passing across 131 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1831 after the providers-ux-overhaul track added 72 tests), build ~3.87MB, 14 lint errors (`no-empty` in content.ts `destroyZombie` — intentional empty catch blocks; previous 5 `no-non-null-assertion`/`no-dynamic-delete` resolved), `tsc` clean (0 errors — previous 3 resolved), 57 tracks archived, 0 active tracks
+Last refreshed: 2026-07-02T19:05:00+07:00
+Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1903 after the generic-subtitle-handler track added 111 tests), build ~3.88MB, 3 lint errors in project source (`content/subtitleRenderer.ts` unused `NativeTrackRenderer` import; `inject/jsonParseSubtitleHook.ts` + `tests/unit/netflixHandler.test.ts` `no-non-null-assertion` — note: vendored `ImmersiveTransalteExtensionCode/` reference copy now excluded via eslint ignores, previously inflated `pnpm lint` to 31585 errors), `tsc` clean (0 errors — manifest sendMessage mock + genericHandler extractor guard fixed this cycle), 58 tracks archived, 0 active tracks
 
 ## Multi-Provider Pool (2026-06-26)
 - **Round-robin coordinator at the single `initService()` seam:** A `ProviderPoolCoordinator implements TranslationService` returned by `initService()` covers all 7 translation paths (page, subtitle, PDF, selection, hover, inline, category-detect) in one place — no per-path changes. The coordinator holds one `OpenAICompatibleService` per enabled `(provider, key)` slot and delegates per call with round-robin + failover. (from: multi-provider-pool_20260626, 2026-06-26)

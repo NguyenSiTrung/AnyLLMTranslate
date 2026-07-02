@@ -1,33 +1,33 @@
 {
-  "lastRefresh": "2026-06-30T12:25:00+07:00",
+  "lastRefresh": "2026-07-02T19:05:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: incremental state-sync refresh. Only 1 conductor track archived since the 2026-06-29 cycle: providers-ux-overhaul_20260630 (created/completed/archived 2026-06-30, 8 phases, 13 findings resolved). Commits b5c579d...d992f57.",
-    "product.md: refresh marker bumped 2026-06-29/1831/129/56 -> 2026-06-30/1903/131/57.",
-    "product.md: NEW Implementation Status entry for 'Providers Tab UI/UX Overhaul' (Archived 2026-06-30) was already added by archive commit d992f57. No additional entry needed.",
-    "product.md: Current State bumped 1831/129/56 -> 1903/131/57. Lint errors changed: 5 (no-non-null-assertion/no-dynamic-delete) -> 14 (no-empty in content.ts destroyZombie). tsc errors: 3 -> 0 (clean). Build size: 3.81MB -> 3.87MB.",
-    "patterns.md: refresh marker bumped (header) to 2026-06-30/1903/131/57.",
-    "patterns.md: footer health line updated to 1903 tests / 131 files, 57 tracks archived, 3.87MB build, 14 lint errors (no-empty), 0 tsc errors.",
-    "patterns.md: 5 patterns from providers-ux-overhaul already elevated by archive commit d992f57 (lines 581-585). No new patterns to add this cycle.",
+    "Scope: full refresh since 2026-06-30 cycle. 1 conductor track archived in between: generic-subtitle-handler_20260702 (created/completed/archived 2026-07-02, 6 phases, 28 leaf sub-tasks). Commits f0e7e2e...443095e.",
+    "product.md: refresh marker bumped 2026-06-30/1903/131/57 -> 2026-07-02/2014/140/58. Implementation Status entry for 'Generic Subtitle Handler' (line 177) + Current State metrics (line 180, 2014 tests/3.88MB) already added by archive commit 4b14883 — no additional entry needed.",
+    "patterns.md: refresh marker bumped (header) to 2026-07-02/2014/140/58. Footer health line updated to 2014 tests / 140 files, 58 tracks archived, 3.88MB build, 3 source lint errors, 0 tsc errors.",
+    "patterns.md: 4 patterns from generic-subtitle-handler already elevated by archive commit 4b14883 (getPatternsForCurrentHost ACCUMULATES, Content-Type fetch-not-xhr, validateSubtitleContent gate, standalone-toggle-vs-per-site-array). No new patterns to add this cycle.",
     "tech-stack.md: No drift vs package.json (no dependency changes this cycle).",
     "workflow.md: No drift.",
-    "tracks.md: No drift (providers-ux-overhaul_20260630 already in archived list from archive commit d992f57).",
-    "learnings: 5 patterns from providers-ux-overhaul were already elevated to patterns.md by the archive commit. No additional patterns needed extraction. No cross-track duplicates to merge.",
-    "beads: No drift. bd list = 0 open issues. No sync needed this cycle.",
+    "tracks.md: No drift (generic-subtitle-handler_20260702 already in archived list from archive commit 4b14883, line 70).",
+    "learnings: 4 patterns from generic-subtitle-handler were already elevated to patterns.md by the archive commit. No additional patterns needed extraction. No cross-track duplicates to merge.",
+    "FIX (out-of-scope, user-approved): eslint.config.mjs — added 'ImmersiveTransalteExtensionCode/**' to ignores array. Vendored gitignored reference copy of Immersive Translate extension was inflating `pnpm lint` from 3 source errors to 31585 errors. Now `pnpm lint` reports 3 real source errors.",
+    "FIX (out-of-scope, user-approved): tests/unit/subtitleCoordinatorManifest.test.ts:339 — sendMessage mock changed from narrow `(msg: { action: string })` signature (TS2345 vs NormalizedProcedure) to type-safe `(...args: unknown[]) => { const msg = args[0] as {...}; ... }` idiom matching line 669 of the same file.",
+    "FIX (out-of-scope, user-approved): tests/unit/genericHandler.test.ts:88-99 — languageExtractor calls guarded with `expect(extractor).toBeDefined(); if (!extractor) return;` to resolve 4x TS2722 (cannot invoke possibly-undefined). These were pre-existing errors hidden behind the manifest mock error in the prior cycle's tail-truncated tsc output.",
+    "beads DRIFT FIXED (user-approved): closed 28 orphaned OPEN leaf sub-tasks (ALT-ix8.7.1 through ALT-ix8.12.5). Their parent epic ALT-ix8 + 12 phase tasks were already CLOSED by commit 443095e, but the leaf children were left open. bd list now shows only ALT-j1k (P3 decision, intentionally open).",
     "backups: product.md.bak + patterns.md.bak + refresh_state.json.bak created before edits.",
-    "verification: pnpm test --run (1903/1903 passed across 131 files), tsc --noEmit (0 errors), eslint . (14 errors — no-empty in content.ts), wxt build (3.87MB) all run live this cycle."
+    "verification: pnpm test --run (2014/2014 passed across 140 files), tsc --noEmit (0 errors), eslint . (3 errors in project source — down from 31585), wxt build (3.88MB) all run live this cycle. Changed test files re-run individually: subtitleCoordinatorManifest.test.ts + genericHandler.test.ts (60/60 passed)."
   ],
   "codebaseHealth": {
-    "tests": 1903,
-    "testFiles": 131,
-    "buildSize": "~3.87 MB",
-    "lintErrors": 14,
-    "lintErrorsDetail": "14x no-empty in entrypoints/content.ts destroyZombie() — intentional empty catch {} blocks for extension-context-invalidated cleanup (introduced by commit edf23b0, 2026-06-29). Previous 5 errors (no-non-null-assertion ×3, no-dynamic-delete ×2) are resolved.",
+    "tests": 2014,
+    "testFiles": 140,
+    "buildSize": "~3.88 MB",
+    "lintErrors": 3,
+    "lintErrorsDetail": "3 errors in project source: (1) content/subtitleRenderer.ts:19 unused 'NativeTrackRenderer' import; (2) inject/jsonParseSubtitleHook.ts:48 no-non-null-assertion; (3) tests/unit/netflixHandler.test.ts:77 no-non-null-assertion. NOTE: previous cycle's 14 no-empty errors in content.ts destroyZombie() no longer reproduce. The 31585-error inflation from vendored ImmersiveTransalteExtensionCode/ is now excluded via eslint ignores.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean (0 errors). Previous 3 errors in content/__tests__/subtitleCoordinator.test.ts (lines 271, 1280, 1338) are resolved.",
-    "archivedTracks": 57,
+    "tscErrorsDetail": "Clean (0 errors). Fixed this cycle: subtitleCoordinatorManifest.test.ts:339 sendMessage mock type (TS2345) + genericHandler.test.ts:88-99 extractor guard (4x TS2722).",
+    "archivedTracks": 58,
     "activeTracks": 0,
     "failingTests": 0
   },
-  "beadsDrift": "No drift. bd list shows 0 open issues. No sync needed this cycle."
+  "beadsDrift": "Fixed. 28 orphaned OPEN leaf tasks (ALT-ix8.7.1–ALT-ix8.12.5) closed this cycle — their parent epic + 12 phase tasks were already closed by commit 443095e. bd list now shows 1 open issue: ALT-j1k (P3 decision, intentionally open)."
 }

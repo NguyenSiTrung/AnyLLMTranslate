@@ -20,6 +20,8 @@ export default tseslint.config(
       '.output/**',
       'dist/**',
       'coverage/**',
+      // Vendored third-party reference copies (gitignored, minified)
+      'ImmersiveTransalteExtensionCode/**',
     ],
   },
 );

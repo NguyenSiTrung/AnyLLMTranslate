@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-06-30 all (post providers-ux-overhaul archive — health re-verified: 1903/0 failing across 131 files, 57 archived) -->
+<!-- conductor-refresh: 2026-07-02 all (post generic-subtitle-handler archive — health re-verified: 2014/0 failing across 140 files, 58 archived; eslint ignores fixed for vendored ImmersiveTransalteExtensionCode/, tsc clean) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
