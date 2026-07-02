@@ -30,6 +30,49 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
   { platform: 'generic', name: 'Generic (Auto-detect)', methodHint: 'Auto-detect (any site with video)' },
 ] as const;
 
+/** Initial number of platform sites shown before "Load more" appears */
+export const SUBTITLE_SITES_INITIAL_VISIBLE = 10;
+
+/** Number of additional platform sites revealed per "Load more" click */
+export const SUBTITLE_SITES_LOAD_MORE_BATCH = 10;
+
+/** Platform-specific sites only (excludes the generic auto-detect fallback). */
+export function getPlatformSubtitleSites(
+  sites: readonly SubtitleSiteInfo[] = SUPPORTED_SUBTITLE_SITES,
+): SubtitleSiteInfo[] {
+  return sites.filter((site) => site.platform !== 'generic');
+}
+
+export interface SubtitleSitesLoadMoreState {
+  visibleSites: SubtitleSiteInfo[];
+  showLoadMore: boolean;
+  remainingCount: number;
+  nextVisibleCount: number;
+}
+
+/** Resolve which platform sites to render and whether to show "Load more". */
+export function getSubtitleSitesLoadMoreState(
+  sites: readonly SubtitleSiteInfo[],
+  visibleCount: number,
+): SubtitleSitesLoadMoreState {
+  const platformSites = getPlatformSubtitleSites(sites);
+  const needsPagination = platformSites.length > SUBTITLE_SITES_INITIAL_VISIBLE;
+  const clampedVisible = needsPagination
+    ? Math.min(visibleCount, platformSites.length)
+    : platformSites.length;
+  const remainingCount = platformSites.length - clampedVisible;
+
+  return {
+    visibleSites: platformSites.slice(0, clampedVisible),
+    showLoadMore: needsPagination && remainingCount > 0,
+    remainingCount,
+    nextVisibleCount: Math.min(
+      clampedVisible + SUBTITLE_SITES_LOAD_MORE_BATCH,
+      platformSites.length,
+    ),
+  };
+}
+
 /**
  * Check whether a platform is disabled in the user's settings.
  * Returns true when the platform identifier appears in the disabled list.

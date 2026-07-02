@@ -4,8 +4,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { SubtitlesSection } from '../SubtitlesSection';
+import * as subtitleSites from '@/lib/subtitleSites';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SUBTITLE_SETTINGS } from '@/types/config';
 
@@ -287,6 +288,48 @@ describe('SubtitlesSection', () => {
       ]) {
         expect(document.getElementById(id)).toBeInTheDocument();
       }
+    });
+
+    it('does not show Load more when platform count is within the initial visible limit', () => {
+      render(<SubtitlesSection />);
+      expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Load more and reveals additional sites on click', () => {
+      const longPlatformList = Array.from({ length: 12 }, (_, index) => ({
+        platform: `platform-${index}`,
+        name: `Platform ${index}`,
+        methodHint: 'Test interception',
+      }));
+
+      const loadMoreSpy = vi.spyOn(subtitleSites, 'getSubtitleSitesLoadMoreState');
+      loadMoreSpy
+        .mockReturnValueOnce({
+          visibleSites: longPlatformList.slice(0, 10),
+          showLoadMore: true,
+          remainingCount: 2,
+          nextVisibleCount: 12,
+        })
+        .mockReturnValue({
+          visibleSites: longPlatformList,
+          showLoadMore: false,
+          remainingCount: 0,
+          nextVisibleCount: 12,
+        });
+
+      render(<SubtitlesSection />);
+
+      expect(screen.getByText('Platform 0')).toBeInTheDocument();
+      expect(screen.getByText('Platform 9')).toBeInTheDocument();
+      expect(screen.queryByText('Platform 10')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /load more \(2 remaining\)/i }));
+
+      expect(screen.getByText('Platform 10')).toBeInTheDocument();
+      expect(screen.getByText('Platform 11')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
+
+      loadMoreSpy.mockRestore();
     });
 
     it('shows unchecked toggle for a disabled site', () => {

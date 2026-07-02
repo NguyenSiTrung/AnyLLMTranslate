@@ -5,8 +5,12 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Subtitles as SubtitlesIcon, Play, Languages, Globe, RotateCcw } from 'lucide-react';
-import { SUPPORTED_SUBTITLE_SITES } from '@/lib/subtitleSites';
+import { Subtitles as SubtitlesIcon, Play, Languages, Globe, RotateCcw, ChevronDown } from 'lucide-react';
+import {
+  SUPPORTED_SUBTITLE_SITES,
+  SUBTITLE_SITES_INITIAL_VISIBLE,
+  getSubtitleSitesLoadMoreState,
+} from '@/lib/subtitleSites';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -15,6 +19,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
 import { Select } from '@/ui/Select';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
@@ -242,6 +247,13 @@ function ProgressBar() {
 export function SubtitlesSection() {
   const subtitleSettings = useSettingsStore((s) => s.subtitleSettings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const [visibleSiteCount, setVisibleSiteCount] = useState(SUBTITLE_SITES_INITIAL_VISIBLE);
+  const {
+    visibleSites,
+    showLoadMore,
+    remainingCount,
+    nextVisibleCount,
+  } = getSubtitleSitesLoadMoreState(SUPPORTED_SUBTITLE_SITES, visibleSiteCount);
 
   const handleUpdate = (partial: Partial<typeof subtitleSettings>) => {
     updateSettings({
@@ -543,7 +555,7 @@ export function SubtitlesSection() {
           <Card title="Supported Sites" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
             <div className={`${isDisabled ? 'opacity-50 pointer-events-none' : ''} transition-opacity duration-200`}>
               <div className="divide-y divide-zinc-800/50">
-                {SUPPORTED_SUBTITLE_SITES.filter((site) => site.platform !== 'generic').map((site) => {
+                {visibleSites.map((site) => {
                   const disabled = (subtitleSettings.disabledSubtitleSites ?? []).includes(site.platform);
                   return (
                     <div key={site.platform} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
@@ -566,6 +578,21 @@ export function SubtitlesSection() {
                   );
                 })}
               </div>
+
+              {showLoadMore && (
+                <div className="pt-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={<ChevronDown className="w-3.5 h-3.5" />}
+                    onClick={() => setVisibleSiteCount(nextVisibleCount)}
+                    className="w-full justify-center text-zinc-400"
+                  >
+                    Load more ({remainingCount} remaining)
+                  </Button>
+                </div>
+              )}
 
               {/* Generic handler — separate standalone toggle (its own boolean
                   setting, not the per-site disable array). It is the
