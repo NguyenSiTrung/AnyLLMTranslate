@@ -72,7 +72,7 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- [ ] **Generic Subtitle Handler** (`generic-subtitle-handler_20260702`) — Priority: High. Add generic subtitle handler (webvtt/srt/ttml/dom-scraping) that intercepts and translates subtitles on any website with a video element, without requiring a dedicated platform-specific handler class. Mirrors Immersive Translate's webvtt/subsrt/ebutt/general handler types.
+- [x] **Generic Subtitle Handler** (`generic-subtitle-handler_20260702`) — Priority: High. Add generic subtitle handler (webvtt/srt/ttml/dom-scraping) that intercepts and translates subtitles on any website with a video element, without requiring a dedicated platform-specific handler class. Mirrors Immersive Translate's webvtt/subsrt/ebutt/general handler types.
   *Link: [./conductor/tracks/generic-subtitle-handler_20260702/](./conductor/tracks/generic-subtitle-handler_20260702/)*
 
 ---
