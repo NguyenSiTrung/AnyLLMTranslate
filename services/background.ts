@@ -799,6 +799,11 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)delivery\.mp\.microsoft\.com$/,
   /(?:^|\.)media\.max\.com$/,
   /(?:^|\.)prd\.media\.max\.com$/,
+  /(?:^|\.)youku\.com$/,
+  /(?:^|\.)youku\.tv$/,
+  /(?:^|\.)ykimg\.com$/,
+  /(?:^|\.)iflix\.com$/,
+  /(?:^|\.)wetv\.vip$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {

@@ -43,6 +43,11 @@ describe('resolveProfile', () => {
     expect(resolveProfile('youku.com')).toBe('cinematic');
   });
 
+  it('returns cinematic for wetv.vip and iflix.com', () => {
+    expect(resolveProfile('wetv.vip')).toBe('cinematic');
+    expect(resolveProfile('www.iflix.com')).toBe('cinematic');
+  });
+
   it('resolves youku.tv subdomains to cinematic', () => {
     expect(resolveProfile('www.youku.tv')).toBe('cinematic');
   });

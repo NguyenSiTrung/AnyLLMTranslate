@@ -49,6 +49,8 @@ function setupContextMenus(): void {
         '*://*.hbomax.com/*',
         '*://*.youku.tv/*',
         '*://*.youku.com/*',
+        '*://*.iflix.com/*',
+        '*://*.wetv.vip/*',
       ],
     });
 

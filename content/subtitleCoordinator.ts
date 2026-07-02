@@ -398,6 +398,20 @@ function restoreNativeCaptions(): void {
   }
 }
 
+/** Apply native caption hide from DomCueSource or handler.getNativeCaptionHide() (WeTV). */
+function applyNativeCaptionHideForHandler(handler: ReturnType<typeof getHandlerByPlatform>): void {
+  if (!handler) return;
+  const domSource = handler.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
+    return;
+  }
+  const hide = handler.getNativeCaptionHide?.();
+  if (hide) {
+    hideNativeCaptions(hide.selector, hide.method ?? 'display');
+  }
+}
+
 /**
  * Build resolved page context for subtitle translation.
  * Extracts metadata, applies site rules and tab overrides.
@@ -509,7 +523,8 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     if (!state.isOverlayMode) {
       console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
       state.isOverlayMode = true;
-      
+      applyNativeCaptionHideForHandler(handler);
+
       const savedPrefs = await initializeControls();
       const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
@@ -622,10 +637,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   console.log('AnyLLMTranslate: Activating overlay from manifest track URL');
 
   const handler = detectCurrentHandler();
-  const domSource = handler?.getDomCueSource?.();
-  if (domSource) {
-    hideNativeCaptions(domSource.captionWindowSelector, domSource.captionHideMethod ?? 'display');
-  }
+  applyNativeCaptionHideForHandler(handler);
 
   // FR-5: Translate cues before handing to overlay
   let cuesToDisplay = cues;

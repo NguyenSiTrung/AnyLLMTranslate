@@ -251,4 +251,4 @@ export interface DomCueSource {
 }
 
 /** Supported subtitle formats */
-export type SubtitleFormat = 'vtt' | 'srt' | 'ttml';
+export type SubtitleFormat = 'vtt' | 'srt' | 'ttml' | 'ass';

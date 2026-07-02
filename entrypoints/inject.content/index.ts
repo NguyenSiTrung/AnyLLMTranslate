@@ -21,6 +21,7 @@ import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import { NetflixHandler } from '@/inject/subtitleHandlers/netflix';
 import { DisneyPlusHandler } from '@/inject/subtitleHandlers/disneyplus';
+import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
 import { installJsonParseSubtitleHook } from '@/inject/jsonParseSubtitleHook';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
@@ -45,6 +46,7 @@ export default defineContentScript({
        new YoukuHandler(),
        new NetflixHandler(),
        new DisneyPlusHandler(),
+       new WetvHandler(),
      ]);
 
     const registry = new InterceptorRegistry();

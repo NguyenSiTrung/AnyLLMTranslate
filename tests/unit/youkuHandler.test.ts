@@ -68,14 +68,21 @@ describe('YoukuHandler', () => {
   });
 
   describe('getPatterns', () => {
-    it('returns empty array (no URL interception — DOM cue scraping only)', () => {
-      expect(handler.getPatterns()).toEqual([]);
+    it('matches .ass URLs (Immersive Translate fetch hook)', () => {
+      const patterns = handler.getPatterns();
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.ass')).toBe(true);
+      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.vtt')).toBe(false);
     });
   });
 
   describe('transformResponse', () => {
-    it('returns empty array (never called for a DOM cue source)', () => {
-      expect(handler.transformResponse('anything', 'text/vtt', 'https://v.youku.com/x')).toEqual([]);
+    it('parses ASS dialogue lines', () => {
+      const ass = `[Events]
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
+      const cues = handler.transformResponse(ass, 'text/plain', 'https://x/a.ass');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Hello');
     });
   });
 

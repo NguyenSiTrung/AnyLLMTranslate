@@ -54,6 +54,8 @@ export const DOMAIN_PROFILE_MAP: Record<string, SubtitleProfile> = {
   'hbomax.com': 'cinematic',
   'youku.tv': 'cinematic',
   'youku.com': 'cinematic',
+  'iflix.com': 'cinematic',
+  'wetv.vip': 'cinematic',
 };
 
 /**

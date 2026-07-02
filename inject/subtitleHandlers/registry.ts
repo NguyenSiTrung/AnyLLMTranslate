@@ -39,6 +39,9 @@ export interface SubtitleHandler {
 
   /** Extract tracks from a value already parsed via JSON.parse (Netflix, Disney+). */
   extractTracksFromParsedJson?(value: unknown): AvailableSubtitleTrack[];
+
+  /** Hide native captions on XHR/fetch intercept path (no DomCueSource). Immersive WeTV: `.text-track`. */
+  getNativeCaptionHide?(): { selector: string; method?: 'display' | 'visibility' };
 }
 
 /** Handler registry — auto-detects platform by hostname and routes to the right handler */

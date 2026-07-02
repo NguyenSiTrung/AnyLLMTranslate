@@ -6,6 +6,7 @@
 
 import type { SubtitleCue, SubtitleFormat } from '@/types/subtitle';
 import { parseTTML } from '@/lib/ttmlParser';
+import { parseASS } from '@/lib/assParser';
 
 /**
  * Parse a WebVTT string into an array of SubtitleCue objects.
@@ -210,6 +211,9 @@ export function parseSubtitles(content: string): SubtitleCue[] {
   if (format === 'ttml') {
     return parseTTML(content);
   }
+  if (format === 'ass') {
+    return parseASS(content);
+  }
   return [];
 }
 
@@ -245,6 +249,10 @@ export function detectFormat(content: string): SubtitleFormat | null {
 
   if (/\d{2}:\d{2}:\d{2}\.\d{3}\s*-->/.test(stripped)) {
     return 'vtt';
+  }
+
+  if (/^\[Script Info\]/im.test(stripped) || /^Dialogue:/im.test(stripped)) {
+    return 'ass';
   }
 
   return null;

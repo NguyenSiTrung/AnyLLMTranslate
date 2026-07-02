@@ -37,6 +37,7 @@ import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
+import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -597,6 +598,7 @@ export default defineContentScript({
       new LinkedInHandler(),
       new HboMaxHandler(),
       new YoukuHandler(),
+      new WetvHandler(),
     ]);
 
     setupMessageListener();

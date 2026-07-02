@@ -5,6 +5,7 @@ import type {
   DomCueSource,
 } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
+import { parseASS } from '@/lib/assParser';
 
 /**
  * Youku internal subtitle codes (as seen in the language picker `data-val`)
@@ -69,12 +70,27 @@ export class YoukuHandler implements SubtitleHandler {
   }
 
   getPatterns(): SubtitleUrlPattern[] {
-    // No URL interception in Phase 1 — captions are scraped from the DOM.
-    return [];
+    // Immersive Translate: fetch hook on Youku ASS subtitle URLs (\.ass$).
+    return [
+      {
+        platform: 'youku',
+        pattern: /\.ass(?:\?|$)/i,
+        languageExtractor: (url) => {
+          const lang =
+            url.searchParams.get('lang') ||
+            url.searchParams.get('language') ||
+            '';
+          if (lang) return youkuCodeToLanguage(lang);
+          const file = url.pathname.split('/').pop() || '';
+          const m = file.match(/[_-]([a-z]{2,3}|default|chs|cht)(?:\.ass)?$/i);
+          return m ? youkuCodeToLanguage(m[1]) : '';
+        },
+      },
+    ];
   }
 
-  transformResponse(_body: string, _contentType: string, _url: string): SubtitleCue[] {
-    return [];
+  transformResponse(body: string, _contentType: string, _url: string): SubtitleCue[] {
+    return parseASS(body);
   }
 
   extractAvailableTracks(

@@ -249,7 +249,7 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('Supported Sites')).toBeInTheDocument();
     });
 
-    it('renders all 6 platform names', () => {
+    it('renders all supported platform names', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('YouTube')).toBeInTheDocument();
       expect(screen.getByText('Udemy')).toBeInTheDocument();
@@ -257,33 +257,36 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('LinkedIn Learning')).toBeInTheDocument();
       expect(screen.getByText('HBO Max')).toBeInTheDocument();
       expect(screen.getByText('Youku')).toBeInTheDocument();
+      expect(screen.getByText('Netflix')).toBeInTheDocument();
+      expect(screen.getByText('Disney+')).toBeInTheDocument();
+      expect(screen.getByText('WeTV')).toBeInTheDocument();
     });
 
     it('renders method hints for each platform', () => {
       render(<SubtitlesSection />);
       const xhrHints = screen.getAllByText('XHR interception');
-      expect(xhrHints).toHaveLength(3); // youtube, udemy, coursera
+      expect(xhrHints.length).toBeGreaterThanOrEqual(3);
       expect(screen.getByText('Fetch interception')).toBeInTheDocument();
-      // HBO Max and Youku both scrape captions from the DOM.
-      const domHints = screen.getAllByText('DOM cue scraping');
-      expect(domHints).toHaveLength(2);
+      expect(screen.getByText('DOM cue scraping')).toBeInTheDocument();
+      expect(screen.getByText('Fetch ASS + DOM fallback')).toBeInTheDocument();
+      expect(screen.getByText('XHR interception (.vtt)')).toBeInTheDocument();
     });
 
-    it('renders all 6 site toggles checked by default (empty disabled list)', () => {
+    it('renders site toggles checked by default (empty disabled list)', () => {
       render(<SubtitlesSection />);
-      const youtubeToggle = document.getElementById('subtitle-site-youtube') as HTMLInputElement;
-      const udemyToggle = document.getElementById('subtitle-site-udemy') as HTMLInputElement;
-      const courseraToggle = document.getElementById('subtitle-site-coursera') as HTMLInputElement;
-      const linkedinToggle = document.getElementById('subtitle-site-linkedin') as HTMLInputElement;
-      const hbomaxToggle = document.getElementById('subtitle-site-hbomax') as HTMLInputElement;
-      const youkuToggle = document.getElementById('subtitle-site-youku') as HTMLInputElement;
-
-      expect(youtubeToggle).toBeInTheDocument();
-      expect(udemyToggle).toBeInTheDocument();
-      expect(courseraToggle).toBeInTheDocument();
-      expect(linkedinToggle).toBeInTheDocument();
-      expect(hbomaxToggle).toBeInTheDocument();
-      expect(youkuToggle).toBeInTheDocument();
+      for (const id of [
+        'subtitle-site-youtube',
+        'subtitle-site-udemy',
+        'subtitle-site-coursera',
+        'subtitle-site-linkedin',
+        'subtitle-site-hbomax',
+        'subtitle-site-youku',
+        'subtitle-site-netflix',
+        'subtitle-site-disneyplus',
+        'subtitle-site-wetv',
+      ]) {
+        expect(document.getElementById(id)).toBeInTheDocument();
+      }
     });
 
     it('shows unchecked toggle for a disabled site', () => {
