@@ -21,7 +21,8 @@ import {
   onMpdProcessing,
 } from '@/content/messageBridge';
 import { sendMessage } from '@/inject/messageBridge';
-import { initializeOverlay, updateCues, cleanup as cleanupOverlay, getOverlayTextContainer } from '@/content/subtitleOverlay';
+import { getOverlayTextContainer } from '@/content/subtitleOverlay';
+import { createRenderer, type SubtitleRenderer } from '@/content/subtitleRenderer';
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { clearTranslatedSections } from '@/content/sectionTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
@@ -224,6 +225,8 @@ interface CoordinatorState {
   activeSubtitleSessionId: number | null;
   /** Active subtitle source tier — first full-track source to resolve wins (precedence: manifest > texttrack > mse > dom) */
   activeSource: 'manifest' | 'texttrack' | 'mse' | 'dom' | null;
+  /** Active subtitle renderer (native TextTrack or overlay fallback). Null until first init. */
+  activeRenderer: SubtitleRenderer | null;
   /** Injected <style> hiding the platform's native caption window (null when inactive) */
   captionHideStyle: HTMLStyleElement | null;
   /** DOM-platform: rolling original (source-language) cues from the scraper */
@@ -276,6 +279,7 @@ const state: CoordinatorState = {
   subtitleKnobOverride: undefined,
   activeSubtitleSessionId: null,
   activeSource: null,
+  activeRenderer: null,
   captionHideStyle: null,
   domOriginalCues: [],
   domTranslatedCues: [],
@@ -318,6 +322,25 @@ function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | 
   return fontFamilyMap[fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
 }
 
+/**
+ * Lazily create the active renderer (native TextTrack if supported, else the
+ * custom overlay fallback) bound to the page's primary <video>. The same
+ * instance is reused across updateCues calls until destroyRenderer().
+ */
+function ensureRenderer(): SubtitleRenderer {
+  if (!state.activeRenderer) {
+    const video = document.querySelector('video');
+    state.activeRenderer = createRenderer(video as HTMLVideoElement);
+  }
+  return state.activeRenderer;
+}
+
+/** Tear down the active renderer (clears cues, disables tracks / overlay). */
+function destroyRenderer(): void {
+  state.activeRenderer?.destroy();
+  state.activeRenderer = null;
+}
+
 function buildSubtitleOverlayConfig(
   subtitleSettings: SubtitleSettings,
   savedPrefs?: Partial<OverlayConfig>,
@@ -340,7 +363,7 @@ function cleanupActiveOverlay(): void {
     state.dragCleanup = null;
   }
   if (state.isOverlayMode) {
-    cleanupOverlay();
+    destroyRenderer();
     state.isOverlayMode = false;
   }
   state.activeSource = null;
@@ -491,7 +514,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
       // Initialize with original cues so they show immediately
-      initializeOverlay(cues, overlayConfig);
+      await ensureRenderer().initialize(cues, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
       // Attach drag-to-reposition on the subtitle text container
       const textContainer = getOverlayTextContainer();
@@ -500,7 +523,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       }
     } else {
       // If already in overlay mode, just update cues
-      updateCues(cues);
+      state.activeRenderer?.updateCues(cues);
     }
 
     // Task 6.4: Don't blank native subtitles until translation succeeds.
@@ -642,7 +665,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
-  initializeOverlay(cuesToDisplay, overlayConfig);
+  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
   // Attach drag-to-reposition on the subtitle text container
   const textContainer = getOverlayTextContainer();
@@ -738,7 +761,7 @@ async function translateDomCueTexts(
       state.domTranslationMap.set(c.originalText ?? c.text, c.text);
     });
     rebuildTranslatedCues();
-    updateCues(state.domTranslatedCues);
+    state.activeRenderer?.updateCues(state.domTranslatedCues);
   } catch (error) {
     console.warn('AnyLLMTranslate: DOM cue delta translation error', error);
   }
@@ -847,7 +870,7 @@ async function translateManifestCueTexts(
       state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
     });
     rebuildManifestTranslatedCues();
-    updateCues(state.manifestTranslatedCues);
+    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
   } catch (error) {
     console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
   }
@@ -955,7 +978,7 @@ function handleVideoSeeked(event?: Event): void {
 
     // Clear the overlay so stale cues from the old position don't show during
     // the brief window before the new position's segment arrives.
-    updateCues([]);
+    state.activeRenderer?.updateCues([]);
   }, SEEK_RESET_DEBOUNCE_MS);
 }
 
@@ -995,7 +1018,7 @@ async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): 
   clearDomTranslationBuffers();
   clearManifestTranslationBuffers();
   if (state.isOverlayMode) {
-    updateCues([]);
+    state.activeRenderer?.updateCues([]);
   }
   scheduleDomTrackDiscovery();
 }
@@ -1058,7 +1081,7 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  initializeOverlay(cuesToDisplay, overlayConfig);
+  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
@@ -1144,7 +1167,7 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   // Always rebuild + push to overlay even when no new texts — cue timing
   // changes (endTime corrections on previous cues) must reach findActiveCue().
   rebuildTranslatedCues();
-  updateCues(state.domTranslatedCues);
+  state.activeRenderer?.updateCues(state.domTranslatedCues);
 
   if (newTexts.length === 0) return;
 
@@ -1226,7 +1249,7 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
   // Initialize overlay with bilingual cues (source until translated).
-  initializeOverlay(state.domTranslatedCues, overlayConfig);
+  await ensureRenderer().initialize(state.domTranslatedCues, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
@@ -1304,7 +1327,7 @@ async function activateOverlayFromManifestCues(
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  initializeOverlay(state.manifestTranslatedCues, overlayConfig);
+  await ensureRenderer().initialize(state.manifestTranslatedCues, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
@@ -1418,7 +1441,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
       // Always rebuild + push, even when no new texts — timing corrections on
       // prior cues must reach findActiveCue().
       rebuildManifestTranslatedCues();
-      updateCues(state.manifestTranslatedCues);
+      state.activeRenderer?.updateCues(state.manifestTranslatedCues);
       state.playbackAnchorTime = null;
       if (newTexts.length === 0) return;
 
@@ -1444,7 +1467,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     // Re-seed the rolling buffer without tearing down the overlay shell.
     const newTexts = mergeManifestOriginalCues(payload.cues);
     rebuildManifestTranslatedCues();
-    updateCues(state.manifestTranslatedCues);
+    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
     state.playbackAnchorTime = null;
     if (newTexts.length === 0) return;
 
@@ -1531,7 +1554,7 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  initializeOverlay(cuesToDisplay, overlayConfig);
+  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
 
   const textContainer = getOverlayTextContainer();
   if (textContainer) {
@@ -1602,7 +1625,7 @@ export function updateTranslatedCues(cues: SubtitleCue[]): void {
     return;
   }
   state.translatedCues = cues;
-  updateCues(cues);
+  state.activeRenderer?.updateCues(cues);
 }
 
 /**
@@ -1632,7 +1655,7 @@ function mergeTranslatedChunk(chunkStart: number, chunkCues: SubtitleCue[]): voi
   // progressive chunk — the helper filters sparse slots and is idempotent.
   const adapted = adaptCueTimings(currentCues);
   state.translatedCues = adapted;
-  updateCues(adapted);
+  state.activeRenderer?.updateCues(adapted);
 }
 
 /**
@@ -1847,7 +1870,7 @@ export function startCoordinator(): () => void {
             state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
           }
           rebuildManifestTranslatedCues();
-          updateCues(state.manifestTranslatedCues);
+          state.activeRenderer?.updateCues(state.manifestTranslatedCues);
         } else {
           mergeTranslatedChunk(msg.chunkStart, msg.chunkCues);
         }
@@ -1858,7 +1881,7 @@ export function startCoordinator(): () => void {
             state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
           }
           rebuildManifestTranslatedCues();
-          updateCues(state.manifestTranslatedCues);
+          state.activeRenderer?.updateCues(state.manifestTranslatedCues);
         } else {
           updateTranslatedCues(msg.cues);
         }
@@ -1936,7 +1959,7 @@ export function startCoordinator(): () => void {
       state.dragCleanup = null;
     }
     if (state.isOverlayMode) {
-      cleanupOverlay();
+      destroyRenderer();
     }
     restoreNativeCaptions();
   };
@@ -1962,7 +1985,7 @@ export function isInOverlayMode(): boolean {
 export function resetCoordinatorState(): void {
   // Clean up active overlay before resetting the flag
   if (state.isOverlayMode) {
-    cleanupOverlay();
+    destroyRenderer();
   }
   state.isOverlayMode = false;
   state.availableTracks = [];
