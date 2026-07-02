@@ -283,4 +283,86 @@ describe('FetchInterceptor', () => {
       expect(() => window.fetch('https://cdna.udemycdn.com/subs/course.vtt')).not.toThrow();
     });
   });
+
+  describe('Content-Type secondary detection (Phase 2)', () => {
+    // Use a registry with NO URL patterns but a content-type pattern, so the
+    // generic content-type path is the only way to detect the subtitle.
+    let ctRegistry: InstanceType<typeof InterceptorRegistry>;
+    let ctInterceptor: InstanceType<typeof FetchInterceptor>;
+
+    beforeEach(() => {
+      ctRegistry = new InterceptorRegistry();
+      ctRegistry.registerContentTypePatterns([
+        { platform: 'generic', contentTypes: ['text/vtt', 'application/x-subtitle'] },
+      ]);
+      ctInterceptor = new FetchInterceptor(ctRegistry, bridge);
+      mockFetch.mockReset();
+    });
+
+    afterEach(() => {
+      ctInterceptor.disable();
+    });
+
+    it('intercepts a subtitle response whose URL did not match but Content-Type did', async () => {
+      // Extensionless URL — no URL pattern would catch it.
+      const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi';
+      const okResponse = new Response(vtt, {
+        status: 200,
+        headers: { 'Content-Type': 'text/vtt; charset=utf-8' },
+      });
+      mockFetch.mockResolvedValue(okResponse);
+
+      ctInterceptor.enable();
+      const fetchPromise = window.fetch('https://cdn.example.com/stream/subtitles-track');
+
+      // The content-type path should fire SUBTITLE_INTERCEPTED with the generic platform.
+      await vi.waitFor(() => {
+        expect(bridge.send).toHaveBeenCalledWith(
+          'SUBTITLE_INTERCEPTED',
+          expect.objectContaining({ platform: 'generic' }),
+        );
+      });
+      // fetchPromise is still pending (waiting for translation) — let it settle.
+      fetchPromise.catch(() => {});
+    });
+
+    it('passes through when neither URL nor Content-Type match', async () => {
+      const json = '{"tracks":[]}';
+      const okResponse = new Response(json, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      mockFetch.mockResolvedValue(okResponse);
+
+      ctInterceptor.enable();
+      const result = await window.fetch('https://api.example.com/metadata');
+
+      expect(result.status).toBe(200);
+      expect(bridge.send).not.toHaveBeenCalled();
+    });
+
+    it('URL pattern matching takes precedence over Content-Type', async () => {
+      // Register BOTH a URL pattern (youtube) and a content-type pattern (generic).
+      ctRegistry.registerPattern({ platform: 'youtube', pattern: /\/api\/timedtext/ });
+      ctRegistry.registerContentTypePatterns([
+        { platform: 'generic', contentTypes: ['text/vtt'] },
+      ]);
+
+      const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi';
+      mockFetch.mockResolvedValue(
+        new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+      );
+
+      ctInterceptor.enable();
+      const fetchPromise = window.fetch('https://youtube.com/api/timedtext?lang=en');
+
+      await vi.waitFor(() => {
+        expect(bridge.send).toHaveBeenCalledWith(
+          'SUBTITLE_INTERCEPTED',
+          expect.objectContaining({ platform: 'youtube' }),
+        );
+      });
+      fetchPromise.catch(() => {});
+    });
+  });
 });

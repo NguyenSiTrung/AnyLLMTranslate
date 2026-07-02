@@ -169,6 +169,21 @@ export interface SubtitleUrlPattern {
   languageExtractor?: (url: URL) => string;
 }
 
+/**
+ * Content-Type based subtitle pattern — secondary detection signal used when
+ * URL pattern matching misses. A handler declares the Content-Type header
+ * values (lowercased, no `;` params) that identify its subtitle payloads
+ * (e.g. `text/vtt`, `application/x-subtitle`, `application/ttml+xml`).
+ *
+ * The registry compares the response Content-Type (params trimmed) against the
+ * declared set; URL patterns always take precedence.
+ */
+export interface SubtitleContentTypePattern {
+  platform: string;
+  /** Lowercased Content-Type values (no `;` params), e.g. `['text/vtt']`. */
+  contentTypes: string[];
+}
+
 /** Manifest-sourced subtitle track (from HLS/DASH manifest parsing) */
 export interface ManifestSubtitleTrack {
   /** Subtitle playlist URL (e.g. .m3u8 media playlist or direct .vtt from DASH) */

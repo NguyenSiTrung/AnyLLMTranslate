@@ -5,7 +5,7 @@
  * The interceptors (XHR/Fetch) use this to determine if a request should be intercepted.
  */
 
-import type { SubtitleUrlPattern } from '@/types/subtitle';
+import type { SubtitleUrlPattern, SubtitleContentTypePattern } from '@/types/subtitle';
 
 export interface UrlMatch {
   platform: string;
@@ -13,10 +13,23 @@ export interface UrlMatch {
   pattern: RegExp;
 }
 
+/** Match result for content-type based detection (secondary signal). */
+export interface ContentTypeMatch {
+  platform: string;
+  /** The matched Content-Type value (lowercased, params trimmed). */
+  contentType: string;
+}
+
 export class InterceptorRegistry {
   private patterns: SubtitleUrlPattern[] = [];
   private metadataPatterns: SubtitleUrlPattern[] = [];
   private manifestPatterns: SubtitleUrlPattern[] = [];
+  /**
+   * Content-Type → platform map for secondary subtitle detection. Populated
+   * from handlers' getContentTypePatterns(). URL patterns take precedence.
+   * Keys are lowercased Content-Type values with `;` params trimmed.
+   */
+  private contentTypeMap: Map<string, string> = new Map();
 
   constructor(
     private messageSender?: { send: (type: string, payload: unknown) => string },
@@ -50,6 +63,23 @@ export class InterceptorRegistry {
   /** Register multiple manifest patterns at once */
   registerManifestPatterns(patterns: SubtitleUrlPattern[]): void {
     this.manifestPatterns.push(...patterns);
+  }
+
+  /**
+   * Register Content-Type patterns for secondary subtitle detection. The first
+   * platform to claim a Content-Type wins (later duplicates are ignored) to
+   * keep the match deterministic. Values are normalized to lowercase + trimmed
+   * of `;` params at match time, so callers should declare them the same way.
+   */
+  registerContentTypePatterns(patterns: SubtitleContentTypePattern[]): void {
+    for (const entry of patterns) {
+      for (const ct of entry.contentTypes) {
+        const key = normalizeContentType(ct);
+        if (key && !this.contentTypeMap.has(key)) {
+          this.contentTypeMap.set(key, entry.platform);
+        }
+      }
+    }
   }
 
   /** Match a URL against all registered subtitle patterns */
@@ -101,6 +131,20 @@ export class InterceptorRegistry {
     return null;
   }
 
+  /**
+   * Match a response Content-Type against the registered content-type patterns.
+   * Secondary signal — URL pattern matching (matchUrl) must be tried FIRST and
+   * takes precedence. Returns the owning platform + the normalized content-type,
+   * or null when no pattern matches.
+   */
+  matchContentType(contentType: string): ContentTypeMatch | null {
+    const key = normalizeContentType(contentType);
+    if (!key) return null;
+    const platform = this.contentTypeMap.get(key);
+    if (!platform) return null;
+    return { platform, contentType: key };
+  }
+
   /** Check if a URL looks like a manifest based on content-type or URL extension */
   isManifestUrl(url: string, contentType?: string): boolean {
     // Check by content-type
@@ -137,10 +181,32 @@ export class InterceptorRegistry {
     return [...this.manifestPatterns];
   }
 
+  /** Get the registered Content-Type → platform map (for inspection/testing). */
+  getContentTypePatterns(): SubtitleContentTypePattern[] {
+    const grouped = new Map<string, string[]>();
+    for (const [ct, platform] of this.contentTypeMap) {
+      const arr = grouped.get(platform) ?? [];
+      arr.push(ct);
+      grouped.set(platform, arr);
+    }
+    return [...grouped.entries()].map(([platform, contentTypes]) => ({ platform, contentTypes }));
+  }
+
   /** Clear all patterns */
   clearPatterns(): void {
     this.patterns = [];
     this.metadataPatterns = [];
     this.manifestPatterns = [];
+    this.contentTypeMap.clear();
   }
+}
+
+/**
+ * Normalize a Content-Type header value for comparison: lowercase + trim the
+ * `;` parameters (e.g. `text/vtt; charset=utf-8` → `text/vtt`). Returns the
+ * empty string for falsy input so callers can treat it as "no match".
+ */
+function normalizeContentType(contentType: string): string {
+  if (!contentType) return '';
+  return contentType.toLowerCase().split(';')[0].trim();
 }

@@ -12,7 +12,7 @@ import { createBridgeSender } from '@/inject/messageBridge';
 import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
 import { MseInterceptor } from '@/inject/mseInterceptor';
-import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost, getManifestPatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
+import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost, getManifestPatternsForCurrentHost, getContentTypePatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
@@ -22,6 +22,7 @@ import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import { NetflixHandler } from '@/inject/subtitleHandlers/netflix';
 import { DisneyPlusHandler } from '@/inject/subtitleHandlers/disneyplus';
 import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
+import { GenericSubtitleHandler } from '@/inject/subtitleHandlers/generic';
 import { installJsonParseSubtitleHook } from '@/inject/jsonParseSubtitleHook';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
@@ -47,6 +48,7 @@ export default defineContentScript({
        new NetflixHandler(),
        new DisneyPlusHandler(),
        new WetvHandler(),
+       new GenericSubtitleHandler(), // LAST — lowest-priority fallback (specific handlers win)
      ]);
 
     const registry = new InterceptorRegistry();
@@ -66,6 +68,12 @@ export default defineContentScript({
 
     // Register manifest patterns (read-only, non-blocking manifest detection)
     registry.registerManifestPatterns(getManifestPatternsForCurrentHost());
+
+    // Register Content-Type patterns (secondary subtitle detection; the
+    // generic handler declares text/vtt, x-subtitle, ttml+xml so subtitle
+    // responses on otherwise-extensionless URLs are still caught). URL
+    // patterns take precedence — content-type is consulted only on URL miss.
+    registry.registerContentTypePatterns(getContentTypePatternsForCurrentHost());
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
     const fetchInterceptor = new FetchInterceptor(registry, bridge);

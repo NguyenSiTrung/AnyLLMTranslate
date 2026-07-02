@@ -90,6 +90,7 @@ describe('config types', () => {
         preferredSubtitleLanguage: 'en',
         autoActivateSubtitles: false,
         disabledSubtitleSites: [],
+        enableGenericSubtitleHandler: true,
       };
       expect(settings.fontSize).toBe(18);
       expect(settings.backgroundOpacity).toBe(0.5);

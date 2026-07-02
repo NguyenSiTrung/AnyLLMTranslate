@@ -3,7 +3,7 @@
  * Platform handlers implement this interface and register via the registry.
  */
 
-import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack, DomCueSource } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleUrlPattern, SubtitleContentTypePattern, AvailableSubtitleTrack, DomCueSource } from '@/types/subtitle';
 
 /** Abstract interface that all platform handlers must implement */
 export interface SubtitleHandler {
@@ -21,6 +21,10 @@ export interface SubtitleHandler {
 
   /** Get URL patterns for metadata API responses that list available tracks (optional) */
   getMetadataPatterns?(): SubtitleUrlPattern[];
+
+  /** Get Content-Type patterns for secondary subtitle detection (optional).
+   *  Consulted only when URL pattern matching misses. (Generic handler.) */
+  getContentTypePatterns?(): string[];
 
   /** Extract available subtitle tracks from a metadata API response (optional) */
   extractAvailableTracks?(body: string, contentType: string, url: string): AvailableSubtitleTrack[];
@@ -102,6 +106,24 @@ export function getMetadataPatternsForCurrentHost(): SubtitleUrlPattern[] {
     }
   }
   return patterns;
+}
+
+/**
+ * Collect Content-Type patterns from handlers that detect the current host.
+ * Returns the merged set grouped by platform so the registry can register
+ * them. Used by the MAIN-world entrypoint after URL/metadata/manifest patterns.
+ */
+export function getContentTypePatternsForCurrentHost(): SubtitleContentTypePattern[] {
+  const out: SubtitleContentTypePattern[] = [];
+  for (const handler of handlers) {
+    if (handler.detect() && handler.getContentTypePatterns) {
+      const contentTypes = handler.getContentTypePatterns();
+      if (contentTypes.length > 0) {
+        out.push({ platform: handler.platform, contentTypes });
+      }
+    }
+  }
+  return out;
 }
 
 /** Get all manifest URL patterns from handlers that match the current hostname */

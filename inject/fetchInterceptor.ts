@@ -52,6 +52,70 @@ export class FetchInterceptor {
     const patchedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
       const urlString = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
+      /**
+       * Shared subtitle interception: send the body over the bridge for
+       * translation, then return a Response holding the translated VTT (or the
+       * original on timeout). Used by both the URL-pattern path and the
+       * Content-Type secondary-detection path.
+       */
+      const interceptSubtitle = async (
+        response: Response,
+        body: string,
+        contentType: string,
+        platform: string,
+        originalLanguage: string,
+      ): Promise<Response> => {
+        const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
+          url: urlString,
+          contentType,
+          body,
+          platform,
+          originalLanguage,
+        } as SubtitleInterceptedPayload);
+
+        console.log('AnyLLMTranslate: Fetch interceptor intercepted subtitle', {
+          url: urlString,
+          platform,
+          extractedLanguage: originalLanguage,
+        });
+
+        return new Promise((resolve) => {
+          const expectedOrigin = window.location.origin;
+
+          const timeout = setTimeout(() => {
+            window.removeEventListener('message', translatedHandler);
+            self.pendingHandlers.delete(translatedHandler);
+            self.pendingTimeouts.delete(timeout);
+            // Translation timed out — return original response
+            resolve(response);
+          }, self.translationTimeoutMs);
+          self.pendingTimeouts.add(timeout);
+
+          const translatedHandler = (event: MessageEvent) => {
+            if (event.origin !== expectedOrigin) return;
+            if (event.data?.channel !== 'anyllm-translate') return;
+            if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
+            if (event.data?.requestId !== requestId) return;
+
+            clearTimeout(timeout);
+            self.pendingTimeouts.delete(timeout);
+            window.removeEventListener('message', translatedHandler);
+            self.pendingHandlers.delete(translatedHandler);
+
+            // Create a new Response with the translated content
+            const translatedResponse = new Response(event.data.payload.vttContent, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            });
+            resolve(translatedResponse);
+          };
+
+          self.pendingHandlers.add(translatedHandler);
+          window.addEventListener('message', translatedHandler);
+        });
+      };
+
       // Check for metadata match first (non-blocking, read-only)
       const metadataMatch = registry.matchMetadataUrl(urlString);
       if (metadataMatch) {
@@ -106,11 +170,37 @@ export class FetchInterceptor {
       const match = registry.matchUrl(urlString);
 
       if (!match) {
-        const response = await originalFetch(input, init);
-        return response;
+        // Secondary signal: URL didn't match, but the response Content-Type
+        // may identify a subtitle (text/vtt, application/x-subtitle, …). The
+        // generic handler registers these. Fetch is already async, so blocking
+        // here to read the header + body is natural (unlike XHR, which captures
+        // handlers in open() before the Content-Type is known).
+        const probeResponse = await originalFetch(input, init);
+        if (probeResponse.ok) {
+          const ctMatch = registry.matchContentType(probeResponse.headers.get('Content-Type') || '');
+          if (ctMatch) {
+            const ctClone = probeResponse.clone();
+            let ctText: string;
+            try {
+              ctText = await ctClone.text();
+            } catch {
+              return probeResponse; // body unreadable — pass through original
+            }
+            // Reuse the subtitle interception path below with a synthesized
+            // match. Content-type-derived matches carry no language signal.
+            return interceptSubtitle(
+              probeResponse,
+              ctText,
+              probeResponse.headers.get('Content-Type') || '',
+              ctMatch.platform,
+              '',
+            );
+          }
+        }
+        return probeResponse;
       }
 
-      // This is a subtitle request
+      // This is a subtitle request (URL-pattern match)
       const response = await originalFetch(input, init);
       if (!response.ok) return response;
       const responseClone = response.clone();
@@ -129,56 +219,13 @@ export class FetchInterceptor {
         return response;
       }
 
-      const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
-        url: urlString,
-        contentType: response.headers.get('Content-Type') || '',
-        body: responseText,
-        platform: match.platform,
-        originalLanguage: match.language || '',
-      } as SubtitleInterceptedPayload);
-
-      console.log('AnyLLMTranslate: Fetch interceptor intercepted subtitle', {
-        url: urlString,
-        platform: match.platform,
-        extractedLanguage: match.language,
-      });
-
-      // Wait for translated response and return it
-      return new Promise((resolve) => {
-        const expectedOrigin = window.location.origin;
-
-        const timeout = setTimeout(() => {
-          window.removeEventListener('message', translatedHandler);
-          self.pendingHandlers.delete(translatedHandler);
-          self.pendingTimeouts.delete(timeout);
-          // Translation timed out — return original response
-          resolve(response);
-        }, self.translationTimeoutMs);
-        self.pendingTimeouts.add(timeout);
-
-        const translatedHandler = (event: MessageEvent) => {
-          if (event.origin !== expectedOrigin) return;
-          if (event.data?.channel !== 'anyllm-translate') return;
-          if (event.data?.type !== 'SUBTITLE_TRANSLATED') return;
-          if (event.data?.requestId !== requestId) return;
-
-          clearTimeout(timeout);
-          self.pendingTimeouts.delete(timeout);
-          window.removeEventListener('message', translatedHandler);
-          self.pendingHandlers.delete(translatedHandler);
-
-          // Create a new Response with the translated content
-          const translatedResponse = new Response(event.data.payload.vttContent, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
-          resolve(translatedResponse);
-        };
-
-        self.pendingHandlers.add(translatedHandler);
-        window.addEventListener('message', translatedHandler);
-      });
+      return interceptSubtitle(
+        response,
+        responseText,
+        response.headers.get('Content-Type') || '',
+        match.platform,
+        match.language || '',
+      );
     };
 
     this.patchedFetch = patchedFetch;
