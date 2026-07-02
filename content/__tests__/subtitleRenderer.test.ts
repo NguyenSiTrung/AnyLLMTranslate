@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createRenderer, OverlayRenderer } from '@/content/subtitleRenderer';
+import { createRenderer, OverlayRenderer, canRenderNatively } from '@/content/subtitleRenderer';
 import { NativeTrackRenderer } from '@/content/nativeTrackRenderer';
 import type { SubtitleCue } from '@/types/subtitle';
 
@@ -28,10 +28,12 @@ describe('createRenderer (overlay fallback)', () => {
   });
 });
 
-describe('createRenderer (native)', () => {
-  it('returns NativeTrackRenderer when VTTCue and addTextTrack are available', () => {
-    // jsdom defines VTTCue as a non-writable global; use defineProperty so the
-    // assignment sticks without leaking beyond this test.
+describe('createRenderer (native currently disabled)', () => {
+  // Native rendering is disabled in createRenderer because real players
+  // (HBO Max) populate their own native textTracks, and synthetic tracks stack
+  // on top — see the NOTE on createRenderer. These tests lock the safe default.
+
+  it('always returns OverlayRenderer, even when native capability exists', () => {
     class FakeVTTCue {
       constructor(
         public s: number,
@@ -51,7 +53,11 @@ describe('createRenderer (native)', () => {
       addCue() {},
       removeCue() {},
     });
-    expect(createRenderer(fakeVideo)).toBeInstanceOf(NativeTrackRenderer);
+    // Capability is correctly detected...
+    expect(canRenderNatively(fakeVideo)).toBe(true);
+    // ...but createRenderer still returns the overlay for now.
+    expect(createRenderer(fakeVideo)).toBeInstanceOf(OverlayRenderer);
+    expect(createRenderer(fakeVideo)).not.toBeInstanceOf(NativeTrackRenderer);
   });
 });
 

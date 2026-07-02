@@ -67,12 +67,20 @@ export function canRenderNatively(video: HTMLVideoElement): boolean {
 
 /**
  * Returns a native renderer if supported, else the overlay fallback (D3).
- * Capability is checked per-video: a browser with VTTCue + addTextTrack gets
- * native rendering; otherwise the legacy custom overlay is used.
+ *
+ * NOTE: native rendering is currently DISABLED. Real players (e.g. HBO Max)
+ * populate their own native <video>.textTracks with cues; creating additional
+ * synthetic tracks stacks on top of theirs and the legacy hideNativeCaptions
+ * CSS cannot hide native-track rendering (it only hides the DOM caption window).
+ * The result was duplicated original-language lines. Until the coordinator can
+ * detect and suppress/hide the player's own native tracks, we always use the
+ * overlay, which the existing hideNativeCaptions path correctly controls.
+ *
+ * Probe 3 (spec Phase 0) confirmed Max populates native textTracks.
  */
 export function createRenderer(video: HTMLVideoElement): SubtitleRenderer {
-  if (canRenderNatively(video)) {
-    return new NativeTrackRenderer();
-  }
+  // Intentionally always overlay for now:
+  // if (canRenderNatively(video)) return new NativeTrackRenderer();
+  void video;
   return new OverlayRenderer();
 }
