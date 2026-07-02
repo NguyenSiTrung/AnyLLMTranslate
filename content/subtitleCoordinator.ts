@@ -50,6 +50,7 @@ import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
+import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import {
   reconcilePendingTranslatedTexts,
   sortCueTextsByPlaybackPriority,
@@ -769,9 +770,7 @@ async function translateDomCueTexts(
     }
     // Accumulate translations in the persistent map so previous
     // batches' translations are preserved across rebuilds.
-    response.cues.forEach((c) => {
-      state.domTranslationMap.set(c.originalText ?? c.text, c.text);
-    });
+    applyTranslatedCueBatchToMap(state.domTranslationMap, response.cues);
     rebuildTranslatedCues();
     state.activeRenderer?.updateCues(state.domTranslatedCues);
   } catch (error) {
@@ -836,6 +835,18 @@ function rebuildManifestTranslatedCues(): void {
  * the overlay keeps whatever the last rebuild produced (original text
  * fallback), so a failed append delta never blanks the overlay.
  */
+function applyTranslatedCueBatchToMap(
+  map: Map<string, string>,
+  translated: SubtitleCue[],
+): void {
+  for (const c of translated) {
+    const src = c.originalText;
+    if (src && c.text !== src) {
+      map.set(src, c.text);
+    }
+  }
+}
+
 async function translateManifestCueTexts(
   newTexts: string[],
   sourceLanguage: string,
@@ -849,42 +860,46 @@ async function translateManifestCueTexts(
     state.manifestOriginalCues,
     getPlaybackTimeForTranslation(),
   );
-  const cuesToTranslate: SubtitleCue[] = orderedTexts.map((text, i) => ({
-    startTime: i,
-    endTime: i + 1,
-    text,
-  }));
-  try {
-    const response = await chrome.runtime.sendMessage({
-      action: 'translateSubtitle',
-      cues: cuesToTranslate,
-      sourceLanguage,
-      targetLanguage,
-      pageContext,
-      profile: currentSubtitleProfile(),
-      knobOverrides: state.subtitleKnobOverride,
-      sessionId: sessionId ?? undefined,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
-    if (!response?.success || !response.cues) {
-      console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
-      return;
+  // Batch like the background chunk loop — a single huge delta (e.g. after seek
+  // when many new lines arrive) can make the LLM return non-JSON and fail the
+  // whole request; smaller batches also return faster for the first overlay update.
+  for (let offset = 0; offset < orderedTexts.length; offset += SUBTITLE_CHUNK_SIZE) {
+    const batchTexts = orderedTexts.slice(offset, offset + SUBTITLE_CHUNK_SIZE);
+    const cuesToTranslate: SubtitleCue[] = batchTexts.map((text, i) => ({
+      startTime: i,
+      endTime: i + 1,
+      text,
+    }));
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'translateSubtitle',
+        cues: cuesToTranslate,
+        sourceLanguage,
+        targetLanguage,
+        pageContext,
+        profile: currentSubtitleProfile(),
+        knobOverrides: state.subtitleKnobOverride,
+        sessionId: sessionId ?? undefined,
+        skipFilmPreScan: offset > 0 || state.manifestTranslationMap.size > 0,
+      }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+      if (!response?.success || !response.cues) {
+        console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
+        continue;
+      }
+      if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
+        return;
+      }
+      if (response.sessionId !== undefined) {
+        state.activeSubtitleSessionId = response.sessionId;
+      }
+      applyTranslatedCueBatchToMap(state.manifestTranslationMap, response.cues);
+      rebuildManifestTranslatedCues();
+      state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+    } catch (error) {
+      console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
     }
-    if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
-      return;
-    }
-    if (response.sessionId !== undefined) {
-      state.activeSubtitleSessionId = response.sessionId;
-    }
-    // Accumulate translations in the persistent map so previous segments'
-    // translations are preserved across rebuilds and appends.
-    response.cues.forEach((c) => {
-      state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
-    });
-    rebuildManifestTranslatedCues();
-    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
-  } catch (error) {
-    console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
   }
 }
 
@@ -1873,14 +1888,16 @@ export function startCoordinator(): () => void {
         return;
       }
       // Handle chunk delta format (chunkStart + chunkCues)
+      const useManifestChunkPath =
+        state.activeSource === 'manifest' ||
+        (state.isOverlayMode && state.manifestOriginalCues.length > 0);
+
       if (msg.chunkCues && msg.chunkStart !== undefined) {
         // Manifest tier (HBOMax progressive VTT) uses the text-keyed map
         // model — route chunk deltas through it so appended segments are
         // translated incrementally. Other tiers keep the offset-based merge.
-        if (state.activeSource === 'manifest') {
-          for (const c of msg.chunkCues) {
-            state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
-          }
+        if (useManifestChunkPath) {
+          applyTranslatedCueBatchToMap(state.manifestTranslationMap, msg.chunkCues);
           rebuildManifestTranslatedCues();
           state.activeRenderer?.updateCues(state.manifestTranslatedCues);
         } else {
@@ -1888,10 +1905,8 @@ export function startCoordinator(): () => void {
         }
       } else if (msg.cues) {
         // Fallback: full array format (backward compat)
-        if (state.activeSource === 'manifest') {
-          for (const c of msg.cues) {
-            state.manifestTranslationMap.set(c.originalText ?? c.text, c.text);
-          }
+        if (useManifestChunkPath) {
+          applyTranslatedCueBatchToMap(state.manifestTranslationMap, msg.cues);
           rebuildManifestTranslatedCues();
           state.activeRenderer?.updateCues(state.manifestTranslatedCues);
         } else {

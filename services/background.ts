@@ -492,18 +492,20 @@ async function handleTranslateSubtitle(
     // Per-film proper-noun glossary: load by content hash, or pre-scan once and
     // persist. Seeds the rolling glossary so chunk 0 translates with the full
     // name list. Every failure degrades to an empty seed — translation proceeds.
-    const filmHash = await contentHash(cues);
     let filmGlossary: Record<string, string> | undefined;
-    try {
-      filmGlossary = await loadFilmGlossary(filmHash);
-      if (!filmGlossary) {
-        filmGlossary = await preScanNames(service, sourceLanguage, targetLanguage, cues, subtitleKnobs);
-        if (filmGlossary && Object.keys(filmGlossary).length > 0) {
-          await saveFilmGlossary(filmHash, filmGlossary);
+    if (!message.skipFilmPreScan) {
+      const filmHash = await contentHash(cues);
+      try {
+        filmGlossary = await loadFilmGlossary(filmHash);
+        if (!filmGlossary) {
+          filmGlossary = await preScanNames(service, sourceLanguage, targetLanguage, cues, subtitleKnobs);
+          if (filmGlossary && Object.keys(filmGlossary).length > 0) {
+            await saveFilmGlossary(filmHash, filmGlossary);
+          }
         }
+      } catch {
+        filmGlossary = undefined;
       }
-    } catch {
-      filmGlossary = undefined;
     }
 
     const CONTEXT_SIZE = 3;

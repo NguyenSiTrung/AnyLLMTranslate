@@ -103,6 +103,8 @@ export interface TranslateSubtitleMessage {
   knobOverrides?: Partial<ProfileKnobs>;
   /** Unique session ID to track progressive chunk translation. */
   sessionId?: number;
+  /** Skip per-film name pre-scan (manifest/seek deltas; glossary already warm). */
+  skipFilmPreScan?: boolean;
 }
 
 /** Popup → content: set or clear the active tab's per-subtitle translation-style override. */
