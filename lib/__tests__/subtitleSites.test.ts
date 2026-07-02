@@ -30,7 +30,7 @@ describe('SUPPORTED_SUBTITLE_SITES', () => {
   it('generic entry is the auto-detect fallback', () => {
     const generic = SUPPORTED_SUBTITLE_SITES.find((s) => s.platform === 'generic');
     expect(generic).toBeDefined();
-    expect(generic!.methodHint).toContain('Auto-detect');
+    expect(generic?.methodHint).toContain('Auto-detect');
   });
 
   it('each entry has platform, name, and methodHint', () => {

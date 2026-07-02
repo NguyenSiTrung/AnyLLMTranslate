@@ -87,8 +87,8 @@ describe('GenericSubtitleHandler — static behaviour', () => {
 
     it('languageExtractor derives code from query params and filename', () => {
       const vttPattern = handler.getPatterns()[0]; // .vtt pattern
-      const extractor = vttPattern.languageExtractor!;
-      expect(extractor(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
+      const extractor = vttPattern.languageExtractor;
+      expect(extractor?.(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
       expect(extractor(new URL('https://x/sub.vtt?language=fr'))).toBe('fr');
       expect(extractor(new URL('https://x/sub.vtt?locale=ja_JP'))).toBe('ja-jp');
       expect(extractor(new URL('https://x/movie_en.vtt'))).toBe('en');
@@ -174,7 +174,7 @@ Intro`;
 
   describe('getNativeCaptionHide', () => {
     it('returns a selector union covering common frameworks', () => {
-      const hide = handler.getNativeCaptionHide!();
+      const hide = handler.getNativeCaptionHide();
       expect(hide.method).toBe('display');
       // Spot-check the major framework containers are present.
       expect(hide.selector).toContain('.vjs-text-track-display');
@@ -185,7 +185,7 @@ Intro`;
 
   describe('getDomCueSource — Phase 3 DOM fallback', () => {
     it('returns cue/window/observe selectors and display hide method', () => {
-      const src = handler.getDomCueSource!();
+      const src = handler.getDomCueSource();
       expect(src.cueSelector).toContain('.vjs-text-track-display');
       expect(src.captionWindowSelector).toBeTruthy();
       expect(src.observeRootSelector).toBe('body');
@@ -193,12 +193,12 @@ Intro`;
     });
 
     it('readActiveLanguage returns empty string (no reliable signal)', () => {
-      const src = handler.getDomCueSource!();
+      const src = handler.getDomCueSource();
       expect(src.readActiveLanguage()).toBe('');
     });
 
     it('omits trackSwitchSelector (track-switch detection skipped)', () => {
-      const src = handler.getDomCueSource!();
+      const src = handler.getDomCueSource();
       expect(src.trackSwitchSelector).toBeUndefined();
     });
   });
