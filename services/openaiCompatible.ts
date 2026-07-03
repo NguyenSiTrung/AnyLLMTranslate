@@ -18,6 +18,11 @@ import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/mes
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
 import { createRateLimiter, type RateLimiter } from '@/lib/rateLimiter';
+import {
+  parseSSEBuffer,
+  extractDeltaContent,
+  extractCompletedPieces,
+} from '@/lib/sseStreamParser';
 
 /** Custom error class carrying the HTTP status code so retry logic can
  *  distinguish 4xx client errors (no retry) from 5xx/network errors (retry)
@@ -193,6 +198,136 @@ export class OpenAICompatibleService implements TranslationService {
       partial,
       properNouns,
     };
+  }
+
+  /**
+   * Streaming translation (Phase 2, PDF-only opt-in).
+   *
+   * Sends `stream: true` and consumes the SSE response body, invoking
+   * `onPiece` as each paragraph's translation completes in the stream. This
+   * gives incremental fill: paragraphs appear one-by-one instead of blocking
+   * on the full batch response.
+   *
+   * Error contract:
+   *  - Transport / auth / rate-limit failures **re-throw** {@link ApiError}
+   *    (carrying `statusCode`) so the pool's failover + the caller's
+   *    non-streaming fallback can fire. The PDF viewer catches this and
+   *    retries via the non-streaming `translate()` path.
+   *  - Content problems (empty stream, no completed pieces) return
+   *    `{success:false}` — the caller may still fall back.
+   *
+   * @param onPiece Called with (pieceId, translatedText) each time a piece
+   *   completes in the stream. May be called multiple times for the same id
+   *   as more content arrives (the final call carries the complete text).
+   */
+  async translateStream(
+    request: TranslationRequest,
+    onPiece: (id: string, text: string) => void,
+  ): Promise<TranslationResult> {
+    const systemPrompt = buildSystemPrompt(
+      request.targetLanguage,
+      request.customSystemPrompt,
+      request.glossaryBlock,
+      request.pageContext,
+    );
+    const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
+
+    const completionRequest = this.buildCompletionRequest({
+      model: this.config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: this.config.temperature,
+      max_tokens: this.config.maxTokens,
+      stream: true,
+    });
+
+    if (isDebugLoggingEnabled()) {
+      console.log('AnyLLMTranslate: LLM Stream Request', { model: this.config.model, systemPrompt, userPrompt });
+    }
+
+    const expectedIds = Array.from(request.texts.keys());
+    const knownIdsSet = expectedIds;
+
+    // Transport/auth/rate-limit errors propagate (FR-1) — do NOT swallow.
+    const response = await this.fetchStream(completionRequest);
+
+    // Consume the SSE stream, accumulating content and emitting completed pieces.
+    let contentBuffer = '';
+    const emittedPieces = new Map<string, string>();
+
+    // `reader` and `decoder` are used to read chunks from the ReadableStream.
+    const reader = response.body?.getReader();
+    if (!reader) {
+      // No body to stream — this is a content problem, return failure (no failover).
+      return { success: false, translations: new Map(), error: 'No stream body' };
+    }
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+    let done = false;
+
+    while (!done) {
+      const { value, done: streamDone } = await reader.read();
+      done = streamDone;
+      if (value) {
+        sseBuffer += decoder.decode(value, { stream: true });
+        const { events, remainder } = parseSSEBuffer(sseBuffer);
+        sseBuffer = remainder;
+
+        for (const event of events) {
+          if (event.type === 'done') {
+            done = true;
+            break;
+          }
+          if (event.type === 'data') {
+            contentBuffer += extractDeltaContent(event.json);
+          }
+        }
+
+        // After accumulating new content, extract any newly-completed pieces.
+        const completed = extractCompletedPieces(contentBuffer, knownIdsSet);
+        for (const [id, text] of completed) {
+          const prev = emittedPieces.get(id);
+          if (prev !== text) {
+            emittedPieces.set(id, text);
+            onPiece(id, text);
+          }
+        }
+      }
+    }
+
+    if (isDebugLoggingEnabled()) {
+      console.log('AnyLLMTranslate: LLM Stream accumulated', { contentBuffer });
+    }
+
+    // Content problems: empty or no completed pieces.
+    if (emittedPieces.size === 0 && contentBuffer.trim().length > 0) {
+      // The stream produced content but no complete pieces parsed — try a
+      // final full parse of the accumulated buffer as a fallback.
+      const finalPieces = extractCompletedPieces(contentBuffer, knownIdsSet);
+      for (const [id, text] of finalPieces) {
+        emittedPieces.set(id, text);
+        onPiece(id, text);
+      }
+    }
+
+    if (emittedPieces.size === 0) {
+      return { success: false, translations: new Map(), error: 'Empty streaming response' };
+    }
+
+    // P2 correctness: back-fill missing pieces with original text (partial).
+    let partial = false;
+    if (emittedPieces.size < expectedIds.length) {
+      partial = true;
+      for (const id of expectedIds) {
+        if (!emittedPieces.has(id)) {
+          emittedPieces.set(id, request.texts.get(id) ?? '');
+        }
+      }
+    }
+
+    return { success: true, translations: emittedPieces, partial };
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
@@ -508,6 +643,61 @@ Rules:
         return this.fetchWithRetry(request, maxRetries, attempt + 1);
       }
 
+      throw error;
+    }
+  }
+
+  /**
+   * Send a streaming request and return the raw Response for SSE consumption.
+   * Used by {@link translateStream}. Does NOT retry on 5xx (the caller falls
+   * back to non-streaming `translate()` on any error). Throws {@link ApiError}
+   * (carrying statusCode) on non-2xx so the caller can decide fallback strategy.
+   *
+   * Reuses the same rate-limiter, header, and AbortController setup as
+   * fetchWithRetry but returns the Response body intact (not `.json()`-parsed).
+   */
+  private async fetchStream(request: ChatCompletionRequest): Promise<Response> {
+    const timeout = this.config.requestTimeoutMs ?? 60000;
+    await this.rateLimiter.acquire(timeout);
+
+    const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorBody);
+          if (errorJson.error?.message) {
+            errorMessage = errorJson.error.message;
+          }
+        } catch {
+          if (errorBody) errorMessage += ` — ${errorBody.slice(0, 200)}`;
+        }
+        throw new ApiError(errorMessage, response.status);
+      }
+
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Stream request timed out after ${timeout}ms`, { cause: error });
+      }
       throw error;
     }
   }

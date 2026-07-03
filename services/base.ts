@@ -13,6 +13,16 @@ export interface TranslationService {
   /** Translate a batch of texts */
   translate(request: TranslationRequest): Promise<TranslationResult>;
 
+  /** Streaming translation (Phase 2, PDF-only opt-in). Optional — only
+   *  OpenAICompatibleService implements it. The pool coordinator delegates
+   *  to the first member that supports it; callers fall back to translate()
+   *  when undefined or on error. Invokes `onPiece(id, text)` as each
+   *  paragraph's translation completes in the SSE stream. */
+  translateStream?(
+    request: TranslationRequest,
+    onPiece: (id: string, text: string) => void,
+  ): Promise<TranslationResult>;
+
   /** Test the connection to the translation provider */
   testConnection(): Promise<{ success: boolean; error?: string }>;
 

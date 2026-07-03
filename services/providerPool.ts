@@ -187,6 +187,37 @@ export class ProviderPoolCoordinator implements TranslationService {
     return this.dispatchWithFailover((service) => service.translate(request));
   }
 
+  /**
+   * Streaming translation (Phase 2, PDF-only opt-in). Delegates to member
+   * services that implement `translateStream`, with the same failover semantics
+   * as translate() — on a transport/auth/rate-limit error, the next healthy
+   * slot is tried. The `onPiece` callback is invoked per completed paragraph
+   * as the SSE stream arrives.
+   *
+   * If NO member supports streaming (all lack translateStream), falls back to
+   * non-streaming translate() so the caller still gets a result.
+   */
+  async translateStream(
+    request: TranslationRequest,
+    onPiece: (id: string, text: string) => void,
+  ): Promise<TranslationResult> {
+    return this.dispatchWithFailover((service) => {
+      if (service.translateStream) {
+        return service.translateStream(request, onPiece);
+      }
+      // Member doesn't support streaming — fall back to non-streaming and
+      // emit all pieces at once via the callback (best-effort incremental UX).
+      return service.translate(request).then((result) => {
+        if (result.success) {
+          for (const [id, text] of result.translations) {
+            onPiece(id, text);
+          }
+        }
+        return result;
+      });
+    });
+  }
+
   async testConnection(
     opts?: { keyId?: string },
   ): Promise<{ success: boolean; error?: string }> {

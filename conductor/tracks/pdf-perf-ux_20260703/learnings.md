@@ -66,3 +66,15 @@ Patterns, gotchas, and context discovered during implementation.
   - Pattern: **Eviction is proxy-only; translations are separate.** The pdfTranslation.ts `memoryCache` (and IndexedDB) are independent of pdf.js proxy objects. Evicting a proxy does NOT lose the translation — re-entering the page serves from cache without a new LLM call. This is the key insight making eviction safe.
   - Gotcha: `renderHook` initialProps with `undefined` value narrows the inferred generic prop type to `undefined`, breaking `rerender` with a `Set`. Cast `initialProps` explicitly: `as { visible: Set<number> | undefined }`.
 ---
+
+## [2026-07-03 13:55] - Phase 1 Task 2: SW keep-alive for PDF sessions
+- **Implemented:** PDF viewer registers a session on mount (`REGISTER_PDF_SESSION`), deregisters on unmount. Background arms/clears the existing keep-alive alarm based on the combined subtitle+PDF session count. `chrome.tabs.onRemoved` cleans up PDF sessions.
+- **Files changed:** entrypoints/pdf-viewer/lib/pdfSession.ts (new), services/background.ts, types/messages.ts, entrypoints/pdf-viewer/App.tsx, services/__tests__/background.pdfSession.test.ts (new), entrypoints/pdf-viewer/lib/__tests__/pdfSession.test.ts (new)
+- **Commit:** af1f909
+- **Learnings:**
+  - Pattern: **keep-alive alarm is shared across session types** — `clearKeepaliveAlarm` must check ALL session sets (subtitle `activeSessions` AND `pdfSessions`), not just one. A subtitle-only check would clear the alarm while PDF viewers are still open. This is the key fix for multi-feature keep-alive coordination.
+  - Pattern: **pure-helper-at-seams for session logic** — `pdfSession.ts` exposes pure `registerPdfSession(sessions, tabId) → new Set` / `unregisterPdfSession` / `shouldArmKeepalive` that operate on an injected `Set<number>`. The background owns the live `Set` + `chrome.alarms` calls; the helpers are the decision logic, fully unit-testable without chrome API mocking (mirrors `getProviderReadiness`, `shouldAutoOpenPdf`).
+  - Pattern: **immutable Set updates for React-style equality** — register/unregister return a NEW `Set` (never mutate), so the consumer can detect changes. Though the background uses a mutable `Set` directly (it's not React state), the helpers are kept pure for testability and future React use.
+  - Gotcha: **renderHook `result.current` staleness** — asserting `result.current.x` immediately after `await waitFor(...)` can read a stale render snapshot (between committed renders). The robust pattern is to put the assertion INSIDE the `waitFor` callback so it always evaluates against a committed render. This caused ~25% flakiness in usePdfDocument eviction tests until fixed.
+  - Gotcha: **`setPages(prev => prev)` (returning same ref) inside an effect can race** with another effect's `setPages(newArray)` under React 19's concurrent rendering in tests. Prefer computing the change from the render closure and only calling `setPages(next)` when there's a real change — never queue a no-op updater from an effect.
+---

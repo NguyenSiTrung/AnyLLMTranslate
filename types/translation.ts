@@ -82,6 +82,9 @@ export interface ChatCompletionRequest {
   temperature?: number;
   max_tokens?: number;
   response_format?: { type: 'json_object' };
+  /** When true, request a streamed SSE response. The caller must consume the
+   *  response body as a ReadableStream of SSE deltas (Phase 2 streaming path). */
+  stream?: boolean;
 }
 
 /** Chat message */
