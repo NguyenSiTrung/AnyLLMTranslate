@@ -9,16 +9,18 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
 ## Phase 1: P0 Reliability Foundation
 <!-- execution: parallel -->
 
-- [ ] Task 1: Page-proxy window eviction in usePdfDocument
+- [x] Task 1: Page-proxy window eviction in usePdfDocument
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfDocument.ts, entrypoints/pdf-viewer/hooks/__tests__/usePdfDocument.test.ts -->
-  - [ ] Write tests: ±5-page window evicts proxies via .cleanup(), re-fetch via getPage() on re-entry, extracted text/translations served from cache (no re-translate), cancelledRef guards setState after unmount
-  - [ ] Implement eviction: track last-visible page, evict proxies outside window, expose re-fetch path, keep `pages` array shape (PDFPageProxy | null pending slots) stable
-  - [ ] Test 100+ page fixture for stable memory (no OOM)
+  - [x] Write tests: ±5-page window evicts proxies via .cleanup(), re-fetch via getPage() on re-entry, extracted text/translations served from cache (no re-translate), cancelledRef guards setState after unmount
+  - [x] Implement eviction: track last-visible page, evict proxies outside window, expose re-fetch path, keep `pages` array shape (PDFPageProxy | null pending slots) stable
+  - [x] Test 100+ page fixture for stable memory (no OOM)
+  - **Commit:** 643402a
 
-- [ ] Task 2: SW keep-alive for PDF sessions
+- [x] Task 2: SW keep-alive for PDF sessions
   <!-- files: services/background.ts, entrypoints/background.ts, entrypoints/pdf-viewer/lib/pdfSession.ts, services/__tests__/pdfSession.test.ts -->
-  - [ ] Write tests: registerSession on viewer open, deregister on close, alarm armed while ≥1 session active, cleared when 0
-  - [ ] Implement: mirror subtitle keep-alive pattern (KEEPALIVE_ALARM 20s), register/deregister API, chrome.tabs.onRemoved cleanup
+  - [x] Write tests: registerSession on viewer open, deregister on close, alarm armed while ≥1 session active, cleared when 0
+  - [x] Implement: mirror subtitle keep-alive pattern (KEEPALIVE_ALARM 20s), register/deregister API, chrome.tabs.onRemoved cleanup
+  - **Commit:** af1f909
 
 - [ ] Task 3: Conductor - User Manual Verification 'P0 Reliability Foundation' (Protocol in workflow.md)
 
