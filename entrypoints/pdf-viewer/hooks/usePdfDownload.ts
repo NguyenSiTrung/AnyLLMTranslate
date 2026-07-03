@@ -108,28 +108,43 @@ export function usePdfDownload({
       setStage('translating');
       setProgress(0);
 
+      const totalPages = pages.length;
       // Count how many pages still need translation
       const untranslatedCount = pages.filter((_, i) => {
         const pageNum = i + 1;
         return translations.get(pageNum)?.state !== 'translated';
       }).length;
+      const alreadyTranslated = totalPages - untranslatedCount;
 
       if (untranslatedCount > 0) {
-        setMessage(`Translating remaining pages… (0/${untranslatedCount})`);
+        // Surface the real total page count (already-translated + to-translate)
+        // so the user sees progress relative to the whole document, not just
+        // the remaining slice. The (completed/total) reflects the translation
+        // queue (untranslated pages) since that's the work in flight.
+        setMessage(
+          `Translating ${alreadyTranslated}/${totalPages} pages done — translating remaining ${untranslatedCount}… (0/${untranslatedCount})`,
+        );
       } else {
-        setMessage('All pages already translated');
+        setMessage(`All ${totalPages} pages already translated`);
       }
 
-      const translateResult = await translateAllPages({
-        pages,
-        pdfUrl,
-        existingTranslations: translations,
-        signal: controller.signal,
-        onProgress: (completed, total) => {
-          setProgress(total > 0 ? completed / total : 1);
-          setMessage(`Translating remaining pages… (${completed}/${total})`);
-        },
-      });
+      const translateResult =
+        untranslatedCount > 0
+          ? await translateAllPages({
+              pages,
+              pdfUrl,
+              existingTranslations: translations,
+              signal: controller.signal,
+              onProgress: (completed, total) => {
+                setProgress(total > 0 ? completed / total : 1);
+                setMessage(`Translating remaining pages… (${completed}/${total})`);
+              },
+            })
+          : {
+              translations: new Map(translations),
+              failedPages: [],
+              errors: new Map(),
+            };
 
       if (controller.signal.aborted) return;
 
@@ -171,7 +186,13 @@ export function usePdfDownload({
         originalPdfBytes,
         pageTranslations: translateResult.translations,
         fontBytes,
-        signal: controller.signal,
+        // Do NOT pass the abort signal to generation. pdf-lib generation is
+        // not safely interruptible mid-page (partial writes corrupt the
+        // output), so a queue-cancel during this stage lets the in-flight
+        // generation complete gracefully. The post-generation `aborted`
+        // check below ensures a cancelled job never triggers a download or
+        // shows a spurious "done" state.
+        signal: undefined,
         onProgress: (completed, total) => {
           setProgress(total > 0 ? completed / total : 1);
           setMessage(`Generating PDF… (${completed}/${total} pages)`);

@@ -101,10 +101,11 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
 ## Phase 5: UI/UX
 <!-- execution: parallel -->
 
-- [ ] Task 1: Font-metrics overlay sizing
+- [x] Task 1: Font-metrics overlay sizing
   <!-- files: entrypoints/pdf-viewer/lib/fontMetrics.ts, entrypoints/pdf-viewer/components/PdfTranslationPane.tsx (LayoutOverlay region), entrypoints/pdf-viewer/lib/__tests__/fontMetrics.test.ts -->
-  - [ ] Write tests: ascent measured via hidden canvas (cached per fontFamily), target box height computed from metrics pre-render, first-paint height matches post-reflow (no collision), cache invalidation on font change
-  - [ ] Implement: ascent/font-metrics helper with cache, pre-compute target box height in LayoutOverlay replacing post-paint getBoundingClientRect reflow
+  - [x] Write tests: ascent measured via hidden canvas (cached per fontFamily), target box height computed from metrics pre-render, first-paint height matches post-reflow (no collision), cache invalidation on font change
+  - [x] Implement: ascent/font-metrics helper with cache, pre-compute target box height in LayoutOverlay replacing post-paint getBoundingClientRect reflow
+  - **Commit:** 9a208ca
 
 - [ ] Task 2: Bilingual view mode
   <!-- files: entrypoints/pdf-viewer/lib/pdfViewMode.ts, entrypoints/pdf-viewer/components/ViewerLayout.tsx -->
