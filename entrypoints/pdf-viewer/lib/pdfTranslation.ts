@@ -288,6 +288,75 @@ export async function translateParagraphs(
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Cross-page request merging (Phase 3 Task 3)
+// ---------------------------------------------------------------------------
+
+/** A paragraph tagged with the page it originated from, for cross-page
+ *  merging. Structurally identical to `translateParagraphs`'s input item so
+ *  the shared batching pipeline can consume it without adaptation. */
+export interface MergedParagraphEntry {
+  pageNumber: number;
+  paragraph: PdfParagraph;
+}
+
+/** A translation result tagged with its originating page number, so the
+ *  caller can route each result back to the correct page after a single
+ *  merged LLM call covering paragraphs from multiple pages. */
+export interface MergedTranslationResult {
+  pageNumber: number;
+  id: string;
+  translatedText: string;
+}
+
+/**
+ * Translate paragraphs from MULTIPLE pages in combined batches.
+ *
+ * When look-ahead is active, this merges pending paragraphs across page
+ * boundaries into batches up to `maxBatchChars`, so one LLM call can cover
+ * tail-of-page-N + head-of-page-N+1. Results are tagged with their original
+ * page number for routing back to the correct page.
+ *
+ * Math/figure classification and cache logic are the same as
+ * `translateParagraphs`. The `onPiece` callback (if provided) receives
+ * `(id, text)` without page info — the caller routes by matching `id` to the
+ * original paragraph.
+ *
+ * Implementation note: `splitIntoBatches` already operates on a flat array,
+ * so batches naturally span page boundaries when the input contains
+ * paragraphs from multiple pages. The only addition over `translateParagraphs`
+ * is tagging each result with its originating `pageNumber`.
+ */
+export async function translateParagraphsMerged(
+  entries: MergedParagraphEntry[],
+  pdfUrl: string,
+  onPiece?: (id: string, text: string) => void,
+): Promise<MergedTranslationResult[]> {
+  if (entries.length === 0) return [];
+
+  // Build a lookup so each result can be tagged with its original page.
+  // Paragraph ids are unique per document (`${pageNumber}-${index}`), so this
+  // map is a reliable router even when batches span page boundaries.
+  const pageById = new Map<string, number>();
+  for (const { pageNumber, paragraph } of entries) {
+    pageById.set(paragraph.id, pageNumber);
+  }
+
+  // Delegate to the shared per-batch pipeline: rule-based math split, LLM
+  // classification, splitIntoBatches (which works on a flat array and therefore
+  // already spans page boundaries), sendTranslationBatch(/Streamed), and
+  // cacheTranslation. The input shape ({ pageNumber, paragraph }) matches
+  // translateParagraphs' expected input, so no adaptation is needed.
+  const results = await translateParagraphs(entries, pdfUrl, onPiece);
+
+  // Tag each result with its originating page number for caller routing.
+  return results.map(({ id, translatedText }) => ({
+    pageNumber: pageById.get(id) ?? 0,
+    id,
+    translatedText,
+  }));
+}
+
 /** Maximum number of document entries kept in the in-memory cache.
  *  When exceeded, the oldest entry (FIFO by insertion order) is evicted. */
 export const MAX_CACHED_DOCUMENTS = 10;
