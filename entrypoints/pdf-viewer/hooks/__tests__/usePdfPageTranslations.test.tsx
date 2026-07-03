@@ -7,16 +7,40 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRef } from 'react';
 import type { PDFPageProxy } from 'pdfjs-dist';
+
+// Mock the translation + extraction + config imports so we can drive the
+// per-paragraph status lifecycle deterministically.
+vi.mock('../../lib/pdfTranslation', () => ({
+  translateParagraphs: vi.fn(),
+  getMemoryCachedPage: vi.fn(() => null),
+  setMemoryCachedPage: vi.fn(),
+}));
+vi.mock('../../lib/pdfTextExtraction', () => ({
+  extractPageText: vi.fn(),
+}));
+vi.mock('@/lib/config', () => ({
+  loadSettings: vi.fn().mockResolvedValue({ sourceLanguage: 'en', targetLanguage: 'vi' }),
+}));
+
 import { usePdfPageTranslations } from '../usePdfPageTranslations';
+import { translateParagraphs } from '../../lib/pdfTranslation';
+import { extractPageText } from '../../lib/pdfTextExtraction';
+
+const mockedTranslateParagraphs = vi.mocked(translateParagraphs);
+const mockedExtractPageText = vi.mocked(extractPageText);
 
 const observerInstances: Array<{ options?: IntersectionObserverInit; observe: ReturnType<typeof vi.fn> }> = [];
 const OriginalIntersectionObserver = globalThis.IntersectionObserver;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   observerInstances.length = 0;
+  // Default mocks so the observer tests' async paths don't throw.
+  mockedExtractPageText.mockResolvedValue({ paragraphs: [], text: '' });
+  mockedTranslateParagraphs.mockResolvedValue([]);
   globalThis.IntersectionObserver = vi.fn((callback: IntersectionObserverCallback, options?: IntersectionObserverInit) => {
     void callback;
     const instance = {
@@ -105,5 +129,132 @@ describe('usePdfPageTranslations', () => {
     // No additional IntersectionObserver constructor calls should have happened
     // because `pages` is no longer in the useEffect dependency array
     expect(ctorMock.mock.calls.length).toBe(callsAfterMount);
+  });
+
+  describe('per-paragraph translationStatus (Phase 2)', () => {
+    function setupSlots(pageCount: number): { scrollPane: HTMLElement; contentWrapper: HTMLElement } {
+      const scrollPane = document.createElement('div');
+      scrollPane.setAttribute('data-pane', 'right');
+      const contentWrapper = document.createElement('div');
+      for (let i = 1; i <= pageCount; i++) {
+        const slot = document.createElement('div');
+        slot.setAttribute('data-page-slot', String(i));
+        contentWrapper.appendChild(slot);
+      }
+      scrollPane.appendChild(contentWrapper);
+      document.body.appendChild(scrollPane);
+      return { scrollPane, contentWrapper };
+    }
+
+    /** Capture the IntersectionObserver callback from the first instance and
+     *  fire an intersection event for the given page slot. Avoids non-null
+     *  assertions by validating existence up-front. */
+    function fireIntersection(pageSlot: number): void {
+      const cb = (globalThis.IntersectionObserver as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0][0] as IntersectionObserverCallback;
+      const target = document.querySelector(`[data-page-slot="${pageSlot}"]`);
+      if (!target) throw new Error(`page slot ${pageSlot} not found`);
+      act(() => {
+        cb([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry]);
+      });
+    }
+
+    it('marks each paragraph success independently when translation completes', async () => {
+      setupSlots(1);
+      mockedExtractPageText.mockResolvedValue({
+        paragraphs: [
+          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 },
+          { id: 'p2', text: 'World', x: 0, y: 20, width: 100, height: 10, fontSize: 10 },
+        ],
+        text: 'Hello\nWorld',
+      });
+      mockedTranslateParagraphs.mockResolvedValue([
+        { id: 'p1', translatedText: 'Xin chào' },
+        { id: 'p2', translatedText: 'Thế giới' },
+      ]);
+
+      const stablePages = [{} as PDFPageProxy];
+      const { result } = renderHook(() => {
+        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
+        return usePdfPageTranslations({
+          pages: stablePages,
+          pdfUrl: 'https://example.com/file.pdf',
+          containerRef,
+        });
+      });
+
+      fireIntersection(1);
+
+      await waitFor(() => {
+        expect(result.current.pages.get(1)?.state).toBe('translated');
+      });
+
+      const page = result.current.pages.get(1);
+      expect(page?.paragraphStatus?.get('p1')).toBe('success');
+      expect(page?.paragraphStatus?.get('p2')).toBe('success');
+    });
+
+    it('marks in-flight paragraphs as error when the page fails', async () => {
+      setupSlots(1);
+      mockedExtractPageText.mockResolvedValue({
+        paragraphs: [
+          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 },
+        ],
+        text: 'Hello',
+      });
+      mockedTranslateParagraphs.mockRejectedValue(new Error('Network down'));
+
+      const stablePages = [{} as PDFPageProxy];
+      const { result } = renderHook(() => {
+        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
+        return usePdfPageTranslations({
+          pages: stablePages,
+          pdfUrl: 'https://example.com/file.pdf',
+          containerRef,
+        });
+      });
+
+      fireIntersection(1);
+
+      await waitFor(() => {
+        expect(result.current.pages.get(1)?.state).toBe('error');
+      });
+
+      const page = result.current.pages.get(1);
+      expect(page?.paragraphStatus?.get('p1')).toBe('error');
+      expect(page?.error).toBe('Network down');
+    });
+
+    it('marks all cached paragraphs as success on a cache hit', async () => {
+      const { getMemoryCachedPage } = await import('../../lib/pdfTranslation');
+      vi.mocked(getMemoryCachedPage).mockReturnValue(
+        new Map([
+          ['p1', 'Xin chào'],
+          ['p2', 'Thế giới'],
+        ]),
+      );
+      setupSlots(1);
+      mockedExtractPageText.mockResolvedValue({ paragraphs: [], text: '' });
+
+      const stablePages = [{} as PDFPageProxy];
+      const { result } = renderHook(() => {
+        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
+        return usePdfPageTranslations({
+          pages: stablePages,
+          pdfUrl: 'https://example.com/file.pdf',
+          containerRef,
+        });
+      });
+
+      fireIntersection(1);
+
+      await waitFor(() => {
+        expect(result.current.pages.get(1)?.state).toBe('translated');
+      });
+
+      const page = result.current.pages.get(1);
+      expect(page?.paragraphStatus?.get('p1')).toBe('success');
+      expect(page?.paragraphStatus?.get('p2')).toBe('success');
+    });
   });
 });

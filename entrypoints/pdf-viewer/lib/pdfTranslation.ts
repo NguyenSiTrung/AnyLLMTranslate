@@ -21,6 +21,11 @@ import { classifyMathParagraph } from './pdfContentDetect';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
 
+/** Per-paragraph translation status (Phase 2 streaming).
+ *  Each paragraph tracks its own lifecycle independent of siblings, enabling
+ *  per-paragraph spinners/success/error indicators and incremental fill. */
+export type ParagraphTranslationStatus = 'translating' | 'success' | 'error';
+
 export interface PageTranslations {
   /** Map of paragraph id → translated text. */
   paragraphs: Map<string, string>;
@@ -30,6 +35,10 @@ export interface PageTranslations {
   state: PageTranslationState;
   /** Error message if state === 'error'. */
   error?: string;
+  /** Per-paragraph status (Phase 2). Present once translation begins; each
+   *  paragraph transitions translating → success/error independently.
+   *  Combined with streaming, paragraphs finalize one-by-one. */
+  paragraphStatus?: Map<string, ParagraphTranslationStatus>;
 }
 
 export type PageTranslationsListener = (pageNumber: number, page: PageTranslations) => void;

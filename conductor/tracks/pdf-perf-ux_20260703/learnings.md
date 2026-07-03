@@ -78,3 +78,15 @@ Patterns, gotchas, and context discovered during implementation.
   - Gotcha: **renderHook `result.current` staleness** — asserting `result.current.x` immediately after `await waitFor(...)` can read a stale render snapshot (between committed renders). The robust pattern is to put the assertion INSIDE the `waitFor` callback so it always evaluates against a committed render. This caused ~25% flakiness in usePdfDocument eviction tests until fixed.
   - Gotcha: **`setPages(prev => prev)` (returning same ref) inside an effect can race** with another effect's `setPages(newArray)` under React 19's concurrent rendering in tests. Prefer computing the change from the render closure and only calling `setPages(next)` when there's a real change — never queue a no-op updater from an effect.
 ---
+
+## [2026-07-03 14:18] - Phase 2 Task 1: SSE streaming translation
+- **Implemented:** `translateStream()` on `OpenAICompatibleService` + pool delegation. Pure SSE parser in `lib/sseStreamParser.ts`. Sends `stream:true`, consumes the ReadableStream body, emits completed pieces via callback, finalizes on `[DONE]`.
+- **Files changed:** lib/sseStreamParser.ts (new), services/openaiCompatible.ts, services/providerPool.ts, services/base.ts, types/translation.ts, + tests
+- **Commit:** 794c533
+- **Learnings:**
+  - Pattern: **pure parser + real-service integration test split.** The SSE wire-format parsing (event splitting, delta extraction, incremental JSON piece extraction) lives in a pure `lib/` module testable with plain strings. The service test then uses the REAL `OpenAICompatibleService` with a mocked `fetch` returning a `ReadableStream` — the "contract bug" test pattern from provider-pool-resilience. This split means a malformed-stream bug is caught at BOTH layers.
+  - Pattern: **incremental JSON piece extraction via regex.** As streaming content accumulates into `{"id1":"partial...`, `extractCompletedPieces(buffer, knownIds)` scans for completed `"id":"value"` pairs (closing quote + comma/brace present) and unescapes them. This enables per-paragraph fill without waiting for the full object. Known IDs are passed in (we know the expected keys from the request), so no heuristic key discovery.
+  - Pattern: **optional interface methods for new paradigms.** `translateStream?()` is optional on `TranslationService` — existing backends are unaffected, and the pool falls back to non-streaming `translate()` when a member lacks it (emitting all pieces at once via the callback for a best-effort incremental UX).
+  - Gotcha: **test fixture JSON escaping.** A JS single-quoted string `'...\"wörld\"...'` produces `"` not `\"`, yielding invalid JSON. Use `\\"` to embed a literal escaped quote in the JSON the test sends.
+  - Pattern: **partial back-fill in streaming too.** If the stream completes some pieces but not all (LLM truncated), missing pieces fall back to original text with `partial:true` — same P2 correctness contract as non-streaming `translate()`.
+---

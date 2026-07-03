@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import {
   type PageTranslations,
+  type ParagraphTranslationStatus,
   translateParagraphs,
   getMemoryCachedPage,
   setMemoryCachedPage,
@@ -44,7 +45,9 @@ export interface UsePdfPageTranslationsResult {
   retryPage: (pageNumber: number) => void;
 }
 
-/** Extract text and translate a single page. Updates `setPages` as it progresses. */
+/** Extract text and translate a single page. Updates `setPages` as it progresses.
+ *  Per-paragraph status (Phase 2): all paragraphs start 'translating', then
+ *  transition to 'success' as results arrive (or 'error' if the page fails). */
 async function translatePage(
   page: PDFPageProxy,
   pageNumber: number,
@@ -62,11 +65,31 @@ async function translatePage(
     if (paragraphs.length === 0) {
       setPages((prev) => {
         const next = new Map(prev);
-        next.set(pageNumber, { paragraphs: new Map(), originalParagraphs: [], state: 'translated' });
+        next.set(pageNumber, {
+          paragraphs: new Map(),
+          originalParagraphs: [],
+          paragraphStatus: new Map(),
+          state: 'translated',
+        });
         return next;
       });
       return;
     }
+    // All paragraphs start as 'translating'.
+    const statusMap = new Map<string, ParagraphTranslationStatus>(
+      paragraphs.map((p) => [p.id, 'translating']),
+    );
+    setPages((prev) => {
+      const next = new Map(prev);
+      next.set(pageNumber, {
+        paragraphs: new Map(),
+        originalParagraphs: paragraphs,
+        paragraphStatus: statusMap,
+        state: 'translating',
+      });
+      return next;
+    });
+
     const results = await translateParagraphs(
       paragraphs.map((paragraph) => ({ pageNumber, paragraph })),
       pdfUrl,
@@ -74,12 +97,14 @@ async function translatePage(
     const paragraphMap = new Map<string, string>();
     for (const { id, translatedText } of results) {
       paragraphMap.set(id, translatedText);
+      statusMap.set(id, 'success');
     }
     setPages((prev) => {
       const next = new Map(prev);
       next.set(pageNumber, {
         paragraphs: paragraphMap,
         originalParagraphs: paragraphs,
+        paragraphStatus: new Map(statusMap),
         state: 'translated',
       });
       return next;
@@ -96,7 +121,20 @@ async function translatePage(
     const message = err instanceof Error ? err.message : 'Translation failed';
     setPages((prev) => {
       const next = new Map(prev);
-      next.set(pageNumber, { paragraphs: new Map(), state: 'error', error: message });
+      // Mark any in-flight paragraphs as 'error' (page-level error).
+      const existing = prev.get(pageNumber);
+      const statusMap = existing?.paragraphStatus
+        ? new Map(existing.paragraphStatus)
+        : new Map<string, ParagraphTranslationStatus>();
+      for (const [id, status] of statusMap) {
+        if (status === 'translating') statusMap.set(id, 'error');
+      }
+      next.set(pageNumber, {
+        paragraphs: new Map(),
+        paragraphStatus: statusMap,
+        state: 'error',
+        error: message,
+      });
       return next;
     });
   }
@@ -172,9 +210,14 @@ export function usePdfPageTranslations({
               }
               setPages((prev) => {
                 const next = new Map(prev);
+                // Cache hit: all cached paragraphs are 'success'.
+                const statusMap = new Map<string, ParagraphTranslationStatus>(
+                  Array.from(cached.keys()).map((id) => [id, 'success' as const]),
+                );
                 next.set(pageNumber, {
                   paragraphs: cached,
                   originalParagraphs,
+                  paragraphStatus: statusMap,
                   state: 'translated',
                 });
                 return next;
