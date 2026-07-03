@@ -529,10 +529,26 @@ Rules:
    *   retry delay to avoid thundering-herd retries when many concurrent
    *   requests get rate-limited simultaneously.
    */
-  private static readonly MAX_429_RETRIES = 3;
-  private static readonly RATE_LIMIT_BASE_DELAY_MS = 1000;
-  private static readonly RATE_LIMIT_MAX_DELAY_MS = 30_000;
-  private static readonly RATE_LIMIT_JITTER_MS = 500;
+  private static MAX_429_RETRIES = 3;
+  private static RATE_LIMIT_BASE_DELAY_MS = 1000;
+  private static RATE_LIMIT_MAX_DELAY_MS = 30_000;
+  private static RATE_LIMIT_JITTER_MS = 500;
+
+  /** Test override: set all 429 retry delays to near-zero so integration
+   *  tests don't wait through real backoff timers. Restore in afterEach. */
+  static __set429DelaysForTest(zero: boolean): void {
+    if (zero) {
+      OpenAICompatibleService.MAX_429_RETRIES = 3;
+      OpenAICompatibleService.RATE_LIMIT_BASE_DELAY_MS = 0;
+      OpenAICompatibleService.RATE_LIMIT_MAX_DELAY_MS = 0;
+      OpenAICompatibleService.RATE_LIMIT_JITTER_MS = 0;
+    } else {
+      OpenAICompatibleService.MAX_429_RETRIES = 3;
+      OpenAICompatibleService.RATE_LIMIT_BASE_DELAY_MS = 1000;
+      OpenAICompatibleService.RATE_LIMIT_MAX_DELAY_MS = 30_000;
+      OpenAICompatibleService.RATE_LIMIT_JITTER_MS = 500;
+    }
+  }
 
   private async fetchCompletion(
     request: ChatCompletionRequest,

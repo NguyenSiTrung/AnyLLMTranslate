@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProviderPoolCoordinator } from '../providerPool';
+import { OpenAICompatibleService } from '../openaiCompatible';
 import type { TranslationService } from '../base';
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
 import type { PageContext, ExtensionSettings } from '@/types/config';
@@ -233,10 +234,14 @@ describe('AC1/NFR-1: real OpenAICompatibleService failover (mocked fetch)', () =
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
+    // Zero out 429 retry delays so the failover tests don't wait through
+    // real exponential backoff (1s + 2s + 4s = 7s would exceed test timeout).
+    OpenAICompatibleService.__set429DelaysForTest(true);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    OpenAICompatibleService.__set429DelaysForTest(false);
   });
 
   /**
