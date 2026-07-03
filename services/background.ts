@@ -70,9 +70,9 @@ function ensureKeepaliveAlarm(): void {
   chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.33 }); // ~20s
 }
 
-/** Clear keep-alive alarm when no sessions remain */
+/** Clear keep-alive alarm when no sessions (subtitle OR PDF) remain */
 function clearKeepaliveAlarm(): void {
-  if (activeSessions.size === 0 && keepaliveAlarmActive) {
+  if (activeSessions.size === 0 && pdfSessions.size === 0 && keepaliveAlarmActive) {
     keepaliveAlarmActive = false;
     chrome.alarms.clear(KEEPALIVE_ALARM);
   }
@@ -102,6 +102,9 @@ export function initSubtitleSessionCleanup(): void {
   chrome.tabs.onRemoved.addListener((tabId: number) => {
     stopSubtitleSession(tabId);
     translatedTabSessions.delete(tabId);
+    // PDF viewer keep-alive cleanup: closing a viewer tab must deregister its
+    // session so the SW keep-alive alarm can clear once no viewers remain.
+    unregisterPdfSession(tabId);
   });
 }
 
@@ -116,6 +119,25 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 /** Track which tabs have been counted for page translation stats */
 const translatedTabSessions = new Set<number>();
+
+/** Active PDF viewer sessions (tab ids). Arms the keep-alive alarm while
+ *  ≥1 viewer is open so long content-heavy translation work is not interrupted
+ *  by MV3 service-worker eviction. Mirrors the subtitle keep-alive pattern. */
+const pdfSessions = new Set<number>();
+
+/** Register a PDF viewer tab as an active session. Idempotent. */
+function registerPdfSession(tabId: number): void {
+  if (!pdfSessions.has(tabId)) {
+    pdfSessions.add(tabId);
+    ensureKeepaliveAlarm();
+  }
+}
+
+/** Deregister a PDF viewer tab; clears the keep-alive alarm when none remain. */
+function unregisterPdfSession(tabId: number): void {
+  pdfSessions.delete(tabId);
+  clearKeepaliveAlarm();
+}
 
 /** Active translation service instance */
 /** The active translation service. Under the multi-provider pool this is a
@@ -239,6 +261,22 @@ function __seedSubtitleSessionForTest(tabId: number): { queue: number[]; session
 /** Count active subtitle sessions. Exported for tests. */
 function __getActiveSessionCountForTest(): number {
   return activeSessions.size;
+}
+
+/** Reset PDF viewer session set + keep-alive flag. Exported for tests. */
+function __resetPdfSessionsForTest(): void {
+  pdfSessions.clear();
+  keepaliveAlarmActive = false;
+}
+
+/** Count active PDF viewer sessions. Exported for tests. */
+function __getPdfSessionCountForTest(): number {
+  return pdfSessions.size;
+}
+
+/** Whether the keep-alive alarm is currently armed. Exported for tests. */
+function __isKeepaliveArmedForTest(): boolean {
+  return keepaliveAlarmActive;
 }
 
 /**
@@ -1375,6 +1413,16 @@ export function handleMessage(
     }
     case 'PDF_DETECTED':
       return handlePdfDetected(message as PdfDetectedMessage, _sender).then(() => ({ success: true }));
+    case 'REGISTER_PDF_SESSION': {
+      const tabId = _sender.tab?.id;
+      if (tabId !== undefined) registerPdfSession(tabId);
+      return Promise.resolve({ success: true });
+    }
+    case 'UNREGISTER_PDF_SESSION': {
+      const tabId = _sender.tab?.id;
+      if (tabId !== undefined) unregisterPdfSession(tabId);
+      return Promise.resolve({ success: true });
+    }
     default:
       return undefined;
   }
@@ -1471,6 +1519,9 @@ export {
   __resetSubtitleSessionCounterForTest,
   __resetTranslationServiceForTest,
   __resetSettingsCacheForTest,
+  __resetPdfSessionsForTest,
+  __getPdfSessionCountForTest,
+  __isKeepaliveArmedForTest,
   MAX_CONCURRENT,
   PDF_MAX_CONCURRENT,
 };

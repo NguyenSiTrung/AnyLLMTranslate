@@ -171,11 +171,16 @@ export function usePdfDocument(
   // translations live in the upstream cache (pdfTranslation.ts memoryCache +
   // IndexedDB), which is independent of these proxies — so scrolling back to
   // an evicted page re-renders from cache without a new LLM call.
+  //
+  // The decision (evict vs keep vs re-fetch) is computed INSIDE the
+  // setPages(prev => ...) updater so it always reads the freshest array
+  // atomically — no race against the streaming loop or a stale pagesRef.
   // ---------------------------------------------------------------------------
-  const pagesRef = useRef<Array<PDFPageProxy | null>>(pages);
-  useEffect(() => {
-    pagesRef.current = pages;
-  }, [pages]);
+  // numPages is read inside the eviction effect via a ref so the effect only
+  // re-runs when the visible set / window actually change (not on every
+  // streaming batch that updates numPages from 0 to its final value).
+  const numPagesRef = useRef(numPages);
+  numPagesRef.current = numPages;
 
   useEffect(() => {
     if (!document) return;
@@ -183,21 +188,25 @@ export function usePdfDocument(
     // Only run eviction when a visible set is explicitly provided.
     if (!visiblePages) return;
     const evictionWindow = options?.evictionWindow ?? 5;
+    const total = numPagesRef.current;
 
     // Compute the set of page numbers that should remain resident.
     const keep = new Set<number>();
     for (const page of visiblePages) {
       const lo = Math.max(1, page - evictionWindow);
-      const hi = Math.min(numPages, page + evictionWindow);
+      const hi = Math.min(total, page + evictionWindow);
       for (let i = lo; i <= hi; i++) keep.add(i);
     }
 
-    // Decide eviction + missing in a single pass over the current array.
-    const current = pagesRef.current;
+    // Decide eviction + missing in a single pass over the current pages
+    // (read from the render closure — fresh on every effect run because the
+    // effect re-runs when visiblePages/window change). Only call setPages
+    // when something actually changes, so we never queue a no-op update that
+    // could race with the streaming loop's setPages.
     const toEvict: PDFPageProxy[] = [];
     const missing: number[] = [];
     let changed = false;
-    const next = current.map((proxy, idx) => {
+    const next = pages.map((proxy, idx) => {
       const pageNumber = idx + 1;
       if (!keep.has(pageNumber)) {
         if (proxy !== null) {
@@ -215,15 +224,12 @@ export function usePdfDocument(
       return proxy;
     });
 
-    if (toEvict.length > 0) {
-      for (const proxy of toEvict) {
-        // PDFPageProxy.cleanup() is synchronous and returns a boolean; wrap in
-        // try/catch defensively in case a future pdf.js version throws.
-        try {
-          proxy.cleanup();
-        } catch {
-          /* best-effort */
-        }
+    // Clean up evicted proxies (best-effort; synchronous API).
+    for (const proxy of toEvict) {
+      try {
+        proxy.cleanup();
+      } catch {
+        /* best-effort */
       }
     }
 
@@ -274,7 +280,10 @@ export function usePdfDocument(
         });
       })();
     }
-  }, [document, options?.visiblePages, options?.evictionWindow, numPages]);
+  // numPages read via numPagesRef inside the effect — omitted from deps so the
+  // effect does not re-fire on every streaming batch. document identity is
+  // stable across renders for a given URL (state, not recreated).
+  }, [document, options?.visiblePages, options?.evictionWindow]);
 
   return { loadState, document, pages, numPages, bytesLoaded, bytesTotal, error };
 }

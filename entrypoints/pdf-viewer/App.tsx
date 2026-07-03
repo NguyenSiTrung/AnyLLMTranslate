@@ -66,6 +66,21 @@ export default function App(): ReactElement {
     void loadPdfViewMode().then((mode) => setViewMode(mode));
   }, []);
 
+  // Register a PDF viewer session on mount so the background service worker
+  // stays alive (via its keep-alive alarm) for the duration of long content-
+  // heavy translation work. Deregister on unmount. Best-effort: a closed tab
+  // is also cleaned up via the background's chrome.tabs.onRemoved listener.
+  useEffect(() => {
+    void chrome.runtime.sendMessage({ action: 'REGISTER_PDF_SESSION' }).catch(() => {
+      /* best-effort: SW may be asleep on first call */
+    });
+    return () => {
+      void chrome.runtime.sendMessage({ action: 'UNREGISTER_PDF_SESSION' }).catch(() => {
+        /* best-effort */
+      });
+    };
+  }, []);
+
   const handleViewModeChange = (mode: PdfViewMode): void => {
     setViewMode(mode);
     void savePdfViewMode(mode);

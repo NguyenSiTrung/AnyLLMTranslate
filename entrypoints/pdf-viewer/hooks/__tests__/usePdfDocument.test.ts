@@ -105,11 +105,15 @@ describe('usePdfDocument — page-proxy window eviction', () => {
       { initialProps: { visible: undefined } as { visible: Set<number> | undefined } },
     );
 
-    await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
-    expect(result.current.pages.filter((p) => p !== null).length).toBe(20);
+    // Wait until all 20 proxies have streamed in (no eviction active).
+    await waitFor(() =>
+      expect(result.current.pages.filter((p) => p !== null).length).toBe(20),
+    );
 
     // Now introduce a visible set around page 10 → keep 5..15; evict the rest.
-    rerender({ visible: new Set<number>([10]) });
+    act(() => {
+      rerender({ visible: new Set<number>([10]) });
+    });
 
     const kept = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     const evicted = Array.from({ length: 20 }, (_, i) => i + 1).filter((n) => !kept.includes(n));
@@ -149,11 +153,15 @@ describe('usePdfDocument — page-proxy window eviction', () => {
     await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
 
     // Scroll to page 1 → keep 1..6; pages 7..20 evicted.
-    rerender({ visible: new Set<number>([1]) });
+    act(() => {
+      rerender({ visible: new Set<number>([1]) });
+    });
     await waitFor(() => expect(result.current.pages[6]).toBeNull());
 
     // Now scroll down to page 18 → keep 13..20; re-fetch 16..20 (13..15 kept).
-    rerender({ visible: new Set<number>([18]) });
+    await act(async () => {
+      rerender({ visible: new Set<number>([18]) });
+    });
 
     await waitFor(() => expect(result.current.pages[17]).not.toBeNull());
 
@@ -175,10 +183,12 @@ describe('usePdfDocument — page-proxy window eviction', () => {
 
     const { result } = renderHook(() => usePdfDocument('https://example.com/x.pdf'));
 
-    await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
-
-    // No eviction ever runs; all proxies stay populated.
-    expect(result.current.pages.filter((p) => p !== null).length).toBe(12);
+    // Assert the full-streamed state INSIDE waitFor so it always reads a
+    // committed render (not a stale result.current between renders).
+    await waitFor(() =>
+      expect(result.current.pages.filter((p) => p !== null).length).toBe(12),
+    );
+    expect(result.current.pages.every((p) => p !== null)).toBe(true);
     for (const p of pages) {
       expect(p.cleanup).not.toHaveBeenCalled();
     }
@@ -206,11 +216,15 @@ describe('usePdfDocument — page-proxy window eviction', () => {
     await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
 
     // Scroll to page 8 → keep 6..10, evict rest (including page 1).
-    rerender({ visible: new Set<number>([8]) });
+    act(() => {
+      rerender({ visible: new Set<number>([8]) });
+    });
     await waitFor(() => expect(result.current.pages[0]).toBeNull()); // page 1 evicted
 
     // Scroll back up so page 1 re-enters (window 2 around page 1 → keep 1..3)
-    rerender({ visible: new Set<number>([1]) });
+    await act(async () => {
+      rerender({ visible: new Set<number>([1]) });
+    });
     await waitFor(() => expect(result.current.pages[0]).not.toBeNull());
 
     // The re-fetched proxy is a valid page proxy at index 0.

@@ -47,7 +47,9 @@ export type MessageAction =
   | 'CLASSIFY_PDF_PARAGRAPHS'
   | 'CLEAR_CACHE'
   | 'OPEN_PDF_VIEWER'
-  | 'PDF_DETECTED';
+  | 'PDF_DETECTED'
+  | 'REGISTER_PDF_SESSION'
+  | 'UNREGISTER_PDF_SESSION';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -240,6 +242,19 @@ export interface PdfDetectedMessage {
   tabId?: number;
 }
 
+/** Register a PDF viewer tab as an active session (Viewer → Background).
+ *  Arms the service-worker keep-alive alarm while ≥1 viewer is open so long
+ *  content-heavy translation work is not interrupted by SW eviction. */
+export interface RegisterPdfSessionMessage {
+  action: 'REGISTER_PDF_SESSION';
+}
+
+/** Deregister a PDF viewer session (Viewer → Background).
+ *  Clears the keep-alive alarm when no viewer sessions remain. */
+export interface UnregisterPdfSessionMessage {
+  action: 'UNREGISTER_PDF_SESSION';
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -267,7 +282,9 @@ export type ExtensionMessage =
   | ClassifyPdfParagraphsMessage
   | ClearCacheMessage
   | OpenPdfViewerMessage
-  | PdfDetectedMessage;
+  | PdfDetectedMessage
+  | RegisterPdfSessionMessage
+  | UnregisterPdfSessionMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

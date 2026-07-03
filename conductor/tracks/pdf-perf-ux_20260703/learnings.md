@@ -55,3 +55,14 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-07-03 12:00] - Phase 1 Task 1: Page-proxy window eviction
+- **Implemented:** `usePdfDocument` now accepts `{ visiblePages?, evictionWindow? }` options. Proxies outside the ±5-page window of the visible set are evicted via `.cleanup()` and re-fetched via `getPage()` on re-entry. App.tsx wires `useVisiblePages` output into `usePdfDocument` for eviction.
+- **Files changed:** entrypoints/pdf-viewer/hooks/usePdfDocument.ts, entrypoints/pdf-viewer/App.tsx, entrypoints/pdf-viewer/hooks/__tests__/usePdfDocument.test.ts
+- **Commit:** 643402a
+- **Learnings:**
+  - Pattern: **PDFPageProxy.cleanup() is SYNCHRONOUS** in pdfjs-dist v4 (returns `boolean`, not a Promise). Don't `.catch()` it — wrap in try/catch. (gotcha — wasted a tsc cycle calling `.catch()` on a boolean)
+  - Pattern: **Chicken-and-egg hook wiring** — `usePdfDocument` (needs visiblePages for eviction) and `useVisiblePages` (needs numPages from usePdfDocument). Resolution: compute `useVisiblePages` FIRST using `numPagesRef` (previous render's numPages), feed result into `usePdfDocument`. First render: ref is 0 → empty visible set → eviction no-op. This is harmless because eviction only matters after the user scrolls.
+  - Pattern: **Eviction is proxy-only; translations are separate.** The pdfTranslation.ts `memoryCache` (and IndexedDB) are independent of pdf.js proxy objects. Evicting a proxy does NOT lose the translation — re-entering the page serves from cache without a new LLM call. This is the key insight making eviction safe.
+  - Gotcha: `renderHook` initialProps with `undefined` value narrows the inferred generic prop type to `undefined`, breaking `rerender` with a `Set`. Cast `initialProps` explicitly: `as { visible: Set<number> | undefined }`.
+---
