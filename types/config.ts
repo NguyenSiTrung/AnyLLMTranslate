@@ -39,6 +39,11 @@ export interface ProviderConfig {
   requestTimeoutMs?: number;
   /** Max requests per minute (0 = unlimited). Threaded into the service for RPM limiting. */
   maxRpm?: number;
+  /** Per-provider max batch size in characters. Overrides the global
+   *  maxBatchChars when set (> 0). 0 = use global default. */
+  maxBatchChars?: number;
+  /** Per-provider max number of text pieces per request. 0 = unlimited. */
+  maxTextGroupCount?: number;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
@@ -87,6 +92,11 @@ export interface PoolProvider {
   maxTokens: number;
   /** Request timeout in milliseconds (default: 60000). */
   requestTimeoutMs?: number;
+  /** Per-provider max batch size in characters. Overrides the global
+   *  maxBatchChars when set (> 0). 0 = use global default. */
+  maxBatchChars?: number;
+  /** Per-provider max number of text pieces per request. 0 = unlimited. */
+  maxTextGroupCount?: number;
   /** Whether this provider participates in the rotation pool. */
   enabled: boolean;
   /** The pool of API keys for this provider. */

@@ -575,3 +575,233 @@ describe('streaming translation port (Phase 2)', () => {
     expect(results.find((r) => r.id === 'p2')?.translatedText).toBe('translated-p2');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 4 Task: Provider-configurable batch size (resolution chain)
+// ---------------------------------------------------------------------------
+
+describe('provider-configurable batch size resolution', () => {
+  /** Minimal PdfParagraph builder. */
+  function para(id: string, text: string) {
+    return { id, text, fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 };
+  }
+
+  /** Build settings that override the active pool provider's batch knobs. */
+  function settingsWithProviderOverride(overrides: {
+    maxBatchChars?: number;
+    maxTextGroupCount?: number;
+    globalMaxBatchChars?: number;
+  }): ExtensionSettings {
+    const base = {
+      ...DEFAULT_SETTINGS,
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+      maxBatchChars: overrides.globalMaxBatchChars ?? DEFAULT_SETTINGS.maxBatchChars,
+    } as ExtensionSettings;
+    const first = base.providers[0];
+    if (!first) return base;
+    base.providers = [
+      {
+        ...first,
+        ...(overrides.maxBatchChars !== undefined ? { maxBatchChars: overrides.maxBatchChars } : {}),
+        ...(overrides.maxTextGroupCount !== undefined ? { maxTextGroupCount: overrides.maxTextGroupCount } : {}),
+      },
+    ];
+    return base;
+  }
+
+  /** Collect every 'translate' sendMessage call's pieces. */
+  function translateCalls(): Array<Array<{ id: string; text: string }>> {
+    return vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string; pieces: Array<{ id: string; text: string }> })
+      .filter((message) => message.action === 'translate')
+      .map((message) => message.pieces);
+  }
+
+  it('uses the provider maxBatchChars override instead of the global default', async () => {
+    // Global budget is huge (5000); provider override is tiny (8). If the
+    // override wins, batches cap at 8 chars (2 paragraphs of 4). If the global
+    // won, all 4 (16 chars) would fit in a single batch.
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({ maxBatchChars: 8, globalMaxBatchChars: 5000 }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddd') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls.map((pieces) => pieces.map((p) => p.id))).toEqual([
+      ['1-0', '1-1'],
+      ['1-2', '1-3'],
+    ]);
+    for (const pieces of calls) {
+      const chars = pieces.reduce((sum, p) => sum + p.text.length, 0);
+      expect(chars).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('falls back to the global default when provider maxBatchChars is 0', async () => {
+    // Provider explicitly sets 0 (= use global). Global is 16. Four 8-char
+    // paragraphs → 2 batches of 2 (16 chars each), matching the global budget.
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({ maxBatchChars: 0, globalMaxBatchChars: 16 }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaaaaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbbbbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccccccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddddddd') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls.map((pieces) => pieces.map((p) => p.id))).toEqual([
+      ['1-0', '1-1'],
+      ['1-2', '1-3'],
+    ]);
+  });
+
+  it('falls back to the global default when provider maxBatchChars is undefined (migration)', async () => {
+    // No provider override at all (mirrors pre-existing settings that never
+    // had the new field). Global is 16 → same 2-batch behavior as legacy.
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({ globalMaxBatchChars: 16 }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaaaaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbbbbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccccccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddddddd') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls).toHaveLength(2);
+    for (const pieces of calls) {
+      const chars = pieces.reduce((sum, p) => sum + p.text.length, 0);
+      expect(chars).toBeLessThanOrEqual(16);
+    }
+  });
+
+  it('enforces the provider maxTextGroupCount piece-count cap', async () => {
+    // Char budget is huge (5000) so only the piece-count cap (2) governs.
+    // Five 4-char paragraphs → batches of [2, 2, 1].
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({
+        maxBatchChars: 5000,
+        maxTextGroupCount: 2,
+        globalMaxBatchChars: 5000,
+      }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddd') },
+        { pageNumber: 1, paragraph: para('1-4', 'eeee') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls.map((pieces) => pieces.length)).toEqual([2, 2, 1]);
+    for (const pieces of calls) {
+      expect(pieces.length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('ignores maxTextGroupCount when set to 0 (unlimited)', async () => {
+    // Provider sets maxTextGroupCount = 0 (= unlimited). Char budget (16)
+    // alone governs. Four 8-char paragraphs → 2 batches of 2.
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({ maxTextGroupCount: 0, globalMaxBatchChars: 16 }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaaaaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbbbbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccccccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddddddd') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls).toHaveLength(2);
+  });
+
+  it('enforces both maxBatchChars and maxTextGroupCount together', async () => {
+    // Both limits active: maxBatchChars = 8, maxTextGroupCount = 2.
+    // Five 4-char paragraphs. Each batch caps at 2 pieces AND 8 chars.
+    // Batches: [1-0,1-1] (8 chars, 2 pieces), [1-2,1-3] (8 chars, 2 pieces),
+    // [1-4] (4 chars, 1 piece).
+    vi.mocked(loadSettings).mockResolvedValue(
+      settingsWithProviderOverride({
+        maxBatchChars: 8,
+        maxTextGroupCount: 2,
+        globalMaxBatchChars: 5000,
+      }),
+    );
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'aaaa') },
+        { pageNumber: 1, paragraph: para('1-1', 'bbbb') },
+        { pageNumber: 1, paragraph: para('1-2', 'cccc') },
+        { pageNumber: 1, paragraph: para('1-3', 'dddd') },
+        { pageNumber: 1, paragraph: para('1-4', 'eeee') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    expect(calls).toHaveLength(3);
+    for (const pieces of calls) {
+      expect(pieces.length).toBeLessThanOrEqual(2);
+      const chars = pieces.reduce((sum, p) => sum + p.text.length, 0);
+      expect(chars).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('preserves legacy behavior when settings have no provider batch fields', async () => {
+    // Raw DEFAULT_SETTINGS (providers[0] has no maxBatchChars/maxTextGroupCount).
+    // Global maxBatchChars = 2000. Three short paragraphs fit in one batch.
+    vi.mocked(loadSettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+    } as ExtensionSettings);
+
+    await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: para('1-0', 'First short prose.') },
+        { pageNumber: 1, paragraph: para('1-1', 'Second short prose.') },
+        { pageNumber: 1, paragraph: para('1-2', 'Third short prose.') },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    const calls = translateCalls();
+    // All three fit well within the 2000-char global default → one batch.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].map((p) => p.id)).toEqual(['1-0', '1-1', '1-2']);
+  });
+});

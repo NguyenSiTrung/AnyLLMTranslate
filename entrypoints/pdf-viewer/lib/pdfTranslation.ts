@@ -52,15 +52,20 @@ function cacheKeyFor(url: string, sourceLanguage: string, targetLanguage: string
 function splitIntoBatches<T extends { paragraph: PdfParagraph }>(
   items: T[],
   maxBatchChars: number,
+  maxTextGroupCount?: number,
 ): T[][] {
   const batches: T[][] = [];
   let current: T[] = [];
   let currentChars = 0;
   const limit = Math.max(1, maxBatchChars);
+  // Per-provider piece-count cap. 0 / undefined → no piece-count limit (char
+  // budget alone governs batching), preserving the legacy behavior.
+  const pieceLimit =
+    maxTextGroupCount && maxTextGroupCount > 0 ? maxTextGroupCount : Infinity;
 
   for (const item of items) {
     const length = item.paragraph.text.length;
-    if (current.length > 0 && currentChars + length > limit) {
+    if (current.length > 0 && (currentChars + length > limit || current.length >= pieceLimit)) {
       batches.push(current);
       current = [];
       currentChars = 0;
@@ -243,7 +248,13 @@ export async function translateParagraphs(
   //    provided), try the streaming port first for incremental fill; fall back
   //    to the non-streaming batch path on any stream error. Correctness is
   //    guaranteed by the fallback — streaming only improves perceived speed.
-  const batches = splitIntoBatches(proseItems, settings.maxBatchChars);
+  //    Batch size resolution: provider-level override (> 0) wins over the
+  //    global default; 0 / undefined falls back to the global maxBatchChars.
+  //    maxTextGroupCount caps the number of pieces per request (> 0 only).
+  const activeProvider = settings.providers?.[0];
+  const maxBatchChars = activeProvider?.maxBatchChars || settings.maxBatchChars;
+  const maxTextGroupCount = activeProvider?.maxTextGroupCount || 0;
+  const batches = splitIntoBatches(proseItems, maxBatchChars, maxTextGroupCount);
   const batchResults = await Promise.all(
     batches.map(async (batch) => {
       if (onPiece) {
