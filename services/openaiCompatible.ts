@@ -518,6 +518,22 @@ Rules:
    */
   private static readonly PER_SERVICE_MAX_RETRIES = 1;
 
+  /**
+   * 429 Too Many Requests retry configuration.
+   * - MAX_429_RETRIES: max retry attempts after the initial 429 response
+   *   (3 → 4 total fetch calls to the same key before giving up).
+   * - RATE_LIMIT_BASE_DELAY_MS: base delay for exponential backoff when the
+   *   server omits a Retry-After header.
+   * - RATE_LIMIT_MAX_DELAY_MS: cap on the exponential backoff delay.
+   * - RATE_LIMIT_JITTER_MS: max random jitter (0..N) added to every 429
+   *   retry delay to avoid thundering-herd retries when many concurrent
+   *   requests get rate-limited simultaneously.
+   */
+  private static readonly MAX_429_RETRIES = 3;
+  private static readonly RATE_LIMIT_BASE_DELAY_MS = 1000;
+  private static readonly RATE_LIMIT_MAX_DELAY_MS = 30_000;
+  private static readonly RATE_LIMIT_JITTER_MS = 500;
+
   private async fetchCompletion(
     request: ChatCompletionRequest,
   ): Promise<ChatCompletionResponse> {
@@ -528,6 +544,7 @@ Rules:
     request: ChatCompletionRequest,
     maxRetries: number,
     attempt = 1,
+    rateLimitAttempts = 0,
   ): Promise<ChatCompletionResponse> {
     const timeout = this.config.requestTimeoutMs ?? 60000;
     // RPM rate limiting: wait for a slot before starting the request-timeout
@@ -612,7 +629,25 @@ Rules:
           };
           const strippedRequest = { ...request };
           delete strippedRequest.response_format;
-          return this.fetchWithRetry(strippedRequest, maxRetries, attempt);
+          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
+        }
+
+        // 429 Too Many Requests: retry with backoff + jitter, honoring the
+        // server's Retry-After header when present. This is a SEPARATE retry
+        // budget from the 5xx path below — a rate-limited key can recover, so
+        // we allow up to MAX_429_RETRIES attempts. After the budget is
+        // exhausted, throw a friendly ApiError carrying statusCode 429 so the
+        // pool's circuit breaker can trip and fail over to another key.
+        if (response.status === 429) {
+          if (rateLimitAttempts < OpenAICompatibleService.MAX_429_RETRIES) {
+            const delay = this.compute429Delay(response, rateLimitAttempts);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            return this.fetchWithRetry(request, maxRetries, attempt, rateLimitAttempts + 1);
+          }
+          throw new ApiError(
+            'Rate limit exceeded. The provider is limiting requests. Please wait a moment or reduce the batch size in Settings.',
+            429,
+          );
         }
 
         // Retry on 5xx or network-like errors, but NOT on 4xx client errors
@@ -620,7 +655,7 @@ Rules:
         if (shouldRetry) {
           const backoff = 500 * Math.pow(2, attempt - 1);
           await new Promise((resolve) => setTimeout(resolve, backoff));
-          return this.fetchWithRetry(request, maxRetries, attempt + 1);
+          return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts);
         }
 
         throw new ApiError(errorMessage, response.status);
@@ -640,11 +675,55 @@ Rules:
       if (attempt <= maxRetries && !isClientError) {
         const backoff = 500 * Math.pow(2, attempt - 1);
         await new Promise((resolve) => setTimeout(resolve, backoff));
-        return this.fetchWithRetry(request, maxRetries, attempt + 1);
+        return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts);
       }
 
       throw error;
     }
+  }
+
+  /** Parse the HTTP `Retry-After` header into a delay in milliseconds.
+   *  The header may be either a non-negative integer (seconds to wait) or an
+   *  HTTP-date (the absolute time at which to retry). Returns null when the
+   *  header is absent or unparseable. */
+  private parseRetryAfter(response: Response): number | null {
+    try {
+      const header = response.headers.get('retry-after');
+      if (!header) return null;
+
+      // Numeric form: seconds until retry.
+      const seconds = Number(header);
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return seconds * 1000;
+      }
+
+      // HTTP-date form: absolute retry time.
+      const dateMs = Date.parse(header);
+      if (!Number.isNaN(dateMs)) {
+        return Math.max(0, dateMs - Date.now());
+      }
+
+      return null;
+    } catch {
+      // Mock responses in tests may omit the headers object — treat as absent.
+      return null;
+    }
+  }
+
+  /** Compute the delay (ms) for a 429 retry. Honors the `Retry-After` header
+   *  when present (seconds or HTTP-date); otherwise falls back to exponential
+   *  backoff (base * 2^attempt, capped at RATE_LIMIT_MAX_DELAY_MS). Jitter
+   *  (0..RATE_LIMIT_JITTER_MS) is always added to avoid thundering-herd
+   *  retries when many concurrent requests get 429'd at once. */
+  private compute429Delay(response: Response, rateLimitAttempts: number): number {
+    const jitter = Math.random() * OpenAICompatibleService.RATE_LIMIT_JITTER_MS;
+    const retryAfterMs = this.parseRetryAfter(response);
+    if (retryAfterMs !== null) {
+      return retryAfterMs + jitter;
+    }
+    const base = OpenAICompatibleService.RATE_LIMIT_BASE_DELAY_MS * Math.pow(2, rateLimitAttempts);
+    const capped = Math.min(base, OpenAICompatibleService.RATE_LIMIT_MAX_DELAY_MS);
+    return capped + jitter;
   }
 
   /**

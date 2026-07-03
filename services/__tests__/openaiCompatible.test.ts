@@ -162,15 +162,20 @@ describe('OpenAICompatibleService', () => {
       }
 
       it('throws ApiError(statusCode=429) on a rate-limit response', async () => {
+        // 429 now retries with backoff (Phase 4) — use fake timers to avoid
+        // the ~7s real-timer wait that would exceed the test timeout.
+        vi.useFakeTimers();
         globalThis.fetch = httpError(429, 'Too Many Requests');
         const service = new OpenAICompatibleService(mockConfigWithKey);
-        await expect(
-          service.translate({
-            texts: new Map([['p1', 'Hello']]),
-            sourceLanguage: 'en',
-            targetLanguage: 'vi',
-          }),
-        ).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
+        const promise = service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        promise.catch(() => {});
+        await vi.advanceTimersByTimeAsync(120_000);
+        await expect(promise).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
+        vi.useRealTimers();
       });
 
       it('throws ApiError(statusCode=503) on a server error', async () => {
@@ -202,19 +207,24 @@ describe('OpenAICompatibleService', () => {
       });
 
       it('the thrown error is an ApiError instance carrying statusCode', async () => {
+        vi.useFakeTimers();
         globalThis.fetch = httpError(429, 'Too Many Requests');
         const service = new OpenAICompatibleService(mockConfigWithKey);
+        const promise = service.translate({
+          texts: new Map([['p1', 'Hello']]),
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+        promise.catch(() => {});
+        await vi.advanceTimersByTimeAsync(120_000);
         try {
-          await service.translate({
-            texts: new Map([['p1', 'Hello']]),
-            sourceLanguage: 'en',
-            targetLanguage: 'vi',
-          });
+          await promise;
           throw new Error('expected translate to throw');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
           expect((error as ApiError).statusCode).toBe(429);
         }
+        vi.useRealTimers();
       });
 
       it('throws ApiError on a network failure (fetch rejects)', async () => {
@@ -859,6 +869,9 @@ describe('OpenAICompatibleService', () => {
     const ctx = { title: 't', description: 'd', domain: 'x.com' };
 
     it('re-throws ApiError on a 429', async () => {
+      // 429 now retries with backoff (Phase 4) — use fake timers to avoid
+      // the ~7s real-timer wait that would exceed the test timeout.
+      vi.useFakeTimers();
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 429,
@@ -866,10 +879,14 @@ describe('OpenAICompatibleService', () => {
         text: () => Promise.resolve(''),
       });
       const service = new OpenAICompatibleService(mockConfigWithKey);
-      await expect(service.detectPageCategory(ctx)).rejects.toMatchObject({
+      const promise = service.detectPageCategory(ctx);
+      promise.catch(() => {});
+      await vi.advanceTimersByTimeAsync(120_000);
+      await expect(promise).rejects.toMatchObject({
         name: 'ApiError',
         statusCode: 429,
       });
+      vi.useRealTimers();
     });
 
     it('returns {success:false} on a parse failure of a 200 response', async () => {
