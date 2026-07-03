@@ -17,6 +17,7 @@ import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
+import { measureBoxHeight } from '../lib/fontMetrics';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -130,23 +131,32 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
 type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 
 /**
- * Conservative lower-bound estimate of a translated box's rendered height.
+ * Font stack used by the layout boxes — must match the CSS inherited font on
+ * `.pdf-viewer-root` (style.css) so canvas `measureText` reflects the actual
+ * rendered glyphs. Used by the font-metrics helper for accurate pre-paint
+ * height computation.
+ */
+const LAYOUT_BOX_FONT_FAMILY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+/**
+ * Accurate pre-paint height estimate for a translated overlay box.
  *
- * Used as a floor under the live DOM measurement: in a real browser we prefer
- * the actual `getBoundingClientRect().height` (which accounts for tall stacking
- * diacritics like Vietnamese `ệ`, `ỗ` and for CJK). The estimate only kicks in
- * when layout is unavailable (jsdom tests, hidden containers) so the reflow
- * never silently under-flows there either.
+ * Delegates to the canvas-based font-metrics helper (`measureBoxHeight`),
+ * which measures real per-word glyph widths (handling tall stacking
+ * diacritics like Vietnamese `ệ`, `ỗ` and CJK) rather than the crude
+ * `chars × avgCharWidth` heuristic. This makes the FIRST-paint box positions
+ * match the final post-reflow layout — no collision flash, no layout-thrash.
+ *
+ * The live DOM `getBoundingClientRect` measurement in the reflow effect still
+ * wins when available (it accounts for sub-pixel rounding + any CSS the
+ * metrics helper doesn't model); this estimate is the floor that guarantees
+ * the first paint is already correct.
  */
 function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): number {
-  const effectiveWidth = Math.max(widthPx - 6, 10);
-  // Generous avg char width so we err toward *more* lines (taller boxes),
-  // which is the safe direction for collision avoidance.
-  const avgCharWidth = fontSizePx * 0.5;
-  const lineHeight = fontSizePx * 1.45;
-  const charsPerLine = Math.max(1, Math.floor(effectiveWidth / avgCharWidth));
-  const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
-  return lines * lineHeight + lineHeight * 0.5 + 4;
+  return measureBoxHeight(text, widthPx, {
+    fontFamily: LAYOUT_BOX_FONT_FAMILY,
+    fontSize: fontSizePx,
+  }).height;
 }
 
 /** Compute the absolute placement + sizing for one overlay box. */

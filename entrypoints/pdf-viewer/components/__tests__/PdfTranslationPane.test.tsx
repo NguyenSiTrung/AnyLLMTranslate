@@ -320,6 +320,77 @@ describe('PdfTranslationPane layout overlay rendering', () => {
   });
 });
 
+describe('PdfTranslationPane font-metrics pre-paint sizing', () => {
+  // These tests verify that the canvas-based font-metrics helper drives
+  // accurate pre-paint box heights — the headline improvement of Phase 5
+  // Task 1. With a real `measureText`, the first-paint `top` of the second
+  // box already accounts for the first box's wrapped height, so there's no
+  // collision flash before the reflow effect runs.
+
+  it('uses font metrics to push the second box below a wrapping first box on first paint', async () => {
+    // measureText returns width = chars × 8px. With width=100 (effectiveWidth=94),
+    // a 30-char text wraps into multiple lines, pushing box 2 down even before
+    // the getBoundingClientRect reflow runs.
+    const measureText = vi.fn((s: string) => ({ width: s.length * 8 }));
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => ({ font: '', measureText }) as unknown as CanvasRenderingContext2D,
+    );
+    // Suppress the reflow effect so we observe the PRE-PAINT estimate only.
+    const realGetBCR = Element.prototype.getBoundingClientRect;
+    vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        // Return 0 height so the measured value never exceeds the estimate —
+        // isolates the font-metrics path from the DOM-measurement path.
+        return { ...realGetBCR.call(this), height: 0, bottom: 0 };
+      });
+
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        // 30 chars → at 8px/char that's 240px; effectiveWidth=94 → ~3 lines.
+        ['1-0', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+        ['1-1', 'translated-b'],
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'short', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'orig', fontSize: 12, isHeading: false, x: 50, y: 70, width: 100, height: 14 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+    const boxes = getLayoutBoxes();
+    expect(boxes.length).toBe(2);
+    // Box 1 at its original 50px; box 2 pushed below 50 + ~3 wrapped lines.
+    expect(boxes[0].style.top).toBe('50px');
+    expect(parseInt(boxes[1].style.top, 10)).toBeGreaterThan(70);
+    expect(measureText).toHaveBeenCalled();
+  });
+
+  it('falls back to a heuristic when measureText is unavailable without throwing', async () => {
+    // No measureText on the context (e.g. jsdom stub) — must not throw, and
+    // the boxes still render with sane positions.
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D);
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        ['1-0', 'A long translated paragraph that should still wrap sanely.'],
+        ['1-1', 'Second box.'],
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'short', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'b', fontSize: 12, isHeading: false, x: 50, y: 70, width: 100, height: 14 },
+      ],
+    };
+    const pdfPage = createPageMock();
+    await renderLayout(page, pdfPage);
+    const boxes = getLayoutBoxes();
+    expect(boxes.length).toBe(2);
+    // Heuristic still pushes box 2 down (it errs toward more lines).
+    expect(parseInt(boxes[1].style.top, 10)).toBeGreaterThan(70);
+  });
+});
+
 describe('PdfTranslationPane layout states', () => {
   it('shows scroll-to-translate status over the canvas when idle', () => {
     const page: PageTranslations = { state: 'idle', paragraphs: new Map() };
