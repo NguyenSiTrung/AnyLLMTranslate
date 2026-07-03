@@ -1,33 +1,28 @@
 {
-  "lastRefresh": "2026-07-02T19:05:00+07:00",
+  "lastRefresh": "2026-07-03T19:15:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh since 2026-06-30 cycle. 1 conductor track archived in between: generic-subtitle-handler_20260702 (created/completed/archived 2026-07-02, 6 phases, 28 leaf sub-tasks). Commits f0e7e2e...443095e.",
-    "product.md: refresh marker bumped 2026-06-30/1903/131/57 -> 2026-07-02/2014/140/58. Implementation Status entry for 'Generic Subtitle Handler' (line 177) + Current State metrics (line 180, 2014 tests/3.88MB) already added by archive commit 4b14883 — no additional entry needed.",
-    "patterns.md: refresh marker bumped (header) to 2026-07-02/2014/140/58. Footer health line updated to 2014 tests / 140 files, 58 tracks archived, 3.88MB build, 3 source lint errors, 0 tsc errors.",
-    "patterns.md: 4 patterns from generic-subtitle-handler already elevated by archive commit 4b14883 (getPatternsForCurrentHost ACCUMULATES, Content-Type fetch-not-xhr, validateSubtitleContent gate, standalone-toggle-vs-per-site-array). No new patterns to add this cycle.",
-    "tech-stack.md: No drift vs package.json (no dependency changes this cycle).",
-    "workflow.md: No drift.",
-    "tracks.md: No drift (generic-subtitle-handler_20260702 already in archived list from archive commit 4b14883, line 70).",
-    "learnings: 4 patterns from generic-subtitle-handler were already elevated to patterns.md by the archive commit. No additional patterns needed extraction. No cross-track duplicates to merge.",
-    "FIX (out-of-scope, user-approved): eslint.config.mjs — added 'ImmersiveTransalteExtensionCode/**' to ignores array. Vendored gitignored reference copy of Immersive Translate extension was inflating `pnpm lint` from 3 source errors to 31585 errors. Now `pnpm lint` reports 3 real source errors.",
-    "FIX (out-of-scope, user-approved): tests/unit/subtitleCoordinatorManifest.test.ts:339 — sendMessage mock changed from narrow `(msg: { action: string })` signature (TS2345 vs NormalizedProcedure) to type-safe `(...args: unknown[]) => { const msg = args[0] as {...}; ... }` idiom matching line 669 of the same file.",
-    "FIX (out-of-scope, user-approved): tests/unit/genericHandler.test.ts:88-99 — languageExtractor calls guarded with `expect(extractor).toBeDefined(); if (!extractor) return;` to resolve 4x TS2722 (cannot invoke possibly-undefined). These were pre-existing errors hidden behind the manifest mock error in the prior cycle's tail-truncated tsc output.",
-    "beads DRIFT FIXED (user-approved): closed 28 orphaned OPEN leaf sub-tasks (ALT-ix8.7.1 through ALT-ix8.12.5). Their parent epic ALT-ix8 + 12 phase tasks were already CLOSED by commit 443095e, but the leaf children were left open. bd list now shows only ALT-j1k (P3 decision, intentionally open).",
-    "backups: product.md.bak + patterns.md.bak + refresh_state.json.bak created before edits.",
-    "verification: pnpm test --run (2014/2014 passed across 140 files), tsc --noEmit (0 errors), eslint . (3 errors in project source — down from 31585), wxt build (3.88MB) all run live this cycle. Changed test files re-run individually: subtitleCoordinatorManifest.test.ts + genericHandler.test.ts (60/60 passed)."
+    "Scope: full refresh since 2026-07-02 cycle. Track pdf-perf-ux_20260703 archived (d7822da); ~26 commits; 157 new tests (2171 total / 146 files).",
+    "product.md: refresh marker + Current State (2171/146/59, build ~3.9 MB, tsc clean, 2 lint). Added Implementation Status entry for PDF Translation Performance & UX Improvements.",
+    "patterns.md: refresh marker bumped; elevated 6 additional patterns from pdf-perf-ux learnings (optional translateStream, port streaming, streaming fallback, shared keep-alive, PDFPageProxy.cleanup sync, subtitle fetch body-scan tests).",
+    "tech-stack.md / workflow.md: no drift. tracks.md already updated by archive commit.",
+    "FIX (user-approved): usePdfPageTranslations.test.tsx — PdfPageText (pageNumber, no text), PdfParagraph isHeading, IO callback 2-arg.",
+    "FIX (user-approved): background.test.ts — poll fetchCalls for bidirectional context; glossary test scans all fetch bodies (mock.calls[1] wrong when chunk 0 retries).",
+    "beads DRIFT FIXED: closed ALT-are epic + 19 child issues. bd list: ALT-j1k only.",
+    "backups: product.md.bak, patterns.md.bak, refresh_state.json.bak.",
+    "verification: pnpm test --run 2171/2171 (3 consecutive full runs), tsc --noEmit 0 errors, wxt build ~3.9 MB."
   ],
   "codebaseHealth": {
-    "tests": 2014,
-    "testFiles": 140,
-    "buildSize": "~3.88 MB",
-    "lintErrors": 3,
-    "lintErrorsDetail": "3 errors in project source: (1) content/subtitleRenderer.ts:19 unused 'NativeTrackRenderer' import; (2) inject/jsonParseSubtitleHook.ts:48 no-non-null-assertion; (3) tests/unit/netflixHandler.test.ts:77 no-non-null-assertion. NOTE: previous cycle's 14 no-empty errors in content.ts destroyZombie() no longer reproduce. The 31585-error inflation from vendored ImmersiveTransalteExtensionCode/ is now excluded via eslint ignores.",
+    "tests": 2171,
+    "testFiles": 146,
+    "buildSize": "~3.9 MB",
+    "lintErrors": 2,
+    "lintErrorsDetail": "subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean (0 errors). Fixed this cycle: subtitleCoordinatorManifest.test.ts:339 sendMessage mock type (TS2345) + genericHandler.test.ts:88-99 extractor guard (4x TS2722).",
-    "archivedTracks": 58,
+    "tscErrorsDetail": "Clean after PDF hook test fixture fixes.",
+    "archivedTracks": 59,
     "activeTracks": 0,
     "failingTests": 0
   },
-  "beadsDrift": "Fixed. 28 orphaned OPEN leaf tasks (ALT-ix8.7.1–ALT-ix8.12.5) closed this cycle — their parent epic + 12 phase tasks were already closed by commit 443095e. bd list now shows 1 open issue: ALT-j1k (P3 decision, intentionally open)."
+  "beadsDrift": "Fixed. Closed ALT-are tree from archived pdf-perf-ux_20260703. Open: ALT-j1k (P3 decision) only."
 }

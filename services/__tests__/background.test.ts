@@ -482,8 +482,13 @@ describe('services/background', () => {
         { tab: { id: 42 } } as chrome.runtime.MessageSender,
       );
 
-      // Wait for background chunks to process
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Wait for at least 2 background chunks to be processed. Polling (vs a
+      // fixed setTimeout) is deterministic — it advances as soon as chunk 1
+      // lands, and is robust to parallel-suite scheduling jitter under load.
+      const deadline = Date.now() + 5000;
+      while (fetchCalls.length < 2 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
 
       // fetchCalls[0] = chunk 0 (first chunk, forward look-ahead only)
       // fetchCalls[1] = chunk 1 (should have bidirectional context)
@@ -510,9 +515,11 @@ describe('services/background', () => {
       }));
 
       // First chunk returns properNouns; second chunk's prompt should contain them.
+      const fetchBodies: string[] = [];
       let callCount = 0;
       vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, opts: { body: string }) => {
         callCount++;
+        fetchBodies.push(opts.body);
         const body = JSON.parse(opts.body) as { messages: Array<{ content: string }> };
         const userJson = JSON.parse(body.messages[1].content.split('\n\n').pop() ?? '{}');
         const translations: Record<string, string> = {};
@@ -520,7 +527,6 @@ describe('services/background', () => {
           translations[key] = `T-${key}`;
         }
         const response: Record<string, unknown> = { translations };
-        // First chunk returns proper nouns
         if (callCount === 1) {
           response.properNouns = { John: 'Juan' };
         }
@@ -547,15 +553,25 @@ describe('services/background', () => {
         { tab: { id: 43 } } as chrome.runtime.MessageSender,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Scan all captured bodies — mock.calls[1] is wrong when chunk 0 retries (withRetry).
+      const glossaryDeadline = Date.now() + 5000;
+      let chunkWithGlossary: { messages: Array<{ content: string }> } | null = null;
+      while (Date.now() < glossaryDeadline) {
+        for (const raw of fetchBodies) {
+          const parsed = JSON.parse(raw) as { messages: Array<{ content: string }> };
+          const system = parsed.messages[0]?.content ?? '';
+          if (system.includes('Previously translated names') && system.includes('"John" → "Juan"')) {
+            chunkWithGlossary = parsed;
+            break;
+          }
+        }
+        if (chunkWithGlossary) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
 
-      // Second chunk's system prompt should contain the rolling glossary
-      expect(callCount).toBeGreaterThanOrEqual(2);
-      const chunk2Body = JSON.parse(
-        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1]?.body as string,
-      ) as { messages: Array<{ content: string }> };
-      expect(chunk2Body.messages[0].content).toContain('Previously translated names');
-      expect(chunk2Body.messages[0].content).toContain('"John" → "Juan"');
+      expect(chunkWithGlossary).not.toBeNull();
+      expect(chunkWithGlossary!.messages[0].content).toContain('Previously translated names');
+      expect(chunkWithGlossary!.messages[0].content).toContain('"John" → "Juan"');
     });
 
     it('prefixes cue text with [voice] when cue.voice is set', async () => {

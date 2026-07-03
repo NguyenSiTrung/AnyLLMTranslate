@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   observerInstances.length = 0;
   // Default mocks so the observer tests' async paths don't throw.
-  mockedExtractPageText.mockResolvedValue({ paragraphs: [], text: '' });
+  mockedExtractPageText.mockResolvedValue({ pageNumber: 1, paragraphs: [] });
   mockedTranslateParagraphs.mockResolvedValue([]);
   globalThis.IntersectionObserver = vi.fn((callback: IntersectionObserverCallback, options?: IntersectionObserverInit) => {
     void callback;
@@ -167,7 +167,10 @@ describe('usePdfPageTranslations', () => {
     const target = document.querySelector(`[data-page-slot="${pageSlot}"]`);
     if (!target) throw new Error(`page slot ${pageSlot} not found`);
     act(() => {
-      cb([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry]);
+      cb(
+        [{ target, isIntersecting: true } as unknown as IntersectionObserverEntry],
+        {} as unknown as IntersectionObserver,
+      );
     });
   }
 
@@ -175,11 +178,11 @@ describe('usePdfPageTranslations', () => {
     it('marks each paragraph success independently when translation completes', async () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
+        pageNumber: 1,
         paragraphs: [
           { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
-          { id: 'p2', text: 'World', x: 0, y: 20, width: 100, height: 10, fontSize: 10 },
+          { id: 'p2', text: 'World', x: 0, y: 20, width: 100, height: 10, fontSize: 10, isHeading: false },
         ],
-        text: 'Hello\nWorld',
       });
       mockedTranslateParagraphs.mockResolvedValue([
         { id: 'p1', translatedText: 'Xin chào' },
@@ -210,10 +213,10 @@ describe('usePdfPageTranslations', () => {
     it('marks in-flight paragraphs as error when the page fails', async () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
+        pageNumber: 1,
         paragraphs: [
           { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
         ],
-        text: 'Hello',
       });
       mockedTranslateParagraphs.mockRejectedValue(new Error('Network down'));
 
@@ -247,7 +250,7 @@ describe('usePdfPageTranslations', () => {
         ]),
       );
       setupSlots(1);
-      mockedExtractPageText.mockResolvedValue({ paragraphs: [], text: '' });
+      mockedExtractPageText.mockResolvedValue({ pageNumber: 1, paragraphs: [] });
 
       const stablePages = [{} as PDFPageProxy];
       const { result } = renderHook(() => {
