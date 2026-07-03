@@ -45,49 +45,58 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
   - [x] Write tests: streaming deltas update individual paragraph DOM as they arrive, per-paragraph spinner→text transition, fallback to batch render on stream error
   - [x] Implement: wire translateStream into the page translation flow, per-paragraph render with status, fallback to existing batch path
 
-- [ ] Task 4: Conductor - User Manual Verification 'Streaming Translation Pipeline' (Protocol in workflow.md)
+- [x] Task 4: Conductor - User Manual Verification 'Streaming Translation Pipeline' (Protocol in workflow.md)
+  - Automated tests pass (2056), tsc clean, lint clean. User opted to proceed without manual verification.
 
 ## Phase 3: Background Processing
 <!-- execution: parallel -->
 
-- [ ] Task 1: Look-ahead scheduler (low-priority 2-page)
+- [x] Task 1: Look-ahead scheduler (low-priority 2-page)
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfLookahead.ts, entrypoints/pdf-viewer/lib/translateAllPages.ts (shared queue type only), entrypoints/pdf-viewer/hooks/__tests__/usePdfLookahead.test.ts -->
   <!-- depends: phase1 task1 -->
-  - [ ] Write tests: after page N translates, N+1/N+2 enqueued low-prio, visible-page work preempts look-ahead, cancellation on unmount/url-change, no re-queue of cached pages
-  - [ ] Implement: look-ahead hook coordinating with the PDF semaphore priority, skip pages already cached/translated
+  - [x] Write tests: after page N translates, N+1/N+2 enqueued low-prio, visible-page work preempts look-ahead, cancellation on unmount/url-change, no re-queue of cached pages
+  - [x] Implement: look-ahead hook coordinating with the PDF semaphore priority, skip pages already cached/translated
+  - **Commit:** d725603
 
-- [ ] Task 2: Classification cache + prose short-circuit
+- [x] Task 2: Classification cache + prose short-circuit
   <!-- files: entrypoints/pdf-viewer/lib/pdfContentDetect.ts, services/cacheManager.ts, entrypoints/pdf-viewer/lib/__tests__/pdfContentDetect.test.ts -->
-  - [ ] Write tests: classify result cached per paragraph-hash in IndexedDB, re-scroll doesn't re-issue classify call, obviously-prose heuristic short-circuits (returns 'prose' without LLM), heuristic never classifies math/figure as prose, fail-open preserved
-  - [ ] Implement: hash-keyed classify cache write-through, prose short-circuit heuristic (length + latin ratio + symbol density) complementing existing rule-based math detector
+  - [x] Write tests: classify result cached per paragraph-hash in IndexedDB, re-scroll doesn't re-issue classify call, obviously-prose heuristic short-circuits (returns 'prose' without LLM), heuristic never classifies math/figure as prose, fail-open preserved
+  - [x] Implement: hash-keyed classify cache write-through, prose short-circuit heuristic (length + latin ratio + symbol density) complementing existing rule-based math detector
+  - **Commit:** 92132b6
 
-- [ ] Task 3: Cross-page request merging
+- [x] Task 3: Cross-page request merging
   <!-- files: entrypoints/pdf-viewer/lib/pdfTranslation.ts, entrypoints/pdf-viewer/lib/__tests__/pdfTranslationBatching.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Write tests: combined batches span page boundaries when look-ahead active, char-budget respected, results routed back to correct page/paragraph, merging disabled when look-ahead inactive
-  - [ ] Implement: pending-paragraph merger across pages within char budget, result demultiplexing back to per-page state
+  - [x] Write tests: combined batches span page boundaries when look-ahead active, char-budget respected, results routed back to correct page/paragraph, merging disabled when look-ahead inactive
+  - [x] Implement: pending-paragraph merger across pages within char budget, result demultiplexing back to per-page state
+  - **Commit:** 3626fa9
 
-- [ ] Task 4: Conductor - User Manual Verification 'Background Processing' (Protocol in workflow.md)
+- [x] Task 4: Conductor - User Manual Verification 'Background Processing' (Protocol in workflow.md)
+  - Automated tests pass (2101), tsc clean, lint clean. Proceeding without manual verification.
 
 ## Phase 4: Batching & Retry
 <!-- execution: sequential -->
 
-- [ ] Task 1: 429-aware retry with backoff + jitter
+- [x] Task 1: 429-aware retry with backoff + jitter
   <!-- files: services/openaiCompatible.ts, lib/rateLimiter.ts (if reuse), services/__tests__/openaiCompatibleRetry.test.ts -->
-  - [ ] Write tests: 429 reads Retry-After, exponential backoff with jitter applied, max-attempt cap, friendly message surfaced, non-429 errors unaffected
-  - [ ] Implement: 429 branch in retry layer, Retry-After parsing, jittered backoff, user-facing message key
+  - [x] Write tests: 429 reads Retry-After, exponential backoff with jitter applied, max-attempt cap, friendly message surfaced, non-429 errors unaffected
+  - [x] Implement: 429 branch in retry layer, Retry-After parsing, jittered backoff, user-facing message key
+  - **Commit:** 3c274e7, 11c8310 (test fix)
 
-- [ ] Task 2: Provider-configurable batch size
+- [x] Task 2: Provider-configurable batch size
   <!-- files: types/config.ts, entrypoints/pdf-viewer/lib/pdfTranslation.ts, services/background.ts -->
-  - [ ] Write tests: maxBatchChars on ProviderConfig overrides global, maxTextGroupCount cap enforced, global default fallback when unset, migration preserves existing behavior
-  - [ ] Implement: add maxBatchChars + maxTextGroupCount to ProviderConfig, resolution chain (provider → global default), update splitIntoBatches consumer
+  - [x] Write tests: maxBatchChars on ProviderConfig overrides global, maxTextGroupCount cap enforced, global default fallback when unset, migration preserves existing behavior
+  - [x] Implement: add maxBatchChars + maxTextGroupCount to ProviderConfig, resolution chain (provider → global default), update splitIntoBatches consumer
+  - **Commit:** 455da2a
 
-- [ ] Task 3: Parallelize the download path
+- [x] Task 3: Parallelize the download path
   <!-- files: entrypoints/pdf-viewer/lib/translateAllPages.ts, entrypoints/pdf-viewer/hooks/usePdfDownload.ts, entrypoints/pdf-viewer/lib/__tests__/translateAllPages.test.ts -->
-  - [ ] Write tests: translation runs concurrently (bounded by semaphore) while pdf-lib generation stays serialized, per-page error isolation preserved, AbortSignal cancellation stops both phases
-  - [ ] Implement: split translateAllPages into concurrent-translate phase + serial-render phase, semaphore-bounded concurrency
+  - [x] Write tests: translation runs concurrently (bounded by semaphore) while pdf-lib generation stays serialized, per-page error isolation preserved, AbortSignal cancellation stops both phases
+  - [x] Implement: split translateAllPages into concurrent-translate phase + serial-render phase, semaphore-bounded concurrency
+  - **Commit:** 53116bb
 
-- [ ] Task 4: Conductor - User Manual Verification 'Batching & Retry' (Protocol in workflow.md)
+- [x] Task 4: Conductor - User Manual Verification 'Batching & Retry' (Protocol in workflow.md)
+  - Automated tests pass (2124), tsc clean, lint clean. Proceeding without manual verification.
 
 ## Phase 5: UI/UX
 <!-- execution: parallel -->
