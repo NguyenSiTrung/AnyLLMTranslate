@@ -22,6 +22,12 @@ import {
 } from '../lib/pdfTranslation';
 import { extractPageText, type PdfParagraph } from '../lib/pdfTextExtraction';
 import { loadSettings } from '@/lib/config';
+import {
+  computeContextHash,
+  loadPdfProgress,
+  savePdfProgress,
+  type PdfProgressContext,
+} from '../lib/pdfProgressStore';
 
 export interface UsePdfPageTranslationsOptions {
   /** Loaded PDF pages, in page order. */
@@ -176,6 +182,85 @@ export function usePdfPageTranslations({
   useEffect(() => { pdfPagesRef.current = pdfPages; }, [pdfPages]);
   // Stable per-page translator references so retry triggers re-extract the same page
   const inFlightRef = useRef<Set<number>>(new Set());
+  // Context hash for progress persistence (null until resolved). Stored in a
+  // ref so write-through reads it without re-running the hydrate effect.
+  const progressHashRef = useRef<string | null>(null);
+  // Hydration guard: prevents write-through from racing ahead of the initial
+  // load (which would clobber hydrated state with an empty Map).
+  const hydratedRef = useRef(false);
+
+  // Resolve the active provider identity for the progress context hash.
+  // Uses the first pool provider's baseUrl + model + preset — sufficient for
+  // invalidation when the user switches provider/model.
+  async function resolveProgressContext(): Promise<PdfProgressContext | null> {
+    try {
+      const settings = await loadSettings();
+      const active = settings.providers?.[0];
+      return {
+        pdfUrl,
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+        provider: active ? `${active.id}@${active.baseUrl}` : 'unknown',
+        model: active?.model ?? 'unknown',
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Hydrate persisted progress on mount / document change. Seeds the pages
+  // Map so a reopened PDF renders instantly from stored state. Falls back to
+  // an empty Map (re-translate) when nothing is stored or the hash mismatches.
+  useEffect(() => {
+    let cancelled = false;
+    hydratedRef.current = false;
+    (async () => {
+      const ctx = await resolveProgressContext();
+      if (!ctx || cancelled) {
+        progressHashRef.current = null;
+        return;
+      }
+      const hash = computeContextHash(ctx);
+      progressHashRef.current = hash;
+      const stored = await loadPdfProgress(hash);
+      if (cancelled || !stored || stored.size === 0) return;
+      // Only seed pages that aren't already populated (defensive against a
+      // fast cache-hit from the viewport path running concurrently).
+      setPages((prev) => {
+        const next = new Map(prev);
+        for (const [pageNumber, page] of stored) {
+          if (!next.has(pageNumber)) next.set(pageNumber, page);
+        }
+        return next;
+      });
+    })().finally(() => {
+      if (!cancelled) hydratedRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfUrl]);
+
+  // Write-through: persist terminal page states (debounced). Skips the
+  // initial hydration window so we don't overwrite stored progress before
+  // it loads. A module-level timer dedupes rapid successive updates.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    const hash = progressHashRef.current;
+    if (!hash) return;
+    const terminalPages = new Map<number, PageTranslations>();
+    let hasTerminal = false;
+    for (const [pageNumber, page] of pages) {
+      if (page.state === 'translated' || page.state === 'error') {
+        terminalPages.set(pageNumber, page);
+        hasTerminal = true;
+      }
+    }
+    if (!hasTerminal) return;
+    // Best-effort write; failures are non-fatal (progress persistence is a
+    // perceived-speed optimization, not a correctness requirement).
+    void savePdfProgress(hash, terminalPages);
+  }, [pages]);
 
   // Reset state when the document changes
   useEffect(() => {

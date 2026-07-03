@@ -84,4 +84,6 @@ export const STORAGE_KEYS = {
   ENC_SALT: 'anyllm-translate-enc-salt',
   /** PDF viewer view-mode preference: 'split' (default) | 'translation-only' | 'bilingual' */
   PDF_VIEW_MODE: 'anyllm-pdf-view-mode',
+  /** PDF viewer translation-progress snapshots, keyed by context hash (url+lang+provider+model). */
+  PDF_PROGRESS: 'anyllm-pdf-progress',
 } as const;
