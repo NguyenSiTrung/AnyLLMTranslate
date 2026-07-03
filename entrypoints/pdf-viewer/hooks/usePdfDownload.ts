@@ -1,9 +1,16 @@
 /**
  * usePdfDownload — Orchestration hook for the 3-stage PDF download pipeline:
  *
- * 1. Translate all remaining pages (if any are untranslated).
+ * 1. **Concurrent translation** — translate all remaining pages (if any are
+ *    untranslated) via `translateAllPages`, which processes pages in parallel
+ *    bounded by a concurrency limit. The `AbortSignal` stops dispatching new
+ *    pages and winds down in-flight work.
  * 2. Fetch/cache a Unicode font (Noto Sans from Google Fonts CDN).
- * 3. Generate a translated PDF via pdf-lib and trigger browser download.
+ * 3. **Serial PDF generation** — generate a translated PDF via pdf-lib (which
+ *    is not thread-safe, so generation runs one page at a time) and trigger
+ *    the browser download. This phase only starts AFTER stage 1 has fully
+ *    resolved, so all text is pre-translated concurrently before any pdf-lib
+ *    work begins.
  *
  * Returns reactive state so the UI can render a progress modal.
  */
@@ -97,7 +104,7 @@ export function usePdfDownload({
     abortRef.current = controller;
 
     try {
-      // ── Stage 1: Translate all remaining pages ──────────────
+      // ── Stage 1: Translate all remaining pages (concurrent) ──
       setStage('translating');
       setProgress(0);
 
@@ -146,7 +153,7 @@ export function usePdfDownload({
 
       if (controller.signal.aborted) return;
 
-      // ── Stage 3: Generate translated PDF ────────────────────
+      // ── Stage 3: Generate translated PDF (serial, pdf-lib) ──
       setStage('generating');
       setProgress(0);
       setMessage('Generating PDF…');

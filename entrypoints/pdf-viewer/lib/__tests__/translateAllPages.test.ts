@@ -1,8 +1,19 @@
 /**
  * Tests for the translateAllPages pipeline.
  *
- * Validates: skip-already-translated, mixed-state handling, progress reporting,
- * AbortSignal cancellation, per-page error isolation, and merge correctness.
+ * Validates the two-phase download path:
+ * - Phase 1 (this module): CONCURRENT translation, bounded by a concurrency
+ *   limit, with per-page error isolation and AbortSignal cancellation.
+ * - Phase 2 (translatedPdfGenerator.ts, invoked by usePdfDownload AFTER this
+ *   resolves): serial pdf-lib generation. This module guarantees the
+ *   precondition for that phase — every page is translated (or recorded as
+ *   failed) before the function resolves — which the "completeness" tests
+ *   below verify. The serial generation contract itself is enforced by
+ *   translatedPdfGenerator's own test suite.
+ *
+ * Also validates: skip-already-translated, mixed-state handling, progress
+ * reporting, AbortSignal cancellation, per-page error isolation, and merge
+ * correctness.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -140,28 +151,206 @@ describe('translateAllPages', () => {
       onProgress,
     });
 
-    // Assert
+    // Assert — completedCount is a shared counter incremented as each page
+    // settles, so the nth onProgress call is always (n, total) regardless of
+    // which page finishes first under concurrency.
     expect(onProgress).toHaveBeenCalledTimes(3);
     expect(onProgress).toHaveBeenNthCalledWith(1, 1, 3);
     expect(onProgress).toHaveBeenNthCalledWith(2, 2, 3);
     expect(onProgress).toHaveBeenNthCalledWith(3, 3, 3);
   });
 
-  it('cancellation via AbortSignal stops processing', async () => {
-    // Arrange
+  it('translates pages concurrently (multiple pages in flight)', async () => {
+    // Arrange — 4 pages, concurrency 4 → all 4 extractions should overlap.
+    const pages = [
+      createMockPage(1),
+      createMockPage(2),
+      createMockPage(3),
+      createMockPage(4),
+    ];
+    const existing = new Map<number, PageTranslations>();
+
+    let activeExtracts = 0;
+    let maxActiveExtracts = 0;
+    vi.mocked(extractPageText).mockImplementation(async (_page, pageNumber) => {
+      activeExtracts += 1;
+      maxActiveExtracts = Math.max(maxActiveExtracts, activeExtracts);
+      // Yield a couple of microtasks so sibling workers can enter the mock
+      // before this one exits — proving the calls overlap in time.
+      await Promise.resolve();
+      await Promise.resolve();
+      activeExtracts -= 1;
+      return { pageNumber, paragraphs: [createParagraph(pageNumber, 0)] };
+    });
+
+    // Act
+    await translateAllPages({
+      pages,
+      pdfUrl: 'https://example.com/test.pdf',
+      existingTranslations: existing,
+      concurrency: 4,
+    });
+
+    // Assert — all 4 extractions overlapped (sequential processing would cap
+    // the in-flight count at 1).
+    expect(maxActiveExtracts).toBe(4);
+    expect(extractPageText).toHaveBeenCalledTimes(4);
+  });
+
+  it('respects the concurrency limit', async () => {
+    // Arrange — 6 pages, concurrency 2 → at most 2 extractions overlap.
+    const pages = Array.from({ length: 6 }, (_, i) => createMockPage(i + 1));
+    const existing = new Map<number, PageTranslations>();
+
+    let activeExtracts = 0;
+    let maxActiveExtracts = 0;
+    vi.mocked(extractPageText).mockImplementation(async (_page, pageNumber) => {
+      activeExtracts += 1;
+      maxActiveExtracts = Math.max(maxActiveExtracts, activeExtracts);
+      await Promise.resolve();
+      await Promise.resolve();
+      activeExtracts -= 1;
+      return { pageNumber, paragraphs: [createParagraph(pageNumber, 0)] };
+    });
+
+    // Act
+    await translateAllPages({
+      pages,
+      pdfUrl: 'https://example.com/test.pdf',
+      existingTranslations: existing,
+      concurrency: 2,
+    });
+
+    // Assert — bounded to exactly 2 in flight, and it reached that bound.
+    expect(maxActiveExtracts).toBe(2);
+    expect(extractPageText).toHaveBeenCalledTimes(6);
+  });
+
+  it('does not resolve until every page has been translated', async () => {
+    // Arrange — gate page 2's translation so it stays in flight while pages
+    // 1 and 3 finish. The function must not resolve until page 2 completes,
+    // guaranteeing the serial generation phase starts with a full dataset.
     const pages = [createMockPage(1), createMockPage(2), createMockPage(3)];
     const existing = new Map<number, PageTranslations>();
-    const controller = new AbortController();
 
-    // Abort after the first page completes
+    let releasePage2: () => void = () => {};
+    const page2Gate = new Promise<void>((resolve) => {
+      releasePage2 = resolve;
+    });
     vi.mocked(translateParagraphs).mockImplementation(async (items) => {
-      // After first translation, trigger abort
-      controller.abort();
+      if (items[0]?.pageNumber === 2) await page2Gate;
       return items.map(({ paragraph }) => ({
         id: paragraph.id,
         translatedText: `translated-${paragraph.id}`,
       }));
     });
+
+    // Act
+    const promise = translateAllPages({
+      pages,
+      pdfUrl: 'https://example.com/test.pdf',
+      existingTranslations: existing,
+    });
+
+    // Give concurrent pages a chance to settle; page 2 is still gated.
+    await new Promise((r) => setTimeout(r, 0));
+    let resolved = false;
+    void promise.then(() => {
+      resolved = true;
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Assert — not resolved yet because page 2 is still in flight.
+    expect(resolved).toBe(false);
+
+    // Release page 2 → now the function can resolve with all 3 pages.
+    releasePage2();
+    const result = await promise;
+    expect(result.translations.size).toBe(3);
+    for (let i = 1; i <= 3; i++) {
+      expect(result.translations.get(i)?.state).toBe('translated');
+    }
+  });
+
+  it('all pages are translated before the function resolves', async () => {
+    // Arrange — verifies the precondition for the serial pdf-lib generation
+    // phase: when translateAllPages resolves, every untranslated page has a
+    // 'translated' entry (or is recorded in failedPages).
+    const pages = [createMockPage(1), createMockPage(2), createMockPage(3)];
+    const existing = new Map<number, PageTranslations>();
+
+    // Act
+    const result = await translateAllPages({
+      pages,
+      pdfUrl: 'https://example.com/test.pdf',
+      existingTranslations: existing,
+    });
+
+    // Assert
+    expect(result.translations.size).toBe(3);
+    for (let i = 1; i <= 3; i++) {
+      expect(result.translations.get(i)?.state).toBe('translated');
+    }
+    expect(result.failedPages).toEqual([]);
+  });
+
+  it('cancellation via AbortSignal stops dispatching new pages', async () => {
+    // Arrange — 6 pages, concurrency 2 → only 2 workers. Gate every
+    // translation so the 2 in-flight pages block, then abort. After the abort
+    // is detected, no further pages should be dispatched.
+    const pages = Array.from({ length: 6 }, (_, i) => createMockPage(i + 1));
+    const existing = new Map<number, PageTranslations>();
+    const controller = new AbortController();
+
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let extractCalls = 0;
+    vi.mocked(extractPageText).mockImplementation(async (_page, pageNumber) => {
+      extractCalls += 1;
+      return { pageNumber, paragraphs: [createParagraph(pageNumber, 0)] };
+    });
+    vi.mocked(translateParagraphs).mockImplementation(async (items) => {
+      // Block every translation until the gate is released.
+      await gate;
+      return items.map(({ paragraph }) => ({
+        id: paragraph.id,
+        translatedText: `translated-${paragraph.id}`,
+      }));
+    });
+
+    // Act — start with concurrency 2 so only 2 pages enter the window.
+    const promise = translateAllPages({
+      pages,
+      pdfUrl: 'https://example.com/test.pdf',
+      existingTranslations: existing,
+      signal: controller.signal,
+      concurrency: 2,
+    });
+
+    // Let the 2 workers pull their first pages and block on the gate.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(extractCalls).toBe(2);
+
+    // Abort while pages 1 & 2 are in flight (blocked on the gate).
+    controller.abort();
+    releaseGate();
+
+    // Assert
+    await expect(promise).rejects.toThrow('Aborted');
+
+    // Only the 2 in-flight pages were extracted; pages 3-6 were never
+    // dispatched because the workers detected the abort before pulling them.
+    expect(extractCalls).toBe(2);
+  });
+
+  it('aborts immediately when the signal is already aborted', async () => {
+    // Arrange
+    const pages = [createMockPage(1), createMockPage(2)];
+    const existing = new Map<number, PageTranslations>();
+    const controller = new AbortController();
+    controller.abort();
 
     // Act & Assert
     await expect(
@@ -173,8 +362,8 @@ describe('translateAllPages', () => {
       }),
     ).rejects.toThrow('Aborted');
 
-    // Only one page should have been extracted before the abort was noticed
-    expect(extractPageText).toHaveBeenCalledTimes(1);
+    // No pages should have been extracted.
+    expect(extractPageText).not.toHaveBeenCalled();
   });
 
   it('page failure continues with remaining pages', async () => {
@@ -201,7 +390,8 @@ describe('translateAllPages', () => {
       existingTranslations: existing,
     });
 
-    // Assert — pages 1 and 3 succeed, page 2 fails
+    // Assert — pages 1 and 3 succeed, page 2 fails (error isolation under
+    // concurrency: one bad page never aborts the others).
     expect(result.translations.get(1)?.state).toBe('translated');
     expect(result.translations.get(1)?.paragraphs.get('1-0')).toBe('translated-1-0');
     expect(result.translations.get(3)?.state).toBe('translated');
@@ -217,11 +407,14 @@ describe('translateAllPages', () => {
     const pages = [createMockPage(1), createMockPage(2), createMockPage(3)];
     const existingParagraphs = new Map([['1-0', 'Existing translation']]);
     const existing = new Map<number, PageTranslations>([
-      [1, {
-        paragraphs: existingParagraphs,
-        originalParagraphs: [createParagraph(1, 0)],
-        state: 'translated',
-      }],
+      [
+        1,
+        {
+          paragraphs: existingParagraphs,
+          originalParagraphs: [createParagraph(1, 0)],
+          state: 'translated',
+        },
+      ],
     ]);
 
     // Act
