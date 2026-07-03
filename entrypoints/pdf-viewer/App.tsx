@@ -71,7 +71,24 @@ export default function App(): ReactElement {
     void savePdfViewMode(mode);
   };
 
-  const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl);
+  // Compute viewport visibility FIRST (using the numPages from the previous
+  // render via a ref), so it can feed page-proxy eviction into usePdfDocument.
+  // On first render the ref is 0 and useVisiblePages returns an empty set —
+  // eviction is a no-op until real page slots are observed. After usePdfDocument
+  // runs, the ref is updated for the next render.
+  const visibilityContainerRef = viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
+  const numPagesRef = useRef(0);
+  const { visiblePages } = useVisiblePages({
+    totalPages: numPagesRef.current,
+    containerRef: visibilityContainerRef,
+  });
+
+  // Page-proxy eviction: pass the visible set so proxies outside the window are
+  // evicted (large-document memory management). Re-entry re-fetches via getPage().
+  const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl, {
+    visiblePages,
+  });
+  numPagesRef.current = numPages;
 
   // Filter to non-null pages for the translation hook (which needs actual PDFPageProxy)
   const loadedPages = useMemo(
@@ -118,11 +135,6 @@ export default function App(): ReactElement {
   // (left originals and right overlay backgrounds). In translation-only +
   // Text mode there are no such elements; useVisiblePages returns early and
   // lazy translation is driven by usePdfPageTranslations' own observer.
-  const visibilityContainerRef = viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
-  const { visiblePages } = useVisiblePages({
-    totalPages: numPages,
-    containerRef: visibilityContainerRef,
-  });
 
   // Pre-compute page dimensions for placeholder sizing (cheap — no text extraction)
   const pageDimensions = useMemo(() => {

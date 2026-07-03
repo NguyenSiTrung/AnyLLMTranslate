@@ -73,6 +73,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-- 🟠 **PDF Translation Performance & UX Improvements** (`pdf-perf-ux_20260703`) — Streaming translation, page-proxy eviction, 2-page look-ahead, cross-page batching, font-metrics overlay, bilingual mode, progress persistence. Based on ImmersiveTranslate comparison. 6 phases, ~20 tasks. *Link: [./conductor/tracks/pdf-perf-ux_20260703/](./conductor/tracks/pdf-perf-ux_20260703/)*
+- 🔵 **PDF Translation Performance & UX Improvements** (`pdf-perf-ux_20260703`) — Streaming translation, page-proxy eviction, 2-page look-ahead, cross-page batching, font-metrics overlay, bilingual mode, progress persistence. Based on ImmersiveTranslate comparison. 6 phases, ~20 tasks. *Link: [./conductor/tracks/pdf-perf-ux_20260703/](./conductor/tracks/pdf-perf-ux_20260703/)*
 
 ---
