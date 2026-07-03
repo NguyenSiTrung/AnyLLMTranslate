@@ -256,5 +256,101 @@ describe('usePdfPageTranslations', () => {
       expect(page?.paragraphStatus?.get('p1')).toBe('success');
       expect(page?.paragraphStatus?.get('p2')).toBe('success');
     });
+
+    it('fills paragraphs incrementally via onPiece during streaming (Phase 2 Task 3)', async () => {
+      setupSlots(1);
+      // Explicitly reset mocks to avoid interference from beforeEach defaults
+      mockedExtractPageText.mockReset();
+      mockedTranslateParagraphs.mockReset();
+      mockedExtractPageText.mockResolvedValue({
+        pageNumber: 1,
+        paragraphs: [
+          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
+          { id: 'p2', text: 'World', x: 0, y: 20, width: 100, height: 10, fontSize: 10, isHeading: false },
+        ],
+      });
+      // Ensure cache miss so the translate path is taken
+      const { getMemoryCachedPage } = await import('../../lib/pdfTranslation');
+      vi.mocked(getMemoryCachedPage).mockReturnValue(null);
+
+      // Capture the onPiece callback from translateParagraphs and hold the
+      // promise so we can verify the intermediate state before completion.
+      let capturedOnPiece: ((id: string, text: string) => void) | undefined;
+      let resolveTranslate: (() => void) | undefined;
+      const translateHold = new Promise<void>((resolve) => {
+        resolveTranslate = resolve;
+      });
+
+      mockedTranslateParagraphs.mockImplementation(
+        async (
+          _paragraphs: unknown,
+          _pdfUrl: string,
+          onPiece?: (id: string, text: string) => void,
+        ) => {
+          capturedOnPiece = onPiece;
+          await translateHold;
+          return [
+            { id: 'p1', translatedText: 'Xin chào' },
+            { id: 'p2', translatedText: 'Thế giới' },
+          ];
+        },
+      );
+
+      const stablePages = [{} as PDFPageProxy];
+      const { result } = renderHook(() => {
+        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
+        return usePdfPageTranslations({
+          pages: stablePages,
+          pdfUrl: 'https://example.com/file.pdf',
+          containerRef,
+        });
+      });
+
+      // Get the observer callback and fire intersection inside a single
+      // async act() with a flush, so the IIFE's microtasks run within scope.
+      await act(async () => {
+        fireIntersection(1);
+        // Flush microtasks so the IIFE reaches translateParagraphs → hold
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      // Verify the page is in 'translating' state with both paragraphs pending
+      await waitFor(() => {
+        expect(result.current.pages.get(1)?.state).toBe('translating');
+      });
+      expect(result.current.pages.get(1)?.paragraphStatus?.get('p1')).toBe('translating');
+      expect(result.current.pages.get(1)?.paragraphStatus?.get('p2')).toBe('translating');
+
+      // Simulate streaming: call onPiece for p1 (as the background would)
+      expect(capturedOnPiece).toBeDefined();
+      await act(async () => {
+        capturedOnPiece?.('p1', 'Xin chào');
+      });
+
+      // p1 should now be filled with 'success' status; p2 still 'translating'
+      const intermediatePage = result.current.pages.get(1);
+      expect(intermediatePage?.state).toBe('translating');
+      expect(intermediatePage?.paragraphs.get('p1')).toBe('Xin chào');
+      expect(intermediatePage?.paragraphStatus?.get('p1')).toBe('success');
+      expect(intermediatePage?.paragraphStatus?.get('p2')).toBe('translating');
+      expect(intermediatePage?.paragraphs.has('p2')).toBe(false);
+
+      // Release the hold to let translateParagraphs complete with final results
+      await act(async () => {
+        if (resolveTranslate) resolveTranslate();
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      // After full completion, both paragraphs are filled
+      await waitFor(() => {
+        expect(result.current.pages.get(1)?.state).toBe('translated');
+      });
+
+      const finalPage = result.current.pages.get(1);
+      expect(finalPage?.paragraphs.get('p1')).toBe('Xin chào');
+      expect(finalPage?.paragraphs.get('p2')).toBe('Thế giới');
+      expect(finalPage?.paragraphStatus?.get('p1')).toBe('success');
+      expect(finalPage?.paragraphStatus?.get('p2')).toBe('success');
+    });
   });
 });

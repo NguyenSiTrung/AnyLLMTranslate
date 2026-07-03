@@ -13,7 +13,8 @@
  *   redundant LLM calls when the user scrolls back and forth.
  */
 
-import type { ExtensionMessage, TranslationResultItem, ClassifyPdfParagraphsResult } from '@/types/messages';
+import type { ExtensionMessage, TranslationResultItem, ClassifyPdfParagraphsResult, PdfStreamPortMessage } from '@/types/messages';
+import { PDF_STREAM_PORT } from '@/types/messages';
 import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
@@ -108,6 +109,67 @@ async function sendTranslationBatch(
 }
 
 /**
+ * Send a batch via the streaming port (Phase 2). Opens a chrome.runtime port,
+ * posts the request, and invokes `onPiece(id, text)` as each paragraph's
+ * translation completes in the stream. Resolves with the final results.
+ *
+ * On any port error, REJECTS so the caller can fall back to the non-streaming
+ * sendTranslationBatch path. The streaming path is best-effort: correctness is
+ * guaranteed by the non-streaming fallback, streaming only improves perceived
+ * speed (incremental fill).
+ */
+async function sendTranslationBatchStreamed(
+  batch: Array<{ pageNumber: number; paragraph: PdfParagraph }>,
+  sourceLanguage: string,
+  targetLanguage: string,
+  onPiece: (id: string, text: string) => void,
+): Promise<TranslationResultItem[]> {
+  const pieces = batch.map(({ paragraph }) => ({ id: paragraph.id, text: paragraph.text }));
+  return new Promise<TranslationResultItem[]>((resolve, reject) => {
+    const port = chrome.runtime.connect({ name: PDF_STREAM_PORT });
+    let settled = false;
+
+    const cleanup = () => {
+      if (settled) return;
+      try {
+        port.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+    };
+
+    port.onMessage.addListener((msg: PdfStreamPortMessage) => {
+      if (msg.type === 'piece') {
+        onPiece(msg.id, msg.text);
+      } else if (msg.type === 'done') {
+        settled = true;
+        cleanup();
+        resolve(msg.results);
+      } else if (msg.type === 'error') {
+        settled = true;
+        cleanup();
+        reject(new Error(msg.error));
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error('Streaming port disconnected'));
+      }
+    });
+
+    // Post the request as the first port message.
+    port.postMessage({
+      type: 'request',
+      pieces,
+      sourceLanguage,
+      targetLanguage,
+    } satisfies PdfStreamPortMessage);
+  });
+}
+
+/**
  * Send non-math paragraphs to the background LLM classifier and return the
  * prose/figure labels. Returns null on any failure so the caller can
  * fail-open (treat everything as prose).
@@ -132,10 +194,14 @@ async function classifyParagraphs(
   }
 }
 
-/** Single batched LLM request for one or more pages of the document. */
+/** Single batched LLM request for one or more pages of the document.
+ *  When `onPiece` is provided, attempts the streaming path first so paragraphs
+ *  fill in incrementally; falls back to the non-streaming batch path on any
+ *  stream error (correctness is guaranteed by the fallback). */
 export async function translateParagraphs(
   paragraphs: Array<{ pageNumber: number; paragraph: PdfParagraph }>,
   pdfUrl: string,
+  onPiece?: (id: string, text: string) => void,
 ): Promise<TranslationResultItem[]> {
   if (paragraphs.length === 0) return [];
 
@@ -173,10 +239,24 @@ export async function translateParagraphs(
 
   const proseItems = restItems.filter((item) => labels?.[item.paragraph.id] !== 'figure');
 
-  // 3. Translate only the prose subset via the existing batched path.
+  // 3. Translate only the prose subset. When streaming is requested (onPiece
+  //    provided), try the streaming port first for incremental fill; fall back
+  //    to the non-streaming batch path on any stream error. Correctness is
+  //    guaranteed by the fallback — streaming only improves perceived speed.
   const batches = splitIntoBatches(proseItems, settings.maxBatchChars);
   const batchResults = await Promise.all(
-    batches.map((batch) => sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage)),
+    batches.map(async (batch) => {
+      if (onPiece) {
+        try {
+          return await sendTranslationBatchStreamed(batch, sourceLanguage, targetLanguage, onPiece);
+        } catch (streamErr) {
+          // Streaming failed — fall back to non-streaming. The pieces emitted
+          // so far are discarded (the caller overwrites with the final result).
+          console.warn('AnyLLMTranslate: PDF streaming failed, falling back to batch', streamErr);
+        }
+      }
+      return sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage);
+    }),
   );
   const translatedResults = batchResults.flat();
 

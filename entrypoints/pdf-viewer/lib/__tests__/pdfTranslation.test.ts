@@ -8,6 +8,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ExtensionSettings } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
+import type { PdfStreamPortMessage } from '@/types/messages';
+import { PDF_STREAM_PORT } from '@/types/messages';
 import {
   getMemoryCachedPage,
   setMemoryCachedPage,
@@ -341,5 +343,235 @@ describe('pdfTranslation memory cache', () => {
       ([msg]) => (msg as unknown as { action: string }).action === 'CLASSIFY_PDF_PARAGRAPHS',
     );
     expect(classifyCalls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2 Task 3: Streaming translation port tests
+// ---------------------------------------------------------------------------
+
+describe('streaming translation port (Phase 2)', () => {
+  /** Messages the fake background will push through the port. */
+  let outgoingMessages: PdfStreamPortMessage[];
+
+  /** Create a fake chrome.runtime.Port that emits `outgoingMessages` when the
+   *  viewer posts its request. Mirrors the real port contract:
+   *  onMessage/onDisconnect listeners + postMessage + disconnect. */
+  function createFakePort() {
+    const messageListeners: Array<(msg: PdfStreamPortMessage) => void> = [];
+    const disconnectListeners: Array<() => void> = [];
+    return {
+      name: PDF_STREAM_PORT,
+      onMessage: {
+        addListener: vi.fn((fn: (msg: PdfStreamPortMessage) => void) => {
+          messageListeners.push(fn);
+        }),
+      },
+      onDisconnect: {
+        addListener: vi.fn((fn: () => void) => {
+          disconnectListeners.push(fn);
+        }),
+      },
+      postMessage: vi.fn((msg: PdfStreamPortMessage) => {
+        if (msg.type === 'request') {
+          // Emit outgoing messages asynchronously (mirrors real port behavior)
+          setTimeout(() => {
+            for (const m of outgoingMessages) {
+              messageListeners.forEach((l) => l(m));
+            }
+          }, 0);
+        }
+      }),
+      disconnect: vi.fn(() => {
+        disconnectListeners.forEach((l) => l());
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    outgoingMessages = [];
+    // Use a larger batch size so all paragraphs fit in one streaming batch
+    vi.mocked(loadSettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+      maxBatchChars: 5000,
+    } as ExtensionSettings);
+    // Ensure chrome.runtime.connect is a mock (not in vitest.setup.ts by default)
+    if (!vi.isMockFunction(chrome.runtime.connect)) {
+      chrome.runtime.connect = vi.fn();
+    }
+    vi.mocked(chrome.runtime.connect).mockImplementation(() => {
+      return createFakePort() as unknown as chrome.runtime.Port;
+    });
+  });
+
+  it('emits onPiece for each streamed paragraph and resolves with final results', async () => {
+    const pieces = [
+      { id: 'p1', text: 'Hello world this is long enough.' },
+      { id: 'p2', text: 'Second paragraph of prose text.' },
+    ];
+    outgoingMessages = [
+      { type: 'piece', id: 'p1', text: 'Xin chào' },
+      { type: 'piece', id: 'p2', text: 'Thế giới' },
+      {
+        type: 'done',
+        results: [
+          { id: 'p1', translatedText: 'Xin chào' },
+          { id: 'p2', translatedText: 'Thế giới' },
+        ],
+      },
+    ];
+
+    const onPiece = vi.fn();
+    const results = await translateParagraphs(
+      pieces.map((p) => ({
+        pageNumber: 1,
+        paragraph: { id: p.id, text: p.text, fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 },
+      })),
+      'https://example.com/a.pdf',
+      onPiece,
+    );
+
+    // onPiece called for each streamed piece
+    expect(onPiece).toHaveBeenCalledWith('p1', 'Xin chào');
+    expect(onPiece).toHaveBeenCalledWith('p2', 'Thế giới');
+    expect(onPiece).toHaveBeenCalledTimes(2);
+
+    // Final results match the done message
+    expect(results.map((r) => r.id)).toContain('p1');
+    expect(results.map((r) => r.id)).toContain('p2');
+    expect(results.find((r) => r.id === 'p1')?.translatedText).toBe('Xin chào');
+    expect(results.find((r) => r.id === 'p2')?.translatedText).toBe('Thế giới');
+
+    // Streaming port was used (connect called), not sendMessage for translate
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string })
+      .filter((message) => message.action === 'translate');
+    // Only the classify call should go through sendMessage; translate goes via port
+    expect(translateMessages).toHaveLength(0);
+  });
+
+  it('falls back to non-streaming when port sends an error', async () => {
+    const pieces = [
+      { id: 'p1', text: 'Hello world this is long enough.' },
+    ];
+    outgoingMessages = [
+      { type: 'error', error: 'Streaming not supported' },
+    ];
+
+    const onPiece = vi.fn();
+    // The sendMessage mock from the outer beforeEach still returns translated-{id}
+    const results = await translateParagraphs(
+      pieces.map((p) => ({
+        pageNumber: 1,
+        paragraph: { id: p.id, text: p.text, fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 },
+      })),
+      'https://example.com/a.pdf',
+      onPiece,
+    );
+
+    // onPiece was NOT called (stream failed before any piece)
+    expect(onPiece).not.toHaveBeenCalled();
+
+    // Fell back to non-streaming translate
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string })
+      .filter((message) => message.action === 'translate');
+    expect(translateMessages).toHaveLength(1);
+
+    // Results came from the non-streaming fallback
+    expect(results.find((r) => r.id === 'p1')?.translatedText).toBe('translated-p1');
+  });
+
+  it('falls back to non-streaming when port disconnects unexpectedly', async () => {
+    const pieces = [
+      { id: 'p1', text: 'Hello world this is long enough.' },
+    ];
+    // No done/error messages — port just disconnects
+    outgoingMessages = [];
+
+    // Override connect to simulate immediate disconnect after postMessage
+    vi.mocked(chrome.runtime.connect).mockImplementation(() => {
+      const port = createFakePort();
+      // Override postMessage to trigger disconnect instead of emitting messages
+      const originalPostMessage = port.postMessage;
+      port.postMessage = vi.fn((msg: PdfStreamPortMessage) => {
+        if (msg.type === 'request') {
+          // Simulate port disconnecting before any message arrives
+          setTimeout(() => {
+            (port.onDisconnect.addListener as unknown as { mock: { calls: Array<Array<() => void>> } }).mock.calls.forEach(([fn]) => fn());
+          }, 0);
+        }
+        void originalPostMessage;
+      });
+      return port as unknown as chrome.runtime.Port;
+    });
+
+    const onPiece = vi.fn();
+    const results = await translateParagraphs(
+      pieces.map((p) => ({
+        pageNumber: 1,
+        paragraph: { id: p.id, text: p.text, fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 },
+      })),
+      'https://example.com/a.pdf',
+      onPiece,
+    );
+
+    // Fell back to non-streaming
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string })
+      .filter((message) => message.action === 'translate');
+    expect(translateMessages).toHaveLength(1);
+    expect(results.find((r) => r.id === 'p1')?.translatedText).toBe('translated-p1');
+  });
+
+  it('does not use the streaming port when onPiece is not provided', async () => {
+    vi.mocked(chrome.runtime.connect).mockImplementation(() => {
+      throw new Error('connect should not be called without onPiece');
+    });
+
+    const results = await translateParagraphs(
+      [
+        { pageNumber: 1, paragraph: { id: 'p1', text: 'Hello world this is long enough.', fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 } },
+      ],
+      'https://example.com/a.pdf',
+    );
+
+    // Non-streaming path used
+    const translateMessages = vi.mocked(chrome.runtime.sendMessage).mock.calls
+      .map(([message]) => message as unknown as { action: string })
+      .filter((message) => message.action === 'translate');
+    expect(translateMessages).toHaveLength(1);
+    expect(results.find((r) => r.id === 'p1')?.translatedText).toBe('translated-p1');
+  });
+
+  it('partial pieces before an error are discarded by the fallback', async () => {
+    const pieces = [
+      { id: 'p1', text: 'Hello world this is long enough.' },
+      { id: 'p2', text: 'Second paragraph of prose text.' },
+    ];
+    // Stream emits p1 then errors — p1 piece should be discarded, both come from fallback
+    outgoingMessages = [
+      { type: 'piece', id: 'p1', text: 'Partial translation' },
+      { type: 'error', error: 'stream truncated' },
+    ];
+
+    const onPiece = vi.fn();
+    const results = await translateParagraphs(
+      pieces.map((p) => ({
+        pageNumber: 1,
+        paragraph: { id: p.id, text: p.text, fontSize: 12, isHeading: false, x: 0, y: 0, width: 0, height: 0 },
+      })),
+      'https://example.com/a.pdf',
+      onPiece,
+    );
+
+    // p1 piece WAS emitted during streaming (before the error)
+    expect(onPiece).toHaveBeenCalledWith('p1', 'Partial translation');
+
+    // But final results come from the non-streaming fallback (overwriting the partial)
+    expect(results.find((r) => r.id === 'p1')?.translatedText).toBe('translated-p1');
+    expect(results.find((r) => r.id === 'p2')?.translatedText).toBe('translated-p2');
   });
 });

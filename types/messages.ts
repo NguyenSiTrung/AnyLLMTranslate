@@ -49,7 +49,8 @@ export type MessageAction =
   | 'OPEN_PDF_VIEWER'
   | 'PDF_DETECTED'
   | 'REGISTER_PDF_SESSION'
-  | 'UNREGISTER_PDF_SESSION';
+  | 'UNREGISTER_PDF_SESSION'
+  | 'TRANSLATE_PDF_STREAM';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -254,6 +255,50 @@ export interface RegisterPdfSessionMessage {
 export interface UnregisterPdfSessionMessage {
   action: 'UNREGISTER_PDF_SESSION';
 }
+
+// ---------------------------------------------------------------------------
+// PDF streaming translation via chrome.runtime.connect port (Phase 2).
+// The viewer opens a port named 'TRANSLATE_PDF_STREAM' with the translate
+// request as the first message. The background calls service.translateStream()
+// and pushes piece deltas back through the port, then a terminal result.
+// ---------------------------------------------------------------------------
+
+/** Port name for PDF streaming translation. */
+export const PDF_STREAM_PORT = 'TRANSLATE_PDF_STREAM';
+
+/** Initial message sent on the streaming port (Viewer → Background). */
+export interface PdfStreamRequest {
+  type: 'request';
+  pieces: TranslationPiecePayload[];
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
+/** A piece delta pushed from background → viewer during streaming. */
+export interface PdfStreamPiece {
+  type: 'piece';
+  id: string;
+  text: string;
+}
+
+/** Terminal success message with the full result map. */
+export interface PdfStreamDone {
+  type: 'done';
+  results: TranslationResultItem[];
+}
+
+/** Terminal error message (caller should fall back to non-streaming). */
+export interface PdfStreamError {
+  type: 'error';
+  error: string;
+}
+
+/** Union of messages flowing through the PDF streaming port. */
+export type PdfStreamPortMessage =
+  | PdfStreamRequest
+  | PdfStreamPiece
+  | PdfStreamDone
+  | PdfStreamError;
 
 /** Union type for all messages */
 export type ExtensionMessage =

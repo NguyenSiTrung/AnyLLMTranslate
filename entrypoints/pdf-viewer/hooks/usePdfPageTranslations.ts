@@ -90,9 +90,30 @@ async function translatePage(
       return next;
     });
 
+    // Stream piece deltas into state incrementally (Phase 2). Each callback
+    // updates the individual paragraph + its status so the UI fills in
+    // one-by-one. The final result overwrites with the authoritative map.
+    const onPiece = (id: string, text: string): void => {
+      statusMap.set(id, 'success');
+      setPages((prev) => {
+        const existing = prev.get(pageNumber);
+        if (!existing || existing.state !== 'translating') return prev; // page superseded/errored
+        const updatedParagraphs = new Map(existing.paragraphs);
+        updatedParagraphs.set(id, text);
+        const next = new Map(prev);
+        next.set(pageNumber, {
+          ...existing,
+          paragraphs: updatedParagraphs,
+          paragraphStatus: new Map(statusMap),
+        });
+        return next;
+      });
+    };
+
     const results = await translateParagraphs(
       paragraphs.map((paragraph) => ({ pageNumber, paragraph })),
       pdfUrl,
+      onPiece,
     );
     const paragraphMap = new Map<string, string>();
     for (const { id, translatedText } of results) {

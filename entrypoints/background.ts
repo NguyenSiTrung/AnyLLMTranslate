@@ -3,7 +3,7 @@
  * Wires up the message router, settings listener, keyboard commands, and context menus.
  */
 
-import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule, initSubtitleSessionCleanup, openPdfViewer } from '@/services/background';
+import { handleMessage, initSettingsListener, scheduleEviction, initEvictionSchedule, initSubtitleSessionCleanup, initPdfStreamPortListener, openPdfViewer } from '@/services/background';
 import { initTabCleanup } from '@/services/categoryStore';
 import { warmDebugCache } from '@/services/debugLog';
 
@@ -98,6 +98,9 @@ export default defineBackground(() => {
 
   // Tear down subtitle sessions + page-translation tracking when tabs close
   initSubtitleSessionCleanup();
+
+  // PDF streaming translation port (Phase 2) — pushes piece deltas to the viewer
+  initPdfStreamPortListener();
 
   // Set up context menus on install
   chrome.runtime.onInstalled.addListener(() => {

@@ -470,6 +470,19 @@ export function PdfTranslationPane({
     return <IdleState pageNumber={pageNumber} />;
   }
   if (page.state === 'translating') {
+    // Phase 2 incremental fill: if streaming has already delivered some
+    // paragraphs, show them with a trailing spinner for the rest instead of
+    // a bare skeleton. Falls back to the skeleton when nothing has arrived.
+    if (page.paragraphs.size > 0) {
+      return (
+        <div className="pdf-viewer-page-translation">
+          <TranslatedParagraphs page={page} />
+          <div className="pdf-viewer-streaming-tail" aria-live="polite">
+            <span className="pdf-viewer-spinner" aria-hidden="true" />
+          </div>
+        </div>
+      );
+    }
     return <LoadingSkeleton count={paragraphCount} />;
   }
   if (page.state === 'error') {

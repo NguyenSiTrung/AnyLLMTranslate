@@ -13,7 +13,13 @@ import type {
   ClassifyPdfParagraphsMessage,
   ClassifyPdfParagraphsResult,
   PdfDetectedMessage,
+  TranslationResultItem,
+  PdfStreamPortMessage,
+  PdfStreamPiece,
+  PdfStreamDone,
+  PdfStreamError,
 } from '@/types/messages';
+import { PDF_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
@@ -115,7 +121,57 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
- 
+/**
+ * PDF streaming translation port handler (Phase 2).
+ *
+ * The PDF viewer opens a port named TRANSLATE_PDF_STREAM with a request
+ * message. The background calls service.translateStream() and pushes piece
+ * deltas back through the port as they arrive, then a terminal 'done' or
+ * 'error' message. On error, the viewer falls back to non-streaming.
+ *
+ * Registered once at SW startup via chrome.runtime.onConnect.
+ */
+export function initPdfStreamPortListener(): void {
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== PDF_STREAM_PORT) return;
+
+    port.onMessage.addListener(async (msg: PdfStreamPortMessage) => {
+      if (msg.type !== 'request') return;
+      try {
+        const service = await initService();
+        if (!service.translateStream) {
+          // No streaming support — post an error so the viewer falls back.
+          port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
+          return;
+        }
+        const texts = new Map(msg.pieces.map((p) => [p.id, p.text]));
+        const result = await service.translateStream(
+          {
+            texts,
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguage: msg.targetLanguage,
+            pageContext: {
+              title: 'pdf-viewer',
+              description: 'PDF document translation',
+              domain: 'pdf',
+              category: 'document',
+            },
+          },
+          (id, text) => {
+            port.postMessage({ type: 'piece', id, text } satisfies PdfStreamPiece);
+          },
+        );
+        const results: TranslationResultItem[] = result.success
+          ? Array.from(result.translations, ([id, translatedText]) => ({ id, translatedText }))
+          : [];
+        port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
+      } catch (err) {
+        const error = err instanceof Error ? err.message : 'Streaming translation failed';
+        port.postMessage({ type: 'error', error } satisfies PdfStreamError);
+      }
+    });
+  });
+}
 
 /** Track which tabs have been counted for page translation stats */
 const translatedTabSessions = new Set<number>();

@@ -394,3 +394,38 @@ describe('PdfTranslationPane layout states', () => {
     expect(screen.getByText(/No extractable text on page 2/)).toBeInTheDocument();
   });
 });
+
+describe('PdfTranslationPane streaming tail spinner (Phase 2)', () => {
+  it('shows streaming tail spinner when translating with partial paragraphs', () => {
+    const page: PageTranslations = {
+      state: 'translating',
+      paragraphs: new Map([
+        ['p1', 'Xin chào'],
+        ['p2', 'Thế giới'],
+      ]),
+    };
+    render(
+      <PdfTranslationPane pageNumber={1} page={page} paragraphCount={3} />,
+    );
+    // Partial paragraphs are visible
+    expect(screen.getByText('Xin chào')).toBeInTheDocument();
+    expect(screen.getByText('Thế giới')).toBeInTheDocument();
+    // Streaming tail spinner is rendered
+    expect(document.querySelector('.pdf-viewer-streaming-tail')).not.toBeNull();
+    expect(document.querySelector('.pdf-viewer-spinner')).not.toBeNull();
+  });
+
+  it('shows loading skeleton when translating with no paragraphs (no stream yet)', () => {
+    const page: PageTranslations = {
+      state: 'translating',
+      paragraphs: new Map(),
+    };
+    render(
+      <PdfTranslationPane pageNumber={1} page={page} paragraphCount={3} />,
+    );
+    // No streaming tail spinner — falls back to skeleton
+    expect(document.querySelector('.pdf-viewer-streaming-tail')).toBeNull();
+    // Skeleton lines should be present
+    expect(document.querySelectorAll('.pdf-viewer-skeleton').length).toBeGreaterThan(0);
+  });
+});

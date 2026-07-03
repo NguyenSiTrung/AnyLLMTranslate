@@ -27,21 +27,23 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
 ## Phase 2: Streaming Translation Pipeline
 <!-- execution: sequential -->
 
-- [ ] Task 1: SSE streaming in OpenAICompatibleService (PDF-only opt-in)
+- [x] Task 1: SSE streaming in OpenAICompatibleService (PDF-only opt-in)
   <!-- files: services/openaiCompatible.ts, services/__tests__/openaiCompatibleStreaming.test.ts -->
-  - [ ] Write tests: stream:true request, SSE delta parsing (data: lines, [DONE]), per-piece callback invocation, [DONE] finalization, malformed stream → throws → fallback path
-  - [ ] Implement: translateStream() method returning an async-iterable / callback stream, guard with stream option, keep translate() non-streaming intact
-  - [ ] Verify graceful fallback when provider rejects stream:true (retry non-streaming)
+  - [x] Write tests: stream:true request, SSE delta parsing (data: lines, [DONE]), per-piece callback invocation, [DONE] finalization, malformed stream → throws → fallback path
+  - [x] Implement: translateStream() method returning an async-iterable / callback stream, guard with stream option, keep translate() non-streaming intact
+  - [x] Verify graceful fallback when provider rejects stream:true (retry non-streaming)
+  - **Commit:** 794c533
 
-- [ ] Task 2: Per-paragraph translationStatus plumbing
+- [x] Task 2: Per-paragraph translationStatus plumbing
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfPageTranslations.ts, types/messages.ts, entrypoints/pdf-viewer/hooks/__tests__/usePdfPageTranslations.test.ts -->
-  - [ ] Write tests: paragraph-level 'translating'|'success'|'error' states independent of siblings, batch update preserves per-paragraph granularity, error on one paragraph doesn't fail the page
-  - [ ] Implement: extend PageTranslations to carry per-paragraph status Map, thread through translateParagraphs results
+  - [x] Write tests: paragraph-level 'translating'|'success'|'error' states independent of siblings, batch update preserves per-paragraph granularity, error on one paragraph doesn't fail the page
+  - [x] Implement: extend PageTranslations to carry per-paragraph status Map, thread through translateParagraphs results
+  - **Commit:** 678ca02
 
-- [ ] Task 3: PDF viewer incremental-fill wiring
+- [x] Task 3: PDF viewer incremental-fill wiring
   <!-- files: entrypoints/pdf-viewer/components/PdfTranslationPane.tsx, entrypoints/pdf-viewer/lib/pdfTranslation.ts -->
-  - [ ] Write tests: streaming deltas update individual paragraph DOM as they arrive, per-paragraph spinner→text transition, fallback to batch render on stream error
-  - [ ] Implement: wire translateStream into the page translation flow, per-paragraph render with status, fallback to existing batch path
+  - [x] Write tests: streaming deltas update individual paragraph DOM as they arrive, per-paragraph spinner→text transition, fallback to batch render on stream error
+  - [x] Implement: wire translateStream into the page translation flow, per-paragraph render with status, fallback to existing batch path
 
 - [ ] Task 4: Conductor - User Manual Verification 'Streaming Translation Pipeline' (Protocol in workflow.md)
 
