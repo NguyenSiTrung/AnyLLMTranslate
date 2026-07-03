@@ -274,3 +274,62 @@ export async function getCacheStats(): Promise<{
     return { entryCount: 0, totalSizeBytes: 0 };
   }
 }
+
+// ── Classification cache (prose|figure|math decisions) ──────────────────────
+
+/**
+ * Prefix for classification cache keys. Classification results share the same
+ * IndexedDB store as translations but use this prefix to guarantee keys never
+ * collide with translation cache entries (which are bare SHA-256 hashes).
+ *
+ * Classification values are stored as plain strings ('prose' | 'figure' |
+ * 'math') rather than CacheEntry objects — they are tiny (a single label) and
+ * do not participate in LRU/TTL bookkeeping. The eviction logic tolerates
+ * non-CacheEntry values gracefully (`sizeBytes ?? 0`, `cachedAt` NaN →
+ * survives TTL).
+ */
+const CLASSIFY_CACHE_PREFIX = 'classify:';
+
+/**
+ * Cache key for paragraph classification results. Produces a
+ * `classify:`-prefixed SHA-256 hash so classification results share the same
+ * IndexedDB store as translations but never collide with translation keys.
+ */
+export async function classifyCacheKey(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<string> {
+  const base = await generateCacheKey(text, sourceLanguage, targetLanguage);
+  return `${CLASSIFY_CACHE_PREFIX}${base}`;
+}
+
+/**
+ * Get a cached classification result. Returns null on miss or error.
+ *
+ * @param key — a key produced by `classifyCacheKey`
+ * @returns the cached label ('prose' | 'figure' | 'math') or null
+ */
+export async function getCachedClassification(key: string): Promise<string | null> {
+  try {
+    const value = await get<string>(key, getStore());
+    return value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Cache a classification result. Best-effort — silently fails on error so
+ * classification failures never break the translation pipeline.
+ *
+ * @param key — a key produced by `classifyCacheKey`
+ * @param kind — the classification label ('prose' | 'figure' | 'math')
+ */
+export async function cacheClassification(key: string, kind: string): Promise<void> {
+  try {
+    await set(key, kind, getStore());
+  } catch {
+    // Silently fail — cache is best-effort
+  }
+}

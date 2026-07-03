@@ -166,3 +166,121 @@ export function classifyMathParagraph(text: string): ParagraphKind {
 
   return 'prose';
 }
+
+// ── Prose short-circuit heuristic ───────────────────────────────────────────
+
+/**
+ * Characters considered "latin" for the prose heuristic: basic letters,
+ * digits, and common ASCII + typographic punctuation. Spaces are handled
+ * separately in `isObviouslyProse` (they count towards the latin ratio but
+ * are not tested here). Characters not in this set and not math symbols
+ * (e.g. CJK, emoji) count against the latin ratio without counting as
+ * math symbols.
+ */
+const LATIN_OR_PUNCT = /[a-zA-Z0-9.,;:!?'"\-–—()[\]/…\u2019\u201C\u201D\u2018]/;
+
+/**
+ * Does the text contain any LaTeX delimiters (block-level or standalone
+ * inline with substantial inner content)? Reuses the patterns from
+ * `classifyMathParagraph` so that `isObviouslyProse` never short-circuits
+ * text the math detector would flag.
+ */
+function containsLatexDelimiters(text: string): boolean {
+  for (const pattern of LATEX_BLOCK_PATTERNS) {
+    if (pattern.test(text)) return true;
+  }
+  return INLINE_LATEX_PATTERN.test(text);
+}
+
+/**
+ * Is the character a math/special symbol? Broader than `hasStrongMathMarker`
+ * (which is a presence check) — this is used for density counting and
+ * includes Unicode mathematical operator ranges beyond the explicit marker
+ * set.
+ */
+function isMathSymbolChar(ch: string): boolean {
+  if (STRONG_MATH_MARKERS.has(ch)) return true;
+  const code = ch.codePointAt(0) ?? 0;
+  if (isSuperSubscriptCode(code)) return true;
+  return (
+    (code >= 0x2200 && code <= 0x22ff) || // Mathematical Operators (∀ ∂ ∑ ∫ …)
+    (code >= 0x2a00 && code <= 0x2aff) || // Supplemental Math Operators
+    (code >= 0x27c0 && code <= 0x27ef) || // Misc Math Symbols-A
+    (code >= 0x2980 && code <= 0x29ff) // Misc Math Symbols-B
+  );
+}
+
+/**
+ * Minimum character length for the prose short-circuit. Short text might be a
+ * figure label or caption, so it should go through the LLM classifier.
+ */
+const PROSE_MIN_CHARS = 80;
+
+/**
+ * Minimum word count for the prose short-circuit. A short word count suggests
+ * a label, title, or formula rather than a prose paragraph.
+ */
+const PROSE_MIN_WORDS = 15;
+
+/** Latin characters (letters, digits, punctuation, spaces) must be ≥ this ratio. */
+const PROSE_MIN_LATIN_RATIO = 0.8;
+
+/** Math/special symbols must be < this ratio for the prose short-circuit. */
+const PROSE_MAX_SYMBOL_RATIO = 0.1;
+
+/**
+ * Deterministic heuristic: returns true if a paragraph is obviously prose
+ * (long, latin-heavy, low symbol density) and can skip the LLM classification
+ * call. Complements `classifyMathParagraph` — if that returns `'math'`, this
+ * is never called. Never classifies math/figure as prose.
+ *
+ * Criteria (ALL must be true):
+ * 1. Length: ≥ 80 characters (short text might be a figure label)
+ * 2. Word count: ≥ 15 words
+ * 3. No LaTeX delimiters (block or inline) — safety guard
+ * 4. No strong math markers (Greek letters, =, ∑, ∫, super/subscripts, etc.)
+ * 5. Latin ratio: ≥ 80% of characters are latin letters/spaces/punctuation
+ * 6. Symbol density: < 10% math/special symbols (Unicode math markers)
+ *
+ * Conservative by design — when in doubt, returns false so the LLM classifier
+ * makes the final call.
+ */
+export function isObviouslyProse(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length < PROSE_MIN_CHARS) return false;
+
+  const words = trimmed.split(/\s+/);
+  if (words.length < PROSE_MIN_WORDS) return false;
+
+  // Safety: never short-circuit text containing LaTeX delimiters or strong
+  // math markers. This guarantees isObviouslyProse() returns false for any
+  // text that classifyMathParagraph() would flag as math.
+  if (containsLatexDelimiters(trimmed)) return false;
+  if (hasStrongMathMarker(trimmed)) return false;
+
+  let total = 0;
+  let latin = 0;
+  let symbols = 0;
+
+  for (const ch of trimmed) {
+    if (/\s/.test(ch)) {
+      total++;
+      latin++; // spaces count as latin
+      continue;
+    }
+    total++;
+    if (LATIN_OR_PUNCT.test(ch)) {
+      latin++;
+    } else if (isMathSymbolChar(ch)) {
+      symbols++;
+    }
+    // Other characters (CJK, emoji, etc.) count against latin ratio but
+    // not as math symbols.
+  }
+
+  if (total === 0) return false;
+  const latinRatio = latin / total;
+  const symbolRatio = symbols / total;
+
+  return latinRatio >= PROSE_MIN_LATIN_RATIO && symbolRatio < PROSE_MAX_SYMBOL_RATIO;
+}
