@@ -126,10 +126,11 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
 ## Phase 6: Persistence & Wrap-up
 <!-- execution: sequential -->
 
-- [ ] Task 1: Persist page-state Map across reloads
+- [x] Task 1: Persist page-state Map across reloads
   <!-- files: entrypoints/pdf-viewer/hooks/usePdfPageTranslations.ts, services/cacheManager.ts (or new lib/pdfProgressStore.ts), entrypoints/pdf-viewer/hooks/__tests__/usePdfPageTranslations.test.ts -->
-  - [ ] Write tests: page-state Map persisted keyed by pdf:${url}+lang+provider+model hash, reload hydrates instantly from stored state, provider/model/lang change invalidates, corruption/shape-mismatch fallback to re-translate
-  - [ ] Implement: progress store write-through on terminal page states, hydrate on mount, invalidation on context hash mismatch
+  - [x] Write tests: page-state Map persisted keyed by pdf:${url}+lang+provider+model hash, reload hydrates instantly from stored state, provider/model/lang change invalidates, corruption/shape-mismatch fallback to re-translate
+  - [x] Implement: progress store write-through on terminal page states, hydrate on mount, invalidation on context hash mismatch
+  - **Commit:** (this commit)
 
 - [ ] Task 2: Full-track regression + bundle size check
   <!-- files: . -->

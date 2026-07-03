@@ -176,7 +176,7 @@ describe('usePdfPageTranslations', () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
         paragraphs: [
-          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 },
+          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
           { id: 'p2', text: 'World', x: 0, y: 20, width: 100, height: 10, fontSize: 10 },
         ],
         text: 'Hello\nWorld',
@@ -211,7 +211,7 @@ describe('usePdfPageTranslations', () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
         paragraphs: [
-          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 },
+          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
         ],
         text: 'Hello',
       });
@@ -405,8 +405,8 @@ describe('usePdfPageTranslations', () => {
     it('persists terminal page states via savePdfProgress write-through', async () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
-        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 }],
-        text: 'Hello',
+        pageNumber: 1,
+        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false }],
       });
       mockedTranslateParagraphs.mockResolvedValue([{ id: 'p1', translatedText: 'Xin chào' }]);
 
@@ -440,8 +440,8 @@ describe('usePdfPageTranslations', () => {
       // Hold translateParagraphs so the page stays 'translating'.
       let resolveTranslate!: (v: Array<{ id: string; translatedText: string }>) => void;
       mockedExtractPageText.mockResolvedValue({
-        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 }],
-        text: 'Hello',
+        pageNumber: 1,
+        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false }],
       });
       mockedTranslateParagraphs.mockReturnValue(
         new Promise((r) => {
@@ -488,8 +488,8 @@ describe('usePdfPageTranslations', () => {
       mockedLoadPdfProgress.mockResolvedValue(null);
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
-        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10 }],
-        text: 'Hello',
+        pageNumber: 1,
+        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false }],
       });
       mockedTranslateParagraphs.mockResolvedValue([{ id: 'p1', translatedText: 'Xin chào' }]);
 
