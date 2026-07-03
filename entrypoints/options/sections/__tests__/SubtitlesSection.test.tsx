@@ -35,78 +35,40 @@ beforeEach(() => {
 
 describe('SubtitlesSection', () => {
   describe('renders all existing controls', () => {
-    it('renders the section heading', () => {
+    it('renders the section heading, enabled toggle, position, font size, and opacity', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Subtitle Settings')).toBeInTheDocument();
-    });
-
-    it('renders the enabled toggle', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Enable Subtitles')).toBeInTheDocument();
-    });
-
-    it('renders the position control', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Subtitle Position')).toBeInTheDocument();
-    });
-
-    it('renders font size slider', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText(/^Font Size:/)).toBeInTheDocument();
-    });
-
-    it('renders background opacity slider', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText(/Background Opacity/)).toBeInTheDocument();
     });
   });
 
   describe('new Phase 2 controls', () => {
-    it('renders Font Family segmented control', () => {
+    it('renders Font Family, Display Mode controls and their options, and no Translation Timeout', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Font Family')).toBeInTheDocument();
-    });
-
-    it('renders Font Family options: System, Serif, Mono', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('System')).toBeInTheDocument();
       expect(screen.getByText('Serif')).toBeInTheDocument();
       expect(screen.getByText('Mono')).toBeInTheDocument();
-    });
-
-    it('renders Display Mode segmented control', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Display Mode')).toBeInTheDocument();
-    });
-
-    it('renders Display Mode options: Bilingual, Translated Only', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Bilingual')).toBeInTheDocument();
       expect(screen.getByText('Translated Only')).toBeInTheDocument();
-    });
-
-    it('does not render the unused Translation Timeout slider', () => {
-      render(<SubtitlesSection />);
       expect(screen.queryByText(/Translation Timeout/)).not.toBeInTheDocument();
     });
   });
 
   describe('preview card', () => {
-    it('renders the Preview card', () => {
+    it('renders the Preview card with translated text and bilingual original text', () => {
       render(<SubtitlesSection />);
       const previewEls = screen.getAllByText('Preview');
       expect(previewEls.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('renders first cue translated text in preview', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Xin chào thế giới')).toBeInTheDocument();
-    });
-
-    it('renders bilingual original text when displayMode is bilingual', () => {
-      render(<SubtitlesSection />);
       // default displayMode = 'bilingual' shows original text too
       expect(screen.getByText('Hello world')).toBeInTheDocument();
+      // enabled by default — no disabled banner
+      expect(screen.queryByText('Subtitles disabled')).not.toBeInTheDocument();
     });
 
     it('hides original text in preview when displayMode is translation-only', () => {
@@ -139,29 +101,17 @@ describe('SubtitlesSection', () => {
     });
 
     it('does not show disabled state when subtitles are enabled', () => {
-      render(<SubtitlesSection />);
-      expect(screen.queryByText('Subtitles disabled')).not.toBeInTheDocument();
+      // already covered in the combined preview test above
+      expect(true).toBe(true);
     });
   });
 
   describe('language discovery controls', () => {
-    it('renders the Language Discovery card', () => {
+    it('renders the Language Discovery card, preferred source language select, and auto-activate toggle', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Language Discovery')).toBeInTheDocument();
-    });
-
-    it('renders Preferred source subtitle language select', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Preferred source subtitle language')).toBeInTheDocument();
-    });
-
-    it('renders Auto-Activate Subtitles toggle', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('Auto-Activate Subtitles')).toBeInTheDocument();
-    });
-
-    it('renders preferred language select with English selected by default', () => {
-      render(<SubtitlesSection />);
       const select = screen.getByLabelText('Preferred source subtitle language') as HTMLSelectElement;
       expect(select.value).toBe('en');
     });
@@ -245,13 +195,9 @@ describe('SubtitlesSection', () => {
   });
 
   describe('supported sites card', () => {
-    it('renders the Supported Sites card', () => {
+    it('renders the Supported Sites card with all platform names, method hints, and toggles checked by default', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Supported Sites')).toBeInTheDocument();
-    });
-
-    it('renders all supported platform names', () => {
-      render(<SubtitlesSection />);
       expect(screen.getByText('YouTube')).toBeInTheDocument();
       expect(screen.getByText('Udemy')).toBeInTheDocument();
       expect(screen.getByText('Coursera')).toBeInTheDocument();
@@ -261,20 +207,14 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('Netflix')).toBeInTheDocument();
       expect(screen.getByText('Disney+')).toBeInTheDocument();
       expect(screen.getByText('WeTV')).toBeInTheDocument();
-    });
 
-    it('renders method hints for each platform', () => {
-      render(<SubtitlesSection />);
       const xhrHints = screen.getAllByText('XHR interception');
       expect(xhrHints.length).toBeGreaterThanOrEqual(3);
       expect(screen.getByText('Fetch interception')).toBeInTheDocument();
       expect(screen.getByText('VTT intercept + MPD/DOM fallback')).toBeInTheDocument();
       expect(screen.getByText('Fetch ASS + DOM fallback')).toBeInTheDocument();
       expect(screen.getByText('XHR interception (.vtt)')).toBeInTheDocument();
-    });
 
-    it('renders site toggles checked by default (empty disabled list)', () => {
-      render(<SubtitlesSection />);
       for (const id of [
         'subtitle-site-youtube',
         'subtitle-site-udemy',
@@ -288,10 +228,7 @@ describe('SubtitlesSection', () => {
       ]) {
         expect(document.getElementById(id)).toBeInTheDocument();
       }
-    });
 
-    it('does not show Load more when platform count is within the initial visible limit', () => {
-      render(<SubtitlesSection />);
       expect(screen.queryByRole('button', { name: /load more/i })).not.toBeInTheDocument();
     });
 
@@ -355,16 +292,13 @@ describe('SubtitlesSection', () => {
   });
 
   describe('generic subtitle detection toggle', () => {
-    it('renders the Generic Subtitle Detection toggle', () => {
+    it('renders the Generic Subtitle Detection toggle checked by default, with no per-site toggle', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Generic Subtitle Detection')).toBeInTheDocument();
-    });
-
-    it('renders the generic toggle checked by default', () => {
-      render(<SubtitlesSection />);
       const toggle = document.getElementById('subtitle-generic-handler-toggle');
       expect(toggle).toBeInTheDocument();
       expect(toggle?.getAttribute('aria-checked')).toBe('true');
+      expect(document.getElementById('subtitle-site-generic')).toBeNull();
     });
 
     it('reflects enableGenericSubtitleHandler=false as unchecked', () => {
@@ -395,10 +329,8 @@ describe('SubtitlesSection', () => {
     });
 
     it('does NOT render a per-site toggle for generic (separate setting)', () => {
-      render(<SubtitlesSection />);
-      // The generic entry is filtered out of the per-site loop, so its per-site
-      // id should not exist; only the dedicated generic-handler toggle exists.
-      expect(document.getElementById('subtitle-site-generic')).toBeNull();
+      // already covered in the combined toggle test above
+      expect(true).toBe(true);
     });
   });
 });

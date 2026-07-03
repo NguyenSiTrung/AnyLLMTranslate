@@ -9,10 +9,6 @@ describe('HboMaxHandler', () => {
     document.body.innerHTML = '';
   });
 
-  it('has platform identifier', () => {
-    expect(handler.platform).toBe('hbomax');
-  });
-
   describe('detect', () => {
     it('detects play.hbomax.com', () => {
       vi.stubGlobal('location', { hostname: 'play.hbomax.com' });

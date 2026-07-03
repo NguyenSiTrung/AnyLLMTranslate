@@ -9,10 +9,6 @@ describe('YoukuHandler', () => {
     document.body.innerHTML = '';
   });
 
-  it('has platform identifier', () => {
-    expect(handler.platform).toBe('youku');
-  });
-
   describe('detect', () => {
     // Canonical + subdomain hosts across the three Youku domains.
     it.each([

@@ -15,30 +15,12 @@ describe('extractProperNouns', () => {
     expect(result).toEqual({ John: 'Juan', MIT: 'MIT' });
   });
 
-  it('returns undefined when properNouns is absent', () => {
-    const response = JSON.stringify({ translations: { s1: 'Hola' } });
-    expect(extractProperNouns(response)).toBeUndefined();
-  });
-
-  it('returns undefined when properNouns is not an object', () => {
-    const response = JSON.stringify({
-      translations: { s1: 'Hola' },
-      properNouns: 'not an object',
-    });
-    expect(extractProperNouns(response)).toBeUndefined();
-  });
-
-  it('returns undefined when response is not valid JSON', () => {
-    expect(extractProperNouns('not json at all')).toBeUndefined();
-  });
-
-  it('returns undefined when properNouns is an empty object', () => {
-    const response = JSON.stringify({
-      translations: { s1: 'Hola' },
-      properNouns: {},
-    });
-    // Empty object is technically valid but carries no data — return undefined
-    // so callers can skip the merge step.
+  it.each([
+    ['absent', JSON.stringify({ translations: { s1: 'Hola' } })],
+    ['not an object', JSON.stringify({ translations: { s1: 'Hola' }, properNouns: 'not an object' })],
+    ['empty object', JSON.stringify({ translations: { s1: 'Hola' }, properNouns: {} })],
+    ['not valid JSON', 'not json at all'],
+  ])('returns undefined when properNouns is %s', (_label, response) => {
     expect(extractProperNouns(response)).toBeUndefined();
   });
 

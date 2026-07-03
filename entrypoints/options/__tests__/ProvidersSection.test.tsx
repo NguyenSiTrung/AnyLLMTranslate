@@ -89,16 +89,10 @@ describe('ProvidersSection', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
-  it('shows the empty-state message when no providers exist', () => {
+  it('shows the empty-state message and an inline add-provider CTA when no providers exist', () => {
     mockState = { ...DEFAULT_SETTINGS, providers: [], updateSettings };
     renderSection();
     expect(screen.getByText(/no providers configured\. add one/i)).toBeInTheDocument();
-  });
-
-  it('shows an inline add-provider CTA in the empty state', () => {
-    mockState = { ...DEFAULT_SETTINGS, providers: [], updateSettings };
-    renderSection();
-    // Both the empty-state CTA and the bottom button share the same label.
     const addButtons = screen.getAllByRole('button', { name: /add provider from catalog/i });
     expect(addButtons.length).toBeGreaterThanOrEqual(1);
   });
@@ -328,9 +322,10 @@ describe('ProvidersSection readiness banner', () => {
     mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
   });
 
-  it('shows pool-ready status when a healthy provider key exists', () => {
+  it('shows pool-ready status and no "Next:" prefix when a healthy provider key exists', () => {
     renderSection();
     expect(screen.getByText(/provider pool ready/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Next:/)).not.toBeInTheDocument();
   });
 
   it('shows not-configured guidance when no providers exist', () => {
@@ -347,10 +342,8 @@ describe('ProvidersSection readiness banner', () => {
     expect(onOpenSetup).toHaveBeenCalledOnce();
   });
 
-  it('does not prefix the banner action with "Next:"', () => {
-    renderSection();
-    // The action text should appear without the "Next:" prefix
-    expect(screen.queryByText(/Next:/)).not.toBeInTheDocument();
+  it('does not prefix the banner action with "Next:" (covered above)', () => {
+    expect(true).toBe(true);
   });
 });
 
@@ -437,7 +430,7 @@ describe('ProvidersSection expanded provider features', () => {
 });
 
 describe('ProvidersSection key row — keyless & get-key link', () => {
-  it('shows "No key required" for a keyless provider (Ollama)', () => {
+  it('shows "No key required" and no Test hint for a keyless provider (Ollama)', () => {
     mockState = {
       ...DEFAULT_SETTINGS,
       providers: [makeProvider({
@@ -451,6 +444,7 @@ describe('ProvidersSection key row — keyless & get-key link', () => {
     renderSection();
     fireEvent.click(screen.getByText('Ollama'));
     expect(screen.getByText('No key required for this provider')).toBeInTheDocument();
+    expect(screen.queryByText('Enter an API key to test this key.')).not.toBeInTheDocument();
   });
 
   it('shows a Get-a-key link for a keyed catalog provider (OpenRouter)', () => {
@@ -512,20 +506,8 @@ describe('ProvidersSection key row — keyless & get-key link', () => {
     expect(screen.getByText('Enter an API key to test this key.')).toBeInTheDocument();
   });
 
-  it('does not show the key Test hint for keyless providers', () => {
-    mockState = {
-      ...DEFAULT_SETTINGS,
-      providers: [makeProvider({
-        requiresApiKey: false,
-        displayName: 'Ollama',
-        baseUrl: 'http://localhost:11434/v1',
-        keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
-      })],
-      updateSettings,
-    };
-    renderSection();
-    fireEvent.click(screen.getByText('Ollama'));
-    expect(screen.queryByText('Enter an API key to test this key.')).not.toBeInTheDocument();
+  it('does not show the key Test hint for keyless providers (covered above)', () => {
+    expect(true).toBe(true);
   });
 });
 
@@ -657,13 +639,9 @@ describe('ProvidersSection system prompt template', () => {
     mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
   });
 
-  it('renders the system prompt template editor', () => {
+  it('renders the system prompt template editor and updates customSystemPrompt on change', () => {
     renderSection();
     expect(screen.getByText('Global System Prompt (advanced)')).toBeInTheDocument();
-  });
-
-  it('updates customSystemPrompt when the textarea changes', () => {
-    renderSection();
     const promptTextarea = document.getElementById('providers-system-prompt') as HTMLTextAreaElement;
     expect(promptTextarea).toBeTruthy();
     fireEvent.change(promptTextarea, { target: { value: 'Translate to {{targetLanguage}} please' } });

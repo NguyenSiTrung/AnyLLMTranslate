@@ -69,17 +69,13 @@ describe('AdvancedSection - Cache Configuration', () => {
     });
   });
 
-  it('renders Cache Configuration card with three input fields', () => {
+  it('renders Cache Configuration card with fields, initial values, and helper text', () => {
     render(<AdvancedSection />);
 
     expect(screen.getByText('Performance & Caching')).toBeInTheDocument();
     expect(screen.getByLabelText('Cache TTL (days)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Cache Size (MB)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Batch Characters')).toBeInTheDocument();
-  });
-
-  it('renders inputs with correct initial values from settings', () => {
-    render(<AdvancedSection />);
 
     const cacheTTLInput = screen.getByLabelText('Cache TTL (days)') as HTMLInputElement;
     const maxCacheSizeInput = screen.getByLabelText('Max Cache Size (MB)') as HTMLInputElement;
@@ -88,71 +84,27 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(cacheTTLInput.value).toBe('30');
     expect(maxCacheSizeInput.value).toBe('100');
     expect(maxBatchCharsInput.value).toBe('2000');
+
+    expect(screen.getByText('How long translations are cached before expiration.')).toBeInTheDocument();
+    expect(screen.getByText('Maximum storage limit for the translation cache.')).toBeInTheDocument();
+    expect(screen.getByText('Maximum characters sent per translation batch.')).toBeInTheDocument();
   });
 
-  it('shows validation error for cacheTTL below minimum (1)', () => {
+  it.each([
+    ['cacheTTL', 'Cache TTL (days)', '0', 'Must be between 1 and 365 days'],
+    ['cacheTTL', 'Cache TTL (days)', '400', 'Must be between 1 and 365 days'],
+    ['maxCacheSize', 'Max Cache Size (MB)', '5', 'Must be between 10 and 1000 MB'],
+    ['maxCacheSize', 'Max Cache Size (MB)', '1500', 'Must be between 10 and 1000 MB'],
+    ['maxBatchChars', 'Max Batch Characters', '100', 'Must be between 500 and 10000 characters'],
+    ['maxBatchChars', 'Max Batch Characters', '15000', 'Must be between 500 and 10000 characters'],
+  ])('shows validation error for %s with value %s', (_field, label, value, error) => {
     render(<AdvancedSection />);
 
-    const cacheTTLInput = screen.getByLabelText('Cache TTL (days)');
-    fireEvent.change(cacheTTLInput, { target: { value: '0' } });
-    fireEvent.blur(cacheTTLInput);
+    const input = screen.getByLabelText(label);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
 
-    expect(screen.getByText('Must be between 1 and 365 days')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for cacheTTL above maximum (365)', () => {
-    render(<AdvancedSection />);
-
-    const cacheTTLInput = screen.getByLabelText('Cache TTL (days)');
-    fireEvent.change(cacheTTLInput, { target: { value: '400' } });
-    fireEvent.blur(cacheTTLInput);
-
-    expect(screen.getByText('Must be between 1 and 365 days')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for maxCacheSize below minimum (10)', () => {
-    render(<AdvancedSection />);
-
-    const maxCacheSizeInput = screen.getByLabelText('Max Cache Size (MB)');
-    fireEvent.change(maxCacheSizeInput, { target: { value: '5' } });
-    fireEvent.blur(maxCacheSizeInput);
-
-    expect(screen.getByText('Must be between 10 and 1000 MB')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for maxCacheSize above maximum (1000)', () => {
-    render(<AdvancedSection />);
-
-    const maxCacheSizeInput = screen.getByLabelText('Max Cache Size (MB)');
-    fireEvent.change(maxCacheSizeInput, { target: { value: '1500' } });
-    fireEvent.blur(maxCacheSizeInput);
-
-    expect(screen.getByText('Must be between 10 and 1000 MB')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for maxBatchChars below minimum (500)', () => {
-    render(<AdvancedSection />);
-
-    const maxBatchCharsInput = screen.getByLabelText('Max Batch Characters');
-    fireEvent.change(maxBatchCharsInput, { target: { value: '100' } });
-    fireEvent.blur(maxBatchCharsInput);
-
-    expect(screen.getByText('Must be between 500 and 10000 characters')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows validation error for maxBatchChars above maximum (10000)', () => {
-    render(<AdvancedSection />);
-
-    const maxBatchCharsInput = screen.getByLabelText('Max Batch Characters');
-    fireEvent.change(maxBatchCharsInput, { target: { value: '15000' } });
-    fireEvent.blur(maxBatchCharsInput);
-
-    expect(screen.getByText('Must be between 500 and 10000 characters')).toBeInTheDocument();
+    expect(screen.getByText(error)).toBeInTheDocument();
     expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
 
@@ -214,10 +166,12 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(screen.getByText('Maximum characters sent per translation batch.')).toBeInTheDocument();
   });
 
-  it('renders LLM Page Category Detection toggle', () => {
+  it('renders LLM Page Category Detection and Context-Aware Translation toggles', () => {
     render(<AdvancedSection />);
     expect(screen.getByText('LLM-based Page Category Detection')).toBeInTheDocument();
     expect(screen.getByText('Auto-detect page topic using LLM for better terminology. Requires background API call.')).toBeInTheDocument();
+    expect(screen.getByText('Context-Aware Translation')).toBeInTheDocument();
+    expect(screen.getByText('Inject page title, description, and domain into translation prompts for more consistent terminology.')).toBeInTheDocument();
   });
 
   it('toggles LLM Page Category Detection on click', () => {
@@ -280,21 +234,13 @@ describe('AdvancedSection - PDF Translator', () => {
     });
   });
 
-  it('renders the PDF Translator card with auto-open mode defaulting to off', () => {
+  it('renders the PDF Translator card with auto-open off, new-tab mode, and no never-open list', () => {
     render(<AdvancedSection />);
     expect(screen.getByText('PDF Translator')).toBeInTheDocument();
     const autoOpenSelect = screen.getByLabelText('Auto-open mode') as HTMLSelectElement;
     expect(autoOpenSelect.value).toBe('off');
-  });
-
-  it('renders the open-mode select defaulting to new-tab', () => {
-    render(<AdvancedSection />);
     const openModeSelect = screen.getByLabelText('Open mode') as HTMLSelectElement;
     expect(openModeSelect.value).toBe('new-tab');
-  });
-
-  it('does NOT show never-open list when autoOpen is off', () => {
-    render(<AdvancedSection />);
     expect(screen.queryByLabelText('Never auto-open these sites')).not.toBeInTheDocument();
   });
 
@@ -359,20 +305,12 @@ describe('AdvancedSection - Rate Limiting', () => {
     });
   });
 
-  it('renders the Rate Limiting card with maxRpm input', () => {
+  it('renders the Rate Limiting card with maxRpm input (default 0, unlimited hint)', () => {
     render(<AdvancedSection />);
     expect(screen.getByText('Rate Limiting')).toBeInTheDocument();
     expect(screen.getByLabelText('Max requests per minute')).toBeInTheDocument();
-  });
-
-  it('renders input with default value 0', () => {
-    render(<AdvancedSection />);
     const input = screen.getByLabelText('Max requests per minute') as HTMLInputElement;
     expect(input.value).toBe('0');
-  });
-
-  it('shows (unlimited) hint when value is 0', () => {
-    render(<AdvancedSection />);
     expect(screen.getByText('(unlimited)')).toBeInTheDocument();
   });
 
@@ -397,28 +335,14 @@ describe('AdvancedSection - Rate Limiting', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith({ maxRpm: 0 });
   });
 
-  it('shows error for negative value', () => {
+  it.each([
+    ['-1', 'negative'],
+    ['601', 'above 600'],
+    ['3.5', 'non-integer'],
+  ])('shows error for value %s (%s)', (value) => {
     render(<AdvancedSection />);
     const input = screen.getByLabelText('Max requests per minute');
-    fireEvent.change(input, { target: { value: '-1' } });
-    fireEvent.blur(input);
-    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows error for value above 600', () => {
-    render(<AdvancedSection />);
-    const input = screen.getByLabelText('Max requests per minute');
-    fireEvent.change(input, { target: { value: '601' } });
-    fireEvent.blur(input);
-    expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
-    expect(mockUpdateSettings).not.toHaveBeenCalled();
-  });
-
-  it('shows error for non-integer value', () => {
-    render(<AdvancedSection />);
-    const input = screen.getByLabelText('Max requests per minute');
-    fireEvent.change(input, { target: { value: '3.5' } });
+    fireEvent.change(input, { target: { value } });
     fireEvent.blur(input);
     expect(screen.getByText('Must be an integer between 0 and 600 (0 = unlimited)')).toBeInTheDocument();
     expect(mockUpdateSettings).not.toHaveBeenCalled();

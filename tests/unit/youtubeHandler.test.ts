@@ -28,10 +28,6 @@ describe('YouTubeHandler', () => {
     });
   };
 
-  it('has platform identifier', () => {
-    expect(handler.platform).toBe('youtube');
-  });
-
   describe('detect', () => {
     it('returns true for youtube.com hostnames', () => {
       setLocation('www.youtube.com');

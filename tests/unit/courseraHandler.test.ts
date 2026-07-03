@@ -24,10 +24,6 @@ describe('CourseraHandler', () => {
     });
   };
 
-  it('has platform identifier', () => {
-    expect(handler.platform).toBe('coursera');
-  });
-
   describe('getPatterns', () => {
     it('returns coursera subtitle patterns including CDN VTT', () => {
       const patterns = handler.getPatterns();

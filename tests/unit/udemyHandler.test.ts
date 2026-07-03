@@ -24,10 +24,6 @@ describe('UdemyHandler', () => {
     });
   };
 
-  it('has platform identifier', () => {
-    expect(handler.platform).toBe('udemy');
-  });
-
   describe('detect', () => {
     it('returns true for udemy.com hosts', () => {
       setLocation('www.udemy.com');

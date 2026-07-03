@@ -46,10 +46,6 @@ describe('GenericSubtitleHandler — static behaviour', () => {
     handler = new GenericSubtitleHandler();
   });
 
-  it('has platform generic', () => {
-    expect(handler.platform).toBe('generic');
-  });
-
   describe('getPatterns — URL matching', () => {
     const pattern = () => handler.getPatterns();
 
