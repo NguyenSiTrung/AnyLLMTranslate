@@ -58,4 +58,23 @@ describe('ViewerLayout', () => {
     expect(screen.getByTestId('left-content')).toBeTruthy();
     expect(screen.getByTestId('right-content')).toBeTruthy();
   });
+
+  it('renders a single-column layout with a Bilingual label in bilingual mode', () => {
+    const { container } = render(
+      <ViewerLayout
+        viewMode="bilingual"
+        left={<div data-testid="left-content">L</div>}
+        right={<div data-testid="right-content">R</div>}
+      />,
+    );
+    // Left pane content is NOT rendered (bilingual uses a single column).
+    expect(screen.queryByTestId('left-content')).toBeNull();
+    // Right pane content IS rendered.
+    expect(screen.getByTestId('right-content')).toBeTruthy();
+    // Single-column class applied (like translation-only).
+    const main = container.querySelector('.pdf-viewer-main');
+    expect(main?.className).toContain('pdf-viewer-main--single');
+    // Distinct "Bilingual" pane label so users can tell the modes apart.
+    expect(screen.getByText('Bilingual')).toBeTruthy();
+  });
 });

@@ -32,6 +32,20 @@ export interface ViewerLayoutProps {
   viewMode?: PdfViewMode;
 }
 
+/**
+ * Whether a view mode renders a single column (no left/original pane).
+ * Both 'translation-only' and 'bilingual' collapse to a single column; only
+ * 'split' keeps the side-by-side panes.
+ */
+function isSingleColumn(mode: PdfViewMode | undefined): boolean {
+  return mode === 'translation-only' || mode === 'bilingual';
+}
+
+/** Pane label for the right/single column based on the view mode. */
+function paneLabel(mode: PdfViewMode | undefined): string {
+  return mode === 'bilingual' ? 'Bilingual' : 'Translation';
+}
+
 export function ViewerLayout({
   title = 'PDF Translator',
   subtitle,
@@ -74,10 +88,10 @@ export function ViewerLayout({
         {headerExtra && <div className="pdf-viewer-header-right">{headerExtra}</div>}
       </header>
       {banner && <div className="pdf-viewer-banner-wrap">{banner}</div>}
-      {viewMode === 'translation-only' ? (
+      {isSingleColumn(viewMode) ? (
         <main className="pdf-viewer-main pdf-viewer-main--single">
           <section className="pdf-viewer-pane pdf-viewer-pane--right">
-            <div className="pdf-viewer-pane-label">Translation</div>
+            <div className="pdf-viewer-pane-label">{paneLabel(viewMode)}</div>
             <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
               {right}
             </div>

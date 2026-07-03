@@ -113,10 +113,11 @@ pdfTranslation.ts); task-level parallelism is enabled only where file ownership 
   - [ ] Write tests: 'bilingual' mode renders original + translated stacked, persisted across reload, pane layout adjusts, scroll sync behaves
   - [ ] Implement: extend PdfViewMode union with 'bilingual', render path in ViewerLayout, persistence key reuse
 
-- [ ] Task 3: Download queue progress + cancel
+- [x] Task 3: Download queue progress + cancel
   <!-- files: entrypoints/pdf-viewer/components/DownloadProgressModal.tsx, entrypoints/pdf-viewer/hooks/usePdfDownload.ts -->
-  - [ ] Write tests: "page X of Y translating" reflects real counts, queue-cancel cancels pending without aborting in-flight mid-generation, retry re-queues
-  - [ ] Implement: expose translated/total counts to modal, queue-level cancel distinct from full-abort
+  - [x] Write tests: "page X of Y translating" reflects real counts, queue-cancel cancels pending without aborting in-flight mid-generation, retry re-queues
+  - [x] Implement: expose translated/total counts to modal, queue-level cancel distinct from full-abort
+  - **Commit:** 621f26d
 
 - [ ] Task 4: Conductor - User Manual Verification 'UI/UX' (Protocol in workflow.md)
 

@@ -510,6 +510,39 @@ html, body, #root {
   color: #fca5a5;
 }
 
+/* Bilingual view mode — original paragraph stacked above its translation */
+.pdf-viewer-bilingual {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pdf-viewer-bilingual-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdf-viewer-bilingual-original {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #71717a;
+}
+
+.pdf-viewer-bilingual-original--heading {
+  font-weight: 700;
+  font-size: 15px;
+  color: #a1a1aa;
+}
+
+.pdf-viewer-bilingual-translation {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1a1a1a;
+}
+
 /* Download Button */
 .pdf-download-btn-header {
   display: inline-flex;

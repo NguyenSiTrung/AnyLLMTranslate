@@ -91,7 +91,8 @@ export default function App(): ReactElement {
   // On first render the ref is 0 and useVisiblePages returns an empty set —
   // eviction is a no-op until real page slots are observed. After usePdfDocument
   // runs, the ref is updated for the next render.
-  const visibilityContainerRef = viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
+  const visibilityContainerRef =
+    viewMode === 'translation-only' || viewMode === 'bilingual' ? rightContainerRef : leftContainerRef;
   const numPagesRef = useRef(0);
   const { visiblePages } = useVisiblePages({
     totalPages: numPagesRef.current,
@@ -170,7 +171,7 @@ export default function App(): ReactElement {
 
   // Fully-loaded state: render the bilingual viewer directly
   if (loadState === 'loaded' && pdfUrl) {
-    const leftPane = viewMode === 'translation-only' ? null : (
+    const leftPane = viewMode === 'translation-only' || viewMode === 'bilingual' ? null : (
       <>
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
@@ -214,6 +215,7 @@ export default function App(): ReactElement {
                 pdfPage={page}
                 visible={isVisible}
                 dims={dims}
+                viewMode={viewMode}
               />
             </div>
           );
@@ -235,7 +237,7 @@ export default function App(): ReactElement {
         }
         headerExtra={
           <div className="pdf-viewer-header-controls">
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split vs translation only)">
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split, translation only, bilingual)">
               <button
                 type="button"
                 className={`pdf-viewer-toggle-btn ${viewMode === 'split' ? 'pdf-viewer-toggle-btn--active' : ''}`}
@@ -253,6 +255,15 @@ export default function App(): ReactElement {
                 title="Translation only: hide the original PDF pane and show the translation full-width."
               >
                 Translation
+              </button>
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${viewMode === 'bilingual' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => handleViewModeChange('bilingual')}
+                aria-pressed={viewMode === 'bilingual'}
+                title="Bilingual: show each paragraph's original text above its translation in a single reading flow (no canvas)."
+              >
+                Bilingual
               </button>
             </div>
             <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation layout mode">

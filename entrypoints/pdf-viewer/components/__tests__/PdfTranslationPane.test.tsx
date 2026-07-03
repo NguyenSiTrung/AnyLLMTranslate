@@ -500,3 +500,83 @@ describe('PdfTranslationPane streaming tail spinner (Phase 2)', () => {
     expect(document.querySelectorAll('.pdf-viewer-skeleton').length).toBeGreaterThan(0);
   });
 });
+
+describe('PdfTranslationPane bilingual mode (Phase 5 Task 2)', () => {
+  it('renders original + translated paragraphs stacked in bilingual mode', () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([
+        ['1-0', 'Bản dịch thứ nhất.'],
+        ['1-1', 'Bản dịch thứ hai.'],
+      ]),
+      originalParagraphs: [
+        { id: '1-0', text: 'First original.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+        { id: '1-1', text: 'Second original.', fontSize: 12, isHeading: false, x: 50, y: 100, width: 100, height: 14 },
+      ],
+    };
+    render(
+      <PdfTranslationPane pageNumber={1} page={page} paragraphCount={2} viewMode="bilingual" />,
+    );
+    // Both originals present
+    expect(screen.getByText('First original.')).toBeInTheDocument();
+    expect(screen.getByText('Second original.')).toBeInTheDocument();
+    // Both translations present
+    expect(screen.getByText('Bản dịch thứ nhất.')).toBeInTheDocument();
+    expect(screen.getByText('Bản dịch thứ hai.')).toBeInTheDocument();
+    // Bilingual container class applied
+    expect(document.querySelector('.pdf-viewer-bilingual')).not.toBeNull();
+  });
+
+  it('renders the original above the translation for each paragraph (reading order)', () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([['1-0', 'Translated text.']]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Original text.', fontSize: 12, isHeading: false, x: 50, y: 50, width: 100, height: 14 },
+      ],
+    };
+    const { container } = render(
+      <PdfTranslationPane pageNumber={1} page={page} paragraphCount={1} viewMode="bilingual" />,
+    );
+    const groups = container.querySelectorAll('.pdf-viewer-bilingual-group');
+    expect(groups.length).toBe(1);
+    // Within the group, original comes before translation in DOM order.
+    const children = Array.from(groups[0].children);
+    expect(children[0].textContent).toBe('Original text.');
+    expect(children[1].textContent).toBe('Translated text.');
+    // Original carries the "original" modifier; translation the "translation" one.
+    expect(children[0].className).toContain('pdf-viewer-bilingual-original');
+    expect(children[1].className).toContain('pdf-viewer-bilingual-translation');
+  });
+
+  it('marks heading originals with the heading modifier in bilingual mode', () => {
+    const page: PageTranslations = {
+      state: 'translated',
+      paragraphs: new Map([['1-0', 'Tiêu đề dịch']]),
+      originalParagraphs: [
+        { id: '1-0', text: 'Heading', fontSize: 22, isHeading: true, x: 50, y: 50, width: 200, height: 26 },
+      ],
+    };
+    render(
+      <PdfTranslationPane pageNumber={1} page={page} paragraphCount={1} viewMode="bilingual" />,
+    );
+    const original = document.querySelector('.pdf-viewer-bilingual-original');
+    expect(original?.className).toContain('pdf-viewer-bilingual-original--heading');
+  });
+
+  it('shows idle status in bilingual mode when not translated', () => {
+    const page: PageTranslations = { state: 'idle', paragraphs: new Map() };
+    render(
+      <PdfTranslationPane pageNumber={3} page={page} paragraphCount={0} viewMode="bilingual" />,
+    );
+    expect(screen.getByText(/Page 3 — Scroll to translate/)).toBeInTheDocument();
+  });
+
+  it('shows empty status in bilingual mode for scanned pages', () => {
+    const page: PageTranslations = { state: 'translated', paragraphs: new Map() };
+    render(
+      <PdfTranslationPane pageNumber={3} page={page} paragraphCount={0} viewMode="bilingual" />,
+    );
+    expect(screen.getByText(/No extractable text on page 3/)).toBeInTheDocument();
+  });
+});

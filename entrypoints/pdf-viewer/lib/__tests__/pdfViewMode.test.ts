@@ -87,4 +87,15 @@ describe('savePdfViewMode', () => {
     await savePdfViewMode('split');
     expect(await loadPdfViewMode()).toBe('split');
   });
+
+  it('round-trips the bilingual mode through save/load', async () => {
+    installStorageMock();
+    await savePdfViewMode('bilingual');
+    expect(await loadPdfViewMode()).toBe('bilingual');
+  });
+
+  it('returns the stored bilingual value when present', async () => {
+    installStorageMock({ [STORAGE_KEYS.PDF_VIEW_MODE]: 'bilingual' });
+    expect(await loadPdfViewMode()).toBe('bilingual');
+  });
 });

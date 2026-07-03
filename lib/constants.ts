@@ -64,8 +64,15 @@ export const DATA_ATTRS = {
 /** Translation page states */
 export type PageState = 'dual' | 'translation-only' | 'off';
 
-/** PDF viewer view-mode preference: split (original + translation panes) vs translation-only. */
-export type PdfViewMode = 'split' | 'translation-only';
+/**
+ * PDF viewer view-mode preference:
+ * - 'split' (default): original PDF canvas left, translation right (side-by-side).
+ * - 'translation-only': full-width reading flow, left pane hidden.
+ * - 'bilingual': full-width single column where each paragraph shows the
+ *   original text and its translation stacked together (focused reading
+ *   without the canvas, like the web-page bilingual-below theme).
+ */
+export type PdfViewMode = 'split' | 'translation-only' | 'bilingual';
 
 /** Extension storage keys */
 export const STORAGE_KEYS = {
@@ -75,6 +82,6 @@ export const STORAGE_KEYS = {
   CONNECTION_STATUS: 'anyllm-connection-status',
   /** Per-install random salt for API key encryption key derivation */
   ENC_SALT: 'anyllm-translate-enc-salt',
-  /** PDF viewer view-mode preference: 'split' (default) | 'translation-only' */
+  /** PDF viewer view-mode preference: 'split' (default) | 'translation-only' | 'bilingual' */
   PDF_VIEW_MODE: 'anyllm-pdf-view-mode',
 } as const;

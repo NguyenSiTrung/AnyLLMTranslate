@@ -18,6 +18,7 @@ import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import { measureBoxHeight } from '../lib/fontMetrics';
+import type { PdfViewMode } from '@/lib/constants';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -36,6 +37,8 @@ export interface PdfTranslationPaneProps {
   visible?: boolean;
   /** Pre-computed dimensions for layout overlay. */
   dims?: { width: number; height: number };
+  /** Viewer view mode. When 'bilingual', renders original + translated stacked. */
+  viewMode?: PdfViewMode;
 }
 
 /** Minimum readable font size (px) for overlay text. */
@@ -126,6 +129,53 @@ function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
       </p>
     </div>
   );
+}
+
+/**
+ * BilingualView — renders each paragraph's original text directly above its
+ * translation in a single vertical reading flow (no canvas).
+ *
+ * Mirrors the web-page translator's "bilingual-below" theme: the original is
+ * shown first (muted/smaller), the translation directly beneath it. This is
+ * the focused-reading mode for users who want both languages without the
+ * visual noise of the original page canvas.
+ *
+ * Paragraphs without an `originalParagraphs` entry (e.g. older cached state)
+ * fall back to showing only the translation. Paragraphs whose translation is
+ * missing render only the original.
+ */
+function BilingualView({ page }: { page: PageTranslations }): React.ReactElement {
+  const originals = page.originalParagraphs ?? [];
+  // Build a stable insertion order: originals in reading order, then any
+  // translated paragraphs that have no matching original (defensive — keeps
+  // orphan translations visible rather than dropping them).
+  const seenIds = new Set<string>();
+  const rows: React.ReactElement[] = originals.map((para) => {
+    seenIds.add(para.id);
+    const translated = page.paragraphs.get(para.id);
+    return (
+      <div key={para.id} className="pdf-viewer-bilingual-group">
+        <p
+          className={`pdf-viewer-bilingual-original${para.isHeading ? ' pdf-viewer-bilingual-original--heading' : ''}`}
+        >
+          {para.text}
+        </p>
+        {translated !== undefined && translated.trim() !== para.text.trim() && (
+          <p className="pdf-viewer-bilingual-translation">{translated}</p>
+        )}
+      </div>
+    );
+  });
+  for (const [id, translated] of page.paragraphs) {
+    if (!seenIds.has(id)) {
+      rows.push(
+        <div key={id} className="pdf-viewer-bilingual-group">
+          <p className="pdf-viewer-bilingual-translation">{translated}</p>
+        </div>,
+      );
+    }
+  }
+  return <div className="pdf-viewer-bilingual">{rows}</div>;
 }
 
 type Viewport = ReturnType<PDFPageProxy['getViewport']>;
@@ -433,7 +483,43 @@ export function PdfTranslationPane({
   pdfPage,
   visible,
   dims,
+  viewMode,
 }: PdfTranslationPaneProps): React.ReactElement {
+  // Bilingual view mode: original + translation stacked, no canvas overlay.
+  // Takes precedence over layoutMode (which only applies to the split/translation
+  // single-pane rendering paths).
+  if (viewMode === 'bilingual') {
+    if (page.state === 'idle') {
+      return <IdleState pageNumber={pageNumber} />;
+    }
+    if (page.state === 'translating') {
+      // If streaming has delivered some paragraphs, show them bilingually with
+      // a tail spinner; otherwise the skeleton.
+      if (page.paragraphs.size > 0) {
+        return (
+          <div className="pdf-viewer-page-translation">
+            <BilingualView page={page} />
+            <div className="pdf-viewer-streaming-tail" aria-live="polite">
+              <span className="pdf-viewer-spinner" aria-hidden="true" />
+            </div>
+          </div>
+        );
+      }
+      return <LoadingSkeleton count={paragraphCount} />;
+    }
+    if (page.state === 'error') {
+      return <ErrorState pageNumber={pageNumber} error={page.error} onRetry={onRetry} />;
+    }
+    if (page.state === 'translated' && page.paragraphs.size === 0) {
+      return <EmptyState pageNumber={pageNumber} />;
+    }
+    return (
+      <div className="pdf-viewer-page-translation">
+        <BilingualView page={page} />
+      </div>
+    );
+  }
+
   if (layoutMode === 'original') {
     const isTranslated = page.state === 'translated';
     const isEmpty = isTranslated && page.paragraphs.size === 0;
