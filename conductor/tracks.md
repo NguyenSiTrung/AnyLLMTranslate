@@ -74,6 +74,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_None — all tracks archived._
+- 🔶 **Providers Tab UX Refactor** (`providers-ux-refactor_20260704`) — High priority. Split 1001-line `ProvidersSection.tsx`; add provider identity badges (monogram + accent); promote test status from dot to Badge; two-zone header; advanced disclosure for temp/maxTokens; collapse catalog picker; rebuild AddProviderModal with search + categories; parallel "Test all keys" with live N/M progress; debounce text inputs (commit-on-blur); relocate Global System Prompt to Advanced. *Predecessor:* `providers-ux-overhaul_20260630` (13 different findings). [View](./conductor/tracks/providers-ux-refactor_20260704/)
 
 ---
