@@ -1016,6 +1016,14 @@ export default function App() {
   const connectionStatusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
   const StatusIcon = statusConfig.icon;
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
+  // The pool (settings.providers) is the source of truth for the active model —
+  // the legacy settings.provider mirror is only written by the setup wizard and
+  // goes stale when the model is changed on the options page. Fall back to it
+  // only when the pool is empty/has no enabled provider.
+  const activePoolProvider = settings.providers?.find((p) => p.enabled) ?? settings.providers?.[0];
+  const activeModel = activePoolProvider?.model || settings.provider.model;
+  const activeDisplayName =
+    activePoolProvider?.displayName || providerPreset?.displayName || settings.provider.displayName;
   const providerReadiness = getPoolReadinessStatus(settings);
   const providerRecoveryMessage = getPoolRecoveryMessage(providerReadiness);
   const shouldShowProviderRecovery = !providerReadiness.canTranslate && !unsupportedPage;
@@ -1570,9 +1578,7 @@ export default function App() {
       <div className="bg-zinc-950/80 border-t border-zinc-900/80 px-5 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-zinc-500 group">
           <Activity className="w-3.5 h-3.5 opacity-60 group-hover:text-blue-400 group-hover:opacity-100 transition-colors" />
-          <span className={TYPOGRAPHY.small}>
-            {providerPreset?.displayName ?? settings.provider.displayName}
-          </span>
+          <span className={TYPOGRAPHY.small}>{activeDisplayName}</span>
         </div>
         <div className="flex items-center gap-1.5 bg-zinc-900/80 backdrop-blur px-2.5 py-1 rounded-full border border-zinc-800/80 shadow-sm">
           <span className="relative">
@@ -1581,7 +1587,7 @@ export default function App() {
               <span className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-50" />
             )}
           </span>
-          <span className={TYPOGRAPHY.small}>{settings.provider.model}</span>
+          <span className={TYPOGRAPHY.small}>{activeModel}</span>
         </div>
       </div>
     </div>
