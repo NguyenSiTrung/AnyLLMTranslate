@@ -158,7 +158,12 @@ export default function App() {
   const renderSection = () => {
     switch (activeTab) {
       case 'general': return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;
-      case 'providers': return <ProvidersSection onOpenSetup={() => setShowSetupWizard(true)} />;
+      case 'providers': return (
+        <ProvidersSection
+          onOpenSetup={() => setShowSetupWizard(true)}
+          onNavigateToAdvanced={() => setActiveTab('advanced')}
+        />
+      );
       case 'themes': return <ThemesSection />;
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;

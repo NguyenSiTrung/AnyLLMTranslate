@@ -369,3 +369,71 @@ describe('AdvancedSection - Rate Limiting', () => {
     expect(mockUpdateSettings).not.toHaveBeenCalled();
   });
 });
+
+describe('AdvancedSection - Translation System Prompt (FR-9)', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+  const mockResetToDefaults = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    maxBatchChars: 2000,
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below' as const,
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: null as string | null,
+    debugMode: false,
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+    maxRpm: 0,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      if (typeof selector === 'function') {
+        return selector({ ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      }
+      return { ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+  });
+
+  it('renders the Translation System Prompt card with the editor', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('Translation System Prompt')).toBeInTheDocument();
+    const promptTextarea = document.getElementById('advanced-system-prompt') as HTMLTextAreaElement;
+    expect(promptTextarea).toBeTruthy();
+  });
+
+  it('updates customSystemPrompt on change', () => {
+    render(<AdvancedSection />);
+    const promptTextarea = document.getElementById('advanced-system-prompt') as HTMLTextAreaElement;
+    fireEvent.change(promptTextarea, { target: { value: 'Translate to {{targetLanguage}} please' } });
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ customSystemPrompt: 'Translate to {{targetLanguage}} please' }),
+    );
+  });
+
+  it('resets the prompt to default when Reset button is clicked', () => {
+    render(<AdvancedSection />);
+    // Two cards now have a "Reset to Default"-style button (cache + prompt);
+    // target the prompt's by scoping to the prompt card.
+    const resetBtns = screen.getAllByRole('button', { name: /reset to default/i });
+    // Click the LAST one — the prompt card is rendered after the cache card.
+    fireEvent.click(resetBtns[resetBtns.length - 1]);
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ customSystemPrompt: null }),
+    );
+  });
+});

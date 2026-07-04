@@ -12,10 +12,10 @@
  * popup imports the helpers and existing tests target the props.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Zap, Plus, Server, AlertTriangle,
-  CheckCircle2, RotateCcw, ChevronsDownUp, ChevronsUpDown, FileText,
+  CheckCircle2, ChevronsDownUp, ChevronsUpDown, ArrowRight,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -27,7 +27,6 @@ import { ProviderCard } from '../components/ProviderCard';
 import { AddProviderModal } from '../components/AddProviderModal';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
-import { FieldGroup } from '@/ui/FieldGroup';
 import { useToast } from '@/ui/ToastProvider';
 import { Modal } from '@/ui/Modal';
 import { EmptyState } from '@/ui/EmptyState';
@@ -35,10 +34,6 @@ import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerRe
 import { applyProviderPatch, applyKeyPatch } from '@/lib/poolTestStatus';
 import { buildProviderConfig } from '@/lib/providerPoolHelpers';
 import { runWithConcurrency } from '@/lib/concurrency';
-import {
-  DEFAULT_SYSTEM_PROMPT_TEMPLATE,
-  validatePromptTemplate,
-} from '@/services/base';
 import type {
   ExtensionSettings,
   PoolProvider,
@@ -51,6 +46,9 @@ import { testConnection } from '@/services/providerTester';
 interface ProvidersSectionProps {
   /** Called when the user clicks "Open setup guide" in the readiness banner. */
   onOpenSetup?: () => void;
+  /** FR-9: called when the user clicks "Edit system prompt →" in the
+   *  readiness banner; App.tsx wires it to `setActiveTab('advanced')`. */
+  onNavigateToAdvanced?: () => void;
   /** Optional: surface a message bus to query coordinator key status. When
    *  provided, each key row shows a live health badge. Omitted in tests. */
   getKeyStatus?: (keyId: string) => KeyStatusBadge | undefined;
@@ -70,7 +68,7 @@ export interface KeyStatusBadge {
  */
 const BULK_TEST_CONCURRENCY = 4;
 
-export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
+export function ProvidersSection({ onOpenSetup, onNavigateToAdvanced }: ProvidersSectionProps = {}) {
   const settings = useSettingsStore();
   const providers = useSettingsStore((s) => s.providers);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -82,16 +80,6 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   // FR-8: live N/M progress counter shown in the "Test all keys" button while
   // the parallel bulk test is running. `{done, total}` or `null` when idle.
   const [bulkTestProgress, setBulkTestProgress] = useState<{ done: number; total: number } | null>(null);
-  const [draftPrompt, setDraftPrompt] = useState(
-    settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
-  );
-
-  // Sync draft when the prompt is reset to null externally (e.g. Reset button).
-  useEffect(() => {
-    if (settings.customSystemPrompt === null) {
-      setDraftPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
-    }
-  }, [settings.customSystemPrompt]);
 
   // Pool readiness banner
   const poolReadiness = getPoolReadinessStatus(settings);
@@ -305,10 +293,6 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
     });
   }, []);
 
-  const promptValidation = settings.customSystemPrompt
-    ? validatePromptTemplate(settings.customSystemPrompt)
-    : null;
-
   return (
     <div className="animate-fade-in-up">
       <SectionHeader
@@ -343,6 +327,15 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                 <p className="text-xs text-zinc-500 mt-1">{recoveryMessage.action}</p>
                 {enabledKeyCount > 0 && (
                   <p className="text-xs text-zinc-600 mt-0.5">{enabledKeyCount} enabled key{enabledKeyCount !== 1 ? 's' : ''} across {providers.length} provider{providers.length !== 1 ? 's' : ''}</p>
+                )}
+                {onNavigateToAdvanced && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToAdvanced}
+                    className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
+                  >
+                    Edit system prompt <ArrowRight className="w-3 h-3" />
+                  </button>
                 )}
               </div>
               {onOpenSetup && (
@@ -407,47 +400,6 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
           >
             Add provider from catalog
           </Button>
-        </div>
-
-        {/* System Prompt Template (global setting) */}
-        <div className="animate-stagger" style={stagger(providers.length + 2)}>
-          <Card title="Global System Prompt (advanced)" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
-            <FieldGroup
-              label="Custom prompt template"
-              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
-              htmlFor="providers-system-prompt"
-            >
-              <textarea
-                id="providers-system-prompt"
-                value={draftPrompt}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDraftPrompt(val);
-                  updateSettings({ customSystemPrompt: val });
-                }}
-                rows={8}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-1">
-                  {promptValidation && !promptValidation.valid && (
-                    <div className="flex items-center gap-1 text-amber-400 text-xs">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>{promptValidation.warnings[0]}</span>
-                    </div>
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<RotateCcw className="w-3 h-3" />}
-                  onClick={() => updateSettings({ customSystemPrompt: null })}
-                >
-                  Reset to Default
-                </Button>
-              </div>
-            </FieldGroup>
-          </Card>
         </div>
       </div>
 

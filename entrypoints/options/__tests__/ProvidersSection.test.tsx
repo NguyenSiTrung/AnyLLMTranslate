@@ -1017,32 +1017,38 @@ describe('ProvidersSection parallel bulk test (FR-8)', () => {
   });
 });
 
-describe('ProvidersSection system prompt template', () => {
+describe('ProvidersSection system prompt relocation (FR-9)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
   });
 
-  it('renders the system prompt template editor and updates customSystemPrompt on change', () => {
+  it('does NOT render the Global System Prompt editor (moved to Advanced)', () => {
     renderSection();
-    expect(screen.getByText('Global System Prompt (advanced)')).toBeInTheDocument();
-    const promptTextarea = document.getElementById('providers-system-prompt') as HTMLTextAreaElement;
-    expect(promptTextarea).toBeTruthy();
-    fireEvent.change(promptTextarea, { target: { value: 'Translate to {{targetLanguage}} please' } });
-
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ customSystemPrompt: 'Translate to {{targetLanguage}} please' }),
-    );
+    expect(screen.queryByText('Global System Prompt (advanced)')).not.toBeInTheDocument();
+    expect(document.getElementById('providers-system-prompt')).toBeNull();
   });
 
-  it('resets the prompt to default when Reset button is clicked', () => {
+  it('does not render a Reset to Default button (the prompt reset moved too)', () => {
     renderSection();
-    const resetBtn = screen.getByRole('button', { name: /reset to default/i });
-    fireEvent.click(resetBtn);
+    expect(screen.queryByRole('button', { name: /reset to default/i })).not.toBeInTheDocument();
+  });
 
-    expect(updateSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ customSystemPrompt: null }),
+  it('renders an "Edit system prompt" link in the readiness banner when onNavigateToAdvanced is provided', () => {
+    const onNavigateToAdvanced = vi.fn();
+    render(
+      <ToastProvider>
+        <ProvidersSection onNavigateToAdvanced={onNavigateToAdvanced} />
+      </ToastProvider>,
     );
+    const link = screen.getByText(/edit system prompt/i);
+    fireEvent.click(link);
+    expect(onNavigateToAdvanced).toHaveBeenCalledOnce();
+  });
+
+  it('does not render the Edit system prompt link when onNavigateToAdvanced is omitted', () => {
+    renderSection();
+    expect(screen.queryByText(/edit system prompt/i)).not.toBeInTheDocument();
   });
 });
 

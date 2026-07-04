@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Gauge } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Gauge, AlertTriangle, RotateCcw } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -16,6 +16,10 @@ import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { useToast } from '@/ui/ToastProvider';
+import {
+  DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+  validatePromptTemplate,
+} from '@/services/base';
 
 export function AdvancedSection() {
   const settings = useSettingsStore();
@@ -36,6 +40,21 @@ export function AdvancedSection() {
   const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
   const [maxRpm, setMaxRpm] = useState(settings.maxRpm ?? 0);
   const [maxRpmError, setMaxRpmError] = useState('');
+
+  // FR-9: Global System Prompt editor relocated here from the Providers tab
+  // (it's unrelated to any provider). Local draft synced to the upstream
+  // setting when reset to null externally (Reset button / settings import).
+  const [draftPrompt, setDraftPrompt] = useState(
+    settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+  );
+  useEffect(() => {
+    if (settings.customSystemPrompt === null) {
+      setDraftPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+    }
+  }, [settings.customSystemPrompt]);
+  const promptValidation = settings.customSystemPrompt
+    ? validatePromptTemplate(settings.customSystemPrompt)
+    : null;
 
   const handleExportSettings = useCallback(() => {
     const exportData = {
@@ -450,8 +469,49 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Reset */}
+        {/* Translation System Prompt (FR-9: relocated from Providers tab) */}
         <div className="animate-stagger" style={stagger(5)}>
+          <Card title="Translation System Prompt" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
+            <FieldGroup
+              label="Custom prompt template"
+              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
+              htmlFor="advanced-system-prompt"
+            >
+              <textarea
+                id="advanced-system-prompt"
+                value={draftPrompt}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftPrompt(val);
+                  updateSettings({ customSystemPrompt: val });
+                }}
+                rows={8}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-1">
+                  {promptValidation && !promptValidation.valid && (
+                    <div className="flex items-center gap-1 text-amber-400 text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>{promptValidation.warnings[0]}</span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
+                  onClick={() => updateSettings({ customSystemPrompt: null })}
+                >
+                  Reset to Default
+                </Button>
+              </div>
+            </FieldGroup>
+          </Card>
+        </div>
+
+        {/* Reset */}
+        <div className="animate-stagger" style={stagger(6)}>
           <Button
             id="reset-all-settings-btn"
             variant="danger"
