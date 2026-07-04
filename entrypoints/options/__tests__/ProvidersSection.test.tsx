@@ -444,9 +444,22 @@ describe('ProvidersSection expanded provider features', () => {
     expect(listProviderModels).toHaveBeenCalled();
   });
 
-  it('shows temperature and max tokens sliders when expanded', () => {
+  it('hides temperature/maxTokens behind an Advanced disclosure until expanded (FR-5)', () => {
     renderSection();
-    fireEvent.click(screen.getByText('OpenAI')); // expand
+    fireEvent.click(screen.getByText('OpenAI')); // expand provider
+    // The sliders are NOT in the body until the disclosure is opened.
+    expect(screen.queryByRole('slider', { name: /temperature/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: /max tokens/i })).not.toBeInTheDocument();
+    // Open the disclosure.
+    fireEvent.click(screen.getByRole('button', { name: /advanced settings/i }));
+    expect(screen.getByRole('slider', { name: /temperature/i })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: /max tokens/i })).toBeInTheDocument();
+  });
+
+  it('shows temperature and max tokens sliders when the Advanced disclosure is open', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI')); // expand provider
+    fireEvent.click(screen.getByRole('button', { name: /advanced settings/i }));
     expect(screen.getByText(/temperature/i)).toBeInTheDocument();
     expect(screen.getByText(/max tokens/i)).toBeInTheDocument();
   });
@@ -485,7 +498,8 @@ describe('ProvidersSection expanded provider features', () => {
 
   it('updates temperature when the slider changes', () => {
     renderSection();
-    fireEvent.click(screen.getByText('OpenAI')); // expand
+    fireEvent.click(screen.getByText('OpenAI')); // expand provider
+    fireEvent.click(screen.getByRole('button', { name: /advanced settings/i })); // open disclosure
     const tempSlider = screen.getByRole('slider', { name: /temperature/i });
     fireEvent.change(tempSlider, { target: { value: '1.5' } });
 
@@ -496,6 +510,57 @@ describe('ProvidersSection expanded provider features', () => {
         ]),
       }),
     );
+  });
+});
+
+describe('ProvidersSection catalog picker collapse (FR-6)', () => {
+  it('shows the picker inline for a custom/unset catalogId provider', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'OpenAI',
+        baseUrl: 'https://api.openai.com/v1',
+        // no catalogId → inferCatalogId returns 'custom' → inline
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    expect(screen.getByText('Provider template')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change template/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the picker behind a "Change template" button for a configured provider', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        catalogId: 'groq',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Groq'));
+    // Picker collapsed; "Change template" button visible.
+    expect(screen.getByRole('button', { name: /change template/i })).toBeInTheDocument();
+    expect(screen.queryByText('Provider template')).not.toBeInTheDocument();
+  });
+
+  it('reveals the picker on "Change template" click', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        catalogId: 'groq',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByText('Groq'));
+    fireEvent.click(screen.getByRole('button', { name: /change template/i }));
+    expect(screen.getByText('Provider template')).toBeInTheDocument();
   });
 });
 

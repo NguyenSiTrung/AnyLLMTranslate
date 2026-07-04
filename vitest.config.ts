@@ -14,6 +14,8 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['entrypoints/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
       ['entrypoints/**/*.test.{ts,tsx}', 'jsdom'],
+      ['ui/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
+      ['ui/**/*.test.{ts,tsx}', 'jsdom'],
       ['content/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
       ['content/**/*.test.{ts,tsx}', 'jsdom'],
       ['tests/**/*.test.{ts,tsx}', 'jsdom'],

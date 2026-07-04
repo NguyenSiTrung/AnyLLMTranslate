@@ -7,6 +7,7 @@
  * test. Extracted verbatim from `ProvidersSection.tsx`.
  */
 
+import { useState } from 'react';
 import { CheckCircle2, ChevronDown, KeyRound, Plus, Trash2, XCircle } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -14,6 +15,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Slider } from '@/ui/Slider';
 import { Toggle } from '@/ui/Toggle';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { ModelPicker } from './ModelPicker';
 import { ProviderCatalogPicker, inferCatalogId } from './ProviderCatalogPicker';
 import { ProviderConnectionTest } from './ProviderConnectionTest';
@@ -61,6 +63,12 @@ export function ProviderCard({
   const identity = resolveProviderIdentity(provider.displayName, provider.catalogId, provider.baseUrl);
   const testStatus = getProviderTestStatus(provider);
   const testName = provider.displayName || 'Unnamed provider';
+
+  // FR-6: when a provider has a non-custom catalogId set, the catalog picker
+  // collapses behind a "Change template" button (reveals on click, re-collapses
+  // on select). A custom/unset catalogId shows the picker inline as before.
+  const hasConfiguredTemplate = catalogId !== 'custom';
+  const [showCatalogPicker, setShowCatalogPicker] = useState(!hasConfiguredTemplate);
 
   return (
     <Card variant="bordered" className="p-0 overflow-hidden">
@@ -135,17 +143,35 @@ export function ProviderCard({
             </Button>
           </div>
 
-          {/* Catalog picker for switching provider template */}
-          <ProviderCatalogPicker
-            compact
-            selectedCatalogId={catalogId}
-            provider={{
-              baseUrl: provider.baseUrl,
-              apiKey: provider.keys[0]?.apiKey ?? '',
-              model: provider.model,
-            }}
-            onSelect={(selection) => onCatalogSelect(selection)}
-          />
+          {/* Catalog picker for switching provider template (FR-6: collapse
+              behind "Change template" once a non-custom template is set). */}
+          {showCatalogPicker ? (
+            <ProviderCatalogPicker
+              compact
+              selectedCatalogId={catalogId}
+              provider={{
+                baseUrl: provider.baseUrl,
+                apiKey: provider.keys[0]?.apiKey ?? '',
+                model: provider.model,
+              }}
+              onSelect={(selection) => {
+                onCatalogSelect(selection);
+                // Re-collapse after a successful selection.
+                if (hasConfiguredTemplate) setShowCatalogPicker(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCatalogPicker(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+              aria-expanded={false}
+              aria-controls={`${panelId}-catalog`}
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              Change template
+            </button>
+          )}
 
           <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
             <Input
@@ -206,32 +232,36 @@ export function ProviderCard({
             onModelChange={(model) => onUpdateProvider({ model })}
           />
 
-          {/* Temperature & Max Tokens */}
-          <div className="grid grid-cols-2 gap-4">
-            <Slider
-              id={`pt-${provider.id}`}
-              label="Temperature"
-              value={provider.temperature}
-              min={0}
-              max={2}
-              step={0.1}
-              onChange={(v) => onUpdateProvider({ temperature: v })}
-              formatValue={(v) => v.toFixed(1)}
-              minLabel="Precise"
-              maxLabel="Creative"
-            />
-            <Slider
-              id={`pmt-${provider.id}`}
-              label="Max Tokens"
-              value={provider.maxTokens}
-              min={256}
-              max={16384}
-              step={256}
-              onChange={(v) => onUpdateProvider({ maxTokens: v })}
-              minLabel="256"
-              maxLabel="16384"
-            />
-          </div>
+          {/* Temperature & Max Tokens — behind an Advanced disclosure (FR-5)
+              so the primary path (template → name → URL → keys → model → test)
+              stays short. Values persist regardless of disclosure state. */}
+          <AdvancedDisclosure label="Advanced settings" idPrefix={`adv-${provider.id}`}>
+            <div className="grid grid-cols-2 gap-4">
+              <Slider
+                id={`pt-${provider.id}`}
+                label="Temperature"
+                value={provider.temperature}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(v) => onUpdateProvider({ temperature: v })}
+                formatValue={(v) => v.toFixed(1)}
+                minLabel="Precise"
+                maxLabel="Creative"
+              />
+              <Slider
+                id={`pmt-${provider.id}`}
+                label="Max Tokens"
+                value={provider.maxTokens}
+                min={256}
+                max={16384}
+                step={256}
+                onChange={(v) => onUpdateProvider({ maxTokens: v })}
+                minLabel="256"
+                maxLabel="16384"
+              />
+            </div>
+          </AdvancedDisclosure>
 
           <ProviderConnectionTest
             provider={provider}
