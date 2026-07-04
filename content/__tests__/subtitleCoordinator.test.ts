@@ -55,8 +55,10 @@ vi.mock('@/content/messageBridge', () => ({
 }));
 
 const mockOnMessage = vi.fn().mockReturnValue(() => {});
+const mockInjectSendMessage = vi.fn();
 vi.mock('@/inject/messageBridge', () => ({
   onMessage: (...args: unknown[]) => mockOnMessage(...args),
+  sendMessage: (...args: unknown[]) => mockInjectSendMessage(...args),
 }));
 
 const mockInitializeOverlay = vi.fn();
@@ -1392,5 +1394,184 @@ describe('subtitleCoordinator – proactive category detection', () => {
       'Gaming',
       expect.any(Function),
     );
+  });
+});
+
+// ============================================================================
+// Youku regression: in-range seeks must NOT cancel an active intercept-path
+// translation session. Youku's KUI player fires `seeked` on initial resume,
+// every buffer transition, and on scrubs. Before the fix, the intercept path
+// never engaged the in-range guard (it only fired for activeSource === 'manifest'),
+// so every seek null'd out state.activeSubtitleSessionId and every subsequent
+// SUBTITLE_CHUNK_TRANSLATED was dropped as stale — translation never appeared.
+// ============================================================================
+
+describe('subtitleCoordinator – seek does not invalidate intercept-path session', () => {
+  let extensionMessageHandler: (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: () => void,
+  ) => void;
+  let stopCoordinator: (() => void) | null = null;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    vi.resetModules();
+
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youku.tv', pathname: '/v/v_show/id_XNjUxNTI4OTk3Mg==.html', href: 'https://www.youku.tv/v/v_show/id_XNjUxNTI4OTk3Mg==.html' },
+      writable: true,
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockDetectCurrentHandler.mockReturnValue({ isWatchPage: () => true });
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockBuildBilingualVTT.mockReturnValue('WEBVTT\n\nbilingual');
+    mockBuildTranslationOnlyVTT.mockReturnValue('WEBVTT\n\ntranslation-only');
+    mockOnMessage.mockReturnValue(() => {});
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true, cues: MOCK_TRANSLATED_CUES, sessionId: 42 }),
+        onMessage: {
+          addListener: vi.fn((handler: (...args: unknown[]) => void) => {
+            extensionMessageHandler = handler as typeof extensionMessageHandler;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    stopCoordinator = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    if (stopCoordinator) {
+      stopCoordinator();
+      stopCoordinator = null;
+    }
+    document.querySelectorAll('video').forEach((v) => v.remove());
+    vi.resetModules();
+  });
+
+  /** Helper: a real <video> must exist BEFORE startCoordinator so scanForVideos
+   *  attaches the seeked listener. Created per-test (not in beforeEach) so the
+   *  intercept-only assertions don't depend on it, and removed in afterEach. */
+  function attachSeekVideo(): HTMLVideoElement {
+    const video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { writable: true, value: 201 });
+    document.body.appendChild(video);
+    return video;
+  }
+
+  it('keeps the session alive across an in-range seek (no CANCEL, no overlay blank)', async () => {
+    // Establish the intercept-path session.
+    const payload = {
+      url: 'https://sub.ykimg.com/test.ass',
+      body: '[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello',
+      contentType: 'text/plain',
+      platform: 'youku',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-seek-1');
+
+    // Sanity: intercept must have activated overlay mode for the seek guard to engage.
+    expect(mockUpdateCues).toHaveBeenCalled();
+
+    const sendMessageMock = global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    sendMessageMock.mockClear();
+    mockUpdateCues.mockClear();
+
+    // Add the seek target video AFTER intercept; the coordinator's
+    // MutationObserver attaches the seeked listener on insertion.
+    const video = attachSeekVideo();
+    // Wait a microtask for the MutationObserver callback to fire.
+    await Promise.resolve();
+
+    // In-range seek (201s → 3s; cues cover [0,4], so 3s is in range).
+    (video.currentTime as number) = 3;
+    video.dispatchEvent(new Event('seeked'));
+
+    // The in-range guard returns synchronously without scheduling the reset
+    // timer, so we can assert immediately.
+    const cancelCalls = sendMessageMock.mock.calls.filter(
+      ([msg]) => (msg as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
+    );
+    expect(cancelCalls).toHaveLength(0);
+    // Overlay must NOT have been blanked.
+    expect(mockUpdateCues).not.toHaveBeenCalledWith([]);
+  });
+
+  it('accepts a chunk with the original sessionId after an in-range seek', async () => {
+    const payload = {
+      url: 'https://sub.ykimg.com/test.ass',
+      body: '[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello',
+      contentType: 'text/plain',
+      platform: 'youku',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-seek-2');
+    expect(mockUpdateCues).toHaveBeenCalled();
+
+    const video = attachSeekVideo();
+    await Promise.resolve();
+
+    // In-range seek (201s → 3s; cues cover [0,4]).
+    (video.currentTime as number) = 3;
+    video.dispatchEvent(new Event('seeked'));
+
+    // A subsequent chunk for the same session must be accepted, not dropped.
+    mockUpdateCues.mockClear();
+    extensionMessageHandler(
+      { action: 'SUBTITLE_CHUNK_TRANSLATED', cues: MOCK_TRANSLATED_CUES, sessionId: 42 },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('regression: an out-of-range seek still cancels the session', async () => {
+    const payload = {
+      url: 'https://sub.ykimg.com/test.ass',
+      body: '[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello',
+      contentType: 'text/plain',
+      platform: 'youku',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-seek-3');
+    expect(mockUpdateCues).toHaveBeenCalled();
+
+    vi.useFakeTimers();
+    try {
+      const video = attachSeekVideo();
+      await Promise.resolve();
+
+      const sendMessageMock = global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+      sendMessageMock.mockClear();
+
+      // Out-of-range seek (201s → 9999s; cues cover [0,4], so 9999 is out of range).
+      (video.currentTime as number) = 9999;
+      video.dispatchEvent(new Event('seeked'));
+
+      await vi.advanceTimersByTimeAsync(250);
+
+      const cancelCalls = sendMessageMock.mock.calls.filter(
+        ([msg]) => (msg as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
+      );
+      // Out-of-range seeks are NOT short-circuited by the in-range guard —
+      // they still cancel the active session. (Count may exceed 1 if the
+      // fake-timer window also flushes other pending senders; we only need to
+      // prove the cancel path fired at least once.)
+      expect(cancelCalls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
