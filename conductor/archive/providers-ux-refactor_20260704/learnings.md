@@ -56,3 +56,21 @@ Seeded from `providers-ux-overhaul_20260630` (the predecessor — resolved 13 *d
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-07-04 11:08] - Track Complete: Providers Tab UX Refactor
+
+- **Implemented:** All 10 FRs across 8 phases. File split (FR-1), provider identity badges (FR-2), promoted test-status Badge (FR-3), two-zone header (FR-4), advanced disclosure for Temp/MaxTokens (FR-5), collapse catalog picker behind Change template (FR-6), rebuilt AddProviderModal with search + Cloud/Local/Custom categories (FR-7), parallel bulk test with live N/M progress cap 4 (FR-8), Global System Prompt relocated to Advanced (FR-9), text inputs commit-on-blur (FR-10).
+- **Files changed:** 26 files across 9 commits. New: `lib/providerPoolHelpers.ts`, `lib/concurrency.ts`, `ui/AdvancedDisclosure.tsx`, `entrypoints/options/hooks/useConnectionTest.ts`, `entrypoints/options/hooks/useDeferredCommit.ts`, `entrypoints/options/components/{ProviderTestResult,ProviderConnectionTest,ProviderKeyRow,ProviderCard,AddProviderModal,ProviderIdentityBadge}.tsx` (+ 5 co-located test files). Modified: `ProvidersSection.tsx` (1001→~430 lines), `AdvancedSection.tsx`, `App.tsx`, `lib/openAiCompatibleCatalog.ts`, `vitest.config.ts`.
+- **Commits:** 75bd966, 9ff7889, 692481c, 12dc822, e777260, 1cbb5f4, 58000b2, 8ff102b
+- **Tests:** 2273/0 across 152 files (+102 new). tsc clean. Lint: 0 net new errors (4 pre-existing). Build: 3.91 MB (delta < +2 KB, no new deps).
+- **Learnings:**
+  - **Pattern (elevation candidate):** `runWithConcurrency(items, worker, {concurrency, delay})` is a reusable bounded-concurrency runner with order-preserving results + injectable `delay` for fake timers — mirrors the rateLimiter/subtitleRetry pure-helper pattern. Already being reused conceptually by the bulk-test path; lives in `lib/concurrency.ts`.
+  - **Pattern (elevation candidate):** `useDeferredCommit(initial, onCommit)` generalizes the existing maxRpm commit-on-blur into a reusable hook for any text input where per-keystroke persistence is wasteful (e.g. AES-GCM-encrypted fields). Dirty-tracked, fires once on blur, syncs on external `initial` change. Lives in `entrypoints/options/hooks/useDeferredCommit.ts`.
+  - **Pattern (elevation candidate):** Extract `inferCatalogId`-style URL→enum inference into the lib that owns the data, re-export from the UI component for backward compat with existing importers (6 callers). Avoids duplicating URL-matching logic across the picker, model picker, key row, card, and identity resolver.
+  - **Gotcha:** `environmentMatchGlobs` in `vitest.config.ts` does NOT cover `ui/**` by default — the first jsdom UI-component test (AdvancedDisclosure) failed with "document is not defined". Add `ui/**/__tests__` + `ui/**` globs when adding the first UI primitive test.
+  - **Gotcha:** `resolveProviderIdentity` fallback chain must distinguish an *explicit* `catalogId='custom'` (use the gear monogram — it's a real entry) from an *inferred* 'custom' (unknown URL → use first letter of displayName). Treating inferred-custom as a match gives unknown URLs a misleading gear icon.
+  - **Gotcha:** ESLint flags `useState` slots that are written but never read (`[committed, setCommitted]` where only `setCommitted` is used). Drop the value with `const [, setCommitted] = useState(...)` rather than an underscore prefix (destructuring array-skip is the idiomatic fix).
+  - **Gotcha:** TypeScript narrows `useDeferredCommit('hello', ...)` to the literal type `'hello'`, rejecting `setValue('hel')`. Tests must pass an explicit type param: `useDeferredCommit<string>('hello', ...)`.
+  - **Process:** A large file split (Phase 1, 1001→430 lines) is safest when leaf-first (pure helpers → hook → dedup component → mid components → orchestrator) with the full suite run once at the end — zero behavioral change, all 205 existing tests passed untouched.
+  - **Surfaced (not mine):** `content/subtitleCoordinator.ts` + its test had uncommitted changes in the working tree at session start (a separate intercept-cue seek fix). Excluded from all providers commits; left intact for the owner.
+---
