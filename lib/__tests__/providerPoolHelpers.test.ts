@@ -120,4 +120,73 @@ describe('getProviderTestStatus', () => {
     });
     expect(getProviderTestStatus(p).state).toBe('failed');
   });
+
+  // Regression: a provider-level "Test connection" that passes after a
+  // previously-failing per-key test must flip the badge from "failed" to
+  // "healthy". Previously provider.lastTestResult was only consulted in the
+  // untested guard, so the stale key failure kept the header stuck on red.
+  it('is healthy when the provider-level test succeeds but keys still carry stale failures', () => {
+    const p = makeProvider({
+      keys: [
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
+      ],
+      lastTestResult: { success: true, at: 2, latencyMs: 42 },
+    });
+    const status = getProviderTestStatus(p);
+    expect(status.state).toBe('healthy');
+    expect(status.result?.at).toBe(2);
+    expect(status.result?.latencyMs).toBe(42);
+  });
+
+  it('is healthy when only the provider-level test has run (no key results)', () => {
+    const p = makeProvider({
+      keys: [{ id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true }],
+      lastTestResult: { success: true, at: 5, latencyMs: 7 },
+    });
+    const status = getProviderTestStatus(p);
+    expect(status.state).toBe('healthy');
+    expect(status.result?.at).toBe(5);
+  });
+
+  it('shows the most recent success when multiple results exist', () => {
+    const p = makeProvider({
+      keys: [
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 3, latencyMs: 50 } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 8, latencyMs: 20 } },
+      ],
+      lastTestResult: { success: true, at: 1, latencyMs: 99 },
+    });
+    const status = getProviderTestStatus(p);
+    expect(status.state).toBe('healthy');
+    expect(status.result?.at).toBe(8);
+    expect(status.result?.latencyMs).toBe(20);
+  });
+
+  it('shows the most recent failure when all results failed', () => {
+    const p = makeProvider({
+      keys: [
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 9, error: 'new' } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 4, error: 'old' } },
+      ],
+      lastTestResult: { success: false, at: 6, error: 'mid' },
+    });
+    const status = getProviderTestStatus(p);
+    expect(status.state).toBe('failed');
+    expect(status.result?.at).toBe(9);
+    expect(status.result?.error).toBe('new');
+  });
+
+  it('treats a newer per-key failure followed by a newer provider-level success as healthy', () => {
+    // user runs a failing per-key test, then runs the provider-level test
+    // which passes — header should reflect the latest provider-level success.
+    const p = makeProvider({
+      keys: [
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 10, error: 'x' } },
+      ],
+      lastTestResult: { success: true, at: 11, latencyMs: 30 },
+    });
+    const status = getProviderTestStatus(p);
+    expect(status.state).toBe('healthy');
+    expect(status.result?.at).toBe(11);
+  });
 });

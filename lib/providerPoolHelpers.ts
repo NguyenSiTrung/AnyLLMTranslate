@@ -53,21 +53,27 @@ export function getProviderTestStatus(provider: PoolProvider): {
   state: 'healthy' | 'failed' | 'untested';
   result?: KeyTestResult;
 } {
-  const testedKeys = provider.keys.filter((k) => k.lastTestResult);
-  if (testedKeys.length === 0 && !provider.lastTestResult) {
+  // Gather every persisted test result on the provider — both the
+  // provider-level "Test connection" outcome and each key's per-key outcome.
+  // A provider-level test (e.g. run after fixing a previously-failing key)
+  // must be able to flip the header badge out of "failed", so it is treated as
+  // a first-class result here, not just an "untested" guard. The freshest
+  // result by `at` wins within each outcome (success/failure).
+  const results: KeyTestResult[] = [];
+  if (provider.lastTestResult) results.push(provider.lastTestResult);
+  for (const k of provider.keys) {
+    if (k.lastTestResult) results.push(k.lastTestResult);
+  }
+  if (results.length === 0) {
     return { state: 'untested' };
   }
-  const anySuccess = testedKeys.some((k) => k.lastTestResult?.success);
-  const allFailed =
-    testedKeys.length > 0 && testedKeys.every((k) => k.lastTestResult?.success === false);
-  if (anySuccess) {
-    return {
-      state: 'healthy',
-      result: testedKeys.find((k) => k.lastTestResult?.success)?.lastTestResult,
-    };
+  // Optimistic display: any successful result (provider-level or per-key)
+  // makes the provider healthy, preferring the most recent success. Only when
+  // every recorded result is a failure do we show "failed" (newest failure).
+  const successes = results.filter((r) => r.success).sort((a, b) => b.at - a.at);
+  if (successes.length > 0) {
+    return { state: 'healthy', result: successes[0] };
   }
-  if (allFailed) {
-    return { state: 'failed', result: testedKeys[0]?.lastTestResult };
-  }
-  return { state: 'untested' };
+  const failures = results.slice().sort((a, b) => b.at - a.at);
+  return { state: 'failed', result: failures[0] };
 }
