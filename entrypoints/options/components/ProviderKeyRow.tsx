@@ -15,6 +15,7 @@ import { Toggle } from '@/ui/Toggle';
 import { ConnectionTestProgressList } from './ConnectionTestProgressList';
 import { ProviderTestResult } from './ProviderTestResult';
 import { useConnectionTest } from '../hooks/useConnectionTest';
+import { useDeferredCommit } from '../hooks/useDeferredCommit';
 import { getConnectionErrorMessage } from '@/lib/providerReadiness';
 import { getCatalogEntryById, getKeyUrlForProvider } from '@/lib/openAiCompatibleCatalog';
 import { inferCatalogId } from './ProviderCatalogPicker';
@@ -40,6 +41,11 @@ export function ProviderKeyRow({
   onRemove,
 }: ProviderKeyRowProps) {
   const [maxRpmDraft, setMaxRpmDraft] = useState(String(poolKey.maxRpm));
+  // FR-10: defer the encrypted store write until blur. Local value updates
+  // immediately for responsiveness; the (AES-GCM) chrome.storage write only
+  // fires on blur, killing per-keystroke encryption overhead.
+  const apiKeyField = useDeferredCommit(poolKey.apiKey, (v) => onUpdate({ apiKey: v }));
+  const labelField = useDeferredCommit(poolKey.label ?? '', (v) => onUpdate({ label: v }));
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
   const canTest = canRunConnectionTest(provider, poolKey);
   const failedStep = testResult?.steps.find((s) => !s.success);
@@ -86,8 +92,9 @@ export function ProviderKeyRow({
           <Input
             id={`pk-${poolKey.id}`}
             type="password"
-            value={poolKey.apiKey}
-            onChange={(e) => onUpdate({ apiKey: e.target.value })}
+            value={apiKeyField.value}
+            onChange={(e) => apiKeyField.setValue(e.target.value)}
+            onBlur={apiKeyField.commit}
             placeholder={keyPlaceholder}
             className="font-mono"
           />
@@ -112,8 +119,9 @@ export function ProviderKeyRow({
         <FieldGroup label="Label (optional)" htmlFor={`pl-${poolKey.id}`}>
           <Input
             id={`pl-${poolKey.id}`}
-            value={poolKey.label ?? ''}
-            onChange={(e) => onUpdate({ label: e.target.value })}
+            value={labelField.value}
+            onChange={(e) => labelField.setValue(e.target.value)}
+            onBlur={labelField.commit}
             placeholder="prod / staging"
           />
         </FieldGroup>

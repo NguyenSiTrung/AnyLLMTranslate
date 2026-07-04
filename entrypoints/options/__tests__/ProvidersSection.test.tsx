@@ -127,6 +127,8 @@ describe('ProvidersSection', () => {
     fireEvent.click(screen.getByText('OpenAI')); // expand
     const baseUrlInput = screen.getByPlaceholderText('https://api.openai.com/v1');
     fireEvent.change(baseUrlInput, { target: { value: 'https://new.example.com/v1' } });
+    // FR-10: text inputs commit on blur, not per keystroke.
+    fireEvent.blur(baseUrlInput);
 
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -561,6 +563,96 @@ describe('ProvidersSection catalog picker collapse (FR-6)', () => {
     fireEvent.click(screen.getByText('Groq'));
     fireEvent.click(screen.getByRole('button', { name: /change template/i }));
     expect(screen.getByText('Provider template')).toBeInTheDocument();
+  });
+});
+
+describe('ProvidersSection text-input debouncing (FR-10)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('does NOT write the store on each keystroke for display name', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const nameInput = screen.getByPlaceholderText('OpenAI');
+    fireEvent.change(nameInput, { target: { value: 'O' } });
+    fireEvent.change(nameInput, { target: { value: 'Op' } });
+    fireEvent.change(nameInput, { target: { value: 'Ope' } });
+    fireEvent.change(nameInput, { target: { value: 'Open' } });
+    // Four keystrokes, zero encrypted writes.
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('writes the store ONCE on blur with the latest display name', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const nameInput = screen.getByPlaceholderText('OpenAI');
+    fireEvent.change(nameInput, { target: { value: 'O' } });
+    fireEvent.change(nameInput, { target: { value: 'Op' } });
+    fireEvent.change(nameInput, { target: { value: 'OpenAI Plus' } });
+    fireEvent.blur(nameInput);
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({ displayName: 'OpenAI Plus' }),
+        ]),
+      }),
+    );
+  });
+
+  it('does NOT write the store on each keystroke for the API key', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const keyInput = screen.getByPlaceholderText('sk-...');
+    fireEvent.change(keyInput, { target: { value: 's' } });
+    fireEvent.change(keyInput, { target: { value: 'sk' } });
+    fireEvent.change(keyInput, { target: { value: 'sk-' } });
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('writes the store ONCE on blur for the API key', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const keyInput = screen.getByPlaceholderText('sk-...');
+    fireEvent.change(keyInput, { target: { value: 'sk-new-key' } });
+    fireEvent.blur(keyInput);
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            keys: expect.arrayContaining([expect.objectContaining({ apiKey: 'sk-new-key' })]),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('updates the visible value immediately while typing (responsiveness)', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const nameInput = screen.getByPlaceholderText('OpenAI') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'OpenAI X' } });
+    expect(nameInput.value).toBe('OpenAI X');
+  });
+
+  it('still commits maxRpm on blur (number inputs unaffected by FR-10)', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('OpenAI'));
+    const rpmInput = screen.getByDisplayValue('60');
+    fireEvent.change(rpmInput, { target: { value: '9999' } });
+    fireEvent.blur(rpmInput);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            keys: expect.arrayContaining([expect.objectContaining({ maxRpm: 600 })]),
+          }),
+        ]),
+      }),
+    );
   });
 });
 

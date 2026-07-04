@@ -21,6 +21,7 @@ import { ProviderCatalogPicker, inferCatalogId } from './ProviderCatalogPicker';
 import { ProviderConnectionTest } from './ProviderConnectionTest';
 import { ProviderIdentityBadge } from './ProviderIdentityBadge';
 import { ProviderKeyRow } from './ProviderKeyRow';
+import { useDeferredCommit } from '../hooks/useDeferredCommit';
 import { formatTestResultAge } from '@/lib/poolTestStatus';
 import { resolveProviderIdentity } from '@/lib/openAiCompatibleCatalog';
 import {
@@ -69,6 +70,12 @@ export function ProviderCard({
   // on select). A custom/unset catalogId shows the picker inline as before.
   const hasConfiguredTemplate = catalogId !== 'custom';
   const [showCatalogPicker, setShowCatalogPicker] = useState(!hasConfiguredTemplate);
+
+  // FR-10: defer display name + base URL store writes until blur (avoid
+  // per-keystroke AES-GCM encryption overhead). Toggles, sliders, the catalog
+  // picker, and test buttons remain immediate-commit (infrequent writes).
+  const displayNameField = useDeferredCommit(provider.displayName, (v) => onUpdateProvider({ displayName: v }));
+  const baseUrlField = useDeferredCommit(provider.baseUrl, (v) => onUpdateProvider({ baseUrl: v }));
 
   return (
     <Card variant="bordered" className="p-0 overflow-hidden">
@@ -176,8 +183,9 @@ export function ProviderCard({
           <FieldGroup label="Display name" htmlFor={`pn-${provider.id}`}>
             <Input
               id={`pn-${provider.id}`}
-              value={provider.displayName}
-              onChange={(e) => onUpdateProvider({ displayName: e.target.value })}
+              value={displayNameField.value}
+              onChange={(e) => displayNameField.setValue(e.target.value)}
+              onBlur={displayNameField.commit}
               placeholder="OpenAI"
             />
           </FieldGroup>
@@ -186,8 +194,9 @@ export function ProviderCard({
             <Input
               id={`pu-${provider.id}`}
               type="url"
-              value={provider.baseUrl}
-              onChange={(e) => onUpdateProvider({ baseUrl: e.target.value })}
+              value={baseUrlField.value}
+              onChange={(e) => baseUrlField.setValue(e.target.value)}
+              onBlur={baseUrlField.commit}
               placeholder="https://api.openai.com/v1"
               className="font-mono"
             />
