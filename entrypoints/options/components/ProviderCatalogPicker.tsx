@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import {
   OPENAI_COMPATIBLE_CATALOG,
   filterCatalog,
+  inferCatalogId,
   type OpenAiCompatibleCatalogEntry,
 } from '@/lib/openAiCompatibleCatalog';
 import type { ProviderConfig } from '@/types/config';
@@ -26,15 +27,10 @@ interface ProviderCatalogPickerProps {
   compact?: boolean;
 }
 
-export function inferCatalogId(baseUrl: string): string {
-  const normalized = baseUrl.trim().replace(/\/$/, '');
-  if (!normalized) return 'custom';
-  const match = OPENAI_COMPATIBLE_CATALOG.find((e) => {
-    const entryUrl = e.baseUrl.trim().replace(/\/$/, '');
-    return entryUrl && entryUrl === normalized;
-  });
-  return match?.id ?? 'custom';
-}
+// Re-export for backward compatibility — `inferCatalogId` now lives in the
+// catalog lib module (it's pure data logic). Existing imports from this
+// module keep working; new callers should import from the lib directly.
+export { inferCatalogId };
 
 export function resolveCatalogSelection(
   entry: OpenAiCompatibleCatalogEntry,

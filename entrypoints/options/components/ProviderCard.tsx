@@ -7,8 +7,7 @@
  * test. Extracted verbatim from `ProvidersSection.tsx`.
  */
 
-import { ChevronDown, KeyRound, Plus, Server, Trash2 } from 'lucide-react';
-import { Badge } from '@/ui/Badge';
+import { CheckCircle2, ChevronDown, KeyRound, Plus, Trash2, XCircle } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { FieldGroup } from '@/ui/FieldGroup';
@@ -18,8 +17,10 @@ import { Toggle } from '@/ui/Toggle';
 import { ModelPicker } from './ModelPicker';
 import { ProviderCatalogPicker, inferCatalogId } from './ProviderCatalogPicker';
 import { ProviderConnectionTest } from './ProviderConnectionTest';
+import { ProviderIdentityBadge } from './ProviderIdentityBadge';
 import { ProviderKeyRow } from './ProviderKeyRow';
 import { formatTestResultAge } from '@/lib/poolTestStatus';
+import { resolveProviderIdentity } from '@/lib/openAiCompatibleCatalog';
 import {
   buildProviderConfig,
   getCredentialKey,
@@ -57,48 +58,46 @@ export function ProviderCard({
   const panelId = `provider-panel-${provider.id}`;
   const headerId = `provider-header-${provider.id}`;
   const catalogId = provider.catalogId ?? inferCatalogId(provider.baseUrl);
+  const identity = resolveProviderIdentity(provider.displayName, provider.catalogId, provider.baseUrl);
+  const testStatus = getProviderTestStatus(provider);
+  const testName = provider.displayName || 'Unnamed provider';
 
   return (
     <Card variant="bordered" className="p-0 overflow-hidden">
-      {/* Provider header (collapsible) */}
+      {/* Provider header (collapsible) — two-zone layout (FR-4) */}
       <button
         type="button"
         id={headerId}
         onClick={onToggle}
-        className={`w-full flex items-center justify-between px-5 py-4 text-sm font-medium transition-colors cursor-pointer ${
+        className={`w-full flex items-center justify-between gap-3 px-5 py-4 text-sm font-medium transition-colors cursor-pointer ${
           provider.enabled
             ? 'text-zinc-300 hover:bg-zinc-800/50'
             : 'text-zinc-500 hover:bg-zinc-800/30 opacity-60'
         }`}
         aria-expanded={isExpanded}
         aria-controls={panelId}
+        aria-label={`${testName} provider`}
       >
-        <span className="flex items-center gap-2 min-w-0">
-          <Server className={`w-3.5 h-3.5 shrink-0 ${provider.enabled ? 'text-zinc-500' : 'text-zinc-600'}`} />
-          <span className="truncate">{provider.displayName || 'Unnamed provider'}</span>
-          <Badge variant={provider.enabled ? 'success' : 'info'}>
-            {provider.enabled ? 'on' : 'off'}
-          </Badge>
-          <span className="flex items-center gap-0.5 text-xs text-zinc-500">
+        {/* Left zone: identity badge + name + test-health badge (FR-2/3/4) */}
+        <span className="flex items-center gap-2.5 min-w-0">
+          <ProviderIdentityBadge
+            accent={identity.accent}
+            monogram={identity.monogram}
+            enabled={provider.enabled}
+          />
+          <span className="truncate">{testName}</span>
+          {testStatus.state !== 'untested' && (
+            <ProviderTestHealthBadge state={testStatus.state} age={testStatus.result ? formatTestResultAge(testStatus.result) : ''} />
+          )}
+        </span>
+        {/* Right zone: key count + chevron (FR-4) */}
+        <span className="flex items-center gap-2 shrink-0">
+          <span className="flex items-center gap-0.5 text-xs text-zinc-500" title={`${provider.keys.length} key${provider.keys.length !== 1 ? 's' : ''}`}>
             <KeyRound className="w-3 h-3" />
             {provider.keys.length}
           </span>
-          {(() => {
-            const status = getProviderTestStatus(provider);
-            if (status.state === 'untested') return null;
-            const color = status.state === 'healthy' ? 'bg-emerald-500' : 'bg-red-500';
-            const label = status.state === 'healthy' ? 'Verified' : 'Failed';
-            const age = status.result ? formatTestResultAge(status.result) : '';
-            return (
-              <span
-                className={`inline-block w-2 h-2 rounded-full ${color}`}
-                title={`${label}${age ? ` (${age})` : ''}`}
-                aria-label={`${label}${age ? ` ${age}` : ''}`}
-              />
-            );
-          })()}
+          <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
         </span>
-        <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
       </button>
 
       {isExpanded && (
@@ -242,5 +241,40 @@ export function ProviderCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Promoted test-health badge for the collapsed provider header (FR-3).
+ *
+ * Replaces the old `w-2 h-2` status dot with a real badge carrying an icon,
+ * a label, and the age. Uses the same `bg-X-600/15 text-X-400` token pattern
+ * as the readiness banner and `ProviderIdentityBadge` (NFR-4). The label is
+ * visible text (better than the old dot's `title` tooltip) and the
+ * `aria-label` carries the same string for assistive tech.
+ */
+function ProviderTestHealthBadge({
+  state,
+  age,
+}: {
+  state: 'healthy' | 'failed';
+  age: string;
+}) {
+  const isHealthy = state === 'healthy';
+  const Icon = isHealthy ? CheckCircle2 : XCircle;
+  const label = isHealthy ? 'Verified' : 'Failed';
+  const text = age ? `${label} · ${age}` : label;
+  const tone = isHealthy
+    ? 'bg-emerald-600/15 border-emerald-500/20 text-emerald-400'
+    : 'bg-red-600/15 border-red-500/20 text-red-400';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${tone}`}
+      aria-label={text}
+      title={text}
+    >
+      <Icon className="w-3 h-3" />
+      {text}
+    </span>
   );
 }

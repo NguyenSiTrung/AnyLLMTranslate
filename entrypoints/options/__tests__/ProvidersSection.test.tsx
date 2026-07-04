@@ -316,6 +316,76 @@ describe('ProvidersSection disabled provider visuals', () => {
   });
 });
 
+describe('ProvidersSection provider identity badge (FR-2) & two-zone header (FR-4)', () => {
+  it('renders a colored monogram badge matching the catalog accent (Groq → orange GQ)', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        catalogId: 'groq',
+      })],
+      updateSettings,
+    };
+    renderSection();
+    // The monogram badge is aria-hidden; locate by text content.
+    const badge = screen.getByText('GQ');
+    expect(badge).toHaveClass('bg-orange-600/15');
+    expect(badge).toHaveClass('border-orange-500/20');
+    expect(badge).toHaveClass('text-orange-400');
+  });
+
+  it('renders a teal monogram badge for Ollama', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Ollama',
+        baseUrl: 'http://localhost:11434/v1',
+        catalogId: 'ollama',
+        requiresApiKey: false,
+      })],
+      updateSettings,
+    };
+    renderSection();
+    const badge = screen.getByText('OL');
+    expect(badge).toHaveClass('bg-teal-600/15');
+    expect(badge).toHaveClass('text-teal-400');
+  });
+
+  it('falls back to zinc + first letter for an unknown provider with no catalogId', () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        displayName: 'Acme',
+        baseUrl: 'https://api.acme.com/v1',
+        catalogId: undefined,
+      })],
+      updateSettings,
+    };
+    renderSection();
+    const badge = screen.getByText('A');
+    expect(badge).toHaveClass('bg-zinc-600/15');
+    expect(badge).toHaveClass('text-zinc-400');
+  });
+
+  it('does not render the standalone on/off Badge in the collapsed header (FR-4)', () => {
+    // The body toggle text "Provider enabled/disabled" already communicates this,
+    // and the header's opacity-60 is the stronger signal when disabled.
+    renderSection();
+    // No "on"/"off" pill should appear in the header while collapsed.
+    expect(screen.queryByText('on')).not.toBeInTheDocument();
+    expect(screen.queryByText('off')).not.toBeInTheDocument();
+  });
+
+  it('keeps the key count + chevron on the right zone of the header', () => {
+    renderSection();
+    // The key count cluster is always present in the collapsed header.
+    expect(screen.getByText('1')).toBeInTheDocument();
+    // Chevron is present.
+    expect(document.querySelector('[class*="chevron"]') || screen.getByRole('button', { name: /openai provider/i })).toBeInTheDocument();
+  });
+});
+
 describe('ProvidersSection readiness banner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -564,7 +634,7 @@ describe('ProvidersSection persisted test status & bulk test', () => {
     });
   });
 
-  it('shows a status dot in the collapsed header when a key has lastTestResult', () => {
+  it('shows a Verified badge in the collapsed header when a key has a healthy lastTestResult', () => {
     mockState = {
       ...DEFAULT_SETTINGS,
       providers: [makeProvider({
@@ -579,11 +649,14 @@ describe('ProvidersSection persisted test status & bulk test', () => {
       updateSettings,
     };
     renderSection();
-    const dot = screen.getByTitle(/Verified/);
-    expect(dot).toHaveClass('bg-emerald-500');
+    // FR-3: the old 2px dot is now a real badge with icon + label + age.
+    const badge = screen.getByTitle(/Verified/);
+    expect(badge).toHaveClass('bg-emerald-600/15');
+    expect(badge).toHaveClass('text-emerald-400');
+    expect(badge).toHaveTextContent(/Verified/);
   });
 
-  it('shows a failed status dot when all keys failed', () => {
+  it('shows a Failed badge when all keys failed', () => {
     mockState = {
       ...DEFAULT_SETTINGS,
       providers: [makeProvider({
@@ -598,11 +671,13 @@ describe('ProvidersSection persisted test status & bulk test', () => {
       updateSettings,
     };
     renderSection();
-    const dot = screen.getByTitle(/Failed/);
-    expect(dot).toHaveClass('bg-red-500');
+    const badge = screen.getByTitle(/Failed/);
+    expect(badge).toHaveClass('bg-red-600/15');
+    expect(badge).toHaveClass('text-red-400');
+    expect(badge).toHaveTextContent(/Failed/);
   });
 
-  it('does not show a status dot when no keys have been tested', () => {
+  it('does not show a status badge when no keys have been tested', () => {
     renderSection();
     expect(screen.queryByTitle(/Verified|Failed/)).not.toBeInTheDocument();
   });

@@ -3,6 +3,13 @@
  * Catalog IDs are not stored in ProviderPreset — selection keeps preset: 'custom'.
  */
 
+/**
+ * The accent-color union used for provider identity badges. Mirrors the
+ * `AccentColor` union in `ui/SectionHeader.tsx` — the two MUST stay in sync
+ * (intentionally duplicated so this `lib/` module stays free of UI imports).
+ */
+export type ProviderAccent = 'blue' | 'pink' | 'emerald' | 'amber' | 'zinc' | 'teal' | 'cyan' | 'orange';
+
 export interface OpenAiCompatibleCatalogEntry {
   id: string;
   displayName: string;
@@ -14,6 +21,11 @@ export interface OpenAiCompatibleCatalogEntry {
   supportsModelListing: boolean;
   /** URL to obtain or manage API keys for this provider (omitted for keyless). */
   getKeyUrl?: string;
+  /** Accent color for the identity badge (FR-2). Falls back to `zinc`. */
+  accent?: ProviderAccent;
+  /** 1–3 character monogram for the identity badge (FR-2). Falls back to the
+   *  first letter of `displayName`, or a gear for the `custom` entry. */
+  monogram?: string;
 }
 
 export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
@@ -27,6 +39,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'openai/gpt-4o-mini',
     supportsModelListing: true,
     getKeyUrl: 'https://openrouter.ai/keys',
+    accent: 'zinc',
+    monogram: 'OR',
   },
   {
     id: 'nvidia-nim',
@@ -38,6 +52,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'meta/llama-3.1-8b-instruct',
     supportsModelListing: true,
     getKeyUrl: 'https://build.nvidia.com/models/api-key',
+    accent: 'emerald',
+    monogram: 'NV',
   },
   {
     id: 'groq',
@@ -49,6 +65,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'llama-3.1-8b-instant',
     supportsModelListing: true,
     getKeyUrl: 'https://console.groq.com/keys',
+    accent: 'orange',
+    monogram: 'GQ',
   },
   {
     id: 'together',
@@ -60,6 +78,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
     supportsModelListing: true,
     getKeyUrl: 'https://api.together.xyz/settings/api-keys',
+    accent: 'pink',
+    monogram: 'TG',
   },
   {
     id: 'fireworks',
@@ -71,6 +91,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
     supportsModelListing: true,
     getKeyUrl: 'https://fireworks.ai/api-keys',
+    accent: 'amber',
+    monogram: 'FW',
   },
   {
     id: 'mistral',
@@ -82,6 +104,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     defaultModel: 'mistral-small-latest',
     supportsModelListing: true,
     getKeyUrl: 'https://console.mistral.ai/api-keys/',
+    accent: 'amber',
+    monogram: 'MI',
   },
   {
     id: 'ollama',
@@ -91,6 +115,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     requiresApiKey: false,
     defaultModel: 'llama3.2',
     supportsModelListing: true,
+    accent: 'teal',
+    monogram: 'OL',
   },
   {
     id: 'lm-studio',
@@ -100,6 +126,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     requiresApiKey: false,
     defaultModel: '',
     supportsModelListing: true,
+    accent: 'cyan',
+    monogram: 'LM',
   },
   {
     id: 'custom',
@@ -108,6 +136,8 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     baseUrl: '',
     requiresApiKey: false,
     supportsModelListing: true,
+    accent: 'zinc',
+    monogram: '⚙',
   },
 ];
 
@@ -127,6 +157,66 @@ export function filterCatalog(
 
 export function getCatalogEntryById(id: string): OpenAiCompatibleCatalogEntry | undefined {
   return OPENAI_COMPATIBLE_CATALOG.find((e) => e.id === id);
+}
+
+/**
+ * Resolve the identity badge metadata (accent + monogram) for a provider,
+ * implementing the FR-2 fallback chain:
+ *   1. the catalog entry for `catalogId` (when explicitly set — including
+ *      `custom`, which has its own gear monogram)
+ *   2. the catalog entry inferred from `baseUrl` (via {@link inferCatalogId}),
+ *      but ONLY when the inference matched a real provider — `inferCatalogId`
+ *      returns `'custom'` as a default sentinel, which is NOT treated as a
+ *      match here (an unknown URL should not get the custom-template gear)
+ *   3. zinc accent + first letter of `displayName`
+ *
+ * The monogram falls back to the first letter of `displayName` when the
+ * resolved entry has none. Pure/dependency-free.
+ */
+export function resolveProviderIdentity(
+  displayName: string,
+  catalogId: string | undefined,
+  baseUrl: string,
+): { accent: ProviderAccent; monogram: string } {
+  // Step 1: an explicitly-set catalogId always wins (including 'custom').
+  if (catalogId) {
+    const entry = getCatalogEntryById(catalogId);
+    if (entry) {
+      const monogram =
+        entry.monogram ?? (displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?');
+      return { accent: entry.accent ?? 'zinc', monogram };
+    }
+  }
+  // Step 2: infer from the base URL, but only accept a real (non-custom) match.
+  const inferred = inferCatalogId(baseUrl);
+  if (inferred !== 'custom') {
+    const entry = getCatalogEntryById(inferred);
+    if (entry) {
+      const monogram =
+        entry.monogram ?? (displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?');
+      return { accent: entry.accent ?? 'zinc', monogram };
+    }
+  }
+  // Step 3: zinc + first letter of displayName.
+  return {
+    accent: 'zinc',
+    monogram: displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?',
+  };
+}
+
+/**
+ * Infer a catalog id from a base URL by exact host+path match. Returns
+ * `'custom'` when the URL is empty or matches no entry. Canonical inference
+ * shared by the catalog picker, model picker, key row, and identity badge.
+ */
+export function inferCatalogId(baseUrl: string): string {
+  const normalized = baseUrl.trim().replace(/\/+$/, '');
+  if (!normalized) return 'custom';
+  for (const e of OPENAI_COMPATIBLE_CATALOG) {
+    const entryUrl = e.baseUrl.trim().replace(/\/+$/, '');
+    if (entryUrl && entryUrl === normalized) return e.id;
+  }
+  return 'custom';
 }
 
 /**
