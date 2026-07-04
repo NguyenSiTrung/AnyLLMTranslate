@@ -65,8 +65,19 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-/* Fade-in animation */
-@keyframes anyllmSubtitleFadeIn {
+/* Fade-in: the overlay's opacity is handled by the transition above (opacity 0
+   -> .anyllm-translate-subtitle-visible opacity 1). The upward slide runs on
+   the INNER text container instead of the overlay.
+
+   Why not animate transform on the overlay itself: positionOverlay() stores the
+   drag-to-reposition offset as an inline `transform: translate(offsetX, offsetY)`
+   on the overlay. A running CSS animation overrides inline styles, so animating
+   `transform` here made the overlay ignore the drag offset for 0.3s and then
+   snap to the dragged position when the animation ended — visible as the
+   subtitle "showing at the bottom first, then jumping up". Animating transform
+   on the text container avoids that conflict because nothing positions via its
+   transform. */
+@keyframes anyllmSubtitleSlideIn {
   from {
     opacity: 0;
     transform: translateY(5px);
@@ -77,8 +88,8 @@
   }
 }
 
-.anyllm-translate-subtitle-overlay.anyllm-translate-subtitle-visible {
-  animation: anyllmSubtitleFadeIn 0.3s ease-out;
+.anyllm-translate-subtitle-overlay.anyllm-translate-subtitle-visible .anyllm-translate-subtitle-text {
+  animation: anyllmSubtitleSlideIn 0.3s ease-out;
 }
 
 /* Dark/light video background support */
