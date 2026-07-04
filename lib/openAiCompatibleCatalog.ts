@@ -220,13 +220,16 @@ export function resolveProviderIdentity(
   catalogId: string | undefined,
   baseUrl: string,
 ): { accent: ProviderAccent; monogram: string } {
+  /** First letter of displayName (uppercased), or '?' when blank. */
+  const monogramFallback = (): string => {
+    const trimmed = displayName.trim();
+    return trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?';
+  };
   // Step 1: an explicitly-set catalogId always wins (including 'custom').
   if (catalogId) {
     const entry = getCatalogEntryById(catalogId);
     if (entry) {
-      const monogram =
-        entry.monogram ?? (displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?');
-      return { accent: entry.accent ?? 'zinc', monogram };
+      return { accent: entry.accent ?? 'zinc', monogram: entry.monogram ?? monogramFallback() };
     }
   }
   // Step 2: infer from the base URL, but only accept a real (non-custom) match.
@@ -234,16 +237,11 @@ export function resolveProviderIdentity(
   if (inferred !== 'custom') {
     const entry = getCatalogEntryById(inferred);
     if (entry) {
-      const monogram =
-        entry.monogram ?? (displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?');
-      return { accent: entry.accent ?? 'zinc', monogram };
+      return { accent: entry.accent ?? 'zinc', monogram: entry.monogram ?? monogramFallback() };
     }
   }
   // Step 3: zinc + first letter of displayName.
-  return {
-    accent: 'zinc',
-    monogram: displayName.trim() ? displayName.trim()[0]!.toUpperCase() : '?',
-  };
+  return { accent: 'zinc', monogram: monogramFallback() };
 }
 
 /**

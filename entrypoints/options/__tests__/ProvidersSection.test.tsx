@@ -904,7 +904,8 @@ describe('ProvidersSection parallel bulk test (FR-8)', () => {
 
   it('commits each key result live as it resolves (not batched at the end)', async () => {
     // Resolve key 2 first; its lastTestResult should land before key 1 resolves.
-    let resolveK1: () => void;
+    // Definite assignment via a wrapper avoids the non-null assertion lint.
+    let resolveK1: (() => void) | undefined;
     const k1Promise = new Promise<void>((r) => { resolveK1 = r; });
     let call = 0;
     testConnection.mockImplementation(async () => {
@@ -959,7 +960,7 @@ describe('ProvidersSection parallel bulk test (FR-8)', () => {
         ]),
       }),
     );
-    resolveK1!();
+    resolveK1?.();
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith(
         expect.objectContaining({

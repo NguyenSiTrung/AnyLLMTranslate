@@ -223,14 +223,16 @@ describe('category field + groupByCategory (FR-7)', () => {
 
   it('groupByCategory puts each entry in its bucket', () => {
     const groups = groupByCategory();
-    const cloudIds = groups.find((g) => g.category === 'cloud')!.entries.map((e) => e.id);
+    const findIds = (cat: 'cloud' | 'local' | 'custom'): string[] => {
+      const g = groups.find((x) => x.category === cat);
+      return g ? g.entries.map((e) => e.id) : [];
+    };
+    const cloudIds = findIds('cloud');
     expect(cloudIds).toContain('openrouter');
     expect(cloudIds).toContain('groq');
     expect(cloudIds).toHaveLength(6);
-    const localIds = groups.find((g) => g.category === 'local')!.entries.map((e) => e.id);
-    expect(localIds).toEqual(['ollama', 'lm-studio']);
-    const customIds = groups.find((g) => g.category === 'custom')!.entries.map((e) => e.id);
-    expect(customIds).toEqual(['custom']);
+    expect(findIds('local')).toEqual(['ollama', 'lm-studio']);
+    expect(findIds('custom')).toEqual(['custom']);
   });
 
   it('groupByCategory omits empty groups and respects filtered input', () => {

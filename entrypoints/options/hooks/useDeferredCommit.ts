@@ -30,7 +30,11 @@ export function useDeferredCommit<T>(
   onCommit: (value: T) => void,
 ): UseDeferredCommitResult<T> {
   const [value, setValue] = useState<T>(initial);
-  const [committed, setCommitted] = useState<T>(initial);
+  // `committed` is the last value written via onCommit. We only need the
+  // setter to read the previous committed value inside the commit callback
+  // (React queues state updates, so we can't read it from a closure). The
+  // underscore prefix flags it as intentionally write-only to ESLint.
+  const [, setCommitted] = useState<T>(initial);
 
   // Sync local state when the upstream value changes externally (reset to
   // defaults, settings import, cross-context chrome.storage.onChanged).

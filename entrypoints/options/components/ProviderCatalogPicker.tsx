@@ -5,7 +5,6 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import {
-  OPENAI_COMPATIBLE_CATALOG,
   filterCatalog,
   inferCatalogId,
   type OpenAiCompatibleCatalogEntry,

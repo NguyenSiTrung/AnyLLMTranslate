@@ -34,10 +34,11 @@ describe('ProviderIdentityBadge', () => {
     const { container } = render(
       <ProviderIdentityBadge accent="emerald" monogram="NV" />,
     );
-    const badge = container.querySelector('span')!;
-    expect(badge.className).toMatch(/bg-emerald-600\/15/);
-    expect(badge.className).toMatch(/border-emerald-500\/20/);
-    expect(badge.className).toMatch(/text-emerald-400/);
+    const badge = container.querySelector('span');
+    expect(badge).not.toBeNull();
+    expect(badge?.className).toMatch(/bg-emerald-600\/15/);
+    expect(badge?.className).toMatch(/border-emerald-500\/20/);
+    expect(badge?.className).toMatch(/text-emerald-400/);
   });
 
   it('is aria-hidden (the header text conveys the name)', () => {

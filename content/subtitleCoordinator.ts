@@ -238,6 +238,13 @@ interface CoordinatorState {
   domTranslatedTexts: Set<string>;
   /** DOM-platform: persistent map of originalText → translatedText across batches */
   domTranslationMap: Map<string, string>;
+  /**
+   * Intercept-path: parsed cues from the full subtitle body captured by
+   * handleIntercepted (e.g. Youku's full .ass file). The whole track is parsed
+   * upfront, so any in-range seek keeps these cues valid — the background
+   * chunked-translation session must not be cancelled for in-range seeks.
+   */
+  interceptOriginalCues: SubtitleCue[];
   /** Manifest-platform (HBOMax progressive VTT): rolling original (source) cues from capture */
   manifestOriginalCues: SubtitleCue[];
   /** Manifest-platform: rebuilt bilingual cues shown in the overlay (originalText + translated/fallback) */
@@ -286,6 +293,7 @@ const state: CoordinatorState = {
   domTranslatedCues: [],
   domTranslatedTexts: new Set(),
   domTranslationMap: new Map(),
+  interceptOriginalCues: [],
   manifestOriginalCues: [],
   manifestTranslatedCues: [],
   manifestTranslatedTexts: new Set(),
@@ -368,6 +376,9 @@ function cleanupActiveOverlay(): void {
     state.isOverlayMode = false;
   }
   state.activeSource = null;
+  // Drop the intercept-path cue cache: the overlay is gone, and any future
+  // intercept repopulates this with the new track's parsed cues.
+  state.interceptOriginalCues = [];
 }
 
 /** Inject a <style> hiding the platform's native caption window.
@@ -527,6 +538,11 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sendTranslatedSubtitle({ requestId, vttContent: body });
       return;
     }
+
+    // Track the full parsed cue set so handleVideoSeeked can recognise
+    // in-range seeks and avoid cancelling the chunked-translation session
+    // (the intercept path parses the entire subtitle body upfront).
+    state.interceptOriginalCues = cues;
 
     // Immediately activate overlay fallback to handle progressive chunks
     if (!state.isOverlayMode) {
@@ -1050,15 +1066,26 @@ function handleVideoSeeked(event?: Event): void {
   // Real seek: update the anchor for the next comparisons
   lastVideoTimes.set(video, currentTime);
 
-  // If we are in manifest mode, check if the seeked time is covered by the current cues.
-  // This prevents startup seeks or local scrubbing from clearing already loaded cues
-  // when the player won't re-fetch the segment.
-  if (state.activeSource === 'manifest' && state.manifestOriginalCues.length > 0) {
-    const firstCue = state.manifestOriginalCues[0];
-    const lastCue = state.manifestOriginalCues[state.manifestOriginalCues.length - 1];
+  // If the seeked time is covered by the current full-content cue set,
+  // keep the existing cues and the active translation session. Two paths can
+  // hold full content: the intercept path (e.g. Youku's full .ass body,
+  // cached in state.interceptOriginalCues) and the manifest path (streaming
+  // VTT, cached in state.manifestOriginalCues). This prevents startup seeks
+  // or local scrubbing from clearing already loaded cues and — critically for
+  // the intercept path — from cancelling the chunked-translation session
+  // (which would cause every subsequent chunk to be dropped as stale).
+  const fullContentCues =
+    state.interceptOriginalCues.length > 0
+      ? state.interceptOriginalCues
+      : state.activeSource === 'manifest'
+        ? state.manifestOriginalCues
+        : [];
+  if (fullContentCues.length > 0) {
+    const firstCue = fullContentCues[0];
+    const lastCue = fullContentCues[fullContentCues.length - 1];
     // Allow a small padding/grace window of 2 seconds at the boundaries
     if (currentTime >= firstCue.startTime - 2 && currentTime <= lastCue.endTime + 2) {
-      console.log('AnyLLMTranslate: Seek is within current manifest cue range — keeping cues');
+      console.log('AnyLLMTranslate: Seek is within current subtitle range — keeping cues');
       state.playbackAnchorTime = currentTime;
       return;
     }
@@ -2139,6 +2166,7 @@ export function resetCoordinatorState(): void {
     seekResetTimer = null;
   }
   state.translatedCues = null;
+  state.interceptOriginalCues = [];
   state.cachedSettings = null;
   if (state.discoverDebounceTimer !== null) {
     clearTimeout(state.discoverDebounceTimer);

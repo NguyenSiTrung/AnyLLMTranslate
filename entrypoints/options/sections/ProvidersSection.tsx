@@ -22,7 +22,7 @@ import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { poolIdGenerators } from '@/lib/config';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
-import { ProviderCatalogPicker, inferCatalogId } from '../components/ProviderCatalogPicker';
+import { inferCatalogId } from '../components/ProviderCatalogPicker';
 import { ProviderCard } from '../components/ProviderCard';
 import { AddProviderModal } from '../components/AddProviderModal';
 import { Button } from '@/ui/Button';

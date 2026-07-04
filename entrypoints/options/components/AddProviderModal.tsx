@@ -36,11 +36,10 @@ function resolveIdentityForEntry(entry: OpenAiCompatibleCatalogEntry): {
   accent: ProviderAccent;
   monogram: string;
 } {
+  const trimmed = entry.displayName.trim();
   return {
     accent: entry.accent ?? 'zinc',
-    monogram:
-      entry.monogram ??
-      (entry.displayName.trim() ? entry.displayName.trim()[0]!.toUpperCase() : '?'),
+    monogram: entry.monogram ?? (trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?'),
   };
 }
 
