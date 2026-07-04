@@ -4,6 +4,7 @@ import {
   filterCatalog,
   getCatalogEntryById,
   getKeyUrlForProvider,
+  groupByCategory,
   inferCatalogId,
   resolveProviderIdentity,
 } from '@/lib/openAiCompatibleCatalog';
@@ -196,5 +197,46 @@ describe('inferCatalogId (URL inference)', () => {
 
   it('returns custom for an unknown URL', () => {
     expect(inferCatalogId('https://api.unknown.com/v1')).toBe('custom');
+  });
+});
+
+describe('category field + groupByCategory (FR-7)', () => {
+  it('every entry has a category', () => {
+    for (const entry of OPENAI_COMPATIBLE_CATALOG) {
+      expect(entry.category, `${entry.id}.category`).toBeDefined();
+    }
+  });
+
+  it('assigns the spec categories', () => {
+    const cloud = ['openrouter', 'nvidia-nim', 'groq', 'together', 'fireworks', 'mistral'];
+    const local = ['ollama', 'lm-studio'];
+    const custom = ['custom'];
+    for (const id of cloud) expect(getCatalogEntryById(id)?.category).toBe('cloud');
+    for (const id of local) expect(getCatalogEntryById(id)?.category).toBe('local');
+    for (const id of custom) expect(getCatalogEntryById(id)?.category).toBe('custom');
+  });
+
+  it('groupByCategory returns groups in cloud → local → custom order', () => {
+    const groups = groupByCategory();
+    expect(groups.map((g) => g.category)).toEqual(['cloud', 'local', 'custom']);
+  });
+
+  it('groupByCategory puts each entry in its bucket', () => {
+    const groups = groupByCategory();
+    const cloudIds = groups.find((g) => g.category === 'cloud')!.entries.map((e) => e.id);
+    expect(cloudIds).toContain('openrouter');
+    expect(cloudIds).toContain('groq');
+    expect(cloudIds).toHaveLength(6);
+    const localIds = groups.find((g) => g.category === 'local')!.entries.map((e) => e.id);
+    expect(localIds).toEqual(['ollama', 'lm-studio']);
+    const customIds = groups.find((g) => g.category === 'custom')!.entries.map((e) => e.id);
+    expect(customIds).toEqual(['custom']);
+  });
+
+  it('groupByCategory omits empty groups and respects filtered input', () => {
+    const filtered = filterCatalog('ollama');
+    const groups = groupByCategory(filtered);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].category).toBe('local');
   });
 });

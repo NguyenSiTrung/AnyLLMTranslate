@@ -10,6 +10,14 @@
  */
 export type ProviderAccent = 'blue' | 'pink' | 'emerald' | 'amber' | 'zinc' | 'teal' | 'cyan' | 'orange';
 
+/**
+ * Catalog category for the AddProviderModal grouping (FR-7).
+ * - `cloud`  — hosted commercial APIs (OpenRouter, NVIDIA, Groq, Together, Fireworks, Mistral)
+ * - `local`  — self-hosted / localhost runtimes (Ollama, LM Studio)
+ * - `custom` — user-defined endpoint
+ */
+export type CatalogCategory = 'cloud' | 'local' | 'custom';
+
 export interface OpenAiCompatibleCatalogEntry {
   id: string;
   displayName: string;
@@ -26,6 +34,8 @@ export interface OpenAiCompatibleCatalogEntry {
   /** 1–3 character monogram for the identity badge (FR-2). Falls back to the
    *  first letter of `displayName`, or a gear for the `custom` entry. */
   monogram?: string;
+  /** Category for the AddProviderModal grouping (FR-7). Defaults to `cloud`. */
+  category?: CatalogCategory;
 }
 
 export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
@@ -41,6 +51,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://openrouter.ai/keys',
     accent: 'zinc',
     monogram: 'OR',
+    category: 'cloud',
   },
   {
     id: 'nvidia-nim',
@@ -54,6 +65,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://build.nvidia.com/models/api-key',
     accent: 'emerald',
     monogram: 'NV',
+    category: 'cloud',
   },
   {
     id: 'groq',
@@ -67,6 +79,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://console.groq.com/keys',
     accent: 'orange',
     monogram: 'GQ',
+    category: 'cloud',
   },
   {
     id: 'together',
@@ -80,6 +93,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://api.together.xyz/settings/api-keys',
     accent: 'pink',
     monogram: 'TG',
+    category: 'cloud',
   },
   {
     id: 'fireworks',
@@ -93,6 +107,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://fireworks.ai/api-keys',
     accent: 'amber',
     monogram: 'FW',
+    category: 'cloud',
   },
   {
     id: 'mistral',
@@ -106,6 +121,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://console.mistral.ai/api-keys/',
     accent: 'amber',
     monogram: 'MI',
+    category: 'cloud',
   },
   {
     id: 'ollama',
@@ -117,6 +133,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     supportsModelListing: true,
     accent: 'teal',
     monogram: 'OL',
+    category: 'local',
   },
   {
     id: 'lm-studio',
@@ -128,6 +145,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     supportsModelListing: true,
     accent: 'cyan',
     monogram: 'LM',
+    category: 'local',
   },
   {
     id: 'custom',
@@ -138,6 +156,7 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     supportsModelListing: true,
     accent: 'zinc',
     monogram: '⚙',
+    category: 'custom',
   },
 ];
 
@@ -153,6 +172,29 @@ export function filterCatalog(
     if (entry.id.toLowerCase().includes(q)) return true;
     return entry.keywords.some((kw) => kw.toLowerCase().includes(q));
   });
+}
+
+/**
+ * Group a (possibly filtered) set of catalog entries by category for the
+ * AddProviderModal (FR-7). Returns categories in display order
+ * (`cloud`, `local`, `custom`) and omits empty groups. Entries with no
+ * explicit category default to `cloud`.
+ */
+export function groupByCategory(
+  entries: OpenAiCompatibleCatalogEntry[] = OPENAI_COMPATIBLE_CATALOG,
+): { category: CatalogCategory; entries: OpenAiCompatibleCatalogEntry[] }[] {
+  const buckets: Record<CatalogCategory, OpenAiCompatibleCatalogEntry[]> = {
+    cloud: [],
+    local: [],
+    custom: [],
+  };
+  for (const entry of entries) {
+    const cat = entry.category ?? 'cloud';
+    buckets[cat].push(entry);
+  }
+  return (['cloud', 'local', 'custom'] as const)
+    .map((category) => ({ category, entries: buckets[category] }))
+    .filter((g) => g.entries.length > 0);
 }
 
 export function getCatalogEntryById(id: string): OpenAiCompatibleCatalogEntry | undefined {
