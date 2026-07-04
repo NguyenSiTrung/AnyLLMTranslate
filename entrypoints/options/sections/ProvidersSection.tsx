@@ -34,6 +34,7 @@ import { EmptyState } from '@/ui/EmptyState';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import { applyProviderPatch, applyKeyPatch } from '@/lib/poolTestStatus';
 import { buildProviderConfig } from '@/lib/providerPoolHelpers';
+import { runWithConcurrency } from '@/lib/concurrency';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -62,6 +63,13 @@ export interface KeyStatusBadge {
   openUntil?: number;
 }
 
+/**
+ * Max concurrent connection tests during "Test all keys" (FR-8). Caps
+ * in-flight requests against provider rate limits while still finishing
+ * ~4× faster than the old sequential runner for pools with many keys.
+ */
+const BULK_TEST_CONCURRENCY = 4;
+
 export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const settings = useSettingsStore();
   const providers = useSettingsStore((s) => s.providers);
@@ -71,6 +79,9 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
   const [showAddProviderModal, setShowAddProviderModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isBulkTesting, setIsBulkTesting] = useState(false);
+  // FR-8: live N/M progress counter shown in the "Test all keys" button while
+  // the parallel bulk test is running. `{done, total}` or `null` when idle.
+  const [bulkTestProgress, setBulkTestProgress] = useState<{ done: number; total: number } | null>(null);
   const [draftPrompt, setDraftPrompt] = useState(
     settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   );
@@ -214,7 +225,13 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
     setExpandedProviderIds(new Set());
   }, []);
 
-  /** Test all enabled (provider, key) pairs sequentially and aggregate results. */
+  /**
+   * Test all enabled (provider, key) pairs in parallel (FR-8) and aggregate
+   * results. Up to BULK_TEST_CONCURRENCY tests run concurrently; each key's
+   * `lastTestResult` is committed AS IT RESOLVES so the per-row badge updates
+   * live (the existing store path is already reactive). A live N/M counter
+   * drives the banner button label.
+   */
   const handleTestAll = useCallback(async () => {
     const slots: { providerId: string; keyId: string; config: ProviderConfig }[] = [];
     for (const p of providers) {
@@ -232,41 +249,47 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
     if (slots.length === 0) return;
 
     setIsBulkTesting(true);
+    setBulkTestProgress({ done: 0, total: slots.length });
     let healthy = 0;
-    const testResults: { providerId: string; keyId: string; result: KeyTestResult }[] = [];
+    let done = 0;
 
-    for (const slot of slots) {
-      try {
-        const result = await testConnection(slot.config, undefined, settings.targetLanguage);
-        const keyResult: KeyTestResult = {
-          success: result.overall,
-          at: Date.now(),
-          latencyMs: result.totalLatencyMs,
-          error: result.overall ? undefined : result.steps.find((s) => !s.success)?.error,
-        };
-        testResults.push({ providerId: slot.providerId, keyId: slot.keyId, result: keyResult });
-        if (result.overall) healthy++;
-      } catch {
-        testResults.push({
-          providerId: slot.providerId,
-          keyId: slot.keyId,
-          result: { success: false, at: Date.now(), error: 'Test failed' },
-        });
-      }
-    }
-
-    // Write all results to the pool model.
-    const resultsByKey = new Map(testResults.map((r) => [r.keyId, r.result]));
-    commitProviders(
-      providers.map((p) => ({
-        ...p,
-        keys: p.keys.map((k) =>
-          resultsByKey.has(k.id) ? { ...k, lastTestResult: resultsByKey.get(k.id) } : k,
-        ),
-      })),
+    await runWithConcurrency(
+      slots,
+      async (slot) => {
+        let keyResult: KeyTestResult;
+        try {
+          const result = await testConnection(slot.config, undefined, settings.targetLanguage);
+          keyResult = {
+            success: result.overall,
+            at: Date.now(),
+            latencyMs: result.totalLatencyMs,
+            error: result.overall ? undefined : result.steps.find((s) => !s.success)?.error,
+          };
+          if (result.overall) healthy++;
+        } catch {
+          keyResult = { success: false, at: Date.now(), error: 'Test failed' };
+        }
+        // Commit each key's result live so its row re-renders immediately.
+        commitProviders(
+          providers.map((p) =>
+            p.id === slot.providerId
+              ? {
+                  ...p,
+                  keys: p.keys.map((k) =>
+                    k.id === slot.keyId ? { ...k, lastTestResult: keyResult } : k,
+                  ),
+                }
+              : p,
+          ),
+        );
+        done++;
+        setBulkTestProgress({ done, total: slots.length });
+      },
+      { concurrency: BULK_TEST_CONCURRENCY },
     );
 
     setIsBulkTesting(false);
+    setBulkTestProgress(null);
     showSuccess(`Test complete: ${healthy}/${slots.length} key${slots.length !== 1 ? 's' : ''} healthy`);
   }, [providers, settings.targetLanguage, commitProviders, showSuccess]);
 
@@ -335,7 +358,9 @@ export function ProvidersSection({ onOpenSetup }: ProvidersSectionProps = {}) {
                   icon={!isBulkTesting ? <Zap className="w-3.5 h-3.5" /> : undefined}
                   onClick={handleTestAll}
                 >
-                  {isBulkTesting ? 'Testing...' : 'Test all keys'}
+                  {isBulkTesting && bulkTestProgress
+                    ? `Testing ${bulkTestProgress.done}/${bulkTestProgress.total}…`
+                    : 'Test all keys'}
                 </Button>
               )}
             </div>

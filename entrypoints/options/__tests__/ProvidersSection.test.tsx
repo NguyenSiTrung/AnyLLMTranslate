@@ -773,6 +773,158 @@ describe('ProvidersSection persisted test status & bulk test', () => {
   });
 });
 
+describe('ProvidersSection parallel bulk test (FR-8)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState = { ...DEFAULT_SETTINGS, providers: [makeProvider()], updateSettings };
+  });
+
+  it('runs up to 4 tests concurrently (cap respected)', async () => {
+    // 6 keys, slow testConnection — at most 4 should be in-flight at once.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    testConnection.mockImplementation(async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight--;
+      return {
+        overall: true,
+        steps: [{ name: 'ping', success: true, latencyMs: 1 }],
+        models: [],
+        totalLatencyMs: 1,
+      };
+    });
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: Array.from({ length: 6 }, (_, i) => ({
+          id: `k${i}`, apiKey: `sk-${i}`, maxRpm: 0, enabled: true,
+        })),
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: /test all keys/i }));
+    await waitFor(() => expect(testConnection).toHaveBeenCalledTimes(6));
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+  });
+
+  it('commits each key result live as it resolves (not batched at the end)', async () => {
+    // Resolve key 2 first; its lastTestResult should land before key 1 resolves.
+    let resolveK1: () => void;
+    const k1Promise = new Promise<void>((r) => { resolveK1 = r; });
+    let call = 0;
+    testConnection.mockImplementation(async () => {
+      call++;
+      if (call === 1) {
+        // First slot (k1) stays pending until we release it.
+        await k1Promise;
+      }
+      return {
+        overall: true,
+        steps: [{ name: 'ping', success: true, latencyMs: 1 }],
+        models: [],
+        totalLatencyMs: 1,
+      };
+    });
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        ],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: /test all keys/i }));
+
+    // k2 resolves quickly; its result is committed while k1 is still pending.
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: expect.arrayContaining([
+            expect.objectContaining({
+              keys: expect.arrayContaining([
+                expect.objectContaining({ id: 'k2', lastTestResult: expect.objectContaining({ success: true }) }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+    // k1 not yet committed.
+    expect(updateSettings).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            keys: expect.arrayContaining([
+              expect.objectContaining({ id: 'k1', lastTestResult: expect.any(Object) }),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    resolveK1!();
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providers: expect.arrayContaining([
+            expect.objectContaining({
+              keys: expect.arrayContaining([
+                expect.objectContaining({ id: 'k1', lastTestResult: expect.any(Object) }),
+              ]),
+            }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('shows a live N/M counter in the button while testing', async () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        ],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: /test all keys/i }));
+    // Button label switches to "Testing N/M…" form while running.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Testing\s+\d+\/\d+/i })).toBeInTheDocument();
+    });
+    // Returns to the idle label once done.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /test all keys/i })).toBeInTheDocument();
+    });
+  });
+
+  it('fires the aggregate toast on completion', async () => {
+    mockState = {
+      ...DEFAULT_SETTINGS,
+      providers: [makeProvider({
+        keys: [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        ],
+      })],
+      updateSettings,
+    };
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: /test all keys/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Test complete: 2\/2 keys healthy/i)).toBeInTheDocument();
+    });
+  });
+});
+
 describe('ProvidersSection system prompt template', () => {
   beforeEach(() => {
     vi.clearAllMocks();
