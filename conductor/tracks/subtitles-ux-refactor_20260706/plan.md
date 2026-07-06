@@ -9,14 +9,17 @@
 ## Phase 1: Scaffolding & Component Extraction (FR-8)
 <!-- execution: sequential -->
 
-- [ ] Task 1.1: Extract `SubtitlePreview.tsx` (AnimatedCue + ProgressBar + preview shell) into `entrypoints/options/components/`
+- [x] Task 1.1: Extract `SubtitlePreview.tsx` (AnimatedCue + ProgressBar + preview shell) into `entrypoints/options/components/`
   <!-- files: entrypoints/options/components/SubtitlePreview.tsx, entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: 1403151
 
-- [ ] Task 1.2: Introduce `DisabledDimmer` wrapper; replace the 3 repeated `${isDisabled ? 'opacity-50 pointer-events-none' : ''}` blocks
+- [x] Task 1.2: Introduce `DisabledDimmer` wrapper; replace the 3 repeated `${isDisabled ? 'opacity-50 pointer-events-none' : ''}` blocks
   <!-- files: ui/DisabledDimmer.tsx, entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: 1403151
 
-- [ ] Task 1.3: Update tests for moved preview; verify full suite green
+- [x] Task 1.3: Update tests for moved preview; verify full suite green
   <!-- files: entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx, entrypoints/options/components/__tests__/SubtitlePreview.test.tsx -->
+  Commit: 1403151
 
 - [ ] Task: Conductor - User Manual Verification 'Scaffolding & Component Extraction' (Protocol in workflow.md)
 

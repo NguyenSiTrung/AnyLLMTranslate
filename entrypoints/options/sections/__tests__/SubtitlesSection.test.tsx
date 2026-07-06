@@ -45,6 +45,47 @@ describe('SubtitlesSection', () => {
     });
   });
 
+  describe('Phase 2 section structure', () => {
+    it('renders the Enable Subtitles toggle in a hero strip above the cards', () => {
+      render(<SubtitlesSection />);
+      // The master-enable toggle is the highest control on the page.
+      const toggle = document.getElementById('subtitle-enabled-toggle');
+      expect(toggle).toBeInTheDocument();
+      // The hero strip is the first bordered region after the SectionHeader.
+      const hero = toggle?.closest('div.rounded-xl');
+      expect(hero?.className).toContain('border-cyan-500/30');
+    });
+
+    it('reflects the enabled status in the hero description line', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText(/Translated subtitles are active/)).toBeInTheDocument();
+    });
+
+    it('groups Display Mode under the Appearance card', () => {
+      render(<SubtitlesSection />);
+      // Display Mode control renders inside the same group as Subtitle Position.
+      const positionGroup = screen.getByText('Subtitle Position').closest('.space-y-5');
+      expect(positionGroup).not.toBeNull();
+      expect(positionGroup?.textContent).toContain('Display Mode');
+    });
+
+    it('shows the off-status description when subtitles are disabled', () => {
+      mockState.subtitleSettings = { ...baseSubtitleSettings, enabled: false };
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') return selector(mockState);
+        return mockState;
+      });
+      render(<SubtitlesSection />);
+      expect(screen.getByText(/Subtitles are off/)).toBeInTheDocument();
+    });
+
+    it('has an "Appearance" card title and no longer has a "Behavior" subgroup', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Appearance')).toBeInTheDocument();
+      expect(screen.queryByText('Behavior')).not.toBeInTheDocument();
+    });
+  });
+
   describe('new Phase 2 controls', () => {
     it('renders Font Family, Display Mode controls and their options, and no Translation Timeout', () => {
       render(<SubtitlesSection />);

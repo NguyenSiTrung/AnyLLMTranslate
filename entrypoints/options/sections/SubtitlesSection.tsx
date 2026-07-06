@@ -126,6 +126,20 @@ export function SubtitlesSection() {
         accentColor="cyan"
       />
 
+      {/* FR-1 — Master Enable hero strip: the most important control sits above
+          all configuration cards. Downstream cards dim when this is off. */}
+      <div className="mb-4 rounded-xl border border-cyan-500/30 bg-cyan-500/[0.04] p-4">
+        <Toggle
+          id="subtitle-enabled-toggle"
+          checked={subtitleSettings.enabled}
+          onChange={(checked) => handleUpdate({ enabled: checked })}
+          label="Enable Subtitles"
+          description={subtitleSettings.enabled
+            ? 'Translated subtitles are active on supported video players.'
+            : 'Subtitles are off — enable to show translated subtitles on video players.'}
+        />
+      </div>
+
       <div className="space-y-4">
         {/* Preview card — placed first so users see live changes while adjusting controls */}
         <div className="animate-stagger" style={stagger(0)}>
@@ -201,97 +215,84 @@ export function SubtitlesSection() {
           </Card>
         </div>
 
-        {/* Controls card */}
+        {/* Appearance card — FR-2: Display Mode (was 'Behavior') joins
+            Position / Font Family / Font Size / Opacity under one group.
+            Enable toggle moved up to the hero strip (FR-1). */}
         <div className="animate-stagger" style={stagger(2)}>
-          <Card variant="bordered">
-            <div className="space-y-5">
-              <Toggle
-                id="subtitle-enabled-toggle"
-                checked={subtitleSettings.enabled}
-                onChange={(checked) => handleUpdate({ enabled: checked })}
-                label="Enable Subtitles"
-                description="Show translated subtitles on video players."
-              />
-
-              {/* M4: Disable appearance/behavior controls when subtitles are off */}
-              <DisabledDimmer disabled={isDisabled}>
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-4">Appearance</p>
-                <div className="space-y-5">
-                  <FieldGroup
+          <Card variant="bordered" title="Appearance">
+            {/* M4: Disable appearance controls when subtitles are off */}
+            <DisabledDimmer disabled={isDisabled}>
+              <div className="space-y-5">
+                <FieldGroup
+                  label="Subtitle Position"
+                  description="Where subtitles appear relative to the video player."
+                >
+                  <SegmentedControl
                     label="Subtitle Position"
-                    description="Where subtitles appear relative to the video player."
-                  >
-                    <SegmentedControl
-                      label="Subtitle Position"
-                      options={POSITION_OPTIONS}
-                      value={subtitleSettings.position}
-                      onChange={(val) => handleUpdate({ position: val })}
-                      disabled={isDisabled}
-                    />
-                  </FieldGroup>
+                    options={POSITION_OPTIONS}
+                    value={subtitleSettings.position}
+                    onChange={(val) => handleUpdate({ position: val })}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
 
-                  <FieldGroup
+                <FieldGroup
+                  label="Font Family"
+                  description="Typeface used for subtitle text in the overlay."
+                >
+                  <SegmentedControl
                     label="Font Family"
-                    description="Typeface used for subtitle text in the overlay."
-                  >
-                    <SegmentedControl
-                      label="Font Family"
-                      options={FONT_FAMILY_OPTIONS}
-                      value={subtitleSettings.fontFamily}
-                      onChange={(val) => handleUpdate({ fontFamily: val })}
-                      disabled={isDisabled}
-                    />
-                  </FieldGroup>
+                    options={FONT_FAMILY_OPTIONS}
+                    value={subtitleSettings.fontFamily}
+                    onChange={(val) => handleUpdate({ fontFamily: val })}
+                    disabled={isDisabled}
+                  />
+                </FieldGroup>
 
-                  <FieldGroup
+                <FieldGroup
+                  label="Font Size Mode"
+                  description="Fixed uses a set pixel value. Auto scales font size based on video player dimensions."
+                >
+                  <SegmentedControl
                     label="Font Size Mode"
-                    description="Fixed uses a set pixel value. Auto scales font size based on video player dimensions."
-                  >
-                    <SegmentedControl
-                      label="Font Size Mode"
-                      options={FONT_SIZE_MODE_OPTIONS}
-                      value={subtitleSettings.fontSizeMode}
-                      onChange={(val) => handleUpdate({ fontSizeMode: val })}
-                      disabled={isDisabled}
-                    />
-                  </FieldGroup>
-
-                  {subtitleSettings.fontSizeMode === 'fixed' && (
-                  <Slider
-                    id="subtitle-font-size"
-                    label="Font Size"
-                    value={subtitleSettings.fontSize}
-                    min={10}
-                    max={32}
-                    step={1}
-                    onChange={(v) => handleUpdate({ fontSize: v })}
-                    formatValue={(v) => `${v}px`}
-                    minLabel="10px"
-                    maxLabel="32px"
+                    options={FONT_SIZE_MODE_OPTIONS}
+                    value={subtitleSettings.fontSizeMode}
+                    onChange={(val) => handleUpdate({ fontSizeMode: val })}
                     disabled={isDisabled}
                   />
-                  )}
+                </FieldGroup>
 
-                  <Slider
-                    id="subtitle-opacity"
-                    label="Background Opacity"
-                    value={subtitleSettings.backgroundOpacity}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    onChange={(v) => handleUpdate({ backgroundOpacity: v })}
-                    formatValue={(v) => `${Math.round(v * 100)}%`}
-                    minLabel="0%"
-                    maxLabel="100%"
-                    disabled={isDisabled}
-                  />
-                </div>
-              </div>
+                {subtitleSettings.fontSizeMode === 'fixed' && (
+                <Slider
+                  id="subtitle-font-size"
+                  label="Font Size"
+                  value={subtitleSettings.fontSize}
+                  min={10}
+                  max={32}
+                  step={1}
+                  onChange={(v) => handleUpdate({ fontSize: v })}
+                  formatValue={(v) => `${v}px`}
+                  minLabel="10px"
+                  maxLabel="32px"
+                  disabled={isDisabled}
+                />
+                )}
 
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-4">Behavior</p>
-                <div className="space-y-5">
+                <Slider
+                  id="subtitle-opacity"
+                  label="Background Opacity"
+                  value={subtitleSettings.backgroundOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(v) => handleUpdate({ backgroundOpacity: v })}
+                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  minLabel="0%"
+                  maxLabel="100%"
+                  disabled={isDisabled}
+                />
+
+                <div className="border-t border-zinc-800 pt-5">
                   <FieldGroup
                     label="Display Mode"
                     description="Show both original and translated text, or translated text only."
@@ -306,13 +307,12 @@ export function SubtitlesSection() {
                   </FieldGroup>
                 </div>
               </div>
-              </DisabledDimmer>
-            </div>
+            </DisabledDimmer>
           </Card>
         </div>
 
         {/* Language Discovery card */}
-        <div className="animate-stagger" style={stagger(2)}>
+        <div className="animate-stagger" style={stagger(3)}>
           <Card title="Language Discovery" icon={<Languages className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-5">
               <FieldGroup
@@ -346,7 +346,7 @@ export function SubtitlesSection() {
         </div>
 
         {/* Supported Sites card */}
-        <div className="animate-stagger" style={stagger(3)}>
+        <div className="animate-stagger" style={stagger(4)}>
           <Card title="Supported Sites" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
             <DisabledDimmer disabled={isDisabled}>
               <div className="divide-y divide-zinc-800/50">
