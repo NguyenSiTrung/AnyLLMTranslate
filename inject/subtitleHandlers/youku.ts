@@ -5,7 +5,7 @@ import type {
   DomCueSource,
 } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
-import { parseASS } from '@/lib/assParser';
+import { parseSubtitles } from '@/lib/subtitleParser';
 
 /**
  * Youku internal subtitle codes (as seen in the language picker `data-val`)
@@ -47,8 +47,12 @@ export function youkuCodeToLanguage(code: string): string {
  * `<track>`/`textTracks` and no interceptable VTT URL in the static HTML, so
  * this is a DOM cue-scraping handler (mirrors {@link HboMaxHandler}).
  *
- * Phase 2 (optional) may add `getPatterns()`/`transformResponse()` if a live
- * DevTools session reveals the subtitle API endpoint.
+ * Subtitle delivery (confirmed via DevTools, see conductor archive learnings):
+ * Youku embeds subtitle tracks as WebVTT segments inside HLS (CMAF) m3u8
+ * manifests (e.g. `pl-ali.youku.tv/playlist/m3u8?vid=...`). There is no
+ * separate subtitle API endpoint. The coordinator source-tier precedence
+ * (manifest > URL intercept > DOM) ensures we try the higher-fidelity paths
+ * first, falling back to DOM scraping only when no file/manifest is caught.
  */
 export class YoukuHandler implements SubtitleHandler {
   readonly platform = 'youku';
@@ -70,11 +74,14 @@ export class YoukuHandler implements SubtitleHandler {
   }
 
   getPatterns(): SubtitleUrlPattern[] {
-    // Immersive Translate: fetch hook on Youku ASS subtitle URLs (\.ass$).
+    // Intercept direct subtitle file URLs (.vtt, .srt, .ass) on any CDN.
+    // Youku's HLS subtitle segments are WebVTT; some older content may use
+    // ASS or SRT. The language is extracted from query params (lang/language)
+    // or the filename suffix (e.g. _en.vtt, _chs.ass).
     return [
       {
         platform: 'youku',
-        pattern: /\.ass(?:\?|$)/i,
+        pattern: /\.(?:vtt|srt|ass)(?:\?|$)/i,
         languageExtractor: (url) => {
           const lang =
             url.searchParams.get('lang') ||
@@ -82,15 +89,41 @@ export class YoukuHandler implements SubtitleHandler {
             '';
           if (lang) return youkuCodeToLanguage(lang);
           const file = url.pathname.split('/').pop() || '';
-          const m = file.match(/[_-]([a-z]{2,3}|default|chs|cht)(?:\.ass)?$/i);
+          const m = file.match(/[_-]([a-z]{2,3}|default|chs|cht)(?:\.(?:vtt|srt|ass))?$/i);
           return m ? youkuCodeToLanguage(m[1]) : '';
         },
       },
     ];
   }
 
+  getManifestPatterns(): SubtitleUrlPattern[] {
+    // Youku embeds subtitle tracks in HLS (CMAF) m3u8 manifests. Intercepts
+    // the manifest non-blockingly — the fetch interceptor parses it via
+    // detectManifestTracks() and emits SUBTITLE_TRACKS_DISCOVERED with the
+    // subtitle playlist URLs, which the coordinator then fetches for
+    // full-track translation (Tier 0, highest priority — suppresses DOM).
+    //
+    // Two URL shapes:
+    // 1. Standard .m3u8 extension (any CDN — safe because detect() already
+    //    confirmed we're on a Youku page, and the interceptor only checks
+    //    manifest patterns for the active handler).
+    // 2. Youku CDN custom path: pl-ali.youku.tv/playlist/m3u8?vid=...
+    return [
+      {
+        platform: 'youku',
+        pattern: /https?:\/\/.+\.m3u8(?:\?|$)/i,
+      },
+      {
+        platform: 'youku',
+        pattern: /https?:\/\/[^/]*youku\.[^/]*\/playlist\/m3u8/i,
+      },
+    ];
+  }
+
   transformResponse(body: string, _contentType: string, _url: string): SubtitleCue[] {
-    return parseASS(body);
+    // Auto-detect format (VTT, SRT, ASS, TTML) — Youku's HLS segments are
+    // WebVTT, but older content may serve ASS or SRT.
+    return parseSubtitles(body);
   }
 
   extractAvailableTracks(

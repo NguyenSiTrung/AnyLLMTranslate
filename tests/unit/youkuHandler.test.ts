@@ -64,11 +64,49 @@ describe('YoukuHandler', () => {
   });
 
   describe('getPatterns', () => {
-    it('matches .ass URLs (Immersive Translate fetch hook)', () => {
+    it('matches .vtt, .srt, and .ass subtitle URLs', () => {
       const patterns = handler.getPatterns();
       expect(patterns).toHaveLength(1);
+      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.vtt')).toBe(true);
+      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.srt')).toBe(true);
       expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.ass')).toBe(true);
-      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.vtt')).toBe(false);
+      expect(patterns[0].pattern.test('https://c.youku.com/foo/bar.mp4')).toBe(false);
+    });
+
+    it('extracts language from query param', () => {
+      const patterns = handler.getPatterns();
+      const url = new URL('https://c.youku.com/subtitle.vtt?lang=en');
+      expect(patterns[0].languageExtractor?.(url)).toBe('en');
+    });
+
+    it('extracts language from filename suffix', () => {
+      const patterns = handler.getPatterns();
+      const url = new URL('https://c.youku.com/path/sub_chs.vtt');
+      expect(patterns[0].languageExtractor?.(url)).toBe('zh-Hans');
+    });
+  });
+
+  describe('getManifestPatterns', () => {
+    it('matches standard .m3u8 URLs', () => {
+      const patterns = handler.getManifestPatterns();
+      expect(patterns.length).toBeGreaterThanOrEqual(1);
+      const m3u8Match = patterns.some((p) => p.pattern.test('https://pl-ali.youku.tv/playlist/master.m3u8'));
+      expect(m3u8Match).toBe(true);
+    });
+
+    it('matches Youku CDN /playlist/m3u8 path', () => {
+      const patterns = handler.getManifestPatterns();
+      const youkuPath = patterns.some((p) =>
+        p.pattern.test('https://pl-ali.youku.tv/playlist/m3u8?vid=XNjQ4MDkzODY2NA=='),
+      );
+      expect(youkuPath).toBe(true);
+    });
+
+    it('does not match non-manifest URLs', () => {
+      const patterns = handler.getManifestPatterns();
+      for (const p of patterns) {
+        expect(p.pattern.test('https://c.youku.com/video.mp4')).toBe(false);
+      }
     });
   });
 
@@ -79,6 +117,28 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
       const cues = handler.transformResponse(ass, 'text/plain', 'https://x/a.ass');
       expect(cues).toHaveLength(1);
       expect(cues[0].text).toBe('Hello');
+    });
+
+    it('parses WebVTT cues', () => {
+      const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+Hello World`;
+      const cues = handler.transformResponse(vtt, 'text/vtt', 'https://x/a.vtt');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Hello World');
+      expect(cues[0].startTime).toBe(1);
+      expect(cues[0].endTime).toBe(2);
+    });
+
+    it('parses SRT cues', () => {
+      const srt = `1
+00:00:01,000 --> 00:00:02,000
+Hello SRT`;
+      const cues = handler.transformResponse(srt, 'application/x-subtitle', 'https://x/a.srt');
+      expect(cues).toHaveLength(1);
+      expect(cues[0].text).toBe('Hello SRT');
+      expect(cues[0].startTime).toBe(1);
     });
   });
 

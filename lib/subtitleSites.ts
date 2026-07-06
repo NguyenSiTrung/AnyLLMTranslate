@@ -64,7 +64,7 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
   {
     platform: 'youku',
     name: 'Youku',
-    methodHint: 'Fetch ASS + DOM fallback',
+    methodHint: 'Manifest + VTT/ASS intercept, DOM fallback',
     monogram: '优',
     accent: 'red',
     summary: 'Bilingual subtitles for Youku video content.',
