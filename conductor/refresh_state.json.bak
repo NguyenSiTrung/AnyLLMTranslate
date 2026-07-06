@@ -1,0 +1,28 @@
+{
+  "lastRefresh": "2026-07-03T19:15:00+07:00",
+  "scope": "all",
+  "changes": [
+    "Scope: full refresh since 2026-07-02 cycle. Track pdf-perf-ux_20260703 archived (d7822da); ~26 commits; 157 new tests (2171 total / 146 files).",
+    "product.md: refresh marker + Current State (2171/146/59, build ~3.9 MB, tsc clean, 2 lint). Added Implementation Status entry for PDF Translation Performance & UX Improvements.",
+    "patterns.md: refresh marker bumped; elevated 6 additional patterns from pdf-perf-ux learnings (optional translateStream, port streaming, streaming fallback, shared keep-alive, PDFPageProxy.cleanup sync, subtitle fetch body-scan tests).",
+    "tech-stack.md / workflow.md: no drift. tracks.md already updated by archive commit.",
+    "FIX (user-approved): usePdfPageTranslations.test.tsx — PdfPageText (pageNumber, no text), PdfParagraph isHeading, IO callback 2-arg.",
+    "FIX (user-approved): background.test.ts — poll fetchCalls for bidirectional context; glossary test scans all fetch bodies (mock.calls[1] wrong when chunk 0 retries).",
+    "beads DRIFT FIXED: closed ALT-are epic + 19 child issues. bd list: ALT-j1k only.",
+    "backups: product.md.bak, patterns.md.bak, refresh_state.json.bak.",
+    "verification: pnpm test --run 2171/2171 (3 consecutive full runs), tsc --noEmit 0 errors, wxt build ~3.9 MB."
+  ],
+  "codebaseHealth": {
+    "tests": 2171,
+    "testFiles": 146,
+    "buildSize": "~3.9 MB",
+    "lintErrors": 2,
+    "lintErrorsDetail": "subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
+    "tscErrors": 0,
+    "tscErrorsDetail": "Clean after PDF hook test fixture fixes.",
+    "archivedTracks": 59,
+    "activeTracks": 0,
+    "failingTests": 0
+  },
+  "beadsDrift": "Fixed. Closed ALT-are tree from archived pdf-perf-ux_20260703. Open: ALT-j1k (P3 decision) only."
+}
