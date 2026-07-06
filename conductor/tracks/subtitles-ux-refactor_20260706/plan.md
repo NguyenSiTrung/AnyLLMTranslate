@@ -29,17 +29,21 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 2.1: Add hero 'Enable Subtitles' header strip above cards; move toggle out of the controls card
+- [x] Task 2.1: Add hero 'Enable Subtitles' header strip above cards; move toggle out of the controls card
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: bdb7e03
 
-- [ ] Task 2.2: Merge 'Behavior' subgroup into 'Appearance' (Display Mode joins the group); remove the now-redundant subgroup label
+- [x] Task 2.2: Merge 'Behavior' subgroup into 'Appearance' (Display Mode joins the group); remove the now-redundant subgroup label
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: bdb7e03
 
-- [ ] Task 2.3: Renumber stagger indices 0→4 (remove duplicate `stagger(2)`)
+- [x] Task 2.3: Renumber stagger indices 0→4 (remove duplicate `stagger(2)`)
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: bdb7e03
 
-- [ ] Task 2.4: Adjust tests for relocated Enable toggle + merged subgroup
+- [x] Task 2.4: Adjust tests for relocated Enable toggle + merged subgroup
   <!-- files: entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx -->
+  Commit: bdb7e03
 
 - [ ] Task: Conductor - User Manual Verification 'Section Structure' (Protocol in workflow.md)
 

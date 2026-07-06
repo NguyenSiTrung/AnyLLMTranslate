@@ -19,9 +19,11 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Toggle } from '@/ui/Toggle';
 import { Slider } from '@/ui/Slider';
 import { Card } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
 import { Select } from '@/ui/Select';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { SubtitlePreview } from '@/entrypoints/options/components/SubtitlePreview';
 import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
@@ -51,32 +53,64 @@ const FONT_SIZE_MODE_OPTIONS: { value: SubtitleFontSizeMode; label: string }[] =
   { value: 'auto', label: 'Auto (Video Size)' },
 ];
 
-const REGISTER_OPTIONS: { value: string; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'formal', label: 'Formal' },
-  { value: 'neutral', label: 'Neutral' },
-  { value: 'casual', label: 'Casual' },
-];
+/**
+ * FR-3 — Data-driven translation-style knobs. The four copy-pasted knob blocks
+ * (Register / Faithfulness / Brevity / Profanity) collapse into a single
+ * mapped render below. 'auto' means "inherit the resolved profile preset"
+ * (the override key is omitted). Identical output to the previous blocks.
+ */
+interface KnobSpec {
+  key: KnobKey;
+  label: string;
+  description: string;
+  options: { value: string; label: string }[];
+}
 
-const FAITHFULNESS_OPTIONS: { value: string; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'literal', label: 'Literal' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'idiomatic', label: 'Idiomatic' },
-];
-
-const BREVITY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'relaxed', label: 'Relaxed' },
-  { value: 'moderate', label: 'Moderate' },
-  { value: 'terse', label: 'Terse' },
-];
-
-const PROFANITY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'preserve', label: 'Preserve' },
-  { value: 'soften', label: 'Soften' },
-  { value: 'remove', label: 'Remove' },
+const KNOB_SPEC: KnobSpec[] = [
+  {
+    key: 'register',
+    label: 'Register',
+    description: 'Tone of the translation.',
+    options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'formal', label: 'Formal' },
+      { value: 'neutral', label: 'Neutral' },
+      { value: 'casual', label: 'Casual' },
+    ],
+  },
+  {
+    key: 'faithfulness',
+    label: 'Faithfulness',
+    description: 'How closely the translation tracks the source wording.',
+    options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'literal', label: 'Literal' },
+      { value: 'balanced', label: 'Balanced' },
+      { value: 'idiomatic', label: 'Idiomatic' },
+    ],
+  },
+  {
+    key: 'brevity',
+    label: 'Brevity',
+    description: 'How aggressively filler is trimmed for on-screen brevity.',
+    options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'relaxed', label: 'Relaxed' },
+      { value: 'moderate', label: 'Moderate' },
+      { value: 'terse', label: 'Terse' },
+    ],
+  },
+  {
+    key: 'profanity',
+    label: 'Profanity',
+    description: 'How to handle strong profanity.',
+    options: [
+      { value: 'auto', label: 'Auto' },
+      { value: 'preserve', label: 'Preserve' },
+      { value: 'soften', label: 'Soften' },
+      { value: 'remove', label: 'Remove' },
+    ],
+  },
 ];
 
 export function SubtitlesSection() {
@@ -100,6 +134,8 @@ export function SubtitlesSection() {
   const isDisabled = !subtitleSettings.enabled;
 
   const overrides = subtitleSettings.knobOverrides ?? {};
+  /** FR-4 — number of knobs with a non-'auto' override set. */
+  const overrideCount = KNOB_SPEC.filter((k) => overrides[k.key] !== undefined).length;
 
   const handleKnobChange = (knob: KnobKey, value: string) => {
     const next = { ...overrides };
@@ -156,60 +192,84 @@ export function SubtitlesSection() {
           </Card>
         </div>
 
-        {/* Translation Style card — editable translation knobs (global override) */}
+        {/* Translation Style card — data-driven knobs (FR-3), override
+            visibility (FR-4), translation timeout (FR-5). */}
         <div className="animate-stagger" style={stagger(1)}>
-          <Card variant="bordered" title="Translation Style">
+          <Card variant="bordered">
+            {/* Custom title row so the override count badge (FR-4) sits inline. */}
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-sm font-semibold text-zinc-200">Translation Style</h3>
+              {overrideCount > 0 && (
+                <Badge variant="info">{overrideCount} custom</Badge>
+              )}
+            </div>
             <p className="text-xs text-zinc-500 mb-4 leading-relaxed">
               Auto uses the recommended value for each site's profile (Educational / Media / Cinematic).
               Override any knob to apply it everywhere subtitles are translated.
             </p>
             <DisabledDimmer disabled={isDisabled}>
               <div className="space-y-5">
-                <FieldGroup label="Register" description="Tone of the translation.">
-                  <SegmentedControl
-                    label="Register"
-                    options={REGISTER_OPTIONS}
-                    value={overrides.register ?? 'auto'}
-                    onChange={(v) => handleKnobChange('register', v)}
-                    disabled={isDisabled}
-                  />
-                </FieldGroup>
-                <FieldGroup label="Faithfulness" description="How closely the translation tracks the source wording.">
-                  <SegmentedControl
-                    label="Faithfulness"
-                    options={FAITHFULNESS_OPTIONS}
-                    value={overrides.faithfulness ?? 'auto'}
-                    onChange={(v) => handleKnobChange('faithfulness', v)}
-                    disabled={isDisabled}
-                  />
-                </FieldGroup>
-                <FieldGroup label="Brevity" description="How aggressively filler is trimmed for on-screen brevity.">
-                  <SegmentedControl
-                    label="Brevity"
-                    options={BREVITY_OPTIONS}
-                    value={overrides.brevity ?? 'auto'}
-                    onChange={(v) => handleKnobChange('brevity', v)}
-                    disabled={isDisabled}
-                  />
-                </FieldGroup>
-                <FieldGroup label="Profanity" description="How to handle strong profanity.">
-                  <SegmentedControl
-                    label="Profanity"
-                    options={PROFANITY_OPTIONS}
-                    value={overrides.profanity ?? 'auto'}
-                    onChange={(v) => handleKnobChange('profanity', v)}
-                    disabled={isDisabled}
-                  />
-                </FieldGroup>
+                {KNOB_SPEC.map((knob) => {
+                  const overridden = overrides[knob.key] !== undefined;
+                  return (
+                    <FieldGroup
+                      key={knob.key}
+                      label={knob.label}
+                      description={knob.description}
+                    >
+                      <SegmentedControl
+                        label={knob.label}
+                        options={knob.options}
+                        value={overrides[knob.key] ?? 'auto'}
+                        onChange={(v) => handleKnobChange(knob.key, v)}
+                        disabled={isDisabled}
+                      />
+                      {/* FR-4 — per-knob override indicator */}
+                      <div className="mt-1.5 text-[10px] text-zinc-500">
+                        {overridden ? (
+                          <span className="inline-flex items-center gap-1 text-cyan-400">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                            Custom
+                          </span>
+                        ) : (
+                          <span>Profile default</span>
+                        )}
+                      </div>
+                    </FieldGroup>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={handleResetKnobs}
-                  disabled={isDisabled || Object.keys(overrides).length === 0}
+                  disabled={isDisabled || overrideCount === 0}
                   className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Reset to profile defaults
                 </button>
+
+                {/* FR-5 — Translation Timeout exposed in an Advanced disclosure.
+                    Actively used at runtime (subtitleCoordinator.ts → interceptors). */}
+                <AdvancedDisclosure label="Advanced">
+                  <Slider
+                    id="subtitle-translation-timeout"
+                    label="Translation Timeout"
+                    value={subtitleSettings.translationTimeout}
+                    min={10}
+                    max={120}
+                    step={1}
+                    onChange={(v) => handleUpdate({ translationTimeout: v })}
+                    formatValue={(v) => `${v}s`}
+                    minLabel="10s"
+                    maxLabel="120s"
+                    disabled={isDisabled}
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-2 leading-relaxed">
+                    Max seconds to wait for each subtitle chunk to translate before
+                    falling back to the original text. Lower values keep subtitles
+                    in sync on fast connections; raise it for slow local LLMs.
+                  </p>
+                </AdvancedDisclosure>
               </div>
             </DisabledDimmer>
           </Card>

@@ -27,3 +27,13 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **Pattern:** Default cues live as `DEFAULT_CUES` constant inside the extracted preview and are overridable via a `cues` prop — preserves backward compat (Vietnamese fallback) while enabling FR-9 target-language-driven cues later.
   - **Pattern:** The `styleChip` prop on `SubtitlePreview` is forward-looking for FR-9 — hidden when disabled, rendered as a cyan chip top-left.
 ---
+
+## [2026-07-06 11:33] - Phase 2 Task 2.1–2.4: Section structure (FR-1/2/7)
+- **Implemented:** (1) Hero 'Enable Subtitles' strip above cards with a status line that reflects enabled state; toggle moved out of controls card. (2) 'Behavior' subgroup collapsed into the 'Appearance' card (now titled); Display Mode joins Position/Font/Opacity under one group with a `border-t` divider. (3) Stagger indices renumbered 0→1→2→3→4 (removed the duplicate `stagger(2)` on Language Discovery). Added 5 Phase-2 structure tests.
+- **Files changed:** `entrypoints/options/sections/SubtitlesSection.tsx`, `entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx`.
+- **Commit:** bdb7e03
+- **Learnings:**
+  - **Pattern:** Semantic test queries (`getByText`, `closest('.space-y-5')`) survive DOM relocation, so existing assertions kept passing when the Enable toggle moved out of a card and Display Mode merged groups — only the *new* structure needed new tests.
+  - **Gotcha:** When moving a control that has an explicit DOM id (`subtitle-enabled-toggle`), the test should query by id (not card position) so it's robust to card reordering.
+  - **Context:** The hero strip uses `border-cyan-500/30 bg-cyan-500/[0.04]` to thread the section's cyan accent (FR-9 prep) into the master control.
+---

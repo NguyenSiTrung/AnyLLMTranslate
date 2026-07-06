@@ -87,7 +87,7 @@ describe('SubtitlesSection', () => {
   });
 
   describe('new Phase 2 controls', () => {
-    it('renders Font Family, Display Mode controls and their options, and no Translation Timeout', () => {
+    it('renders Font Family, Display Mode controls and their options', () => {
       render(<SubtitlesSection />);
       expect(screen.getByText('Font Family')).toBeInTheDocument();
       expect(screen.getByText('System')).toBeInTheDocument();
@@ -96,7 +96,65 @@ describe('SubtitlesSection', () => {
       expect(screen.getByText('Display Mode')).toBeInTheDocument();
       expect(screen.getByText('Bilingual')).toBeInTheDocument();
       expect(screen.getByText('Translated Only')).toBeInTheDocument();
-      expect(screen.queryByText(/Translation Timeout/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Phase 3 translation style card', () => {
+    it('renders all four knobs from the data-driven spec', () => {
+      render(<SubtitlesSection />);
+      // The four knobs are rendered from KNOB_SPEC (FR-3).
+      for (const label of ['Register', 'Faithfulness', 'Brevity', 'Profanity']) {
+        // Multiple occurrences: the FieldGroup label + the SegmentedControl aria-label.
+        expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(1);
+      }
+    });
+
+    it('shows no override badge and all knobs as Profile default when nothing is overridden', () => {
+      render(<SubtitlesSection />);
+      expect(screen.queryByText(/custom/)).not.toBeInTheDocument();
+      // Each knob shows the Profile default indicator.
+      const defaults = screen.getAllByText('Profile default');
+      expect(defaults.length).toBe(4);
+    });
+
+    it('shows an override count badge and Custom indicators when knobs are overridden', () => {
+      mockState.subtitleSettings = {
+        ...baseSubtitleSettings,
+        knobOverrides: { register: 'formal', brevity: 'terse' },
+      };
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') return selector(mockState);
+        return mockState;
+      });
+      render(<SubtitlesSection />);
+      // FR-4 — count badge on the card title.
+      expect(screen.getByText('2 custom')).toBeInTheDocument();
+      // Two knobs marked Custom, the rest Profile default.
+      expect(screen.getAllByText('Custom').length).toBe(2);
+      expect(screen.getAllByText('Profile default').length).toBe(2);
+    });
+
+    it('exposes the Translation Timeout slider inside the Advanced disclosure (FR-5)', () => {
+      render(<SubtitlesSection />);
+      // Hidden by default (collapsed disclosure).
+      expect(screen.queryByLabelText('Translation Timeout')).not.toBeInTheDocument();
+      // Expand the Advanced disclosure.
+      fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+      const slider = document.getElementById('subtitle-translation-timeout');
+      expect(slider).toBeInTheDocument();
+      expect((slider as HTMLInputElement).value).toBe('30'); // default
+    });
+
+    it('updates translationTimeout when the slider changes', () => {
+      render(<SubtitlesSection />);
+      fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+      const slider = document.getElementById('subtitle-translation-timeout') as HTMLInputElement;
+      fireEvent.change(slider, { target: { value: '60' } });
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtitleSettings: expect.objectContaining({ translationTimeout: 60 }),
+        }),
+      );
     });
   });
 
