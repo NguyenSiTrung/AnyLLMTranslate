@@ -90,6 +90,7 @@ describe('usePdfPageTranslations', () => {
       const containerRef = useRef<HTMLElement | null>(contentWrapper);
       return usePdfPageTranslations({
         pages: [{} as PDFPageProxy],
+        numPages: 1,
         pdfUrl: 'https://example.com/file.pdf',
         containerRef,
       });
@@ -120,6 +121,7 @@ describe('usePdfPageTranslations', () => {
       const containerRef = useRef<HTMLElement | null>(contentWrapper);
       return usePdfPageTranslations({
         pages: stablePages,
+        numPages: 1,
         pdfUrl: 'https://example.com/file.pdf',
         containerRef,
       });
@@ -194,6 +196,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/file.pdf',
           containerRef,
         });
@@ -225,6 +228,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/file.pdf',
           containerRef,
         });
@@ -257,6 +261,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/file.pdf',
           containerRef,
         });
@@ -317,6 +322,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/file.pdf',
           containerRef,
         });
@@ -391,6 +397,7 @@ describe('usePdfPageTranslations', () => {
         result = {
           current: usePdfPageTranslations({
             pages: stablePages,
+            numPages: 1,
             pdfUrl: 'https://example.com/hydrate.pdf',
             containerRef,
           }),
@@ -418,6 +425,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/persist.pdf',
           containerRef,
         });
@@ -457,6 +465,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/inflight.pdf',
           containerRef,
         });
@@ -501,6 +510,7 @@ describe('usePdfPageTranslations', () => {
         const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
         return usePdfPageTranslations({
           pages: stablePages,
+          numPages: 1,
           pdfUrl: 'https://example.com/empty.pdf',
           containerRef,
         });

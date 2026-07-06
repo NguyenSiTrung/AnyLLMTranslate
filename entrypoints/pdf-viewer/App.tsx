@@ -114,6 +114,7 @@ export default function App(): ReactElement {
 
   const { pages: translations, translatedCount, totalCount, retryPage } = usePdfPageTranslations({
     pages: loadedPages,
+    numPages,
     pdfUrl: pdfUrl ?? '',
     containerRef: rightContainerRef,
   });

@@ -30,8 +30,14 @@ import {
 } from '../lib/pdfProgressStore';
 
 export interface UsePdfPageTranslationsOptions {
-  /** Loaded PDF pages, in page order. */
+  /** Loaded PDF pages, in page order. May contain fewer entries than
+   *  `numPages` because page proxies are evicted outside the viewport window
+   *  (memory management). Use `numPages` for the true document total. */
   pages: PDFPageProxy[];
+  /** Total number of pages in the document (stable once loaded). Used for the
+   *  progress indicator so eviction/re-fetch of page proxies does not change
+   *  the reported total. */
+  numPages: number;
   /** PDF source URL — used as a stable identifier for in-memory cache. */
   pdfUrl: string;
   /** Container element that holds the right-pane slots. */
@@ -169,6 +175,7 @@ async function translatePage(
 
 export function usePdfPageTranslations({
   pages: pdfPages,
+  numPages,
   pdfUrl,
   containerRef,
   rootMargin = '200px 0px',
@@ -371,5 +378,5 @@ export function usePdfPageTranslations({
     });
   };
 
-  return { pages, translatedCount, totalCount: pdfPages.length, retryPage };
+  return { pages, translatedCount, totalCount: numPages, retryPage };
 }
