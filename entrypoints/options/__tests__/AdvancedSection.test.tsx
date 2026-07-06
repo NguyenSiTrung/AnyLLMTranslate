@@ -465,6 +465,40 @@ describe('AdvancedSection - Translation System Prompt (FR-9)', () => {
       expect.objectContaining({ customSystemPrompt: null }),
     );
   });
+
+  it('shows a Customized badge when customSystemPrompt is set', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, customSystemPrompt: 'my custom prompt', updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    expect(screen.getByText('Customized')).toBeInTheDocument();
+  });
+
+  it('does not show the Customized badge when prompt is default (null)', () => {
+    render(<AdvancedSection />);
+    expect(screen.queryByText('Customized')).not.toBeInTheDocument();
+  });
+
+  it('inserts a variable into the prompt when its chip is clicked (FR-5)', () => {
+    vi.mocked(getCacheStats).mockResolvedValue({ entryCount: 0, totalSizeBytes: 0 });
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: '{{glossary}}' }));
+    expect(mockUpdateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ customSystemPrompt: expect.stringContaining('{{glossary}}') }),
+    );
+  });
+
+  it('renders all validation warnings when the prompt is invalid (FR-5)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, customSystemPrompt: 'hello', updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    expect(screen.getByText(/Missing \{\{targetLanguage\}\} variable/)).toBeInTheDocument();
+    expect(screen.getByText(/Missing JSON format instruction/)).toBeInTheDocument();
+    expect(screen.getByText(/Missing "translations" key instruction/)).toBeInTheDocument();
+  });
 });
 
 describe('AdvancedSection - Hero Status Strip (FR-3/FR-8)', () => {

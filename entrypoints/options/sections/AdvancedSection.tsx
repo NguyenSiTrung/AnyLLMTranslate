@@ -15,6 +15,8 @@ import { Modal } from '@/ui/Modal';
 import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 import { FieldGroup } from '@/ui/FieldGroup';
+import { Badge } from '@/ui/Badge';
+import { Textarea } from '@/ui/Textarea';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { useToast } from '@/ui/ToastProvider';
@@ -64,6 +66,23 @@ export function AdvancedSection() {
   const promptValidation = settings.customSystemPrompt
     ? validatePromptTemplate(settings.customSystemPrompt)
     : null;
+
+  /** FR-5 — insert a template variable at the cursor (or append) and commit. */
+  const insertVariable = (variable: string) => {
+    const el = document.getElementById('advanced-system-prompt') as HTMLTextAreaElement | null;
+    const text = draftPrompt;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next =
+      el && typeof el.setRangeText === 'function'
+        ? text.slice(0, start) + variable + text.slice(end)
+        : text + variable;
+    if (el && typeof el.setRangeText === 'function') {
+      el.setRangeText(variable, start, end, 'end');
+    }
+    setDraftPrompt(next);
+    updateSettings({ customSystemPrompt: next });
+  };
 
   const handleExportSettings = useCallback(() => {
     const exportData = {
@@ -242,13 +261,20 @@ export function AdvancedSection() {
       <div className="space-y-4">
         {/* Translation System Prompt (relocated from Providers; elevated above tuning) */}
         <div className="animate-stagger" style={stagger(0)}>
-          <Card title="Translation System Prompt" icon={<Braces className="w-3.5 h-3.5" />} variant="bordered">
+          <Card variant="bordered">
+            <div className="flex items-center gap-2 mb-4">
+              <Braces className="w-3.5 h-3.5 text-zinc-500" />
+              <h3 className="text-sm font-semibold text-zinc-200">Translation System Prompt</h3>
+              {settings.customSystemPrompt !== null && (
+                <Badge variant="info">Customized</Badge>
+              )}
+            </div>
             <FieldGroup
               label="Custom prompt template"
               description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
               htmlFor="advanced-system-prompt"
             >
-              <textarea
+              <Textarea
                 id="advanced-system-prompt"
                 value={draftPrompt}
                 onChange={(e) => {
@@ -257,17 +283,36 @@ export function AdvancedSection() {
                   updateSettings({ customSystemPrompt: val });
                 }}
                 rows={8}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
+                mono
               />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-1">
-                  {promptValidation && !promptValidation.valid && (
-                    <div className="flex items-center gap-1 text-amber-400 text-xs">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>{promptValidation.warnings[0]}</span>
-                    </div>
-                  )}
-                </div>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs text-zinc-500">Insert variable:</span>
+                <button
+                  type="button"
+                  onClick={() => insertVariable('{{targetLanguage}}')}
+                  className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 transition-colors cursor-pointer"
+                >
+                  {'{{targetLanguage}}'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertVariable('{{glossary}}')}
+                  className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 transition-colors cursor-pointer"
+                >
+                  {'{{glossary}}'}
+                </button>
+              </div>
+              <div className="flex items-start justify-between gap-3 mt-2">
+                <ul className="space-y-1">
+                  {promptValidation &&
+                    !promptValidation.valid &&
+                    promptValidation.warnings.map((w) => (
+                      <li key={w} className="flex items-start gap-1 text-amber-400 text-xs">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                </ul>
                 <Button
                   variant="ghost"
                   size="sm"

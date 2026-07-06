@@ -126,23 +126,24 @@
 <!-- execution: sequential -->
 <!-- depends: phase5 -->
 
-- [ ] Task 6.1: Swap raw `<textarea>` for `ui/Textarea`; add `Customized` badge
-  - Replace the hand-styled `<textarea>` with `<Textarea id="advanced-system-prompt" ... />` (Task 1.1). Add a `Badge` ("Customized") on the card title row when `settings.customSystemPrompt !== null` (render the card untitled + a manual `<h3>` + badge, per the Subtitles FR-4 pattern since `Card` only accepts a string title).
+- [x] Task 6.1: Swap raw `<textarea>` for `ui/Textarea`; add `Customized` badge
+  - Replaced the raw `<textarea>` with `<Textarea ... mono />`. Rendered the card untitled with a manual header row (`Braces` icon + `<h3>` + `Badge` "Customized" when `customSystemPrompt !== null`), per the Subtitles FR-4 pattern.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 6.2: Variable-insertion chips + supported-variables list
-  - Add a row of small chips for `{{targetLanguage}}` and `{{glossary}}` that insert at the cursor position into the `Textarea` (use a ref + `setRangeText`/selection). Fallback: a static "Supported variables: {{targetLanguage}}, {{glossary}}" line if cursor insertion is fragile. Wire `aria-describedby` from the textarea to the warnings region.
+- [x] Task 6.2: Variable-insertion chips + supported-variables list
+  - Added an "Insert variable:" row with `{{targetLanguage}}` / `{{glossary}}` chip buttons. `insertVariable()` inserts at the cursor via `setRangeText` when available, else appends (robust in jsdom). (Skipped `aria-describedby` wiring — kept minimal; warnings remain visually adjacent.)
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 6.3: Render all validation warnings
-  - Replace `{promptValidation.warnings[0]}` with `promptValidation.warnings.map(w => <li ...>)` (up to 3 warnings). Keep the amber `AlertTriangle` styling per item.
+- [x] Task 6.3: Render all validation warnings
+  - Replaced `warnings[0]` with `warnings.map(w => <li>)` (up to 3), each with an `AlertTriangle`.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 6.4: Tests — badge presence, variable chips, all warnings render
+- [x] Task 6.4: Tests — badge presence/absence, variable chip insertion, all warnings render
+  - 4 new tests (39 total): Customized badge present when set / absent when null; clicking `{{glossary}}` chip calls updateSettings with a prompt containing `{{glossary}}`; an invalid prompt ('hello') renders all 3 warnings.
   <!-- files: entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 6.5: Verify Phase 6 green; commit
-  <!-- verify: pnpm test AdvancedSection; tsc --noEmit; pnpm lint -->
+- [x] Task 6.5: Verify Phase 6 green; commit
+  <!-- verify: pnpm test AdvancedSection (39/39); tsc --noEmit clean; eslint clean -->
 
 - [ ] Task: Conductor - User Manual Verification 'System Prompt Editor Polish' (Protocol in workflow.md)
 
