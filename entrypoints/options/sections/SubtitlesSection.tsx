@@ -5,11 +5,13 @@
  */
 
 import { useState } from 'react';
-import { Subtitles as SubtitlesIcon, Languages, Globe, RotateCcw, ChevronDown } from 'lucide-react';
+import { Subtitles as SubtitlesIcon, Languages, Globe, RotateCcw, ChevronDown, Info } from 'lucide-react';
 import {
   SUPPORTED_SUBTITLE_SITES,
   SUBTITLE_SITES_INITIAL_VISIBLE,
   getSubtitleSitesLoadMoreState,
+  monogramAccentClasses,
+  type SubtitleSiteInfo,
 } from '@/lib/subtitleSites';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -113,6 +115,64 @@ const KNOB_SPEC: KnobSpec[] = [
   },
 ];
 
+/** FR-6 — leading monogram dot for a supported site (scannability). */
+function MonogramDot({ site }: { site: SubtitleSiteInfo }) {
+  const monogram = site.monogram ?? site.name.slice(0, 1);
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md border text-[11px] font-semibold ${monogramAccentClasses(site.accent)}`}
+      aria-hidden="true"
+    >
+      {monogram}
+    </span>
+  );
+}
+
+/** FR-6 — a single Supported Sites row: monogram + friendly label/summary +
+ *  method hint tooltip + toggle. */
+function SiteRow({
+  site,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  site: SubtitleSiteInfo;
+  checked: boolean;
+  disabled: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  const label = site.name;
+  return (
+    <div className="flex items-start justify-between gap-3 py-2.5">
+      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+        <MonogramDot site={site} />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm text-zinc-200">{label}</div>
+          {site.summary ? (
+            <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{site.summary}</div>
+          ) : null}
+          {/* Technical method hint preserved for power users / debugging. */}
+          <div className="text-[10px] text-zinc-600 mt-0.5 inline-flex items-center gap-1">
+            <Info className="w-3 h-3" aria-hidden="true" />
+            <span>{site.methodHint}</span>
+          </div>
+        </div>
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <Toggle
+          id={site.platform === 'generic'
+            ? 'subtitle-generic-handler-toggle'
+            : `subtitle-site-${site.platform}`}
+          ariaLabel={`${site.name} subtitles`}
+          checked={checked}
+          onChange={onToggle}
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function SubtitlesSection() {
   const subtitleSettings = useSettingsStore((s) => s.subtitleSettings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -132,6 +192,9 @@ export function SubtitlesSection() {
 
   const preferredLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
   const isDisabled = !subtitleSettings.enabled;
+
+  /** FR-6 — the Generic fallback site, rendered in its own labeled subsection. */
+  const genericSite = SUPPORTED_SUBTITLE_SITES.find((s) => s.platform === 'generic');
 
   const overrides = subtitleSettings.knobOverrides ?? {};
   /** FR-4 — number of knobs with a non-'auto' override set. */
@@ -405,7 +468,9 @@ export function SubtitlesSection() {
           </Card>
         </div>
 
-        {/* Supported Sites card */}
+        {/* Supported Sites card — FR-6: friendly labels + per-platform icons,
+            method hint moved into a tooltip/affordance, Generic fallback in a
+            separate labeled subsection. */}
         <div className="animate-stagger" style={stagger(4)}>
           <Card title="Supported Sites" icon={<Globe className="w-3.5 h-3.5" />} variant="bordered">
             <DisabledDimmer disabled={isDisabled}>
@@ -413,26 +478,19 @@ export function SubtitlesSection() {
                 {visibleSites.map((site) => {
                   const disabled = (subtitleSettings.disabledSubtitleSites ?? []).includes(site.platform);
                   return (
-                    <div key={site.platform} className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm text-zinc-200">{site.name}</div>
-                        <div className="text-xs text-zinc-500 mt-0.5">{site.methodHint}</div>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <Toggle
-                          id={`subtitle-site-${site.platform}`}
-                          ariaLabel={`${site.name} subtitles`}
-                          checked={!disabled}
-                          onChange={(checked) => {
-                            const current = subtitleSettings.disabledSubtitleSites ?? [];
-                            const updated = checked
-                              ? current.filter((p) => p !== site.platform)
-                              : [...current, site.platform];
-                            handleUpdate({ disabledSubtitleSites: updated });
-                          }}
-                        />
-                      </div>
-                    </div>
+                    <SiteRow
+                      key={site.platform}
+                      site={site}
+                      checked={!disabled}
+                      disabled={isDisabled}
+                      onToggle={(checked) => {
+                        const current = subtitleSettings.disabledSubtitleSites ?? [];
+                        const updated = checked
+                          ? current.filter((p) => p !== site.platform)
+                          : [...current, site.platform];
+                        handleUpdate({ disabledSubtitleSites: updated });
+                      }}
+                    />
                   );
                 })}
               </div>
@@ -452,27 +510,19 @@ export function SubtitlesSection() {
                 </div>
               )}
 
-              {/* Generic handler — same row layout as platform sites; separate
-                  boolean setting, not the per-site disable array. */}
-              <div className="flex items-start justify-between gap-4 py-2.5 border-t border-zinc-800/50">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm text-zinc-200">Generic Subtitle Detection</div>
-                  <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
-                    Auto-detect and translate subtitles on unsupported sites with a video element
-                    (broad .vtt/.srt/.ttml interception + DOM fallback). Platform-specific handlers
-                    always take precedence.
-                  </div>
-                </div>
-                <div className="shrink-0 pt-0.5">
-                  <Toggle
-                    id="subtitle-generic-handler-toggle"
-                    ariaLabel="Generic Subtitle Detection"
+              {/* FR-6 — Generic fallback in a distinct labeled subsection.
+                  Separate boolean setting, not the per-site disable array. */}
+              {genericSite && (
+                <div className="mt-2 pt-3 border-t border-zinc-800/50">
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">Fallback</p>
+                  <SiteRow
+                    site={genericSite}
                     checked={subtitleSettings.enableGenericSubtitleHandler}
-                    onChange={(checked) => handleUpdate({ enableGenericSubtitleHandler: checked })}
                     disabled={isDisabled}
+                    onToggle={(checked) => handleUpdate({ enableGenericSubtitleHandler: checked })}
                   />
                 </div>
-              </div>
+              )}
             </DisabledDimmer>
           </Card>
         </div>

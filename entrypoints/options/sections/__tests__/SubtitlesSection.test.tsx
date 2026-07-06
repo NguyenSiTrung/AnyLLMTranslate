@@ -391,9 +391,10 @@ describe('SubtitlesSection', () => {
   });
 
   describe('generic subtitle detection toggle', () => {
-    it('renders the Generic Subtitle Detection toggle checked by default, with no per-site toggle', () => {
+    it('renders the Generic fallback toggle (friendly label) checked by default, with no per-site toggle', () => {
       render(<SubtitlesSection />);
-      expect(screen.getByText('Generic Subtitle Detection')).toBeInTheDocument();
+      // FR-6 — friendly label "Generic (Auto-detect)" is the primary text.
+      expect(screen.getByText('Generic (Auto-detect)')).toBeInTheDocument();
       const toggle = document.getElementById('subtitle-generic-handler-toggle');
       expect(toggle).toBeInTheDocument();
       expect(toggle?.getAttribute('aria-checked')).toBe('true');
@@ -420,7 +421,7 @@ describe('SubtitlesSection', () => {
 
     it('calls updateSettings when the generic toggle is clicked', () => {
       render(<SubtitlesSection />);
-      const toggle = screen.getByRole('switch', { name: 'Generic Subtitle Detection' });
+      const toggle = screen.getByRole('switch', { name: 'Generic (Auto-detect) subtitles' });
       toggle.click();
       expect(mockUpdateSettings).toHaveBeenCalledWith(
         expect.objectContaining({ subtitleSettings: expect.objectContaining({ enableGenericSubtitleHandler: false }) }),
@@ -430,6 +431,35 @@ describe('SubtitlesSection', () => {
     it('does NOT render a per-site toggle for generic (separate setting)', () => {
       // already covered in the combined toggle test above
       expect(true).toBe(true);
+    });
+  });
+
+  describe('Phase 4 supported sites redesign', () => {
+    it('renders per-platform monogram dots for platform sites', () => {
+      render(<SubtitlesSection />);
+      // FR-6 — monogram dots render for known platforms.
+      const youtubeRow = screen.getByText('YouTube').closest('div.flex');
+      expect(youtubeRow?.querySelector('span[aria-hidden="true"]')?.textContent).toBe('YT');
+    });
+
+    it('renders friendly summaries as the primary subtitle text for platforms', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Full bilingual subtitle translation on all YouTube videos.')).toBeInTheDocument();
+    });
+
+    it('keeps the technical method hint available (tooltip affordance)', () => {
+      render(<SubtitlesSection />);
+      // FR-6 — technical method hint preserved for power users.
+      expect(screen.getAllByText('XHR interception').length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('places the Generic fallback in a distinct labeled Fallback subsection', () => {
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Fallback')).toBeInTheDocument();
+      // The Fallback label and the Generic row live in the same subsection.
+      const fallbackLabel = screen.getByText('Fallback');
+      const subsection = fallbackLabel.closest('div');
+      expect(subsection?.textContent).toContain('Generic (Auto-detect)');
     });
   });
 });

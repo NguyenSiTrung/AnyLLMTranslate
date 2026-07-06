@@ -37,3 +37,14 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **Gotcha:** When moving a control that has an explicit DOM id (`subtitle-enabled-toggle`), the test should query by id (not card position) so it's robust to card reordering.
   - **Context:** The hero strip uses `border-cyan-500/30 bg-cyan-500/[0.04]` to thread the section's cyan accent (FR-9 prep) into the master control.
 ---
+
+## [2026-07-06 11:37] - Phase 3 Task 3.1–3.4: Translation Style card (FR-3/4/5)
+- **Implemented:** (1) `KNOB_SPEC` array drives the 4 knobs (Register/Faithfulness/Brevity/Profanity) via a single `.map()`; deleted 4 copy-pasted option arrays + blocks. (2) Override-count badge (`{overrideCount} custom`) on the card title; per-knob `Custom` (cyan dot) vs `Profile default` indicator. (3) `translationTimeout` (10–120s, default 30) exposed inside an `AdvancedDisclosure` on the card. Re-enabled the timeout test (now expands the disclosure + asserts slider presence/value). Added 5 Phase-3 tests (33 total).
+- **Files changed:** `entrypoints/options/sections/SubtitlesSection.tsx`, `entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx`.
+- **Commit:** c3868ed
+- **Learnings:**
+  - **Pattern:** `SegmentedControl` is generic `<T extends string>`; mapping over a spec whose `options` are `{value:string;label:string}[]` infers `T = string`, so `onChange={(v) => handleKnobChange(knob.key, v)}` typechecks without casts. Keep the spec typed `KnobSpec[]` with `key: KnobKey` for the settings write to stay type-safe.
+  - **Pattern:** The `Card` component only accepts `title?: string`; to put a `Badge` inline in the title row, render the card untitled and emit a manual `<h3 className="text-sm font-semibold text-zinc-200">` + badge as the first child — matches the card title style exactly.
+  - **Gotcha:** `AdvancedDisclosure` is collapsed by default, so content inside it is NOT in the DOM until expanded. Tests that assert presence of disclosed controls must first `fireEvent.click(screen.getByRole('button', { name: <label> }))`. The old `queryByText(/Translation Timeout/)` "absence" test was actually asserting the collapsed state — updated to expand + assert presence (FR-5).
+  - **Pattern:** `overrideCount = KNOB_SPEC.filter(k => overrides[k.key] !== undefined).length` is the single source of truth for both the title badge and the reset-button `disabled` state — avoids the two drifting.
+---

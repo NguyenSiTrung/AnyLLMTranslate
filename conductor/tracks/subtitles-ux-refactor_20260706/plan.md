@@ -53,17 +53,21 @@
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] Task 3.1: Data-drive the 4 knob controls via a `KNOB_SPEC` array (Register/Faithfulness/Brevity/Profanity); delete the copy-pasted blocks
+- [x] Task 3.1: Data-drive the 4 knob controls via a `KNOB_SPEC` array (Register/Faithfulness/Brevity/Profanity); delete the copy-pasted blocks
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: c3868ed
 
-- [ ] Task 3.2: Add override-count badge to card title + per-knob 'Custom'/'Profile default' indicator
+- [x] Task 3.2: Add override-count badge to card title + per-knob 'Custom'/'Profile default' indicator
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: c3868ed
 
-- [ ] Task 3.3: Expose `translationTimeout` (10–120s) inside an `AdvancedDisclosure` on this card
+- [x] Task 3.3: Expose `translationTimeout` (10–120s) inside an `AdvancedDisclosure` on this card
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: c3868ed
 
-- [ ] Task 3.4: Add/adjust tests: knob rendering from spec, override badge count, advanced disclosure, timeout slider
+- [x] Task 3.4: Add/adjust tests: knob rendering from spec, override badge count, advanced disclosure, timeout slider
   <!-- files: entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx -->
+  Commit: c3868ed
 
 - [ ] Task: Conductor - User Manual Verification 'Translation Style Card' (Protocol in workflow.md)
 

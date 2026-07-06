@@ -8,6 +8,7 @@ import {
   isSiteDisabled,
   getPlatformSubtitleSites,
   getSubtitleSitesLoadMoreState,
+  monogramAccentClasses,
   SUBTITLE_SITES_INITIAL_VISIBLE,
   SUBTITLE_SITES_LOAD_MORE_BATCH,
   type SubtitleSiteInfo,
@@ -137,5 +138,28 @@ describe('subtitle sites pagination', () => {
 describe('DEFAULT_SUBTITLE_SETTINGS.disabledSubtitleSites', () => {
   it('defaults to an empty array', () => {
     expect(DEFAULT_SUBTITLE_SETTINGS.disabledSubtitleSites).toEqual([]);
+  });
+});
+
+describe('monogramAccentClasses (FR-6)', () => {
+  it.each([
+    ['red', 'bg-red-500/15 border-red-500/20 text-red-400'],
+    ['blue', 'bg-blue-500/15 border-blue-500/20 text-blue-400'],
+    ['cyan', 'bg-cyan-500/15 border-cyan-500/20 text-cyan-400'],
+    ['purple', 'bg-purple-500/15 border-purple-500/20 text-purple-400'],
+    ['zinc', 'bg-zinc-500/15 border-zinc-500/20 text-zinc-400'],
+  ] as const)('returns the NFR-4 opacity triplet for accent %s', (accent, expected) => {
+    expect(monogramAccentClasses(accent)).toBe(expected);
+  });
+
+  it('falls back to zinc for an undefined accent', () => {
+    expect(monogramAccentClasses(undefined)).toBe('bg-zinc-500/15 border-zinc-500/20 text-zinc-400');
+  });
+
+  it('every supported site has a monogram and accent populated', () => {
+    for (const site of SUPPORTED_SUBTITLE_SITES) {
+      expect(site.monogram).toBeTruthy();
+      expect(site.accent).toBeTruthy();
+    }
   });
 });
