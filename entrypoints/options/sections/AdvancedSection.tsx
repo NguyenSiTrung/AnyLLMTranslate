@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Gauge, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, AlertTriangle, RotateCcw } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -209,10 +209,51 @@ export function AdvancedSection() {
       />
 
       <div className="space-y-4">
-        {/* Performance & Caching */}
+        {/* Translation System Prompt (relocated from Providers; elevated above tuning) */}
         <div className="animate-stagger" style={stagger(0)}>
-          <Card title="Performance & Caching" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-5 mb-5">
+          <Card title="Translation System Prompt" icon={<Braces className="w-3.5 h-3.5" />} variant="bordered">
+            <FieldGroup
+              label="Custom prompt template"
+              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
+              htmlFor="advanced-system-prompt"
+            >
+              <textarea
+                id="advanced-system-prompt"
+                value={draftPrompt}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDraftPrompt(val);
+                  updateSettings({ customSystemPrompt: val });
+                }}
+                rows={8}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-1">
+                  {promptValidation && !promptValidation.valid && (
+                    <div className="flex items-center gap-1 text-amber-400 text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>{promptValidation.warnings[0]}</span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RotateCcw className="w-3 h-3" />}
+                  onClick={() => updateSettings({ customSystemPrompt: null })}
+                >
+                  Reset to Default
+                </Button>
+              </div>
+            </FieldGroup>
+          </Card>
+        </div>
+
+        {/* Performance & Throughput (cache + rate limiting merged) */}
+        <div className="animate-stagger" style={stagger(1)}>
+          <Card title="Performance & Throughput" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-5">
               <FieldGroup
                 label="Cache TTL (days)"
                 description="How long translations are cached before expiration."
@@ -261,42 +302,28 @@ export function AdvancedSection() {
                   error={maxBatchCharsError}
                 />
               </FieldGroup>
+              <div className="border-t border-zinc-800 pt-5">
+                <FieldGroup
+                  label="Max requests per minute"
+                  description="Limit provider calls per minute to avoid hitting rate limits (0 = unlimited). Leave at 0 for local LLMs like Ollama/LM Studio."
+                  htmlFor="max-rpm-input"
+                >
+                  <Input
+                    id="max-rpm-input"
+                    type="number"
+                    value={maxRpmField.value}
+                    onChange={(e) => maxRpmField.setValue(Number(e.target.value))}
+                    onBlur={handleMaxRpmBlur}
+                    min={0}
+                    max={600}
+                    error={maxRpmError}
+                  />
+                  {maxRpmField.value === 0 && !maxRpmError && (
+                    <p className="text-xs text-zinc-500 mt-1">(unlimited)</p>
+                  )}
+                </FieldGroup>
+              </div>
             </div>
-            <Button
-              id="clear-cache-btn"
-              variant="danger"
-              onClick={() => setShowClearCacheModal(true)}
-              disabled={clearStatus === 'clearing'}
-              loading={clearStatus === 'clearing'}
-              icon={<Trash2 className="w-4 h-4" />}
-            >
-              {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
-            </Button>
-          </Card>
-        </div>
-
-        {/* Rate Limiting */}
-        <div className="animate-stagger" style={stagger(1)}>
-          <Card title="Rate Limiting" icon={<Gauge className="w-3.5 h-3.5" />} variant="bordered">
-            <FieldGroup
-              label="Max requests per minute"
-              description="Limit provider calls per minute to avoid hitting rate limits (0 = unlimited). Leave at 0 for local LLMs like Ollama/LM Studio."
-              htmlFor="max-rpm-input"
-            >
-              <Input
-                id="max-rpm-input"
-                type="number"
-                value={maxRpmField.value}
-                onChange={(e) => maxRpmField.setValue(Number(e.target.value))}
-                onBlur={handleMaxRpmBlur}
-                min={0}
-                max={600}
-                error={maxRpmError}
-              />
-              {maxRpmField.value === 0 && !maxRpmError && (
-                <p className="text-xs text-zinc-500 mt-1">(unlimited)</p>
-              )}
-            </FieldGroup>
           </Card>
         </div>
 
@@ -417,10 +444,10 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Data & Developer Tools */}
+        {/* Data Portability */}
         <div className="animate-stagger" style={stagger(4)}>
-          <Card title="Data & Developer Tools" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="flex gap-3 mb-5">
+          <Card title="Data Portability" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="flex gap-3">
               <Button
                 id="export-settings-btn"
                 variant="secondary"
@@ -449,69 +476,60 @@ export function AdvancedSection() {
                 }}
               />
             </div>
-            <div className="border-t border-zinc-800 pt-4">
-              <Toggle
-                id="debug-mode-toggle"
-                checked={settings.debugMode}
-                onChange={(checked) => updateSettings({ debugMode: checked })}
-                label="Debug Mode"
-                description="Enable verbose logging in the browser console."
-              />
-            </div>
           </Card>
         </div>
 
-        {/* Translation System Prompt (FR-9: relocated from Providers tab) */}
+        {/* Developer */}
         <div className="animate-stagger" style={stagger(5)}>
-          <Card title="Translation System Prompt" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
-            <FieldGroup
-              label="Custom prompt template"
-              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
-              htmlFor="advanced-system-prompt"
-            >
-              <textarea
-                id="advanced-system-prompt"
-                value={draftPrompt}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDraftPrompt(val);
-                  updateSettings({ customSystemPrompt: val });
-                }}
-                rows={8}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-mono resize-y"
-              />
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-1">
-                  {promptValidation && !promptValidation.valid && (
-                    <div className="flex items-center gap-1 text-amber-400 text-xs">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>{promptValidation.warnings[0]}</span>
-                    </div>
-                  )}
+          <Card title="Developer" icon={<Wrench className="w-3.5 h-3.5" />} variant="bordered">
+            <Toggle
+              id="debug-mode-toggle"
+              checked={settings.debugMode}
+              onChange={(checked) => updateSettings({ debugMode: checked })}
+              label="Debug Mode"
+              description="Enable verbose logging in the browser console."
+            />
+          </Card>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="animate-stagger" style={stagger(6)}>
+          <Card title="Danger Zone" icon={<AlertTriangle className="w-3.5 h-3.5" />} accent="red" variant="bordered">
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Clear translation cache</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Deletes all cached translations. Future translations re-fetch from your provider (may incur API costs).</p>
                 </div>
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<RotateCcw className="w-3 h-3" />}
-                  onClick={() => updateSettings({ customSystemPrompt: null })}
+                  id="clear-cache-btn"
+                  variant="danger"
+                  onClick={() => setShowClearCacheModal(true)}
+                  disabled={clearStatus === 'clearing'}
+                  loading={clearStatus === 'clearing'}
+                  icon={<Trash2 className="w-4 h-4" />}
                 >
-                  Reset to Default
+                  {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
                 </Button>
               </div>
-            </FieldGroup>
+              <div className="border-t border-zinc-800 pt-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">Reset all settings</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Restores all settings to defaults — custom dictionary, site rules, and provider configuration will be lost. Cannot be undone.</p>
+                  </div>
+                  <Button
+                    id="reset-all-settings-btn"
+                    variant="danger"
+                    onClick={() => setShowResetModal(true)}
+                    icon={<RotateCcw className="w-4 h-4" />}
+                  >
+                    Reset All
+                  </Button>
+                </div>
+              </div>
+            </div>
           </Card>
-        </div>
-
-        {/* Reset */}
-        <div className="animate-stagger" style={stagger(6)}>
-          <Button
-            id="reset-all-settings-btn"
-            variant="danger"
-            className="w-full"
-            onClick={() => setShowResetModal(true)}
-          >
-            Reset All Settings to Default
-          </Button>
         </div>
       </div>
 

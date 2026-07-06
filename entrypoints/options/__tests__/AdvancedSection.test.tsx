@@ -72,7 +72,7 @@ describe('AdvancedSection - Cache Configuration', () => {
   it('renders Cache Configuration card with fields, initial values, and helper text', () => {
     render(<AdvancedSection />);
 
-    expect(screen.getByText('Performance & Caching')).toBeInTheDocument();
+    expect(screen.getByText('Performance & Throughput')).toBeInTheDocument();
     expect(screen.getByLabelText('Cache TTL (days)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Cache Size (MB)')).toBeInTheDocument();
     expect(screen.getByLabelText('Max Batch Characters')).toBeInTheDocument();
@@ -315,9 +315,9 @@ describe('AdvancedSection - Rate Limiting', () => {
     });
   });
 
-  it('renders the Rate Limiting card with maxRpm input (default 0, unlimited hint)', () => {
+  it('renders the Max RPM input within Performance & Throughput (default 0, unlimited hint)', () => {
     render(<AdvancedSection />);
-    expect(screen.getByText('Rate Limiting')).toBeInTheDocument();
+    expect(screen.getByText('Performance & Throughput')).toBeInTheDocument();
     expect(screen.getByLabelText('Max requests per minute')).toBeInTheDocument();
     const input = screen.getByLabelText('Max requests per minute') as HTMLInputElement;
     expect(input.value).toBe('0');

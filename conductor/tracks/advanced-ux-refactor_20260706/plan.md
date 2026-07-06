@@ -59,27 +59,26 @@
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] Task 3.1: Merge Rate Limiting into Performance & Caching → "Performance & Throughput"
-  - Remove the standalone Rate Limiting card; move the Max RPM `FieldGroup` into the Performance card below the three cache fields, separated by `<div className="border-t border-zinc-800 pt-5 mt-5" />`. Rename the card title to "Performance & Throughput". Renumber stagger indices 0→N unique ascending.
-  - Update tests: the "Rate Limiting" card-text assertion is removed; Max RPM input still queryable by label.
+- [x] Task 3.1: Merge Rate Limiting into Performance & Caching → "Performance & Throughput"
+  - Removed the standalone Rate Limiting card; Max RPM `FieldGroup` moved into the Performance card below the three cache fields, separated by `border-t border-zinc-800 pt-5`. Renamed title to "Performance & Throughput". Removed the Clear Cache button from this card (moves to Danger Zone). Stagger renumbered.
+  - Updated test: "Rate Limiting" card-text assertion removed; Max RPM still queryable by label; "Performance & Caching" → "Performance & Throughput".
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 3.2: Split "Data & Developer Tools" into "Data Portability" + "Developer"
-  - "Data Portability" card: Export/Import buttons. "Developer" card: Debug Mode toggle (optionally behind an `AdvancedDisclosure` on the Data card — choose standalone small card for clarity). Remove the `border-t` split that previously divided them inside one card.
-  - Update tests for the two new card titles.
-  <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
-
-- [ ] Task 3.3: Add "Danger Zone" card; move Clear Cache + Reset All into it
-  - New card (red-accented surface: `border-red-500/20 bg-red-500/[0.04]` per NFR-5 token pattern) titled "Danger Zone" with an `AlertTriangle` icon. Move the Clear Cache button (out of Performance) + the Reset All button (out of the bare full-width spot) into it. Reset gains an `AlertTriangle` icon + a one-line description ("Restores all settings to defaults — custom dictionary, site rules, and provider configuration will be lost"). Both keep their existing danger `Modal` confirmations.
-  - Update tests: both buttons still queryable by id (`clear-cache-btn`, `reset-all-settings-btn`); assert they live in the Danger Zone card.
-  <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
-
-- [ ] Task 3.4: Reposition Translation System Prompt card above the tuning cards
-  - Move the System Prompt card render block above the Performance & Throughput card (after the hero strip, which lands in Phase 4 — for now place it first). Change its icon from `FileText` to `Braces`. Renumber stagger.
+- [x] Task 3.2: Split "Data & Developer Tools" into "Data Portability" + "Developer"
+  - "Data Portability" card: Export/Import buttons. "Developer" card (standalone, `Wrench` icon): Debug Mode toggle. Removed the `border-t` split. (No existing test asserted "Data & Developer Tools".)
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 3.5: Verify Phase 3 green; commit
-  <!-- verify: pnpm test AdvancedSection; tsc --noEmit; pnpm lint -->
+- [x] Task 3.3: Add "Danger Zone" card; move Clear Cache + Reset All into it
+  - New "Danger Zone" card with `AlertTriangle` icon + `accent="red"` (Card's red left-accent). Clear Cache + Reset All moved in, each with a one-line description + icon (Reset All gets `RotateCcw`). Both keep their existing danger Modals. Reset button label shortened to "Reset All".
+  - Tests: both buttons still queryable by id (no test asserted their old label text).
+  <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
+
+- [x] Task 3.4: Reposition Translation System Prompt card above the tuning cards
+  - Moved to first card (stagger 0); icon changed `FileText` → `Braces`. Inner content unchanged (Textarea/badge/variables land in Phase 6).
+  <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
+
+- [x] Task 3.5: Verify Phase 3 green; commit
+  <!-- verify: pnpm test AdvancedSection (31/31); tsc --noEmit clean; eslint clean -->
 
 - [ ] Task: Conductor - User Manual Verification 'IA Restructure' (Protocol in workflow.md)
 

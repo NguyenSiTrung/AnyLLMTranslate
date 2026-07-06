@@ -39,3 +39,14 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **a11y fix verified:** `DisabledDimmer` dims visually, but `pointer-events-none` only blocks the mouse — inner controls MUST carry `disabled` to be keyboard-inert. New test asserts `toBeDisabled()` on the LLM toggle when Context-Aware is off. This is the concrete NFR-4 net improvement.
   - **Gotcha (Toggle/Select disabled):** `Toggle` has an explicit `disabled` prop; `Select` has no explicit `disabled` prop but spreads `...props` to the native `<select>`, so `disabled` passes through. Both verified by the passing a11y test.
 ---
+
+## [2026-07-06 14:43] - Phase 3: Information Architecture Restructure (FR-1, FR-2, FR-7)
+- **Implemented:** New card order — Translation System Prompt (elevated to first, `Braces` icon, stagger 0) → Performance & Throughput (merged Rate Limiting; Clear Cache button removed) → Context & Intelligence → PDF Translator → Data Portability (split) → Developer (split, Debug only) → Danger Zone (Clear Cache + Reset All, each with description + icon, `accent="red"`). Removed standalone Rate Limiting card + bare Reset button. Stagger 0-6 unique ascending.
+- **Files changed:** `entrypoints/options/sections/AdvancedSection.tsx`, `entrypoints/options/__tests__/AdvancedSection.test.tsx`.
+- **Commit:** (this phase)
+- **Learnings:**
+  - **Pattern (Card danger accent):** `Card` has `accent?: 'blue'|'emerald'|'amber'|'red'` → adds `border-l-4 border-l-red-500`. Use `accent="red"` for the Danger Zone card (left red bar) rather than fighting `border-white/10` with a custom `border-red-500/20` className.
+  - **Pattern (move via 2 edits):** Repositioning a card block is cleanest as two edits — insert the block at the new location, then replace the old block (+ adjacent block to remove) with the new content. This avoids reproducing the entire space-y-4 container and sidesteps whitespace-ambiguous blank lines in untouched cards (the Context card has a trailing-whitespace blank line that would break a full-container match).
+  - **Decision (Reset label):** Shortened "Reset All Settings to Default" → "Reset All" (fits the Danger Zone row). No test asserted the old label (the prompt-reset test uses `getAllByRole('button', { name: /reset to default/i })` which only ever matched the prompt's "Reset to Default" button — "Reset All Settings to Default" did not contain the substring "reset to default"). Test stayed green.
+  - **Import hygiene:** Removing the Rate Limiting card made `Gauge` unused → swapped `Gauge` → `Braces` in the lucide import (Braces used by the elevated System Prompt card). `Wrench` now used by both SectionHeader and the Developer card.
+---
