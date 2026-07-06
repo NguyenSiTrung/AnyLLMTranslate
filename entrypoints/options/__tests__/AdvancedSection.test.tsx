@@ -197,6 +197,19 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(toggle).toBeDisabled();
   });
 
+  it('hides Detection Mode behind an AdvancedDisclosure until expanded (FR-4)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...mockSettings, enableLLMPageCategoryDetection: true, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    // Collapsed by default — the Detection Mode select is not in the DOM.
+    expect(screen.queryByLabelText('Detection Mode')).not.toBeInTheDocument();
+    // Expand the disclosure → the select appears.
+    fireEvent.click(screen.getByRole('button', { name: /detection mode/i }));
+    expect(screen.getByLabelText('Detection Mode')).toBeInTheDocument();
+  });
+
   it('renders Context-Aware Translation toggle', () => {
     render(<AdvancedSection />);
     expect(screen.getByText('Context-Aware Translation')).toBeInTheDocument();

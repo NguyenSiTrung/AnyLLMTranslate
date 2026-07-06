@@ -16,6 +16,7 @@ import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { useToast } from '@/ui/ToastProvider';
 import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 import { useCacheStats } from '@/entrypoints/options/hooks/useCacheStats';
@@ -383,7 +384,7 @@ export function AdvancedSection() {
                 />
                 
                 {settings.enableLLMPageCategoryDetection && (
-                  <div className="pl-6 border-l-2 border-zinc-800 ml-2 animate-fade-in">
+                  <AdvancedDisclosure label="Detection mode">
                     <FieldGroup label="Detection Mode" htmlFor="llm-category-mode-select">
                       <Select
                         id="llm-category-mode-select"
@@ -396,7 +397,7 @@ export function AdvancedSection() {
                         ]}
                       />
                     </FieldGroup>
-                  </div>
+                  </AdvancedDisclosure>
                 )}
               </DisabledDimmer>
             </div>

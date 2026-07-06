@@ -107,16 +107,16 @@
 <!-- execution: sequential -->
 <!-- depends: phase4 -->
 
-- [ ] Task 5.1: Move Detection Mode behind an `AdvancedDisclosure`
-  - Wrap the Detection Mode `FieldGroup` in `<AdvancedDisclosure label="Detection mode">` (default collapsed). It only renders when LLM detection is enabled. Keeps the `DisabledDimmer` from Task 2.2 around the whole LLM-detection sub-block.
+- [x] Task 5.1: Move Detection Mode behind an `AdvancedDisclosure`
+  - Replaced the `pl-6 border-l-2` indent div with `<AdvancedDisclosure label="Detection mode">` wrapping the Detection Mode FieldGroup. Still gated by `enableLLMPageCategoryDetection` and inside the `DisabledDimmer` (Context-Aware gating) from Task 2.2.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 5.2: Tests for the disclosure + disabled gating
-  - Expand disclosure (click the "Detection mode" button) → assert the Select is present; collapse → absent. When Context-Aware is off, the disclosure/Select are disabled (NFR-4).
+- [x] Task 5.2: Tests for the disclosure + disabled gating
+  - Added test: collapsed → `queryByLabelText('Detection Mode')` absent; click "Detection mode" trigger → select present. The Context-Aware-off disabled gating is covered by the Phase 2 a11y test (LLM toggle disabled → detection can't be enabled → disclosure never renders).
   <!-- files: entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 5.3: Verify Phase 5 green; commit
-  <!-- verify: pnpm test AdvancedSection; tsc --noEmit; pnpm lint -->
+- [x] Task 5.3: Verify Phase 5 green; commit
+  <!-- verify: pnpm test AdvancedSection (35/35); tsc --noEmit clean; eslint clean -->
 
 - [ ] Task: Conductor - User Manual Verification 'Context & Intelligence Cleanup' (Protocol in workflow.md)
 

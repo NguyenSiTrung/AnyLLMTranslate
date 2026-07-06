@@ -59,3 +59,11 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **Pattern (hero ≠ master toggle):** Unlike Subtitles FR-1 (a master-enable hero), Advanced has no single enable, so the hero is a **status strip** (live readout + state chips) — an anchor with information density rather than a control. Matches the spec FR-3 decision.
   - **Gotcha (useCallback dep):** `handleClearCache` gained `cacheStats.refresh` in its `useCallback` deps so the closure sees the stable refresh fn. `cacheStats.refresh` is stable (hook's `useCallback([load])`, `load` is `useCallback([])`), so no re-creation churn.
 ---
+
+## [2026-07-06 14:51] - Phase 5: Context & Intelligence Cleanup (FR-4)
+- **Implemented:** Wrapped Detection Mode in `<AdvancedDisclosure label="Detection mode">` (replaced the `pl-6 border-l-2` indent div). Still gated by `enableLLMPageCategoryDetection` + inside the `DisabledDimmer`. 1 new test (35 total).
+- **Files changed:** `entrypoints/options/sections/AdvancedSection.tsx`, `entrypoints/options/__tests__/AdvancedSection.test.tsx`.
+- **Learnings:**
+  - **Pattern (disclosure collapses children out of DOM):** `AdvancedDisclosure` returns `null` for the region when collapsed, so `queryByLabelText('Detection Mode')` is absent until the trigger is clicked — test asserts both states. Same gotcha as Subtitles FR-5 (disclosed content not in DOM until expanded).
+  - **Reduction:** The 3-level nesting (Toggle → dimmed sub-block → Toggle → indented conditional Select) is now 2-level (Toggle → dimmed sub-block → Toggle → disclosure). The disclosure replaces both the indent styling and the always-on visibility of the rarely-changed Detection Mode.
+---
