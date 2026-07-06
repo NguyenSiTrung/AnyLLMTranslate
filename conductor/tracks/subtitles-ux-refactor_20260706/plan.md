@@ -77,17 +77,21 @@
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] Task 4.1: Add friendly label + per-platform icon/monogram data to `SubtitleSiteInfo` (preserve technical method hint)
+- [x] Task 4.1: Add friendly label + per-platform icon/monogram data to `SubtitleSiteInfo` (preserve technical method hint)
   <!-- files: lib/subtitleSites.ts -->
+  Commit: 2b5e55a
 
-- [ ] Task 4.2: Render friendly primary labels + per-platform leading icon; move method hint into a tooltip/info affordance
+- [x] Task 4.2: Render friendly primary labels + per-platform leading icon; move method hint into a tooltip/info affordance
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: 2b5e55a
 
-- [ ] Task 4.3: Separate the Generic fallback into a distinct labeled 'Fallback' subsection
+- [x] Task 4.3: Separate the Generic fallback into a distinct labeled 'Fallback' subsection
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx -->
+  Commit: 2b5e55a
 
-- [ ] Task 4.4: Update tests for friendly labels, icon rendering, and fallback separation
+- [x] Task 4.4: Update tests for friendly labels, icon rendering, and fallback separation
   <!-- files: entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx -->
+  Commit: 2b5e55a
 
 - [ ] Task: Conductor - User Manual Verification 'Supported Sites Redesign' (Protocol in workflow.md)
 

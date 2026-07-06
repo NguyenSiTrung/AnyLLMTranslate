@@ -14,6 +14,9 @@ interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'
   minLabel?: string;
   maxLabel?: string;
   formatValue?: (value: number) => string;
+  /** FR-9 — override the native accent-color token (defaults to blue-500).
+   *  Pass e.g. 'accent-cyan-500' to thread a section's identity accent. */
+  accentClassName?: string;
 }
 
 export function Slider({
@@ -27,6 +30,7 @@ export function Slider({
   maxLabel,
   formatValue,
   id,
+  accentClassName = 'accent-blue-500',
   ...props
 }: SliderProps) {
   const displayValue = formatValue ? formatValue(value) : String(value);
@@ -52,7 +56,7 @@ export function Slider({
         aria-valuemax={max}
         aria-valuenow={value}
         aria-valuetext={displayValue}
-        className="w-full accent-blue-500 cursor-pointer"
+        className={`w-full ${accentClassName} cursor-pointer`}
         {...props}
       />
       {(minLabel || maxLabel) && (

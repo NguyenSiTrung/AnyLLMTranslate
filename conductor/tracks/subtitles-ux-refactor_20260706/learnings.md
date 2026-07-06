@@ -48,3 +48,13 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **Gotcha:** `AdvancedDisclosure` is collapsed by default, so content inside it is NOT in the DOM until expanded. Tests that assert presence of disclosed controls must first `fireEvent.click(screen.getByRole('button', { name: <label> }))`. The old `queryByText(/Translation Timeout/)` "absence" test was actually asserting the collapsed state — updated to expand + assert presence (FR-5).
   - **Pattern:** `overrideCount = KNOB_SPEC.filter(k => overrides[k.key] !== undefined).length` is the single source of truth for both the title badge and the reset-button `disabled` state — avoids the two drifting.
 ---
+
+## [2026-07-06 11:45] - Phase 4 Task 4.1–4.4: Supported Sites redesign (FR-6)
+- **Implemented:** (1) Added optional `monogram` / `accent` / `summary` fields to `SubtitleSiteInfo` (kept `methodHint` + `name` for backward compat); populated all 10 sites. (2) New `SiteRow` + `MonogramDot` components render friendly label + summary + a leading colored monogram dot, with the technical method hint demoted to a small `Info` affordance line. (3) Generic fallback pulled into a distinct labeled `Fallback` subsection. Added pure `monogramAccentClasses()` helper. Updated 2 generic-toggle tests to the new friendly label; added 4 redesign tests + 7 helper tests.
+- **Files changed:** `lib/subtitleSites.ts`, `entrypoints/options/sections/SubtitlesSection.tsx`, `lib/__tests__/subtitleSites.test.ts`, `entrypoints/options/sections/__tests__/SubtitlesSection.test.tsx`.
+- **Commit:** 2b5e55a
+- **Learnings:**
+  - **Pattern:** Keep new presentation-only fields on a shared data interface **optional** so legacy callers (e.g. `makePlatformSites` test factory, runtime coordinator) that construct `SubtitleSiteInfo` with only `platform/name/methodHint` keep typechecking — the redesign is additive, not breaking.
+  - **Gotcha:** Reusing one row component (`SiteRow`) for both platform sites and the generic fallback means the toggle aria-label derives from `site.name`. When the friendly label changes ("Generic Subtitle Detection" → "Generic (Auto-detect)"), any test querying the switch by accessible name must update in lockstep (NFR-2 allows DOM-structure-driven test edits).
+  - **Pattern:** Method hints that repeat across sites (e.g. "XHR interception" ×4) now appear once per site row — tests using `getByText` must switch to `getAllByText(...).length >= N` to stay robust.
+---

@@ -18,12 +18,14 @@ const baseSubtitleSettings = { ...DEFAULT_SUBTITLE_SETTINGS };
 
 const mockState = {
   subtitleSettings: baseSubtitleSettings,
+  targetLanguage: 'vi',
   updateSettings: mockUpdateSettings,
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockState.subtitleSettings = { ...DEFAULT_SUBTITLE_SETTINGS };
+  mockState.targetLanguage = 'vi';
 
   (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
     if (typeof selector === 'function') {
@@ -460,6 +462,48 @@ describe('SubtitlesSection', () => {
       const fallbackLabel = screen.getByText('Fallback');
       const subsection = fallbackLabel.closest('div');
       expect(subsection?.textContent).toContain('Generic (Auto-detect)');
+    });
+  });
+
+  describe('Phase 5 accent & preview polish', () => {
+    it('renders preview cues driven by the configured target language', () => {
+      // default mock targetLanguage = 'vi'
+      render(<SubtitlesSection />);
+      expect(screen.getByText('Xin chào thế giới')).toBeInTheDocument();
+    });
+
+    it('switches preview cues when target language changes', () => {
+      mockState.targetLanguage = 'ja';
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') return selector(mockState);
+        return mockState;
+      });
+      render(<SubtitlesSection />);
+      expect(screen.getByText('こんにちは世界')).toBeInTheDocument();
+      expect(screen.queryByText('Xin chào thế giới')).not.toBeInTheDocument();
+    });
+
+    it('shows no Style chip by default (no overrides)', () => {
+      const { container } = render(<SubtitlesSection />);
+      // The Style chip uses text-cyan-300 (distinct from monogram dots which
+      // use text-cyan-400). With no overrides it should not render.
+      const chips = container.querySelectorAll('span.text-cyan-300');
+      expect(chips.length).toBe(0);
+    });
+
+    it('shows a Style chip reflecting the active register override', () => {
+      mockState.subtitleSettings = {
+        ...baseSubtitleSettings,
+        knobOverrides: { register: 'formal' },
+      };
+      (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+        if (typeof selector === 'function') return selector(mockState);
+        return mockState;
+      });
+      const { container } = render(<SubtitlesSection />);
+      // The Style chip renders the capitalized override label.
+      const chip = container.querySelector('span.text-cyan-300');
+      expect(chip?.textContent).toBe('Formal');
     });
   });
 });

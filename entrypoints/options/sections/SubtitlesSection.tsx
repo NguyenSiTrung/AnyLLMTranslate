@@ -28,6 +28,7 @@ import { SegmentedControl } from '@/ui/SegmentedControl';
 import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { SubtitlePreview } from '@/entrypoints/options/components/SubtitlePreview';
+import { getPreviewCuesForLanguage, resolveStyleChipLabel } from '@/lib/subtitlePreviewCues';
 import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 
@@ -175,6 +176,7 @@ function SiteRow({
 
 export function SubtitlesSection() {
   const subtitleSettings = useSettingsStore((s) => s.subtitleSettings);
+  const targetLanguage = useSettingsStore((s) => s.targetLanguage);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [visibleSiteCount, setVisibleSiteCount] = useState(SUBTITLE_SITES_INITIAL_VISIBLE);
   const {
@@ -199,6 +201,11 @@ export function SubtitlesSection() {
   const overrides = subtitleSettings.knobOverrides ?? {};
   /** FR-4 — number of knobs with a non-'auto' override set. */
   const overrideCount = KNOB_SPEC.filter((k) => overrides[k.key] !== undefined).length;
+
+  /** FR-9 — target-language-driven preview cues + a Style chip tying the
+   *  preview to the active translation-style overrides. */
+  const previewCues = getPreviewCuesForLanguage(targetLanguage);
+  const styleChip = resolveStyleChipLabel(overrides);
 
   const handleKnobChange = (knob: KnobKey, value: string) => {
     const next = { ...overrides };
@@ -251,6 +258,8 @@ export function SubtitlesSection() {
               fontFamily={subtitleSettings.fontFamily}
               displayMode={subtitleSettings.displayMode}
               position={subtitleSettings.position}
+              cues={previewCues}
+              styleChip={styleChip}
             />
           </Card>
         </div>
@@ -325,6 +334,7 @@ export function SubtitlesSection() {
                     formatValue={(v) => `${v}s`}
                     minLabel="10s"
                     maxLabel="120s"
+                    accentClassName="accent-cyan-500"
                     disabled={isDisabled}
                   />
                   <p className="text-[10px] text-zinc-500 mt-2 leading-relaxed">
