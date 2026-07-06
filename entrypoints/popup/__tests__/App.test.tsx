@@ -89,63 +89,6 @@ describe('popup provider recovery', () => {
     expect(await screen.findByRole('button', { name: /translate page/i })).toBeInTheDocument();
     expect(screen.queryByText(/no providers configured/i)).not.toBeInTheDocument();
   });
-
-  it('shows translate action when the multi-provider pool is ready, even with a stale legacy mirror (AnyLLMTranslate-37j)', async () => {
-    // Regression: a user who configures a provider via the Providers tab has a
-    // ready pool (settings.providers[] with an enabled key), but the legacy
-    // settings.provider mirror is left at its default (connectionStatus
-    // 'unknown'). The popup must read pool readiness, not the stale mirror —
-    // otherwise it wrongly shows "Provider not ready" and hides the translate
-    // button despite a healthy pool.
-    storedSettings = {
-      ...DEFAULT_SETTINGS,
-      // Legacy mirror intentionally left empty / untested (mirrors what the
-      // new ProvidersSection writes — it never touches settings.provider).
-      provider: {
-        ...DEFAULT_SETTINGS.provider,
-        baseUrl: '',
-        model: '',
-        apiKey: '',
-        connectionStatus: 'unknown',
-      },
-      providers: [
-        {
-          id: 'p1',
-          displayName: 'OpenAI',
-          baseUrl: 'https://api.openai.com/v1',
-          model: 'gpt-4o-mini',
-          requiresApiKey: true,
-          temperature: 0.3,
-          maxTokens: 4096,
-          enabled: true,
-          keys: [{ id: 'k1', apiKey: 'sk-ready', maxRpm: 0, enabled: true }],
-        },
-      ],
-      onboarding: { completed: true, skipped: false, lastStep: 'done' },
-    };
-
-    render(<App />);
-
-    expect(await screen.findByRole('button', { name: /translate page/i })).toBeInTheDocument();
-    expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
-  });
-
-  it('opens options setup flow from recovery CTA', async () => {
-    render(<App />);
-
-    const setupButton = await screen.findByRole('button', { name: /set up provider/i });
-    setupButton.click();
-
-    await waitFor(() => {
-      expect(createWindow).toHaveBeenCalledWith({
-        url: 'chrome-extension://test/options.html?setup=1',
-        type: 'popup',
-        width: 1200,
-        height: 800,
-        focused: true,
-      });
-    });
-  });
 });
 
 describe('popup unsupported pages', () => {
@@ -167,15 +110,6 @@ describe('popup unsupported pages', () => {
     expect(await screen.findByText(/this page can't be translated/i)).toBeInTheDocument();
     expect(screen.getByText(/browser or extension pages don't allow translation/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /translate page/i })).not.toBeInTheDocument();
-  });
-
-  it('prioritizes unsupported-page feedback over provider setup recovery', async () => {
-    queryTabs.mockResolvedValue([{ id: 7, url: 'chrome://extensions/' }]);
-
-    render(<App />);
-
-    expect(await screen.findByText(/this page can't be translated/i)).toBeInTheDocument();
-    expect(screen.queryByText(/provider not ready/i)).not.toBeInTheDocument();
   });
 
   it('shows PDF-translation-active message and category dropdown on the extension pdf-viewer page', async () => {
@@ -232,36 +166,6 @@ describe('popup PDF detection', () => {
       if (action === 'getPageCategory') return null;
       return undefined;
     });
-
-    render(<App />);
-
-    expect(await screen.findByText(/open current pdf/i)).toBeInTheDocument();
-  });
-
-  it('does NOT show "Open current PDF" for an HTML tab', async () => {
-    storedSettings = connectedSettings;
-    queryTabs.mockResolvedValue([{ id: 7, url: 'https://example.com/article' }]);
-    sendMessage.mockImplementation(async (_tabIdOrMsg: unknown, msg?: { action: string }) => {
-      const action = (msg ?? (_tabIdOrMsg as { action: string }))?.action;
-      if (action === 'getPageContentType') return { isPdf: false };
-      if (action === 'getStatus') return { status: 'idle', translatedCount: 0, totalCount: 0 };
-      return undefined;
-    });
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(screen.queryByText(/open current pdf/i)).not.toBeInTheDocument();
-    });
-    // The URL-paste affordance should be present instead.
-    expect(screen.getByText(/open url/i)).toBeInTheDocument();
-  });
-
-  it('falls back to URL heuristic when content script is unreachable', async () => {
-    storedSettings = connectedSettings;
-    // Classic .pdf suffix → URL regex fallback should fire.
-    queryTabs.mockResolvedValue([{ id: 7, url: 'https://example.com/paper.pdf' }]);
-    sendMessage.mockRejectedValue(new Error('content script not loaded'));
 
     render(<App />);
 

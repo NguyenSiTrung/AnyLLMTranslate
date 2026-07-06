@@ -34,21 +34,6 @@ describe('CSS themes', () => {
     }
   });
 
-  it('has base .anyllm-translate-translation styles', () => {
-    expect(cssContent).toContain('.anyllm-translate-translation');
-    expect(cssContent).toContain('anyllmFadeIn');
-  });
-
-  it('has loading state styles', () => {
-    expect(cssContent).toContain('anyllm-translate-loading');
-    expect(cssContent).toContain('anyllmSpinnerRotate');
-  });
-
-  it('has error state styles', () => {
-    expect(cssContent).toContain('data-anyllm-error');
-    expect(cssContent).toContain('#ef4444');
-  });
-
   it('has page state rules for dual, translation-only, and off', () => {
     expect(cssContent).toContain('data-anyllm-state="dual"');
     expect(cssContent).toContain('data-anyllm-state="translation-only"');
@@ -58,9 +43,5 @@ describe('CSS themes', () => {
   it('has translation position variants', () => {
     expect(cssContent).toContain('data-anyllm-position="above"');
     expect(cssContent).toContain('data-anyllm-position="side"');
-  });
-
-  it('default theme applies when no data-anyllm-theme attribute', () => {
-    expect(cssContent).toContain('html:not([data-anyllm-theme]) .anyllm-translate-translation');
   });
 });

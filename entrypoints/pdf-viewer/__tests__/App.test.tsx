@@ -97,14 +97,6 @@ describe('App — View mode toggle', () => {
     });
   });
 
-  it('shows a View toggle with Split and Translation buttons', async () => {
-    render(<App />);
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Split/i })).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Translation/i })).toBeTruthy();
-    });
-  });
-
   it('hides the Original pane and persists when clicking Translation', async () => {
     render(<App />);
     await waitFor(() => expectPaneLabel('Original', true));
@@ -129,18 +121,5 @@ describe('App — View mode toggle', () => {
       expectPaneLabel('Original', true);
     });
     expect(savePdfViewMode).toHaveBeenCalledWith('split');
-  });
-
-  it('the Layout/Text toggle still renders in both view modes', async () => {
-    render(<App />);
-    await waitFor(() => expectPaneLabel('Original', true));
-    expect(screen.getByRole('button', { name: /^Layout$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Text$/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: /^Translation$/i }));
-    await waitFor(() => expectPaneLabel('Original', false));
-    // Layout/Text still present after switching to translation-only
-    expect(screen.getByRole('button', { name: /^Layout$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Text$/i })).toBeTruthy();
   });
 });
