@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -18,6 +18,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { useToast } from '@/ui/ToastProvider';
 import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
+import { useCacheStats } from '@/entrypoints/options/hooks/useCacheStats';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -32,6 +33,7 @@ export function AdvancedSection() {
   const [showClearCacheModal, setShowClearCacheModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
+  const cacheStats = useCacheStats();
 
   // Cache configuration — commit-on-blur via useDeferredCommit (FR-9).
   // onCommit is just the store write; range validation + error state live in
@@ -141,6 +143,7 @@ export function AdvancedSection() {
       if (response?.success) {
         setClearStatus('done');
         showSuccess('Translation cache cleared');
+        void cacheStats.refresh();
       } else {
         throw new Error('Clear cache failed');
       }
@@ -149,7 +152,7 @@ export function AdvancedSection() {
       setClearStatus('idle');
       showError('Failed to clear cache');
     }
-  }, [showSuccess, showError]);
+  }, [showSuccess, showError, cacheStats.refresh]);
 
   const handleReset = useCallback(() => {
     resetToDefaults();
@@ -207,6 +210,33 @@ export function AdvancedSection() {
         icon={<Wrench className="w-4 h-4" />}
         accentColor="zinc"
       />
+
+      {/* Hero status strip (FR-3): live cache usage + state chips at a glance */}
+      <div className="mb-4 rounded-xl border border-zinc-500/20 bg-zinc-600/[0.04] p-4">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <HardDrive className="w-3.5 h-3.5 text-zinc-500" />
+            <span className="text-zinc-500">Cache:</span>
+            <span className="text-zinc-200 font-medium tabular-nums">
+              {cacheStats.loading
+                ? '…'
+                : `${cacheStats.entryCount} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
+            </span>
+          </div>
+          {settings.customSystemPrompt !== null && (
+            <span className="inline-flex items-center gap-1 text-zinc-300">
+              <Braces className="w-3.5 h-3.5 text-zinc-400" />
+              Custom prompt
+            </span>
+          )}
+          {settings.debugMode && (
+            <span className="inline-flex items-center gap-1 text-amber-400">
+              <Bug className="w-3.5 h-3.5" />
+              Debug on
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="space-y-4">
         {/* Translation System Prompt (relocated from Providers; elevated above tuning) */}

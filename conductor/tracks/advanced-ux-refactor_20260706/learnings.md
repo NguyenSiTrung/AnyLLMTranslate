@@ -50,3 +50,12 @@ Read `conductor/patterns.md` for full project patterns. Key ones for this track:
   - **Decision (Reset label):** Shortened "Reset All Settings to Default" → "Reset All" (fits the Danger Zone row). No test asserted the old label (the prompt-reset test uses `getAllByRole('button', { name: /reset to default/i })` which only ever matched the prompt's "Reset to Default" button — "Reset All Settings to Default" did not contain the substring "reset to default"). Test stayed green.
   - **Import hygiene:** Removing the Rate Limiting card made `Gauge` unused → swapped `Gauge` → `Braces` in the lucide import (Braces used by the elevated System Prompt card). `Wrench` now used by both SectionHeader and the Developer card.
 ---
+
+## [2026-07-06 14:48] - Phase 4: Hero Status Strip + Cache Readout (FR-3, FR-8)
+- **Implemented:** Hero strip above cards with live cache usage (`useCacheStats`: "X entries · Y.X MB", "…" while loading), `Braces` "Custom prompt" chip (`customSystemPrompt !== null`), `Bug` "Debug on" chip (`debugMode`). `handleClearCache` calls `cacheStats.refresh()` on success. 3 new tests (34 total).
+- **Files changed:** `entrypoints/options/sections/AdvancedSection.tsx`, `entrypoints/options/__tests__/AdvancedSection.test.tsx`.
+- **Learnings:**
+  - **Pattern (test-wide cacheManager mock):** Added a file-wide `vi.mock('@/services/cacheManager', () => ({ getCacheStats: vi.fn() }))` to `AdvancedSection.test.tsx` so `useCacheStats` doesn't hit real IndexedDB in jsdom. Default `vi.fn()` returns `undefined` → the hook's try/catch catches the `undefined.entryCount` TypeError → readout shows "0 entries · 0.0 MB". Harmless for the 31 pre-existing tests (none assert hero content); hero tests use `vi.mocked(getCacheStats).mockResolvedValue(...)` to drive the readout.
+  - **Pattern (hero ≠ master toggle):** Unlike Subtitles FR-1 (a master-enable hero), Advanced has no single enable, so the hero is a **status strip** (live readout + state chips) — an anchor with information density rather than a control. Matches the spec FR-3 decision.
+  - **Gotcha (useCallback dep):** `handleClearCache` gained `cacheStats.refresh` in its `useCallback` deps so the closure sees the stable refresh fn. `cacheStats.refresh` is stable (hook's `useCallback([load])`, `load` is `useCallback([])`), so no re-creation churn.
+---

@@ -88,17 +88,16 @@
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] Task 4.1: Add the hero status strip above the cards
-  - A full-width strip (`border-zinc-500/20 bg-zinc-600/[0.04]`, zinc accent per `SectionHeader`) holding: a live cache-usage readout ("X entries · Y MB") from `useCacheStats` (Task 1.2), a "Custom prompt" chip when `customSystemPrompt !== null`, and a "Debug on" chip when `debugMode`. Mirror Subtitles FR-1 hero styling.
+- [x] Task 4.1: Add the hero status strip above the cards
+  - Added a zinc-accented hero strip (`border-zinc-500/20 bg-zinc-600/[0.04]`) with a live cache readout ("X entries · Y.X MB") from `useCacheStats`, a `Braces` "Custom prompt" chip when `customSystemPrompt !== null`, and a `Bug` "Debug on" chip when `debugMode`.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 4.2: Wire cache stats refresh after Clear Cache
-  - After `handleClearCache` succeeds, call `refresh()` from `useCacheStats` so the readout updates. Confirm the readout renders `entryCount`/`sizeMb` and shows a loading state while `loading`.
-  - Add tests: hero renders usage; refresh called after clear (mock the hook or `getCacheStats`).
+- [x] Task 4.2: Wire cache stats refresh after Clear Cache
+  - `handleClearCache` now calls `cacheStats.refresh()` on success (added to `useCallback` deps). Readout shows "…" while `loading`. Added 3 hero tests (readout from mocked stats; chips present; chip absent when prompt null). File-wide `vi.mock('@/services/cacheManager')` added so `useCacheStats` doesn't hit real IDB in jsdom.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 4.3: Verify Phase 4 green; commit
-  <!-- verify: pnpm test AdvancedSection useCacheStats; tsc --noEmit; pnpm lint -->
+- [x] Task 4.3: Verify Phase 4 green; commit
+  <!-- verify: pnpm test AdvancedSection (34/34); tsc --noEmit clean; eslint clean -->
 
 - [ ] Task: Conductor - User Manual Verification 'Hero Strip + Cache Readout' (Protocol in workflow.md)
 

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AdvancedSection } from '../sections/AdvancedSection';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { getCacheStats } from '@/services/cacheManager';
 
 // Mock the settings store with selector support
 vi.mock('@/stores/settingsStore');
@@ -12,6 +13,11 @@ vi.mock('@/ui/ToastProvider', () => ({
     success: vi.fn(),
     error: vi.fn(),
   }),
+}));
+
+// Mock cacheManager so useCacheStats doesn't hit real IndexedDB in jsdom
+vi.mock('@/services/cacheManager', () => ({
+  getCacheStats: vi.fn(),
 }));
 
 describe('AdvancedSection - Cache Configuration', () => {
@@ -445,5 +451,68 @@ describe('AdvancedSection - Translation System Prompt (FR-9)', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ customSystemPrompt: null }),
     );
+  });
+});
+
+describe('AdvancedSection - Hero Status Strip (FR-3/FR-8)', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+  const mockResetToDefaults = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    maxBatchChars: 2000,
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below' as const,
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: 'custom prompt' as string | null,
+    debugMode: true,
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+    maxRpm: 0,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCacheStats).mockResolvedValue({ entryCount: 0, totalSizeBytes: 0 });
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+  });
+
+  it('renders the live cache usage readout from useCacheStats', async () => {
+    vi.mocked(getCacheStats).mockResolvedValue({ entryCount: 42, totalSizeBytes: 2 * 1024 * 1024 });
+    render(<AdvancedSection />);
+    expect(await screen.findByText(/42 entries/)).toBeInTheDocument();
+    expect(screen.getByText(/2\.0 MB/)).toBeInTheDocument();
+  });
+
+  it('shows Custom prompt + Debug on chips when those states are active', async () => {
+    render(<AdvancedSection />);
+    expect(await screen.findByText('Custom prompt')).toBeInTheDocument();
+    expect(screen.getByText('Debug on')).toBeInTheDocument();
+  });
+
+  it('hides the Custom prompt chip when the prompt is at default (null)', async () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, customSystemPrompt: null, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    // allow the cache readout to settle (mount effect) before asserting absence
+    await screen.findByText(/0 entries/);
+    expect(screen.queryByText('Custom prompt')).not.toBeInTheDocument();
   });
 });
