@@ -75,6 +75,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(none — 0 active tracks. 60 archived.)*
+- [ ] **Subtitles Settings — UX Refactor** (`subtitles-ux-refactor_20260706`) — 🟠 High. Refactor the Settings → Subtitles tab for better structure, clarity, and visual polish: master-enable header strip, merged subgroups, data-driven translation knobs, override-state visibility, exposed translation timeout, Supported Sites redesign (friendly labels + per-platform icons + separated Generic fallback), component extraction, accent/preview polish. Pure presentation refactor — no behavior/setting-model changes. 5 phases, 17 tasks. Driven by a 15-point deep analysis. [View](./conductor/tracks/subtitles-ux-refactor_20260706/)
 
 ---
