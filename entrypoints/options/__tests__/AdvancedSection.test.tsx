@@ -181,6 +181,16 @@ describe('AdvancedSection - Cache Configuration', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith({ enableLLMPageCategoryDetection: true });
   });
 
+  it('disables the LLM-detection toggle when Context-Aware Translation is off (a11y)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...mockSettings, enableContextAwareTranslation: false, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    const toggle = screen.getByRole('switch', { name: /LLM-based Page Category Detection/i });
+    expect(toggle).toBeDisabled();
+  });
+
   it('renders Context-Aware Translation toggle', () => {
     render(<AdvancedSection />);
     expect(screen.getByText('Context-Aware Translation')).toBeInTheDocument();

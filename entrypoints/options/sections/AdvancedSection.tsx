@@ -15,7 +15,9 @@ import { Modal } from '@/ui/Modal';
 import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 import { FieldGroup } from '@/ui/FieldGroup';
+import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { useToast } from '@/ui/ToastProvider';
+import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
@@ -31,14 +33,18 @@ export function AdvancedSection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
 
-  // Cache configuration local state
-  const [cacheTTL, setCacheTTL] = useState(settings.cacheTTLDays);
-  const [maxCacheSize, setMaxCacheSize] = useState(settings.maxCacheSizeMB);
-  const [maxBatchChars, setMaxBatchChars] = useState(settings.maxBatchChars);
+  // Cache configuration — commit-on-blur via useDeferredCommit (FR-9).
+  // onCommit is just the store write; range validation + error state live in
+  // the blur wrappers below. Per-field success toasts are dropped (the sidebar
+  // "Auto-saved" badge already confirms every store write), matching the
+  // providers-ux-refactor deferred-commit pattern.
+  const ttlField = useDeferredCommit(settings.cacheTTLDays, (v) => updateSettings({ cacheTTLDays: v }));
+  const maxCacheField = useDeferredCommit(settings.maxCacheSizeMB, (v) => updateSettings({ maxCacheSizeMB: v }));
+  const maxBatchField = useDeferredCommit(settings.maxBatchChars, (v) => updateSettings({ maxBatchChars: v }));
+  const maxRpmField = useDeferredCommit(settings.maxRpm ?? 0, (v) => updateSettings({ maxRpm: v }));
   const [cacheTTLError, setCacheTTLError] = useState('');
   const [maxCacheSizeError, setMaxCacheSizeError] = useState('');
   const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
-  const [maxRpm, setMaxRpm] = useState(settings.maxRpm ?? 0);
   const [maxRpmError, setMaxRpmError] = useState('');
 
   // FR-9: Global System Prompt editor relocated here from the Providers tab
@@ -151,66 +157,47 @@ export function AdvancedSection() {
     showSuccess('All settings reset to defaults');
   }, [resetToDefaults, showSuccess]);
 
-  // Sync local state with settings
-  useEffect(() => {
-    setCacheTTL(settings.cacheTTLDays);
-    setMaxCacheSize(settings.maxCacheSizeMB);
-    setMaxBatchChars(settings.maxBatchChars);
-    setMaxRpm(settings.maxRpm ?? 0);
-  }, [settings.cacheTTLDays, settings.maxCacheSizeMB, settings.maxBatchChars, settings.maxRpm]);
-
-  // Cache configuration handlers
-  const handleCacheTTLBlur = useCallback(() => {
-    const value = Number(cacheTTL);
+  // Cache configuration blur handlers — validate, set/clear error, then commit
+  // (useDeferredCommit handles the dirty-check + external sync on reset/import).
+  const handleCacheTTLBlur = () => {
+    const value = Number(ttlField.value);
     if (value < 1 || value > 365) {
       setCacheTTLError('Must be between 1 and 365 days');
       return;
     }
     setCacheTTLError('');
-    if (value !== settings.cacheTTLDays) {
-      updateSettings({ cacheTTLDays: value });
-      showSuccess('Cache TTL updated');
-    }
-  }, [cacheTTL, settings.cacheTTLDays, updateSettings, showSuccess]);
+    ttlField.commit();
+  };
 
-  const handleMaxCacheSizeBlur = useCallback(() => {
-    const value = Number(maxCacheSize);
+  const handleMaxCacheSizeBlur = () => {
+    const value = Number(maxCacheField.value);
     if (value < 10 || value > 1000) {
       setMaxCacheSizeError('Must be between 10 and 1000 MB');
       return;
     }
     setMaxCacheSizeError('');
-    if (value !== settings.maxCacheSizeMB) {
-      updateSettings({ maxCacheSizeMB: value });
-      showSuccess('Max cache size updated');
-    }
-  }, [maxCacheSize, settings.maxCacheSizeMB, updateSettings, showSuccess]);
+    maxCacheField.commit();
+  };
 
-  const handleMaxBatchCharsBlur = useCallback(() => {
-    const value = Number(maxBatchChars);
+  const handleMaxBatchCharsBlur = () => {
+    const value = Number(maxBatchField.value);
     if (value < 500 || value > 10000) {
       setMaxBatchCharsError('Must be between 500 and 10000 characters');
       return;
     }
     setMaxBatchCharsError('');
-    if (value !== settings.maxBatchChars) {
-      updateSettings({ maxBatchChars: value });
-      showSuccess('Max batch characters updated');
-    }
-  }, [maxBatchChars, settings.maxBatchChars, updateSettings, showSuccess]);
+    maxBatchField.commit();
+  };
 
-  const handleMaxRpmBlur = useCallback(() => {
-    const value = Number(maxRpm);
+  const handleMaxRpmBlur = () => {
+    const value = Number(maxRpmField.value);
     if (!Number.isInteger(value) || value < 0 || value > 600) {
       setMaxRpmError('Must be an integer between 0 and 600 (0 = unlimited)');
       return;
     }
     setMaxRpmError('');
-    if (value !== (settings.maxRpm ?? 0)) {
-      updateSettings({ maxRpm: value });
-      showSuccess('Max RPM updated');
-    }
-  }, [maxRpm, settings.maxRpm, updateSettings, showSuccess]);
+    maxRpmField.commit();
+  };
 
   return (
     <div className="animate-fade-in-up">
@@ -234,8 +221,8 @@ export function AdvancedSection() {
                 <Input
                   id="cache-ttl-input"
                   type="number"
-                  value={cacheTTL}
-                  onChange={(e) => setCacheTTL(Number(e.target.value))}
+                  value={ttlField.value}
+                  onChange={(e) => ttlField.setValue(Number(e.target.value))}
                   onBlur={handleCacheTTLBlur}
                   min={1}
                   max={365}
@@ -250,8 +237,8 @@ export function AdvancedSection() {
                 <Input
                   id="max-cache-size-input"
                   type="number"
-                  value={maxCacheSize}
-                  onChange={(e) => setMaxCacheSize(Number(e.target.value))}
+                  value={maxCacheField.value}
+                  onChange={(e) => maxCacheField.setValue(Number(e.target.value))}
                   onBlur={handleMaxCacheSizeBlur}
                   min={10}
                   max={1000}
@@ -266,8 +253,8 @@ export function AdvancedSection() {
                 <Input
                   id="max-batch-chars-input"
                   type="number"
-                  value={maxBatchChars}
-                  onChange={(e) => setMaxBatchChars(Number(e.target.value))}
+                  value={maxBatchField.value}
+                  onChange={(e) => maxBatchField.setValue(Number(e.target.value))}
                   onBlur={handleMaxBatchCharsBlur}
                   min={500}
                   max={10000}
@@ -299,14 +286,14 @@ export function AdvancedSection() {
               <Input
                 id="max-rpm-input"
                 type="number"
-                value={maxRpm}
-                onChange={(e) => setMaxRpm(Number(e.target.value))}
+                value={maxRpmField.value}
+                onChange={(e) => maxRpmField.setValue(Number(e.target.value))}
                 onBlur={handleMaxRpmBlur}
                 min={0}
                 max={600}
                 error={maxRpmError}
               />
-              {maxRpm === 0 && !maxRpmError && (
+              {maxRpmField.value === 0 && !maxRpmError && (
                 <p className="text-xs text-zinc-500 mt-1">(unlimited)</p>
               )}
             </FieldGroup>
@@ -325,11 +312,15 @@ export function AdvancedSection() {
                 description="Inject page title, description, and domain into translation prompts for more consistent terminology."
               />
               
-              <div className={`pt-4 border-t border-zinc-800 space-y-4 ${!settings.enableContextAwareTranslation ? 'opacity-40 pointer-events-none' : ''}`}>
+              <DisabledDimmer
+                disabled={!settings.enableContextAwareTranslation}
+                className="pt-4 border-t border-zinc-800 space-y-4"
+              >
                 <Toggle
                   id="page-category-detection-toggle"
                   checked={settings.enableLLMPageCategoryDetection}
                   onChange={(checked) => updateSettings({ enableLLMPageCategoryDetection: checked })}
+                  disabled={!settings.enableContextAwareTranslation}
                   label="LLM-based Page Category Detection"
                   description="Auto-detect page topic using LLM for better terminology. Requires background API call."
                 />
@@ -341,6 +332,7 @@ export function AdvancedSection() {
                         id="llm-category-mode-select"
                         value={settings.llmCategoryDetectionMode}
                         onChange={(e) => updateSettings({ llmCategoryDetectionMode: e.target.value as 'async' | 'blocking' })}
+                        disabled={!settings.enableContextAwareTranslation}
                         options={[
                           { value: 'async', label: 'Async (No delay, progressive context upgrade)' },
                           { value: 'blocking', label: 'Blocking (Wait for exact context before first translation)' },
@@ -349,7 +341,7 @@ export function AdvancedSection() {
                     </FieldGroup>
                   </div>
                 )}
-              </div>
+              </DisabledDimmer>
             </div>
           </Card>
         </div>
