@@ -349,6 +349,7 @@ export function AdvancedSection() {
                   min={1}
                   max={365}
                   error={cacheTTLError}
+                  hint="1–365 days"
                 />
               </FieldGroup>
               <FieldGroup
@@ -365,6 +366,7 @@ export function AdvancedSection() {
                   min={10}
                   max={1000}
                   error={maxCacheSizeError}
+                  hint="10–1000 MB"
                 />
               </FieldGroup>
               <FieldGroup
@@ -381,6 +383,7 @@ export function AdvancedSection() {
                   min={500}
                   max={10000}
                   error={maxBatchCharsError}
+                  hint="500–10000 chars"
                 />
               </FieldGroup>
               <div className="border-t border-zinc-800 pt-5">
@@ -398,9 +401,10 @@ export function AdvancedSection() {
                     min={0}
                     max={600}
                     error={maxRpmError}
+                    hint="0–600 rpm"
                   />
                   {maxRpmField.value === 0 && !maxRpmError && (
-                    <p className="text-xs text-zinc-500 mt-1">(unlimited)</p>
+                    <Badge variant="info" className="mt-1">Unlimited</Badge>
                   )}
                 </FieldGroup>
               </div>
@@ -502,24 +506,39 @@ export function AdvancedSection() {
               </FieldGroup>
 
               {settings.pdfSettings?.autoOpen && settings.pdfSettings.autoOpen !== 'off' && (
-                <FieldGroup
-                  label="Never auto-open these sites"
-                  description="Comma-separated hostnames. Auto-open is suppressed for these even when enabled above."
-                  htmlFor="pdf-never-open-input"
-                >
-                  <Input
-                    id="pdf-never-open-input"
-                    type="text"
-                    placeholder="example.com, arxiv.org"
-                    value={(settings.pdfSettings?.neverAutoOpenSites ?? []).join(', ')}
-                    onChange={(e) => updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
-                        neverAutoOpenSites: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                      },
-                    })}
-                  />
-                </FieldGroup>
+                <div className="animate-fade-in-up" aria-live="polite">
+                  <FieldGroup
+                    label="Never auto-open these sites"
+                    description="Comma-separated hostnames. Auto-open is suppressed for these even when enabled above."
+                    htmlFor="pdf-never-open-input"
+                  >
+                    <Input
+                      id="pdf-never-open-input"
+                      type="text"
+                      placeholder="example.com, arxiv.org"
+                      value={(settings.pdfSettings?.neverAutoOpenSites ?? []).join(', ')}
+                      onChange={(e) => updateSettings({
+                        pdfSettings: {
+                          ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
+                          neverAutoOpenSites: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                        },
+                      })}
+                    />
+                    {(settings.pdfSettings?.neverAutoOpenSites ?? []).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="text-xs text-zinc-500">Will skip:</span>
+                        {(settings.pdfSettings?.neverAutoOpenSites ?? []).map((host) => (
+                          <span
+                            key={host}
+                            className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-400"
+                          >
+                            {host}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </FieldGroup>
+                </div>
               )}
             </div>
           </Card>

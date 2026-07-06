@@ -297,6 +297,32 @@ describe('AdvancedSection - PDF Translator', () => {
       pdfSettings: { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] },
     });
   });
+
+  it('renders the never-open field inside an aria-live region when auto-open is on (FR-6)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, pdfSettings: { ...baseSettings.pdfSettings, autoOpen: 'auto' as const } };
+      if (typeof selector === 'function') return selector({ ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      return { ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+    render(<AdvancedSection />);
+    expect(screen.getByLabelText('Never auto-open these sites')).toBeInTheDocument();
+    expect(document.querySelector('[aria-live="polite"]')).toBeTruthy();
+  });
+
+  it('renders parsed-host preview chips for never-open sites (FR-6)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = {
+        ...baseSettings,
+        pdfSettings: { ...baseSettings.pdfSettings, autoOpen: 'auto' as const, neverAutoOpenSites: ['arxiv.org', 'example.com'] },
+      };
+      if (typeof selector === 'function') return selector({ ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults });
+      return { ...s, updateSettings: mockUpdateSettings, resetToDefaults: mockResetToDefaults };
+    });
+    render(<AdvancedSection />);
+    expect(screen.getByText('Will skip:')).toBeInTheDocument();
+    expect(screen.getByText('arxiv.org')).toBeInTheDocument();
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
 });
 
 describe('AdvancedSection - Rate Limiting', () => {
@@ -344,7 +370,7 @@ describe('AdvancedSection - Rate Limiting', () => {
     expect(screen.getByLabelText('Max requests per minute')).toBeInTheDocument();
     const input = screen.getByLabelText('Max requests per minute') as HTMLInputElement;
     expect(input.value).toBe('0');
-    expect(screen.getByText('(unlimited)')).toBeInTheDocument();
+    expect(screen.getByText('Unlimited')).toBeInTheDocument();
   });
 
   it('writes valid value on blur', () => {

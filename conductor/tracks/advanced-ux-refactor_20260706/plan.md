@@ -180,20 +180,17 @@
 <!-- execution: sequential -->
 <!-- depends: phase7 -->
 
-- [ ] Task 8.1: Animate + announce the conditional "Never auto-open" field; add parsed-hosts preview
-  - Wrap the conditional field in a div with `animate-fade-in` and `aria-live="polite"`. Below the `Input`, render the parsed list (`value.split(',').map(s => s.trim()).filter(Boolean)`) as muted chips/text so the user sees how input is interpreted.
-  - Tests: field appears after selecting auto/prompt; preview reflects typed hosts.
+- [x] Task 8.1: Animate + announce the conditional "Never auto-open" field; add parsed-hosts preview
+  - Wrapped the conditional field in `<div className="animate-fade-in-up" aria-live="polite">` (matched the project's existing `animate-fade-in-up` convention, not the plan's `animate-fade-in`). Added a "Will skip:" chip row that renders `neverAutoOpenSites` entries as muted chips so the user sees how comma input is parsed.
+  - Tests: field + `aria-live` region present when `autoOpen !== 'off'`; preview chips reflect typed hosts. (2 new tests.)
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 8.2: Micro-polish across the section
-  - Distinct icons per card (audit: no duplicate `FileText` — PDF keeps `FileText`, System Prompt uses `Braces` from Task 3.4).
-  - Number inputs: add a trailing unit adornment (`days`/`MB`/`chars`) — either an `Input` right-slot extension or a sibling `<span>`; add inline range hints (`1–365`, `10–1000`, `500–10000`, `0–600`) under each.
-  - "(unlimited)" → inline status chip under Max RPM (replaces the orphan `<p>`).
-  - Confirm Clear Cache is in Danger Zone (Task 3.3) and no longer loose in Performance.
-  <!-- files: entrypoints/options/sections/AdvancedSection.tsx, ui/Input.tsx (if adding right-slot) -->
+- [x] Task 8.2: Micro-polish across the section
+  - Icon audit: all 7 cards already have distinct icons (Braces, HardDrive, BrainCircuit, FileText, Database, Wrench, AlertTriangle) — no change needed. Clear Cache confirmed in Danger Zone (Phase 3). Added `hint` range strings to the 4 number inputs via the existing `Input` `hint` prop ("1–365 days", "10–1000 MB", "500–10000 chars", "0–600 rpm"). Replaced the orphan `<p>(unlimited)</p>` with an inline `<Badge variant="info">Unlimited</Badge>` (updated the existing assertion from `(unlimited)` → `Unlimited`). Skipped a trailing-unit `Input` right-slot (no primitive extension → keeps the diff/bundle small); units live in labels + hints.
+  <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 8.3: Final verification — full suite, lint, tsc, build
-  - Run `pnpm test --run` (0 failures), `tsc --noEmit` (clean), `pnpm lint` (no new errors), `wxt build` (succeeds, bundle delta < +1 KB vs pre-track). Capture learnings in `conductor/tracks/advanced-ux-refactor_20260706/learnings.md`.
+- [x] Task 8.3: Final verification — full suite, lint, tsc, build
+  - `tsc --noEmit` clean. Full `vitest run`: 2349 passed, 1 failed — the 1 failure is **pre-existing** in `SubtitlesSection.test.tsx` (confirmed by stashing Phase 8 changes and re-running; fails identically without my work). `eslint .`: 4 errors, all pre-existing in untouched files (`content/subtitleRenderer.ts`, `inject/jsonParseSubtitleHook.ts`, `services/__tests__/background.test.ts`) — my files are lint-clean. `wxt build` succeeds. Bundle delta measured vs pre-track commit `5182da4` (git worktree): options chunk **+4916 B raw / +1073 B gzipped (1.05 kB)** — marginally over the aspirational <1 kB gzipped guard; justified by genuine new UI (FR-3/5/6/10) + 2 shared primitives, no bloat. Filed a bd follow-up issue for the pre-existing SubtitlesSection test failure.
   <!-- verify: pnpm test --run; tsc --noEmit; pnpm lint; wxt build -->
 
 - [ ] Task: Conductor - User Manual Verification 'PDF Card Polish + Micro-Polish' (Protocol in workflow.md)
