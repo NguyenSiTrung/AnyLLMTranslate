@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AdvancedSection } from '../sections/AdvancedSection';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getCacheStats } from '@/services/cacheManager';
@@ -7,11 +7,15 @@ import { getCacheStats } from '@/services/cacheManager';
 // Mock the settings store with selector support
 vi.mock('@/stores/settingsStore');
 
-// Mock ToastProvider
+// Mock ToastProvider with stable refs so tests can assert on toast messages.
+const { mockToastSuccess, mockToastError } = vi.hoisted(() => ({
+  mockToastSuccess: vi.fn(),
+  mockToastError: vi.fn(),
+}));
 vi.mock('@/ui/ToastProvider', () => ({
   useToast: () => ({
-    success: vi.fn(),
-    error: vi.fn(),
+    success: mockToastSuccess,
+    error: mockToastError,
   }),
 }));
 
@@ -561,5 +565,115 @@ describe('AdvancedSection - Hero Status Strip (FR-3/FR-8)', () => {
     // allow the cache readout to settle (mount effect) before asserting absence
     await screen.findByText(/0 entries/);
     expect(screen.queryByText('Custom prompt')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdvancedSection - Data Portability (FR-10, FR-11)', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+  const mockResetToDefaults = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below',
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: null,
+    maxBatchChars: 2000,
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    debugMode: false,
+    customTheme: null,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    llmCategoryDetectionMode: 'off',
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    inlineTranslate: false,
+    enableSmartExcludes: true,
+    maxRpm: 0,
+    pdfSettings: { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] },
+    updateSettings: mockUpdateSettings,
+    resetToDefaults: mockResetToDefaults,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCacheStats).mockResolvedValue({ entryCount: 0, totalSizeBytes: 0 });
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      if (typeof selector === 'function') return selector(baseSettings);
+      return baseSettings;
+    });
+  });
+
+  it('shows a pre-export cleartext-API-key callout when a key is set (FR-10)', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText(/API key in cleartext/i)).toBeInTheDocument();
+  });
+
+  it('hides the pre-export callout when no API key is set (FR-10)', () => {
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      const s = { ...baseSettings, provider: { ...baseSettings.provider, apiKey: '' } };
+      return typeof selector === 'function' ? selector(s) : s;
+    });
+    render(<AdvancedSection />);
+    expect(screen.queryByText(/API key in cleartext/i)).not.toBeInTheDocument();
+  });
+
+  it('derives the export payload from the PORTABLE_KEYS allowlist (FR-11)', async () => {
+    let capturedBlob: Blob | undefined;
+    // jsdom does not implement URL.createObjectURL/revokeObjectURL; install fakes.
+    const createMock = vi.fn((obj: Blob | MediaSource) => {
+      capturedBlob = obj as Blob;
+      return 'blob:fake';
+    });
+    Object.defineProperty(URL, 'createObjectURL', { value: createMock, configurable: true, writable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true, writable: true });
+    const clickSpy = vi.spyOn(HTMLElement.prototype, 'click').mockImplementation(() => {});
+
+    try {
+      render(<AdvancedSection />);
+      fireEvent.click(screen.getByRole('button', { name: 'Export Settings' }));
+
+      expect(capturedBlob).toBeDefined();
+      const text = await (capturedBlob as Blob).text();
+      const json = JSON.parse(text);
+      expect(Object.keys(json)).toEqual([
+        'provider', 'sourceLanguage', 'targetLanguage', 'displayMode', 'theme',
+        'translationPosition', 'darkMode', 'siteRules', 'glossary', 'subtitleSettings',
+        'customSystemPrompt', 'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
+        'debugMode', 'customTheme', 'enableContextAwareTranslation',
+        'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
+        'textSelectionEnabled', 'hoverTranslateEnabled', 'hoverDelay',
+        'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
+      ]);
+    } finally {
+      clickSpy.mockRestore();
+      delete (URL as Partial<typeof URL>).createObjectURL;
+      delete (URL as Partial<typeof URL>).revokeObjectURL;
+    }
+  });
+
+  it('reports ignored unknown keys after import (FR-11)', async () => {
+    render(<AdvancedSection />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(
+      [JSON.stringify({ targetLanguage: 'de', bogusKey1: 'x', bogusKey2: 'y' })],
+      'settings.json',
+      { type: 'application/json' },
+    );
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(mockUpdateSettings).toHaveBeenCalled());
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      expect.stringContaining('ignored 2 unknown key(s)'),
+    );
   });
 });

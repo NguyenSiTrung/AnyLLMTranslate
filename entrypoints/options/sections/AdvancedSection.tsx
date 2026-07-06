@@ -27,6 +27,22 @@ import {
   validatePromptTemplate,
 } from '@/services/base';
 
+/**
+ * FR-11 — portable-settings allowlist. Only these keys are written to the
+ * export file. Derived (not hand-listed inline) so the payload can't silently
+ * drift from the settings shape; keep this list equal to the keys exported
+ * historically to preserve byte-identical JSON for existing keys (NFR-1).
+ */
+const PORTABLE_KEYS = [
+  'provider', 'sourceLanguage', 'targetLanguage', 'displayMode', 'theme',
+  'translationPosition', 'darkMode', 'siteRules', 'glossary', 'subtitleSettings',
+  'customSystemPrompt', 'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
+  'debugMode', 'customTheme', 'enableContextAwareTranslation',
+  'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
+  'textSelectionEnabled', 'hoverTranslateEnabled', 'hoverDelay',
+  'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
+] as const;
+
 export function AdvancedSection() {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -85,33 +101,9 @@ export function AdvancedSection() {
   };
 
   const handleExportSettings = useCallback(() => {
-    const exportData = {
-      provider: settings.provider,
-      sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      displayMode: settings.displayMode,
-      theme: settings.theme,
-      translationPosition: settings.translationPosition,
-      darkMode: settings.darkMode,
-      siteRules: settings.siteRules,
-      glossary: settings.glossary,
-      subtitleSettings: settings.subtitleSettings,
-      customSystemPrompt: settings.customSystemPrompt,
-      maxBatchChars: settings.maxBatchChars,
-      cacheTTLDays: settings.cacheTTLDays,
-      maxCacheSizeMB: settings.maxCacheSizeMB,
-      debugMode: settings.debugMode,
-      customTheme: settings.customTheme,
-      enableContextAwareTranslation: settings.enableContextAwareTranslation,
-      enableLLMPageCategoryDetection: settings.enableLLMPageCategoryDetection,
-      llmCategoryDetectionMode: settings.llmCategoryDetectionMode,
-      textSelectionEnabled: settings.textSelectionEnabled,
-      hoverTranslateEnabled: settings.hoverTranslateEnabled,
-      hoverDelay: settings.hoverDelay,
-      inlineTranslate: settings.inlineTranslate,
-      enableSmartExcludes: settings.enableSmartExcludes,
-      maxRpm: settings.maxRpm,
-    };
+    const exportData = Object.fromEntries(
+      PORTABLE_KEYS.map((k) => [k, settings[k]]),
+    );
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -137,19 +129,32 @@ export function AdvancedSection() {
       // P2 security: guard against prototype pollution. JSON.parse alone does NOT
       // set __proto__ on a plain object literal, but a crafted payload with a
       // "__proto__"/"constructor"/"prototype" key survives the spread below and
-      // can pollute Object.prototype. Strip them before merging.
+      // can pollute Object.prototype. Strip them (silently) before merging.
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         throw new Error('Settings file must be a JSON object');
       }
       const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-      const sanitized: Record<string, unknown> = {};
+      const knownKeys = new Set(Object.keys(DEFAULT_SETTINGS));
+      const recognized: Record<string, unknown> = {};
+      const ignored: string[] = [];
       for (const [key, value] of Object.entries(parsed)) {
         if (FORBIDDEN_KEYS.has(key)) continue;
-        sanitized[key] = value;
+        if (knownKeys.has(key)) {
+          recognized[key] = value;
+        } else {
+          ignored.push(key);
+        }
       }
-      const merged = { ...DEFAULT_SETTINGS, ...sanitized };
+      const merged = { ...DEFAULT_SETTINGS, ...recognized };
       await updateSettings(merged);
-      showSuccess('Settings imported successfully!');
+      // FR-11: surface unknown keys so users notice a partial/partially-stale import.
+      if (ignored.length > 0) {
+        showSuccess(
+          `Imported ${Object.keys(recognized).length} settings; ignored ${ignored.length} unknown key(s): ${ignored.join(', ')}`,
+        );
+      } else {
+        showSuccess('Settings imported successfully!');
+      }
     } catch {
       showError('Failed to import settings. Invalid JSON file.');
     }
@@ -552,6 +557,15 @@ export function AdvancedSection() {
                 }}
               />
             </div>
+            {settings.provider?.apiKey && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-400 text-xs mt-3">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Your export will include the provider API key in cleartext.
+                  Treat the file as a secret and don't share it.
+                </span>
+              </div>
+            )}
           </Card>
         </div>
 

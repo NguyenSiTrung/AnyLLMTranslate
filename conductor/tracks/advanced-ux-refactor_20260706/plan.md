@@ -153,23 +153,24 @@
 <!-- execution: sequential -->
 <!-- depends: phase6 -->
 
-- [ ] Task 7.1: Pre-export API-key-cleartext callout
-  - Add an amber callout under the Export button: "Export includes your API key in cleartext — keep the file private." Keep the post-click toast (success vs error-on-apikey-present). Callout uses the NFR-5 token pattern (`bg-amber-500/10 text-amber-400` + `AlertTriangle`).
+- [x] Task 7.1: Pre-export API-key-cleartext callout
+  - Added an amber callout (`border-amber-500/30 bg-amber-500/10 text-amber-400` + `AlertTriangle`) below the Export/Import button row, shown only when `settings.provider?.apiKey` is set. Post-click cleartext toast kept.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 7.2: Derive export payload from `DEFAULT_SETTINGS` keys
-  - Replace the hand-listed 28-key export object with an allowlisted derivation: `const PORTABLE_KEYS = [...]; const exportData = Object.fromEntries(PORTABLE_KEYS.map(k => [k, settings[k]]))` (or `pick(settings, PORTABLE_KEYS)`). Keep the exact same key set as today to preserve byte-identical output for existing keys (NFR-1). Add a comment that this list is the portable allowlist.
+- [x] Task 7.2: Derive export payload from `PORTABLE_KEYS` allowlist
+  - Added a module-level `PORTABLE_KEYS` tuple (25 keys, same order as the old hand-listed object). Export now `Object.fromEntries(PORTABLE_KEYS.map(k => [k, settings[k]]))` — byte-identical JSON for existing keys (NFR-1), no per-key drift.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 7.3: Report unknown/ignored keys after import
-  - In `handleImportSettings`, after sanitizing, compute `const known = new Set(Object.keys(DEFAULT_SETTINGS)); const ignored = Object.keys(sanitized).filter(k => !known.has(k));`. Toast: `Imported ${applied} settings${ignored.length ? `, ignored ${ignored.length} unknown key(s)` : ''}`. Keep the prototype-pollution guard.
+- [x] Task 7.3: Report unknown/ignored keys after import
+  - `handleImportSettings` now splits sanitized entries into `recognized` (in `DEFAULT_SETTINGS`) vs `ignored`; merges only `recognized` (so "ignored" is truthful — unknown keys are NOT applied), keeps the prototype-pollution guard, and toasts `Imported N settings; ignored M unknown key(s): …` when `ignored.length > 0`.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
 
-- [ ] Task 7.4: Tests — callout renders; export derives correct keys; import reports ignored keys
+- [x] Task 7.4: Tests — callout present/absent; export derives correct 25 keys (in order); import reports ignored keys
+  - Refactored the `ToastProvider` mock to `vi.hoisted` stable refs (`mockToastSuccess`/`mockToastError`) so the import toast is assertable. 4 new tests (43 total). Export test installs `URL.createObjectURL`/`revokeObjectURL` fakes via `Object.defineProperty` (jsdom lacks them) and reads the captured `Blob.text()` to assert the exact key list.
   <!-- files: entrypoints/options/__tests__/AdvancedSection.test.tsx -->
 
-- [ ] Task 7.5: Verify Phase 7 green; commit
-  <!-- verify: pnpm test AdvancedSection; tsc --noEmit; pnpm lint -->
+- [x] Task 7.5: Verify Phase 7 green; commit
+  <!-- verify: pnpm test AdvancedSection (43/43); tsc --noEmit clean; eslint clean -->
 
 - [ ] Task: Conductor - User Manual Verification 'Data Portability Safety + Export Derivation' (Protocol in workflow.md)
 
