@@ -24,7 +24,7 @@
   - Add `entrypoints/options/hooks/__tests__/useCacheStats.test.ts` (mock `cacheManager.getCacheStats`, assert initial load + refresh). Note `vitest.config.ts` `environmentMatchGlobs` must cover `entrypoints/options/hooks/**` (jsdom) — verify/add if the first hook test here fails with "document is not defined" (gotcha from `providers-ux-refactor`).
   <!-- files: entrypoints/options/hooks/useCacheStats.ts, entrypoints/options/hooks/__tests__/useCacheStats.test.ts, vitest.config.ts -->
 
-- [ ] Task 1.3: Verify Phase 1 compiles + tests green; commit
+- [x] Task 1.3: Verify Phase 1 compiles + tests green; commit
   <!-- verify: pnpm test ui entrypoints/options/hooks; tsc --noEmit -->
 
 - [ ] Task: Conductor - User Manual Verification 'Shared Primitives & Helpers' (Protocol in workflow.md)
@@ -35,18 +35,21 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 2.1: Migrate the 4 number inputs to `useDeferredCommit`
-  - Replace the 4× (`useState` + sync `useEffect` + blur handler) blocks for `cacheTTLDays`, `maxCacheSizeMB`, `maxBatchChars`, `maxRpm` with `useDeferredCommit<number>(settings.X, (v) => commitWithValidation(v))`. Keep range validation inside the commit callback (set error + skip `updateSettings` if out of range). Delete the manual sync `useEffect` (the hook syncs on `initial` change — covers reset/import per the `cache-settings-ui` pattern).
-  - Adjust `AdvancedSection.test.tsx`: blur-still-commits assertions stay valid; remove any assertion on the removed sync effect.
+- [x] Task 2.1: Migrate the 4 number inputs to `useDeferredCommit`
+  - Replaced the 4× (`useState` + sync `useEffect` + `useCallback` blur handler) blocks with `useDeferredCommit(settings.X, (v) => updateSettings({ X: v }))`. Validation lives in thin blur wrappers (set/clear error, `commit()` only if valid); `onCommit` is just the store write. Deleted the manual sync `useEffect` (the hook syncs on `initial` change). Dropped per-field success toasts (sidebar "Auto-saved" badge covers it) — matches providers-ux-refactor.
+  - Existing blur-still-commits / error assertions stayed valid unchanged.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
+  Commit: 2f34b38
 
-- [ ] Task 2.2: Replace inline dimmer with `DisabledDimmer`; pass `disabled` to inner controls (a11y fix)
-  - In the Context & Intelligence card, replace `<div className={... 'opacity-40 pointer-events-none' ...}>` with `<DisabledDimmer disabled={!settings.enableContextAwareTranslation}>`. Pass `disabled={!settings.enableContextAwareTranslation}` to the LLM-detection `Toggle` and the Detection Mode `Select`. This fixes the a11y defect (NFR-4): today the dimmed controls remain keyboard-operable.
-  - Add a test: when Context-Aware is off, the LLM-detection toggle is `disabled` (query by role + assert `disabled`/`aria-disabled`), not merely visually dimmed.
+- [x] Task 2.2: Replace inline dimmer with `DisabledDimmer`; pass `disabled` to inner controls (a11y fix)
+  - Replaced the inline `opacity-40 pointer-events-none` div with `<DisabledDimmer disabled={!settings.enableContextAwareTranslation} className="pt-4 border-t border-zinc-800 space-y-4">`; passed `disabled={!settings.enableContextAwareTranslation}` to the LLM-detection `Toggle` and the Detection Mode `Select`. Fixes NFR-4 a11y defect (dimmed controls were keyboard-operable).
+  - Added test: when Context-Aware is off, the LLM-detection toggle is `toBeDisabled()`.
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
+  Commit: 2f34b38
 
-- [ ] Task 2.3: Verify Phase 2 green; commit
-  <!-- verify: pnpm test AdvancedSection; tsc --noEmit; pnpm lint -->
+- [x] Task 2.3: Verify Phase 2 green; commit
+  <!-- verify: pnpm test AdvancedSection (31/31); tsc --noEmit clean; eslint clean -->
+  Commit: 2f34b38
 
 - [ ] Task: Conductor - User Manual Verification 'DRY Migration + a11y fix' (Protocol in workflow.md)
 

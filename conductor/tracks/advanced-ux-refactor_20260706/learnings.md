@@ -1,0 +1,41 @@
+# Track Learnings: advanced-ux-refactor_20260706
+
+Patterns, gotchas, and context discovered during implementation.
+
+## Codebase Patterns (Inherited)
+
+Read `conductor/patterns.md` for full project patterns. Key ones for this track:
+
+- **Settings section shape:** `<SectionHeader>` + a `space-y-4` stack of `<Card variant="bordered">` blocks, each wrapped in `<div className="animate-stagger" style={stagger(N)}>` with unique ascending N.
+- **Shared UI primitives** live in `ui/*` (`Card`, `FieldGroup`, `Toggle`, `Slider`, `SegmentedControl`, `Select`, `Input`, `Button`, `Modal`, `Badge`, `AdvancedDisclosure`, `DisabledDimmer`). Reuse over reinventing.
+- **`useDeferredCommit(initial, onCommit)`** (`entrypoints/options/hooks/useDeferredCommit.ts`) generalizes commit-on-blur; syncs local state when upstream `initial` changes (reset/import). Built in `providers-ux-refactor` FR-10.
+- **`DisabledDimmer`** (`ui/DisabledDimmer.tsx`): visual dim + `pointer-events-none`; inner controls MUST carry their own `disabled` (it does NOT set `aria-hidden`) — built in `subtitles-ux-refactor` FR-8.
+- **`getCacheStats()`** already exists in `services/cacheManager.ts` → `{ entryCount, totalSizeBytes }` (reads idb-keyval `entries()`). Options page runs in extension context so the cacheManager can be imported directly (no background message needed).
+- **Card title + inline Badge:** `Card` only accepts a string `title`; to put a `Badge` inline, render the card untitled and emit a manual `<h3 className="text-sm font-semibold text-zinc-200">` + badge as the first child (Subtitles FR-4 pattern).
+- **`.beads/` is gitignored** — Beads data syncs via `bd dolt push`, NOT `git add`. Never `git add .beads/`.
+- **pnpm** not global on this machine — `npx vitest` / `npx tsc` / `npx eslint` work directly via local devDeps.
+
+---
+
+## [2026-07-06 14:26] - Phase 1: Shared Primitives & Helpers
+- **Implemented:** `ui/Textarea.tsx` (multiline input mirroring `Input` API: error/hint/mono/rows, extracted from the prompt editor's hand-rolled classes) + `ui/__tests__/Textarea.test.tsx` (6 tests). `entrypoints/options/hooks/useCacheStats.ts` wrapping `getCacheStats()` → `{ entryCount, sizeMb, loading, refresh }` + `__tests__/useCacheStats.test.ts` (3 tests).
+- **Files changed:** `ui/Textarea.tsx`, `ui/__tests__/Textarea.test.tsx`, `entrypoints/options/hooks/useCacheStats.ts`, `entrypoints/options/hooks/__tests__/useCacheStats.test.ts`.
+- **Commits:** (scaffolding) + `feat(options): add Textarea primitive + useCacheStats hook`.
+- **Learnings:**
+  - **Gotcha (React 19 + renderHook):** after `await result.current.refresh()` (an async hook callback that setState's), `result.current` is NOT updated synchronously — the re-render flushes in a later microtask. Must follow with `await waitFor(() => expect(result.current.X).toBe(...))`. Reading `result.current` on the next line gives the stale pre-refresh value. (Echoes the patterns.md React-19 async-flush gotcha.)
+  - **Pattern:** `vi.mock('@/services/cacheManager', () => ({ getCacheStats: vi.fn() }))` + `vi.mocked(getCacheStats)` keeps the hook test off real IndexedDB (jsdom has no usable IDB). The hook's `catch` block lets the readout degrade gracefully on error — tested explicitly.
+  - **Pattern:** `Textarea` deliberately does NOT take an `icon`/password-toggle (unlike `Input`) — multiline fields don't need them; keep the primitive minimal and extend later if needed.
+  - **vitest config:** `entrypoints/**/*.test.{ts,tsx}` glob already covers `entrypoints/options/hooks/__tests__/**` → jsdom; no vitest.config edit needed (the plan flagged this as a possible gotcha — it's already covered).
+---
+
+## [2026-07-06 14:35] - Phase 2: DRY Migration (FR-9) + a11y fix
+- **Implemented:** Migrated the 4 number inputs (`cacheTTLDays`, `maxCacheSizeMB`, `maxBatchChars`, `maxRpm`) from hand-rolled `useState` + sync `useEffect` + `useCallback` blur handlers to `useDeferredCommit`; deleted the manual sync effect. Replaced the inline `opacity-40 pointer-events-none` dimmer with `DisabledDimmer` + passed `disabled` to the LLM-detection `Toggle` and Detection Mode `Select`. Added 1 a11y test (31 total).
+- **Files changed:** `entrypoints/options/sections/AdvancedSection.tsx`, `entrypoints/options/__tests__/AdvancedSection.test.tsx`.
+- **Commit:** 2f34b38
+- **Learnings:**
+  - **Decision (toast removal):** Deferred-commit inputs drop the per-field success toast. The sidebar "Auto-saved" badge (App.tsx subscribes to the store) already confirms every write, so the toast was redundant. Matches providers-ux-refactor's silent deferred commits. No test asserted the toast, so this was test-safe.
+  - **Pattern (validation placement):** `useDeferredCommit`'s `onCommit` is just the store write (no validation/toast inside it — avoids side-effects-in-updater concerns and matches the providers `useDeferredCommit(initial, (v) => onUpdate({...}))` precedent). Range validation lives in a thin blur wrapper that sets/clears the error `useState` and calls `field.commit()` only if valid. This keeps `committed` from advancing to an invalid value (skip-commit-on-invalid), so re-blurring the same invalid value is a no-op — acceptable.
+  - **Pattern (dirty-check):** `useDeferredCommit.commit()` already gates `onCommit` on `value !== prevCommitted`, so the existing "does not write when value is unchanged" maxRpm test passes unchanged — no manual `if (value !== settings.X)` guard needed.
+  - **a11y fix verified:** `DisabledDimmer` dims visually, but `pointer-events-none` only blocks the mouse — inner controls MUST carry `disabled` to be keyboard-inert. New test asserts `toBeDisabled()` on the LLM toggle when Context-Aware is off. This is the concrete NFR-4 net improvement.
+  - **Gotcha (Toggle/Select disabled):** `Toggle` has an explicit `disabled` prop; `Select` has no explicit `disabled` prop but spreads `...props` to the native `<select>`, so `disabled` passes through. Both verified by the passing a11y test.
+---
