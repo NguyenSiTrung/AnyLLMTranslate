@@ -101,13 +101,16 @@
 <!-- execution: sequential -->
 <!-- depends: phase4 -->
 
-- [ ] Task 5.1: Resolve accent inconsistency (thread cyan into active states, or standardize on blue) across the section
+- [x] Task 5.1: Resolve accent inconsistency (thread cyan into active states, or standardize on blue) across the section
   <!-- files: entrypoints/options/sections/SubtitlesSection.tsx, entrypoints/options/components/SubtitlePreview.tsx -->
+  Commit: e9286fd
 
-- [ ] Task 5.2: Make preview reflect configured target language (replace hardcoded Vietnamese cues) + add a 'Style' chip tying preview to translation-style knobs
+- [x] Task 5.2: Make preview reflect configured target language (replace hardcoded Vietnamese cues) + add a 'Style' chip tying preview to translation-style knobs
   <!-- files: entrypoints/options/components/SubtitlePreview.tsx -->
+  Commit: e9286fd
 
-- [ ] Task 5.3: Add tests for target-language-driven preview + style chip
+- [x] Task 5.3: Add tests for target-language-driven preview + style chip
   <!-- files: entrypoints/options/components/__tests__/SubtitlePreview.test.tsx -->
+  Commit: e9286fd
 
 - [ ] Task: Conductor - User Manual Verification 'Accent & Preview Polish' (Protocol in workflow.md)
