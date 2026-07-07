@@ -52,6 +52,8 @@ export interface ProviderPoolCoordinatorOptions {
   serviceFactory?: ServiceFactory;
   /** Override the clock (tests inject a controllable now). */
   clock?: () => number;
+  /** Override the delay for per-key throttle sleeps (fake-timer friendly) (FR-5). */
+  delay?: (ms: number) => Promise<void>;
 }
 
 /** Public view of a single key's status — drives the UI badge. */
@@ -100,6 +102,7 @@ export class ProviderPoolCoordinator implements TranslationService {
   private readonly breaker: CircuitBreaker;
   private readonly clock: () => number;
   private readonly cursor: PoolCursor;
+  private readonly delay: (ms: number) => Promise<void>;
 
   /** All currently-enabled slots (the rotation universe). */
   private slots: PoolSlot[] = [];
@@ -110,6 +113,14 @@ export class ProviderPoolCoordinator implements TranslationService {
   /** keyId → providerId, for status reporting. */
   private keyToProvider: Map<string, string> = new Map();
 
+  // FR-5: per-key concurrency limit + throttle interval state.
+  /** keyId → count of in-flight requests on that key. */
+  private readonly inFlight: Map<string, number> = new Map();
+  /** keyId → queue of pending per-key-concurrency waiters (FIFO). */
+  private readonly keyQueues: Map<string, Array<() => void>> = new Map();
+  /** keyId → wall-clock ms of the last dispatched request on that key. */
+  private readonly lastDispatchAt: Map<string, number> = new Map();
+
   constructor(options: ProviderPoolCoordinatorOptions = {}) {
     this.serviceFactory =
       options.serviceFactory ??
@@ -117,6 +128,7 @@ export class ProviderPoolCoordinator implements TranslationService {
     this.clock = options.clock ?? (() => Date.now());
     this.breaker = createCircuitBreaker({ clock: this.clock });
     this.cursor = createPoolCursor(0);
+    this.delay = options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   /**
@@ -316,6 +328,58 @@ export class ProviderPoolCoordinator implements TranslationService {
    *  - Failover walks the REMAINING healthy slots sequentially (a `tried` set
    *    guarantees no revisit), recomputing the healthy pool after each open.
    */
+  /**
+   * FR-5: acquire a per-key concurrency slot. If `concurrencyLimit > 0` and the
+   * key already has `concurrencyLimit` in-flight requests, the caller awaits a
+   * FIFO queue position. Returns a `release` fn that must be called in `finally`.
+   * When `concurrencyLimit === 0`, this is a no-op (uses the global semaphore
+   * cap only) — preserving the pre-FR-5 default behavior.
+   */
+  private async acquireKeySlot(slot: PoolSlot): Promise<() => void> {
+    const limit = slot.concurrencyLimit;
+    if (!limit || limit <= 0) {
+      // No per-key cap — track in-flight anyway for status, release is a no-op.
+      this.inFlight.set(slot.keyId, (this.inFlight.get(slot.keyId) ?? 0) + 1);
+      return () => {
+        const n = (this.inFlight.get(slot.keyId) ?? 1) - 1;
+        this.inFlight.set(slot.keyId, Math.max(0, n));
+      };
+    }
+    const current = this.inFlight.get(slot.keyId) ?? 0;
+    if (current >= limit) {
+      // Block until a slot frees up.
+      await new Promise<void>((resolve) => {
+        const queue = this.keyQueues.get(slot.keyId) ?? [];
+        queue.push(resolve);
+        this.keyQueues.set(slot.keyId, queue);
+      });
+    }
+    this.inFlight.set(slot.keyId, (this.inFlight.get(slot.keyId) ?? 0) + 1);
+    return () => {
+      const n = (this.inFlight.get(slot.keyId) ?? 1) - 1;
+      this.inFlight.set(slot.keyId, Math.max(0, n));
+      const queue = this.keyQueues.get(slot.keyId);
+      const next = queue?.shift();
+      if (next) next();
+    };
+  }
+
+  /**
+   * FR-5: per-key throttle. Sleeps the configured `interval` ms since the last
+   * dispatched request on this key, if an interval is set. No-op when 0.
+   */
+  private async applyKeyThrottle(slot: PoolSlot): Promise<void> {
+    if (!slot.interval || slot.interval <= 0) return;
+    const last = this.lastDispatchAt.get(slot.keyId);
+    const now = this.clock();
+    if (last !== undefined) {
+      const elapsed = now - last;
+      const wait = slot.interval - elapsed;
+      if (wait > 0) await this.delay(wait);
+    }
+    this.lastDispatchAt.set(slot.keyId, this.clock());
+  }
+
   private async dispatchWithFailover<T>(
     call: (service: TranslationService) => Promise<T>,
   ): Promise<T> {
@@ -373,7 +437,12 @@ export class ProviderPoolCoordinator implements TranslationService {
       const member = this.members.get(slot.keyId);
       if (!member) continue;
 
+      // FR-5: acquire a per-key concurrency slot before dispatch, then apply
+      // the per-key throttle interval. Release in finally so the slot frees up
+      // on both success and failure (failover).
+      const releaseKeySlot = await this.acquireKeySlot(slot);
       try {
+        await this.applyKeyThrottle(slot);
         const result = await call(member.service);
         this.breaker.recordSuccess(slot.keyId);
         return result;
@@ -398,6 +467,9 @@ export class ProviderPoolCoordinator implements TranslationService {
         }
         // Non-eligible (clientError): surface directly, no failover.
         throw error;
+      } finally {
+        // FR-5: release the per-key concurrency slot on every exit path.
+        releaseKeySlot();
       }
     }
 

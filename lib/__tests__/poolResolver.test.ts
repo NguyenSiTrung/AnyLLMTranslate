@@ -135,9 +135,9 @@ describe('healthySlots', () => {
         displayName: 'X',
         requiresApiKey: false,
         maxRpm: 0,
-        concurrencyLimit: 0,
-        interval: 0,
       },
+      concurrencyLimit: 0,
+      interval: 0,
     }));
   }
 

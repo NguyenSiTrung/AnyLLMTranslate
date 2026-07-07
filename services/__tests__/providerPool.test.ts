@@ -678,4 +678,138 @@ describe('ProviderPoolCoordinator', () => {
       expect(Object.keys(all).sort()).toEqual(['k1', 'k2']);
     });
   });
+
+  describe('FR-5: per-key concurrencyLimit + throttle interval', () => {
+    /** Build settings with a single key carrying the given concurrencyLimit + interval. */
+    function singleKeySettings(concurrencyLimit: number, interval: number): ExtensionSettings {
+      const providers: PoolProvider[] = [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit, interval, enabled: true }],
+        },
+      ];
+      return { ...DEFAULT_SETTINGS, providers };
+    }
+
+    it('does NOT throttle when interval = 0 (default — preserves prior behavior)', async () => {
+      const delays: number[] = [];
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+        delay: (ms) => { delays.push(ms); return Promise.resolve(); },
+      });
+      coord.rebuild(singleKeySettings(0, 0));
+
+      await coord.translate({ texts: new Map([['id1', 't']]), targetLanguage: 'vi' });
+      expect(delays).toEqual([]);
+    });
+
+    it('throttles by sleeping the configured interval since the last dispatch', async () => {
+      const delays: number[] = [];
+      let tick = 1000;
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => tick,
+        delay: (ms) => { delays.push(ms); tick += ms; return Promise.resolve(); },
+      });
+      coord.rebuild(singleKeySettings(0, 200));
+
+      // First call: no prior dispatch → no wait.
+      await coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' });
+      // Second call immediately after: 200ms elapsed so far (clock didn't advance
+      // except by the delay) → waits the remaining interval.
+      await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+
+      // First dispatch records lastDispatchAt; second sees elapsed < 200 → sleeps.
+      expect(delays.length).toBeGreaterThanOrEqual(1);
+      expect(delays.every((d) => d > 0 && d <= 200)).toBe(true);
+    });
+
+    it('caps concurrent in-flight requests per key at concurrencyLimit', async () => {
+      // concurrencyLimit = 1: a second concurrent dispatch must wait for the
+      // first to release before its service.translate runs.
+      const settings = singleKeySettings(1, 0);
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(settings);
+
+      const k1 = stubs.get('k1')!;
+      // Make the first call block until we release it.
+      let releaseFirst: () => void = () => {};
+      const firstBlocked = new Promise<void>((resolve) => { releaseFirst = resolve; });
+      k1.nextOutcome = {
+        kind: 'success',
+        result: { success: true, translations: new Map() },
+      };
+      // Override translate to block on the first call.
+      let firstCallStarted = false;
+      const callOrder: string[] = [];
+      k1.translate = async () => {
+        callOrder.push('start');
+        if (!firstCallStarted) {
+          firstCallStarted = true;
+          await firstBlocked;
+        }
+        callOrder.push('end');
+        return { success: true, translations: new Map([['id1', 'x']]) };
+      };
+
+      const first = coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' });
+      // Yield so the first call enters translate.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Start a second concurrent call — it must NOT enter translate until the
+      // first releases (concurrencyLimit = 1).
+      const second = coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Only the first call has started.
+      expect(callOrder.filter((c) => c === 'start')).toHaveLength(1);
+
+      releaseFirst();
+      await first;
+      await second;
+
+      // Both calls eventually ran.
+      expect(callOrder.filter((c) => c === 'end')).toHaveLength(2);
+    });
+
+    it('releases the per-key slot on failure (failover-safe)', async () => {
+      const settings = singleKeySettings(1, 0);
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(settings);
+
+      const k1 = stubs.get('k1')!;
+      // A client error (400) is non-eligible: it surfaces WITHOUT opening the
+      // breaker, so the slot stays healthy and we can isolate slot-release.
+      k1.nextOutcome = { kind: 'fail', error: new ApiError('bad request', 400) };
+
+      // A failing call must still release its key slot — a subsequent call must
+      // not block forever.
+      await expect(
+        coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' }),
+      ).rejects.toThrow();
+
+      k1.nextOutcome = {
+        kind: 'success',
+        result: { success: true, translations: new Map([['id1', 'ok']]) },
+      };
+      const result = await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+      expect(result.success).toBe(true);
+    });
+  });
 });

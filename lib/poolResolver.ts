@@ -21,6 +21,10 @@ export interface PoolSlot {
   keyId: string;
   /** Resolved per-slot config: provider fields merged with the key's apiKey + maxRpm. */
   providerConfig: ProviderConfig;
+  /** Per-key concurrency limit (0 = use the global semaphore cap only) (FR-5). */
+  concurrencyLimit: number;
+  /** Per-key throttle interval in ms (0 = off) (FR-5). */
+  interval: number;
 }
 
 /**
@@ -34,7 +38,9 @@ export function resolveSlots(providers: PoolProvider[]): PoolSlot[] {
     if (!provider.enabled) continue;
     for (const key of provider.keys ?? []) {
       if (!key.enabled) continue;
-      slots.push(buildSlot(provider, key.id, key.apiKey, key.maxRpm));
+      slots.push(
+        buildSlot(provider, key.id, key.apiKey, key.maxRpm, key.concurrencyLimit, key.interval),
+      );
     }
   }
   return slots;
@@ -58,6 +64,8 @@ function buildSlot(
   keyId: string,
   apiKey: string,
   maxRpm: number,
+  concurrencyLimit: number,
+  interval: number,
 ): PoolSlot {
   // The provider config the member OpenAICompatibleService is constructed from.
   // `preset` is always 'custom' in the pool world (OpenAI-compatible only).
@@ -77,5 +85,7 @@ function buildSlot(
     providerId: provider.id,
     keyId,
     providerConfig,
+    concurrencyLimit: Math.max(0, concurrencyLimit | 0),
+    interval: Math.max(0, interval | 0),
   };
 }
