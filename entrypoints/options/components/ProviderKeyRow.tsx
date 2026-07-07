@@ -12,6 +12,7 @@ import { Button } from '@/ui/Button';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Toggle } from '@/ui/Toggle';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { ConnectionTestProgressList } from './ConnectionTestProgressList';
 import { ProviderTestResult } from './ProviderTestResult';
 import { useConnectionTest } from '../hooks/useConnectionTest';
@@ -41,6 +42,9 @@ export function ProviderKeyRow({
   onRemove,
 }: ProviderKeyRowProps) {
   const [maxRpmDraft, setMaxRpmDraft] = useState(String(poolKey.maxRpm));
+  // FR-5: per-key concurrency limit + throttle interval drafts.
+  const [concurrencyDraft, setConcurrencyDraft] = useState(String(poolKey.concurrencyLimit ?? 0));
+  const [intervalDraft, setIntervalDraft] = useState(String(poolKey.interval ?? 0));
   // FR-10: defer the encrypted store write until blur. Local value updates
   // immediately for responsiveness; the (AES-GCM) chrome.storage write only
   // fires on blur, killing per-keystroke encryption overhead.
@@ -75,6 +79,17 @@ export function ProviderKeyRow({
     const n = Math.max(0, Math.min(600, Math.floor(Number(maxRpmDraft) || 0)));
     setMaxRpmDraft(String(n));
     if (n !== poolKey.maxRpm) onUpdate({ maxRpm: n });
+  };
+  // FR-5: per-key concurrency limit (0 = global cap only) + throttle interval (0 = off).
+  const commitConcurrency = () => {
+    const n = Math.max(0, Math.min(20, Math.floor(Number(concurrencyDraft) || 0)));
+    setConcurrencyDraft(String(n));
+    if (n !== (poolKey.concurrencyLimit ?? 0)) onUpdate({ concurrencyLimit: n });
+  };
+  const commitInterval = () => {
+    const n = Math.max(0, Math.min(60000, Math.floor(Number(intervalDraft) || 0)));
+    setIntervalDraft(String(n));
+    if (n !== (poolKey.interval ?? 0)) onUpdate({ interval: n });
   };
 
   return (
@@ -138,6 +153,35 @@ export function ProviderKeyRow({
           />
         </FieldGroup>
       </div>
+
+      <AdvancedDisclosure label="Concurrency & throttle (advanced)">
+        <div className="grid grid-cols-2 gap-3">
+          <FieldGroup label="Concurrency limit (0 = global only)" htmlFor={`pc-${poolKey.id}`}>
+            <Input
+              id={`pc-${poolKey.id}`}
+              type="number"
+              min={0}
+              max={20}
+              value={concurrencyDraft}
+              onChange={(e) => setConcurrencyDraft(e.target.value)}
+              onBlur={commitConcurrency}
+              hint="0–20 in-flight requests (0 = global cap)"
+            />
+          </FieldGroup>
+          <FieldGroup label="Throttle interval ms (0 = off)" htmlFor={`pi-${poolKey.id}`}>
+            <Input
+              id={`pi-${poolKey.id}`}
+              type="number"
+              min={0}
+              max={60000}
+              value={intervalDraft}
+              onChange={(e) => setIntervalDraft(e.target.value)}
+              onBlur={commitInterval}
+              hint="Min ms between requests (0 = off)"
+            />
+          </FieldGroup>
+        </div>
+      </AdvancedDisclosure>
 
       <div className="flex items-center justify-between gap-4 pt-3 border-t border-zinc-700/40">
         <label className="flex items-center gap-3 cursor-pointer select-none">

@@ -291,3 +291,94 @@ describe('AdvancedSection - Data Portability (FR-10, FR-11)', () => {
     );
   });
 });
+
+describe('AdvancedSection - Translation Quality (FR-1/2/3/4/6/7)', () => {
+  const mockUpdateSettings = vi.fn().mockResolvedValue(undefined);
+
+  const baseSettings = {
+    cacheTTLDays: 30,
+    maxCacheSizeMB: 100,
+    maxBatchChars: 2000,
+    provider: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'gpt-4' },
+    sourceLanguage: 'en',
+    targetLanguage: 'es',
+    displayMode: 'bilingual-below' as const,
+    theme: 'blockquote',
+    translationPosition: 'below',
+    darkMode: false,
+    siteRules: [],
+    glossary: [],
+    subtitleSettings: { enabled: false, position: 'bottom' },
+    customSystemPrompt: null,
+    debugMode: false,
+    textSelectionEnabled: true,
+    hoverTranslateEnabled: false,
+    hoverDelay: 300,
+    enableContextAwareTranslation: true,
+    enableLLMPageCategoryDetection: false,
+    pdfSettings: { autoOpen: 'off' as const, openMode: 'new-tab' as const, neverAutoOpenSites: [] },
+    maxRpm: 0,
+    // New web-bilingual-quality settings
+    enableRichTranslate: true,
+    enableSourceLanguageDetection: true,
+    enableFailureCache: true,
+    failureCacheTtlMinutes: 120,
+    enableStreamingTranslation: false,
+    enableWebResume: true,
+    maxTextGroupLengthPerRequest: 4,
+    maxTextLengthPerRequest: 2000,
+    updateSettings: mockUpdateSettings,
+    resetToDefaults: vi.fn().mockResolvedValue(undefined),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCacheStats).mockResolvedValue({ entryCount: 0, totalSizeBytes: 0 });
+    (useSettingsStore as unknown as ReturnType<typeof vi.fn>).mockImplementation((selector) => {
+      if (typeof selector === 'function') return selector(baseSettings);
+      return baseSettings;
+    });
+  });
+
+  it('renders all 5 Translation Quality toggles', () => {
+    render(<AdvancedSection />);
+    expect(screen.getByText('Rich Translate (inline markup)')).toBeInTheDocument();
+    expect(screen.getByText('Source-Language Detection')).toBeInTheDocument();
+    expect(screen.getByText('Failure Cache')).toBeInTheDocument();
+    expect(screen.getByText('Cross-Session Resume')).toBeInTheDocument();
+    expect(screen.getByText('Streaming Translation (experimental)')).toBeInTheDocument();
+  });
+
+  it('toggles Rich Translate and calls updateSettings', () => {
+    render(<AdvancedSection />);
+    const toggle = screen.getByLabelText('Rich Translate (inline markup)');
+    fireEvent.click(toggle);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ enableRichTranslate: false });
+  });
+
+  it('toggles Streaming Translation and calls updateSettings', () => {
+    render(<AdvancedSection />);
+    const toggle = screen.getByLabelText('Streaming Translation (experimental)');
+    fireEvent.click(toggle);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ enableStreamingTranslation: true });
+  });
+
+  it('commits failure cache TTL on blur', () => {
+    render(<AdvancedSection />);
+    // Open the AdvancedDisclosure that wraps the number fields.
+    fireEvent.click(screen.getByRole('button', { name: /request budget & failure ttl/i }));
+    const input = screen.getByLabelText('Failure cache TTL (minutes)');
+    fireEvent.change(input, { target: { value: '60' } });
+    fireEvent.blur(input);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ failureCacheTtlMinutes: 60 });
+  });
+
+  it('commits max pieces per request on blur', () => {
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /request budget & failure ttl/i }));
+    const input = screen.getByLabelText('Max pieces per request');
+    fireEvent.change(input, { target: { value: '8' } });
+    fireEvent.blur(input);
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ maxTextGroupLengthPerRequest: 8 });
+  });
+});

@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -63,6 +63,11 @@ export function AdvancedSection() {
   const maxCacheField = useDeferredCommit(settings.maxCacheSizeMB, (v) => updateSettings({ maxCacheSizeMB: v }));
   const maxBatchField = useDeferredCommit(settings.maxBatchChars, (v) => updateSettings({ maxBatchChars: v }));
   const maxRpmField = useDeferredCommit(settings.maxRpm ?? 0, (v) => updateSettings({ maxRpm: v }));
+  // FR-2: request-boundary budget fields.
+  const maxGroupField = useDeferredCommit(settings.maxTextGroupLengthPerRequest, (v) => updateSettings({ maxTextGroupLengthPerRequest: v }));
+  const maxLengthField = useDeferredCommit(settings.maxTextLengthPerRequest, (v) => updateSettings({ maxTextLengthPerRequest: v }));
+  // FR-4: negative-cache TTL field.
+  const failureTtlField = useDeferredCommit(settings.failureCacheTtlMinutes, (v) => updateSettings({ failureCacheTtlMinutes: v }));
   const [cacheTTLError, setCacheTTLError] = useState('');
   const [maxCacheSizeError, setMaxCacheSizeError] = useState('');
   const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
@@ -412,8 +417,104 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Context & Intelligence */}
+        {/* Translation Quality (FR-1/2/3/4/6/7 toggles + request budgets) */}
         <div className="animate-stagger" style={stagger(2)}>
+          <Card title="Translation Quality" icon={<Sparkles className="w-3.5 h-3.5" />} variant="bordered">
+            <div className="space-y-4">
+              <Toggle
+                id="rich-translate-toggle"
+                checked={settings.enableRichTranslate}
+                onChange={(checked) => updateSettings({ enableRichTranslate: checked })}
+                label="Rich Translate (inline markup)"
+                description="Preserve bold, links, code, and other inline formatting in translated paragraphs."
+              />
+              <Toggle
+                id="source-lang-detect-toggle"
+                checked={settings.enableSourceLanguageDetection}
+                onChange={(checked) => updateSettings({ enableSourceLanguageDetection: checked })}
+                label="Source-Language Detection"
+                description="Skip translation for text already in the target language (saves tokens + latency)."
+              />
+              <Toggle
+                id="failure-cache-toggle"
+                checked={settings.enableFailureCache}
+                onChange={(checked) => updateSettings({ enableFailureCache: checked })}
+                label="Failure Cache"
+                description="Temporarily remember translation failures so flaky providers aren't retried every scroll-past."
+              />
+              <Toggle
+                id="web-resume-toggle"
+                checked={settings.enableWebResume}
+                onChange={(checked) => updateSettings({ enableWebResume: checked })}
+                label="Cross-Session Resume"
+                description="Restore translated state after a page refresh (when the cache still holds translations)."
+              />
+              <Toggle
+                id="streaming-toggle"
+                checked={settings.enableStreamingTranslation}
+                onChange={(checked) => updateSettings({ enableStreamingTranslation: checked })}
+                label="Streaming Translation (experimental)"
+                description="Fill translations incrementally as the response streams, instead of waiting for the full batch."
+              />
+
+              <AdvancedDisclosure label="Request budget & failure TTL">
+                <div className="space-y-5">
+                  <FieldGroup
+                    label="Max pieces per request"
+                    description="How many paragraphs are grouped into a single LLM call (0 = unlimited)."
+                    htmlFor="max-text-group-input"
+                  >
+                    <Input
+                      id="max-text-group-input"
+                      type="number"
+                      value={maxGroupField.value}
+                      onChange={(e) => maxGroupField.setValue(Number(e.target.value))}
+                      onBlur={maxGroupField.commit}
+                      min={0}
+                      max={50}
+                      hint="0–50 (default 4)"
+                    />
+                  </FieldGroup>
+                  <FieldGroup
+                    label="Max characters per request"
+                    description="Maximum total characters sent in one LLM request (0 = unlimited)."
+                    htmlFor="max-text-length-input"
+                  >
+                    <Input
+                      id="max-text-length-input"
+                      type="number"
+                      value={maxLengthField.value}
+                      onChange={(e) => maxLengthField.setValue(Number(e.target.value))}
+                      onBlur={maxLengthField.commit}
+                      min={0}
+                      max={20000}
+                      hint="0–20000 (default 2000)"
+                    />
+                  </FieldGroup>
+                  <FieldGroup
+                    label="Failure cache TTL (minutes)"
+                    description="How long a failed translation is remembered before retrying."
+                    htmlFor="failure-ttl-input"
+                  >
+                    <Input
+                      id="failure-ttl-input"
+                      type="number"
+                      value={failureTtlField.value}
+                      onChange={(e) => failureTtlField.setValue(Number(e.target.value))}
+                      onBlur={failureTtlField.commit}
+                      min={1}
+                      max={1440}
+                      hint="1–1440 minutes (default 120)"
+                    />
+                  </FieldGroup>
+                </div>
+              </AdvancedDisclosure>
+            </div>
+          </Card>
+        </div>
+
+        {/* Context & Intelligence */}
+        <div className="animate-stagger" style={stagger(3)}>
           <Card title="Context & Intelligence" icon={<BrainCircuit className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               <Toggle
@@ -459,7 +560,7 @@ export function AdvancedSection() {
         </div>
 
         {/* PDF Translator */}
-        <div className="animate-stagger" style={stagger(3)}>
+        <div className="animate-stagger" style={stagger(4)}>
           <Card title="PDF Translator" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
               <FieldGroup
@@ -545,7 +646,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Data Portability */}
-        <div className="animate-stagger" style={stagger(4)}>
+        <div className="animate-stagger" style={stagger(5)}>
           <Card title="Data Portability" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
             <div className="flex gap-3">
               <Button
@@ -589,7 +690,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Developer */}
-        <div className="animate-stagger" style={stagger(5)}>
+        <div className="animate-stagger" style={stagger(6)}>
           <Card title="Developer" icon={<Wrench className="w-3.5 h-3.5" />} variant="bordered">
             <Toggle
               id="debug-mode-toggle"
@@ -602,7 +703,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Danger Zone */}
-        <div className="animate-stagger" style={stagger(6)}>
+        <div className="animate-stagger" style={stagger(7)}>
           <Card title="Danger Zone" icon={<AlertTriangle className="w-3.5 h-3.5" />} accent="red" variant="bordered">
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
