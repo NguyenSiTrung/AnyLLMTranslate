@@ -4,6 +4,7 @@
 
 import type { PageContext } from './config';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import type { RichVariable } from '@/lib/richTranslate';
 
 /** A translatable piece of content extracted from the DOM */
 export interface TranslationPiece {
@@ -19,6 +20,13 @@ export interface TranslationPiece {
   isTranslated: boolean;
   /** The translated text (if translated) */
   translatedText?: string;
+  /**
+   * Inline-markup variables for rich translate (FR-1). Present when
+   * `enableRichTranslate` is on and the piece carried inline elements; the
+   * LLM receives `<z id="N">…</z>` tokens in `text` and these variables
+   * reconstruct the markup on decode. Absent for plain-text pieces.
+   */
+  variables?: RichVariable[];
 }
 
 /** Request to the translation service */

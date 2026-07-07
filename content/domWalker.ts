@@ -6,6 +6,7 @@
 
 import type { TranslationPiece } from '@/types/translation';
 import { deduplicateAncestors } from '@/lib/domUtils';
+import { encodeInlineHtml } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
 
 let pieceCounter = 0;
@@ -23,6 +24,8 @@ export function resetPieceCounter(): void {
 export interface ExtractOptions {
   includeSelectors?: string[];
   excludeSelectors?: string[];
+  /** When true, capture inline markup as `<z id="N">` placeholders (FR-1 rich translate). */
+  enableRichTranslate?: boolean;
 }
 
 /** Check if an element should be skipped */
@@ -195,9 +198,26 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
       return;
     }
 
+    // Rich translate: encode inline markup from the anchor's innerHTML so the
+    // LLM receives `<z id="N">…</z>` tokens and the markup can be reconstructed
+    // on decode (FR-1). Only applied to single-piece anchors (no sentence split)
+    // so placeholder ids stay aligned with the piece text. Long pieces that
+    // would split fall back to plain text (no variables) — safe degradation.
+    let richText = trimmed;
+    let richVariables: TranslationPiece['variables'];
+    if (options.enableRichTranslate && anchorElement) {
+      const encoded = encodeInlineHtml(anchorElement.innerHTML);
+      // Use the encoded flat text only when it carries placeholders AND the
+      // piece isn't going to be split (keeps id alignment correct).
+      if (encoded.variables.length > 0 && trimmed.length <= MAX_PIECE_CHARS) {
+        richText = encoded.flatText.trim();
+        richVariables = encoded.variables;
+      }
+    }
+
     // Split long texts at sentence boundaries
-    if (trimmed.length > MAX_PIECE_CHARS) {
-      const parts = splitAtSentenceBoundary(trimmed, MAX_PIECE_CHARS);
+    if (richText.length > MAX_PIECE_CHARS) {
+      const parts = splitAtSentenceBoundary(richText, MAX_PIECE_CHARS);
       for (const part of parts) {
         pieces.push({
           id: generatePieceId(),
@@ -212,8 +232,9 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
         id: generatePieceId(),
         parentElement: anchorElement,
         textNodes: [...currentTextNodes],
-        text: trimmed,
+        text: richText,
         isTranslated: false,
+        ...(richVariables ? { variables: richVariables } : {}),
       });
     }
 

@@ -75,8 +75,9 @@ function extractDynamicPieces(
   element: Element,
   includeSelectors: string[] | undefined,
   excludeSelectors: string[],
+  enableRichTranslate?: boolean,
 ): TranslationPiece[] {
-  if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, selector))) {
+  if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, excludeSelectors as unknown as string))) {
     return [];
   }
 
@@ -87,6 +88,7 @@ function extractDynamicPieces(
   return extractPieces(element, {
     includeSelectors: rootIsIncluded ? undefined : includeSelectors,
     excludeSelectors,
+    enableRichTranslate,
   });
 }
 
@@ -182,9 +184,9 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
           piece.translatedText = result.translatedText;
           // Short pieces → inline parenthetical, long pieces → block themed display
           if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
-            applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage);
+            applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
           } else {
-            applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage);
+            applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
           }
         }
       }
@@ -306,6 +308,7 @@ export async function startTranslation(): Promise<void> {
   allPieces = extractPieces(document.body, {
     includeSelectors: matchingRule?.includeSelectors,
     excludeSelectors: effectiveExcludes,
+    enableRichTranslate: settings.enableRichTranslate,
   });
 
   // Set page state based on displayMode setting
@@ -326,7 +329,7 @@ export async function startTranslation(): Promise<void> {
     if (!viewportObserver || getPageState() === 'off') return;
 
     const newPieces = addedElements.flatMap((element) =>
-      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes),
+      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate),
     );
     if (newPieces.length === 0) return;
 

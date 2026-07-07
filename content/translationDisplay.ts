@@ -5,6 +5,8 @@
 
 import { DATA_ATTRS } from '@/lib/constants';
 import { scheduleDomWrite } from '@/lib/performance';
+import { decodeInlineHtml } from '@/lib/richTranslate';
+import type { RichVariable } from '@/lib/richTranslate';
 import type { PageState } from '@/lib/constants';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
 
@@ -305,6 +307,7 @@ export function applyTranslation(
   pieceId: string,
   translatedText: string,
   targetLanguage?: string,
+  variables?: RichVariable[],
 ): void {
   // Defensive: never mark <body> or <html> as original — that would hide the page
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') {
@@ -315,13 +318,19 @@ export function applyTranslation(
     markOriginalElement(parentElement);
   }
 
+  // Rich translate: reconstruct inline markup from `<z id="N">` tokens into a
+  // safe DocumentFragment (createElement only, never innerHTML) (FR-1).
+  const contentNode: Node = variables && variables.length > 0
+    ? decodeInlineHtml(translatedText, variables)
+    : document.createTextNode(translatedText);
+
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
-    // Update placeholder in-place: remove spinner class, set translated text
+    // Update placeholder in-place: remove spinner class, set translated content
     existing.classList.remove('anyllm-translate-loading');
     existing.removeAttribute('role');
     existing.removeAttribute('aria-label');
-    existing.textContent = translatedText;
+    existing.replaceChildren(contentNode.cloneNode(true));
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
     if (!existing.hasAttribute('dir')) existing.setAttribute('dir', 'auto');
     applyMaskA11yIfNeeded(existing as HTMLElement);
@@ -335,7 +344,7 @@ export function applyTranslation(
   translationEl.setAttribute(DATA_ATTRS.ROLE, 'translation');
   translationEl.setAttribute(DATA_ATTRS.PIECE_ID, pieceId);
   translationEl.className = 'anyllm-translate-translation';
-  translationEl.textContent = translatedText;
+  translationEl.appendChild(contentNode.cloneNode(true));
   translationEl.setAttribute('dir', 'auto');
   if (targetLanguage) translationEl.setAttribute('lang', targetLanguage);
   applyMaskA11yIfNeeded(translationEl);
@@ -430,21 +439,33 @@ export function applyInlineTranslation(
   pieceId: string,
   translatedText: string,
   targetLanguage?: string,
+  variables?: RichVariable[],
 ): void {
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
 
   const renderTarget = getInlineRenderTarget(parentElement);
 
   const translationOnly = isTranslationOnlyMode();
-  const displayText = formatInlineText(translatedText, translationOnly);
   const constrained = isConstrainedContainer(parentElement);
+
+  // Rich translate: when variables are present, decode inline markup into a
+  // DocumentFragment and render that (skipping the plain-text parenthetical
+  // wrap, which doesn't compose with reconstructed elements) (FR-1).
+  const hasRichVars = variables && variables.length > 0;
+
+  const buildContent = (): Node => {
+    if (hasRichVars) {
+      return decodeInlineHtml(translatedText, variables!);
+    }
+    return document.createTextNode(formatInlineText(translatedText, translationOnly));
+  };
 
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
     // Update inline placeholder in-place
     existing.classList.remove('anyllm-inline-bilingual-loading');
     if (constrained) existing.classList.add('anyllm-inline-constrained');
-    existing.textContent = displayText;
+    existing.replaceChildren(buildContent().cloneNode(true));
     // Accessibility: set lang for screen readers and title for hover tooltip
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
     (existing as HTMLElement).title = translatedText;
@@ -460,7 +481,7 @@ export function applyInlineTranslation(
   inlineEl.className = constrained
     ? 'anyllm-inline-bilingual anyllm-inline-constrained'
     : 'anyllm-inline-bilingual';
-  inlineEl.textContent = displayText;
+  inlineEl.appendChild(buildContent());
   // Accessibility: lang attribute for correct pronunciation, title for hover
   if (targetLanguage) inlineEl.setAttribute('lang', targetLanguage);
   inlineEl.title = translatedText;

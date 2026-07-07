@@ -191,6 +191,63 @@ describe('translationDisplay', () => {
         .filter(Boolean);
       expect(orderedPieceIds).toEqual(['piece-1', 'piece-2']);
     });
+
+    it('reconstructs inline markup from rich-translate variables (FR-1)', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Hello world';
+      document.body.appendChild(parent);
+
+      // Simulate a translated flat text + the variable produced by encodeInlineHtml.
+      const translatedFlat = 'Xin chào <z id="0">thế giới</z>';
+      const variables = [
+        { id: 0, tag: 'STRONG', openHtml: '<strong>', closeHtml: '</strong>' },
+      ];
+      applyTranslation(parent, 'piece-rich', translatedFlat, 'vi', variables);
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-rich"]');
+      expect(translation).not.toBeNull();
+      const strong = translation?.querySelector('strong');
+      expect(strong).not.toBeNull();
+      expect(strong?.textContent).toBe('thế giới');
+      expect(translation?.textContent).toBe('Xin chào thế giới');
+    });
+
+    it('updates an existing rich-translate placeholder in-place preserving markup', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'Hello world';
+      document.body.appendChild(parent);
+
+      // First pass: create the placeholder.
+      const vars = [
+        { id: 0, tag: 'A', openHtml: '<a href="https://x.test">', closeHtml: '</a>' },
+      ];
+      applyTranslation(parent, 'piece-rt', 'A <z id="0">link</z>', 'vi', vars);
+
+      // Second pass: in-place update with a new translation.
+      applyTranslation(parent, 'piece-rt', 'Một <z id="0">liên kết</z>', 'vi', vars);
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-rt"]');
+      const a = translation?.querySelector('a');
+      expect(a).not.toBeNull();
+      expect(a?.getAttribute('href')).toBe('https://x.test');
+      expect(a?.textContent).toBe('liên kết');
+      expect(translation?.textContent).toBe('Một liên kết');
+    });
+
+    it('does not execute or render a <script> carried by a malicious variable (XSS guard)', () => {
+      const parent = document.createElement('p');
+      parent.textContent = 'text';
+      document.body.appendChild(parent);
+
+      const vars = [
+        { id: 0, tag: 'SCRIPT', openHtml: '<script>', closeHtml: '</script>' },
+      ];
+      applyTranslation(parent, 'piece-xss', 'a<z id="0">evil()</z>', 'vi', vars);
+
+      const translation = document.querySelector('[data-anyllm-piece-id="piece-xss"]');
+      expect(translation?.querySelector('script')).toBeNull();
+      expect(translation?.textContent).toBe('aevil()');
+    });
   });
 
   describe('showLoadingPlaceholder', () => {

@@ -31,3 +31,14 @@ From `conductor/patterns.md` — read full file for detail. Key inherited patter
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-07-07 16:46] - Phase 1 Task 1.1: Foundation settings
+- **Implemented:** Added 8 new ExtensionSettings fields + PoolKey.concurrencyLimit/interval; updated DEFAULT_SETTINGS, extractSettings(), migration, factories.
+- **Files changed:** types/config.ts, stores/settingsStore.ts, lib/config.ts, entrypoints/options/sections/ProvidersSection.tsx, 11 test fixtures.
+- **Commit:** f4a2b29
+- **Learnings:**
+  - **Pattern confirmed (3-place settings change):** any new ExtensionSettings field MUST be added to (1) interface, (2) DEFAULT_SETTINGS, (3) extractSettings() in settingsStore.ts — else useSettings() silently drops it. SettingsState extends ExtensionSettings so the store type auto-inherits.
+  - **PoolKey field addition is viral:** adding required fields to PoolKey forces updating ~30 test-fixture literals across 11 test files. Used a Python script with the `maxRpm: N, enabled:` (PoolKey-unique, since ProviderConfig has no `enabled` and PoolProvider has no `maxRpm`) + `apiKey`-nearby heuristics. The multiline `apiKey` heuristic wrongly hit one ProviderConfig literal (which also has apiKey) — must verify no ProviderConfig gained the fields.
+  - **deepMerge(DEFAULT_SETTINGS, loaded)** in loadSettings gives legacy-storage migration for free for the new top-level boolean/number fields — no explicit migration code needed.
+  - **Pre-existing tsc errors exist on clean master:** `services/__tests__/subtitlePrompt.test.ts` (8 errors: subtitle knob type mismatches) — left from the test-trim track ALT-t0w. Must exclude these from "clean" assertions.
+  - **Real test count is 1403**, not the 2319 in product.md (test suite was trimmed in ALT-t0w; product.md figure stale). Baseline for this track = 1403.
