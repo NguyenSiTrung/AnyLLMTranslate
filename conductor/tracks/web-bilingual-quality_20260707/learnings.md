@@ -53,3 +53,13 @@ From `conductor/patterns.md` — read full file for detail. Key inherited patter
   - **`existing.replaceChildren(node)` is the modern API** for swapping a child node (vs `textContent=`) when injecting a DocumentFragment or element. Use `cloneNode(true)` if reusing the same fragment across the in-place + create paths.
   - **DOM-using lib tests need `@vitest-environment jsdom` docblock** (per-file) since `lib/__tests__` defaults to node env. Pattern matches `services/__tests__/background.urlAllowlist.test.ts`.
   - **Manual HTML tokenizer over DOMParser** for encodeInlineHtml: a regex TAG scanner with a stack handles nested inline elements + attribute preservation reliably and deterministically; avoids DOMParser quirks. Decode uses a recursive `<z id="N">…</z>` scanner that builds safe elements via createElement.
+
+## [2026-07-07 17:20] - Phase 3 (FR-2 Batcher cleanup + char-budget)
+- **Implemented:** Deleted dead TranslationBatcher; new pure lib/textBatching.ts; wired sub-batching + dedup into handleTranslate.
+- **Files changed:** (deleted) services/batcher.ts, services/__tests__/batcher.test.ts; lib/textBatching.ts, lib/__tests__/textBatching.test.ts, services/background.ts, types/messages.ts, services/__tests__/background.test.ts.
+- **Commit:** 73cdfe7
+- **Learnings:**
+  - **Pure helper extraction makes background-handler logic testable:** `splitPiecesIntoBatches` + `dedupPiecesByText` are pure (no chrome/fetch), unit-tested directly (11 tests), then wired into the handler. The handler tests cover integration (fetch call count, dup re-hydration). This split is cleaner than testing the whole handler for budget logic.
+  - **`TranslationResultMessage` return shape matters for strict `toEqual` tests:** background.test.ts does `expect(result).toEqual({ success, results })`. Adding `partial: false` unconditionally broke it. Solution: spread `partial` only when true (`...(anyPartial ? { partial: true } : {})`) so the default response stays `{ success, results }`.
+  - **`totalApiCalls` stat now reflects sub-batch count** (was hardcoded 1). recordDailyStats takes the count too.
+  - **A flaky test exists** in the suite (1 intermittent failure on a full run that passes on re-run — likely a subtitle coordinator timeout under parallel load, matching the known intermittent noted in product.md). Confirmed stable across 2 consecutive runs.

@@ -28,7 +28,7 @@ import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
-import { SHORT_PIECE_THRESHOLD } from '@/lib/constants';
+import { SHORT_PIECE_THRESHOLD, DATA_ATTRS } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
@@ -43,6 +43,7 @@ import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 import { isContextInvalidated } from '@/lib/utils';
+import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -160,9 +161,35 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       }
     }
 
+    // FR-3: source-language gate. When detection is on and sourceLanguage is
+    // 'auto', skip pieces whose detected language already matches the target —
+    // they would round-trip through the LLM unchanged (wasted tokens + latency).
+    // Confidence threshold guards against false positives on ambiguous text.
+    const SAME_LANG_CONFIDENCE = 0.55;
+    let translatablePieces = pieces;
+    if (settings.enableSourceLanguageDetection && settings.sourceLanguage === 'auto') {
+      translatablePieces = pieces.filter((piece) => {
+        const detected = detectLanguage(piece.text);
+        if (detected.lang && isSameLanguage(detected.lang, settings.targetLanguage) && detected.confidence >= SAME_LANG_CONFIDENCE) {
+          // Already in the target language — mark translated (source = target),
+          // clear the loading spinner, and skip injection entirely.
+          piece.isTranslated = true;
+          piece.translatedText = piece.text;
+          const el = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${piece.id}"]`);
+          if (el) el.remove();
+          return false;
+        }
+        return true;
+      });
+      // All pieces already in the target language — nothing to send.
+      if (translatablePieces.length === 0) {
+        return;
+      }
+    }
+
     const response: TranslationResultMessage = await chrome.runtime.sendMessage({
       action: 'translate',
-      pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
+      pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       pageContext,
