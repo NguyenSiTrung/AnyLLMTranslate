@@ -63,3 +63,13 @@ From `conductor/patterns.md` — read full file for detail. Key inherited patter
   - **`TranslationResultMessage` return shape matters for strict `toEqual` tests:** background.test.ts does `expect(result).toEqual({ success, results })`. Adding `partial: false` unconditionally broke it. Solution: spread `partial` only when true (`...(anyPartial ? { partial: true } : {})`) so the default response stays `{ success, results }`.
   - **`totalApiCalls` stat now reflects sub-batch count** (was hardcoded 1). recordDailyStats takes the count too.
   - **A flaky test exists** in the suite (1 intermittent failure on a full run that passes on re-run — likely a subtitle coordinator timeout under parallel load, matching the known intermittent noted in product.md). Confirmed stable across 2 consecutive runs.
+
+## [2026-07-07 17:30] - Phase 4 (FR-3 Source-language gate)
+- **Implemented:** New pure lib/langDetect.ts (script + n-gram heuristics); wired source-lang gate into translatePieces.
+- **Files changed:** lib/langDetect.ts, lib/__tests__/langDetect.test.ts, entrypoints/content.ts.
+- **Commit:** f797437
+- **Learnings:**
+  - **Latin n-gram detection is hard with shared stopwords.** es/pt/fr share many short stopwords (de, a, que, no). Solution: per-language unique-diacritic fast-paths run BEFORE stopword scoring — Vietnamese uses ă/ơ/ư/đ + hook/horn tone marks (NOT the shared á/é/í which es/pt also use), Portuguese uses ã/õ (tilde, unique among candidates), German uses ü/ö/ä/ß. Only English/Spanish/French fall through to pure stopword scoring.
+  - **Script-range order matters:** check Japanese (Hiragana/Katakana) BEFORE Chinese (CJK Han) — Japanese text mixes all three, so kana presence → ja. Korean Hangul before CJK too.
+  - **Confidence threshold 0.55 for the same-lang skip** balances false-skip risk vs token savings. Script-range signals are ≥0.9 (very safe to skip); Latin n-gram is 0.3–0.85 so the threshold filters weak detections.
+  - **The flaky test(s)** in the suite manifest as 1-3 intermittent failures under full parallel runs that pass on immediate re-run (no code change). Confirmed by 3 consecutive clean full runs after fixes. Don't chase these — they're pre-existing parallel-load timing issues.

@@ -41,6 +41,9 @@ vi.mock('@/services/cacheManager', () => ({
   // Sub-project 6: subtitle path now uses key-based variants.
   getCachedTranslationByKey: vi.fn().mockResolvedValue(null),
   cacheTranslationByKey: vi.fn().mockResolvedValue(undefined),
+  // FR-4: negative-cache functions.
+  getCachedFailure: vi.fn().mockResolvedValue(null),
+  cacheFailure: vi.fn().mockResolvedValue(undefined),
   evictCache: vi.fn(),
   clearCache: vi.fn(),
   flushLruUpdates: vi.fn(),

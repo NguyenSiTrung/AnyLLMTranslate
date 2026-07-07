@@ -338,6 +338,9 @@ export interface TranslationResultMessage {
   error?: string;
   /** True when at least one sub-batch returned a partial (back-filled) result (FR-2). */
   partial?: boolean;
+  /** Per-piece failures (from negative-cache hits or batch failures) so the content
+   *  script can show error states per piece without a batch-level failure (FR-4). */
+  failed?: Array<{ id: string; error: string }>;
 }
 
 /** Single translation result item */

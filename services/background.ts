@@ -39,7 +39,7 @@ import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fe
 import { ProviderPoolCoordinator } from '@/services/providerPool';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
-import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
+import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
@@ -432,6 +432,8 @@ async function handleTranslate(
     // FR-1: Split pieces into cached and uncached
     const cachedResults: Array<{ id: string; translatedText: string }> = [];
     const uncachedPieces: Array<{ id: string; text: string }> = [];
+    // FR-4: per-piece failures (from negative-cache hits or batch failures).
+    const failedResults: Array<{ id: string; error: string }> = [];
 
     for (const piece of message.pieces) {
       const cached = await getCachedTranslation(
@@ -442,9 +444,25 @@ async function handleTranslate(
       );
       if (cached !== null) {
         cachedResults.push({ id: piece.id, translatedText: cached });
-      } else {
-        uncachedPieces.push(piece);
+        continue;
       }
+      // FR-4: negative cache — if a recent failure is cached for this piece,
+      // short-circuit to an error result (no LLM call) so flaky providers aren't
+      // retried on every scroll-past. The piece surfaces in `failed`, not
+      // `results`, so the content script shows an error state.
+      if (settings.enableFailureCache) {
+        const failure = await getCachedFailure(
+          piece.text,
+          message.sourceLanguage,
+          message.targetLanguage,
+          settings.failureCacheTtlMinutes,
+        );
+        if (failure !== null) {
+          failedResults.push({ id: piece.id, error: failure });
+          continue;
+        }
+      }
+      uncachedPieces.push(piece);
     }
 
     // Track cache hit/miss stats (fire-and-forget)
@@ -455,9 +473,14 @@ async function handleTranslate(
       }).catch(() => {});
     }
 
-    // If all pieces were cached, return immediately — no LLM call
+    // If all pieces were cached or negative-cached, return immediately — no LLM call.
+    // FR-4: surface negative-cached failures so the content script shows error states.
     if (uncachedPieces.length === 0) {
-      return { success: true, results: cachedResults };
+      return {
+        success: true,
+        results: cachedResults,
+        ...(failedResults.length > 0 ? { failed: failedResults } : {}),
+      };
     }
 
     ensureKeepaliveAlarm();
@@ -524,6 +547,19 @@ async function handleTranslate(
         // surface (a later batch may succeed). If ALL batches fail, the final
         // return reports the error.
         lastError = result.error ?? 'Translation failed';
+        // FR-4: write negative-cache entries for the failed pieces so a retry
+        // within the TTL short-circuits without another LLM round-trip.
+        if (settings.enableFailureCache) {
+          for (const piece of batch) {
+            failedResults.push({ id: piece.id, error: lastError });
+            cacheFailure(
+              piece.text,
+              lastError,
+              message.sourceLanguage,
+              message.targetLanguage,
+            ).catch(() => {});
+          }
+        }
       }
     }
 
@@ -558,11 +594,15 @@ async function handleTranslate(
         // Only flag partial when at least one batch back-filled; omit otherwise
         // so the default response shape stays `{ success, results }`.
         ...(anyPartial ? { partial: true } : {}),
+        // FR-4: surface per-piece failures even on partial success so the content
+        // script can show error states for negative-cached/failed pieces.
+        ...(failedResults.length > 0 ? { failed: failedResults } : {}),
       };
     } else {
       return {
         success: false,
         error: lastError ?? 'Translation failed',
+        ...(failedResults.length > 0 ? { failed: failedResults } : {}),
       };
     }
   } catch (error) {

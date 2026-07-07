@@ -35,6 +35,9 @@ vi.stubGlobal('chrome', {
 vi.mock('@/services/cacheManager', () => ({
   getCachedTranslation: vi.fn(),
   cacheTranslation: vi.fn().mockResolvedValue(undefined),
+  // FR-4: negative-cache functions.
+  getCachedFailure: vi.fn().mockResolvedValue(null),
+  cacheFailure: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -32,6 +32,23 @@ export async function generateCacheKey(
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * FR-4: Negative-cache (failure) namespace prefix. Negative entries are stored
+ * under `negative:` + the same SHA-256 key as success entries so they share the
+ * text/lang identity but never collide with success-cache lookups.
+ */
+export const NEGATIVE_CACHE_PREFIX = 'negative:';
+
+/** Build a negative-cache key from the same inputs as the success cache key. */
+export async function generateNegativeCacheKey(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<string> {
+  const base = await generateCacheKey(text, sourceLanguage, targetLanguage);
+  return `${NEGATIVE_CACHE_PREFIX}${base}`;
+}
+
 /** Pending LRU updates — Map ensures per-key deduplication (latest wins) */
 const pendingLruUpdates = new Map<string, CacheEntry>();
 
@@ -192,6 +209,61 @@ export async function cacheTranslationByKey(
   }
 }
 
+/**
+ * FR-4: Negative cache (failure cache).
+ *
+ * On a hard translation failure (after all retries/failover), record the error
+ * so a second scroll-past within the TTL short-circuits to the error state
+ * without hitting the LLM. Entries live under the `negative:` namespace and
+ * share the success-cache's text/lang identity.
+ */
+
+/** Interface for a negative-cache entry (kept minimal — no translatedText). */
+interface NegativeCacheEntry {
+  key: string;
+  error: string;
+  cachedAt: number;
+}
+
+/** Read a cached failure for this text/lang pair. Returns the error string if a
+ *  fresh negative entry exists, or null on miss/expiry/disabled. */
+export async function getCachedFailure(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+  ttlMinutes = 120,
+): Promise<string | null> {
+  try {
+    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    const entry = await get<NegativeCacheEntry>(key, getStore());
+    if (!entry) return null;
+    const ttlMs = Math.max(1, ttlMinutes) * 60 * 1000;
+    if (Date.now() - entry.cachedAt > ttlMs) {
+      await del(key, getStore());
+      return null;
+    }
+    return entry.error;
+  } catch {
+    return null;
+  }
+}
+
+/** Record a translation failure so it isn't retried within the TTL. */
+export async function cacheFailure(
+  text: string,
+  error: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<void> {
+  try {
+    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    const entry: NegativeCacheEntry = { key, error, cachedAt: Date.now() };
+    await set(key, entry, getStore());
+  } catch {
+    // Silently fail — negative cache is best-effort
+  }
+}
+
 /** Evict expired and LRU entries to stay under maxSizeMB */
 export async function evictCache(
   maxSizeMB = 100,
@@ -204,14 +276,21 @@ export async function evictCache(
     const now = Date.now();
     let evicted = 0;
 
-    // Phase 1: Remove expired entries
+    // Phase 1: Remove expired entries. Negative-cache entries (FR-4) share this
+    // store under a `negative:` prefix and lack some CacheEntry fields, so guard
+    // field access and exclude them from the LRU size/sort accounting (they're
+    // tiny and short-TTL anyway).
     const validEntries: [string, CacheEntry][] = [];
     for (const [key, entry] of allEntries) {
-      if (now - entry.cachedAt > ttlMs) {
+      const cachedAt = (entry as { cachedAt?: number }).cachedAt ?? 0;
+      if (cachedAt && now - cachedAt > ttlMs) {
         await del(key, getStore());
         evicted++;
+      } else if (key.startsWith(NEGATIVE_CACHE_PREFIX)) {
+        // Negative entries: skip LRU size accounting (tiny, short-TTL).
+        continue;
       } else {
-        validEntries.push([key, entry]);
+        validEntries.push([key, entry as CacheEntry]);
       }
     }
 
@@ -222,7 +301,7 @@ export async function evictCache(
 
     if (totalSize > maxSizeBytes) {
       // Sort by lastAccessedAt ascending (oldest first)
-      validEntries.sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt);
+      validEntries.sort((a, b) => (a[1].lastAccessedAt ?? 0) - (b[1].lastAccessedAt ?? 0));
 
       for (const [key, entry] of validEntries) {
         if (totalSize <= maxSizeBytes) break;

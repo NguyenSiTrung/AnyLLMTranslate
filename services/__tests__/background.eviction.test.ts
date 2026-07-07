@@ -18,6 +18,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/services/cacheManager', () => ({
   getCachedTranslation: vi.fn().mockResolvedValue(null),
   cacheTranslation: vi.fn().mockResolvedValue(undefined),
+  // FR-4: negative-cache functions.
+  getCachedFailure: vi.fn().mockResolvedValue(null),
+  cacheFailure: vi.fn().mockResolvedValue(undefined),
   evictCache: vi.fn().mockResolvedValue(5),
 }));
 

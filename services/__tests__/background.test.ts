@@ -162,6 +162,40 @@ describe('services/background', () => {
       expect(byId.get('p2')).toBe('Thế giới');
     });
 
+    it('FR-4: short-circuits to a failed result on a negative-cache hit (no LLM call)', async () => {
+      // The idb-backed cache isn't available in node/jsdom (no fake-indexeddb),
+      // so spy on the module function to simulate a negative-cache hit. This
+      // verifies the handleTranslate wiring short-circuits without an LLM call.
+      const cacheManager = await import('../cacheManager');
+      const spy = vi
+        .spyOn(cacheManager, 'getCachedFailure')
+        .mockResolvedValue('Provider down');
+
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const result = await handleMessage(
+        {
+          action: 'translate',
+          pieces: [{ id: 'p1', text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const typed = result as { success: boolean; results?: unknown[]; failed?: { id: string; error: string }[] };
+      expect(spy).toHaveBeenCalled();
+      // No LLM call should be made — the negative cache short-circuits.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      // The piece surfaces as a failure (not a result) so the content script
+      // shows an error state.
+      expect(typed.failed?.find((f) => f.id === 'p1')?.error).toBe('Provider down');
+      expect(typed.results ?? []).toEqual([]);
+
+      spy.mockRestore();
+    });
+
     it('returns error on translation failure', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 

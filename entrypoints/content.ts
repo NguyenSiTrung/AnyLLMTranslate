@@ -217,6 +217,20 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
           }
         }
       }
+      // FR-4: per-piece failures (negative-cache hits) — show error state with
+      // retry for each failed piece without failing the whole batch.
+      if (response.failed) {
+        for (const failure of response.failed) {
+          const piece = pieces.find((p) => p.id === failure.id);
+          if (!piece) continue;
+          const retryPiece = () => translatePieces([piece]);
+          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+            setInlineErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
+          } else {
+            setErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
+          }
+        }
+      }
     } else if (!response.success && response.error) {
       // Batch-level failure: mark all pieces as error with retry
       for (const piece of pieces) {
