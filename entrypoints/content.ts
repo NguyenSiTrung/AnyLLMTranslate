@@ -5,7 +5,6 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
-import type { TranslationResultMessage } from '@/types/messages';
 import { extractPieces } from '@/content/domWalker';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
@@ -50,6 +49,8 @@ import {
   deriveContentHash,
   type ResumePiece,
 } from '@/lib/webResume';
+import { WEB_STREAM_PORT } from '@/types/messages';
+import type { TranslationResultMessage, TranslationResultItem } from '@/types/messages';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -99,6 +100,65 @@ function extractDynamicPieces(
     includeSelectors: rootIsIncluded ? undefined : includeSelectors,
     excludeSelectors,
     enableRichTranslate,
+  });
+}
+
+/**
+ * FR-6: stream a translation request via a chrome.runtime port. Emits per-piece
+ * deltas (incremental spinner→text swaps) and resolves to a result message
+ * shaped like the non-streaming path. On error, the caller falls back to the
+ * non-streaming path (re-issued in translatePieces' catch block).
+ */
+function streamTranslate(
+  pieces: TranslationPiece[],
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<TranslationResultMessage> {
+  return new Promise((resolve) => {
+    const pieceById = new Map(pieces.map((p) => [p.id, p]));
+    const results: TranslationResultItem[] = [];
+    let settled = false;
+
+    const port = chrome.runtime.connect({ name: WEB_STREAM_PORT });
+    port.postMessage({
+      type: 'request',
+      pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
+      sourceLanguage,
+      targetLanguage,
+    });
+
+    port.onMessage.addListener((msg: { type: string; id?: string; text?: string; results?: TranslationResultItem[]; error?: string }) => {
+      if (msg.type === 'piece' && msg.id && msg.text) {
+        // Incremental in-place update: find the piece + swap its spinner.
+        const piece = pieceById.get(msg.id);
+        if (piece) {
+          piece.isTranslated = true;
+          piece.translatedText = msg.text;
+          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+            applyInlineTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
+          } else {
+            applyTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
+          }
+        }
+      } else if (msg.type === 'done') {
+        settled = true;
+        port.disconnect();
+        resolve({ success: true, results: msg.results ?? results });
+      } else if (msg.type === 'error') {
+        settled = true;
+        port.disconnect();
+        // Surface as a failure so translatePieces' error branch + non-streaming
+        // fallback can handle it.
+        resolve({ success: false, error: msg.error ?? 'Streaming failed' });
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      if (!settled) {
+        // Port closed unexpectedly — fall back to non-streaming.
+        resolve({ success: false, error: 'Streaming port disconnected' });
+      }
+    });
   });
 }
 
@@ -196,13 +256,28 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       }
     }
 
-    const response: TranslationResultMessage = await chrome.runtime.sendMessage({
-      action: 'translate',
-      pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
-      sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      pageContext,
-    });
+    let response: TranslationResultMessage;
+    if (settings.enableStreamingTranslation) {
+      // FR-6: try streaming first; fall back to non-streaming on failure.
+      const streamed = await streamTranslate(translatablePieces, settings.sourceLanguage, settings.targetLanguage);
+      response = streamed.success
+        ? streamed
+        : await chrome.runtime.sendMessage({
+            action: 'translate',
+            pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
+            sourceLanguage: settings.sourceLanguage,
+            targetLanguage: settings.targetLanguage,
+            pageContext,
+          });
+    } else {
+      response = await chrome.runtime.sendMessage({
+        action: 'translate',
+        pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+        pageContext,
+      });
+    }
 
     // Session guard: if the page has been restored or re-translated
     // since this request was issued, drop the response without touching

@@ -19,7 +19,7 @@ import type {
   PdfStreamDone,
   PdfStreamError,
 } from '@/types/messages';
-import { PDF_STREAM_PORT } from '@/types/messages';
+import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { ExtensionSettings } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
@@ -165,6 +165,68 @@ export function initPdfStreamPortListener(): void {
         const results: TranslationResultItem[] = result.success
           ? Array.from(result.translations, ([id, translatedText]) => ({ id, translatedText }))
           : [];
+        port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
+      } catch (err) {
+        const error = err instanceof Error ? err.message : 'Streaming translation failed';
+        port.postMessage({ type: 'error', error } satisfies PdfStreamError);
+      }
+    });
+  });
+}
+
+/**
+ * FR-6: web-page streaming translation port. Content script opens a port,
+ * background streams parsed JSON piece deltas as they arrive (reusing the
+ * OpenAICompatibleService.translateStream + SSE parser), then a terminal
+ * 'done'/'error'. Falls back to non-streaming in the content script on error
+ * or when the service lacks translateStream.
+ */
+export function initWebStreamPortListener(): void {
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== WEB_STREAM_PORT) return;
+
+    port.onMessage.addListener(async (msg: PdfStreamPortMessage) => {
+      if (msg.type !== 'request') return;
+      try {
+        const service = await initService();
+        if (!service.translateStream) {
+          port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
+          return;
+        }
+        const texts = new Map(msg.pieces.map((p) => [p.id, p.text]));
+        const result = await service.translateStream(
+          {
+            texts,
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguage: msg.targetLanguage,
+          },
+          (id, text) => {
+            port.postMessage({ type: 'piece', id, text } satisfies PdfStreamPiece);
+          },
+        );
+        const results: TranslationResultItem[] = result.success
+          ? Array.from(result.translations, ([id, translatedText]) => ({ id, translatedText }))
+          : [];
+        // FR-2/FR-7: write fresh translations to the success cache so resume +
+        // negative-cache lookups work the same as the non-streaming path.
+        if (result.success) {
+          const settings = await loadSettings();
+          for (const { id, translatedText } of results) {
+            const piece = msg.pieces.find((p) => p.id === id);
+            if (piece) {
+              const isBackfilled = result.partial === true && translatedText === piece.text;
+              if (!isBackfilled) {
+                cacheTranslation(
+                  piece.text,
+                  translatedText,
+                  msg.sourceLanguage,
+                  msg.targetLanguage,
+                ).catch(() => {});
+              }
+            }
+          }
+          void settings; // settings loaded for cache writes above (TTL via defaults).
+        }
         port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
       } catch (err) {
         const error = err instanceof Error ? err.message : 'Streaming translation failed';

@@ -266,6 +266,9 @@ export interface UnregisterPdfSessionMessage {
 /** Port name for PDF streaming translation. */
 export const PDF_STREAM_PORT = 'TRANSLATE_PDF_STREAM';
 
+/** Port name for web-page streaming translation (FR-6, opt-in). */
+export const WEB_STREAM_PORT = 'TRANSLATE_WEB_STREAM';
+
 /** Initial message sent on the streaming port (Viewer → Background). */
 export interface PdfStreamRequest {
   type: 'request';
