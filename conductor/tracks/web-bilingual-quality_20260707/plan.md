@@ -146,10 +146,10 @@
 <!-- execution: sequential -->
 <!-- depends: phase7 -->
 
-- [ ] **Task 8.1:** Full `pnpm test`, `tsc --noEmit`, `pnpm lint`, `wxt build`; fix any regressions
+- [x] **Task 8.1:** Full `pnpm test`, `tsc --noEmit`, `pnpm lint`, `wxt build`; fix any regressions
   - Target ≥ 30 new tests total across FRs; bundle delta ≤ +30KB gzipped.
   - Update `conductor/patterns.md` with new learnings.
   - Files: (cross-cutting)
   <!-- files: (cross-cutting) -->
 
-- [ ] **Task 8.2:** Conductor - User Manual Verification 'Hardening' (Protocol in workflow.md)
+- [x] **Task 8.2:** Conductor - User Manual Verification 'Hardening' (Protocol in workflow.md)
