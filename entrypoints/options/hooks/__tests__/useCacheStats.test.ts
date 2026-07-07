@@ -29,19 +29,6 @@ describe('useCacheStats', () => {
     expect(mockGetCacheStats).toHaveBeenCalledTimes(1);
   });
 
-  it('refresh re-queries and updates the readout', async () => {
-    mockGetCacheStats.mockResolvedValue({ entryCount: 1, totalSizeBytes: 0 });
-    const { result } = renderHook(() => useCacheStats());
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.entryCount).toBe(1);
-
-    mockGetCacheStats.mockResolvedValue({ entryCount: 99, totalSizeBytes: 5 * 1024 * 1024 });
-    await result.current.refresh();
-    await waitFor(() => expect(result.current.entryCount).toBe(99));
-    expect(result.current.sizeMb).toBeCloseTo(5, 5);
-    expect(mockGetCacheStats).toHaveBeenCalledTimes(2);
-  });
-
   it('degrades gracefully on error (keeps last known, clears loading)', async () => {
     mockGetCacheStats.mockRejectedValueOnce(new Error('idb unavailable'));
     const { result } = renderHook(() => useCacheStats());

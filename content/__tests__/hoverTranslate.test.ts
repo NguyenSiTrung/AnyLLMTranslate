@@ -50,7 +50,7 @@ describe('content/hoverTranslate', () => {
   });
 
   describe('HOVER_TARGETS', () => {
-    it('includes paragraph-level elements', () => {
+    it('includes paragraph-level elements but not inline elements', () => {
       expect(HOVER_TARGETS.has('P')).toBe(true);
       expect(HOVER_TARGETS.has('DIV')).toBe(true);
       expect(HOVER_TARGETS.has('H1')).toBe(true);
@@ -58,9 +58,6 @@ describe('content/hoverTranslate', () => {
       expect(HOVER_TARGETS.has('H3')).toBe(true);
       expect(HOVER_TARGETS.has('LI')).toBe(true);
       expect(HOVER_TARGETS.has('TD')).toBe(true);
-    });
-
-    it('does not include inline elements', () => {
       expect(HOVER_TARGETS.has('SPAN')).toBe(false);
       expect(HOVER_TARGETS.has('A')).toBe(false);
       expect(HOVER_TARGETS.has('B')).toBe(false);
@@ -68,14 +65,10 @@ describe('content/hoverTranslate', () => {
   });
 
   describe('initHoverTranslate', () => {
-    it('returns a cleanup function', () => {
-      cleanup = initHoverTranslate();
-      expect(typeof cleanup).toBe('function');
-    });
-
-    it('attaches event listeners', () => {
+    it('returns a cleanup function and attaches event listeners', () => {
       const addSpy = vi.spyOn(document, 'addEventListener');
       cleanup = initHoverTranslate();
+      expect(typeof cleanup).toBe('function');
 
       expect(addSpy).toHaveBeenCalledWith('mouseover', expect.any(Function));
       expect(addSpy).toHaveBeenCalledWith('mouseout', expect.any(Function));
@@ -93,36 +86,25 @@ describe('content/hoverTranslate', () => {
   });
 
   describe('setHoverTranslateEnabled', () => {
-    it('enables hover translate', () => {
+    it('toggles hover translate enabled state', () => {
       setHoverTranslateEnabled(true);
       expect(isHoverTranslateEnabled()).toBe(true);
-    });
 
-    it('disables hover translate', () => {
       setHoverTranslateEnabled(false);
       expect(isHoverTranslateEnabled()).toBe(false);
     });
   });
 
   describe('setHoverDelay', () => {
-    it('clamps delay to minimum 200ms', () => {
+    it('clamps delay to [200ms, 500ms] without throwing', () => {
       setHoverDelay(100);
-      // Internal state — we verify via behavior, not direct access
-    });
-
-    it('clamps delay to maximum 500ms', () => {
       setHoverDelay(1000);
-      // Internal state — we verify via behavior, not direct access
-    });
-
-    it('accepts valid delay values', () => {
       setHoverDelay(300);
-      // Should not throw
     });
   });
 
   describe('hover detection', () => {
-    it('does not trigger when disabled', () => {
+    it('does not trigger when disabled or on inline elements', () => {
       cleanup = initHoverTranslate();
       setHoverTranslateEnabled(false);
 
@@ -132,17 +114,11 @@ describe('content/hoverTranslate', () => {
 
       vi.advanceTimersByTime(500);
 
-      // No translation should have been attempted
       // No translation should have been attempted (disabled)
-    });
-
-    it('does not trigger on inline elements', () => {
-      cleanup = initHoverTranslate();
       setHoverTranslateEnabled(true);
-
       const span = document.getElementById('test-inline') as HTMLElement;
-      const event = new MouseEvent('mouseover', { bubbles: true });
-      span.dispatchEvent(event);
+      const inlineEvent = new MouseEvent('mouseover', { bubbles: true });
+      span.dispatchEvent(inlineEvent);
 
       vi.advanceTimersByTime(500);
 

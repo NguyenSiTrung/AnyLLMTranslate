@@ -50,22 +50,21 @@ describe('subtitle URL allow-list hardening', () => {
     fetchMock.mockRejectedValue(new Error('network disabled in test'));
   });
 
-  it('accepts valid YouTube subtitle URL', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'https://www.youtube.com/api/timedtext?v=abc' },
-      fakeSender(),
-    );
-    // fetch will fail in test but the URL check should pass
-    expect(result).toBeDefined();
-    expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
-  });
-
-  it('accepts valid Udemy CDN URL', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'https://assets.udemycdn.com/subtitle.vtt' },
-      fakeSender(),
-    );
-    expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
+  it('accepts valid allowed-list subtitle URLs (YouTube, Udemy CDN, CloudFront subdomain)', async () => {
+    const urls = [
+      'https://www.youtube.com/api/timedtext?v=abc',
+      'https://assets.udemycdn.com/subtitle.vtt',
+      'https://cdn.cloudfront.net/subtitles/en.vtt',
+    ];
+    for (const url of urls) {
+      const result = await handleMessage(
+        { action: 'FETCH_SUBTITLE', url },
+        fakeSender(),
+      );
+      // fetch will fail in test but the URL check should pass
+      expect(result).toBeDefined();
+      expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
+    }
   });
 
   it('rejects URL with allowed domain in path (not hostname)', async () => {
@@ -76,44 +75,21 @@ describe('subtitle URL allow-list hardening', () => {
     expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
   });
 
-  it('rejects URL with allowed domain in query string', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'https://evil.com/proxy?target=youtube.com' },
-      fakeSender(),
-    );
-    expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
-  });
-
-  it('rejects localhost URLs containing allowed domain suffix', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'http://localhost:8080/youtube.com/captions' },
-      fakeSender(),
-    );
-    expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
-  });
-
-  it('rejects private IP addresses', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'http://192.168.1.1/subtitles.vtt' },
-      fakeSender(),
-    );
-    expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
-  });
-
-  it('rejects non-HTTP protocols', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'file:///etc/passwd' },
-      fakeSender(),
-    );
-    expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
-  });
-
-  it('rejects data: URLs', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'data:text/plain,youtube.com' },
-      fakeSender(),
-    );
-    expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
+  it('rejects non-HTTP protocols and private/local hosts', async () => {
+    const urls = [
+      'file:///etc/passwd',
+      'http://192.168.1.1/subtitles.vtt',
+      'http://localhost:8080/youtube.com/captions',
+      'https://evil.com/proxy?target=youtube.com',
+      'data:text/plain,youtube.com',
+    ];
+    for (const url of urls) {
+      const result = await handleMessage(
+        { action: 'FETCH_SUBTITLE', url },
+        fakeSender(),
+      );
+      expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
+    }
   });
 
   it('rejects invalid URL strings', async () => {
@@ -122,14 +98,6 @@ describe('subtitle URL allow-list hardening', () => {
       fakeSender(),
     );
     expect(result).toEqual({ success: false, error: 'URL not in subtitle allow-list' });
-  });
-
-  it('accepts CDN subdomain of allowed domain', async () => {
-    const result = await handleMessage(
-      { action: 'FETCH_SUBTITLE', url: 'https://cdn.cloudfront.net/subtitles/en.vtt' },
-      fakeSender(),
-    );
-    expect((result as { error?: string }).error).not.toBe('URL not in subtitle allow-list');
   });
 
   it('accepts Max APAC media CDN hostname', async () => {

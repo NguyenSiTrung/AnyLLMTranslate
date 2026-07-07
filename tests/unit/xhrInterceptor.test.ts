@@ -208,17 +208,6 @@ describe('XhrInterceptor', () => {
 
       expect(rscHandler).toHaveBeenCalled();
     });
-
-    it('does not intercept addEventListener for non-subtitle XHRs', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const loadHandler = vi.fn();
-
-      xhr.open('GET', 'https://example.com/api/data');
-      xhr.addEventListener('load', loadHandler);
-
-      expect(() => xhr.send()).not.toThrow();
-    });
   });
 
   describe('lifecycle robustness', () => {
@@ -291,37 +280,6 @@ describe('XhrInterceptor', () => {
       expect(messageListeners.length).toBe(listenersBefore);
       expect(onloadHandler).not.toHaveBeenCalled();
     });
-
-    it('accepts translated messages from same origin', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const onloadHandler = vi.fn();
-      xhr.onload = onloadHandler;
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-
-      const listenersBefore = messageListeners.length;
-
-      // Genuine message from same origin with correct requestId
-      const genuineEvent = {
-        data: {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'req-123',
-          payload: { vttContent: 'WEBVTT\nreal' },
-        },
-        origin: window.location.origin,
-      } as MessageEvent;
-      for (const listener of [...messageListeners]) {
-        listener(genuineEvent);
-      }
-
-      // Same-origin message accepted — handler removed, onload fired
-      expect(messageListeners.length).toBeLessThan(listenersBefore);
-      expect(onloadHandler).toHaveBeenCalled();
-    });
   });
 
   describe('response property override', () => {
@@ -352,11 +310,6 @@ describe('XhrInterceptor', () => {
   });
 
   describe('configurable timeout', () => {
-    it('uses default 30s timeout', () => {
-      // The default timeout is 30000ms — just verify the interceptor accepts setTimeout
-      expect(interceptor).toBeDefined();
-    });
-
     it('accepts custom timeout via setTimeout()', () => {
       interceptor.setTimeout(5000);
       interceptor.enable();

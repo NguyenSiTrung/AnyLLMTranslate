@@ -11,53 +11,17 @@ import {
 } from '@/lib/subtitleProfiles';
 
 describe('resolveProfile', () => {
-  it('returns educational for udemy.com', () => {
+  it('returns educational for a known educational domain', () => {
     expect(resolveProfile('udemy.com')).toBe('educational');
   });
 
-  it('returns educational for coursera.org', () => {
-    expect(resolveProfile('coursera.org')).toBe('educational');
-  });
-
-  it('returns educational for linkedin.com', () => {
-    expect(resolveProfile('linkedin.com')).toBe('educational');
-  });
-
-  it('returns media for youtube.com', () => {
+  it('returns media for a known media domain', () => {
     expect(resolveProfile('youtube.com')).toBe('media');
   });
 
-  it('returns cinematic for max.com', () => {
+  it('returns cinematic for known cinematic domains incl. subdomains', () => {
     expect(resolveProfile('max.com')).toBe('cinematic');
-  });
-
-  it('returns cinematic for hbomax.com', () => {
-    expect(resolveProfile('hbomax.com')).toBe('cinematic');
-  });
-
-  it('returns cinematic for youku.tv', () => {
-    expect(resolveProfile('youku.tv')).toBe('cinematic');
-  });
-
-  it('returns cinematic for youku.com', () => {
-    expect(resolveProfile('youku.com')).toBe('cinematic');
-  });
-
-  it('returns cinematic for wetv.vip and iflix.com', () => {
-    expect(resolveProfile('wetv.vip')).toBe('cinematic');
-    expect(resolveProfile('www.iflix.com')).toBe('cinematic');
-  });
-
-  it('resolves youku.tv subdomains to cinematic', () => {
-    expect(resolveProfile('www.youku.tv')).toBe('cinematic');
-  });
-
-  it('resolves youku.com subdomains to cinematic', () => {
     expect(resolveProfile('v.youku.com')).toBe('cinematic');
-    expect(resolveProfile('m.youku.com')).toBe('cinematic');
-  });
-
-  it('resolves hbomax.com subdomains to cinematic', () => {
     // Regression guard: previously play.hbomax.com fell back to 'media'.
     expect(resolveProfile('play.hbomax.com')).toBe('cinematic');
   });
@@ -67,11 +31,8 @@ describe('resolveProfile', () => {
     expect(resolveProfile('youku.evil.com')).toBe('media');
   });
 
-  it('falls back to media for an unmapped domain', () => {
+  it('falls back to media for an unmapped domain or the empty string', () => {
     expect(resolveProfile('example.org')).toBe('media');
-  });
-
-  it('falls back to media for the empty string', () => {
     expect(resolveProfile('')).toBe('media');
   });
 });

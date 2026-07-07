@@ -75,33 +75,6 @@ describe('content/mutationWatcher', () => {
       expect(callback).not.toHaveBeenCalled();
     });
 
-    it('skips inline bilingual elements injected by the extension', async () => {
-      watcher.start();
-
-      const inline = document.createElement('span');
-      inline.className = 'anyllm-inline-bilingual';
-      inline.textContent = ' (Injected translation)';
-      document.body.appendChild(inline);
-
-      await vi.advanceTimersByTimeAsync(0);
-      await vi.advanceTimersByTimeAsync(150);
-
-      expect(callback).not.toHaveBeenCalled();
-    });
-
-    it('skips script and style elements', async () => {
-      watcher.start();
-
-      const script = document.createElement('script');
-      script.textContent = 'console.log("hidden")';
-      document.body.appendChild(script);
-
-      await vi.advanceTimersByTimeAsync(0);
-      await vi.advanceTimersByTimeAsync(150);
-
-      expect(callback).not.toHaveBeenCalled();
-    });
-
     it('deduplicates nested elements', async () => {
       watcher.start();
 

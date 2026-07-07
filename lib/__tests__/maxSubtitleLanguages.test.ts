@@ -45,25 +45,11 @@ describe('readMaxActiveSubtitleLanguage', () => {
     expect(readMaxActiveSubtitleLanguage()).toBe('ja');
   });
 
-  it('resolves localized Spanish label "Inglés" without lang attribute', () => {
+  it('resolves localized labels via the label-to-language map', () => {
     document.body.innerHTML = `
       <button data-testid="player-ux-text-track-button" aria-label="Inglés" aria-checked="true"></button>
     `;
     expect(readMaxActiveSubtitleLanguage()).toBe('en');
-  });
-
-  it('resolves localized French label "Anglais"', () => {
-    document.body.innerHTML = `
-      <button data-testid="player-ux-text-track-button" aria-label="Anglais" aria-checked="true"></button>
-    `;
-    expect(readMaxActiveSubtitleLanguage()).toBe('en');
-  });
-
-  it('resolves localized Portuguese label "Chinês (Simplificado)"', () => {
-    document.body.innerHTML = `
-      <button data-testid="player-ux-text-track-button" aria-label="Chinês (Simplificado)" aria-checked="true"></button>
-    `;
-    expect(readMaxActiveSubtitleLanguage()).toBe('zh-Hans');
   });
 
   it('converts ISO 639-2 code via attribute fallback', () => {

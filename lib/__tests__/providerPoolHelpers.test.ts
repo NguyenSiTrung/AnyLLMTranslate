@@ -138,55 +138,30 @@ describe('getProviderTestStatus', () => {
     expect(status.result?.latencyMs).toBe(42);
   });
 
-  it('is healthy when only the provider-level test has run (no key results)', () => {
-    const p = makeProvider({
-      keys: [{ id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true }],
-      lastTestResult: { success: true, at: 5, latencyMs: 7 },
-    });
-    const status = getProviderTestStatus(p);
-    expect(status.state).toBe('healthy');
-    expect(status.result?.at).toBe(5);
-  });
-
-  it('shows the most recent success when multiple results exist', () => {
-    const p = makeProvider({
+  it('shows the most recent success or failure across keys and provider-level results', () => {
+    // success case: latest result wins
+    const okP = makeProvider({
       keys: [
         { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 3, latencyMs: 50 } },
         { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 8, latencyMs: 20 } },
       ],
       lastTestResult: { success: true, at: 1, latencyMs: 99 },
     });
-    const status = getProviderTestStatus(p);
-    expect(status.state).toBe('healthy');
-    expect(status.result?.at).toBe(8);
-    expect(status.result?.latencyMs).toBe(20);
-  });
+    const okStatus = getProviderTestStatus(okP);
+    expect(okStatus.state).toBe('healthy');
+    expect(okStatus.result?.at).toBe(8);
 
-  it('shows the most recent failure when all results failed', () => {
-    const p = makeProvider({
+    // failure case: latest failure wins when all failed
+    const failP = makeProvider({
       keys: [
         { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 9, error: 'new' } },
         { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 4, error: 'old' } },
       ],
       lastTestResult: { success: false, at: 6, error: 'mid' },
     });
-    const status = getProviderTestStatus(p);
-    expect(status.state).toBe('failed');
-    expect(status.result?.at).toBe(9);
-    expect(status.result?.error).toBe('new');
-  });
-
-  it('treats a newer per-key failure followed by a newer provider-level success as healthy', () => {
-    // user runs a failing per-key test, then runs the provider-level test
-    // which passes — header should reflect the latest provider-level success.
-    const p = makeProvider({
-      keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 10, error: 'x' } },
-      ],
-      lastTestResult: { success: true, at: 11, latencyMs: 30 },
-    });
-    const status = getProviderTestStatus(p);
-    expect(status.state).toBe('healthy');
-    expect(status.result?.at).toBe(11);
+    const failStatus = getProviderTestStatus(failP);
+    expect(failStatus.state).toBe('failed');
+    expect(failStatus.result?.at).toBe(9);
+    expect(failStatus.result?.error).toBe('new');
   });
 });

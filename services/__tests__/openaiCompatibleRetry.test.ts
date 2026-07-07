@@ -202,42 +202,33 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
 
   // ── Non-429 errors unaffected ────────────────────────────────────────────
 
-  it('500 errors use the existing retry path (PER_SERVICE_MAX_RETRIES=1), not 429 backoff', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(make500Response());
-    globalThis.fetch = fetchMock;
-
+  it('non-429 errors (500 / network / 401) use the existing retry path, not 429 backoff', async () => {
+    // 500 → existing retry (1 initial + 1 retry = 2 calls)
+    const fetch500 = vi.fn().mockResolvedValue(make500Response());
+    globalThis.fetch = fetch500;
     const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    const p500 = startTranslate(service, new Map([['p1', 'Hello']]));
     await flushTimers();
-
-    let thrown: unknown;
+    let thrown500: unknown;
     try {
-      await promise;
+      await p500;
     } catch (error) {
-      thrown = error;
+      thrown500 = error;
     }
+    expect(thrown500).toBeInstanceOf(ApiError);
+    expect((thrown500 as ApiError).statusCode).toBe(500);
+    expect(fetch500).toHaveBeenCalledTimes(2);
 
-    expect(thrown).toBeInstanceOf(ApiError);
-    expect((thrown as ApiError).statusCode).toBe(500);
-    // 1 initial + 1 retry = 2 total fetch calls (existing 5xx path).
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('network errors use the existing retry path, not 429 backoff', async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-    globalThis.fetch = fetchMock;
-
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    // network error → existing retry path (2 calls)
+    const fetchNet = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    globalThis.fetch = fetchNet;
+    const pNet = startTranslate(new OpenAICompatibleService(makeConfig()), new Map([['p1', 'Hello']]));
     await flushTimers();
+    await expect(pNet).rejects.toThrow('ECONNREFUSED');
+    expect(fetchNet).toHaveBeenCalledTimes(2);
 
-    await expect(promise).rejects.toThrow('ECONNREFUSED');
-    // 1 initial + 1 retry = 2 total fetch calls (existing network-error path).
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('non-429 client errors (401) are not retried at all', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+    // 401 client error → not retried at all (1 call)
+    const fetch401 = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
       statusText: 'Unauthorized',
@@ -245,33 +236,28 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
       json: () => Promise.resolve({}),
       headers: new Headers(),
     } as unknown as Response);
-    globalThis.fetch = fetchMock;
-
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    globalThis.fetch = fetch401;
+    const p401 = startTranslate(new OpenAICompatibleService(makeConfig()), new Map([['p1', 'Hello']]));
     await flushTimers();
-
-    let thrown: unknown;
+    let thrown401: unknown;
     try {
-      await promise;
+      await p401;
     } catch (error) {
-      thrown = error;
+      thrown401 = error;
     }
-
-    expect(thrown).toBeInstanceOf(ApiError);
-    expect((thrown as ApiError).statusCode).toBe(401);
-    // No retries for 401 — single fetch call.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(thrown401).toBeInstanceOf(ApiError);
+    expect((thrown401 as ApiError).statusCode).toBe(401);
+    expect(fetch401).toHaveBeenCalledTimes(1);
   });
 
   // ── Success after 429 retry ──────────────────────────────────────────────
 
-  it('returns normally when a 429 retry succeeds', async () => {
-    const fetchMock = vi.fn()
+  it('returns normally when a 429 retry succeeds (with or without Retry-After)', async () => {
+    // With Retry-After: 1 failed + 1 success = 2 calls.
+    const fetchWithRetryAfter = vi.fn()
       .mockResolvedValueOnce(make429Response('1'))
       .mockResolvedValueOnce(make200Response('{"translations":{"p1":"Xin chao"}}'));
-    globalThis.fetch = fetchMock;
-
+    globalThis.fetch = fetchWithRetryAfter;
     const service = new OpenAICompatibleService(makeConfig());
     const promise = startTranslate(service, new Map([['p1', 'Hello']]));
     await flushTimers();
@@ -279,25 +265,21 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
 
     expect(result.success).toBe(true);
     expect(result.translations.get('p1')).toBe('Xin chao');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
+    expect(fetchWithRetryAfter).toHaveBeenCalledTimes(2);
 
-  it('returns normally when a 429 retry (no Retry-After) succeeds', async () => {
-    const fetchMock = vi.fn()
+    // Without Retry-After: 2 failed + 1 success = 3 calls.
+    const fetchNoRetryAfter = vi.fn()
       .mockResolvedValueOnce(make429Response())
       .mockResolvedValueOnce(make429Response())
       .mockResolvedValueOnce(make200Response('{"translations":{"p1":"Xin chao"}}'));
-    globalThis.fetch = fetchMock;
-
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    globalThis.fetch = fetchNoRetryAfter;
+    const promise2 = startTranslate(new OpenAICompatibleService(makeConfig()), new Map([['p1', 'Hello']]));
     await flushTimers();
-    const result = await promise;
+    const result2 = await promise2;
 
-    expect(result.success).toBe(true);
-    expect(result.translations.get('p1')).toBe('Xin chao');
-    // 2 failed 429 attempts + 1 successful = 3 total fetch calls.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result2.success).toBe(true);
+    expect(result2.translations.get('p1')).toBe('Xin chao');
+    expect(fetchNoRetryAfter).toHaveBeenCalledTimes(3);
   });
 
   // ── Jitter verification ─────────────────────────────────────────────────

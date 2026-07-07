@@ -30,40 +30,27 @@ beforeEach(() => {
 });
 
 describe('filmGlossaryStore', () => {
-  it('uses the documented storage key', () => {
+  it('round-trips, overwrites, isolates by key, and persists under the documented storage key', async () => {
     expect(FILM_GLOSSARY_STORAGE_KEY).toBe('anyllm-film-glossary');
-  });
-
-  it('load returns undefined on miss', async () => {
+    // miss
     expect(await loadFilmGlossary('deadbeef')).toBeUndefined();
-  });
-
-  it('save then load round-trips', async () => {
+    // save then load round-trip
     await saveFilmGlossary('abc123', { Dumbledore: 'Phù thủy' });
     expect(await loadFilmGlossary('abc123')).toEqual({ Dumbledore: 'Phù thủy' });
-  });
-
-  it('save overwrites an existing key', async () => {
-    await saveFilmGlossary('abc123', { Dumbledore: 'Old' });
+    // overwrite
     await saveFilmGlossary('abc123', { Voldemort: 'New' });
     expect(await loadFilmGlossary('abc123')).toEqual({ Voldemort: 'New' });
-  });
-
-  it('persisted map lives under the film-glossary storage key', async () => {
-    await saveFilmGlossary('abc123', { Dumbledore: 'Phù thủy' });
+    // persisted under the storage key, namespaced by content id
     expect(backing[FILM_GLOSSARY_STORAGE_KEY]).toEqual({
-      abc123: { Dumbledore: 'Phù thủy' },
+      abc123: { Voldemort: 'New' },
     });
   });
 
-  it('load returns undefined (not throw) on storage read error', async () => {
+  it('swallows storage read/write errors (returns undefined instead of throwing)', async () => {
     (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('storage exploded'),
     );
     await expect(loadFilmGlossary('abc123')).resolves.toBeUndefined();
-  });
-
-  it('save does not throw on storage write error', async () => {
     (chrome.storage.local.set as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('quota exceeded'),
     );

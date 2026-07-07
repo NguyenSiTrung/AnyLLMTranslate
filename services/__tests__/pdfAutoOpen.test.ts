@@ -17,19 +17,16 @@ const providerReady = {
 };
 
 describe('buildSessionKey', () => {
-  it('joins tabId and url origin+pathname (strips hash/query churn)', () => {
-    const k1 = buildSessionKey(7, 'https://arxiv.org/pdf/2606.20543');
-    const k2 = buildSessionKey(7, 'https://arxiv.org/pdf/2606.20543#page=3');
-    expect(k1).toBe(k2);
-  });
-
-  it('strips query strings', () => {
-    const k1 = buildSessionKey(7, 'https://x/y.pdf');
-    const k2 = buildSessionKey(7, 'https://x/y.pdf?download=1');
-    expect(k1).toBe(k2);
-  });
-
-  it('differs across tabs', () => {
+  it('strips hash and query churn but differs across tabs', () => {
+    // hash churn
+    expect(buildSessionKey(7, 'https://arxiv.org/pdf/2606.20543')).toBe(
+      buildSessionKey(7, 'https://arxiv.org/pdf/2606.20543#page=3'),
+    );
+    // query churn
+    expect(buildSessionKey(7, 'https://x/y.pdf')).toBe(
+      buildSessionKey(7, 'https://x/y.pdf?download=1'),
+    );
+    // differs across tabs
     expect(buildSessionKey(1, 'https://x/y.pdf')).not.toBe(buildSessionKey(2, 'https://x/y.pdf'));
   });
 });
@@ -46,16 +43,42 @@ describe('shouldAutoOpenPdf', () => {
     expect(r.open).toBe(true);
   });
 
-  it('does NOT open when autoOpen is off', () => {
-    const r = shouldAutoOpenPdf({
+  it('does NOT open when autoOpen is off, provider is not ready, or site is blocklisted (reason guards)', () => {
+    // autoOpen off
+    const rOff = shouldAutoOpenPdf({
       url: 'https://x/y.pdf',
       viewerOrigin: 'chrome-extension://abc/',
       settings: { ...providerReady, pdfSettings: { ...providerReady.pdfSettings, autoOpen: 'off' } },
       sessionKey: 'k1',
       openedSessionKeys: new Set(),
     });
-    expect(r.open).toBe(false);
-    expect(r.reason).toMatch(/autoOpen/i);
+    expect(rOff.open).toBe(false);
+    expect(rOff.reason).toMatch(/autoOpen/i);
+
+    // provider not ready
+    const rProvider = shouldAutoOpenPdf({
+      url: 'https://x/y.pdf',
+      viewerOrigin: 'chrome-extension://abc/',
+      settings: { ...baseSettings, provider: { ...baseSettings.provider, baseUrl: '', model: '' } },
+      sessionKey: 'k1',
+      openedSessionKeys: new Set(),
+    });
+    expect(rProvider.open).toBe(false);
+    expect(rProvider.reason).toMatch(/provider/i);
+
+    // neverAutoOpenSites blocklist
+    const rBlocked = shouldAutoOpenPdf({
+      url: 'https://blocked.example.com/p.pdf',
+      viewerOrigin: 'chrome-extension://abc/',
+      settings: {
+        ...providerReady,
+        pdfSettings: { ...providerReady.pdfSettings, neverAutoOpenSites: ['blocked.example.com'] },
+      },
+      sessionKey: 'k1',
+      openedSessionKeys: new Set(),
+    });
+    expect(rBlocked.open).toBe(false);
+    expect(rBlocked.reason).toMatch(/never|blocked/i);
   });
 
   it('does NOT open when url is the viewer itself (infinite-loop guard)', () => {
@@ -68,33 +91,6 @@ describe('shouldAutoOpenPdf', () => {
     });
     expect(r.open).toBe(false);
     expect(r.reason).toMatch(/viewer|loop/i);
-  });
-
-  it('does NOT open when provider cannot translate', () => {
-    const r = shouldAutoOpenPdf({
-      url: 'https://x/y.pdf',
-      viewerOrigin: 'chrome-extension://abc/',
-      settings: { ...baseSettings, provider: { ...baseSettings.provider, baseUrl: '', model: '' } },
-      sessionKey: 'k1',
-      openedSessionKeys: new Set(),
-    });
-    expect(r.open).toBe(false);
-    expect(r.reason).toMatch(/provider/i);
-  });
-
-  it('does NOT open when hostname is in neverAutoOpenSites', () => {
-    const r = shouldAutoOpenPdf({
-      url: 'https://blocked.example.com/p.pdf',
-      viewerOrigin: 'chrome-extension://abc/',
-      settings: {
-        ...providerReady,
-        pdfSettings: { ...providerReady.pdfSettings, neverAutoOpenSites: ['blocked.example.com'] },
-      },
-      sessionKey: 'k1',
-      openedSessionKeys: new Set(),
-    });
-    expect(r.open).toBe(false);
-    expect(r.reason).toMatch(/never|blocked/i);
   });
 
   it('does NOT open when session key was already opened (dedupe)', () => {

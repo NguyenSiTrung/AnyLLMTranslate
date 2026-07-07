@@ -66,42 +66,28 @@ afterEach(() => {
 /* ── isEditableElement ────────────────────────────────────────── */
 
 describe('isEditableElement', () => {
-  it('returns true for input[type="text"]', () => {
+  it('returns true for editable elements (input, textarea, contentEditable)', () => {
     const input = document.createElement('input');
     input.type = 'text';
     expect(isEditableElement(input)).toBe(true);
-  });
 
-  it('returns true for input[type="search"]', () => {
-    const input = document.createElement('input');
-    input.type = 'search';
-    expect(isEditableElement(input)).toBe(true);
-  });
-
-  it('returns true for textarea', () => {
     const textarea = document.createElement('textarea');
     expect(isEditableElement(textarea)).toBe(true);
-  });
 
-  it('returns true for contentEditable elements', () => {
     const div = document.createElement('div');
     div.contentEditable = 'true';
     document.body.appendChild(div);
     expect(isEditableElement(div)).toBe(true);
   });
 
-  it('returns false for input[type="password"]', () => {
-    const input = document.createElement('input');
-    input.type = 'password';
-    expect(isEditableElement(input)).toBe(false);
-  });
-
-  it('returns false for non-editable div', () => {
+  it('returns false for non-editable elements, passwords, and null', () => {
     const div = document.createElement('div');
     expect(isEditableElement(div)).toBe(false);
-  });
 
-  it('returns false for null', () => {
+    const password = document.createElement('input');
+    password.type = 'password';
+    expect(isEditableElement(password)).toBe(false);
+
     expect(isEditableElement(null)).toBe(false);
   });
 });
@@ -109,43 +95,17 @@ describe('isEditableElement', () => {
 /* ── isCodeEditor ─────────────────────────────────────────────── */
 
 describe('isCodeEditor', () => {
-  it('detects Monaco editor by class', () => {
-    const el = document.createElement('div');
-    el.className = 'monaco-editor';
-    const child = document.createElement('textarea');
-    el.appendChild(child);
-    document.body.appendChild(el);
-    expect(isCodeEditor(child)).toBe(true);
-  });
+  it('detects known code-editor wrappers and rejects regular inputs', () => {
+    for (const cls of ['monaco-editor', 'CodeMirror', 'ace_editor', 'cm-editor']) {
+      const el = document.createElement('div');
+      el.className = cls;
+      const child = document.createElement('textarea');
+      el.appendChild(child);
+      document.body.appendChild(el);
+      expect(isCodeEditor(child)).toBe(true);
+      el.remove();
+    }
 
-  it('detects CodeMirror by class', () => {
-    const el = document.createElement('div');
-    el.className = 'CodeMirror';
-    const child = document.createElement('textarea');
-    el.appendChild(child);
-    document.body.appendChild(el);
-    expect(isCodeEditor(child)).toBe(true);
-  });
-
-  it('detects Ace editor by class', () => {
-    const el = document.createElement('div');
-    el.className = 'ace_editor';
-    const child = document.createElement('textarea');
-    el.appendChild(child);
-    document.body.appendChild(el);
-    expect(isCodeEditor(child)).toBe(true);
-  });
-
-  it('detects cm-editor by class', () => {
-    const el = document.createElement('div');
-    el.className = 'cm-editor';
-    const child = document.createElement('textarea');
-    el.appendChild(child);
-    document.body.appendChild(el);
-    expect(isCodeEditor(child)).toBe(true);
-  });
-
-  it('returns false for regular input', () => {
     const input = document.createElement('input');
     input.type = 'text';
     document.body.appendChild(input);
@@ -156,20 +116,16 @@ describe('isCodeEditor', () => {
 /* ── getElementText ───────────────────────────────────────────── */
 
 describe('getElementText', () => {
-  it('gets value from input', () => {
+  it('reads value from inputs/textareas and textContent from contentEditable', () => {
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'hello world';
     expect(getElementText(input)).toBe('hello world');
-  });
 
-  it('gets value from textarea', () => {
     const textarea = document.createElement('textarea');
     textarea.value = 'some text';
     expect(getElementText(textarea)).toBe('some text');
-  });
 
-  it('gets textContent from contentEditable', () => {
     const div = document.createElement('div');
     div.contentEditable = 'true';
     div.textContent = 'editable text';
@@ -180,7 +136,7 @@ describe('getElementText', () => {
 /* ── replaceElementText ───────────────────────────────────────── */
 
 describe('replaceElementText', () => {
-  it('dispatches input and change events on input', () => {
+  it('dispatches input/change events on inputs and textareas', () => {
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'original';
@@ -195,19 +151,17 @@ describe('replaceElementText', () => {
 
     expect(inputHandler).toHaveBeenCalledTimes(1);
     expect(changeHandler).toHaveBeenCalledTimes(1);
-  });
 
-  it('dispatches input and change events on textarea', () => {
     const textarea = document.createElement('textarea');
     textarea.value = 'original';
     document.body.appendChild(textarea);
 
-    const inputHandler = vi.fn();
-    textarea.addEventListener('input', inputHandler);
+    const taInputHandler = vi.fn();
+    textarea.addEventListener('input', taInputHandler);
 
     replaceElementText(textarea, 'replaced');
 
-    expect(inputHandler).toHaveBeenCalledTimes(1);
+    expect(taInputHandler).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -466,7 +420,7 @@ describe('visual feedback', () => {
     await vi.advanceTimersByTimeAsync(10);
   });
 
-  it('updates toast to success on completion', async () => {
+  it('updates toast to success on completion and auto-dismisses after 2 seconds', async () => {
     const input = createFocusedInput('hello   ');
     mockSendMessage.mockResolvedValueOnce({
       success: true,
@@ -481,6 +435,10 @@ describe('visual feedback', () => {
     const toast = document.querySelector(`.${TOAST_CLASS}`);
     expect(toast?.getAttribute('data-type')).toBe('success');
     expect(toast?.textContent).toBe('Translated ✓');
+
+    // Advance 2 seconds for auto-dismiss
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
   });
 
   it('shows error toast on failure', async () => {
@@ -498,26 +456,6 @@ describe('visual feedback', () => {
     const toast = document.querySelector(`.${TOAST_CLASS}`);
     expect(toast?.getAttribute('data-type')).toBe('error');
     expect(toast?.textContent).toBe('⚠ Translation failed');
-  });
-
-  it('auto-dismisses toast after 2 seconds', async () => {
-    const input = createFocusedInput('hello   ');
-    mockSendMessage.mockResolvedValueOnce({
-      success: true,
-      translatedText: 'xin chào',
-    });
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(document.querySelector(`.${TOAST_CLASS}`)).not.toBeNull();
-
-    // Advance 2 seconds for auto-dismiss
-    await vi.advanceTimersByTimeAsync(2000);
-
-    expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
   });
 });
 
@@ -709,36 +647,25 @@ describe('empty field guard', () => {
     cleanup();
   });
 
-  it('does not count taps on empty field (prevents swallowed gestures)', async () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = '';
-    document.body.appendChild(input);
-    input.focus();
+  it('does not count taps on empty or whitespace-only field (prevents swallowed gestures)', async () => {
+    for (const value of ['', '     ']) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = value;
+      document.body.appendChild(input);
+      input.focus();
 
-    // Fire many more than tapCount — should never trigger because field is empty.
-    for (let i = 0; i < 6; i++) {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      // Fire many more than tapCount — should never trigger because field is empty.
+      for (let i = 0; i < 6; i++) {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      }
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
+      input.remove();
+      removeToast();
     }
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(mockSendMessage).not.toHaveBeenCalled();
-    expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
-  });
-
-  it('does not count taps when field has only whitespace', async () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = '     ';
-    document.body.appendChild(input);
-    input.focus();
-
-    for (let i = 0; i < 6; i++) {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    }
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });
 

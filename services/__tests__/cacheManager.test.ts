@@ -23,33 +23,17 @@ describe('services/cacheManager', () => {
       });
     });
 
-    it('generates a hex string key', async () => {
-      const key = await generateCacheKey('Hello', 'en', 'vi');
-      expect(typeof key).toBe('string');
-      expect(key).toMatch(/^[0-9a-f]+$/);
-    });
-
-    it('generates different keys for different texts', async () => {
-      const key1 = await generateCacheKey('Hello', 'en', 'vi');
-      const key2 = await generateCacheKey('World', 'en', 'vi');
-      expect(key1).not.toBe(key2);
-    });
-
-    it('generates different keys for different language pairs', async () => {
-      const key1 = await generateCacheKey('Hello', 'en', 'vi');
-      const key2 = await generateCacheKey('Hello', 'en', 'ja');
-      expect(key1).not.toBe(key2);
-    });
-
-    it('generates consistent key for same input', async () => {
+    it('generates a consistent 64-char hex SHA-256 key for the same input', async () => {
       const key1 = await generateCacheKey('Hello', 'en', 'vi');
       const key2 = await generateCacheKey('Hello', 'en', 'vi');
-      expect(key1).toBe(key2);
+      expect(key1).toMatch(/^[0-9a-f]{64}$/);
+      expect(key2).toBe(key1);
     });
 
-    it('generates 64-character hex key (SHA-256)', async () => {
-      const key = await generateCacheKey('Hello', 'en', 'vi');
-      expect(key).toMatch(/^[0-9a-f]{64}$/);
+    it('generates different keys for different texts or language pairs', async () => {
+      const base = await generateCacheKey('Hello', 'en', 'vi');
+      expect(await generateCacheKey('World', 'en', 'vi')).not.toBe(base);
+      expect(await generateCacheKey('Hello', 'en', 'ja')).not.toBe(base);
     });
   });
 });

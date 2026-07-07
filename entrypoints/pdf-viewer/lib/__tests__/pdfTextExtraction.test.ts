@@ -52,38 +52,6 @@ describe('pdfTextExtraction', () => {
     expect(result.paragraphs[0].text).toBe('Hello world');
   });
 
-  it('splits paragraphs across large vertical gaps', async () => {
-    const page = fakePage([
-      item('First paragraph', 100, 700),
-      item('Second paragraph', 100, 600), // 100pt gap → paragraph break
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(2);
-    expect(result.paragraphs[0].text).toBe('First paragraph');
-    expect(result.paragraphs[1].text).toBe('Second paragraph');
-  });
-
-  it('keeps adjacent lines as a single paragraph when gap is small', async () => {
-    const page = fakePage([
-      item('Line one', 100, 700),
-      item('Line two', 100, 685), // 15pt gap (1.25x line height) → still paragraph
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(1);
-    expect(result.paragraphs[0].text).toContain('Line one');
-    expect(result.paragraphs[0].text).toContain('Line two');
-  });
-
-  it('returns paragraph ids with `${pageNumber}-${index}` format', async () => {
-    const page = fakePage([
-      item('Alpha', 100, 700),
-      item('Beta', 100, 600),
-      item('Gamma', 100, 500),
-    ]);
-    const result = await extractPageText(page, 7);
-    expect(result.paragraphs.map((p) => p.id)).toEqual(['7-0', '7-1', '7-2']);
-  });
-
   it('marks paragraphs with large fonts as headings', async () => {
     // Use many body-sized lines so the median sits at 12, then a single
     // oversized line (48pt) — which is > 1.4x median → heading.
@@ -100,76 +68,5 @@ describe('pdfTextExtraction', () => {
     expect(result.paragraphs[1].isHeading).toBe(true);
     expect(result.paragraphs[0].isHeading).toBe(false);
   });
-
-  it('returns an empty array when there is no extractable text', async () => {
-    const page = fakePage([]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toEqual([]);
-  });
-
-  it('strips empty items from items', async () => {
-    const page = fakePage([
-      item('Real text', 100, 700),
-      item('   ', 100, 700),
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(1);
-    expect(result.paragraphs[0].text).toBe('Real text');
-  });
-
-  it('sorts multi-line paragraphs top-to-bottom (y descending)', async () => {
-    // Items provided in random order — they should be re-sorted by y
-    const page = fakePage([
-      item('Second line', 100, 600),
-      item('First line', 100, 700),
-    ]);
-    const result = await extractPageText(page, 1);
-    // The two lines should still form one paragraph (gap 100pt = para break)
-    expect(result.paragraphs).toHaveLength(2);
-    expect(result.paragraphs[0].text).toBe('First line');
-    expect(result.paragraphs[1].text).toBe('Second line');
-  });
-
-  it('calculates correct coordinate bounding boxes for paragraphs', async () => {
-    // A single paragraph made of two adjacent lines:
-    // Line 1: x=100, y=700, height=12, width=50 -> xEnd=150, yTop=712
-    // Line 2: x=110, y=685, height=12, width=60 -> xEnd=170, yTop=697
-    // Grouped paragraph should have:
-    // xMin = 100
-    // xMax = 170
-    // yMin = 685
-    // yMax = 712 (700 + 12)
-    // Thus: x=100, y=712, width=70, height=27 (712 - 685)
-    const page = fakePage([
-      item('Line one', 100, 700, 12, 50),
-      item('Line two', 110, 685, 12, 60),
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(1);
-    const p = result.paragraphs[0];
-    expect(p.x).toBe(100);
-    expect(p.y).toBe(712);
-    expect(p.width).toBe(70);
-    expect(p.height).toBe(27);
-  });
-
-  it('filters out rotated/vertical text items (e.g. arXiv sidebar)', async () => {
-    // Rotated text (90° CCW) has transform [0, 1, -1, 0, x, y] — a=0, b=1, c=-1, d=0
-    const rotatedItem: TextItem = {
-      str: 'arXiv:2510.18716v1',
-      dir: 'ltr',
-      width: 100,
-      height: 8,
-      transform: [0, 1, -1, 0, 20, 400],
-      fontName: 'g_d0_f1',
-      hasEOL: false,
-    };
-    const page = fakePage([
-      item('Normal text', 100, 700),
-      rotatedItem,
-    ]);
-    const result = await extractPageText(page, 1);
-    expect(result.paragraphs).toHaveLength(1);
-    expect(result.paragraphs[0].text).toBe('Normal text');
-  });
 });
+

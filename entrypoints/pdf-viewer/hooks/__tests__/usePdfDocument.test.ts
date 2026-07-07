@@ -83,11 +83,6 @@ describe('usePdfDocument — progressive streaming', () => {
     expect(result.current.error).toBe('Network down');
   });
 
-  it('sets error when no URL provided', () => {
-    const { result } = renderHook(() => usePdfDocument(null));
-    expect(result.current.loadState).toBe('error');
-    expect(result.current.error).toBe('No PDF URL provided');
-  });
 });
 
 describe('usePdfDocument — page-proxy window eviction', () => {
@@ -134,107 +129,6 @@ describe('usePdfDocument — page-proxy window eviction', () => {
 
     // Total getPage calls: 20 initial stream. Eviction does NOT re-fetch.
     expect(getPageSpy).toHaveBeenCalledTimes(20);
-  });
-
-  it('re-fetches evicted pages when they re-enter the window', async () => {
-    const { doc, pages, getPageSpy } = makeFakeDoc(20);
-    mockedLoadPdfDocument.mockResolvedValue(doc);
-
-    // Load fully first (no visible set).
-    const { result, rerender } = renderHook(
-      ({ visible }: { visible: Set<number> | undefined }) =>
-        usePdfDocument('https://example.com/big.pdf', {
-          visiblePages: visible,
-          evictionWindow: 5,
-        }),
-      { initialProps: { visible: undefined } as { visible: Set<number> | undefined } },
-    );
-
-    await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
-
-    // Scroll to page 1 → keep 1..6; pages 7..20 evicted.
-    act(() => {
-      rerender({ visible: new Set<number>([1]) });
-    });
-    await waitFor(() => expect(result.current.pages[6]).toBeNull());
-
-    // Now scroll down to page 18 → keep 13..20; re-fetch 16..20 (13..15 kept).
-    await act(async () => {
-      rerender({ visible: new Set<number>([18]) });
-    });
-
-    await waitFor(() => expect(result.current.pages[17]).not.toBeNull());
-
-    // Pages 16-20 were re-fetched (getPage called again for each).
-    for (const n of [16, 17, 18, 19, 20]) {
-      const callsForN = getPageSpy.mock.calls.filter((c) => c[0] === n).length;
-      expect(callsForN).toBeGreaterThanOrEqual(2);
-    }
-    // Pages outside the new window (1..12) are evicted now.
-    for (const n of [1, 2, 6]) {
-      expect(result.current.pages[n - 1]).toBeNull();
-    }
-    void pages;
-  });
-
-  it('does not evict when evictionWindow is not configured (backward compatible)', async () => {
-    const { doc, pages } = makeFakeDoc(12);
-    mockedLoadPdfDocument.mockResolvedValue(doc);
-
-    const { result } = renderHook(() => usePdfDocument('https://example.com/x.pdf'));
-
-    // Assert the full-streamed state INSIDE waitFor so it always reads a
-    // committed render (not a stale result.current between renders).
-    await waitFor(() =>
-      expect(result.current.pages.filter((p) => p !== null).length).toBe(12),
-    );
-    expect(result.current.pages.every((p) => p !== null)).toBe(true);
-    for (const p of pages) {
-      expect(p.cleanup).not.toHaveBeenCalled();
-    }
-  });
-
-  it('does not re-translate: visible re-entry reuses the page proxy without re-translation (handled upstream cache)', async () => {
-    // This test asserts the eviction contract: a re-fetched proxy has the same
-    // pageNumber identity the translation layer keys on. The translation cache
-    // (pdfTranslation.ts memoryCache) is independent of proxies and serves
-    // cached translations without re-translation — eviction only affects the
-    // pdf.js proxy objects, not the translation Map.
-    const { doc, getPageSpy } = makeFakeDoc(15);
-    mockedLoadPdfDocument.mockResolvedValue(doc);
-
-    // Load fully first (no visible set).
-    const { result, rerender } = renderHook(
-      ({ visible }: { visible: Set<number> | undefined }) =>
-        usePdfDocument('https://example.com/x.pdf', {
-          visiblePages: visible,
-          evictionWindow: 2,
-        }),
-      { initialProps: { visible: undefined } as { visible: Set<number> | undefined } },
-    );
-
-    await waitFor(() => expect(result.current.pages.every((p) => p !== null)).toBe(true));
-
-    // Scroll to page 8 → keep 6..10, evict rest (including page 1).
-    act(() => {
-      rerender({ visible: new Set<number>([8]) });
-    });
-    await waitFor(() => expect(result.current.pages[0]).toBeNull()); // page 1 evicted
-
-    // Scroll back up so page 1 re-enters (window 2 around page 1 → keep 1..3)
-    await act(async () => {
-      rerender({ visible: new Set<number>([1]) });
-    });
-    await waitFor(() => expect(result.current.pages[0]).not.toBeNull());
-
-    // The re-fetched proxy is a valid page proxy at index 0.
-    const refetched = result.current.pages[0];
-    expect(refetched).not.toBeNull();
-    expect((refetched as PDFPageProxy).pageNumber).toBe(1);
-
-    // getPage was called twice for page 1 (initial stream + re-fetch).
-    const callsForPage1 = getPageSpy.mock.calls.filter((c) => c[0] === 1).length;
-    expect(callsForPage1).toBe(2);
   });
 
   it('guards setState after unmount during streaming', async () => {

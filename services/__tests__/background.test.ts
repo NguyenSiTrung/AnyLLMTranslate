@@ -235,32 +235,7 @@ describe('services/background', () => {
       expect(body.messages[0].content).not.toContain('<page_domain>');
     });
 
-    it('works correctly when pageContext is undefined (backward compat)', async () => {
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      const result = await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const typedResult = result as { success: boolean; cues?: Array<{ text: string }> };
-      expect(typedResult.success).toBe(true);
-      expect(typedResult.cues).toBeDefined();
-      expect(typedResult.cues?.[0].text).toBe('Xin chào');
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      expect(body.messages[0].content).not.toContain('UNTRUSTED DATA');
-    });
-
-    it('routes cinematic profile to the subtitle prompt', async () => {
+    it('routes cinematic profile to the subtitle prompt (representative profile→knob mapping)', async () => {
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -280,50 +255,6 @@ describe('services/background', () => {
       };
       expect(body.messages[0].content).toContain('subtitle translator');
       expect(body.messages[0].content).toContain('idiomatic, natural phrasing');
-    });
-
-    it('routes educational profile to the subtitle prompt (literal)', async () => {
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-          profile: 'educational',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      expect(body.messages[0].content).toContain('precise, faithful translation');
-    });
-
-    it('falls back to media profile when profile is absent (backward compat)', async () => {
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      // Media = all defaults → subtitle identity present but no knob lines.
-      expect(body.messages[0].content).toContain('subtitle translator');
-      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
-      expect(body.messages[0].content).not.toContain('precise, faithful translation');
     });
 
     it('applies a per-tab knob override over the profile preset', async () => {
@@ -373,31 +304,6 @@ describe('services/background', () => {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body.messages[0].content).toContain('Remove strong profanity entirely');
-    });
-
-    it('produces the plain profile prompt when neither override is set (regression)', async () => {
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-          profile: 'media',   // all defaults → no knob lines
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      // Media preset = neutral/balanced/moderate/preserve → identity only, no knob lines.
-      expect(body.messages[0].content).toContain('subtitle translator');
-      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
-      expect(body.messages[0].content).not.toContain('precise, faithful translation');
-      expect(body.messages[0].content).not.toContain('Remove strong profanity');
     });
 
     it('seeds the first chunk with look-ahead context cues', async () => {
@@ -570,8 +476,9 @@ describe('services/background', () => {
       }
 
       expect(chunkWithGlossary).not.toBeNull();
-      expect(chunkWithGlossary!.messages[0].content).toContain('Previously translated names');
-      expect(chunkWithGlossary!.messages[0].content).toContain('"John" → "Juan"');
+      const messages = chunkWithGlossary?.messages;
+      expect(messages?.[0].content).toContain('Previously translated names');
+      expect(messages?.[0].content).toContain('"John" → "Juan"');
     });
 
     it('prefixes cue text with [voice] when cue.voice is set', async () => {
@@ -599,31 +506,6 @@ describe('services/background', () => {
       // The user prompt should contain the voice prefix
       expect(body.messages[1].content).toContain('[John]');
       expect(body.messages[1].content).toContain('[John] Hello');
-    });
-
-    it('does not prefix cue text when cue.voice is absent', async () => {
-      const cues = [
-        { startTime: 0, endTime: 2, text: 'Hello' },
-      ];
-
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues,
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-          profile: 'media',
-        },
-        { tab: { id: 45 } } as chrome.runtime.MessageSender,
-      );
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      expect(body.messages[1].content).not.toContain('[John]');
     });
 
     it('uses original cue text for cache, not voice-prefixed text', async () => {

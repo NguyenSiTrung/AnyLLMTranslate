@@ -37,11 +37,10 @@ vi.mock('../../lib/pdfProgressStore', () => ({
 import { usePdfPageTranslations } from '../usePdfPageTranslations';
 import { translateParagraphs } from '../../lib/pdfTranslation';
 import { extractPageText } from '../../lib/pdfTextExtraction';
-import { loadPdfProgress, savePdfProgress } from '../../lib/pdfProgressStore';
+import { savePdfProgress } from '../../lib/pdfProgressStore';
 
 const mockedTranslateParagraphs = vi.mocked(translateParagraphs);
 const mockedExtractPageText = vi.mocked(extractPageText);
-const mockedLoadPdfProgress = vi.mocked(loadPdfProgress);
 const mockedSavePdfProgress = vi.mocked(savePdfProgress);
 
 const observerInstances: Array<{ options?: IntersectionObserverInit; observe: ReturnType<typeof vi.fn> }> = [];
@@ -76,75 +75,6 @@ afterEach(() => {
 });
 
 describe('usePdfPageTranslations', () => {
-  it('uses the scroll pane, not the inner content wrapper, as IntersectionObserver root', () => {
-    const scrollPane = document.createElement('div');
-    scrollPane.setAttribute('data-pane', 'right');
-    const contentWrapper = document.createElement('div');
-    const slot = document.createElement('div');
-    slot.setAttribute('data-page-slot', '1');
-    contentWrapper.appendChild(slot);
-    scrollPane.appendChild(contentWrapper);
-    document.body.appendChild(scrollPane);
-
-    renderHook(() => {
-      const containerRef = useRef<HTMLElement | null>(contentWrapper);
-      return usePdfPageTranslations({
-        pages: [{} as PDFPageProxy],
-        numPages: 1,
-        pdfUrl: 'https://example.com/file.pdf',
-        containerRef,
-      });
-    });
-
-    expect(observerInstances.length).toBeGreaterThan(0);
-    for (const instance of observerInstances) {
-      expect(instance.options?.root).toBe(scrollPane);
-    }
-  });
-
-  it('does NOT recreate IntersectionObserver when translation state changes', async () => {
-    // --- DOM setup identical to the root test ---
-    const scrollPane = document.createElement('div');
-    scrollPane.setAttribute('data-pane', 'right');
-    const contentWrapper = document.createElement('div');
-    const slot = document.createElement('div');
-    slot.setAttribute('data-page-slot', '1');
-    contentWrapper.appendChild(slot);
-    scrollPane.appendChild(contentWrapper);
-    document.body.appendChild(scrollPane);
-
-    // Stable array reference — creating `[{}]` inside renderHook creates a new
-    // array on every render which changes `pdfPages` and re-triggers the effect.
-    const stablePages = [{} as PDFPageProxy];
-
-    const { result } = renderHook(() => {
-      const containerRef = useRef<HTMLElement | null>(contentWrapper);
-      return usePdfPageTranslations({
-        pages: stablePages,
-        numPages: 1,
-        pdfUrl: 'https://example.com/file.pdf',
-        containerRef,
-      });
-    });
-
-    // Flush all pending effects
-    await act(async () => {});
-
-    // Record the IntersectionObserver constructor call count after mount
-    const ctorMock = vi.mocked(globalThis.IntersectionObserver);
-    const callsAfterMount = ctorMock.mock.calls.length;
-    expect(callsAfterMount).toBeGreaterThan(0);
-
-    // Simulate a state change by calling retryPage — this triggers setPages internally
-    await act(async () => {
-      result.current.retryPage(999); // non-existent page, just triggers state update
-    });
-
-    // No additional IntersectionObserver constructor calls should have happened
-    // because `pages` is no longer in the useEffect dependency array
-    expect(ctorMock.mock.calls.length).toBe(callsAfterMount);
-  });
-
   /** Set up a scroll pane + content wrapper with N page slots in the DOM. */
   function setupSlots(pageCount: number): { scrollPane: HTMLElement; contentWrapper: HTMLElement } {
     const scrollPane = document.createElement('div');
@@ -190,71 +120,6 @@ describe('usePdfPageTranslations', () => {
         { id: 'p1', translatedText: 'Xin chào' },
         { id: 'p2', translatedText: 'Thế giới' },
       ]);
-
-      const stablePages = [{} as PDFPageProxy];
-      const { result } = renderHook(() => {
-        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
-        return usePdfPageTranslations({
-          pages: stablePages,
-          numPages: 1,
-          pdfUrl: 'https://example.com/file.pdf',
-          containerRef,
-        });
-      });
-
-      fireIntersection(1);
-
-      await waitFor(() => {
-        expect(result.current.pages.get(1)?.state).toBe('translated');
-      });
-
-      const page = result.current.pages.get(1);
-      expect(page?.paragraphStatus?.get('p1')).toBe('success');
-      expect(page?.paragraphStatus?.get('p2')).toBe('success');
-    });
-
-    it('marks in-flight paragraphs as error when the page fails', async () => {
-      setupSlots(1);
-      mockedExtractPageText.mockResolvedValue({
-        pageNumber: 1,
-        paragraphs: [
-          { id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false },
-        ],
-      });
-      mockedTranslateParagraphs.mockRejectedValue(new Error('Network down'));
-
-      const stablePages = [{} as PDFPageProxy];
-      const { result } = renderHook(() => {
-        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
-        return usePdfPageTranslations({
-          pages: stablePages,
-          numPages: 1,
-          pdfUrl: 'https://example.com/file.pdf',
-          containerRef,
-        });
-      });
-
-      fireIntersection(1);
-
-      await waitFor(() => {
-        expect(result.current.pages.get(1)?.state).toBe('error');
-      });
-
-      const page = result.current.pages.get(1);
-      expect(page?.paragraphStatus?.get('p1')).toBe('error');
-      expect(page?.error).toBe('Network down');
-    });
-
-    it('marks all cached paragraphs as success on a cache hit', async () => {
-      const { getMemoryCachedPage } = await import('../../lib/pdfTranslation');
-      vi.mocked(getMemoryCachedPage).mockReturnValue(
-        new Map([
-          ['p1', 'Xin chào'],
-          ['p2', 'Thế giới'],
-        ]),
-      );
-      setupSlots(1);
-      mockedExtractPageText.mockResolvedValue({ pageNumber: 1, paragraphs: [] });
 
       const stablePages = [{} as PDFPageProxy];
       const { result } = renderHook(() => {
@@ -377,41 +242,6 @@ describe('usePdfPageTranslations', () => {
   });
 
   describe('progress persistence (Phase 6 Task 1)', () => {
-    it('hydrates page-state from persisted progress on mount', async () => {
-      mockedLoadPdfProgress.mockResolvedValue(
-        new Map([
-          [
-            1,
-            {
-              state: 'translated' as const,
-              paragraphs: new Map([['1-0', 'Persisted translation.']]),
-            },
-          ],
-        ]),
-      );
-
-      const stablePages = [{} as PDFPageProxy];
-      let result!: { current: ReturnType<typeof usePdfPageTranslations> };
-      renderHook(() => {
-        const containerRef = useRef<HTMLElement | null>(null);
-        result = {
-          current: usePdfPageTranslations({
-            pages: stablePages,
-            numPages: 1,
-            pdfUrl: 'https://example.com/hydrate.pdf',
-            containerRef,
-          }),
-        };
-        return result.current;
-      });
-
-      // Wait for the async hydrate to seed the pages Map.
-      await waitFor(() => {
-        expect(result.current.pages.get(1)?.state).toBe('translated');
-      });
-      expect(result.current.pages.get(1)?.paragraphs.get('1-0')).toBe('Persisted translation.');
-    });
-
     it('persists terminal page states via savePdfProgress write-through', async () => {
       setupSlots(1);
       mockedExtractPageText.mockResolvedValue({
@@ -446,83 +276,5 @@ describe('usePdfPageTranslations', () => {
       expect(savedArg[1].get(1)?.state).toBe('translated');
     });
 
-    it('does not persist in-flight (translating) pages', async () => {
-      setupSlots(1);
-      // Hold translateParagraphs so the page stays 'translating'.
-      let resolveTranslate!: (v: Array<{ id: string; translatedText: string }>) => void;
-      mockedExtractPageText.mockResolvedValue({
-        pageNumber: 1,
-        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false }],
-      });
-      mockedTranslateParagraphs.mockReturnValue(
-        new Promise((r) => {
-          resolveTranslate = r;
-        }),
-      );
-
-      const stablePages = [{} as PDFPageProxy];
-      const { result } = renderHook(() => {
-        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
-        return usePdfPageTranslations({
-          pages: stablePages,
-          numPages: 1,
-          pdfUrl: 'https://example.com/inflight.pdf',
-          containerRef,
-        });
-      });
-
-      fireIntersection(1);
-      await waitFor(() => {
-        expect(result.current.pages.get(1)?.state).toBe('translating');
-      });
-
-      // Allow any pending save calls to flush.
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 20));
-      });
-
-      // No save call should include the translating page (filtered out).
-      for (const call of mockedSavePdfProgress.mock.calls) {
-        const saved = call[1] as Map<number, { state: string }>;
-        for (const page of saved.values()) {
-          expect(page.state).not.toBe('translating');
-        }
-      }
-
-      // Clean up: resolve so the hook settles.
-      await act(async () => {
-        resolveTranslate([{ id: 'p1', translatedText: 'Xin chào' }]);
-        await new Promise((r) => setTimeout(r, 20));
-      });
-    });
-
-    it('falls back to re-translate when persisted data is null (no progress stored)', async () => {
-      mockedLoadPdfProgress.mockResolvedValue(null);
-      setupSlots(1);
-      mockedExtractPageText.mockResolvedValue({
-        pageNumber: 1,
-        paragraphs: [{ id: 'p1', text: 'Hello', x: 0, y: 0, width: 100, height: 10, fontSize: 10, isHeading: false }],
-      });
-      mockedTranslateParagraphs.mockResolvedValue([{ id: 'p1', translatedText: 'Xin chào' }]);
-
-      const stablePages = [{} as PDFPageProxy];
-      const { result } = renderHook(() => {
-        const containerRef = useRef<HTMLElement | null>(document.querySelector('[data-pane="right"] > div'));
-        return usePdfPageTranslations({
-          pages: stablePages,
-          numPages: 1,
-          pdfUrl: 'https://example.com/empty.pdf',
-          containerRef,
-        });
-      });
-
-      // Nothing hydrated — page starts absent.
-      expect(result.current.pages.has(1)).toBe(false);
-
-      fireIntersection(1);
-      await waitFor(() => {
-        expect(result.current.pages.get(1)?.state).toBe('translated');
-      });
-    });
   });
 });

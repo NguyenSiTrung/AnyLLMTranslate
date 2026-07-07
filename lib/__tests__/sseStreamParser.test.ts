@@ -45,24 +45,15 @@ describe('parseSSEBuffer', () => {
     expect(remainder).toBe('data: {"choi');
   });
 
-  it('handles data: with leading space after colon', () => {
-    const buffer = 'data: {"choices":[{"delta":{"content":"X"}}]}\n\n';
-    const { events } = parseSSEBuffer(buffer);
-    expect(events[0]).toEqual({ type: 'data', json: '{"choices":[{"delta":{"content":"X"}}]}' });
-  });
+  it('handles multi-line data fields and ignores comment/event/id lines', () => {
+    const multiline = 'data: line1\ndata: line2\n\n';
+    const { events: mlEvents } = parseSSEBuffer(multiline);
+    expect(mlEvents[0]).toEqual({ type: 'data', json: 'line1\nline2' });
 
-  it('handles multi-line data fields (joined with newline)', () => {
-    const buffer = 'data: line1\ndata: line2\n\n';
-    const { events } = parseSSEBuffer(buffer);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual({ type: 'data', json: 'line1\nline2' });
-  });
-
-  it('ignores comment lines (starting with :) and event/id fields', () => {
-    const buffer = ': comment\nevent: test\ndata: {"x":1}\n\n';
-    const { events } = parseSSEBuffer(buffer);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual({ type: 'data', json: '{"x":1}' });
+    const withNoise = ': comment\nevent: test\ndata: {"x":1}\n\n';
+    const { events: noiseEvents } = parseSSEBuffer(withNoise);
+    expect(noiseEvents).toHaveLength(1);
+    expect(noiseEvents[0]).toEqual({ type: 'data', json: '{"x":1}' });
   });
 
   it('returns empty events for empty buffer', () => {
@@ -136,16 +127,12 @@ describe('extractCompletedPieces', () => {
     expect(pieces.get('p1')).toBe('Value');
   });
 
-  it('correctly unescapes embedded quotes in values', () => {
-    const buffer = '{"p1":"He said \\"hi\\""}';
-    const pieces = extractCompletedPieces(buffer, ['p1']);
-    expect(pieces.get('p1')).toBe('He said "hi"');
-  });
+  it('correctly unescapes embedded quotes and backslashes in values', () => {
+    const quotes = '{"p1":"He said \\"hi\\""}';
+    expect(extractCompletedPieces(quotes, ['p1']).get('p1')).toBe('He said "hi"');
 
-  it('handles escaped backslashes in values', () => {
-    const buffer = '{"p1":"path\\\\to\\\\file"}';
-    const pieces = extractCompletedPieces(buffer, ['p1']);
-    expect(pieces.get('p1')).toBe('path\\to\\file');
+    const backslashes = '{"p1":"path\\\\to\\\\file"}';
+    expect(extractCompletedPieces(backslashes, ['p1']).get('p1')).toBe('path\\to\\file');
   });
 
   it('handles values containing braces and commas (inside JSON strings)', () => {

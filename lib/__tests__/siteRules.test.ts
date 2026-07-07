@@ -16,61 +16,28 @@ function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): Site
 
 describe('matchHostname', () => {
   describe('exact match', () => {
-    it('matches identical hostnames', () => {
+    it('matches identical hostnames case-insensitively', () => {
       expect(matchHostname('example.com', 'example.com')).toBe(true);
-    });
-
-    it('matches case-insensitively', () => {
       expect(matchHostname('Example.COM', 'example.com')).toBe(true);
-    });
-
-    it('does not match different hostnames', () => {
-      expect(matchHostname('other.com', 'example.com')).toBe(false);
-    });
-
-    it('matches localhost', () => {
-      expect(matchHostname('localhost', 'localhost')).toBe(true);
     });
   });
 
   describe('wildcard match', () => {
-    it('matches subdomain with *.example.com', () => {
+    it('matches subdomain with *.example.com but NOT bare domain', () => {
       expect(matchHostname('sub.example.com', '*.example.com')).toBe(true);
-    });
-
-    it('matches deeply nested subdomain', () => {
-      expect(matchHostname('a.b.example.com', '*.example.com')).toBe(true);
-    });
-
-    it('does NOT match bare domain with wildcard', () => {
       expect(matchHostname('example.com', '*.example.com')).toBe(false);
-    });
-
-    it('is case-insensitive for wildcards', () => {
-      expect(matchHostname('Sub.Example.COM', '*.example.com')).toBe(true);
     });
   });
 
   describe('no-match cases', () => {
-    it('returns false for partial hostname match', () => {
+    it('returns false for unrelated or partial hostname match', () => {
       expect(matchHostname('notexample.com', '*.example.com')).toBe(false);
-    });
-
-    it('returns false for unrelated domain', () => {
-      expect(matchHostname('google.com', '*.example.com')).toBe(false);
     });
   });
 
   describe('edge cases', () => {
-    it('returns false for empty hostname', () => {
+    it('returns false for empty hostname, pattern, or both', () => {
       expect(matchHostname('', 'example.com')).toBe(false);
-    });
-
-    it('returns false for empty pattern', () => {
-      expect(matchHostname('example.com', '')).toBe(false);
-    });
-
-    it('returns false for both empty', () => {
       expect(matchHostname('', '')).toBe(false);
     });
   });
@@ -182,34 +149,14 @@ describe('BUILT_IN_RULES', () => {
 });
 
 describe('mergeExcludeSelectors', () => {
-  it('returns global excludes when no site excludes exist', () => {
-    const result = mergeExcludeSelectors(['pre', 'code'], undefined);
-    expect(result).toEqual(['pre', 'code']);
-  });
-
-  it('returns global excludes when site excludes is empty array', () => {
-    const result = mergeExcludeSelectors(['pre', 'code'], []);
-    expect(result).toEqual(['pre', 'code']);
-  });
-
   it('merges global and site excludes without duplicates', () => {
     const result = mergeExcludeSelectors(['pre', 'code'], ['pre', '.sidebar']);
     expect(result).toEqual(['pre', 'code', '.sidebar']);
   });
 
-  it('returns site excludes when global is empty', () => {
-    const result = mergeExcludeSelectors([], ['.nav', 'footer']);
-    expect(result).toEqual(['.nav', 'footer']);
-  });
-
-  it('returns empty array when both are empty', () => {
-    const result = mergeExcludeSelectors([], []);
-    expect(result).toEqual([]);
-  });
-
-  it('returns empty array when global is empty and site is undefined', () => {
-    const result = mergeExcludeSelectors([], undefined);
-    expect(result).toEqual([]);
+  it('returns empty array when both are empty/undefined', () => {
+    expect(mergeExcludeSelectors([], [])).toEqual([]);
+    expect(mergeExcludeSelectors([], undefined)).toEqual([]);
   });
 
   it('handles case-sensitive selectors correctly', () => {

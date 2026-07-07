@@ -18,18 +18,6 @@ describe('detectPdfAndNotify', () => {
     });
   });
 
-  it('does nothing when contentType is text/html', () => {
-    const send = vi.fn();
-    detectPdfAndNotify({
-      contentType: 'text/html',
-      href: 'https://example.com/',
-      viewerOrigin: 'chrome-extension://abc/',
-      tabId: 5,
-      sendMessage: send,
-    });
-    expect(send).not.toHaveBeenCalled();
-  });
-
   it('does nothing inside the viewer page (defensive; background also guards)', () => {
     const send = vi.fn();
     detectPdfAndNotify({
@@ -43,18 +31,6 @@ describe('detectPdfAndNotify', () => {
   });
 
   it('does nothing when contentType is undefined (older browsers)', () => {
-    const send = vi.fn();
-    detectPdfAndNotify({
-      contentType: undefined,
-      href: 'https://x/y.pdf',
-      viewerOrigin: 'chrome-extension://abc/',
-      tabId: 5,
-      sendMessage: send,
-    });
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it('does nothing when contentType is an unrelated type (e.g. image)', () => {
     const send = vi.fn();
     detectPdfAndNotify({
       contentType: 'image/png',

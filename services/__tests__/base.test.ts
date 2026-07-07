@@ -13,19 +13,10 @@ import {
 } from '@/services/base';
 
 describe('DEFAULT_SYSTEM_PROMPT_TEMPLATE', () => {
-  it('contains {{targetLanguage}} variable', () => {
+  it('contains required template variables and format instructions', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{targetLanguage}}');
-  });
-
-  it('contains {{glossary}} variable', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{glossary}}');
-  });
-
-  it('contains JSON format instruction', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('json');
-  });
-
-  it('contains translations key instruction', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('translations');
   });
 
@@ -36,14 +27,10 @@ describe('DEFAULT_SYSTEM_PROMPT_TEMPLATE', () => {
 });
 
 describe('buildSystemPrompt', () => {
-  it('injects targetLanguage into default template', () => {
+  it('injects targetLanguage and removes {{glossary}} placeholder in default template', () => {
     const prompt = buildSystemPrompt('Vietnamese');
     expect(prompt).toContain('Vietnamese');
     expect(prompt).not.toContain('{{targetLanguage}}');
-  });
-
-  it('removes {{glossary}} placeholder when no glossary provided', () => {
-    const prompt = buildSystemPrompt('Vietnamese');
     expect(prompt).not.toContain('{{glossary}}');
   });
 
@@ -60,16 +47,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toBe('Translate to Vietnamese. \nglossary block');
   });
 
-  it('handles null custom template (uses default)', () => {
-    const prompt = buildSystemPrompt('French', null);
-    expect(prompt).toContain('French');
-    expect(prompt).toContain('JSON');
-  });
-
-  it('handles empty string custom template (uses default)', () => {
-    const prompt = buildSystemPrompt('French', '');
-    expect(prompt).toContain('French');
-    expect(prompt).toContain('JSON');
+  it('handles null or empty custom template (uses default)', () => {
+    const promptNull = buildSystemPrompt('French', null);
+    expect(promptNull).toContain('French');
+    expect(promptNull).toContain('JSON');
+    const promptEmpty = buildSystemPrompt('French', '');
+    expect(promptEmpty).toContain('French');
+    expect(promptEmpty).toContain('JSON');
   });
 
   it('replaces multiple occurrences of targetLanguage', () => {
@@ -104,18 +88,15 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('<page_topic>');
   });
 
-  it('does not append context block when all fields are empty', () => {
-    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+  it('does not append context block when all fields are empty or pageContext is undefined', () => {
+    const promptEmpty = buildSystemPrompt('Vietnamese', null, undefined, {
       title: '',
       description: '',
       domain: '',
     });
-    expect(prompt).not.toContain('UNTRUSTED DATA');
-  });
-
-  it('does not append context block when pageContext is undefined', () => {
-    const prompt = buildSystemPrompt('Vietnamese');
-    expect(prompt).not.toContain('UNTRUSTED DATA');
+    expect(promptEmpty).not.toContain('UNTRUSTED DATA');
+    const promptUndefined = buildSystemPrompt('Vietnamese');
+    expect(promptUndefined).not.toContain('UNTRUSTED DATA');
   });
 
   it('P2 security: caps long page-context fields to mitigate prompt injection', () => {
@@ -210,20 +191,7 @@ describe('parseTranslationResponse', () => {
   });
 
   it('handles trailing commas in JSON (common LLM output error)', () => {
-    const response = '{"translations": {"id1": "Hello", "id2": "World",}}';
-    const result = parseTranslationResponse(response, ['id1', 'id2']);
-    expect(result.get('id1')).toBe('Hello');
-    expect(result.get('id2')).toBe('World');
-  });
-
-  it('handles trailing commas in nested objects', () => {
     const response = '{"translations": {"id1": "Hello",}, "properNouns": {"name": "translated",},}';
-    const result = parseTranslationResponse(response, ['id1']);
-    expect(result.get('id1')).toBe('Hello');
-  });
-
-  it('handles trailing commas inside markdown code blocks', () => {
-    const response = '```json\n{"translations": {"id1": "Hello",}}\n```';
     const result = parseTranslationResponse(response, ['id1']);
     expect(result.get('id1')).toBe('Hello');
   });

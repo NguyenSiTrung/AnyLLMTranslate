@@ -92,14 +92,34 @@ describe('handleMessage — PDF_DETECTED', () => {
     expect(mockTabsCreate).not.toHaveBeenCalled();
   });
 
-  it('does NOT open when autoOpen is off', async () => {
+  it('does NOT open when autoOpen is off, site is blocklisted, or provider is not ready', async () => {
+    const sender = { tab: { id: 9 } } as chrome.runtime.MessageSender;
+    // autoOpen off
     settingsWith({ pdfSettings: { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] } });
-    await handleMessage(
-      { action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 },
-      { tab: { id: 9 } } as chrome.runtime.MessageSender,
-    );
+    await handleMessage({ action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 }, sender);
     expect(mockTabsCreate).not.toHaveBeenCalled();
     expect(mockTabsUpdate).not.toHaveBeenCalled();
+
+    // neverAutoOpenSites blocklist
+    settingsWith({
+      pdfSettings: { autoOpen: 'auto', openMode: 'new-tab', neverAutoOpenSites: ['blocked.com'] },
+    });
+    await handleMessage({ action: 'PDF_DETECTED', url: 'https://blocked.com/p.pdf', tabId: 9 }, sender);
+    expect(mockTabsCreate).not.toHaveBeenCalled();
+
+    // provider not ready
+    settingsWith({
+      provider: {
+        preset: 'custom',
+        baseUrl: '',
+        apiKey: '',
+        model: '',
+        connectionStatus: 'unknown',
+        requiresApiKey: false,
+      },
+    });
+    await handleMessage({ action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 }, sender);
+    expect(mockTabsCreate).not.toHaveBeenCalled();
   });
 
   it('does NOT open the viewer for its own pages (loop guard)', async () => {
@@ -121,34 +141,5 @@ describe('handleMessage — PDF_DETECTED', () => {
     await handleMessage({ action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 }, sender);
     await handleMessage({ action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 }, sender);
     expect(mockTabsCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it('respects neverAutoOpenSites', async () => {
-    settingsWith({
-      pdfSettings: { autoOpen: 'auto', openMode: 'new-tab', neverAutoOpenSites: ['blocked.com'] },
-    });
-    await handleMessage(
-      { action: 'PDF_DETECTED', url: 'https://blocked.com/p.pdf', tabId: 9 },
-      { tab: { id: 9 } } as chrome.runtime.MessageSender,
-    );
-    expect(mockTabsCreate).not.toHaveBeenCalled();
-  });
-
-  it('does NOT open when provider is not ready', async () => {
-    settingsWith({
-      provider: {
-        preset: 'custom',
-        baseUrl: '',
-        apiKey: '',
-        model: '',
-        connectionStatus: 'unknown',
-        requiresApiKey: false,
-      },
-    });
-    await handleMessage(
-      { action: 'PDF_DETECTED', url: 'https://x/y.pdf', tabId: 9 },
-      { tab: { id: 9 } } as chrome.runtime.MessageSender,
-    );
-    expect(mockTabsCreate).not.toHaveBeenCalled();
   });
 });

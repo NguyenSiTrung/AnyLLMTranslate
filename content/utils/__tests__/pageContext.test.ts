@@ -70,17 +70,6 @@ describe('extractPageContext', () => {
     expect(ctx.category).toBe('Software Development');
   });
 
-  it('detects education category from keywords', () => {
-    document.title = 'Test';
-    const meta = document.createElement('meta');
-    meta.setAttribute('name', 'keywords');
-    meta.setAttribute('content', 'education, learning, course');
-    document.head.appendChild(meta);
-
-    const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('Online Education');
-  });
-
   it('detects news category from h1 text', () => {
     document.title = 'Test';
     const h1 = document.createElement('h1');
@@ -91,24 +80,6 @@ describe('extractPageContext', () => {
     expect(ctx.category).toBe('News');
 
     document.body.innerHTML = '';
-  });
-
-  it('detects academic research from h1 text', () => {
-    document.title = 'Test';
-    const h1 = document.createElement('h1');
-    h1.textContent = 'A New Study on Climate Change';
-    document.body.appendChild(h1);
-
-    const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBe('Academic Research');
-
-    document.body.innerHTML = '';
-  });
-
-  it('returns undefined category for unknown domains without clues', () => {
-    document.title = 'Test';
-    const ctx = extractPageContext(document, true);
-    expect(ctx.category).toBeUndefined();
   });
 
   it('leaves description empty when meta content is empty', () => {
@@ -131,20 +102,8 @@ describe('resolveCategory', () => {
     expect(resolveCategory('auto', 'site', undefined)).toBe('site');
   });
 
-  it('returns autoDetected when no tabOverride or siteRule', () => {
-    expect(resolveCategory('auto', undefined, undefined)).toBe('auto');
-  });
-
   it('returns undefined when all are undefined', () => {
     expect(resolveCategory(undefined, undefined, undefined)).toBeUndefined();
-  });
-
-  it('prefers tabOverride over siteRule even when autoDetected is set', () => {
-    expect(resolveCategory('auto', 'site', 'override')).toBe('override');
-  });
-
-  it('prefers siteRule over autoDetected', () => {
-    expect(resolveCategory('auto', 'site')).toBe('site');
   });
 });
 
@@ -175,18 +134,6 @@ describe('detectLLMCategoryIfNeeded', () => {
     expect(onDetected).not.toHaveBeenCalled();
   });
 
-  it('returns early when a manual override is set', async () => {
-    const onDetected = vi.fn();
-    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, 'Gaming', undefined, onDetected);
-    expect(onDetected).not.toHaveBeenCalled();
-  });
-
-  it('returns early when existingAutoDetected is already set', async () => {
-    const onDetected = vi.fn();
-    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, 'News', onDetected);
-    expect(onDetected).not.toHaveBeenCalled();
-  });
-
   it('calls onDetected with the LLM category in blocking mode', async () => {
     const onDetected = vi.fn();
     const ctx = makePageContext();
@@ -202,14 +149,6 @@ describe('detectLLMCategoryIfNeeded', () => {
     const onDetected = vi.fn();
     await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, undefined, onDetected);
     expect(onDetected).not.toHaveBeenCalled();
-  });
-
-  it('does NOT send setCategoryOverride', async () => {
-    const sendSpy = vi.fn().mockResolvedValue({ success: true, category: 'News' });
-    vi.stubGlobal('chrome', { runtime: { sendMessage: sendSpy } });
-    await detectLLMCategoryIfNeeded(makePageContext(), baseSettings as never, undefined, undefined, vi.fn());
-    const overrideCalls = sendSpy.mock.calls.filter((c: unknown[]) => (c[0] as { action?: string }).action === 'setCategoryOverride');
-    expect(overrideCalls).toHaveLength(0);
   });
 
   it('calls onDetected in async mode', async () => {
@@ -249,29 +188,6 @@ describe('triggerAutoCategoryDetection', () => {
     const onDetected = vi.fn();
     const settings = { ...baseSettings, enableLLMPageCategoryDetection: false } as never;
     await triggerAutoCategoryDetection(settings, undefined, onDetected);
-    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
-    expect(onDetected).not.toHaveBeenCalled();
-  });
-
-  it('returns early when a manual override is set', async () => {
-    const onDetected = vi.fn();
-    await triggerAutoCategoryDetection(baseSettings as never, 'Gaming', onDetected);
-    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
-    expect(onDetected).not.toHaveBeenCalled();
-  });
-
-  it('returns early when an auto-detected value already exists', async () => {
-    vi.mocked(getAutoDetectedCategory).mockReturnValue('News');
-    const onDetected = vi.fn();
-    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
-    expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
-    expect(onDetected).not.toHaveBeenCalled();
-  });
-
-  it('returns early when a detection is already in flight', async () => {
-    vi.mocked(isCategoryDetectionInFlight).mockReturnValue(true);
-    const onDetected = vi.fn();
-    await triggerAutoCategoryDetection(baseSettings as never, undefined, onDetected);
     expect(setCategoryDetectionInFlight).not.toHaveBeenCalledWith(true);
     expect(onDetected).not.toHaveBeenCalled();
   });

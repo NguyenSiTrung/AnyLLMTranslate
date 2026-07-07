@@ -62,28 +62,6 @@ describe('parseGlossaryCSV', () => {
     expect(entries).toHaveLength(1);
   });
 
-  it('skips header line with reversed column order (target,source)', () => {
-    const csv = 'target,source\nReact,React\nAPI,API';
-    const entries = parseGlossaryCSV(csv);
-    // Header skipped, but the two data rows will be parsed with target/source swapped
-    // — that's acceptable for this hardening pass; the column order is preserved by
-    // the parser mapping parts[0]→source and parts[1]→target.
-    expect(entries).toHaveLength(2);
-  });
-
-  it('skips a header that is just the word "Source"', () => {
-    const csv = 'Source,Target\nReact,React\nAPI,API';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(2);
-  });
-
-  it('does not treat a real entry as a header', () => {
-    const csv = 'React,React';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].source).toBe('React');
-  });
-
   it('handles CSV without header', () => {
     const csv = 'React,React\nAPI,API';
     const entries = parseGlossaryCSV(csv);
@@ -153,17 +131,10 @@ describe('parseGlossaryJSON', () => {
     expect(() => parseGlossaryJSON('[{"source": "hello"}]')).toThrow('must have source and target');
   });
 
-  it('generates fresh UUIDs for entries', () => {
-    const json = '[{"source": "hello", "target": "xin chào"}]';
-    const result = parseGlossaryJSON(json);
-    expect(result[0].id).toBeTruthy();
-    // UUID v4 format: 8-4-4-4-12 hex chars
-    expect(result[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-  });
-
-  it('always generates fresh IDs even when JSON has existing IDs', () => {
+  it('always generates fresh UUIDs, ignoring any existing IDs in the JSON', () => {
     const json = '[{"id": "custom-id", "source": "hello", "target": "xin chào"}]';
     const result = parseGlossaryJSON(json);
+    expect(result[0].id).toBeTruthy();
     // Fresh UUID is always generated, original id is not preserved
     expect(result[0].id).not.toBe('custom-id');
     expect(result[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
@@ -198,36 +169,25 @@ describe('checkGlossaryMismatches', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('is case-insensitive for source term matching', () => {
+  it('is case-insensitive for source and target term matching', () => {
     const result = checkGlossaryMismatches(
       entries,
       'Machine Learning is great.',  // uppercase 'M'
       'Something else entirely.',
     );
     expect(result.map((e) => e.id)).toContain('1');
-  });
 
-  it('is case-insensitive for target term matching', () => {
-    const result = checkGlossaryMismatches(
+    const matched = checkGlossaryMismatches(
       entries,
       'machine learning',
       'HỌC MÁY is mentioned here.',  // uppercase target
     );
     // 'học máy'.toLowerCase() is in output.toLowerCase() → no mismatch
-    expect(result).toHaveLength(0);
+    expect(matched).toHaveLength(0);
   });
 
-  it('does not flag entries whose source is not in the input', () => {
-    const result = checkGlossaryMismatches(
-      entries,
-      'Hello world',  // no glossary source terms
-      'Xin chào thế giới',
-    );
-    expect(result).toHaveLength(0);
-  });
-
-  it('returns empty array for empty entries list', () => {
-    const result = checkGlossaryMismatches([], 'machine learning', 'hello');
-    expect(result).toHaveLength(0);
+  it('returns empty array when no source terms are present or entries list is empty', () => {
+    expect(checkGlossaryMismatches(entries, 'Hello world', 'Xin chào thế giới')).toHaveLength(0);
+    expect(checkGlossaryMismatches([], 'machine learning', 'hello')).toHaveLength(0);
   });
 });

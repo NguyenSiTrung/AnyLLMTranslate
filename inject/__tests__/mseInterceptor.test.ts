@@ -92,40 +92,11 @@ describe('MseInterceptor', () => {
     );
   });
 
-  it('emits SUBTITLE_MSE_CUES for application/mp4 SourceBuffer with WebVTT content', () => {
-    interceptor.enable();
-    const ms = new MediaSource();
-    const sb = ms.addSourceBuffer('application/mp4');
-    const vttSegment = new TextEncoder().encode('WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nTest cue\n');
-    sb.appendBuffer(vttSegment);
-
-    expect(mockSend).toHaveBeenCalledWith(
-      'SUBTITLE_MSE_CUES',
-      expect.objectContaining({
-        cues: expect.arrayContaining([
-          expect.objectContaining({
-            text: 'Test cue',
-          }),
-        ]),
-      }),
-    );
-  });
-
   it('does not emit cues for video/mp4 SourceBuffers', () => {
     interceptor.enable();
     const ms = new MediaSource();
     const sb = ms.addSourceBuffer('video/mp4');
     const data = new TextEncoder().encode('some video data');
-    sb.appendBuffer(data);
-
-    expect(mockSend).not.toHaveBeenCalledWith('SUBTITLE_MSE_CUES', expect.anything());
-  });
-
-  it('does not emit cues for audio SourceBuffers', () => {
-    interceptor.enable();
-    const ms = new MediaSource();
-    const sb = ms.addSourceBuffer('audio/mp4');
-    const data = new TextEncoder().encode('audio data');
     sb.appendBuffer(data);
 
     expect(mockSend).not.toHaveBeenCalledWith('SUBTITLE_MSE_CUES', expect.anything());

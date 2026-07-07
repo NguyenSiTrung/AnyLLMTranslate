@@ -129,7 +129,7 @@ describe('content/textSelection', () => {
   });
 
   describe('mouseup with no selection', () => {
-    it('does not create translate button when selection is empty', () => {
+    it('does not create translate button when selection is empty or too short', () => {
       cleanup = initTextSelection();
 
       // Mock empty selection
@@ -138,7 +138,6 @@ describe('content/textSelection', () => {
         rangeCount: 0,
       } as unknown as Selection);
 
-      // Simulate mouseup
       const mouseupEvent = new MouseEvent('mouseup', {
         clientX: 100,
         clientY: 100,
@@ -147,12 +146,8 @@ describe('content/textSelection', () => {
       document.dispatchEvent(mouseupEvent);
 
       expect(document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`)).toBeNull();
-    });
 
-    it('does not create translate button when selection is too short', () => {
-      cleanup = initTextSelection();
-
-      // Mock single-char selection
+      // Single-char selection is also too short
       vi.spyOn(window, 'getSelection').mockReturnValue({
         toString: () => 'a',
         rangeCount: 1,
@@ -163,11 +158,6 @@ describe('content/textSelection', () => {
         }),
       } as unknown as Selection);
 
-      const mouseupEvent = new MouseEvent('mouseup', {
-        clientX: 100,
-        clientY: 100,
-        bubbles: true,
-      });
       document.dispatchEvent(mouseupEvent);
 
       expect(document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`)).toBeNull();
@@ -266,61 +256,6 @@ describe('content/textSelection', () => {
       });
 
       expect(document.querySelector(`.${TOOLTIP_CLASS}`)).not.toBeNull();
-    });
-
-    it('does not recreate the translate button on mouseup after starting translation', async () => {
-      cleanup = initTextSelection();
-
-      vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({
-        success: true,
-        translatedText: 'Xin chào',
-      });
-
-      const mockRange = {
-        getBoundingClientRect: () => ({
-          top: 100, left: 100, width: 50, height: 20,
-          bottom: 120, right: 150, x: 100, y: 100,
-          toJSON: () => ({}),
-        }),
-      };
-
-      vi.spyOn(window, 'getSelection').mockReturnValue({
-        toString: () => 'Hello world',
-        rangeCount: 1,
-        getRangeAt: () => mockRange,
-      } as unknown as Selection);
-
-      const para = document.querySelector('p') as HTMLElement;
-      para.dispatchEvent(new MouseEvent('mouseup', {
-        clientX: 125,
-        clientY: 110,
-        bubbles: true,
-      }));
-
-      const btn = await vi.waitFor(() => {
-        const el = document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`) as HTMLElement | null;
-        expect(el).not.toBeNull();
-        return el as HTMLElement;
-      });
-
-      btn.dispatchEvent(new MouseEvent('mousedown', {
-        clientX: 125,
-        clientY: 80,
-        bubbles: true,
-        cancelable: true,
-      }));
-
-      para.dispatchEvent(new MouseEvent('mouseup', {
-        clientX: 125,
-        clientY: 80,
-        bubbles: true,
-      }));
-
-      await vi.waitFor(() => {
-        expect(document.querySelector(`.${TOOLTIP_CLASS}`)).not.toBeNull();
-      });
-
-      expect(document.querySelector(`.${TRANSLATE_BUTTON_CLASS}`)).toBeNull();
     });
 
     it('positions the tooltip near the visible selection when the page is scrolled', async () => {

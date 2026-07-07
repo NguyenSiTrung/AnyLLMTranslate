@@ -19,31 +19,16 @@ describe('categoryState', () => {
   });
 
   describe('get/setAutoDetectedCategory', () => {
-    it('returns undefined by default', () => {
+    it('defaults to undefined, stores a value, and can be cleared', () => {
       expect(getAutoDetectedCategory()).toBeUndefined();
-    });
-
-    it('stores and returns the category', () => {
       setAutoDetectedCategory('News');
       expect(getAutoDetectedCategory()).toBe('News');
-    });
-
-    it('can be cleared with undefined', () => {
-      setAutoDetectedCategory('News');
       setAutoDetectedCategory(undefined);
       expect(getAutoDetectedCategory()).toBeUndefined();
     });
   });
 
   describe('buildCategoryInfo', () => {
-    it('returns effective = autoDetected when no siteRule or override', () => {
-      setAutoDetectedCategory('News');
-      const info = buildCategoryInfo(baseSettings, undefined);
-      expect(info.autoDetected).toBe('News');
-      expect(info.override).toBeUndefined();
-      expect(info.effective).toBe('News');
-    });
-
     it('prefers siteRule over autoDetected', () => {
       setAutoDetectedCategory('News');
       const settings = {
@@ -51,6 +36,7 @@ describe('categoryState', () => {
         siteRules: [{ id: '1', hostname: 'localhost', includeSelectors: [], excludeSelectors: [], alwaysTranslate: false, neverTranslate: false, builtIn: false, category: 'Encyclopedia' }],
       };
       const info = buildCategoryInfo(settings, undefined);
+      expect(info.autoDetected).toBe('News');
       expect(info.effective).toBe('Encyclopedia');
     });
 
@@ -79,22 +65,12 @@ describe('categoryState', () => {
   });
 
   describe('categoryDetectionInFlight guard', () => {
-    it('is false by default', () => {
+    it('is false by default, toggles true/false, and is cleared by _resetCategoryState', () => {
       expect(isCategoryDetectionInFlight()).toBe(false);
-    });
-
-    it('setCategoryDetectionInFlight(true) makes isCategoryDetectionInFlight return true', () => {
       setCategoryDetectionInFlight(true);
       expect(isCategoryDetectionInFlight()).toBe(true);
-    });
-
-    it('can be cleared by setting false', () => {
-      setCategoryDetectionInFlight(true);
       setCategoryDetectionInFlight(false);
       expect(isCategoryDetectionInFlight()).toBe(false);
-    });
-
-    it('_resetCategoryState clears the in-flight flag', () => {
       setCategoryDetectionInFlight(true);
       _resetCategoryState();
       expect(isCategoryDetectionInFlight()).toBe(false);

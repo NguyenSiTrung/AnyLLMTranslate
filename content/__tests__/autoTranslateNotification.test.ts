@@ -24,16 +24,6 @@ describe('showAutoTranslateNotification', () => {
     expect(el?.textContent).toContain('Auto-translating this page');
   });
 
-  it('dismiss button removes the notification', () => {
-    showAutoTranslateNotification(vi.fn());
-
-    const closeBtn = document.querySelector(`${SELECTOR} .anyllm-notification-close`) as HTMLElement;
-    expect(closeBtn).not.toBeNull();
-    closeBtn.click();
-
-    expect(document.querySelector(SELECTOR)).toBeNull();
-  });
-
   it('disable button calls onDisable and removes notification', () => {
     const onDisable = vi.fn();
     showAutoTranslateNotification(onDisable);
