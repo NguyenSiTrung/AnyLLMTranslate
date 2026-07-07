@@ -123,7 +123,8 @@ describe('FR-6: initWebStreamPortListener', () => {
     for (const cb of connectListeners) cb(port);
     expect(port._msgCb).toBeDefined();
 
-    port._msgCb!({
+    if (!port._msgCb) throw new Error('msgCb not set');
+    port._msgCb({
       type: 'request',
       pieces: [
         { id: 'p1', text: 'Hello' },
@@ -161,7 +162,8 @@ describe('FR-6: initWebStreamPortListener', () => {
     const port = makePort('TRANSLATE_WEB_STREAM');
     for (const cb of connectListeners) cb(port);
 
-    port._msgCb!({
+    if (!port._msgCb) throw new Error('msgCb not set');
+    port._msgCb({
       type: 'request',
       pieces: [{ id: 'p1', text: 'Hello' }],
       sourceLanguage: 'en',

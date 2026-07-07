@@ -742,7 +742,8 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(settings);
 
-      const k1 = stubs.get('k1')!;
+      const k1 = stubs.get('k1');
+      if (!k1) throw new Error('stub k1 not found');
       // Make the first call block until we release it.
       let releaseFirst: () => void = () => {};
       const firstBlocked = new Promise<void>((resolve) => { releaseFirst = resolve; });
@@ -793,7 +794,8 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(settings);
 
-      const k1 = stubs.get('k1')!;
+      const k1 = stubs.get('k1');
+      if (!k1) throw new Error('stub k1 not found');
       // A client error (400) is non-eligible: it surfaces WITHOUT opening the
       // breaker, so the slot stays healthy and we can isolate slot-release.
       k1.nextOutcome = { kind: 'fail', error: new ApiError('bad request', 400) };

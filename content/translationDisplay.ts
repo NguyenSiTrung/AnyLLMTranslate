@@ -454,8 +454,8 @@ export function applyInlineTranslation(
   const hasRichVars = variables && variables.length > 0;
 
   const buildContent = (): Node => {
-    if (hasRichVars) {
-      return decodeInlineHtml(translatedText, variables!);
+    if (hasRichVars && variables) {
+      return decodeInlineHtml(translatedText, variables);
     }
     return document.createTextNode(formatInlineText(translatedText, translationOnly));
   };

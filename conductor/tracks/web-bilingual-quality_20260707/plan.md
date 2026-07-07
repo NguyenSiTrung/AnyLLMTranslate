@@ -132,13 +132,13 @@
 <!-- execution: sequential -->
 <!-- depends: phase1, phase2, phase3, phase4, phase5, phase6 -->
 
-- [ ] **Task 7.1:** Expose all new settings in Options + popup where applicable
+- [x] **Task 7.1:** Expose all new settings in Options + popup where applicable
   - Options → Advanced: rich translate toggle, source-lang detection toggle, failure cache toggle + TTL, web resume toggle, maxTextGroupLength/Length, streaming toggle.
   - Options → Providers → per-key AdvancedDisclosure: `concurrencyLimit` + `interval` inputs (defaults 0).
   - Files: `entrypoints/options/sections/AdvancedSection.tsx`, `entrypoints/options` (ProviderKeyRow or equivalent), popup (lang detection quick toggle if desired)
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options -->
 
-- [ ] **Task 7.2:** Conductor - User Manual Verification 'Settings UI' (Protocol in workflow.md)
+- [x] **Task 7.2:** Conductor - User Manual Verification 'Settings UI' (Protocol in workflow.md)
 
 ---
 

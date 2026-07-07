@@ -155,7 +155,7 @@ describe('services/background', () => {
 
       const typed = result as { success: boolean; results: { id: string; translatedText: string }[] };
       expect(typed.success).toBe(true);
-      const byId = new Map(typed.results!.map((r) => [r.id, r.translatedText]));
+      const byId = new Map(typed.results.map((r) => [r.id, r.translatedText]));
       expect(byId.get('p1')).toBe('Xin chào');
       // The dup adopts the canonical translation — no extra LLM piece sent.
       expect(byId.get('p1dup')).toBe('Xin chào');

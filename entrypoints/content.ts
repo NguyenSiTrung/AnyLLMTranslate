@@ -88,7 +88,7 @@ function extractDynamicPieces(
   excludeSelectors: string[],
   enableRichTranslate?: boolean,
 ): TranslationPiece[] {
-  if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, excludeSelectors as unknown as string))) {
+  if (excludeSelectors.some((_selector) => selectorAppliesToElementOrAncestor(element, excludeSelectors as unknown as string))) {
     return [];
   }
 

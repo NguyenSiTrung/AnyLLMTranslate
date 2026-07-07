@@ -209,8 +209,6 @@ function buildSanitizedElement(variable: RichVariable): Element | null {
   return el;
 }
 
-const PLACEHOLDER_OPEN_RE = /<z id="(\d+)">/g;
-
 /**
  * Rebuild a safe `DocumentFragment` from translated flat text + the variables
  * produced by {@link encodeInlineHtml}. Text nodes are appended verbatim
@@ -223,12 +221,7 @@ export function decodeInlineHtml(translated: string, variables: RichVariable[]):
   const byId = new Map<number, RichVariable>();
   for (const v of variables) byId.set(v.id, v);
 
-  let cursor = 0;
-  // We scan for `<z id="N">` opens and the matching `</z>` closes, rebuilding
-  // a node tree. Nested placeholders are handled by recursing.
   appendRun(frag, translated, 0, translated.length, byId);
-  // Suppress unused-cursor var (kept for clarity of the scan model).
-  void cursor;
 
   return frag;
 }
