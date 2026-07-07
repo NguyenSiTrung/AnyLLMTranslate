@@ -67,8 +67,8 @@ function twoKeySettings(): ExtensionSettings {
         maxTokens: 4096,
         enabled: true,
         keys: [
-          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ],
       },
     ],
@@ -169,7 +169,7 @@ describe('ProviderPoolCoordinator — single-seam integration (AC-6)', () => {
           temperature: 0.3,
           maxTokens: 4096,
           enabled: true,
-          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true }],
+          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
         },
       ],
     };
@@ -266,8 +266,8 @@ describe('AC1/NFR-1: real OpenAICompatibleService failover (mocked fetch)', () =
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],

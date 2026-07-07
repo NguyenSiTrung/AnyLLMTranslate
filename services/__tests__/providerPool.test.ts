@@ -89,8 +89,8 @@ function twoKeySettings(): ExtensionSettings {
       maxTokens: 4096,
       enabled: true,
       keys: [
-        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
       ],
     },
   ];
@@ -110,9 +110,9 @@ function threeKeySettings(): ExtensionSettings {
       maxTokens: 4096,
       enabled: true,
       keys: [
-        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
-        { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: true },
+        { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+        { id: 'k3', apiKey: 'sk-3', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
       ],
     },
   ];
@@ -184,8 +184,8 @@ describe('ProviderPoolCoordinator', () => {
       const firstProvider = settings.providers[0];
       if (firstProvider) {
         firstProvider.keys = [
-          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-          { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: true },
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'k3', apiKey: 'sk-3', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ];
       }
       coord.rebuild(settings);
@@ -221,8 +221,8 @@ describe('ProviderPoolCoordinator', () => {
       if (firstProvider) {
         firstProvider.baseUrl = 'https://new-endpoint/v1';
         firstProvider.keys = [
-          { id: 'k1', apiKey: 'sk-1-NEW', maxRpm: 0, enabled: true },
-          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+          { id: 'k1', apiKey: 'sk-1-NEW', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ];
       }
       coord.rebuild(updated);

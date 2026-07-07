@@ -29,6 +29,8 @@ function makeKey(overrides: Partial<PoolKey> = {}): PoolKey {
     id: 'k1',
     apiKey: 'sk-old',
     maxRpm: 0,
+    concurrencyLimit: 0,
+    interval: 0,
     enabled: true,
     lastTestResult: { success: true, at: 1700000000000, latencyMs: 100 },
     ...overrides,

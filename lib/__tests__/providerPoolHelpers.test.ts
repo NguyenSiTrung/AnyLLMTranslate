@@ -21,7 +21,7 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
     temperature: 0.3,
     maxTokens: 4096,
     enabled: true,
-    keys: [{ id: 'k1', apiKey: 'sk-test', maxRpm: 60, enabled: true }],
+    keys: [{ id: 'k1', apiKey: 'sk-test', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true }],
     ...overrides,
   };
 }
@@ -30,8 +30,8 @@ describe('getCredentialKey', () => {
   it('returns the first key with a non-empty apiKey when a key is required', () => {
     const p = makeProvider({
       keys: [
-        { id: 'k1', apiKey: '', maxRpm: 0, enabled: true },
-        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+        { id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+        { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
       ],
     });
     expect(getCredentialKey(p)?.id).toBe('k2');
@@ -40,14 +40,14 @@ describe('getCredentialKey', () => {
   it('returns the first key for a keyless provider regardless of apiKey', () => {
     const p = makeProvider({
       requiresApiKey: false,
-      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
     });
     expect(getCredentialKey(p)?.id).toBe('k1');
   });
 
   it('returns undefined when a key is required but none has credentials', () => {
     const p = makeProvider({
-      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
     });
     expect(getCredentialKey(p)).toBeUndefined();
   });
@@ -90,7 +90,7 @@ describe('canRunConnectionTest', () => {
     const p = makeProvider();
     expect(canRunConnectionTest(p, p.keys[0])).toBe(true);
     expect(
-      canRunConnectionTest(p, { id: 'k2', apiKey: '', maxRpm: 0, enabled: true }),
+      canRunConnectionTest(p, { id: 'k2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }),
     ).toBe(false);
   });
 });
@@ -103,8 +103,8 @@ describe('getProviderTestStatus', () => {
   it('is healthy when at least one key succeeded', () => {
     const p = makeProvider({
       keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
-        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 2, latencyMs: 5 } },
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: true, at: 2, latencyMs: 5 } },
       ],
     });
     expect(getProviderTestStatus(p).state).toBe('healthy');
@@ -114,8 +114,8 @@ describe('getProviderTestStatus', () => {
   it('is failed when every tested key failed', () => {
     const p = makeProvider({
       keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
-        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 2, error: 'y' } },
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 2, error: 'y' } },
       ],
     });
     expect(getProviderTestStatus(p).state).toBe('failed');
@@ -128,7 +128,7 @@ describe('getProviderTestStatus', () => {
   it('is healthy when the provider-level test succeeds but keys still carry stale failures', () => {
     const p = makeProvider({
       keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 1, error: 'x' } },
       ],
       lastTestResult: { success: true, at: 2, latencyMs: 42 },
     });
@@ -142,8 +142,8 @@ describe('getProviderTestStatus', () => {
     // success case: latest result wins
     const okP = makeProvider({
       keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 3, latencyMs: 50 } },
-        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: true, at: 8, latencyMs: 20 } },
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: true, at: 3, latencyMs: 50 } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: true, at: 8, latencyMs: 20 } },
       ],
       lastTestResult: { success: true, at: 1, latencyMs: 99 },
     });
@@ -154,8 +154,8 @@ describe('getProviderTestStatus', () => {
     // failure case: latest failure wins when all failed
     const failP = makeProvider({
       keys: [
-        { id: 'k1', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 9, error: 'new' } },
-        { id: 'k2', apiKey: 'sk', maxRpm: 0, enabled: true, lastTestResult: { success: false, at: 4, error: 'old' } },
+        { id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 9, error: 'new' } },
+        { id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, lastTestResult: { success: false, at: 4, error: 'old' } },
       ],
       lastTestResult: { success: false, at: 6, error: 'mid' },
     });

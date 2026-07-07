@@ -275,7 +275,7 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
           temperature: 0.3,
           maxTokens: 4096,
           enabled: true,
-          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: false }],
+          keys: [{ id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: false }],
         },
       ],
     };
@@ -306,8 +306,8 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],
@@ -436,7 +436,7 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
         {
           id: 'p1', displayName: 'P1', baseUrl: 'https://a/v1', model: 'm',
           requiresApiKey: false, temperature: 0.3, maxTokens: 4096, enabled: true,
-          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
         },
       ],
     };
@@ -450,7 +450,7 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
         {
           id: 'p1', displayName: 'P1', baseUrl: 'https://a/v1', model: 'm',
           requiresApiKey: false, temperature: 0.3, maxTokens: 4096, enabled: true,
-          keys: [{ id: 'k1', apiKey: '', maxRpm: 60, enabled: true }],
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true }],
         },
       ],
     };

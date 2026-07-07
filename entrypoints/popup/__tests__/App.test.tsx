@@ -78,7 +78,7 @@ describe('popup provider recovery', () => {
           temperature: 0.3,
           maxTokens: 4096,
           enabled: true,
-          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+          keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
         },
       ],
       onboarding: { completed: true, skipped: false, lastStep: 'done' },

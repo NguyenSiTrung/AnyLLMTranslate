@@ -573,8 +573,8 @@ describe('services/background', () => {
             maxTokens: 4096,
             enabled: true,
             keys: [
-              { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-              { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true },
+              { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+              { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
             ],
           },
         ],

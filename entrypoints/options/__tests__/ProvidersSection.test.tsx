@@ -62,7 +62,7 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
     temperature: 0.3,
     maxTokens: 4096,
     enabled: true,
-    keys: [{ id: 'k1', apiKey: 'sk-test', maxRpm: 60, enabled: true, label: 'prod' }],
+    keys: [{ id: 'k1', apiKey: 'sk-test', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true, label: 'prod' }],
     ...overrides,
   };
 }
@@ -207,8 +207,8 @@ describe('ProvidersSection persisted test status & bulk test', () => {
       ...DEFAULT_SETTINGS,
       providers: [makeProvider({
         keys: [
-          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true, label: 'prod' },
-          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, enabled: true, label: 'staging' },
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, label: 'prod' },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true, label: 'staging' },
         ],
       })],
       updateSettings,
@@ -240,15 +240,15 @@ describe('getPoolReadiness / countEnabledKeys', () => {
         makeProvider({
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: '', maxRpm: 0, enabled: true }, // empty key, not counted
-            { id: 'k3', apiKey: 'sk-3', maxRpm: 0, enabled: false }, // disabled, not counted
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }, // empty key, not counted
+            { id: 'k3', apiKey: 'sk-3', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: false }, // disabled, not counted
           ],
         }),
         makeProvider({
           id: 'p2',
           enabled: false, // disabled provider
-          keys: [{ id: 'k4', apiKey: 'sk-4', maxRpm: 0, enabled: true }],
+          keys: [{ id: 'k4', apiKey: 'sk-4', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
         }),
       ],
     };

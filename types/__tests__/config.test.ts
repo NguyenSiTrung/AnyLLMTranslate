@@ -206,6 +206,8 @@ describe('config types', () => {
         id: 'k1',
         apiKey: 'sk-...',
         maxRpm: 0,
+        concurrencyLimit: 0,
+        interval: 0,
         enabled: true,
       };
       expect(key.lastTestResult).toBeUndefined();

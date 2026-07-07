@@ -30,13 +30,13 @@ describe('resolveSlots', () => {
       provider({
         id: 'p1',
         keys: [
-          { id: 'k1', apiKey: 'a', maxRpm: 0, enabled: true },
-          { id: 'k2', apiKey: 'b', maxRpm: 0, enabled: true },
+          { id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ],
       }),
       provider({
         id: 'p2',
-        keys: [{ id: 'k3', apiKey: 'c', maxRpm: 0, enabled: true }],
+        keys: [{ id: 'k3', apiKey: 'c', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
       }),
     ];
 
@@ -51,12 +51,12 @@ describe('resolveSlots', () => {
       provider({
         id: 'p1',
         enabled: false,
-        keys: [{ id: 'k1', apiKey: 'a', maxRpm: 0, enabled: true }],
+        keys: [{ id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
       }),
       provider({
         id: 'p2',
         enabled: true,
-        keys: [{ id: 'k2', apiKey: 'b', maxRpm: 0, enabled: true }],
+        keys: [{ id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
       }),
     ];
 
@@ -69,9 +69,9 @@ describe('resolveSlots', () => {
       provider({
         id: 'p1',
         keys: [
-          { id: 'k1', apiKey: 'a', maxRpm: 0, enabled: true },
-          { id: 'k2', apiKey: 'b', maxRpm: 0, enabled: false },
-          { id: 'k3', apiKey: 'c', maxRpm: 0, enabled: true },
+          { id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: false },
+          { id: 'k3', apiKey: 'c', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ],
       }),
     ];
@@ -85,13 +85,13 @@ describe('resolveSlots', () => {
       provider({
         id: 'pB',
         keys: [
-          { id: 'kB2', apiKey: '', maxRpm: 0, enabled: true },
-          { id: 'kB1', apiKey: '', maxRpm: 0, enabled: true },
+          { id: 'kB2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'kB1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
         ],
       }),
       provider({
         id: 'pA',
-        keys: [{ id: 'kA1', apiKey: '', maxRpm: 0, enabled: true }],
+        keys: [{ id: 'kA1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
       }),
     ];
 
@@ -106,7 +106,7 @@ describe('resolveSlots', () => {
       model: 'gpt-4o',
       temperature: 0.7,
       maxTokens: 8192,
-      keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 60, enabled: true, label: 'prod' }],
+      keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true, label: 'prod' }],
     });
 
     const slot = resolveSlots([p])[0];
@@ -135,6 +135,8 @@ describe('healthySlots', () => {
         displayName: 'X',
         requiresApiKey: false,
         maxRpm: 0,
+        concurrencyLimit: 0,
+        interval: 0,
       },
     }));
   }

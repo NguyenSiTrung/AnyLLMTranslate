@@ -35,6 +35,8 @@ function migrateLegacyProviderIntoPool(merged: ExtensionSettings): void {
     id: generatePoolKeyId(),
     apiKey: legacy.apiKey,
     maxRpm: merged.maxRpm ?? 0,
+    concurrencyLimit: 0,
+    interval: 0,
     enabled: true,
   };
   const poolProvider: PoolProvider = {
@@ -134,6 +136,8 @@ export function syncProviderToPool(
           id: generatePoolKeyId(),
           apiKey: providerPatch.apiKey ?? '',
           maxRpm: providerPatch.maxRpm ?? 0,
+          concurrencyLimit: 0,
+          interval: 0,
           enabled: true,
           ...keyPatch,
         },

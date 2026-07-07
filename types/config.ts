@@ -62,6 +62,13 @@ export interface PoolKey {
   label?: string;
   /** Max requests per minute for this key (0 = unlimited). */
   maxRpm: number;
+  /**
+   * Per-key concurrency limit (0 = use the global semaphore cap only). Caps how
+   * many in-flight requests this single key may hold at once (FR-5).
+   */
+  concurrencyLimit: number;
+  /** Minimum gap in ms between successive requests on this key (0 = off, FR-5 throttle). */
+  interval: number;
   /** Whether this key participates in the rotation pool. */
   enabled: boolean;
   /** Persisted last connection-test result (survives collapse/reload). */
@@ -339,6 +346,22 @@ export interface ExtensionSettings {
    * users until migrated by loadSettings() (see FR-1 migration rule).
    */
   providers: PoolProvider[];
+  /** Preserve inline markup (<b>, <a>, <code>, …) in translated paragraphs (FR-1 rich translate) */
+  enableRichTranslate: boolean;
+  /** Skip LLM calls when the detected source language already matches the target (FR-3 source-lang gate) */
+  enableSourceLanguageDetection: boolean;
+  /** Cache translation failures for a short TTL so flaky providers aren't retried every scroll-past (FR-4 negative cache) */
+  enableFailureCache: boolean;
+  /** Negative-cache entry TTL in minutes (FR-4, default 120) */
+  failureCacheTtlMinutes: number;
+  /** Stream web-page translations incrementally instead of waiting for the full batch (FR-6, opt-in) */
+  enableStreamingTranslation: boolean;
+  /** Restore translated state on page reload if a snapshot + cache are still present (FR-7 web resume) */
+  enableWebResume: boolean;
+  /** Max number of text pieces grouped into a single LLM request (FR-2, default 4 — mirrors Immersive's LLM default) */
+  maxTextGroupLengthPerRequest: number;
+  /** Max total characters allowed in a single LLM request (FR-2, default 2000) */
+  maxTextLengthPerRequest: number;
 }
 
 /** Provider preset definitions */
@@ -493,9 +516,17 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       maxTokens: 4096,
       requestTimeoutMs: 60000,
       enabled: true,
-      keys: [{ id: 'k_default', apiKey: '', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k_default', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
     },
   ],
+  enableRichTranslate: true,
+  enableSourceLanguageDetection: true,
+  enableFailureCache: true,
+  failureCacheTtlMinutes: 120,
+  enableStreamingTranslation: false,
+  enableWebResume: true,
+  maxTextGroupLengthPerRequest: 4,
+  maxTextLengthPerRequest: 2000,
 };
 
 /** All available provider presets */

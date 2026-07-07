@@ -126,6 +126,8 @@ export function ProvidersSection({ onOpenSetup, onNavigateToAdvanced }: Provider
         id: newKeyId,
         apiKey: '',
         maxRpm: 0,
+        concurrencyLimit: 0,
+        interval: 0,
         enabled: true,
       };
       commitProviders(
@@ -181,7 +183,7 @@ export function ProvidersSection({ onOpenSetup, onNavigateToAdvanced }: Provider
         maxTokens: 4096,
         requestTimeoutMs: 60000,
         enabled: true,
-        keys: [{ id: poolIdGenerators.keyId(), apiKey: '', maxRpm: 0, enabled: true }],
+        keys: [{ id: poolIdGenerators.keyId(), apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
       };
       commitProviders([...providers, newProvider]);
       setExpandedProviderIds((prev) => new Set(prev).add(newProvider.id));

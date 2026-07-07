@@ -158,5 +158,13 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     pdfSettings: state.pdfSettings,
     maxRpm: state.maxRpm,
     providers: state.providers,
+    enableRichTranslate: state.enableRichTranslate,
+    enableSourceLanguageDetection: state.enableSourceLanguageDetection,
+    enableFailureCache: state.enableFailureCache,
+    failureCacheTtlMinutes: state.failureCacheTtlMinutes,
+    enableStreamingTranslation: state.enableStreamingTranslation,
+    enableWebResume: state.enableWebResume,
+    maxTextGroupLengthPerRequest: state.maxTextGroupLengthPerRequest,
+    maxTextLengthPerRequest: state.maxTextLengthPerRequest,
   };
 }

@@ -83,7 +83,7 @@ describe('loadSettings — multi-provider pool migration', () => {
       temperature: 0.3,
       maxTokens: 4096,
       enabled: true,
-      keys: [{ id: 'k1', apiKey: 'plain-key', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k1', apiKey: 'plain-key', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
     };
     const stored = baseSettings({ providers: [existing], provider: { ...DEFAULT_SETTINGS.provider } });
 
@@ -109,8 +109,8 @@ describe('loadSettings — multi-provider pool migration', () => {
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'enc:key-one', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'enc:key-two', maxRpm: 30, enabled: true },
+            { id: 'k1', apiKey: 'enc:key-one', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'enc:key-two', maxRpm: 30, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],
@@ -139,8 +139,8 @@ describe('loadSettings — multi-provider pool migration', () => {
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'enc:corrupted', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'plain-ok', maxRpm: 0, enabled: true },
+            { id: 'k1', apiKey: 'enc:corrupted', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'plain-ok', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],
@@ -180,8 +180,8 @@ describe('saveSettings — per-key encryption', () => {
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'plain-one', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'plain-two', maxRpm: 0, enabled: true },
+            { id: 'k1', apiKey: 'plain-one', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'plain-two', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],
@@ -228,6 +228,8 @@ describe('saveSettings — per-key encryption', () => {
               id: 'k1',
               apiKey: 'plain-key',
               maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
               enabled: true,
               lastTestResult: testResult,
             },
@@ -267,6 +269,8 @@ describe('saveSettings — per-key encryption', () => {
               id: 'k1',
               apiKey: 'enc:my-key',
               maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
               enabled: true,
               lastTestResult: { success: true, at: 1700000000002, latencyMs: 120 },
             },
@@ -312,7 +316,7 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       temperature: 0.3,
       maxTokens: 4096,
       enabled: true,
-      keys: [{ id: 'k1', apiKey: 'old-key', maxRpm: 30, enabled: true }],
+      keys: [{ id: 'k1', apiKey: 'old-key', maxRpm: 30, concurrencyLimit: 0, interval: 0,enabled: true }],
     };
     const result = syncProviderToPool([existing], {
       baseUrl: 'https://new/v1',
@@ -339,7 +343,7 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       temperature: 0.3,
       maxTokens: 4096,
       enabled: true,
-      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
     };
     const result = syncProviderToPool([existing], { maxRpm: 60 });
     expect(result[0]?.keys[0]?.maxRpm).toBe(60);
@@ -355,7 +359,7 @@ describe('syncProviderToPool — wizard/legacy mirror → pool[0]', () => {
       temperature: 0.3,
       maxTokens: 4096,
       enabled: true,
-      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, enabled: true }],
+      keys: [{ id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
     };
     const result = syncProviderToPool([existing], {});
     expect(result[0]?.baseUrl).toBe('https://x/v1');
@@ -382,8 +386,8 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
           maxTokens: 4096,
           enabled: true,
           keys: [
-            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, enabled: true },
-            { id: 'k2', apiKey: 'sk-2', maxRpm: 30, enabled: true },
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 30, concurrencyLimit: 0, interval: 0,enabled: true },
           ],
         },
       ],

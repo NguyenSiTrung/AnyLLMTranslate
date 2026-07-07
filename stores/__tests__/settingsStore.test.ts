@@ -315,7 +315,7 @@ describe('useSettingsStore', () => {
             temperature: 0.3,
             maxTokens: 4096,
             enabled: true,
-            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, enabled: true }],
+            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true }],
           },
         ],
       });
@@ -346,8 +346,8 @@ describe('useSettingsStore', () => {
                   id: 'p1',
                   enabled: true,
                   keys: [
-                    { id: 'k1', apiKey: 'enc:leak-attempt-1', maxRpm: 30, enabled: true },
-                    { id: 'k2', apiKey: 'enc:leak-attempt-2', maxRpm: 0, enabled: true },
+                    { id: 'k1', apiKey: 'enc:leak-attempt-1', maxRpm: 30, concurrencyLimit: 0, interval: 0,enabled: true },
+                    { id: 'k2', apiKey: 'enc:leak-attempt-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
                   ],
                 },
               ],
