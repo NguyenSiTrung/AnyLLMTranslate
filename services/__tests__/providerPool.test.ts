@@ -707,7 +707,7 @@ describe('ProviderPoolCoordinator', () => {
       });
       coord.rebuild(singleKeySettings(0, 0));
 
-      await coord.translate({ texts: new Map([['id1', 't']]), targetLanguage: 'vi' });
+      await coord.translate({ texts: new Map([['id1', 't']]), targetLanguage: 'vi', sourceLanguage: 'en' });
       expect(delays).toEqual([]);
     });
 
@@ -722,10 +722,10 @@ describe('ProviderPoolCoordinator', () => {
       coord.rebuild(singleKeySettings(0, 200));
 
       // First call: no prior dispatch → no wait.
-      await coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' });
+      await coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi', sourceLanguage: 'en' });
       // Second call immediately after: 200ms elapsed so far (clock didn't advance
       // except by the delay) → waits the remaining interval.
-      await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+      await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi', sourceLanguage: 'en' });
 
       // First dispatch records lastDispatchAt; second sees elapsed < 200 → sleeps.
       expect(delays.length).toBeGreaterThanOrEqual(1);
@@ -763,14 +763,14 @@ describe('ProviderPoolCoordinator', () => {
         return { success: true, translations: new Map([['id1', 'x']]) };
       };
 
-      const first = coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' });
+      const first = coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi', sourceLanguage: 'en' });
       // Yield so the first call enters translate.
       await Promise.resolve();
       await Promise.resolve();
 
       // Start a second concurrent call — it must NOT enter translate until the
       // first releases (concurrencyLimit = 1).
-      const second = coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+      const second = coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi', sourceLanguage: 'en' });
       await Promise.resolve();
       await Promise.resolve();
 
@@ -801,14 +801,14 @@ describe('ProviderPoolCoordinator', () => {
       // A failing call must still release its key slot — a subsequent call must
       // not block forever.
       await expect(
-        coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi' }),
+        coord.translate({ texts: new Map([['id1', 'a']]), targetLanguage: 'vi', sourceLanguage: 'en' }),
       ).rejects.toThrow();
 
       k1.nextOutcome = {
         kind: 'success',
         result: { success: true, translations: new Map([['id1', 'ok']]) },
       };
-      const result = await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi' });
+      const result = await coord.translate({ texts: new Map([['id1', 'b']]), targetLanguage: 'vi', sourceLanguage: 'en' });
       expect(result.success).toBe(true);
     });
   });

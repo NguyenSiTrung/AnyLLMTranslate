@@ -44,10 +44,19 @@ import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 import { isContextInvalidated } from '@/lib/utils';
 import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
+import {
+  loadSnapshot,
+  saveSnapshot,
+  deriveContentHash,
+  type ResumePiece,
+} from '@/lib/webResume';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
 let allPieces: TranslationPiece[] = [];
+/** FR-7: the target language of the active session, captured so the
+ *  pagehide snapshot writer can record it without re-reading settings. */
+let currentTargetLanguage = 'vi';
 let coordinatorCleanup: (() => void) | null = null;
 let _beforeUnloadCleanup: (() => void) | null = null;
 let activeRequests = 0;
@@ -296,6 +305,89 @@ function sendStatusUpdate(): void {
   }).catch(() => { /* Popup likely closed */ });
 }
 
+/** FR-7: one-time flag so the pagehide/beforeunload snapshot writer is registered once per session. */
+let resumeSnapshotWriterRegistered = false;
+
+/**
+ * FR-7: restore already-translated pieces from a prior session's snapshot.
+ * Matches pieces by `text` (the snapshot may use different piece ids after a
+ * re-extraction) and applies the cached translation via the display layer. Only
+ * restores pieces whose translation is still in the success cache — a cache
+ * miss degrades gracefully (the viewport observer re-translates normally).
+ */
+async function restoreFromSnapshot(pieces: TranslationPiece[], targetLanguage: string): Promise<void> {
+  try {
+    const url = window.location.href;
+    const contentHash = await deriveContentHash(pieces.map((p) => p.text).join('\n'));
+    const snapshot = await loadSnapshot(url, contentHash);
+    if (!snapshot) return;
+    // Only restore if the target language matches the snapshot's.
+    if (snapshot.targetLanguage !== targetLanguage) return;
+
+    // Build a text → translation map from the snapshot for fast lookup.
+    const translatedByText = new Map<string, string>();
+    for (const piece of snapshot.pieces) {
+      if (piece.status === 'translated' && piece.translatedText) {
+        translatedByText.set(piece.text, piece.translatedText);
+      }
+    }
+    if (translatedByText.size === 0) return;
+
+    let restored = 0;
+    for (const piece of pieces) {
+      const cached = translatedByText.get(piece.text);
+      if (cached !== undefined) {
+        piece.isTranslated = true;
+        piece.translatedText = cached;
+        if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+          applyInlineTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
+        } else {
+          applyTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
+        }
+        restored++;
+      }
+    }
+    if (restored > 0) sendStatusUpdate();
+  } catch {
+    // Resume is best-effort — never block normal translation on it.
+  }
+}
+
+/** FR-7: write a resume snapshot on pagehide/beforeunload so the next session can restore. */
+function writeResumeSnapshot(): void {
+  if (allPieces.length === 0) return;
+  const url = window.location.href;
+  const targetLang = currentTargetLanguage;
+  void (async () => {
+    try {
+      const contentHash = await deriveContentHash(allPieces.map((p) => p.text).join('\n'));
+      const resumePieces: ResumePiece[] = allPieces.map((p) => ({
+        id: p.id,
+        text: p.text,
+        ...(p.translatedText !== undefined ? { translatedText: p.translatedText } : {}),
+        status: p.isTranslated ? 'translated' : 'pending',
+      }));
+      await saveSnapshot({
+        url,
+        contentHash,
+        targetLanguage: targetLang,
+        capturedAt: Date.now(),
+        pieces: resumePieces,
+      });
+    } catch {
+      // Best-effort — resume is non-critical.
+    }
+  })();
+}
+
+/** Register the pagehide/beforeunload snapshot writer once per session (FR-7). */
+function registerResumeSnapshotWriter(): void {
+  if (resumeSnapshotWriterRegistered) return;
+  resumeSnapshotWriterRegistered = true;
+  window.addEventListener('pagehide', writeResumeSnapshot, { once: false });
+  window.addEventListener('beforeunload', writeResumeSnapshot, { once: false });
+}
+
 /** Start translation on the current page */
 export async function startTranslation(): Promise<void> {
   // Bump the session id so any in-flight translations from a previous
@@ -319,6 +411,8 @@ export async function startTranslation(): Promise<void> {
 
   // Load settings to apply visual settings
   const settings = await loadSettings();
+  // FR-7: capture the target language for the pagehide snapshot writer.
+  currentTargetLanguage = settings.targetLanguage;
 
   // Apply visual settings to DOM
   applyTheme(settings.theme);
@@ -366,6 +460,15 @@ export async function startTranslation(): Promise<void> {
     viewportObserver.observeAll([...allPieces]);
   }
 
+  // FR-7: cross-session resume. If a fresh snapshot exists for this URL +
+  // content hash, restore already-translated pieces immediately (no LLM calls
+  // — relies on the success cache still holding the translations).
+  if (settings.enableWebResume && allPieces.length > 0) {
+    void restoreFromSnapshot(allPieces, settings.targetLanguage).catch(() => {});
+    // Register a one-time snapshot writer on page hide so the next session can resume.
+    registerResumeSnapshotWriter();
+  }
+
   mutationWatcher = new MutationWatcher((addedElements) => {
     if (!viewportObserver || getPageState() === 'off') return;
 
@@ -407,6 +510,10 @@ export function stopTranslation(): void {
   hideAutoTranslateNotification();
   allPieces = [];
   activeRequests = 0;
+  // FR-7: write a final snapshot before clearing so the next session can resume,
+  // then reset the writer-registration flag.
+  writeResumeSnapshot();
+  resumeSnapshotWriterRegistered = false;
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
   try {
