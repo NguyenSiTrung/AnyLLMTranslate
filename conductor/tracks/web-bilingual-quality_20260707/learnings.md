@@ -42,3 +42,14 @@ From `conductor/patterns.md` — read full file for detail. Key inherited patter
   - **deepMerge(DEFAULT_SETTINGS, loaded)** in loadSettings gives legacy-storage migration for free for the new top-level boolean/number fields — no explicit migration code needed.
   - **Pre-existing tsc errors exist on clean master:** `services/__tests__/subtitlePrompt.test.ts` (8 errors: subtitle knob type mismatches) — left from the test-trim track ALT-t0w. Must exclude these from "clean" assertions.
   - **Real test count is 1403**, not the 2319 in product.md (test suite was trimmed in ALT-t0w; product.md figure stale). Baseline for this track = 1403.
+
+## [2026-07-07 17:03] - Phase 2 (FR-1 Rich translate)
+- **Implemented:** New lib/richTranslate.ts (encode/decode inline markup); wired into domWalker/translationDisplay/base prompt/content.ts.
+- **Files changed:** lib/richTranslate.ts, lib/__tests__/richTranslate.test.ts, types/translation.ts, content/domWalker.ts, content/translationDisplay.ts, services/base.ts, entrypoints/content.ts, content/__tests__/translationDisplay.test.ts.
+- **Commit:** 4a0020f
+- **Learnings:**
+  - **Rich translate integration is subtle re: the anchor scope:** the piece's `anchorElement.innerHTML` may be larger than the piece's text-node span (multi-piece splits share an anchor). Solution: only attach variables when there's a single piece per anchor (no sentence split), so placeholder ids stay aligned. Long pieces degrade to plain text — safe.
+  - **`inlineEl.title` must stay the RAW translatedText, NOT the formatted displayText.** `getInlineTranslationText()` (clone logic) prefers the `title` attribute and relies on it being the clean unwrapped text to strip parens. Setting title to `formatInlineText(...)` broke the inline-clone test (got `(Văn bản ngắn)` instead of `Văn bản ngắn`).
+  - **`existing.replaceChildren(node)` is the modern API** for swapping a child node (vs `textContent=`) when injecting a DocumentFragment or element. Use `cloneNode(true)` if reusing the same fragment across the in-place + create paths.
+  - **DOM-using lib tests need `@vitest-environment jsdom` docblock** (per-file) since `lib/__tests__` defaults to node env. Pattern matches `services/__tests__/background.urlAllowlist.test.ts`.
+  - **Manual HTML tokenizer over DOMParser** for encodeInlineHtml: a regex TAG scanner with a stack handles nested inline elements + attribute preservation reliably and deterministically; avoids DOMParser quirks. Decode uses a recursive `<z id="N">…</z>` scanner that builds safe elements via createElement.

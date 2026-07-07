@@ -41,6 +41,7 @@ import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
+import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
 import { withRetry } from '@/lib/subtitleRetry';
@@ -461,64 +462,107 @@ async function handleTranslate(
 
     ensureKeepaliveAlarm();
 
-    // Translate only uncached pieces
-    const service = await initService();
-    const texts = new Map<string, string>();
-    for (const piece of uncachedPieces) {
-      texts.set(piece.id, piece.text);
-    }
-
-    const result = await service.translate({
-      texts,
-      sourceLanguage: message.sourceLanguage,
-      targetLanguage: message.targetLanguage,
-      glossaryBlock: glossaryBlock || undefined,
-      customSystemPrompt: settings.customSystemPrompt ?? null,
-      pageContext: message.pageContext,
+    // FR-2: dedup identical short paragraphs that scrolled in together, then
+    // split the unique pieces into request-sized sub-batches so a single large
+    // viewport flush never becomes one oversized LLM call. Mirrors Immersive's
+    // maxTextGroupLengthPerRequest / maxTextLengthPerRequest.
+    const { deduped, dupes } = dedupPiecesByText(uncachedPieces);
+    const batches = splitPiecesIntoBatches(deduped, {
+      maxTextGroupLengthPerRequest: settings.maxTextGroupLengthPerRequest,
+      maxTextLengthPerRequest: settings.maxTextLengthPerRequest,
     });
 
-    if (result.success) {
-      const freshResults: Array<{ id: string; translatedText: string }> = [];
+    // Translate only uncached pieces
+    const service = await initService();
 
-      for (const [id, translatedText] of result.translations.entries()) {
-        freshResults.push({ id, translatedText });
+    const freshResults: Array<{ id: string; translatedText: string }> = [];
+    let totalApiCalls = 0;
+    let anyPartial = false;
+    let lastError: string | undefined;
 
-        // Write each fresh translation back to cache.
-        const piece = uncachedPieces.find((p) => p.id === id);
-        if (piece) {
-          // FR-7 (fixes #9): partial-result guard — mirror the subtitle path.
-          // When the LLM omitted this ID, the service back-fills it with the
-          // source text. Never cache that: it would persist source-as-translation
-          // and poison future lookups. (result.partial marks the chunk.)
-          const isBackfilled =
-            result.partial === true && translatedText === piece.text;
-          if (!isBackfilled) {
-            await cacheTranslation(
-              piece.text,
-              translatedText,
-              message.sourceLanguage,
-              message.targetLanguage,
-            );
+    for (const batch of batches) {
+      const texts = new Map<string, string>();
+      for (const piece of batch) {
+        texts.set(piece.id, piece.text);
+      }
+
+      const result = await service.translate({
+        texts,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        glossaryBlock: glossaryBlock || undefined,
+        customSystemPrompt: settings.customSystemPrompt ?? null,
+        pageContext: message.pageContext,
+      });
+      totalApiCalls++;
+
+      if (result.success) {
+        if (result.partial) anyPartial = true;
+        for (const [id, translatedText] of result.translations.entries()) {
+          freshResults.push({ id, translatedText });
+
+          // Write each fresh translation back to cache.
+          const piece = batch.find((p) => p.id === id);
+          if (piece) {
+            // FR-7 (fixes #9): partial-result guard — mirror the subtitle path.
+            // When the LLM omitted this ID, the service back-fills it with the
+            // source text. Never cache that: it would persist source-as-translation
+            // and poison future lookups. (result.partial marks the chunk.)
+            const isBackfilled = result.partial === true && translatedText === piece.text;
+            if (!isBackfilled) {
+              await cacheTranslation(
+                piece.text,
+                translatedText,
+                message.sourceLanguage,
+                message.targetLanguage,
+              );
+            }
+          }
+        }
+      } else {
+        // Record the first batch failure; continue so partial results still
+        // surface (a later batch may succeed). If ALL batches fail, the final
+        // return reports the error.
+        lastError = result.error ?? 'Translation failed';
+      }
+    }
+
+    // Re-hydrate duplicate ids: each dup adopts its canonical piece's translation.
+    if (dupes.size > 0) {
+      for (const [dupeId, canonicalId] of dupes) {
+        const canonical = freshResults.find((r) => r.id === canonicalId);
+        if (canonical) {
+          freshResults.push({ id: dupeId, translatedText: canonical.translatedText });
+        } else {
+          // Canonical didn't translate (e.g. its batch failed) — fall back to source.
+          const dupePiece = uncachedPieces.find((p) => p.id === dupeId);
+          if (dupePiece) {
+            freshResults.push({ id: dupeId, translatedText: dupePiece.text });
           }
         }
       }
+    }
 
-      // Track translation stats (fire-and-forget)
-      const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
-      incrementStats({
-        totalApiCalls: 1,
-        totalCharactersTranslated: totalChars,
-      }).catch(() => {});
-      recordDailyStats(totalChars, 1, cachedResults.length).catch(() => {});
+    // Track translation stats (fire-and-forget)
+    const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
+    incrementStats({
+      totalApiCalls,
+      totalCharactersTranslated: totalChars,
+    }).catch(() => {});
+    recordDailyStats(totalChars, totalApiCalls, cachedResults.length).catch(() => {});
 
+    if (freshResults.length > 0) {
       return {
         success: true,
         results: [...cachedResults, ...freshResults],
+        // Only flag partial when at least one batch back-filled; omit otherwise
+        // so the default response shape stays `{ success, results }`.
+        ...(anyPartial ? { partial: true } : {}),
       };
     } else {
       return {
         success: false,
-        error: result.error ?? 'Translation failed',
+        error: lastError ?? 'Translation failed',
       };
     }
   } catch (error) {

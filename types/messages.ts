@@ -336,6 +336,8 @@ export interface TranslationResultMessage {
   success: boolean;
   results?: TranslationResultItem[];
   error?: string;
+  /** True when at least one sub-batch returned a partial (back-filled) result (FR-2). */
+  partial?: boolean;
 }
 
 /** Single translation result item */

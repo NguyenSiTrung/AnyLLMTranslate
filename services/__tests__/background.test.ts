@@ -109,6 +109,59 @@ describe('services/background', () => {
       });
     });
 
+    it('FR-2: splits a large flush into multiple LLM calls by maxTextGroupLengthPerRequest', async () => {
+      // Five pieces, default maxTextGroupLengthPerRequest=4 → 2 LLM calls.
+      mockFetch(JSON.stringify({ translations: { p1: 'a', p2: 'b', p3: 'c', p4: 'd', p5: 'e' } }));
+
+      const result = await handleMessage(
+        {
+          action: 'translate',
+          pieces: [
+            { id: 'p1', text: 'one' },
+            { id: 'p2', text: 'two' },
+            { id: 'p3', text: 'three' },
+            { id: 'p4', text: 'four' },
+            { id: 'p5', text: 'five' },
+          ],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const typed = result as { success: boolean; results: { id: string }[] };
+      expect(typed.success).toBe(true);
+      expect(typed.results?.map((r) => r.id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+      // Two sub-batches (4-piece cap → batch of 4 + batch of 1) → 2 fetch calls.
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('FR-2: dedups identical texts and re-hydrates them from the canonical result', async () => {
+      mockFetch(JSON.stringify({ translations: { p1: 'Xin chào', p2: 'Thế giới' } }));
+
+      const result = await handleMessage(
+        {
+          action: 'translate',
+          pieces: [
+            { id: 'p1', text: 'Hello' },
+            { id: 'p1dup', text: 'Hello' }, // duplicate of p1
+            { id: 'p2', text: 'World' },
+          ],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const typed = result as { success: boolean; results: { id: string; translatedText: string }[] };
+      expect(typed.success).toBe(true);
+      const byId = new Map(typed.results!.map((r) => [r.id, r.translatedText]));
+      expect(byId.get('p1')).toBe('Xin chào');
+      // The dup adopts the canonical translation — no extra LLM piece sent.
+      expect(byId.get('p1dup')).toBe('Xin chào');
+      expect(byId.get('p2')).toBe('Thế giới');
+    });
+
     it('returns error on translation failure', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
