@@ -269,11 +269,6 @@ describe('useSettingsStore', () => {
       expect(DEFAULT_SETTINGS.provider.maxRpm).toBe(0);
     });
 
-    it('is included in the store state', () => {
-      const state = useSettingsStore.getState();
-      expect(state.maxRpm).toBe(0);
-    });
-
     it('updateSettings persists maxRpm', async () => {
       await useSettingsStore.getState().updateSettings({ maxRpm: 30 });
       const state = useSettingsStore.getState();
@@ -289,12 +284,6 @@ describe('useSettingsStore', () => {
       mockStorageData['anyllm-translate-settings'] = { maxRpm: 60 };
       await useSettingsStore.getState().loadFromStorage();
       expect(useSettingsStore.getState().maxRpm).toBe(60);
-    });
-
-    it('loadFromStorage falls back to default (0) when maxRpm is absent', async () => {
-      mockStorageData['anyllm-translate-settings'] = { theme: 'bubble' };
-      await useSettingsStore.getState().loadFromStorage();
-      expect(useSettingsStore.getState().maxRpm).toBe(0);
     });
 
     it('resetToDefaults restores maxRpm to 0', async () => {

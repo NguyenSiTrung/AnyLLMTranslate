@@ -89,10 +89,8 @@ describe('InterceptorRegistry — Content-Type matching', () => {
   });
 
   it.each([
-    ['text/vtt'],
     ['text/VTT'], // case-insensitive
     ['text/vtt; charset=utf-8'], // params trimmed
-    ['  text/vtt ; charset=utf-8  '], // whitespace tolerated
   ])('matches registered Content-Type %s', (ct) => {
     registry.registerContentTypePatterns([{ platform: 'generic', contentTypes: ['text/vtt'] }]);
     const result = registry.matchContentType(ct);

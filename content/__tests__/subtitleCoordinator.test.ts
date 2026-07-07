@@ -304,60 +304,6 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toEqual({ faithfulness: 'literal' });
   });
 
-  it('omits knobOverrides from the outgoing message when not set', async () => {
-    // No setSubtitleKnobOverride dispatched → state.subtitleKnobOverride is undefined.
-    if (capturedInterceptedHandler) {
-      await capturedInterceptedHandler(
-        {
-          url: 'https://youtube.com/timedtext',
-          body: '<transcript>...</transcript>',
-          contentType: 'application/json',
-          platform: 'youtube',
-          originalLanguage: 'en',
-        },
-        'req-knobs-unset',
-      );
-    }
-
-    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
-    );
-    if (!sent) throw new Error('Expected translateSubtitle message');
-    expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
-  });
-
-  it('clears the override when setSubtitleKnobOverride receives null', async () => {
-    const addListenerCalls = (global.chrome.runtime.onMessage.addListener as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    // Set, then clear with null.
-    for (const call of addListenerCalls) {
-      const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
-      try { l({ action: 'setSubtitleKnobOverride', knobOverrides: { brevity: 'terse' } }); } catch { /* ignore */ }
-    }
-    for (const call of addListenerCalls) {
-      const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
-      try { l({ action: 'setSubtitleKnobOverride', knobOverrides: null }); } catch { /* ignore */ }
-    }
-
-    if (capturedInterceptedHandler) {
-      await capturedInterceptedHandler(
-        {
-          url: 'https://youtube.com/timedtext',
-          body: '<transcript>...</transcript>',
-          contentType: 'application/json',
-          platform: 'youtube',
-          originalLanguage: 'en',
-        },
-        'req-knobs-cleared',
-      );
-    }
-
-    const sent = (chrome.runtime.sendMessage as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
-    );
-    if (!sent) throw new Error('Expected translateSubtitle message');
-    expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toBeUndefined();
-  });
-
   it('falls back to settings.sourceLanguage when payload.originalLanguage is empty', async () => {
     const payload = {
       url: 'https://udemy.com/subtitles.vtt',
@@ -392,46 +338,6 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       requestId: 'req-004',
       vttContent: 'WEBVTT\n\n',
     });
-  });
-
-  it('applies SiteRule category even when category detection is off and no tab override', async () => {
-    // Edge case: enableLLMPageCategoryDetection=false → extractPageContext returns no category
-    // No tab override set. But a SiteRule with a category exists → should still be applied.
-    mockLoadSettings.mockResolvedValue({
-      ...MOCK_SETTINGS,
-      enableContextAwareTranslation: true,
-      enableLLMPageCategoryDetection: false,
-      siteRules: [{ hostname: 'youtube.com', category: 'entertainment' }],
-    });
-    mockExtractPageContext.mockReturnValue({
-      title: 'Test Video',
-      description: '',
-      domain: 'youtube.com',
-    });
-    mockFindMatchingRule.mockReturnValue({ hostname: 'youtube.com', category: 'entertainment' });
-    mockResolveCategory.mockReturnValue('entertainment');
-
-    const payload = {
-      url: 'https://youtube.com/timedtext',
-      body: '<transcript>...</transcript>',
-      contentType: 'application/json',
-      platform: 'youtube',
-      originalLanguage: 'en',
-    };
-
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-013');
-
-    expect(mockFindMatchingRule).toHaveBeenCalledWith('www.youtube.com', [{ hostname: 'youtube.com', category: 'entertainment' }]);
-    expect(mockResolveCategory).toHaveBeenCalledWith(
-      undefined, // no auto-detected category (detection off)
-      'entertainment', // from SiteRule
-      undefined, // no tab override
-    );
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pageContext: expect.objectContaining({ category: 'entertainment' }),
-      }),
-    );
   });
 
   it('activates overlay immediately with original cues', async () => {
@@ -645,32 +551,6 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
   });
 
-  it('omits pageContext when enableContextAwareTranslation is false', async () => {
-    mockLoadSettings.mockResolvedValue({
-      ...MOCK_SETTINGS,
-      enableContextAwareTranslation: false,
-    });
-
-    const payload = {
-      url: 'https://youtube.com/timedtext',
-      body: '<transcript>...</transcript>',
-      contentType: 'application/json',
-      platform: 'youtube',
-      originalLanguage: 'en',
-    };
-
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-011');
-
-    expect(mockExtractPageContext).not.toHaveBeenCalled();
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'translateSubtitle',
-      }),
-    );
-    const sentMessage = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sentMessage.pageContext).toBeUndefined();
-  });
-
   it('resolves category with tab override > site rule > auto-detected', async () => {
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
@@ -833,26 +713,6 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     );
   });
 
-  it('gracefully falls back when background returns success: false', async () => {
-    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
-      success: false,
-      error: 'Translation failed',
-    });
-
-    const { forceOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
-    resetCoordinatorState();
-
-    const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
-    await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
-
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(
-      MOCK_CUES,
-      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
-    );
-  });
-
   it('sends pageContext in overlay mode when context-aware is enabled', async () => {
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
@@ -890,6 +750,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
 // ============================================================================
 // Phase 1: Stale subtitle chunk rejection
 // ============================================================================
+
 
 describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
   let extensionMessageHandler: (

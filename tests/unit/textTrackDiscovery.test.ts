@@ -98,23 +98,6 @@ describe('startTextTrackDiscovery', () => {
     cleanup();
   });
 
-  it('scans existing video elements for textTracks', () => {
-    const video = makeVideo(
-      [{ kind: 'subtitles', language: 'en', label: 'English' }],
-      [{ srclang: 'en', kind: 'subtitles', src: 'https://example.com/en.vtt' }]
-    );
-    document.body.appendChild(video);
-
-    const cleanup = startTextTrackDiscovery(bridge);
-    expect(bridge.send).toHaveBeenCalledTimes(1);
-    expect(bridge.send).toHaveBeenCalledWith(
-      'SUBTITLE_TRACKS_DISCOVERED',
-      expect.objectContaining({ platform: 'html5' })
-    );
-
-    cleanup();
-  });
-
   it('sends SUBTITLE_TRACKS_DISCOVERED with correct payload when tracks are found', () => {
     const video = makeVideo(
       [

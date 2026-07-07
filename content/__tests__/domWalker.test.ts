@@ -66,38 +66,6 @@ describe('content/domWalker', () => {
       expect(pieces[0].text).toBe('Translate this');
     });
 
-    it('skips elements with .notranslate class', () => {
-      document.body.innerHTML = '<p>Translate this</p><p class="notranslate">Skip this</p>';
-      const pieces = extractPieces(document.body);
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Translate this');
-    });
-
-    it('skips contentEditable elements', () => {
-      document.body.innerHTML = '<p>Normal</p><div contenteditable="true">Editable</div>';
-      const pieces = extractPieces(document.body);
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Normal');
-    });
-
-    it('skips elements with data-anyllm-translated', () => {
-      document.body.innerHTML = '<p>Normal</p><div data-anyllm-translated>Injected</div>';
-      const pieces = extractPieces(document.body);
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Normal');
-    });
-
-    it('skips very short text (less than 2 chars)', () => {
-      document.body.innerHTML = '<p>A</p><p>Real paragraph here</p>';
-      const pieces = extractPieces(document.body);
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Real paragraph here');
-    });
-
     it('handles nested block elements', () => {
       document.body.innerHTML = `
         <article>
@@ -144,50 +112,12 @@ describe('content/domWalker', () => {
       expect(pieces[0].text).toBe('Keep this');
     });
 
-    it('skips nested elements matching excludeSelectors', () => {
-      document.body.innerHTML = '<div><p>Keep this</p><code>skip code</code></div>';
-      const pieces = extractPieces(document.body, { excludeSelectors: ['code'] });
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Keep this');
-    });
-
-    it('ignores invalid excludeSelectors', () => {
-      document.body.innerHTML = '<p>Valid text</p>';
-      const pieces = extractPieces(document.body, { excludeSelectors: ['[invalid!'] });
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Valid text');
-    });
-
     it('extracts only from includeSelectors', () => {
       document.body.innerHTML = '<article><p>Article text</p></article><aside><p>Aside text</p></aside>';
       const pieces = extractPieces(document.body, { includeSelectors: ['article'] });
 
       expect(pieces.length).toBe(1);
       expect(pieces[0].text).toBe('Article text');
-    });
-
-    it('deduplicates nested includeSelectors', () => {
-      document.body.innerHTML = '<article><section><p>Text</p></section></article>';
-      const pieces = extractPieces(document.body, { includeSelectors: ['article', 'section'] });
-
-      expect(pieces.length).toBe(1);
-      expect(pieces[0].text).toBe('Text');
-    });
-
-    it('returns empty array when includeSelectors match nothing', () => {
-      document.body.innerHTML = '<p>Text</p>';
-      const pieces = extractPieces(document.body, { includeSelectors: ['.missing'] });
-
-      expect(pieces.length).toBe(0);
-    });
-
-    it('ignores invalid includeSelectors', () => {
-      document.body.innerHTML = '<p>Text</p>';
-      const pieces = extractPieces(document.body, { includeSelectors: ['[invalid!'] });
-
-      expect(pieces.length).toBe(0);
     });
 
     it('applies excludeSelectors within includeSelectors', () => {

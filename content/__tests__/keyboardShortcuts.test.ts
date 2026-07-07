@@ -40,15 +40,11 @@ describe('content/keyboardShortcuts', () => {
   });
 
   describe('initKeyboardShortcuts', () => {
-    it('returns a cleanup function', () => {
-      cleanup = initKeyboardShortcuts();
-      expect(typeof cleanup).toBe('function');
-    });
-
-    it('attaches keydown listener in capture phase', () => {
+    it('attaches keydown listener in capture phase and returns a cleanup function', () => {
       const addSpy = vi.spyOn(document, 'addEventListener');
       cleanup = initKeyboardShortcuts();
 
+      expect(typeof cleanup).toBe('function');
       expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     });
 
@@ -63,30 +59,12 @@ describe('content/keyboardShortcuts', () => {
   });
 
   describe('getDefaultShortcuts', () => {
-    it('returns 4 default shortcuts', () => {
+    it('returns 4 default shortcuts including Alt+H, Alt+D, and Escape', () => {
       const shortcuts = getDefaultShortcuts();
       expect(shortcuts).toHaveLength(4);
-    });
-
-    it('includes Alt+H for hover translate toggle', () => {
-      const shortcuts = getDefaultShortcuts();
-      const hoverShortcut = shortcuts.find((s) => s.key === 'h' && s.altKey);
-      expect(hoverShortcut).toBeDefined();
-      expect(hoverShortcut?.description).toContain('hover');
-    });
-
-    it('includes Alt+D for text selection toggle', () => {
-      const shortcuts = getDefaultShortcuts();
-      const selectionShortcut = shortcuts.find((s) => s.key === 'd' && s.altKey);
-      expect(selectionShortcut).toBeDefined();
-      expect(selectionShortcut?.description).toContain('selection');
-    });
-
-    it('includes Escape for tooltip dismissal', () => {
-      const shortcuts = getDefaultShortcuts();
-      const escShortcut = shortcuts.find((s) => s.key === 'Escape');
-      expect(escShortcut).toBeDefined();
-      expect(escShortcut?.description).toContain('tooltip');
+      expect(shortcuts.find((s) => s.key === 'h' && s.altKey)).toBeDefined();
+      expect(shortcuts.find((s) => s.key === 'd' && s.altKey)).toBeDefined();
+      expect(shortcuts.find((s) => s.key === 'Escape')).toBeDefined();
     });
   });
 

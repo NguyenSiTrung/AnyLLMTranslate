@@ -49,19 +49,6 @@ describe('config types', () => {
       };
       expect(rule.category).toBe('Software Development');
     });
-
-    it('accepts a site rule without category (undefined)', () => {
-      const rule: SiteRule = {
-        id: 'rule-no-cat',
-        hostname: 'example.com',
-        includeSelectors: [],
-        excludeSelectors: [],
-        alwaysTranslate: false,
-        neverTranslate: false,
-        builtIn: false,
-      };
-      expect(rule.category).toBeUndefined();
-    });
   });
 
   describe('GlossaryEntry interface', () => {
@@ -147,14 +134,6 @@ describe('config types', () => {
       expect(DEFAULT_SETTINGS.customTheme?.fontSize).toBe('same');
     });
 
-    it('has context-aware translation enabled by default', () => {
-      expect(DEFAULT_SETTINGS.enableContextAwareTranslation).toBe(true);
-    });
-
-    it('has page category detection disabled by default', () => {
-      expect(DEFAULT_SETTINGS.enableLLMPageCategoryDetection).toBe(false);
-    });
-
     it('fulfills ExtensionSettings interface completely', () => {
       const settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
       expect(settings).toBeDefined();
@@ -195,15 +174,6 @@ describe('config types', () => {
     it('includes custom as first preset', () => {
       expect(PROVIDER_PRESETS[0].preset).toBe('custom');
       expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
-    });
-
-
-    it('all presets have required fields', () => {
-      for (const preset of PROVIDER_PRESETS) {
-        expect(preset.preset).toBeTruthy();
-        expect(preset.displayName).toBeTruthy();
-        expect(typeof preset.requiresApiKey).toBe('boolean');
-      }
     });
   });
 

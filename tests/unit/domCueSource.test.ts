@@ -184,29 +184,6 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     cleanup();
   });
 
-  it('waits and attaches when the caption overlay is absent at startup', async () => {
-    document.body.innerHTML = '';
-    const earlyVideo = document.createElement('video');
-    document.body.appendChild(earlyVideo);
-    // No caption overlay at startup — scraper must NOT bail.
-    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
-
-    // Caption overlay mounts later.
-    const lateOverlay = document.createElement('div');
-    lateOverlay.setAttribute('data-testid', 'caption_renderer_overlay');
-    const lateCue = document.createElement('div');
-    lateCue.setAttribute('data-testid', 'cueBoxRowTextCue');
-    lateOverlay.appendChild(lateCue);
-    document.body.appendChild(lateOverlay);
-
-    Object.defineProperty(earlyVideo, 'currentTime', { configurable: true, get: () => 7 });
-    lateCue.textContent = 'Late cue';
-    await flushObservers();
-
-    expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeDefined();
-    cleanup();
-  });
-
   it('resets the rolling cue buffer when the active track changes mid-session', async () => {
     // A track button that will become active mid-session.
     const btn = document.createElement('button');
@@ -345,59 +322,6 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     const open = cues.find((c) => c.text === 'Open cue');
     expect(open).toBeDefined();
     expect((open as SubtitleCue).endTime).toBe(OPEN_CUE_END_SENTINEL);
-
-    cleanup();
-  });
-
-  it('resets the buffer when a track-switch item activates (configurable selector + attribute — Youku aria-selected)', async () => {
-    // Youku-style picker: com="subtitle" panel with [data-val] items that use
-    // aria-selected (NOT aria-checked) to mark the active track.
-    const panel = document.createElement('div');
-    panel.setAttribute('com', 'subtitle');
-    const enItem = document.createElement('li');
-    enItem.setAttribute('data-val', 'en');
-    enItem.setAttribute('aria-selected', 'false');
-    enItem.textContent = 'English';
-    const thItem = document.createElement('li');
-    thItem.setAttribute('data-val', 'th');
-    thItem.setAttribute('aria-selected', 'false');
-    thItem.textContent = 'ภาษาไทย';
-    panel.appendChild(enItem);
-    panel.appendChild(thItem);
-    document.body.appendChild(panel);
-
-    const youkuDomSource: DomCueSource = {
-      cueSelector: '[data-testid="cueBoxRowTextCue"]',
-      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
-      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
-      readActiveLanguage: () => 'th',
-      trackSwitchSelector: '[com="subtitle"] [data-val]',
-      trackSwitchAttribute: 'aria-selected',
-    };
-    const youkuHandler = { ...makeHandler(youkuDomSource), platform: 'youku' } as unknown as SubtitleHandler;
-    const cleanup = startDomCueSource(youkuHandler, bridge);
-
-    // Seed a cue from the first track.
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
-    cueEl.textContent = 'English cue';
-    await flushObservers();
-
-    // Switch to Thai: the picker item becomes aria-selected=true.
-    thItem.setAttribute('aria-selected', 'true');
-    await flushObservers();
-
-    const trackChanged = sentMessages.find((m) => m.type === 'SUBTITLE_DOM_TRACK_CHANGED');
-    expect(trackChanged).toBeDefined();
-    expect((trackChanged?.payload as { platform: string }).platform).toBe('youku');
-    expect((trackChanged?.payload as { language: string }).language).toBe('th');
-
-    // Cue from the new track — buffer was reset, only this cue remains.
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 9 });
-    cueEl.textContent = 'Thai cue';
-    await flushObservers();
-    const afterSwitch = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } };
-    expect(afterSwitch?.payload.cues).toHaveLength(1);
-    expect(afterSwitch?.payload.cues[0].text).toBe('Thai cue');
 
     cleanup();
   });

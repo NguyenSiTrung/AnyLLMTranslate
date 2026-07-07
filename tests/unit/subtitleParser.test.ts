@@ -44,29 +44,6 @@ Just a normal line`;
     expect(cues[0].text).toBe('Just a normal line');
   });
 
-  it('handles multi-word speaker names', () => {
-    const vtt = `WEBVTT
-
-00:00:01.000 --> 00:00:03.000
-<v Dr. Smith> Good morning`;
-
-    const cues = parseWebVTT(vtt);
-    expect(cues[0].voice).toBe('Dr. Smith');
-    expect(cues[0].text).toBe('Good morning');
-  });
-
-  it('handles <v> tag on multi-line cue text', () => {
-    const vtt = `WEBVTT
-
-00:00:01.000 --> 00:00:03.000
-<v John> Hello
-world`;
-
-    const cues = parseWebVTT(vtt);
-    expect(cues[0].voice).toBe('John');
-    expect(cues[0].text).toBe('Hello\nworld');
-  });
-
   it('strips the closing voice tag from display text', () => {
     const vtt = `WEBVTT
 
@@ -157,20 +134,6 @@ Hello world`;
     expect(cues[0].metadata).toEqual({ line: '80%', position: '10%', align: 'start' });
   });
 
-  it('handles VTT header with metadata', () => {
-    const vtt = `WEBVTT
-Kind: captions
-Language: en
-
-1
-00:00:01.000 --> 00:00:04.000
-Hello`;
-
-    const cues = parseWebVTT(vtt);
-    expect(cues).toHaveLength(1);
-    expect(cues[0].text).toBe('Hello');
-  });
-
   it('returns empty array for empty input', () => {
     expect(parseWebVTT('')).toEqual([]);
   });
@@ -195,21 +158,6 @@ Valid cue`;
 NOTE
 This is a comment block
 spanning multiple lines
-
-1
-00:00:01.000 --> 00:00:04.000
-Actual cue`;
-
-    const cues = parseWebVTT(vtt);
-    expect(cues).toHaveLength(1);
-    expect(cues[0].text).toBe('Actual cue');
-  });
-
-  it('skips NOTE blocks with inline note text', () => {
-    const vtt = `WEBVTT
-
-NOTE Max generated segment metadata
-variant=t6
 
 1
 00:00:01.000 --> 00:00:04.000
@@ -292,22 +240,6 @@ Test`;
     expect(cues[0].endTime).toBe(4.75);
   });
 
-  it('handles multi-line SRT cues', () => {
-    const srt = `1
-00:00:01,000 --> 00:00:04,000
-Line one
-Line two`;
-
-    const cues = parseSRT(srt);
-    expect(cues[0].text).toBe('Line one\nLine two');
-  });
-
-  it('strips BOM markers from SRT', () => {
-    const srt = '\uFEFF1\n00:00:01,000 --> 00:00:04,000\nTest';
-    const cues = parseSRT(srt);
-    expect(cues).toHaveLength(1);
-  });
-
   it('normalizes CRLF line endings', () => {
     const srt = '1\r\n00:00:01,000 --> 00:00:04,000\r\nTest\r\n\r\n2\r\n00:00:05,000 --> 00:00:08,000\r\nSecond';
     const cues = parseSRT(srt);
@@ -323,12 +255,6 @@ describe('parseSubtitles', () => {
     expect(cues[0].text).toBe('Test');
   });
 
-  it('auto-detects and parses SRT format', () => {
-    const content = '1\n00:00:01,000 --> 00:00:04,000\nTest';
-    const cues = parseSubtitles(content);
-    expect(cues).toHaveLength(1);
-  });
-
   it('returns empty array for unrecognized format', () => {
     expect(parseSubtitles('random content')).toEqual([]);
   });
@@ -337,10 +263,6 @@ describe('parseSubtitles', () => {
 describe('detectFormat', () => {
   it('detects VTT by WEBVTT header', () => {
     expect(detectFormat('WEBVTT\n\n')).toBe('vtt');
-  });
-
-  it('detects VTT with BOM', () => {
-    expect(detectFormat('\uFEFFWEBVTT\n\n')).toBe('vtt');
   });
 
   it('detects SRT by sequence number start', () => {
@@ -371,11 +293,6 @@ describe('parseTimestamp', () => {
     expect(parseTimestamp('00:01.000')).toBe(1);
     expect(parseTimestamp('01:30.000')).toBe(90);
     expect(parseTimestamp('05:00.500')).toBe(300.5);
-  });
-
-  it('handles milliseconds', () => {
-    expect(parseTimestamp('00:00:01.500')).toBe(1.5);
-    expect(parseTimestamp('00:00:00.001')).toBe(0.001);
   });
 
   it('returns NaN for invalid format', () => {

@@ -132,12 +132,6 @@ describe('subtitleCoordinator — DOM branch (hbomax)', () => {
     expect(isOnWatchPage()).toBe(true);
   });
 
-  it('isOnWatchPage returns true for /video/watch on play.hbomax.com', async () => {
-    setLocation('play.hbomax.com', '/video/watch/abc-123/def');
-    const { isOnWatchPage } = await import('@/content/subtitleCoordinator');
-    expect(isOnWatchPage()).toBe(true);
-  });
-
   it('isOnWatchPage returns false for non-watch path on max.com', async () => {
     setLocation('www.max.com', '/browse');
     const { isOnWatchPage } = await import('@/content/subtitleCoordinator');

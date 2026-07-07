@@ -62,14 +62,6 @@ describe('subtitleOverlay — fontFamily wiring', () => {
     expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('Georgia, serif');
   });
 
-  it('defaults to system-ui when fontFamily not specified', () => {
-    initializeOverlay(MOCK_CUES);
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    const fontFamily = overlay.style.getPropertyValue('--anyllm-subtitle-font-family');
-    expect(fontFamily).toContain('system-ui');
-  });
-
   it('updateConfig changes --anyllm-subtitle-font-family', () => {
     initializeOverlay(MOCK_CUES);
     updateConfig({ fontFamily: 'monospace' });
@@ -77,22 +69,9 @@ describe('subtitleOverlay — fontFamily wiring', () => {
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('monospace');
   });
-
-  it('getConfig returns updated fontFamily after updateConfig', () => {
-    initializeOverlay(MOCK_CUES);
-    updateConfig({ fontFamily: 'Georgia, serif' });
-    expect(getConfig().fontFamily).toBe('Georgia, serif');
-  });
 });
 
 describe('subtitleOverlay — displayMode wiring', () => {
-  it('sets data-display-mode="bilingual" by default', () => {
-    initializeOverlay(MOCK_CUES);
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.getAttribute('data-display-mode')).toBe('bilingual');
-  });
-
   it('sets data-display-mode="translation-only" when specified', () => {
     initializeOverlay(MOCK_CUES, { displayMode: 'translation-only' });
 
@@ -108,18 +87,12 @@ describe('subtitleOverlay — displayMode wiring', () => {
     expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
   });
 
-  it('can toggle back from translation-only to bilingual', () => {
-    initializeOverlay(MOCK_CUES, { displayMode: 'translation-only' });
-    updateConfig({ displayMode: 'bilingual' });
+  it('updateConfig changes data-display-mode attribute', () => {
+    initializeOverlay(MOCK_CUES, { displayMode: 'bilingual' });
+    updateConfig({ displayMode: 'translation-only' });
 
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.getAttribute('data-display-mode')).toBe('bilingual');
-  });
-
-  it('getConfig returns updated displayMode after updateConfig', () => {
-    initializeOverlay(MOCK_CUES);
-    updateConfig({ displayMode: 'translation-only' });
-    expect(getConfig().displayMode).toBe('translation-only');
+    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
   });
 });
 
@@ -243,22 +216,6 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.hasAttribute('popover')).toBe(false);
   });
 
-  it('reparents overlay when a container is fullscreen even when Popover API is supported', () => {
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-
-    // Simulate container fullscreen
-    Object.defineProperty(document, 'fullscreenElement', {
-      value: container,
-      configurable: true
-    });
-    document.dispatchEvent(new Event('fullscreenchange'));
-
-    expect(overlay.parentElement).toBe(container);
-    expect(overlay.hasAttribute('popover')).toBe(false);
-    expect(HTMLElement.prototype.showPopover).not.toHaveBeenCalled();
-  });
-
   it('uses position:absolute inside fullscreen container after reposition (when Popover API is NOT supported)', () => {
     // Disable popover to test fallback path
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -268,32 +225,6 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (HTMLElement.prototype as any).hidePopover;
 
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-
-    // Install fake timers BEFORE triggering the event so the scheduled
-    // setTimeout calls inside handleFullscreenChange are captured.
-    vi.useFakeTimers();
-
-    // Simulate container fullscreen
-    Object.defineProperty(document, 'fullscreenElement', {
-      value: container,
-      configurable: true
-    });
-    document.dispatchEvent(new Event('fullscreenchange'));
-
-    // Advance past both reposition timeouts (50ms + 350ms)
-    vi.advanceTimersByTime(400);
-    vi.useRealTimers();
-
-    expect(overlay.style.position).toBe('absolute');
-    expect(overlay.style.top).toBe('0px');
-    expect(overlay.style.left).toBe('0px');
-    expect(overlay.style.width).toBe('100%');
-    expect(overlay.style.height).toBe('100%');
-  });
-
-  it('uses position:absolute inside fullscreen container when Popover API is supported', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
 

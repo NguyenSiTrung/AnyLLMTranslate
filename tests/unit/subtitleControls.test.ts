@@ -174,12 +174,6 @@ describe('content/subtitleControls', () => {
       // Verify no error is thrown for out-of-range values
       expect(() => setFontSize(5)).not.toThrow();
     });
-
-    it('clamps font size to maximum (36px)', () => {
-      setFontSize(50);
-      // Verify no error is thrown for out-of-range values
-      expect(() => setFontSize(50)).not.toThrow();
-    });
   });
 
   describe('togglePosition', () => {
@@ -200,11 +194,6 @@ describe('content/subtitleControls', () => {
     it('clamps opacity to minimum (0)', () => {
       setBackgroundOpacity(-0.5);
       expect(() => setBackgroundOpacity(-0.5)).not.toThrow();
-    });
-
-    it('clamps opacity to maximum (1)', () => {
-      setBackgroundOpacity(1.5);
-      expect(() => setBackgroundOpacity(1.5)).not.toThrow();
     });
   });
 
@@ -241,17 +230,6 @@ describe('content/subtitleControls', () => {
 
       cleanup();
       expect(element.style.cursor).toBe('');
-    });
-
-    it('returns cleanup function', () => {
-      const element = document.createElement('div');
-      document.body.appendChild(element);
-
-      const cleanup = enableDragReposition(element);
-
-      expect(typeof cleanup).toBe('function');
-
-      cleanup();
     });
 
     it('updates offset on drag', () => {

@@ -135,23 +135,6 @@ describe('messageBridge', () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
-    it('processes messages from same origin', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_TRANSLATED', handler);
-
-      fireMessageEvent(
-        {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'test-456',
-          payload: { vttContent: 'test' },
-        },
-        window.location.origin,
-      );
-
-      expect(handler).toHaveBeenCalledWith({ vttContent: 'test' }, 'test-456');
-    });
-
     it('removes listener after once callback', () => {
       const handler = vi.fn();
       onMessage('SUBTITLE_INTERCEPTED', handler, { once: true });

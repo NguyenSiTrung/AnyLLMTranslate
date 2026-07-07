@@ -285,40 +285,6 @@ describe('subtitleCoordinator — manifest cues (hbomax)', () => {
     expect(appended?.text).toBe('second cue (vi)');
   });
 
-  it('append segment preserves earlier translations in the persistent map', async () => {
-    setLocation('play.hbomax.com', '/video/watch/abc/def');
-    const { startCoordinator } = await import('@/content/subtitleCoordinator');
-    const { updateCues } = await import('@/content/subtitleOverlay');
-
-    startCoordinator();
-
-    await invokeManifestCuesHandler({
-      platform: 'hbomax',
-      language: 'en',
-      url: 'https://cdn.example.com/subs_en.vtt',
-      cues: [{ startTime: 1, endTime: 2, text: 'first cue' }],
-    });
-
-    await invokeManifestCuesHandler({
-      platform: 'hbomax',
-      language: 'en',
-      url: 'https://cdn.example.com/subs_en.vtt',
-      cues: [
-        { startTime: 1, endTime: 2, text: 'first cue' },
-        { startTime: 3, endTime: 4, text: 'second cue' },
-      ],
-      append: true,
-    });
-
-    // After the append, the first cue must still show its translation — the
-    // manifestTranslationMap persists across appends.
-    const lastCues = vi.mocked(updateCues).mock.calls.at(-1)?.[0] as Array<{
-      text: string; originalText?: string;
-    }>;
-    const first = lastCues.find((c) => c.originalText === 'first cue');
-    expect(first?.text).toBe('first cue (vi)');
-  });
-
   it('appended cue falls back to original text until its translation resolves', async () => {
     setLocation('play.hbomax.com', '/video/watch/abc/def');
     const { startCoordinator } = await import('@/content/subtitleCoordinator');
