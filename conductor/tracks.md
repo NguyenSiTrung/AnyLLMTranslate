@@ -77,6 +77,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_(none — all work cleared)_
+- 🟠 **[ ] Bilingual Web Translation Quality & Performance** (`web-bilingual-quality_20260707`) — Close 7 highest-impact gaps vs Immersive Translate: rich translate (inline markup), batcher cleanup + char-budget, source-lang gate, negative cache, per-key concurrency, web streaming, cross-session resume. *Link: [./conductor/tracks/web-bilingual-quality_20260707/](./conductor/tracks/web-bilingual-quality_20260707/)*
 
 ---
