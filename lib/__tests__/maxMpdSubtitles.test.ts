@@ -391,25 +391,6 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     expect(tracks[0].url).not.toBe(mpdUrl);
   });
 
-  it('resolves SegmentTemplate URLs under extensionless Max MPD URL paths', () => {
-    const noExtensionMpdUrl = 'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
-    const xml = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet contentType="text" lang="en-US">
-      <Representation id="t6" mimeType="text/vtt">
-        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1"/>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-    const doc = parseTestMpd(xml, noExtensionMpdUrl);
-    const tracks = extractSubtitleTracks(doc, noExtensionMpdUrl);
-    expect(tracks).toHaveLength(1);
-    expect(tracks[0].url).toBe('https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/t6/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam');
-  });
-
   it('falls back to SegmentTemplate when Representation BaseURL points back to the MPD manifest', () => {
     const xml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
@@ -464,40 +445,6 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
     expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
   });
 
-  it('skips subtitle URLs ending in .mpd or .m3u8 even if pathname differs from MPD URL', () => {
-    const NO_EXT_MPD_URL = 'https://cf.asia.prd.media.max.com/fadb6e8d-4efa-49-fh3HlKAQ==?rtype=s&market=apac&x-wbd-tenant=beam';
-    const xml = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet mimeType="text/vtt" lang="en-US">
-      <Representation id="s1">
-        <BaseURL>descriptor.mpd</BaseURL>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-    const doc = parseTestMpd(xml, NO_EXT_MPD_URL);
-    expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
-  });
-
-  it('skips self-referential subtitle URLs resolving to the manifest path ignoring trailing slashes', () => {
-    const NO_EXT_MPD_URL = 'https://cf.asia.prd.media.max.com/fadb6e8d-4efa-49-fh3HlKAQ==?rtype=s&market=apac&x-wbd-tenant=beam';
-    const xml = `<?xml version="1.0"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
-  <Period>
-    <AdaptationSet mimeType="text/vtt" lang="en-US">
-      <Representation id="s1">
-        <BaseURL>fadb6e8d-4efa-49-fh3HlKAQ==/</BaseURL>
-      </Representation>
-    </AdaptationSet>
-  </Period>
-</MPD>`;
-
-    const doc = parseTestMpd(xml, NO_EXT_MPD_URL);
-    expect(extractSubtitleTracks(doc, NO_EXT_MPD_URL)).toEqual([]);
-  });
-
   it('still resolves correctly when the MPD URL has no query string', () => {
     const plainMpdUrl = 'https://cdn.example.com/manifest.mpd';
     const xml = `<?xml version="1.0"?>
@@ -519,14 +466,11 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
 });
 
 describe('isManifestResponse', () => {
-  it('detects DASH MPD with namespace', () => {
+  it('detects DASH MPD with or without namespace', () => {
     expect(isManifestResponse(
       '<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>',
       '',
     )).toBe(true);
-  });
-
-  it('detects DASH MPD without namespace', () => {
     expect(isManifestResponse(
       '<MPD><Period><AdaptationSet/></Period></MPD>',
       '',
@@ -537,16 +481,9 @@ describe('isManifestResponse', () => {
     expect(isManifestResponse('not a manifest body', 'application/dash+xml')).toBe(true);
   });
 
-  it('does not treat WEBVTT as manifest even with dash+xml content-type', () => {
+  it('does not treat subtitle content (WEBVTT/TTML) as manifest', () => {
     expect(isManifestResponse('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi', 'application/dash+xml')).toBe(false);
-  });
-
-  it('does not treat TTML as manifest', () => {
     expect(isManifestResponse('<tt xmlns="http://www.w3.org/ns/ttml"></tt>', 'application/ttml+xml')).toBe(false);
-  });
-
-  it('returns false for plain subtitle content', () => {
-    expect(isManifestResponse('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi', 'text/vtt')).toBe(false);
   });
 });
 

@@ -31,26 +31,17 @@ const okResponse = (properNouns: Record<string, string>): TranslationResult => (
 });
 
 describe('buildPreScanPrompt', () => {
-  it('identifies itself as a name-extraction task (not a translator)', () => {
-    const p = buildPreScanPrompt('vi', PROFILE_PRESETS.cinematic);
-    expect(p.toLowerCase()).toContain('proper noun');
-    expect(p).toContain('properNouns');
-  });
-
-  it('injects the target language and drops the placeholder', () => {
-    const p = buildPreScanPrompt('vi', PROFILE_PRESETS.media);
-    expect(p).not.toContain('{{targetLanguage}}');
-  });
-
-  it('carries profile knob instructions (cinematic → idiomatic)', () => {
-    const p = buildPreScanPrompt('vi', PROFILE_PRESETS.cinematic);
-    expect(p).toContain('idiomatic');
-  });
-
-  it('omits knob lines for media (all defaults)', () => {
-    const p = buildPreScanPrompt('vi', PROFILE_PRESETS.media);
-    expect(p).not.toContain('idiomatic');
-    expect(p).not.toContain('how people actually talk');
+  it('is a name-extraction task that injects the target language and routes profile knobs', () => {
+    // cinematic: identity + knob line present, placeholder dropped
+    const cinematic = buildPreScanPrompt('vi', PROFILE_PRESETS.cinematic);
+    expect(cinematic.toLowerCase()).toContain('proper noun');
+    expect(cinematic).toContain('properNouns');
+    expect(cinematic).not.toContain('{{targetLanguage}}');
+    expect(cinematic).toContain('idiomatic');
+    // media (all defaults): knob lines absent
+    const media = buildPreScanPrompt('vi', PROFILE_PRESETS.media);
+    expect(media).not.toContain('idiomatic');
+    expect(media).not.toContain('how people actually talk');
   });
 });
 
@@ -74,36 +65,26 @@ describe('preScanNames', () => {
     expect(result).toEqual({ Dumbledore: 'Phù thủy', Hogwarts: 'Hogwarts' });
   });
 
-  it('returns {} (not throw) when the service call fails', async () => {
-    const svc = fakeService({ success: false, translations: new Map(), error: 'boom' });
-    await expect(
-      preScanNames(svc, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media),
-    ).resolves.toEqual({});
-  });
+  it('returns {} (not throw) on any failure path (service-fail / no-properNouns / translate-throws / empty-cues)', async () => {
+    // service returns failure
+    const svcFail = fakeService({ success: false, translations: new Map(), error: 'boom' });
+    await expect(preScanNames(svcFail, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media)).resolves.toEqual({});
 
-  it('returns {} when the response has no properNouns field', async () => {
-    const svc = fakeService({ success: true, translations: new Map() });
-    await expect(
-      preScanNames(svc, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media),
-    ).resolves.toEqual({});
-  });
+    // response has no properNouns field
+    const svcNoNouns = fakeService({ success: true, translations: new Map() });
+    await expect(preScanNames(svcNoNouns, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media)).resolves.toEqual({});
 
-  it('returns {} when translate() throws', async () => {
-    const svc: TranslationService = {
+    // translate() throws
+    const svcThrow: TranslationService = {
       translate: vi.fn().mockRejectedValue(new Error('network')),
       testConnection: vi.fn(),
     };
-    await expect(
-      preScanNames(svc, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media),
-    ).resolves.toEqual({});
-  });
+    await expect(preScanNames(svcThrow, 'en', 'vi', [cue('Hi')], PROFILE_PRESETS.media)).resolves.toEqual({});
 
-  it('returns {} for an empty cue set (no API call)', async () => {
-    const svc = fakeService(okResponse({ X: 'Y' }));
-    await expect(
-      preScanNames(svc, 'en', 'vi', [], PROFILE_PRESETS.media),
-    ).resolves.toEqual({});
-    expect(svc.translate).not.toHaveBeenCalled();
+    // empty cue set → {} and no API call
+    const svcEmpty = fakeService(okResponse({ X: 'Y' }));
+    await expect(preScanNames(svcEmpty, 'en', 'vi', [], PROFILE_PRESETS.media)).resolves.toEqual({});
+    expect(svcEmpty.translate).not.toHaveBeenCalled();
   });
 
   it('passes preScanSystemPrompt (not subtitleKnobs) on the request', async () => {

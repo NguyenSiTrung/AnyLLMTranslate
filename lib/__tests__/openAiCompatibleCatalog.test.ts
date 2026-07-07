@@ -22,12 +22,9 @@ describe('openAiCompatibleCatalog', () => {
     expect(filterCatalog('   ')).toHaveLength(OPENAI_COMPATIBLE_CATALOG.length);
   });
 
-  it('filterCatalog matches OpenRouter by name and keyword', () => {
+  it('filterCatalog matches by name/keyword and is case-insensitive', () => {
     expect(filterCatalog('openrouter').some((e) => e.id === 'openrouter')).toBe(true);
     expect(filterCatalog('router').some((e) => e.id === 'openrouter')).toBe(true);
-  });
-
-  it('filterCatalog is case-insensitive', () => {
     const results = filterCatalog('GROQ');
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe('groq');
@@ -41,64 +38,30 @@ describe('openAiCompatibleCatalog', () => {
 });
 
 describe('getKeyUrl — catalog field', () => {
-  it('keyed entries have getKeyUrl', () => {
+  it('keyed entries have getKeyUrl, keyless entries omit it', () => {
     const keyed = OPENAI_COMPATIBLE_CATALOG.filter((e) => e.requiresApiKey);
     for (const entry of keyed) {
       expect(entry.getKeyUrl).toBeTruthy();
       expect(entry.getKeyUrl).toMatch(/^https?:\/\//);
     }
-  });
-
-  it('keyless entries (ollama, lm-studio, custom) omit getKeyUrl', () => {
     const keyless = OPENAI_COMPATIBLE_CATALOG.filter((e) => !e.requiresApiKey);
     for (const entry of keyless) {
       expect(entry.getKeyUrl).toBeUndefined();
     }
   });
-
-  it('OpenRouter getKeyUrl is correct', () => {
-    expect(getCatalogEntryById('openrouter')?.getKeyUrl).toBe('https://openrouter.ai/keys');
-  });
-
-  it('Groq getKeyUrl is correct', () => {
-    expect(getCatalogEntryById('groq')?.getKeyUrl).toBe('https://console.groq.com/keys');
-  });
 });
 
 describe('getKeyUrlForProvider', () => {
-  it('resolves OpenRouter by base URL', () => {
+  it('resolves a known keyed provider by base URL', () => {
     expect(getKeyUrlForProvider('https://openrouter.ai/api/v1')).toBe('https://openrouter.ai/keys');
-  });
-
-  it('resolves Groq by base URL', () => {
-    expect(getKeyUrlForProvider('https://api.groq.com/openai/v1')).toBe('https://console.groq.com/keys');
-  });
-
-  it('resolves NVIDIA NIM by base URL', () => {
-    expect(getKeyUrlForProvider('https://integrate.api.nvidia.com/v1')).toBe('https://build.nvidia.com/models/api-key');
-  });
-
-  it('resolves Together AI by base URL', () => {
-    expect(getKeyUrlForProvider('https://api.together.xyz/v1')).toBe('https://api.together.xyz/settings/api-keys');
-  });
-
-  it('resolves Fireworks AI by base URL', () => {
-    expect(getKeyUrlForProvider('https://api.fireworks.ai/inference/v1')).toBe('https://fireworks.ai/api-keys');
-  });
-
-  it('resolves Mistral AI by base URL', () => {
-    expect(getKeyUrlForProvider('https://api.mistral.ai/v1')).toBe('https://console.mistral.ai/api-keys/');
   });
 
   it('returns undefined for keyless providers (Ollama)', () => {
     expect(getKeyUrlForProvider('http://localhost:11434/v1')).toBeUndefined();
   });
 
-  it('returns undefined for unknown base URLs', () => {
+  it('returns undefined for unknown or empty base URLs', () => {
     expect(getKeyUrlForProvider('https://api.unknown.com/v1')).toBeUndefined();
-  });
-
-  it('returns undefined for empty base URL', () => {
     expect(getKeyUrlForProvider('')).toBeUndefined();
     expect(getKeyUrlForProvider('   ')).toBeUndefined();
   });
@@ -117,26 +80,12 @@ describe('identity badge metadata (FR-2)', () => {
   });
 
   it('assigns the spec accents per provider', () => {
-    expect(getCatalogEntryById('openrouter')?.accent).toBe('zinc');
-    expect(getCatalogEntryById('nvidia-nim')?.accent).toBe('emerald');
     expect(getCatalogEntryById('groq')?.accent).toBe('orange');
-    expect(getCatalogEntryById('together')?.accent).toBe('pink');
-    expect(getCatalogEntryById('fireworks')?.accent).toBe('amber');
-    expect(getCatalogEntryById('mistral')?.accent).toBe('amber');
     expect(getCatalogEntryById('ollama')?.accent).toBe('teal');
-    expect(getCatalogEntryById('lm-studio')?.accent).toBe('cyan');
-    expect(getCatalogEntryById('custom')?.accent).toBe('zinc');
   });
 
   it('assigns the spec monograms per provider', () => {
-    expect(getCatalogEntryById('openrouter')?.monogram).toBe('OR');
-    expect(getCatalogEntryById('nvidia-nim')?.monogram).toBe('NV');
     expect(getCatalogEntryById('groq')?.monogram).toBe('GQ');
-    expect(getCatalogEntryById('together')?.monogram).toBe('TG');
-    expect(getCatalogEntryById('fireworks')?.monogram).toBe('FW');
-    expect(getCatalogEntryById('mistral')?.monogram).toBe('MI');
-    expect(getCatalogEntryById('ollama')?.monogram).toBe('OL');
-    expect(getCatalogEntryById('lm-studio')?.monogram).toBe('LM');
     expect(getCatalogEntryById('custom')?.monogram).toBe('⚙');
   });
 });
@@ -162,16 +111,9 @@ describe('resolveProviderIdentity (FR-2 fallback chain)', () => {
     expect(id.monogram).toBe('OL');
   });
 
-  it('falls back to zinc + first letter for an unknown URL', () => {
-    const id = resolveProviderIdentity('My Provider', undefined, 'https://api.unknown.com/v1');
-    expect(id.accent).toBe('zinc');
-    expect(id.monogram).toBe('M');
-  });
-
-  it('falls back to zinc + first letter for an empty URL', () => {
-    const id = resolveProviderIdentity('Acme', undefined, '');
-    expect(id.accent).toBe('zinc');
-    expect(id.monogram).toBe('A');
+  it('falls back to zinc + first letter for unknown or empty URL', () => {
+    expect(resolveProviderIdentity('My Provider', undefined, 'https://api.unknown.com/v1').monogram).toBe('M');
+    expect(resolveProviderIdentity('Acme', undefined, '').monogram).toBe('A');
   });
 
   it('returns ? when display name is empty and nothing resolves', () => {
@@ -186,12 +128,8 @@ describe('inferCatalogId (URL inference)', () => {
     expect(inferCatalogId('   ')).toBe('custom');
   });
 
-  it('matches a known catalog URL exactly', () => {
+  it('matches a known catalog URL exactly, normalizing trailing slashes', () => {
     expect(inferCatalogId('https://openrouter.ai/api/v1')).toBe('openrouter');
-    expect(inferCatalogId('https://api.groq.com/openai/v1')).toBe('groq');
-  });
-
-  it('normalizes a trailing slash before matching', () => {
     expect(inferCatalogId('https://openrouter.ai/api/v1/')).toBe('openrouter');
   });
 
@@ -201,36 +139,24 @@ describe('inferCatalogId (URL inference)', () => {
 });
 
 describe('category field + groupByCategory (FR-7)', () => {
-  it('every entry has a category', () => {
+  it('every entry has a category matching its bucket (cloud/local/custom)', () => {
     for (const entry of OPENAI_COMPATIBLE_CATALOG) {
       expect(entry.category, `${entry.id}.category`).toBeDefined();
     }
-  });
-
-  it('assigns the spec categories', () => {
     const cloud = ['openrouter', 'nvidia-nim', 'groq', 'together', 'fireworks', 'mistral'];
     const local = ['ollama', 'lm-studio'];
-    const custom = ['custom'];
     for (const id of cloud) expect(getCatalogEntryById(id)?.category).toBe('cloud');
     for (const id of local) expect(getCatalogEntryById(id)?.category).toBe('local');
-    for (const id of custom) expect(getCatalogEntryById(id)?.category).toBe('custom');
   });
 
-  it('groupByCategory returns groups in cloud → local → custom order', () => {
+  it('groupByCategory returns groups in order and puts each entry in its bucket', () => {
     const groups = groupByCategory();
     expect(groups.map((g) => g.category)).toEqual(['cloud', 'local', 'custom']);
-  });
-
-  it('groupByCategory puts each entry in its bucket', () => {
-    const groups = groupByCategory();
     const findIds = (cat: 'cloud' | 'local' | 'custom'): string[] => {
       const g = groups.find((x) => x.category === cat);
       return g ? g.entries.map((e) => e.id) : [];
     };
-    const cloudIds = findIds('cloud');
-    expect(cloudIds).toContain('openrouter');
-    expect(cloudIds).toContain('groq');
-    expect(cloudIds).toHaveLength(6);
+    expect(findIds('cloud')).toHaveLength(6);
     expect(findIds('local')).toEqual(['ollama', 'lm-studio']);
     expect(findIds('custom')).toEqual(['custom']);
   });

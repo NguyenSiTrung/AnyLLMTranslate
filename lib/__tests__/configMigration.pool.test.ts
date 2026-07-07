@@ -421,25 +421,22 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
     };
   };
 
-  it('changes when a provider baseUrl changes', () => {
+  it('changes when a provider baseUrl or model changes', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withProviderPatch({ baseUrl: 'https://other/v1' })),
     );
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withProviderPatch({ model: 'other-model' })),
+    );
   });
 
-  it('changes when a key apiKey changes', () => {
+  it('changes when a key apiKey/maxRpm/enabled changes', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ apiKey: 'sk-CHANGED' })),
     );
-  });
-
-  it('changes when a key maxRpm changes', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ maxRpm: 99 })),
     );
-  });
-
-  it('changes when a key is enabled/disabled', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ enabled: false })),
     );
@@ -449,11 +446,5 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
     const a = baseSettings();
     const b: ExtensionSettings = { ...baseSettings(), maxRpm: 60 };
     expect(computePoolSignature(a)).not.toBe(computePoolSignature(b));
-  });
-
-  it('changes when the model changes', () => {
-    expect(computePoolSignature(baseSettings())).not.toBe(
-      computePoolSignature(withProviderPatch({ model: 'other-model' })),
-    );
   });
 });

@@ -113,24 +113,16 @@ describe('extractTrackCues', () => {
     expect(cues[0].text).toBe('Just plain text');
   });
 
-  it('preserves HTML tags in cue text', () => {
+  it('preserves HTML tags and multiline text in cue text', () => {
     const track = makeTextTrack([
       makeVttCue(0, 2, '<b>Bold</b> and <i>italic</i>'),
+      makeVttCue(2, 4, 'Line one\nLine two'),
     ]);
 
     const cues = extractTrackCues(track);
 
     expect(cues[0].text).toBe('<b>Bold</b> and <i>italic</i>');
-  });
-
-  it('handles multiline cue text', () => {
-    const track = makeTextTrack([
-      makeVttCue(0, 3, 'Line one\nLine two'),
-    ]);
-
-    const cues = extractTrackCues(track);
-
-    expect(cues[0].text).toBe('Line one\nLine two');
+    expect(cues[1].text).toBe('Line one\nLine two');
   });
 
   it('skips non-subtitle/caption tracks', () => {
@@ -178,16 +170,5 @@ describe('extractTrackCues', () => {
 
     expect(cues[0].voice).toBe('Speaker');
     expect(cues[0].text).toBe('Hello');
-  });
-
-  it('handles cue with empty text', () => {
-    const track = makeTextTrack([
-      makeVttCue(0, 2, ''),
-    ]);
-
-    const cues = extractTrackCues(track);
-
-    expect(cues).toHaveLength(1);
-    expect(cues[0].text).toBe('');
   });
 });

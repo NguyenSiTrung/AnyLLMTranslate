@@ -52,24 +52,11 @@ describe('SUPPORTED_SUBTITLE_SITES', () => {
 });
 
 describe('isSiteDisabled', () => {
-  it('returns false when disabled list is empty', () => {
-    expect(isSiteDisabled('youtube', [])).toBe(false);
-  });
-
-  it('returns true when platform is in the disabled list', () => {
+  it('returns true when platform is in the disabled list, false otherwise', () => {
     expect(isSiteDisabled('youtube', ['youtube', 'udemy'])).toBe(true);
-  });
-
-  it('returns false when platform is not in the disabled list', () => {
     expect(isSiteDisabled('coursera', ['youtube', 'udemy'])).toBe(false);
-  });
-
-  it('returns false for unknown platform not in the disabled list', () => {
-    expect(isSiteDisabled('netflix', ['youtube'])).toBe(false);
-  });
-
-  it('returns true for unknown platform that is in the disabled list', () => {
     expect(isSiteDisabled('netflix', ['netflix'])).toBe(true);
+    expect(isSiteDisabled('youtube', [])).toBe(false);
   });
 });
 
@@ -91,15 +78,6 @@ describe('subtitle sites pagination', () => {
     const platformSites = getPlatformSubtitleSites();
     expect(platformSites).toHaveLength(9);
     expect(platformSites.some((site) => site.platform === 'generic')).toBe(false);
-  });
-
-  it('shows all platform sites when count is at most the initial visible limit', () => {
-    const sites = makePlatformSites(10);
-    const state = getSubtitleSitesLoadMoreState(sites, SUBTITLE_SITES_INITIAL_VISIBLE);
-
-    expect(state.visibleSites).toHaveLength(10);
-    expect(state.showLoadMore).toBe(false);
-    expect(state.remainingCount).toBe(0);
   });
 
   it('shows only the first page when count exceeds the initial visible limit', () => {
@@ -125,7 +103,7 @@ describe('subtitle sites pagination', () => {
     expect(secondPage.nextVisibleCount).toBe(25);
   });
 
-  it('hides load more once all platform sites are visible', () => {
+  it('hides load more and shows all once all platform sites are visible', () => {
     const sites = makePlatformSites(12);
     const state = getSubtitleSitesLoadMoreState(sites, 12);
 

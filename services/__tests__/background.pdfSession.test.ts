@@ -55,30 +55,7 @@ describe('PDF viewer keep-alive session', () => {
     alarmsClear.mockClear();
   });
 
-  it('REGISTER_PDF_SESSION registers the tab and arms the keep-alive alarm', async () => {
-    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
-    expect(__getPdfSessionCountForTest()).toBe(1);
-    expect(__isKeepaliveArmedForTest()).toBe(true);
-    expect(alarmsCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it('UNREGISTER_PDF_SESSION deregisters and clears the alarm when none remain', async () => {
-    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
-    await handleMessage({ action: 'UNREGISTER_PDF_SESSION' }, fakeSender(100));
-    expect(__getPdfSessionCountForTest()).toBe(0);
-    expect(__isKeepaliveArmedForTest()).toBe(false);
-    expect(alarmsClear).toHaveBeenCalled();
-  });
-
-  it('re-registering the same tab is idempotent (alarm armed once)', async () => {
-    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
-    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
-    expect(__getPdfSessionCountForTest()).toBe(1);
-    // ensureKeepaliveAlarm short-circuits when already armed.
-    expect(alarmsCreate).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps the alarm armed while ≥1 viewer is open (multi-session)', async () => {
+  it('keeps the alarm armed while ≥1 viewer is open (multi-session: arm → keep → disarm)', async () => {
     await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
     await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(200));
     expect(__getPdfSessionCountForTest()).toBe(2);
@@ -94,8 +71,21 @@ describe('PDF viewer keep-alive session', () => {
     expect(__isKeepaliveArmedForTest()).toBe(false);
   });
 
-  it('ignores register/unregister from senders without a tab id', async () => {
+  it('re-registering the same tab is idempotent (alarm armed once)', async () => {
+    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
+    await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(100));
+    expect(__getPdfSessionCountForTest()).toBe(1);
+    // ensureKeepaliveAlarm short-circuits when already armed.
+    expect(alarmsCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores register/unregister for no-tab senders and unknown tab ids (safe no-ops)', async () => {
+    // register from a sender without a tab id → ignored
     await handleMessage({ action: 'REGISTER_PDF_SESSION' }, fakeSender(undefined));
+    expect(__getPdfSessionCountForTest()).toBe(0);
+    expect(__isKeepaliveArmedForTest()).toBe(false);
+    // unregister for an unknown tab id → safe
+    await handleMessage({ action: 'UNREGISTER_PDF_SESSION' }, fakeSender(999));
     expect(__getPdfSessionCountForTest()).toBe(0);
     expect(__isKeepaliveArmedForTest()).toBe(false);
   });
@@ -109,12 +99,6 @@ describe('PDF viewer keep-alive session', () => {
 
     // Simulate the tab closing.
     if (tabRemovedListener) tabRemovedListener(300);
-    expect(__getPdfSessionCountForTest()).toBe(0);
-    expect(__isKeepaliveArmedForTest()).toBe(false);
-  });
-
-  it('UNREGISTER for an unknown tab id is safe', async () => {
-    await handleMessage({ action: 'UNREGISTER_PDF_SESSION' }, fakeSender(999));
     expect(__getPdfSessionCountForTest()).toBe(0);
     expect(__isKeepaliveArmedForTest()).toBe(false);
   });

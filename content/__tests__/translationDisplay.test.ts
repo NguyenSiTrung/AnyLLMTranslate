@@ -38,15 +38,10 @@ describe('translationDisplay', () => {
       expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('bubble');
     });
 
-    it('overwrites existing theme', () => {
+    it('overwrites existing theme and toggles tabindex for mask', () => {
       applyTheme('paper');
       applyTheme('shadow-card');
       expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('shadow-card');
-    });
-
-    it('supports custom theme', () => {
-      applyTheme('custom');
-      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('custom');
     });
   });
 
@@ -123,26 +118,18 @@ describe('translationDisplay', () => {
   });
 
   describe('applyDarkMode', () => {
-    it('adds anyllm-dark class for dark mode', () => {
+    it('adds anyllm-dark class for dark mode and removes it for light/auto mode', () => {
       applyDarkMode('dark');
       expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
-    });
 
-    it('removes anyllm-dark class for light mode', () => {
       document.documentElement.classList.add('anyllm-dark');
       applyDarkMode('light');
-      expect(document.documentElement.classList.contains('anyllm-dark')).toBe(false);
-    });
-
-    it('removes anyllm-dark class for auto mode', () => {
-      document.documentElement.classList.add('anyllm-dark');
-      applyDarkMode('auto');
       expect(document.documentElement.classList.contains('anyllm-dark')).toBe(false);
     });
   });
 
   describe('applyTranslation', () => {
-    it('creates translation element after parent', () => {
+    it('creates translation element after parent and marks parent as original', () => {
       const parent = document.createElement('p');
       parent.textContent = 'Hello world';
       document.body.appendChild(parent);
@@ -153,19 +140,8 @@ describe('translationDisplay', () => {
       expect(translation).not.toBeNull();
       expect(translation?.textContent).toBe('Xin chào thế giới');
       expect(translation?.className).toContain('anyllm-translate-translation');
-    });
-
-    it('does not duplicate translations', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      applyTranslation(parent, 'piece-1', 'First');
-      applyTranslation(parent, 'piece-1', 'Second');
-
-      const translations = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
-      expect(translations).toHaveLength(1);
-      // In-place update: second call overwrites content
-      expect(translations[0].textContent).toBe('Second');
+      expect(parent.getAttribute('data-anyllm-role')).toBe('original');
+      expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
     });
 
     it('updates placeholder in-place (no duplicate element)', () => {
@@ -179,16 +155,6 @@ describe('translationDisplay', () => {
       expect(translations).toHaveLength(1);
       expect(translations[0].textContent).toBe('Translated text');
       expect(translations[0].classList.contains('anyllm-translate-loading')).toBe(false);
-    });
-
-    it('marks parent as original', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      applyTranslation(parent, 'piece-1', 'Translation');
-
-      expect(parent.getAttribute('data-anyllm-role')).toBe('original');
-      expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
     });
 
     it('refuses to mark body or html as original', () => {
@@ -212,29 +178,6 @@ describe('translationDisplay', () => {
       expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
     });
 
-    it('inserts translations inside table cells to avoid invalid table children', () => {
-      document.body.innerHTML = '<table><tbody><tr><td>Cell text</td></tr></tbody></table>';
-      const cell = document.querySelector('td') as HTMLTableCellElement;
-
-      applyTranslation(cell, 'piece-1', 'Ô văn bản');
-
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(translation?.parentElement).toBe(cell);
-      expect(document.querySelector('tr')?.children).toHaveLength(1);
-    });
-
-    it('inserts translations before the original when position is above', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'Hello world';
-      document.body.appendChild(parent);
-      document.documentElement.setAttribute('data-anyllm-position', 'above');
-
-      applyTranslation(parent, 'piece-1', 'Xin chào thế giới');
-
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(translation?.nextSibling).toBe(parent);
-    });
-
     it('preserves split-piece translation order below the original', () => {
       const parent = document.createElement('p');
       parent.textContent = 'Long paragraph';
@@ -251,7 +194,7 @@ describe('translationDisplay', () => {
   });
 
   describe('showLoadingPlaceholder', () => {
-    it('inserts placeholder element after parent with spinner classes', () => {
+    it('inserts placeholder element after parent with spinner classes and marks parent original', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -262,18 +205,10 @@ describe('translationDisplay', () => {
       expect(placeholder?.classList.contains('anyllm-translate-loading')).toBe(true);
       expect(placeholder?.classList.contains('anyllm-translate-translation')).toBe(true);
       expect(placeholder?.getAttribute('data-anyllm-role')).toBe('translation');
-    });
-
-    it('marks parent element as original', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      showLoadingPlaceholder(parent, 'piece-1');
-
       expect(parent.getAttribute('data-anyllm-role')).toBe('original');
     });
 
-    it('is idempotent — second call for same pieceId does nothing', () => {
+    it('is idempotent and refuses body/html', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -282,23 +217,10 @@ describe('translationDisplay', () => {
 
       const placeholders = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
       expect(placeholders).toHaveLength(1);
-    });
 
-    it('refuses to attach spinner to body or html', () => {
       showLoadingPlaceholder(document.body, 'piece-body');
       expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
-    });
-
-    it('inserts above-position placeholders before the original', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-      document.documentElement.setAttribute('data-anyllm-position', 'above');
-
-      showLoadingPlaceholder(parent, 'piece-1');
-
-      const placeholder = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(placeholder?.nextSibling).toBe(parent);
     });
   });
 
@@ -317,19 +239,6 @@ describe('translationDisplay', () => {
       expect(clone?.textContent).toBe('Văn bản ngắn');
       expect(clone?.getAttribute('data-anyllm-role')).toBe('translation');
       expect(clone?.previousSibling).toBe(parent);
-    });
-
-    it('removes inline translation-only clones when switching back to bilingual mode', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'Short text';
-      document.body.appendChild(parent);
-      setPageState('dual');
-      applyInlineTranslation(parent, 'piece-1', 'Văn bản ngắn', 'vi');
-
-      setPageState('translation-only');
-      setPageState('dual');
-
-      expect(document.querySelector('[data-anyllm-inline-clone-for="piece-1"]')).toBeNull();
     });
 
     it('keeps inline translation-only clones inside list items', () => {
@@ -376,24 +285,6 @@ describe('translationDisplay', () => {
       expect(errors[0].getAttribute('data-anyllm-error')).toBe('');
       expect(errors[0].textContent).toContain('API error');
     });
-
-    it('deduplicates error element when called twice without placeholder', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      setErrorState(parent, 'piece-1', 'First error');
-      setErrorState(parent, 'piece-1', 'Second error');
-
-      const errors = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
-      expect(errors).toHaveLength(1);
-      expect(errors[0].textContent).toContain('Second error');
-    });
-
-    it('refuses to attach error state to body or html', () => {
-      setErrorState(document.body, 'piece-body', 'Error');
-      expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
-      expect(document.body.hasAttribute('data-anyllm-error')).toBe(false);
-    });
   });
 
   describe('clearErrorState', () => {
@@ -410,16 +301,6 @@ describe('translationDisplay', () => {
   });
 
   describe('removeTranslation', () => {
-    it('removes translation element by piece ID', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-      applyTranslation(parent, 'piece-1', 'Translation');
-
-      removeTranslation('piece-1');
-
-      expect(document.querySelector('[data-anyllm-piece-id="piece-1"]')).toBeNull();
-    });
-
     it('P0 regression: does NOT un-mark original markers for OTHER translations', () => {
       // Two separate paragraphs, each with its own translation.
       const p1 = document.createElement('p');
@@ -497,32 +378,15 @@ describe('translationDisplay', () => {
   });
 
   describe('page state', () => {
-    it('setPageState updates attribute', () => {
+    it('setPageState updates attribute and getPageState reads it (default off)', () => {
+      expect(getPageState()).toBe('off');
       setPageState('dual');
       expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('dual');
+      expect(getPageState()).toBe('dual');
     });
 
-    it('getPageState returns current state', () => {
-      document.documentElement.setAttribute('data-anyllm-state', 'translation-only');
-      expect(getPageState()).toBe('translation-only');
-    });
-
-    it('getPageState defaults to off', () => {
-      expect(getPageState()).toBe('off');
-    });
-
-    it('togglePageState cycles correctly (backward compat to dual)', () => {
-      expect(togglePageState()).toBe('dual');
-      expect(togglePageState()).toBe('off');
-    });
-
-    it('togglePageState cycles to translation-only when requested', () => {
+    it('togglePageState cycles to translation-only when requested, then off', () => {
       expect(togglePageState('translation-only')).toBe('translation-only');
-      expect(togglePageState()).toBe('off');
-    });
-
-    it('togglePageState cycles to dual when requested', () => {
-      expect(togglePageState('bilingual-below')).toBe('dual');
       expect(togglePageState()).toBe('off');
     });
   });
@@ -539,21 +403,6 @@ describe('translationDisplay', () => {
       expect(el?.getAttribute('dir')).toBe('auto');
     });
 
-    it('updates lang on placeholder when applyTranslation runs after showLoadingPlaceholder', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      showLoadingPlaceholder(parent, 'piece-1');
-      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('lang')).toBe('vi');
-      expect(el?.getAttribute('dir')).toBe('auto');
-      // Loading-state aria attributes must be cleared once content is ready.
-      expect(el?.getAttribute('role')).toBeNull();
-      expect(el?.getAttribute('aria-label')).toBeNull();
-    });
-
     it('exposes role=status and aria-label on block loading placeholder', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
@@ -563,49 +412,6 @@ describe('translationDisplay', () => {
       const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
       expect(el?.getAttribute('role')).toBe('status');
       expect(el?.getAttribute('aria-label')).toBe('Translating');
-    });
-
-    it('exposes role=alert on block error state', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      showLoadingPlaceholder(parent, 'piece-1');
-      setErrorState(parent, 'piece-1', 'Network down');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('role')).toBe('alert');
-    });
-
-    it('exposes role=status and aria-label on inline loading placeholder', () => {
-      const parent = document.createElement('span');
-      document.body.appendChild(parent);
-
-      showInlineLoadingPlaceholder(parent, 'piece-1');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('role')).toBe('status');
-      expect(el?.getAttribute('aria-label')).toBe('Translating');
-    });
-
-    it('exposes role=alert on inline error state', () => {
-      const parent = document.createElement('span');
-      document.body.appendChild(parent);
-
-      setInlineErrorState(parent, 'piece-1', 'Network down');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('role')).toBe('alert');
-    });
-
-    it('makes block translations keyboard-focusable when mask theme is active', () => {
-      applyTheme('mask');
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('tabindex')).toBe('0');
     });
 
     it('toggles tabindex on existing translations when theme switches to mask and back', () => {

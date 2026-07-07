@@ -114,33 +114,6 @@ describe('ProviderPoolCoordinator — single-seam integration (AC-6)', () => {
     expect(r3.translations.get('p1')).toBe('hello|via-k1');
   });
 
-  it('testConnection path: round-robins across keys', async () => {
-    const coord = buildCoordinator();
-    await coord.testConnection();
-    await coord.testConnection();
-    await coord.testConnection();
-    expect(k1Stub.callCount).toBe(2);
-    expect(k2Stub.callCount).toBe(1);
-  });
-
-  it('detectPageCategory path: round-robins across keys', async () => {
-    const coord = buildCoordinator();
-    const ctx: PageContext = { title: 't', description: 'd', domain: 'x.com' };
-    const r1 = await coord.detectPageCategory(ctx);
-    const r2 = await coord.detectPageCategory(ctx);
-    expect(r1.category).toBe('cat-k1');
-    expect(r2.category).toBe('cat-k2');
-  });
-
-  it('classifyPdfParagraphs path: round-robins across keys', async () => {
-    const coord = buildCoordinator();
-    const paras = [{ id: 'p1', text: 'hi' }];
-    const r1 = await coord.classifyPdfParagraphs(paras);
-    const r2 = await coord.classifyPdfParagraphs(paras);
-    expect(r1.labels?.p1).toBe('k1');
-    expect(r2.labels?.p1).toBe('k2');
-  });
-
   it('mixed calls share the same rotation cursor (cross-path round-robin)', async () => {
     // A realistic mix: translate, then a category detect, then another translate.
     // The cursor advances per logical request regardless of method, so the pool

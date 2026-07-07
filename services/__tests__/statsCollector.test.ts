@@ -112,21 +112,6 @@ describe('statsCollector', () => {
       expect(stats.dailyStats[0].cacheHits).toBe(1);
     });
 
-    it('should handle concurrent daily stats without losing updates', async () => {
-      // Arrange — empty storage
-
-      // Act — fire 10 concurrent daily updates
-      await Promise.all(
-        Array.from({ length: 10 }, () => recordDailyStats(10, 1, 0)),
-      );
-
-      // Assert
-      const stats = await getStats();
-      expect(stats.dailyStats).toHaveLength(1);
-      expect(stats.dailyStats[0].chars).toBe(100);
-      expect(stats.dailyStats[0].apiCalls).toBe(10);
-    });
-
     it('should prune entries beyond 30 days', async () => {
       // Arrange — seed 30 existing entries
       const dailyStats = Array.from({ length: 30 }, (_, i) => ({

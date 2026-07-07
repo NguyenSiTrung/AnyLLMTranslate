@@ -135,27 +135,17 @@ describe('concatVttSegments', () => {
     expect(result).toContain('A');
   });
 
-  it('preserves cue text with HTML tags', () => {
+  it('preserves HTML and voice tags in cue text', () => {
     const seg1 = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n<b>Bold</b> text';
-    const seg2 = 'WEBVTT\n\n00:00:02.000 --> 00:00:04.000\n<i>Italic</i> text';
+    const seg2 = 'WEBVTT\n\n00:00:02.000 --> 00:00:04.000\n<v Speaker>Hello</v>';
 
     const result = concatVttSegments([seg1, seg2]);
 
     expect(result).toContain('<b>Bold</b> text');
-    expect(result).toContain('<i>Italic</i> text');
-  });
-
-  it('preserves voice tags', () => {
-    const seg1 = 'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n<v Speaker>Hello</v>';
-    const seg2 = 'WEBVTT\n\n00:00:02.000 --> 00:00:04.000\n<v Other>World</v>';
-
-    const result = concatVttSegments([seg1, seg2]);
-
     expect(result).toContain('<v Speaker>Hello</v>');
-    expect(result).toContain('<v Other>World</v>');
   });
 
-  it('handles NOTE blocks', () => {
+  it('handles NOTE blocks and strips BOM markers', () => {
     const seg1 = [
       'WEBVTT',
       '',
@@ -166,29 +156,14 @@ describe('concatVttSegments', () => {
       'First cue',
     ].join('\n');
 
-    const seg2 = [
-      'WEBVTT',
-      '',
-      '00:00:02.000 --> 00:00:04.000',
-      'Second cue',
-    ].join('\n');
-
-    const result = concatVttSegments([seg1, seg2]);
-
-    expect(result).toContain('First cue');
-    expect(result).toContain('Second cue');
-    expect(result).toContain('NOTE');
-  });
-
-  it('handles BOM markers', () => {
-    const seg1 = '\uFEFFWEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello';
     const seg2 = '\uFEFFWEBVTT\n\n00:00:02.000 --> 00:00:04.000\nWorld';
 
     const result = concatVttSegments([seg1, seg2]);
 
-    expect(result).not.toContain('\uFEFF');
-    expect(result).toContain('Hello');
+    expect(result).toContain('First cue');
+    expect(result).toContain('NOTE');
     expect(result).toContain('World');
+    expect(result).not.toContain('\uFEFF');
   });
 
   it('handles multiple cues per segment with offset', () => {

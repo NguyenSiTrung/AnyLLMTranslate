@@ -26,49 +26,41 @@ describe('categoryStore', () => {
   });
 
   describe('setCategoryOverride / getCategoryOverride', () => {
-    it('should set and get a category override for a tab', () => {
+    it('sets, overwrites, trims, truncates, and isolates per-tab overrides', () => {
       setCategoryOverride(42, 'Software Development');
       expect(getCategoryOverride(42)).toBe('Software Development');
-    });
 
-    it('should return undefined for tabs without an override', () => {
-      expect(getCategoryOverride(99)).toBeUndefined();
-    });
-
-    it('should clear override when category is null', () => {
+      // overwrite
       setCategoryOverride(42, 'News');
-      setCategoryOverride(42, null);
-      expect(getCategoryOverride(42)).toBeUndefined();
-    });
+      setCategoryOverride(42, 'E-Commerce');
+      expect(getCategoryOverride(42)).toBe('E-Commerce');
 
-    it('should clear override when category is empty string', () => {
-      setCategoryOverride(42, 'News');
-      setCategoryOverride(42, '');
-      expect(getCategoryOverride(42)).toBeUndefined();
-    });
-
-    it('should trim category text', () => {
+      // trim whitespace
       setCategoryOverride(42, '  Software Development  ');
       expect(getCategoryOverride(42)).toBe('Software Development');
-    });
 
-    it('should truncate category to 50 chars', () => {
-      const longCategory = 'A'.repeat(60);
-      setCategoryOverride(42, longCategory);
+      // truncate to 50 chars
+      setCategoryOverride(42, 'A'.repeat(60));
       expect(getCategoryOverride(42)?.length).toBe(50);
-    });
 
-    it('should support multiple tabs independently', () => {
+      // multiple tabs independent
       setCategoryOverride(1, 'News');
       setCategoryOverride(2, 'Academic Research');
       expect(getCategoryOverride(1)).toBe('News');
       expect(getCategoryOverride(2)).toBe('Academic Research');
     });
 
-    it('should overwrite existing override', () => {
+    it('returns undefined for tabs without an override', () => {
+      expect(getCategoryOverride(99)).toBeUndefined();
+    });
+
+    it('clears override when category is null or empty string', () => {
       setCategoryOverride(42, 'News');
-      setCategoryOverride(42, 'E-Commerce');
-      expect(getCategoryOverride(42)).toBe('E-Commerce');
+      setCategoryOverride(42, null);
+      expect(getCategoryOverride(42)).toBeUndefined();
+      setCategoryOverride(42, 'News');
+      setCategoryOverride(42, '');
+      expect(getCategoryOverride(42)).toBeUndefined();
     });
   });
 

@@ -87,35 +87,17 @@ describe('applyProviderPatch', () => {
     expect(patched.displayName).toBe('Renamed');
   });
 
-  it('clears lastTestResult when baseUrl changes', () => {
+  it('clears lastTestResult when any credential field (baseUrl/model/requiresApiKey) changes', () => {
     const p = makeProvider();
-    const patched = applyProviderPatch(p, { baseUrl: 'https://other/v1' });
-    expect(patched.lastTestResult).toBeUndefined();
-    expect(patched.baseUrl).toBe('https://other/v1');
+    expect(applyProviderPatch(p, { baseUrl: 'https://other/v1' }).lastTestResult).toBeUndefined();
+    expect(applyProviderPatch(p, { model: 'new-model' }).lastTestResult).toBeUndefined();
+    expect(applyProviderPatch(p, { requiresApiKey: false }).lastTestResult).toBeUndefined();
   });
 
-  it('clears lastTestResult when model changes', () => {
-    const p = makeProvider();
-    const patched = applyProviderPatch(p, { model: 'new-model' });
-    expect(patched.lastTestResult).toBeUndefined();
-  });
-
-  it('clears lastTestResult when requiresApiKey changes', () => {
-    const p = makeProvider();
-    const patched = applyProviderPatch(p, { requiresApiKey: false });
-    expect(patched.lastTestResult).toBeUndefined();
-  });
-
-  it('does not clear lastTestResult when patch has no credential fields', () => {
-    const p = makeProvider();
-    const patched = applyProviderPatch(p, { enabled: false, temperature: 0.9 });
-    expect(patched.lastTestResult).toBeDefined();
-  });
-
-  it('does not clear lastTestResult when patch sets same values', () => {
+  it('does not clear lastTestResult when patch has no credential fields or sets same values', () => {
     const p = makeProvider({ baseUrl: 'https://api.test.com/v1', model: 'gpt-4o-mini' });
-    const patched = applyProviderPatch(p, { baseUrl: 'https://api.test.com/v1', model: 'gpt-4o-mini' });
-    expect(patched.lastTestResult).toBeDefined();
+    expect(applyProviderPatch(p, { enabled: false, temperature: 0.9 }).lastTestResult).toBeDefined();
+    expect(applyProviderPatch(p, { baseUrl: 'https://api.test.com/v1', model: 'gpt-4o-mini' }).lastTestResult).toBeDefined();
   });
 });
 
@@ -134,16 +116,10 @@ describe('applyKeyPatch', () => {
     expect(patched.apiKey).toBe('sk-new');
   });
 
-  it('does not clear lastTestResult when patch sets same apiKey', () => {
+  it('does not clear lastTestResult when patch has no apiKey field or sets the same value', () => {
     const k = makeKey({ apiKey: 'sk-same' });
-    const patched = applyKeyPatch(k, { apiKey: 'sk-same' });
-    expect(patched.lastTestResult).toBeDefined();
-  });
-
-  it('does not clear lastTestResult when patch has no apiKey field', () => {
-    const k = makeKey();
-    const patched = applyKeyPatch(k, { enabled: false, label: 'prod' });
-    expect(patched.lastTestResult).toBeDefined();
+    expect(applyKeyPatch(k, { apiKey: 'sk-same' }).lastTestResult).toBeDefined();
+    expect(applyKeyPatch(k, { enabled: false, label: 'prod' }).lastTestResult).toBeDefined();
   });
 });
 
