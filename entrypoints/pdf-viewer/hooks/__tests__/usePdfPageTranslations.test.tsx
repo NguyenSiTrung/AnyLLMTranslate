@@ -37,11 +37,10 @@ vi.mock('../../lib/pdfProgressStore', () => ({
 import { usePdfPageTranslations } from '../usePdfPageTranslations';
 import { translateParagraphs } from '../../lib/pdfTranslation';
 import { extractPageText } from '../../lib/pdfTextExtraction';
-import { loadPdfProgress, savePdfProgress } from '../../lib/pdfProgressStore';
+import { savePdfProgress } from '../../lib/pdfProgressStore';
 
 const mockedTranslateParagraphs = vi.mocked(translateParagraphs);
 const mockedExtractPageText = vi.mocked(extractPageText);
-const mockedLoadPdfProgress = vi.mocked(loadPdfProgress);
 const mockedSavePdfProgress = vi.mocked(savePdfProgress);
 
 const observerInstances: Array<{ options?: IntersectionObserverInit; observe: ReturnType<typeof vi.fn> }> = [];

@@ -39,7 +39,7 @@ vi.mock('@/lib/config', () => ({
 }));
 
 // Import mocked modules so we can configure them per-test
-import { translateParagraphs, setMemoryCachedPage } from '../pdfTranslation';
+import { translateParagraphs } from '../pdfTranslation';
 import { extractPageText } from '../pdfTextExtraction';
 
 function createMockPage(pageNumber: number): PDFPageProxy {

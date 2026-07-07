@@ -15,7 +15,6 @@ import {
   setMemoryCachedPage,
   clearMemoryCache,
   translateParagraphs,
-  MAX_CACHED_DOCUMENTS,
 } from '../pdfTranslation';
 import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';

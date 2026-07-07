@@ -9,11 +9,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   computeContextHash,
-  savePdfProgress,
   loadPdfProgress,
-  clearPdfProgress,
 } from '../pdfProgressStore';
-import type { PageTranslations } from '../pdfTranslation';
 
 /** In-memory chrome.storage.local backing store. */
 function installStorageMock(initial: Record<string, unknown> = {}): {

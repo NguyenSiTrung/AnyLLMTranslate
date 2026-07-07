@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatisticsSection } from '../StatisticsSection';
-import { getStats, resetStats, STATS_STORAGE_KEY } from '@/services/statsCollector';
-import { DEFAULT_STATS, type TranslationStats } from '@/types/stats';
+import { getStats, resetStats } from '@/services/statsCollector';
+import { type TranslationStats } from '@/types/stats';
 
 vi.mock('@/services/statsCollector', () => ({
   STATS_STORAGE_KEY: 'anyllm-translate-stats',

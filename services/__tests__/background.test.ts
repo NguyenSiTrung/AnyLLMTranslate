@@ -476,8 +476,9 @@ describe('services/background', () => {
       }
 
       expect(chunkWithGlossary).not.toBeNull();
-      expect(chunkWithGlossary!.messages[0].content).toContain('Previously translated names');
-      expect(chunkWithGlossary!.messages[0].content).toContain('"John" → "Juan"');
+      const messages = chunkWithGlossary?.messages;
+      expect(messages?.[0].content).toContain('Previously translated names');
+      expect(messages?.[0].content).toContain('"John" → "Juan"');
     });
 
     it('prefixes cue text with [voice] when cue.voice is set', async () => {

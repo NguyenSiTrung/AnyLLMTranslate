@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
-import { generateTranslatedPdf, clampFontSize, wrapText } from '../translatedPdfGenerator';
+import { generateTranslatedPdf } from '../translatedPdfGenerator';
 import type { PageTranslations } from '../pdfTranslation';
 import type { PdfParagraph } from '../pdfTextExtraction';
 

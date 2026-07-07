@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { SubtitlesSection } from '../SubtitlesSection';
-import * as subtitleSites from '@/lib/subtitleSites';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DEFAULT_SUBTITLE_SETTINGS } from '@/types/config';
 
