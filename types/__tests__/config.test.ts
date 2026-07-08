@@ -118,6 +118,11 @@ describe('config types', () => {
       expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
     });
 
+    it('defaults body-tag whitelist and aside caps to OFF (FR-4/FR-5)', () => {
+      expect(DEFAULT_SETTINGS.enableBodyTagWhitelist).toBe(false);
+      expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(false);
+    });
+
     it('has subtitle settings defaults', () => {
       expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
     });

@@ -167,5 +167,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableWebResume: state.enableWebResume,
     maxTextGroupLengthPerRequest: state.maxTextGroupLengthPerRequest,
     maxTextLengthPerRequest: state.maxTextLengthPerRequest,
+    enableBodyTagWhitelist: state.enableBodyTagWhitelist,
+    enableAsideCaps: state.enableAsideCaps,
   };
 }

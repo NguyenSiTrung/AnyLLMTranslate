@@ -52,7 +52,7 @@ Foundational optimization; must land first since it restructures how domWalker c
 
 Both add opt-in settings and edit domWalker; bundled into one phase.
 
-- [ ] Task 3.1: Add settings + constants
+- [x] Task 3.1: Add settings + constants
   <!-- files: types/config.ts, lib/constants.ts, stores/settingsStore.ts -->
   - Add `enableBodyTagWhitelist: boolean` (default false), `enableAsideCaps: boolean` (default false) to `ExtensionSettings` + `DEFAULT_SETTINGS`.
   - Add `BODY_TRANSLATE_TAGS` whitelist (`MAIN`, `ARTICLE`, `SECTION`, `DIV`) and `ASIDE_MAX_TEXT_PER_PARAGRAPH=67`, `ASIDE_MAX_TEXT_PER_REGION=1000` to `lib/constants.ts`.

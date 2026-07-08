@@ -49,6 +49,18 @@ export const VIEWPORT_MARGIN = '200px';
 /** MutationObserver debounce interval in ms */
 export const MUTATION_DEBOUNCE_MS = 500;
 
+// FR-4: Whitelist of body-level tags the walker descends into when
+// enableBodyTagWhitelist is ON. Other direct children of <body> (nav, aside,
+// header, footer, form, table, …) are skipped entirely. Composable with
+// smart-excludes (which still apply within whitelisted containers).
+export const BODY_TRANSLATE_TAGS = new Set(['MAIN', 'ARTICLE', 'SECTION', 'DIV']);
+
+// FR-5: Aside-region text caps (constants, not user-configurable in this track).
+// Per-paragraph: skip pieces longer than this (ImmersiveTranslate default 67).
+export const ASIDE_MAX_TEXT_PER_PARAGRAPH = 67;
+// Per-region: stop translating a region once cumulative chars exceed this.
+export const ASIDE_MAX_TEXT_PER_REGION = 1000;
+
 /** Data attributes used by the extension */
 export const DATA_ATTRS = {
   /** Role marker: 'original' or 'translation' */

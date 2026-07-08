@@ -365,6 +365,14 @@ export interface ExtensionSettings {
   maxTextGroupLengthPerRequest: number;
   /** Max total characters allowed in a single LLM request (FR-2, default 2000) */
   maxTextLengthPerRequest: number;
+  /** FR-4: When ON, the walk under <body> only descends into direct children whose tag
+   *  is in BODY_TRANSLATE_TAGS (MAIN, ARTICLE, SECTION, DIV); other top-level tags
+   *  (NAV, ASIDE, HEADER, FOOTER, FORM, TABLE, …) are skipped entirely. Default off. */
+  enableBodyTagWhitelist: boolean;
+  /** FR-5: When ON, within aside regions (ASIDE, [role="complementary"], sidebar selectors),
+   *  apply per-paragraph and per-region text caps to limit token waste + page clutter.
+   *  Default off. Cap values are constants (ASIDE_MAX_TEXT_PER_PARAGRAPH/REGION). */
+  enableAsideCaps: boolean;
 }
 
 /** Provider preset definitions */
@@ -531,6 +539,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableWebResume: true,
   maxTextGroupLengthPerRequest: 4,
   maxTextLengthPerRequest: 2000,
+  enableBodyTagWhitelist: false,
+  enableAsideCaps: false,
 };
 
 /** All available provider presets */
