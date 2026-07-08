@@ -39,7 +39,7 @@ import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fe
 import { ProviderPoolCoordinator } from '@/services/providerPool';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
-import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure } from '@/services/cacheManager';
+import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
 import { formatGlossary } from '@/lib/glossary';
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
@@ -512,7 +512,9 @@ async function handleTranslate(
       // short-circuit to an error result (no LLM call) so flaky providers aren't
       // retried on every scroll-past. The piece surfaces in `failed`, not
       // `results`, so the content script shows an error state.
-      if (settings.enableFailureCache) {
+      // Bypassed (and cleared) on a forced retry so the "Click to retry" button
+      // actually re-calls the LLM instead of re-surfacing the cached error.
+      if (settings.enableFailureCache && !message.skipFailureCache) {
         const failure = await getCachedFailure(
           piece.text,
           message.sourceLanguage,
@@ -523,6 +525,14 @@ async function handleTranslate(
           failedResults.push({ id: piece.id, error: failure });
           continue;
         }
+      } else if (message.skipFailureCache) {
+        // Forced retry: drop any stale negative-cache entry for this piece so a
+        // fresh failure isn't shadowed by the previous one (fire-and-forget).
+        deleteCachedFailure(
+          piece.text,
+          message.sourceLanguage,
+          message.targetLanguage,
+        ).catch(() => {});
       }
       uncachedPieces.push(piece);
     }

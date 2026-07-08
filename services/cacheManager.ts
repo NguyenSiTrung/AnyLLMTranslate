@@ -264,6 +264,21 @@ export async function cacheFailure(
   }
 }
 
+/** Delete a cached failure so a forced retry (user clicks "retry") isn't
+ *  shadowed by a stale negative-cache entry. Best-effort, never throws. */
+export async function deleteCachedFailure(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): Promise<void> {
+  try {
+    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    await del(key, getStore());
+  } catch {
+    // Silently fail — negative cache is best-effort
+  }
+}
+
 /** Evict expired and LRU entries to stay under maxSizeMB */
 export async function evictCache(
   maxSizeMB = 100,

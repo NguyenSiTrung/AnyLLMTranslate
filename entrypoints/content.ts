@@ -170,9 +170,15 @@ function streamTranslate(
   });
 }
 
-/** Send translation request to background and apply results */
-async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
+/** Send translation request to background and apply results.
+ *  When `options.skipFailureCache` is set (user-initiated retry), the background
+ *  bypasses the FR-4 negative cache so the retry actually re-calls the LLM. */
+async function translatePieces(
+  pieces: TranslationPiece[],
+  options: { skipFailureCache?: boolean } = {},
+): Promise<void> {
   if (pieces.length === 0) return;
+  const { skipFailureCache = false } = options;
 
   // Capture session at request start; if the page is restored or
   // re-translated before the response arrives, the session will have
@@ -279,6 +285,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
             sourceLanguage: settings.sourceLanguage,
             targetLanguage: settings.targetLanguage,
             pageContext,
+            skipFailureCache,
           });
     } else {
       response = await chrome.runtime.sendMessage({
@@ -287,6 +294,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
         sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
         pageContext,
+        skipFailureCache,
       });
     }
 
@@ -318,7 +326,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
         for (const failure of response.failed) {
           const piece = pieces.find((p) => p.id === failure.id);
           if (!piece) continue;
-          const retryPiece = () => translatePieces([piece]);
+          const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
           if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
             setInlineErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
           } else {
@@ -329,7 +337,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     } else if (!response.success && response.error) {
       // Batch-level failure: mark all pieces as error with retry
       for (const piece of pieces) {
-        const retryPiece = () => translatePieces([piece]);
+        const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
         if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
           setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
         } else {
@@ -344,7 +352,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
-      const retryPiece = () => translatePieces([piece]);
+      const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
       if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
         setInlineErrorState(piece.parentElement, piece.id, message, retryPiece);
       } else {

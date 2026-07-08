@@ -60,6 +60,11 @@ export interface TranslateMessage {
   targetLanguage: string;
   tabId?: number;
   pageContext?: PageContext;
+  /** Bypass the FR-4 negative (failure) cache and clear any cached failure for
+   *  these pieces before re-requesting. Set on user-initiated retry (clicking the
+   *  "Click to retry" error state) so the retry actually re-calls the LLM instead
+   *  of re-surfacing the cached error. */
+  skipFailureCache?: boolean;
 }
 
 /** Payload sent for translation (serializable subset of TranslationPiece) */

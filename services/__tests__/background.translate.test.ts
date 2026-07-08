@@ -40,6 +40,7 @@ vi.mock('@/services/cacheManager', () => ({
   // split/merge tests are unaffected.
   getCachedFailure: vi.fn().mockResolvedValue(null),
   cacheFailure: vi.fn().mockResolvedValue(undefined),
+  deleteCachedFailure: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -463,5 +464,63 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
     expect(rebuildsAfterSecond).toBeGreaterThan(rebuildsAfterFirst);
 
     rebuildSpy.mockRestore();
+  });
+});
+
+describe('handleTranslate — FR-4 negative-cache + forced-retry bypass', () => {
+  let getCachedFailure: ReturnType<typeof vi.fn>;
+  let deleteCachedFailure: ReturnType<typeof vi.fn>;
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    // Enable the failure cache for this suite.
+    mockStorage['anyllm-translate-settings'] = { enableFailureCache: true, failureCacheTtlMinutes: 120 };
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    getCachedFailure = mod.getCachedFailure as ReturnType<typeof vi.fn>;
+    deleteCachedFailure = mod.deleteCachedFailure as ReturnType<typeof vi.fn>;
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    // Success cache always misses so the failure cache is the deciding factor.
+    getCachedTranslation.mockResolvedValue(null);
+  });
+
+  it('short-circuits to a failed result when a failure is cached (no skipFailureCache)', async () => {
+    getCachedFailure.mockResolvedValue('Failed to parse translation response as JSON');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await handleMessage(
+      buildMsg([{ id: 'p1', text: 'Hello' }]),
+      fakeSender,
+    ) as { success: boolean; failed?: Array<{ id: string; error: string }> };
+
+    // Cached failure short-circuits — LLM is never called.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(getCachedFailure).toHaveBeenCalledTimes(1);
+    expect(result.failed).toEqual([{ id: 'p1', error: 'Failed to parse translation response as JSON' }]);
+  });
+
+  it('bypasses + clears the failure cache on a forced retry (skipFailureCache: true)', async () => {
+    // Even though a failure is cached, the retry must ignore it.
+    getCachedFailure.mockResolvedValue('Failed to parse translation response as JSON');
+    // Provide a valid LLM response so the retry succeeds.
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    const result = await handleMessage(
+      { ...buildMsg([{ id: 'p1', text: 'Hello' }]), skipFailureCache: true },
+      fakeSender,
+    ) as { success: boolean; results?: Array<{ id: string; translatedText: string }>; failed?: unknown[] };
+
+    // The failure cache is bypassed (not consulted) ...
+    expect(getCachedFailure).not.toHaveBeenCalled();
+    // ... and the stale entry is cleared so a fresh success isn't shadowed.
+    expect(deleteCachedFailure).toHaveBeenCalledWith('Hello', 'en', 'vi');
+    // The LLM is actually called and the retry succeeds.
+    expect(result.success).toBe(true);
+    expect(result.results).toEqual([{ id: 'p1', translatedText: 'Xin chào' }]);
+    expect(result.failed ?? []).toEqual([]);
   });
 });
