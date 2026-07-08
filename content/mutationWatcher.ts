@@ -1,23 +1,39 @@
 /**
  * MutationWatcher — observes DOM for dynamic content changes (SPAs).
  * Detects new translatable content and triggers re-extraction.
+ * FR-1: Also detects SPA <body> replacement (Next.js App Router, Astro view
+ * transitions, Turbo Drive) via a second observer on <html>, re-initializing
+ * translation on the new body.
  */
 
 import { MUTATION_DEBOUNCE_MS, DATA_ATTRS, SKIP_ELEMENTS, BLOCK_ELEMENTS } from '@/lib/constants';
 import { deduplicateAncestors } from '@/lib/domUtils';
 
 export type OnMutationCallback = (addedElements: Element[]) => void;
+export type OnBodySwappedCallback = () => void;
 
 export class MutationWatcher {
   private observer: MutationObserver | null = null;
+  /** FR-1: second observer on <html> for body-swap detection */
+  private bodySwapObserver: MutationObserver | null = null;
+  /** FR-1: last-seen <body> element identity for swap detection */
+  private lastSeenBody: Element | null = null;
+  /** FR-1: debounce timer for body-swap callback */
+  private bodySwapTimer: ReturnType<typeof setTimeout> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingElements: Element[] = [];
   private onMutation: OnMutationCallback;
+  private onBodySwapped: OnBodySwappedCallback | null;
   private debounceMs: number;
 
-  constructor(onMutation: OnMutationCallback, debounceMs = MUTATION_DEBOUNCE_MS) {
+  constructor(
+    onMutation: OnMutationCallback,
+    debounceMs = MUTATION_DEBOUNCE_MS,
+    onBodySwapped?: OnBodySwappedCallback,
+  ) {
     this.onMutation = onMutation;
     this.debounceMs = debounceMs;
+    this.onBodySwapped = onBodySwapped ?? null;
   }
 
   private processElement(el: Element): void {
@@ -44,6 +60,9 @@ export class MutationWatcher {
   /** Start observing DOM mutations */
   start(root: Node = document.body): void {
     if (this.observer) return;
+
+    // FR-1: track the initial body identity for swap detection
+    this.lastSeenBody = document.body;
 
     this.observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -74,6 +93,31 @@ export class MutationWatcher {
       subtree: true,
       characterData: true,
     });
+
+    // FR-1: second observer on <html> for body-swap detection
+    if (this.onBodySwapped) {
+      this.bodySwapObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type !== 'childList') continue;
+          // Check if a new <body> was added to <html>
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'BODY') {
+              const newBody = node as Element;
+              // Guard: only fire if the new body is a DIFFERENT identity than
+              // the last-seen body (prevents double-fire for same node).
+              if (newBody !== this.lastSeenBody) {
+                this.lastSeenBody = newBody;
+                this.scheduleBodySwap();
+              }
+            }
+          }
+        }
+      });
+
+      this.bodySwapObserver.observe(document.documentElement, {
+        childList: true,
+      });
+    }
   }
 
   /** Stop observing mutations */
@@ -83,12 +127,23 @@ export class MutationWatcher {
       this.observer = null;
     }
 
+    if (this.bodySwapObserver) {
+      this.bodySwapObserver.disconnect();
+      this.bodySwapObserver = null;
+    }
+
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
 
+    if (this.bodySwapTimer) {
+      clearTimeout(this.bodySwapTimer);
+      this.bodySwapTimer = null;
+    }
+
     this.pendingElements = [];
+    this.lastSeenBody = null;
   }
 
   /** Whether the watcher is active */
@@ -106,6 +161,15 @@ export class MutationWatcher {
       } else {
         this.flush();
       }
+    }, this.debounceMs);
+  }
+
+  /** FR-1: debounce the body-swap callback so rapid swaps coalesce */
+  private scheduleBodySwap(): void {
+    if (this.bodySwapTimer) return;
+    this.bodySwapTimer = setTimeout(() => {
+      this.bodySwapTimer = null;
+      this.onBodySwapped?.();
     }, this.debounceMs);
   }
 

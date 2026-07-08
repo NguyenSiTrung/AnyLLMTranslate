@@ -82,7 +82,7 @@ Both add opt-in settings and edit domWalker; bundled into one phase.
 
 Independent of Phases 1–3 (different files). Safe to run concurrently with Phase 1.
 
-- [ ] Task 4.1: Body-swap detector in MutationWatcher
+- [x] Task 4.1: Body-swap detector in MutationWatcher
   <!-- files: content/mutationWatcher.ts, content/__tests__/mutationWatcher.test.ts -->
   - Test first (jsdom): create a watcher, replace `document.body` with a new `<body>` node; assert the `onBodySwapped` callback fires exactly once and NOT for unrelated mutations.
   - Add a second internal observer on `document.documentElement` `{ childList: true }`; detect a new `<body>` by identity (different node than the last-seen body) OR a body re-added after removal.
