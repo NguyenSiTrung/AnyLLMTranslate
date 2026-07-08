@@ -59,12 +59,12 @@ Both add opt-in settings and edit domWalker; bundled into one phase.
   - Update `extractSettings()` in the store.
   - Test: defaults round-trip; explicit on persists.
 
-- [ ] Task 3.2: Whitelist early-exit in extraction
+- [x] Task 3.2: Whitelist early-exit in extraction
   <!-- files: content/domWalker.ts, content/__tests__/domWalker.test.ts -->
   - Test first: with whitelist ON, direct-child `<nav>`/`<aside>` under `<body>` are NOT descended into (assert no pieces produced from them); with OFF, behavior unchanged.
   - Gate: only applies to DIRECT children of `<body>`; deeper nesting unaffected.
 
-- [ ] Task 3.3: Aside-region caps in extraction
+- [x] Task 3.3: Aside-region caps in extraction
   <!-- files: content/domWalker.ts, content/__tests__/domWalker.test.ts -->
   - Test first: with caps ON, an `<aside>` with 40 short links produces at most the per-region char cap worth of pieces, and any single paragraph over the per-paragraph cap is dropped; with OFF, all translate.
   - Track per-region cumulative chars in a Map keyed by region root; reset between extractions.

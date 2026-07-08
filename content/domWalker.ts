@@ -5,9 +5,9 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
-import { deduplicateAncestors, matchesCached, classifyInArticle } from '@/lib/domUtils';
+import { deduplicateAncestors, matchesCached, classifyInArticle, findAsideRegionRoot } from '@/lib/domUtils';
 import { encodeInlineHtml } from '@/lib/richTranslate';
-import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
+import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS, BODY_TRANSLATE_TAGS, ASIDE_MAX_TEXT_PER_PARAGRAPH, ASIDE_MAX_TEXT_PER_REGION } from '@/lib/constants';
 
 let pieceCounter = 0;
 
@@ -26,6 +26,10 @@ export interface ExtractOptions {
   excludeSelectors?: string[];
   /** When true, capture inline markup as `<z id="N">` placeholders (FR-1 rich translate). */
   enableRichTranslate?: boolean;
+  /** FR-4: When true, only descend into body-level children whose tag is in BODY_TRANSLATE_TAGS. */
+  enableBodyTagWhitelist?: boolean;
+  /** FR-5: When true, apply per-paragraph and per-region text caps within aside regions. */
+  enableAsideCaps?: boolean;
 }
 
 /** Check if an element should be skipped */
@@ -143,6 +147,8 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
   const pieces: TranslationPiece[] = [];
   let currentTextNodes: Text[] = [];
   let currentParent: Element | null = null;
+  // FR-5: per-region cumulative char tracker for aside caps.
+  const asideRegionChars = new Map<Element, number>();
 
   /** Find the deepest common ancestor element of a list of text nodes */
   function getCommonAncestor(nodes: Node[]): Element | null {
@@ -212,6 +218,25 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
     }
 
     // Split long texts at sentence boundaries
+    // FR-5: aside caps — skip pieces in aside regions that exceed per-paragraph
+    // or per-region char limits. Applied before splitting so the per-paragraph
+    // cap checks the full text, not each split part.
+    if (options.enableAsideCaps && anchorElement) {
+      const asideRoot = findAsideRegionRoot(anchorElement);
+      if (asideRoot) {
+        if (richText.length > ASIDE_MAX_TEXT_PER_PARAGRAPH) {
+          currentTextNodes = [];
+          return;
+        }
+        const regionChars = asideRegionChars.get(asideRoot) ?? 0;
+        if (regionChars >= ASIDE_MAX_TEXT_PER_REGION) {
+          currentTextNodes = [];
+          return;
+        }
+        asideRegionChars.set(asideRoot, regionChars + richText.length);
+      }
+    }
+
     if (richText.length > MAX_PIECE_CHARS) {
       const parts = splitAtSentenceBoundary(richText, MAX_PIECE_CHARS);
       const inArticleContext = classifyInArticle(anchorElement);
@@ -251,6 +276,14 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
           const el = node as Element;
           if (shouldSkipElement(el, options.excludeSelectors)) {
             return NodeFilter.FILTER_REJECT; // Skip element and all descendants
+          }
+          // FR-4: body-tag whitelist — only descend into direct children of
+          // <body> whose tag is in BODY_TRANSLATE_TAGS. Other top-level tags
+          // (NAV, ASIDE, HEADER, FOOTER, FORM, TABLE, …) are skipped entirely.
+          if (options.enableBodyTagWhitelist && root.tagName === 'BODY' && el.parentElement === root) {
+            if (!BODY_TRANSLATE_TAGS.has(el.tagName)) {
+              return NodeFilter.FILTER_REJECT;
+            }
           }
           return NodeFilter.FILTER_ACCEPT;
         }

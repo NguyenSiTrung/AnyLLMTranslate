@@ -70,6 +70,29 @@ export function classifyInArticle(element: Element): boolean {
   return false;
 }
 
+// FR-5: Selectors that identify "aside" regions where text caps apply.
+const ASIDE_REGION_SELECTORS = [
+  'aside',
+  '[role="complementary"]',
+  '.sidebar',
+];
+
+/**
+ * FR-5: Find the nearest ancestor (including the element itself) that matches
+ * an aside-region selector. Returns the region root element, or null if the
+ * element is not inside an aside region. Uses matchesCached for cache benefit.
+ */
+export function findAsideRegionRoot(element: Element): Element | null {
+  let el: Element | null = element;
+  while (el && el.tagName !== 'HTML') {
+    for (const selector of ASIDE_REGION_SELECTORS) {
+      if (matchesCached(el, selector)) return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
 /**
  * Deduplicate elements by keeping only the outermost ones.
  * Removes any element that is a descendant of another element in the list.

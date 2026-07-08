@@ -87,6 +87,7 @@ function extractDynamicPieces(
   includeSelectors: string[] | undefined,
   excludeSelectors: string[],
   enableRichTranslate?: boolean,
+  enableAsideCaps?: boolean,
 ): TranslationPiece[] {
   if (excludeSelectors.some((_selector) => selectorAppliesToElementOrAncestor(element, excludeSelectors as unknown as string))) {
     return [];
@@ -100,6 +101,7 @@ function extractDynamicPieces(
     includeSelectors: rootIsIncluded ? undefined : includeSelectors,
     excludeSelectors,
     enableRichTranslate,
+    enableAsideCaps,
   });
 }
 
@@ -542,6 +544,8 @@ export async function startTranslation(): Promise<void> {
     includeSelectors: matchingRule?.includeSelectors,
     excludeSelectors: effectiveExcludes,
     enableRichTranslate: settings.enableRichTranslate,
+    enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
+    enableAsideCaps: settings.enableAsideCaps,
   });
 
   // Set page state based on displayMode setting
@@ -571,7 +575,7 @@ export async function startTranslation(): Promise<void> {
     if (!viewportObserver || getPageState() === 'off') return;
 
     const newPieces = addedElements.flatMap((element) =>
-      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate),
+      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate, settings.enableAsideCaps),
     );
     if (newPieces.length === 0) return;
 
