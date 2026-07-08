@@ -16,6 +16,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Select } from '@/ui/Select';
 import { Card } from '@/ui/Card';
 import { SegmentedControl } from '@/ui/SegmentedControl';
+import { Toggle } from '@/ui/Toggle';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode } from '@/types/config';
@@ -191,6 +192,16 @@ export function GeneralSection({ onNavigateToThemes }: GeneralSectionProps) {
                   onChange={(val) => updateSettings({ darkMode: val })}
                 />
               </FieldGroup>
+
+              <div className="pt-2 border-t border-zinc-800/50">
+                <Toggle
+                  id="general-compact-inline-toggle"
+                  checked={settings.enableCompactInlineForShortText}
+                  onChange={(checked) => updateSettings({ enableCompactInlineForShortText: checked })}
+                  label="Compact inline for short text"
+                  description="Show short translations inline in parentheses. Turn off for uniform block display that always matches your theme."
+                />
+              </div>
             </div>
           </Card>
         </div>

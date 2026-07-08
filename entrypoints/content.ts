@@ -103,6 +103,13 @@ function extractDynamicPieces(
   });
 }
 
+/** Should this piece use compact inline (parenthetical) display?
+ *  Disabled when "Compact inline for short text" is off — all pieces then use
+ *  uniform block display that matches the active theme. */
+function shouldUseInlineDisplay(piece: TranslationPiece, compactInlineEnabled: boolean): boolean {
+  return compactInlineEnabled && piece.text.length <= SHORT_PIECE_THRESHOLD;
+}
+
 /**
  * FR-6: stream a translation request via a chrome.runtime port. Emits per-piece
  * deltas (incremental spinner→text swaps) and resolves to a result message
@@ -113,6 +120,7 @@ function streamTranslate(
   pieces: TranslationPiece[],
   sourceLanguage: string,
   targetLanguage: string,
+  compactInlineEnabled: boolean,
 ): Promise<TranslationResultMessage> {
   return new Promise((resolve) => {
     const pieceById = new Map(pieces.map((p) => [p.id, p]));
@@ -134,7 +142,7 @@ function streamTranslate(
         if (piece) {
           piece.isTranslated = true;
           piece.translatedText = msg.text;
-          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+          if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
             applyInlineTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
           } else {
             applyTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
@@ -171,17 +179,20 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
   // advanced and this response must be ignored to prevent stale DOM writes.
   const requestSession = translationSession;
 
+  // Load settings before the placeholder loop so the compact-inline flag
+  // gates which spinner style each piece gets (short → inline, long → block).
+  const settings = await loadSettings();
+  const compactInlineEnabled = settings.enableCompactInlineForShortText;
+
   // Show spinner placeholder for each piece immediately (before async call)
   // Short pieces get compact inline spinner, long pieces get block spinner
   for (const piece of pieces) {
-    if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+    if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
       showInlineLoadingPlaceholder(piece.parentElement, piece.id);
     } else {
       showLoadingPlaceholder(piece.parentElement, piece.id);
     }
   }
-
-  const settings = await loadSettings();
 
   try {
     activeRequests++;
@@ -259,7 +270,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     let response: TranslationResultMessage;
     if (settings.enableStreamingTranslation) {
       // FR-6: try streaming first; fall back to non-streaming on failure.
-      const streamed = await streamTranslate(translatablePieces, settings.sourceLanguage, settings.targetLanguage);
+      const streamed = await streamTranslate(translatablePieces, settings.sourceLanguage, settings.targetLanguage, settings.enableCompactInlineForShortText);
       response = streamed.success
         ? streamed
         : await chrome.runtime.sendMessage({
@@ -294,7 +305,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
           piece.isTranslated = true;
           piece.translatedText = result.translatedText;
           // Short pieces → inline parenthetical, long pieces → block themed display
-          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+          if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
             applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
           } else {
             applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
@@ -308,7 +319,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
           const piece = pieces.find((p) => p.id === failure.id);
           if (!piece) continue;
           const retryPiece = () => translatePieces([piece]);
-          if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+          if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
             setInlineErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
           } else {
             setErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
@@ -319,7 +330,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
       // Batch-level failure: mark all pieces as error with retry
       for (const piece of pieces) {
         const retryPiece = () => translatePieces([piece]);
-        if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+        if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
           setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
         } else {
           setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
@@ -334,7 +345,7 @@ async function translatePieces(pieces: TranslationPiece[]): Promise<void> {
     const message = err instanceof Error ? err.message : 'Unknown error';
     for (const piece of pieces) {
       const retryPiece = () => translatePieces([piece]);
-      if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+      if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
         setInlineErrorState(piece.parentElement, piece.id, message, retryPiece);
       } else {
         setErrorState(piece.parentElement, piece.id, message, retryPiece);
@@ -390,7 +401,11 @@ let resumeSnapshotWriterRegistered = false;
  * restores pieces whose translation is still in the success cache — a cache
  * miss degrades gracefully (the viewport observer re-translates normally).
  */
-async function restoreFromSnapshot(pieces: TranslationPiece[], targetLanguage: string): Promise<void> {
+async function restoreFromSnapshot(
+  pieces: TranslationPiece[],
+  targetLanguage: string,
+  compactInlineEnabled: boolean,
+): Promise<void> {
   try {
     const url = window.location.href;
     const contentHash = await deriveContentHash(pieces.map((p) => p.text).join('\n'));
@@ -414,7 +429,7 @@ async function restoreFromSnapshot(pieces: TranslationPiece[], targetLanguage: s
       if (cached !== undefined) {
         piece.isTranslated = true;
         piece.translatedText = cached;
-        if (piece.text.length <= SHORT_PIECE_THRESHOLD) {
+        if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
           applyInlineTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
         } else {
           applyTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
@@ -539,7 +554,7 @@ export async function startTranslation(): Promise<void> {
   // content hash, restore already-translated pieces immediately (no LLM calls
   // — relies on the success cache still holding the translations).
   if (settings.enableWebResume && allPieces.length > 0) {
-    void restoreFromSnapshot(allPieces, settings.targetLanguage).catch(() => {});
+    void restoreFromSnapshot(allPieces, settings.targetLanguage, settings.enableCompactInlineForShortText).catch(() => {});
     // Register a one-time snapshot writer on page hide so the next session can resume.
     registerResumeSnapshotWriter();
   }

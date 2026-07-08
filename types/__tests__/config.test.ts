@@ -114,6 +114,10 @@ describe('config types', () => {
       expect(DEFAULT_SETTINGS.debugMode).toBe(false);
     });
 
+    it('defaults compact inline for short text to OFF (uniform block display)', () => {
+      expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
+    });
+
     it('has subtitle settings defaults', () => {
       expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
     });

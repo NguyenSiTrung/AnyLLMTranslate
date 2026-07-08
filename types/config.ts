@@ -348,6 +348,9 @@ export interface ExtensionSettings {
   providers: PoolProvider[];
   /** Preserve inline markup (<b>, <a>, <code>, …) in translated paragraphs (FR-1 rich translate) */
   enableRichTranslate: boolean;
+  /** Render short pieces (≤ SHORT_PIECE_THRESHOLD chars) inline as " (translation)" instead of a
+   *  themed block. Off by default → all pieces use uniform block display that matches the active theme. */
+  enableCompactInlineForShortText: boolean;
   /** Skip LLM calls when the detected source language already matches the target (FR-3 source-lang gate) */
   enableSourceLanguageDetection: boolean;
   /** Cache translation failures for a short TTL so flaky providers aren't retried every scroll-past (FR-4 negative cache) */
@@ -520,6 +523,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     },
   ],
   enableRichTranslate: true,
+  enableCompactInlineForShortText: false,
   enableSourceLanguageDetection: true,
   enableFailureCache: true,
   failureCacheTtlMinutes: 120,

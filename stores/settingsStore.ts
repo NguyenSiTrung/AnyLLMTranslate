@@ -159,6 +159,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     maxRpm: state.maxRpm,
     providers: state.providers,
     enableRichTranslate: state.enableRichTranslate,
+    enableCompactInlineForShortText: state.enableCompactInlineForShortText,
     enableSourceLanguageDetection: state.enableSourceLanguageDetection,
     enableFailureCache: state.enableFailureCache,
     failureCacheTtlMinutes: state.failureCacheTtlMinutes,

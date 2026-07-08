@@ -41,6 +41,7 @@ const PORTABLE_KEYS = [
   'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
   'textSelectionEnabled', 'hoverTranslateEnabled', 'hoverDelay',
   'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
+  'enableCompactInlineForShortText',
 ] as const;
 
 export function AdvancedSection() {
