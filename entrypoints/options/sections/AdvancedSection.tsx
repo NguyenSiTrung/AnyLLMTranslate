@@ -510,6 +510,25 @@ export function AdvancedSection() {
                   </FieldGroup>
                 </div>
               </AdvancedDisclosure>
+
+              {/* FR-4/FR-5: Page Walk Tuning */}
+              <div className="border-t border-zinc-800 pt-4 space-y-4">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600">Page Walk Tuning</p>
+                <Toggle
+                  id="body-tag-whitelist-toggle"
+                  checked={settings.enableBodyTagWhitelist}
+                  onChange={(checked) => updateSettings({ enableBodyTagWhitelist: checked })}
+                  label="Body-Tag Whitelist"
+                  description="Only translate direct children of <body> that are MAIN, ARTICLE, SECTION, or DIV. Skips top-level nav, aside, header, footer entirely."
+                />
+                <Toggle
+                  id="aside-caps-toggle"
+                  checked={settings.enableAsideCaps}
+                  onChange={(checked) => updateSettings({ enableAsideCaps: checked })}
+                  label="Aside Text Caps"
+                  description="Limit translation in sidebar/aside regions: skip paragraphs over 67 chars and cap each region at 1000 chars total."
+                />
+              </div>
             </div>
           </Card>
         </div>

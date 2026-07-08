@@ -69,12 +69,12 @@ Both add opt-in settings and edit domWalker; bundled into one phase.
   - Test first: with caps ON, an `<aside>` with 40 short links produces at most the per-region char cap worth of pieces, and any single paragraph over the per-paragraph cap is dropped; with OFF, all translate.
   - Track per-region cumulative chars in a Map keyed by region root; reset between extractions.
 
-- [ ] Task 3.4: Options → Advanced toggles
+- [x] Task 3.4: Options → Advanced toggles
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx, entrypoints/options/__tests__/AdvancedSection.test.tsx -->
   - Test first: two new toggles appear under a "Page Walk Tuning" subgroup; default OFF; flipping calls settings update.
   - Reuse existing Toggle + FieldGroup primitives; follow the `useDeferredCommit` pattern if applicable.
 
-- [ ] Task: Conductor - User Manual Verification 'Whitelist & Aside Caps' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Whitelist & Aside Caps' (Protocol in workflow.md)
 
 ## Phase 4: FR-1 — Body-Swap Observer (parallel-capable)
 <!-- execution: sequential -->
