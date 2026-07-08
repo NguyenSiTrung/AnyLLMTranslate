@@ -27,4 +27,24 @@ From `conductor/patterns.md` (full file read at track start; key entries for thi
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## Implementation Learnings
+
+### Phase 1: FR-2 — Selector-Match Cache
+- **WeakMap clear pattern:** WeakMap has no `clear()` method. Use a mutable holder object `{ map: WeakMap }` and swap the inner WeakMap in `__resetMatchCacheForTest` instead of reassigning a `const`.
+- **matchesCached invalid-selector handling:** The try/catch for invalid selectors is absorbed into `matchesCached` itself, so callers no longer need their own try/catch around `.matches()`.
+- **Cache verification in tests:** To verify the cache works, re-extract the same DOM tree and assert the spy call count is 0 (all cached). The first pass count isn't needed for the assertion.
+
+### Phase 2: FR-3 — In-Article Batch Separation
+- **BatchablePiece field preservation:** `dedupPiecesByText` and `splitPiecesIntoBatches` push the original piece objects, so extra fields like `inArticleContext` survive through the pipeline without any code changes in those functions.
+- **Background test fetch inspection:** The user message content is `"Translate the following texts...\n\n{json}"`, not raw JSON. Extract the JSON by finding the first `{` in the content string, not by parsing the whole content.
+- **Partition after dedup:** Run dedup on ALL uncached pieces first (shared dup map), then partition the deduped array by `inArticleContext`. This ensures duplicates across groups are handled correctly.
+
+### Phase 3: FR-4/FR-5 — Whitelist & Aside Caps
+- **Body-tag whitelist scope:** Only check direct children of `<body>` (via `el.parentElement === root && root.tagName === 'BODY'`). Deeper nesting inside allowed tags (e.g., `<nav>` inside `<main>`) is unaffected.
+- **Aside caps placement:** Apply caps in `flushPiece` before the sentence-split check, so the per-paragraph cap checks the full text length, not each split part.
+- **Per-region tracking:** Use a `Map<Element, number>` keyed by the aside region root element (found via `findAsideRegionRoot`). Reset between extractions (declared inside `extractPieces`).
+
+### Phase 4: FR-1 — Body-Swap Observer
+- **MutationObserver timing in jsdom:** Body-swap callback tests need to wait at least `debounceMs + buffer` (e.g., 150ms for a 100ms debounce) for the debounced callback to fire.
+- **Body-swap detection:** The second observer on `document.documentElement` checks `addedNodes` for a `<body>` element with a different identity than `lastSeenBody`. `replaceChild` puts the new body in `addedNodes` and the old in `removedNodes`.
+- **Re-init safety:** `startTranslation()` already bumps `translationSession++` and tears down old observers before creating new ones, so the body-swap handler just calls `void startTranslation()` — the session guard drops stale writes automatically.
