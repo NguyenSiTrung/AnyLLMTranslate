@@ -707,28 +707,26 @@ export function AdvancedSection() {
         <div className="animate-stagger" style={stagger(7)}>
           <Card title="Danger Zone" icon={<AlertTriangle className="w-3.5 h-3.5" />} accent="red" variant="bordered">
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-200">Clear translation cache</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Deletes all cached translations. Future translations re-fetch from your provider (may incur API costs).</p>
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Clear translation cache</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Deletes all cached translations. Future translations re-fetch from your provider (may incur API costs).</p>
+                <div className="mt-3">
+                  <Button
+                    id="clear-cache-btn"
+                    variant="danger"
+                    onClick={() => setShowClearCacheModal(true)}
+                    disabled={clearStatus === 'clearing'}
+                    loading={clearStatus === 'clearing'}
+                    icon={<Trash2 className="w-4 h-4" />}
+                  >
+                    {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
+                  </Button>
                 </div>
-                <Button
-                  id="clear-cache-btn"
-                  variant="danger"
-                  onClick={() => setShowClearCacheModal(true)}
-                  disabled={clearStatus === 'clearing'}
-                  loading={clearStatus === 'clearing'}
-                  icon={<Trash2 className="w-4 h-4" />}
-                >
-                  {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
-                </Button>
               </div>
               <div className="border-t border-zinc-800 pt-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Reset all settings</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">Restores all settings to defaults — custom dictionary, site rules, and provider configuration will be lost. Cannot be undone.</p>
-                  </div>
+                <p className="text-sm font-medium text-zinc-200">Reset all settings</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Restores all settings to defaults — custom dictionary, site rules, and provider configuration will be lost. Cannot be undone.</p>
+                <div className="mt-3">
                   <Button
                     id="reset-all-settings-btn"
                     variant="danger"
