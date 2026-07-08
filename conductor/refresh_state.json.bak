@@ -1,28 +1,27 @@
 {
-  "lastRefresh": "2026-07-03T19:15:00+07:00",
+  "lastRefresh": "2026-07-06T13:30:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh since 2026-07-02 cycle. Track pdf-perf-ux_20260703 archived (d7822da); ~26 commits; 157 new tests (2171 total / 146 files).",
-    "product.md: refresh marker + Current State (2171/146/59, build ~3.9 MB, tsc clean, 2 lint). Added Implementation Status entry for PDF Translation Performance & UX Improvements.",
-    "patterns.md: refresh marker bumped; elevated 6 additional patterns from pdf-perf-ux learnings (optional translateStream, port streaming, streaming fallback, shared keep-alive, PDFPageProxy.cleanup sync, subtitle fetch body-scan tests).",
-    "tech-stack.md / workflow.md: no drift. tracks.md already updated by archive commit.",
-    "FIX (user-approved): usePdfPageTranslations.test.tsx — PdfPageText (pageNumber, no text), PdfParagraph isHeading, IO callback 2-arg.",
-    "FIX (user-approved): background.test.ts — poll fetchCalls for bidirectional context; glossary test scans all fetch bodies (mock.calls[1] wrong when chunk 0 retries).",
-    "beads DRIFT FIXED: closed ALT-are epic + 19 child issues. bd list: ALT-j1k only.",
+    "Scope: full refresh since 2026-07-03 cycle. Tracks archived since last refresh: providers-ux-refactor_20260704 (2026-07-04), subtitles-ux-refactor_20260706 (2026-07-06). ~20 commits; +148 tests (2171→2319), +8 test files (146→154), +2 archived tracks (59→61).",
+    "product.md: refresh marker bumped; added Implementation Status entry for Subtitles Settings — UX Refactor; Current State updated (2319/154/61, build ~3.92 MB, tsc clean, 4 lint, intermittent glossary-test flake noted).",
+    "patterns.md: refresh marker bumped; patterns from providers-ux-refactor (5) + subtitles-ux-refactor (6) already elevated in commit 27030bd — no new pattern additions.",
+    "tech-stack.md / workflow.md / tracks.md: no drift (tracks.md already updated by archive commits).",
+    "beads DRIFT: none. Open: ALT-j1k (P3 Max in-flight interception decision) only.",
     "backups: product.md.bak, patterns.md.bak, refresh_state.json.bak.",
-    "verification: pnpm test --run 2171/2171 (3 consecutive full runs), tsc --noEmit 0 errors, wxt build ~3.9 MB."
+    "verification: pnpm test --run 2318/2319 then 2319/2319 (2 runs), tsc --noEmit 0 errors, wxt build ~3.92 MB."
   ],
   "codebaseHealth": {
-    "tests": 2171,
-    "testFiles": 146,
-    "buildSize": "~3.9 MB",
-    "lintErrors": 2,
-    "lintErrorsDetail": "subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
+    "tests": 2319,
+    "testFiles": 154,
+    "buildSize": "~3.92 MB",
+    "lintErrors": 4,
+    "lintErrorsDetail": "subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion; background.test.ts 2 non-null assertions.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean after PDF hook test fixture fixes.",
-    "archivedTracks": 59,
+    "tscErrorsDetail": "Clean.",
+    "archivedTracks": 61,
     "activeTracks": 0,
-    "failingTests": 0
+    "failingTests": 0,
+    "flakyTests": "background.test.ts > accumulates rolling glossary across chunks — intermittent 5s timeout under full parallel suite; passes in isolation and on 2nd full run."
   },
-  "beadsDrift": "Fixed. Closed ALT-are tree from archived pdf-perf-ux_20260703. Open: ALT-j1k (P3 decision) only."
+  "beadsDrift": "None. ALT-j1k only open issue (deferred P3 decision)."
 }
