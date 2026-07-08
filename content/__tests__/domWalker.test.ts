@@ -53,7 +53,6 @@ describe('domWalker — selector-match cache integration', () => {
       // the same element isn't re-checked. However the walker visits each
       // element once, so we verify the cache is working by checking that
       // re-extracting the same tree does NOT increment the count further.
-      const firstPassCount = matchCallCount;
 
       // Re-extract — cache should prevent any new .matches() calls
       matchCallCount = 0;
