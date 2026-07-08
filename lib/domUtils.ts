@@ -42,6 +42,34 @@ export function __resetMatchCacheForTest(): void {
   matchCacheHolder.map = new WeakMap();
 }
 
+// FR-3: Selectors that identify "in-article" content containers. A piece whose
+// nearest block ancestor matches one of these is tagged inArticleContext=true.
+const ARTICLE_CONTEXT_SELECTORS = [
+  'article',
+  'main',
+  '[role="main"]',
+  '#main',
+  '#content',
+  '#primary',
+];
+
+/**
+ * FR-3: Classify whether an element is inside an article/main content container.
+ * Walks up from the element to find the nearest block ancestor that matches one
+ * of the ARTICLE_CONTEXT_SELECTORS. Returns true if found, false otherwise.
+ * Uses matchesCached so the classification benefits from the same WeakMap cache.
+ */
+export function classifyInArticle(element: Element): boolean {
+  let el: Element | null = element;
+  while (el && el.tagName !== 'HTML') {
+    for (const selector of ARTICLE_CONTEXT_SELECTORS) {
+      if (matchesCached(el, selector)) return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 /**
  * Deduplicate elements by keeping only the outermost ones.
  * Removes any element that is a descendant of another element in the list.

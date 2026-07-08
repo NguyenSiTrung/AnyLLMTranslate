@@ -27,6 +27,10 @@ export interface TranslationPiece {
    * reconstruct the markup on decode. Absent for plain-text pieces.
    */
   variables?: RichVariable[];
+  /** FR-3: true when the piece's nearest block ancestor is an article/main
+   *  container; false for sidebar/nav content. Used to partition batches so
+   *  article prose and chrome text don't interleave in the same LLM request. */
+  inArticleContext?: boolean;
 }
 
 /** Request to the translation service */

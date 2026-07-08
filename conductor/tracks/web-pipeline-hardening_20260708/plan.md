@@ -21,13 +21,13 @@ Foundational optimization; must land first since it restructures how domWalker c
   - Replace bare `element.matches(selector)` at `domWalker.ts:53` with `matchesCached(element, selector)`.
   - No behavior change for existing domWalker tests (regression assertion).
 
-- [ ] Task: Conductor - User Manual Verification 'Selector-Match Cache' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Selector-Match Cache' (Protocol in workflow.md)
 
 ## Phase 2: FR-3 — In-Article vs Out-of-Article Batch Separation
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 2.1: Add inArticleContext field + classifier
+- [x] Task 2.1: Add inArticleContext field + classifier
   <!-- files: types/translation.ts, content/domWalker.ts, content/__tests__/domWalker.test.ts -->
   - Test first: `classifyInArticle(element)` returns true when nearest block ancestor is `<article>`/`<main>`/`[role=main]`/`#main`/`#content`/`#primary`; false for `<nav>`/`<aside>` roots.
   - Add `inArticleContext?: boolean` to `TranslationPiece` type.

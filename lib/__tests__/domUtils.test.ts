@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { matchesCached, __resetMatchCacheForTest } from '../domUtils';
+import { matchesCached, __resetMatchCacheForTest, classifyInArticle } from '../domUtils';
 
 describe('domUtils — matchesCached', () => {
   beforeEach(() => {
@@ -111,5 +111,108 @@ describe('domUtils — matchesCached', () => {
 
     matchesCached(el, '.foo');
     expect(callCount).toBe(2); // cache was cleared → re-invoked
+  });
+});
+
+describe('domUtils — classifyInArticle', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    __resetMatchCacheForTest();
+  });
+
+  it('returns true when element is inside <article>', () => {
+    const article = document.createElement('article');
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    article.appendChild(p);
+    document.body.appendChild(article);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns true when element is inside <main>', () => {
+    const main = document.createElement('main');
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    main.appendChild(p);
+    document.body.appendChild(main);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns true when element is inside [role="main"]', () => {
+    const div = document.createElement('div');
+    div.setAttribute('role', 'main');
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    div.appendChild(p);
+    document.body.appendChild(div);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns true when element is inside #main', () => {
+    const div = document.createElement('div');
+    div.id = 'main';
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    div.appendChild(p);
+    document.body.appendChild(div);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns true when element is inside #content', () => {
+    const div = document.createElement('div');
+    div.id = 'content';
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    div.appendChild(p);
+    document.body.appendChild(div);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns true when element is inside #primary', () => {
+    const div = document.createElement('div');
+    div.id = 'primary';
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    div.appendChild(p);
+    document.body.appendChild(div);
+    expect(classifyInArticle(p)).toBe(true);
+  });
+
+  it('returns false when element is inside <nav>', () => {
+    const nav = document.createElement('nav');
+    const a = document.createElement('a');
+    a.textContent = 'Link';
+    nav.appendChild(a);
+    document.body.appendChild(nav);
+    expect(classifyInArticle(a)).toBe(false);
+  });
+
+  it('returns false when element is inside <aside>', () => {
+    const aside = document.createElement('aside');
+    const p = document.createElement('p');
+    p.textContent = 'Sidebar';
+    aside.appendChild(p);
+    document.body.appendChild(aside);
+    expect(classifyInArticle(p)).toBe(false);
+  });
+
+  it('returns false for a bare element with no article ancestor', () => {
+    const p = document.createElement('p');
+    p.textContent = 'Hello';
+    document.body.appendChild(p);
+    expect(classifyInArticle(p)).toBe(false);
+  });
+
+  it('finds the nearest ancestor even when nested deeply', () => {
+    const article = document.createElement('article');
+    const div1 = document.createElement('div');
+    const div2 = document.createElement('div');
+    const span = document.createElement('span');
+    span.textContent = 'Deep';
+    div2.appendChild(span);
+    div1.appendChild(div2);
+    article.appendChild(div1);
+    document.body.appendChild(article);
+    expect(classifyInArticle(span)).toBe(true);
   });
 });

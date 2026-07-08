@@ -5,7 +5,7 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
-import { deduplicateAncestors, matchesCached } from '@/lib/domUtils';
+import { deduplicateAncestors, matchesCached, classifyInArticle } from '@/lib/domUtils';
 import { encodeInlineHtml } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
 
@@ -214,6 +214,7 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
     // Split long texts at sentence boundaries
     if (richText.length > MAX_PIECE_CHARS) {
       const parts = splitAtSentenceBoundary(richText, MAX_PIECE_CHARS);
+      const inArticleContext = classifyInArticle(anchorElement);
       for (const part of parts) {
         pieces.push({
           id: generatePieceId(),
@@ -221,9 +222,11 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
           textNodes: [...currentTextNodes],
           text: part,
           isTranslated: false,
+          inArticleContext,
         });
       }
     } else {
+      const inArticleContext = classifyInArticle(anchorElement);
       pieces.push({
         id: generatePieceId(),
         parentElement: anchorElement,
@@ -231,6 +234,7 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
         text: richText,
         isTranslated: false,
         ...(richVariables ? { variables: richVariables } : {}),
+        inArticleContext,
       });
     }
 
