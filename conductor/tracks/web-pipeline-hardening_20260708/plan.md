@@ -9,7 +9,7 @@ Branch: `feat/web-pipeline-hardening_20260708`
 
 Foundational optimization; must land first since it restructures how domWalker calls `.matches()`, and Phases 2–3 extend that same file.
 
-- [ ] Task 1.1: Create pure memoized match helper
+- [x] Task 1.1: Create pure memoized match helper
   <!-- files: lib/domUtils.ts, lib/__tests__/domUtils.test.ts -->
   - Write test first: a `matchesCached(el, selector)` that returns `el.matches(selector)`, caches in `WeakMap<Element, Map<string, boolean>>`; second call with same args must NOT re-invoke underlying `.matches()` (verify via spy on a wrapper).
   - Implement `lib/domUtils.ts` exporting `matchesCached` + `__resetMatchCacheForTest`.
