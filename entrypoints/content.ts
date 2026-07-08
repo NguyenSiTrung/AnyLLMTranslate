@@ -27,7 +27,7 @@ import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
-import { SHORT_PIECE_THRESHOLD, DATA_ATTRS } from '@/lib/constants';
+import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
@@ -571,18 +571,28 @@ export async function startTranslation(): Promise<void> {
     registerResumeSnapshotWriter();
   }
 
-  mutationWatcher = new MutationWatcher((addedElements) => {
-    if (!viewportObserver || getPageState() === 'off') return;
+  mutationWatcher = new MutationWatcher(
+    (addedElements) => {
+      if (!viewportObserver || getPageState() === 'off') return;
 
-    const newPieces = addedElements.flatMap((element) =>
-      extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate, settings.enableAsideCaps),
-    );
-    if (newPieces.length === 0) return;
+      const newPieces = addedElements.flatMap((element) =>
+        extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate, settings.enableAsideCaps),
+      );
+      if (newPieces.length === 0) return;
 
-    allPieces.push(...newPieces);
-    viewportObserver.observeAll(newPieces);
-    sendStatusUpdate();
-  });
+      allPieces.push(...newPieces);
+      viewportObserver.observeAll(newPieces);
+      sendStatusUpdate();
+    },
+    MUTATION_DEBOUNCE_MS,
+    // FR-1: SPA <body> replacement — re-initialize translation on the new body.
+    // startTranslation() bumps the session id (dropping stale pre-swap writes),
+    // tears down the old observers, and re-extracts from the new document.body.
+    () => {
+      if (getPageState() === 'off') return;
+      void startTranslation();
+    },
+  );
   mutationWatcher.start(document.body);
 }
 

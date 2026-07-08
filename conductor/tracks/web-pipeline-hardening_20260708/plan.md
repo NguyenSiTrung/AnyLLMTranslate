@@ -89,9 +89,9 @@ Independent of Phases 1–3 (different files). Safe to run concurrently with Pha
   - Debounce via existing debounce primitive; guard same-identity double-fire.
   - Tear down both observers in `stop()`.
 
-- [ ] Task 4.2: Wire re-init into content orchestration
+- [x] Task 4.2: Wire re-init into content orchestration
   <!-- files: entrypoints/content.ts, entrypoints/__tests__/content.test.ts (if present) -->
   - In `startTranslation`, pass an `onBodySwapped` handler that calls `startTranslation()` again (re-extract on the new body); honor the session guard so stale pre-swap writes are dropped.
   - Ensure the swap handler is unregistered in `stopTranslation`.
 
-- [ ] Task: Conductor - User Manual Verification 'Body-Swap Observer' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Body-Swap Observer' (Protocol in workflow.md)
