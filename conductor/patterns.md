@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-08 all (post web-bilingual-quality archive — health: 1485/2 intermittent across 135 files, 62 archived; 8 pre-existing tsc errors in subtitlePrompt.test.ts; 6 patterns elevated from web-bilingual-quality_20260707) -->
+<!-- conductor-refresh: 2026-07-08 all (post test-suite trim b720491 — health: 999/0 failing across 65 files, 62 archived; tsc clean; 6 patterns elevated from web-bilingual-quality_20260707) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.

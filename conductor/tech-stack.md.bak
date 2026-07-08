@@ -1,4 +1,3 @@
-<!-- conductor-refresh: 2026-07-08 all (added test:fast + zip:source scripts) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -80,10 +79,8 @@
 | `build:firefox` | `wxt build -b firefox` | Production build for Firefox |
 | `zip` | `wxt zip` | Package for Chrome Web Store |
 | `zip:firefox` | `wxt zip -b firefox` | Package for Firefox Add-ons |
-| `zip:source` | `git archive -o source-code.zip HEAD` | Export source archive from HEAD |
 | `compile` | `tsc --noEmit` | Type-check without emitting |
 | `test` | `vitest run` | Run test suite once |
-| `test:fast` | `vitest run lib tests/unit` | Fast subset — lib + tests/unit only |
 | `test:watch` | `vitest` | Run tests in watch mode |
 | `test:coverage` | `vitest run --coverage` | Run tests with V8 coverage report |
 | `lint` | `eslint .` | Check for lint errors |
