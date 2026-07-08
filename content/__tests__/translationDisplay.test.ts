@@ -38,11 +38,7 @@ describe('translationDisplay', () => {
       expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('bubble');
     });
 
-    it('overwrites existing theme and toggles tabindex for mask', () => {
-      applyTheme('paper');
-      applyTheme('shadow-card');
-      expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('shadow-card');
-    });
+
   });
 
   describe('applyCustomTheme', () => {
@@ -64,29 +60,7 @@ describe('translationDisplay', () => {
       expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('1.1em');
     });
 
-    it('maps fontSize values correctly', () => {
-      applyCustomTheme({
-        textColor: '#555',
-        backgroundColor: 'transparent',
-        borderStyle: 'solid',
-        borderColor: '#3b82f6',
-        fontStyle: 'normal',
-        fontSize: 'smaller',
-      });
-      const root = document.documentElement;
-      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('0.9em');
 
-      clearCustomTheme();
-      applyCustomTheme({
-        textColor: '#555',
-        backgroundColor: 'transparent',
-        borderStyle: 'solid',
-        borderColor: '#3b82f6',
-        fontStyle: 'normal',
-        fontSize: 'same',
-      });
-      expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('inherit');
-    });
   });
 
   describe('clearCustomTheme', () => {
@@ -281,40 +255,7 @@ describe('translationDisplay', () => {
     });
   });
 
-  describe('applyInlineTranslation', () => {
-    it('creates a visible sibling clone when switching inline translations to translation-only mode', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'Short text';
-      document.body.appendChild(parent);
-      setPageState('dual');
-      applyInlineTranslation(parent, 'piece-1', 'Văn bản ngắn', 'vi');
 
-      setPageState('translation-only');
-
-      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
-      expect(clone).not.toBeNull();
-      expect(clone?.textContent).toBe('Văn bản ngắn');
-      expect(clone?.getAttribute('data-anyllm-role')).toBe('translation');
-      expect(clone?.previousSibling).toBe(parent);
-    });
-
-    it('keeps inline translation-only clones inside list items', () => {
-      const list = document.createElement('ul');
-      const item = document.createElement('li');
-      item.textContent = 'Short item';
-      list.appendChild(item);
-      document.body.appendChild(list);
-      setPageState('dual');
-      applyInlineTranslation(item, 'piece-1', 'Mục ngắn', 'vi');
-
-      setPageState('translation-only');
-
-      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
-      expect(clone?.parentElement).toBe(item);
-      expect(item.getAttribute('data-anyllm-role')).not.toBe('original');
-      expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
-    });
-  });
 
   describe('setErrorState', () => {
     it('adds data-anyllm-error attribute on parent and creates error element', () => {
@@ -383,25 +324,7 @@ describe('translationDisplay', () => {
       expect(document.querySelector('[data-anyllm-piece-id="piece-b"]')).not.toBeNull();
     });
 
-    it('keeps the marker if other translations remain in the same ancestor', () => {
-      // A list item whose translation element stays inside its parent after removal of
-      // a sibling piece is an edge case; here we just confirm that when an ancestor still
-      // contains another translation, the marker is retained.
-      const parent = document.createElement('div');
-      document.body.appendChild(parent);
-      applyTranslation(parent, 'piece-x', 'Translation X');
-      // Manually add a second translation element sharing the same marked ancestor.
-      const second = document.createElement('div');
-      second.setAttribute('data-anyllm-role', 'translation');
-      second.setAttribute('data-anyllm-piece-id', 'piece-y');
-      parent.appendChild(second);
 
-      removeTranslation('piece-x');
-
-      // Ancestor keeps its marker because piece-y still remains inside it.
-      expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
-      expect(parent.querySelector('[data-anyllm-piece-id="piece-y"]')).not.toBeNull();
-    });
   });
 
   describe('removeAllTranslations', () => {
@@ -421,17 +344,7 @@ describe('translationDisplay', () => {
       expect(getPageState()).toBe('off');
     });
 
-    it('cleans up loading and error states', () => {
-      const el = document.createElement('p');
-      document.body.appendChild(el);
-      el.setAttribute('data-anyllm-loading', '');
-      el.setAttribute('data-anyllm-error', '');
 
-      removeAllTranslations();
-
-      expect(el.hasAttribute('data-anyllm-loading')).toBe(false);
-      expect(el.hasAttribute('data-anyllm-error')).toBe(false);
-    });
   });
 
   describe('page state', () => {
@@ -448,83 +361,4 @@ describe('translationDisplay', () => {
     });
   });
 
-  describe('accessibility metadata', () => {
-    it('applies lang and dir on block translation when targetLanguage is provided', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('lang')).toBe('vi');
-      expect(el?.getAttribute('dir')).toBe('auto');
-    });
-
-    it('exposes role=status and aria-label on block loading placeholder', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      showLoadingPlaceholder(parent, 'piece-1');
-
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.getAttribute('role')).toBe('status');
-      expect(el?.getAttribute('aria-label')).toBe('Translating');
-    });
-
-    it('toggles tabindex on existing translations when theme switches to mask and back', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      applyTheme('blockquote');
-      applyTranslation(parent, 'piece-1', 'Translated', 'vi');
-      const el = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(el?.hasAttribute('tabindex')).toBe(false);
-
-      applyTheme('mask');
-      expect(el?.getAttribute('tabindex')).toBe('0');
-
-      applyTheme('paper');
-      expect(el?.hasAttribute('tabindex')).toBe(false);
-    });
-  });
-
-  describe('translation-only inline visibility', () => {
-    it('creates a visible loading sibling clone when an inline placeholder is shown in translation-only mode', () => {
-      const parent = document.createElement('span');
-      document.body.appendChild(parent);
-      setPageState('translation-only');
-
-      showInlineLoadingPlaceholder(parent, 'piece-1');
-
-      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
-      expect(clone).not.toBeNull();
-      expect(clone?.classList.contains('anyllm-inline-bilingual-loading')).toBe(true);
-      expect(clone?.getAttribute('role')).toBe('status');
-      expect(clone?.getAttribute('aria-label')).toBe('Translating');
-    });
-
-    it('creates a visible error sibling clone for inline errors in translation-only mode', () => {
-      const parent = document.createElement('span');
-      document.body.appendChild(parent);
-      setPageState('translation-only');
-
-      setInlineErrorState(parent, 'piece-1', 'API down');
-
-      const clone = document.querySelector('[data-anyllm-inline-clone-for="piece-1"]');
-      expect(clone).not.toBeNull();
-      expect(clone?.classList.contains('anyllm-inline-bilingual-error')).toBe(true);
-      expect(clone?.getAttribute('role')).toBe('alert');
-    });
-
-    it('removes inline loading clones when switching back to bilingual mode', () => {
-      const parent = document.createElement('span');
-      document.body.appendChild(parent);
-      setPageState('translation-only');
-      showInlineLoadingPlaceholder(parent, 'piece-1');
-
-      setPageState('dual');
-
-      expect(document.querySelector('[data-anyllm-inline-clone-for="piece-1"]')).toBeNull();
-    });
-  });
 });

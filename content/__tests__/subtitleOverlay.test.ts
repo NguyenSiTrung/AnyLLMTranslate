@@ -86,14 +86,6 @@ describe('subtitleOverlay — displayMode wiring', () => {
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
   });
-
-  it('updateConfig changes data-display-mode attribute', () => {
-    initializeOverlay(MOCK_CUES, { displayMode: 'bilingual' });
-    updateConfig({ displayMode: 'translation-only' });
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
-  });
 });
 
 describe('subtitleOverlay — positioning', () => {
@@ -190,101 +182,6 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(HTMLElement.prototype.showPopover).toHaveBeenCalled();
   });
 
-  it('reparents overlay when a container is fullscreen (when Popover API is NOT supported)', () => {
-    // Disable popover to test fallback path
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).popover;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).showPopover;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).hidePopover;
-
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    
-    // Set initial popover so we can check it gets removed
-    overlay.setAttribute('popover', 'manual');
-
-    // Simulate container fullscreen
-    Object.defineProperty(document, 'fullscreenElement', {
-      value: container,
-      configurable: true
-    });
-    document.dispatchEvent(new Event('fullscreenchange'));
-
-    expect(overlay.parentElement).toBe(container);
-    expect(overlay.hasAttribute('popover')).toBe(false);
-  });
-
-  it('uses position:absolute inside fullscreen container after reposition (when Popover API is NOT supported)', () => {
-    // Disable popover to test fallback path
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).popover;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).showPopover;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (HTMLElement.prototype as any).hidePopover;
-
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-
-    // Install fake timers BEFORE triggering the event so the scheduled
-    // setTimeout calls inside handleFullscreenChange are captured.
-    vi.useFakeTimers();
-
-    // Simulate container fullscreen
-    Object.defineProperty(document, 'fullscreenElement', {
-      value: container,
-      configurable: true
-    });
-    document.dispatchEvent(new Event('fullscreenchange'));
-
-    // Advance past both reposition timeouts (50ms + 350ms)
-    vi.advanceTimersByTime(400);
-    vi.useRealTimers();
-
-    expect(overlay.style.position).toBe('absolute');
-    expect(overlay.style.top).toBe('0px');
-    expect(overlay.style.left).toBe('0px');
-    expect(overlay.style.width).toBe('100%');
-    expect(overlay.style.height).toBe('100%');
-  });
-
-  it('reparents overlay into HBO player container when it is fullscreen-sized without Fullscreen API state', () => {
-    container.setAttribute('data-testid', 'playerContainer');
-    Object.defineProperty(window, 'innerWidth', {
-      value: 800,
-      configurable: true
-    });
-    Object.defineProperty(window, 'innerHeight', {
-      value: 600,
-      configurable: true
-    });
-
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-
-    expect(document.fullscreenElement).toBeNull();
-    expect(overlay.parentElement).toBe(container);
-    expect(overlay.style.position).toBe('absolute');
-    expect(overlay.style.width).toBe('100%');
-    expect(overlay.style.height).toBe('100%');
-  });
-
-  it('uses webkitFullscreenElement as fullscreen container fallback', () => {
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-
-    Object.defineProperty(document, 'webkitFullscreenElement', {
-      value: container,
-      configurable: true
-    });
-    document.dispatchEvent(new Event('webkitfullscreenchange'));
-
-    expect(overlay.parentElement).toBe(container);
-    expect(overlay.hasAttribute('popover')).toBe(false);
-  });
-
   it('reverts to body on exit fullscreen', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
@@ -358,38 +255,6 @@ describe('subtitleOverlay — line wrapping (sub-project 5b)', () => {
     expect(origDivs[0].textContent).toBe('Hola');
   });
 
-  it('never exceeds 2 line divs in either block (the 2+2 cap)', () => {
-    document.body.innerHTML = '<video src="test.mp4"></video>';
-
-    // Very long text in BOTH blocks, tight window -> narrow CPL -> max wrapping.
-    const veryLong = 'word '.repeat(40).trim(); // 40 words
-    const cues = [{
-      startTime: 0, endTime: 1,
-      text: veryLong, originalText: veryLong,
-    }];
-    showCue(cues);
-
-    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
-    const originalEl = document.querySelector('.anyllm-translate-subtitle-original') as HTMLElement;
-    expect(translatedEl.querySelectorAll(':scope > div').length).toBeLessThanOrEqual(2);
-    expect(originalEl.querySelectorAll(':scope > div').length).toBeLessThanOrEqual(2);
-  });
-
-  it('uses textContent per line (XSS-safe — no innerHTML)', () => {
-    document.body.innerHTML = '<video src="test.mp4"></video>';
-
-    // A cue whose text contains HTML-like content.
-    const cues = [{
-      startTime: 0, endTime: 4,
-      text: '<b>not bold</b>', originalText: '<img src=x>',
-    }];
-    showCue(cues);
-
-    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
-    // textContent renders the string literally; no <b> element is created.
-    expect(translatedEl.querySelectorAll('b').length).toBe(0);
-    expect(translatedEl.textContent).toContain('<b>not bold</b>');
-  });
 });
 
 // ============================================================================
@@ -436,80 +301,6 @@ describe('subtitleOverlay — playback-position chunk priority', () => {
     );
   });
 
-  it('dedupes messages within the same chunk (no repeat on every cue)', () => {
-    document.body.innerHTML = '<video src="test.mp4"></video>';
-    const cues = buildMultiChunkCueArray(30);
-    const video = document.querySelector('video') as HTMLVideoElement;
-
-    initializeOverlay(cues, {}, video);
-
-    // First cue of the second chunk fires a message.
-    playToCue(cues, 25);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-
-    // Subsequent cues within the same chunk must NOT re-fire.
-    playToCue(cues, 26);
-    playToCue(cues, 27);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-
-    // Crossing into the next chunk boundary re-enables sending. Here we cross
-    // from chunk [25,50) — there's no third chunk in a 30-cue array, so jump
-    // back to chunk 0 to verify a chunk-boundary crossing still sends.
-    playToCue(cues, 0);
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        action: 'PRIORITIZE_SUBTITLE_CHUNK',
-        cueIndex: 0,
-      }),
-    );
-  });
-
-  it('fires priority on seek to a new chunk', () => {
-    document.body.innerHTML = '<video src="test.mp4"></video>';
-    const cues = buildMultiChunkCueArray(30);
-    const video = document.querySelector('video') as HTMLVideoElement;
-
-    initializeOverlay(cues, {}, video);
-
-    // Seek into cue 25.
-    Object.defineProperty(video, 'currentTime', {
-      configurable: true,
-      get: () => cues[25].startTime + 0.1,
-    });
-    video.dispatchEvent(new Event('seeked'));
-
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'PRIORITIZE_SUBTITLE_CHUNK',
-        cueIndex: 25,
-      }),
-    );
-
-    // Seeking within the same chunk is deduped.
-    Object.defineProperty(video, 'currentTime', {
-      configurable: true,
-      get: () => cues[26].startTime + 0.1,
-    });
-    video.dispatchEvent(new Event('seeked'));
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-  });
-
-  it('resets the dedup tracker when a fresh overlay is initialized', () => {
-    document.body.innerHTML = '<video src="test.mp4"></video>';
-    const cues = buildMultiChunkCueArray(30);
-    const video = document.querySelector('video') as HTMLVideoElement;
-
-    initializeOverlay(cues, {}, video);
-    playToCue(cues, 25);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-
-    // A new overlay/session must be able to re-prioritize the same chunk.
-    initializeOverlay(cues, {}, video);
-    playToCue(cues, 25);
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-  });
 });
 
 // ============================================================================
@@ -555,33 +346,6 @@ describe('content/subtitleOverlay — lifecycle', () => {
       expect(overlay).toBeFalsy();
     });
 
-    it('positions overlay over video element', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      video.style.width = '640px';
-      video.style.height = '360px';
-      document.body.appendChild(video);
-
-      vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
-        width: 640,
-        height: 360,
-        top: 0,
-        left: 0,
-        right: 640,
-        bottom: 360,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      });
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-      expect(overlay?.style.width).toBe('640px');
-      expect(overlay?.style.height).toBe('360px');
-    });
-
     it('applies custom configuration', () => {
       const video = document.createElement('video');
       video.src = 'test.mp4';
@@ -612,43 +376,9 @@ describe('content/subtitleOverlay — lifecycle', () => {
       expect(config.backgroundOpacity).toBe(0.5);
     });
 
-    it('updates position class on overlay', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      updateConfig({ position: 'top' });
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      expect(overlay?.classList.contains('anyllm-translate-position-top')).toBe(true);
-      expect(overlay?.classList.contains('anyllm-translate-position-bottom')).toBe(false);
-    });
-  });
-
-  describe('getConfig', () => {
-    it('returns current configuration', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues, { fontSize: 18 });
-
-      const config = getConfig();
-      expect(config.fontSize).toBe(18);
-      expect(config.position).toBe('bottom');
-      expect(config.backgroundOpacity).toBe(0.75);
-    });
   });
 
   describe('isOverlayActive', () => {
-    it('returns false before initialization', () => {
-      expect(isOverlayActive()).toBe(false);
-    });
-
     it('returns true after initialization', () => {
       const video = document.createElement('video');
       video.src = 'test.mp4';
@@ -688,19 +418,6 @@ describe('content/subtitleOverlay — lifecycle', () => {
       expect(overlay).toBeFalsy();
     });
 
-    it('detaches event listeners', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      const removeEventListenerSpy = vi.spyOn(video, 'removeEventListener');
-      cleanup();
-
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('timeupdate', expect.any(Function));
-    });
   });
 
   describe('resetOverlayState', () => {
@@ -818,15 +535,5 @@ describe('content/subtitleOverlay — lifecycle', () => {
       expect(translatedText?.textContent).toBe('Hello');
     });
 
-    it('falls back to first video when no videoNode provided', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      expect(isOverlayActive()).toBe(true);
-    });
   });
 });

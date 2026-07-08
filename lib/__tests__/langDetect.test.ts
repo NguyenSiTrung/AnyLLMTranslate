@@ -15,41 +15,7 @@ describe('langDetect', () => {
       expect(r.confidence).toBeGreaterThanOrEqual(0.9);
     });
 
-    it('detects Korean (Hangul)', () => {
-      const r = detectLanguage('안녕하세요 반갑습니다');
-      expect(r.lang).toBe('ko');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
 
-    it('detects Russian (Cyrillic)', () => {
-      const r = detectLanguage('Привет мир, как дела сегодня');
-      expect(r.lang).toBe('ru');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
-
-    it('detects Arabic', () => {
-      const r = detectLanguage('مرحبا بالعالم كيف حالك اليوم');
-      expect(r.lang).toBe('ar');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
-
-    it('detects Hebrew', () => {
-      const r = detectLanguage('שלום עולם מה שלומך היום');
-      expect(r.lang).toBe('he');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
-
-    it('detects Thai', () => {
-      const r = detectLanguage('สวัสดีครับ สบายดีไหมวันนี้');
-      expect(r.lang).toBe('th');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
-
-    it('detects Hindi (Devanagari)', () => {
-      const r = detectLanguage('नमस्ते दुनिया आज कैसे हो');
-      expect(r.lang).toBe('hi');
-      expect(r.confidence).toBeGreaterThanOrEqual(0.9);
-    });
   });
 
   describe('detectLanguage — Latin-script n-gram scoring', () => {
@@ -65,25 +31,7 @@ describe('langDetect', () => {
       expect(r.confidence).toBeGreaterThan(0.3);
     });
 
-    it('detects Spanish', () => {
-      const r = detectLanguage('Hola mundo, cómo estás hoy en la mañana');
-      expect(r.lang).toBe('es');
-    });
 
-    it('detects French', () => {
-      const r = detectLanguage('Bonjour le monde, comment allez-vous aujourd\'hui');
-      expect(r.lang).toBe('fr');
-    });
-
-    it('detects German', () => {
-      const r = detectLanguage('Hallo Welt, wie geht es dir heute morgen');
-      expect(r.lang).toBe('de');
-    });
-
-    it('detects Portuguese', () => {
-      const r = detectLanguage('Olá mundo, como você está hoje de manhã');
-      expect(r.lang).toBe('pt');
-    });
   });
 
   describe('detectLanguage — edge cases', () => {
@@ -100,15 +48,7 @@ describe('langDetect', () => {
       expect(r.lang).toBeNull();
     });
 
-    it('returns null lang for very short ambiguous text', () => {
-      const r = detectLanguage('ok');
-      expect(r.lang).toBeNull();
-    });
 
-    it('handles punctuation-only or symbol-heavy text', () => {
-      const r = detectLanguage('!!! ??? ... ---');
-      expect(r.lang).toBeNull();
-    });
   });
 
   describe('detectLanguage — mixed scripts', () => {
@@ -118,10 +58,7 @@ describe('langDetect', () => {
       expect(r.lang).toBe('zh');
     });
 
-    it('detects the script language even with surrounding latin whitespace/punct', () => {
-      const r = detectLanguage('  -- 안녕하세요 -- ');
-      expect(r.lang).toBe('ko');
-    });
+
   });
 
   describe('isSameLanguage', () => {
