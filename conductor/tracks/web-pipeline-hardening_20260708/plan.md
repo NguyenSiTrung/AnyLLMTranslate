@@ -39,12 +39,12 @@ Foundational optimization; must land first since it restructures how domWalker c
   - In `handleTranslate`, partition `uncachedPieces` into `inArticle` / `outOfArticle`; run the dedup+split+per-batch loop once per group; merge results for cache-write + response.
   - Negative cache + dedup re-hydration must work across both groups (shared dup map keyed by text).
 
-- [ ] Task 2.3: Carry inArticleContext over the message round-trip
+- [x] Task 2.3: Carry inArticleContext over the message round-trip
   <!-- files: entrypoints/content.ts, types/messages.ts (if present) -->
   - Verify the field serializes in the `translatePieces` → background message; add/adjust type.
   - Regression test: streamed + non-streamed paths still render identical output regardless of flag.
 
-- [ ] Task: Conductor - User Manual Verification 'In-Article Batch Separation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'In-Article Batch Separation' (Protocol in workflow.md)
 
 ## Phase 3: FR-4 + FR-5 — Body-Tag Whitelist & Aside Caps (opt-in)
 <!-- execution: sequential -->

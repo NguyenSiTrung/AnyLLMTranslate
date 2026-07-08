@@ -130,7 +130,7 @@ function streamTranslate(
     const port = chrome.runtime.connect({ name: WEB_STREAM_PORT });
     port.postMessage({
       type: 'request',
-      pieces: pieces.map((p) => ({ id: p.id, text: p.text })),
+      pieces: pieces.map((p) => ({ id: p.id, text: p.text, inArticleContext: p.inArticleContext })),
       sourceLanguage,
       targetLanguage,
     });
@@ -281,7 +281,7 @@ async function translatePieces(
         ? streamed
         : await chrome.runtime.sendMessage({
             action: 'translate',
-            pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
+            pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text, inArticleContext: p.inArticleContext })),
             sourceLanguage: settings.sourceLanguage,
             targetLanguage: settings.targetLanguage,
             pageContext,
@@ -290,7 +290,7 @@ async function translatePieces(
     } else {
       response = await chrome.runtime.sendMessage({
         action: 'translate',
-        pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text })),
+        pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text, inArticleContext: p.inArticleContext })),
         sourceLanguage: settings.sourceLanguage,
         targetLanguage: settings.targetLanguage,
         pageContext,
