@@ -78,6 +78,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(none)*
+- 🔶 **Bilingual Page-Translation Pipeline Hardening v2** (`web-pipeline-hardening_20260708`) — Close 5 gaps vs ImmersiveTranslate: body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps. [View](./conductor/tracks/web-pipeline-hardening_20260708/)
 
 ---
