@@ -561,11 +561,19 @@ async function handleTranslate(
     // split the unique pieces into request-sized sub-batches so a single large
     // viewport flush never becomes one oversized LLM call. Mirrors Immersive's
     // maxTextGroupLengthPerRequest / maxTextLengthPerRequest.
+    // FR-3: partition by inArticleContext so article prose and chrome text
+    // don't interleave in the same LLM request (coherent context per batch).
     const { deduped, dupes } = dedupPiecesByText(uncachedPieces);
-    const batches = splitPiecesIntoBatches(deduped, {
+    const batchOpts = {
       maxTextGroupLengthPerRequest: settings.maxTextGroupLengthPerRequest,
       maxTextLengthPerRequest: settings.maxTextLengthPerRequest,
-    });
+    };
+    const inArticleDeduped = deduped.filter((p) => p.inArticleContext === true);
+    const outOfArticleDeduped = deduped.filter((p) => p.inArticleContext !== true);
+    const batches = [
+      ...splitPiecesIntoBatches(inArticleDeduped, batchOpts),
+      ...splitPiecesIntoBatches(outOfArticleDeduped, batchOpts),
+    ];
 
     // Translate only uncached pieces
     const service = await initService();

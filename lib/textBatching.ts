@@ -18,6 +18,9 @@ export interface BatchOptions {
 export interface BatchablePiece {
   id: string;
   text: string;
+  /** FR-3: true when the piece is inside an article/main container. Preserved
+   *  through dedup + split so the background can partition batches by context. */
+  inArticleContext?: boolean;
 }
 
 /**

@@ -524,3 +524,127 @@ describe('handleTranslate — FR-4 negative-cache + forced-retry bypass', () => 
     expect(result.failed ?? []).toEqual([]);
   });
 });
+
+describe('handleTranslate — inArticleContext batch partitioning (FR-3)', () => {
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+  let getCachedFailure: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCachedFailure = mod.getCachedFailure as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+    getCachedFailure.mockResolvedValue(null);
+  });
+
+  it('partitions in-article and out-of-article pieces into separate LLM requests', async () => {
+    const pieces = [
+      { id: 'a1', text: 'Article intro paragraph.', inArticleContext: true },
+      { id: 'a2', text: 'Article body paragraph.', inArticleContext: true },
+      { id: 'a3', text: 'Article conclusion.', inArticleContext: true },
+      { id: 's1', text: 'Sidebar link one', inArticleContext: false },
+      { id: 's2', text: 'Sidebar link two', inArticleContext: false },
+    ];
+
+    // Use a single response covering all piece IDs
+    mockFetchTranslation({
+      translations: {
+        a1: 'T-Article intro', a2: 'T-Article body', a3: 'T-Article conclusion',
+        s1: 'T-Sidebar one', s2: 'T-Sidebar two',
+      },
+    });
+
+    const result = await handleMessage(
+      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
+      fakeSender,
+    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
+
+    expect(result.success).toBe(true);
+    expect(result.results.length).toBe(5);
+
+    // Inspect fetch calls — each call's body contains the piece IDs sent
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock).toHaveBeenCalled();
+    const calls = fetchMock.mock.calls;
+    expect(calls.length).toBe(2); // two separate LLM requests
+
+    // Extract piece IDs from each request body
+    const getIdsFromCall = (call: unknown[]): string[] => {
+      const init = call[1] as RequestInit;
+      const body = JSON.parse(init.body as string);
+      const userMsg = body.messages?.find((m: { role: string }) => m.role === 'user');
+      if (!userMsg) return [];
+      // User content is "Translate the following texts...\n\n{json}"
+      const jsonStart = (userMsg.content as string).indexOf('{');
+      if (jsonStart === -1) return [];
+      const jsonStr = (userMsg.content as string).slice(jsonStart);
+      return Object.keys(JSON.parse(jsonStr));
+    };
+
+    const firstCallIds = getIdsFromCall(calls[0]);
+    const secondCallIds = getIdsFromCall(calls[1]);
+
+    // One call should have only article IDs, the other only sidebar IDs
+    const articleIds = ['a1', 'a2', 'a3'];
+    const sidebarIds = ['s1', 's2'];
+
+    const firstIsArticle = firstCallIds.includes('a1');
+    if (firstIsArticle) {
+      expect(firstCallIds).toEqual(expect.arrayContaining(articleIds));
+      expect(firstCallIds).not.toContain('s1');
+      expect(secondCallIds).toEqual(expect.arrayContaining(sidebarIds));
+      expect(secondCallIds).not.toContain('a1');
+    } else {
+      expect(firstCallIds).toEqual(expect.arrayContaining(sidebarIds));
+      expect(firstCallIds).not.toContain('a1');
+      expect(secondCallIds).toEqual(expect.arrayContaining(articleIds));
+      expect(secondCallIds).not.toContain('s1');
+    }
+  });
+
+  it('dedup is shared across both groups (same text in article + sidebar)', async () => {
+    const pieces = [
+      { id: 'a1', text: 'Shared text.', inArticleContext: true },
+      { id: 's1', text: 'Shared text.', inArticleContext: false },
+    ];
+
+    mockFetchTranslation({ translations: { a1: 'T-Shared' } });
+
+    const result = await handleMessage(
+      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
+      fakeSender,
+    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
+
+    expect(result.success).toBe(true);
+    // Only 1 LLM call — dedup removed the duplicate before partitioning
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls.length).toBe(1);
+    // Both pieces get translations (one from LLM, one re-hydrated from dedup)
+    expect(result.results.length).toBe(2);
+    expect(result.results.every((r) => r.translatedText === 'T-Shared')).toBe(true);
+  });
+
+  it('all pieces with inArticleContext undefined go into the out-of-article group', async () => {
+    const pieces = [
+      { id: 'p1', text: 'Plain text one.' },
+      { id: 'p2', text: 'Plain text two.' },
+    ];
+
+    mockFetchTranslation({ translations: { p1: 'T-One', p2: 'T-Two' } });
+
+    const result = await handleMessage(
+      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
+      fakeSender,
+    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
+
+    expect(result.success).toBe(true);
+    // All pieces in one batch (out-of-article group, since flag is undefined)
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls.length).toBe(1);
+    expect(result.results.length).toBe(2);
+  });
+});

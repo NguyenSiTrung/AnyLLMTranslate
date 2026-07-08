@@ -71,6 +71,10 @@ export interface TranslateMessage {
 export interface TranslationPiecePayload {
   id: string;
   text: string;
+  /** FR-3: true when the piece is inside an article/main container. Used by
+   *  the background to partition batches so article prose and chrome text
+   *  don't interleave in the same LLM request. */
+  inArticleContext?: boolean;
 }
 
 /** Restore request from popup/content → background */

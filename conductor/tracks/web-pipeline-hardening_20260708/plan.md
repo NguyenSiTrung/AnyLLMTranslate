@@ -33,7 +33,7 @@ Foundational optimization; must land first since it restructures how domWalker c
   - Add `inArticleContext?: boolean` to `TranslationPiece` type.
   - Set the flag inside `flushPiece` using the classifier.
 
-- [ ] Task 2.2: Partition batches in background by inArticleContext
+- [x] Task 2.2: Partition batches in background by inArticleContext
   <!-- files: lib/textBatching.ts, services/background.ts, services/__tests__/background.translate.test.ts -->
   - Test first: a `handleTranslate` payload with mixed in/out pieces produces TWO service.translate calls (one per group), each group's pieces respect `maxTextGroupLengthPerRequest`/`maxTextLengthPerRequest`.
   - In `handleTranslate`, partition `uncachedPieces` into `inArticle` / `outOfArticle`; run the dedup+split+per-batch loop once per group; merge results for cache-write + response.
