@@ -15,7 +15,7 @@ Foundational optimization; must land first since it restructures how domWalker c
   - Implement `lib/domUtils.ts` exporting `matchesCached` + `__resetMatchCacheForTest`.
   - AAA tests; cover true/false/null-element paths.
 
-- [ ] Task 1.2: Wire cache into domWalker shouldSkipElement
+- [x] Task 1.2: Wire cache into domWalker shouldSkipElement
   <!-- files: content/domWalker.ts, content/__tests__/domWalker.test.ts -->
   - Test: walking a tree with many exclude-selector matches calls the underlying matcher fewer times than nodes (use a counting spy).
   - Replace bare `element.matches(selector)` at `domWalker.ts:53` with `matchesCached(element, selector)`.

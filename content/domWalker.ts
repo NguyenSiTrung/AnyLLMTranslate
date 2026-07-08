@@ -5,7 +5,7 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
-import { deduplicateAncestors } from '@/lib/domUtils';
+import { deduplicateAncestors, matchesCached } from '@/lib/domUtils';
 import { encodeInlineHtml } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS } from '@/lib/constants';
 
@@ -49,11 +49,7 @@ function shouldSkipElement(element: Element, excludeSelectors?: string[]): boole
   if (excludeSelectors && excludeSelectors.length > 0) {
     for (const selector of excludeSelectors) {
       if (!selector) continue;
-      try {
-        if (element.matches(selector)) return true;
-      } catch {
-        // Invalid selector, ignore
-      }
+      if (matchesCached(element, selector)) return true;
     }
   }
 
