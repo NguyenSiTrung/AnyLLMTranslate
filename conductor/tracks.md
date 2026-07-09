@@ -74,17 +74,10 @@ This file tracks all major tracks for the project.
 - ✅ **Advanced Tab UX Refactor** (`advanced-ux-refactor_20260706`) — Archived 2026-07-06. Pure presentation + code-health refactor of `AdvancedSection.tsx`, driven by a 21-point deep analysis — no behavior/setting-model changes. Repays the card-layout-restructuring debt deferred by `settings-ux-audit_20260506` + `settings-ux-polish_20260418`. 12 FRs delivered: IA restructure (merge Rate Limiting into Performance, split Data/Developer, Danger Zone card), elevate System Prompt + `Customized` badge, hero status strip with live cache readout (`getCacheStats`), `DisabledDimmer` + `AdvancedDisclosure` cleanup (fixes a11y: dimmed controls now `disabled`), `ui/Textarea` primitive + variable-insertion chips + all validation warnings, pre-export API-key warning + derived export payload (`PORTABLE_KEYS` allowlist) + import ignored-keys report, PDF conditional-field animation + parsed-hosts preview, `useDeferredCommit` migration, micro-polish (range hints + Unlimited badge). 8 phases, 45 tests. Bundle delta: +1.05 kB gzipped. Benchmarks: `subtitles-ux-refactor_20260706`, `providers-ux-refactor_20260704`. [View](./conductor/archive/advanced-ux-refactor_20260706/)
 - ✅ **Bilingual Web Translation Quality & Performance** (`web-bilingual-quality_20260707`) — Archived 2026-07-07. Closed 7 highest-impact gaps vs Immersive Translate: rich translate (inline markup via `lib/richTranslate.ts`), batcher cleanup + char-budget (`lib/textBatching.ts`), source-lang gate (`lib/langDetect.ts`), negative cache (failure cache with TTL), per-key concurrency + throttle, web streaming (port-based SSE), cross-session resume (`lib/webResume.ts`). 8 phases, 84 new tests (1487 total). [View](./conductor/archive/web-bilingual-quality_20260707/)
 - ✅ **Bilingual Page-Translation Pipeline Hardening v2** (`web-pipeline-hardening_20260708`) — Archived 2026-07-09. Close 5 gaps vs ImmersiveTranslate: body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps. 48 new tests (1047 total). [View](./conductor/archive/web-pipeline-hardening_20260708/)
+- ✅ **Inline Input Translation — Immersive-Parity Hardening** (`inline-input-parity_20260709`) — Archived 2026-07-09. IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command (no 5th suggested_key), site blocklist, full advanced Options panel; fallback undo only when unedited. Default write remains translation-only. Excludes WebView floating-dot. [View](./conductor/archive/inline-input-parity_20260709/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: Inline Input Translation — Immersive-Parity Hardening
-*Link: [./conductor/tracks/inline-input-parity_20260709/](./conductor/tracks/inline-input-parity_20260709/)*
-*Priority: 🟠 High | Status: complete*
-
-Harden inline input-box translation toward Immersive Translate parity: IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command, site blocklist, full advanced Options panel. Default write remains translation-only. Excludes WebView floating-dot.
 
 ---
