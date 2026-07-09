@@ -14,6 +14,9 @@ import {
   mergeHangingGroups,
   mergeEndCompatible,
   requestAiAsrResegment,
+  isYoutubeAsrUrl,
+  parseYoutubeJson3Words,
+  applyYoutubeAsrResegment,
   type AsrWord,
   type YoutubeJson3Event,
 } from '@/lib/youtubeAsrResegment';
@@ -123,7 +126,9 @@ describe('resolveAsrLangConfig', () => {
     const enUs = resolveAsrLangConfig('en-US');
     expect(en.mergeConfig.endWords.length).toBeGreaterThan(0);
     expect(enUs).toEqual(en);
-    expect(en.splitConfig.maxWords).toBe(DEFAULT_YOUTUBE_ASR_CONFIG.langsConfig.en!.splitConfig.maxWords);
+    expect(en.splitConfig.maxWords).toBe(
+      DEFAULT_YOUTUBE_ASR_CONFIG.langsConfig.en?.splitConfig.maxWords,
+    );
   });
 
   it('falls back to base for unknown languages', () => {
@@ -144,7 +149,7 @@ describe('resolveAsrLangConfig', () => {
 // ─── split ───────────────────────────────────────────────────────────────────
 
 describe('splitWords', () => {
-  const splitCfg = DEFAULT_YOUTUBE_ASR_CONFIG.langsConfig.en!.splitConfig;
+  const splitCfg = resolveAsrLangConfig('en').splitConfig;
 
   it('splits on large gaps', () => {
     const words: AsrWord[] = [
@@ -184,7 +189,7 @@ describe('splitWords', () => {
 // ─── merge hanging ───────────────────────────────────────────────────────────
 
 describe('mergeHangingGroups', () => {
-  const mergeCfg = DEFAULT_YOUTUBE_ASR_CONFIG.langsConfig.en!.mergeConfig;
+  const mergeCfg = resolveAsrLangConfig('en').mergeConfig;
 
   it('merges group ending with hanging endWord into next', () => {
     const groups = [
@@ -354,5 +359,162 @@ describe('requestAiAsrResegment', () => {
   it('is a no-op stub that returns null (no network)', async () => {
     const result = await requestAiAsrResegment([], 'en');
     expect(result).toBeNull();
+  });
+});
+
+// ─── URL / JSON3 parse surface ───────────────────────────────────────────────
+
+describe('isYoutubeAsrUrl / parseYoutubeJson3Words', () => {
+  it('detects kind=asr on timedtext URLs', () => {
+    expect(
+      isYoutubeAsrUrl('https://www.youtube.com/api/timedtext?v=x&lang=en&kind=asr&fmt=json3'),
+    ).toBe(true);
+    expect(
+      isYoutubeAsrUrl('https://www.youtube.com/api/timedtext?v=x&lang=en&fmt=json3'),
+    ).toBe(false);
+  });
+
+  it('parses multi-seg word events with tOffsetMs and skips newlines', () => {
+    const body = JSON.stringify({
+      events: [
+        {
+          tStartMs: 0,
+          dDurationMs: 2000,
+          segs: [
+            { utf8: 'Hello ', tOffsetMs: 0 },
+            { utf8: '\n' },
+            { utf8: 'world', tOffsetMs: 500 },
+          ],
+        },
+        {
+          tStartMs: 2500,
+          dDurationMs: 1000,
+          segs: [{ utf8: 'Again', tOffsetMs: 0 }],
+        },
+      ],
+    });
+    const words = parseYoutubeJson3Words(body);
+    expect(words.length).toBe(3);
+    expect(words[0]).toMatchObject({ text: 'Hello', startMs: 0 });
+    expect(words[1]).toMatchObject({ text: 'world', startMs: 500 });
+    expect(words[2].startMs).toBe(2500);
+  });
+
+  it('returns [] for invalid / empty body', () => {
+    expect(parseYoutubeJson3Words('')).toEqual([]);
+    expect(parseYoutubeJson3Words('not-json')).toEqual([]);
+    expect(parseYoutubeJson3Words('{}')).toEqual([]);
+  });
+});
+
+// ─── Coordinator gate (pure) ─────────────────────────────────────────────────
+
+describe('applyYoutubeAsrResegment gate', () => {
+  const asrUrl = 'https://www.youtube.com/api/timedtext?lang=en&kind=asr&fmt=json3';
+  const humanUrl = 'https://www.youtube.com/api/timedtext?lang=en&fmt=json3';
+  const fragmentedBody = JSON.stringify({
+    events: [
+      {
+        tStartMs: 0,
+        dDurationMs: 1500,
+        segs: [
+          { utf8: 'I ', tOffsetMs: 0 },
+          { utf8: 'went ', tOffsetMs: 200 },
+          { utf8: 'to', tOffsetMs: 500 },
+        ],
+      },
+      {
+        tStartMs: 1600,
+        dDurationMs: 1500,
+        segs: [
+          { utf8: 'the ', tOffsetMs: 0 },
+          { utf8: 'store.', tOffsetMs: 400 },
+        ],
+      },
+    ],
+  });
+  const rawCues: SubtitleCue[] = [
+    { startTime: 0, endTime: 1.5, text: 'I went to' },
+    { startTime: 1.6, endTime: 3.1, text: 'the store.' },
+  ];
+
+  it('ASR + enable → resegmented cues (often fewer / different text)', () => {
+    const out = applyYoutubeAsrResegment({
+      platform: 'youtube',
+      url: asrUrl,
+      body: fragmentedBody,
+      cues: rawCues,
+      language: 'en',
+      enable: true,
+    });
+    expect(out.length).toBeGreaterThan(0);
+    // Prefer merge of hanging "to" → fewer or equal cues with store in first
+    expect(out.length).toBeLessThanOrEqual(rawCues.length);
+    expect(out.map((c) => c.text).join(' ')).toMatch(/store/i);
+  });
+
+  it('enable false → original cues', () => {
+    const out = applyYoutubeAsrResegment({
+      platform: 'youtube',
+      url: asrUrl,
+      body: fragmentedBody,
+      cues: rawCues,
+      language: 'en',
+      enable: false,
+    });
+    expect(out).toEqual(rawCues);
+  });
+
+  it('non-ASR YouTube → original cues', () => {
+    const out = applyYoutubeAsrResegment({
+      platform: 'youtube',
+      url: humanUrl,
+      body: fragmentedBody,
+      cues: rawCues,
+      language: 'en',
+      enable: true,
+      isAutoGenerated: false,
+    });
+    expect(out).toEqual(rawCues);
+  });
+
+  it('non-YouTube platform → original cues', () => {
+    const out = applyYoutubeAsrResegment({
+      platform: 'udemy',
+      url: asrUrl,
+      body: fragmentedBody,
+      cues: rawCues,
+      language: 'en',
+      enable: true,
+    });
+    expect(out).toEqual(rawCues);
+  });
+
+  it('isAutoGenerated true without kind=asr still resegments', () => {
+    const out = applyYoutubeAsrResegment({
+      platform: 'youtube',
+      url: humanUrl,
+      body: fragmentedBody,
+      cues: rawCues,
+      language: 'en',
+      enable: true,
+      isAutoGenerated: true,
+    });
+    expect(out).not.toEqual(rawCues);
+  });
+
+  it('throw / bad body fail-open to original cues', () => {
+    // body is not JSON3 → words empty → cue-level fallback should still work;
+    // force fail-open by enabling with empty cues handled separately
+    const out = applyYoutubeAsrResegment({
+      platform: 'youtube',
+      url: asrUrl,
+      body: '<<<not-json>>>',
+      cues: rawCues,
+      language: 'en',
+      enable: true,
+    });
+    // cue-level path may still resegment; should never throw and never return empty
+    expect(out.length).toBeGreaterThan(0);
   });
 });

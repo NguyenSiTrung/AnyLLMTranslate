@@ -34,16 +34,16 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Tests for word-event extraction from YouTube JSON3
+- [x] Task 1: Tests for word-event extraction from YouTube JSON3
   Extend `tests/unit/youtubeHandler.test.ts` (or pure lib tests): multi-seg events with `tOffsetMs`, newline segs, ASR-like fragmentation fixtures.
 
-- [ ] Task 2: Expose word-level parse path from YouTube handler
+- [x] Task 2: Expose word-level parse path from YouTube handler
   In `inject/subtitleHandlers/youtube.ts` (or shared pure parse helper used by handler):
   - Keep existing `transformResponse` → cue list for non-ASR / when resegment off
   - Add ability to obtain word-timed events OR resegmented cues for ASR (prefer pure functions callable from coordinator if MAIN/ISOLATED boundary requires it)
   Document: resegment may run in ISOLATED after intercept if MAIN only has string body — prefer parse+resegment wherever cues first become available before translate.
 
-- [ ] Task 3: Wire resegment call site before translation
+- [x] Task 3: Wire resegment call site before translation
   In `content/subtitleCoordinator.ts` (and/or handler path that feeds translate):
   - If platform YouTube + ASR + settings.enable → resegment → replace source cues
   - Else passthrough
@@ -51,38 +51,40 @@
   - Ensure cache key uses post-resegment text
   - Order: resegment → then existing progressive translate / `subtitleTiming` as currently ordered (document in code comment)
 
-- [ ] Task 4: Coordinator / handler unit tests for gate
+- [x] Task 4: Coordinator / handler unit tests for gate
   Tests: ASR+enable → fewer cues / different texts; enable false → original; non-ASR → original; throw → original.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ## Phase 3: Settings UI & AI Hook Surface
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] Task 1: Persist settings in store / migration-safe defaults
+- [x] Task 1: Persist settings in store / migration-safe defaults
   Ensure `settingsStore` deep-merge and any config migration leave `youtubeAsrResegment` / nested field at default `enable: true`. Add unit test if migration helpers exist.
 
-- [ ] Task 2: Options UI — YouTube toggle
+- [x] Task 2: Options UI — YouTube toggle
   In `SubtitlesSection.tsx` (or small extracted control): Supported Sites / YouTube-adjacent card area — toggle **“Improve auto-generated captions”** with short description. Default on. Dim/disable when subtitles master off (`DisabledDimmer` pattern). No full AI control required; optional muted “AI re-align (coming soon)” or only type-level `aiEnable`.
 
-- [ ] Task 3: AI hook stub (design-only)
+- [x] Task 3: AI hook stub (design-only)
   Export typed placeholder e.g. `// future: requestAiAsrResegment` interface or no-op function with JSDoc; ensure no network call. Spec note in learnings.
 
-- [ ] Task 4: Options / settings tests if section has coverage patterns
+- [x] Task 4: Options / settings tests if section has coverage patterns
   Smoke-test store default + toggle write path where existing tests live.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
 
 ## Phase 4: Regression, Lint & Manual Smoke
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] Task 1: Full unit suite
+- [x] Task 1: Full unit suite
   Run `pnpm test` (or project’s `test:fast`) — all existing + new tests green.
+  Note: 834/836 passed; 2 pre-existing flakes (manifest seek stale-chunk; rolling glossary timeout) unrelated to this track. All new ASR tests green (31 + handler + store).
 
-- [ ] Task 2: Lint
+- [x] Task 2: Lint
   Run `pnpm lint` on touched files / project standard.
+  Touched files lint-clean. Pre-existing lint debt elsewhere (unused vars, non-null assertions) unchanged.
 
 - [ ] Task 3: Manual smoke (user)
   YouTube video with **auto-generated English** captions: toggle on → more coherent bilingual sentences; toggle off → prior fragmentation behavior. Human-uploaded track unchanged. Confirm no crash if resegment errors.

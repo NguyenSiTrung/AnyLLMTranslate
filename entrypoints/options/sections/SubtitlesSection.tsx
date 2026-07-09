@@ -29,7 +29,12 @@ import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { SubtitlePreview } from '@/entrypoints/options/components/SubtitlePreview';
 import { getPreviewCuesForLanguage, resolveStyleChipLabel } from '@/lib/subtitlePreviewCues';
-import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
+import {
+  DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
+  type SubtitleFontFamily,
+  type SubtitleDisplayMode,
+  type SubtitleFontSizeMode,
+} from '@/types/config';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 
 // Auto = inherit from the resolved profile preset (omit the key from the override).
@@ -533,6 +538,39 @@ export function SubtitlesSection() {
                   />
                 </div>
               )}
+
+              {/* YouTube ASR re-alignment — local rule engine before translate.
+                  Independent of per-site disable; only applies to kind=asr tracks. */}
+              <div className="mt-2 pt-3 border-t border-zinc-800/50">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-2">YouTube</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-zinc-200">Improve auto-generated captions</p>
+                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                      Re-chunk fragmented ASR captions into clearer sentences before
+                      translation. Human-uploaded tracks are unchanged.
+                    </p>
+                    <p className="text-[10px] text-zinc-600 mt-1.5 italic">
+                      AI re-align — coming soon
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={
+                      subtitleSettings.youtubeAsrResegment?.enable ??
+                      DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.enable
+                    }
+                    disabled={isDisabled}
+                    onToggle={(checked) => {
+                      const current =
+                        subtitleSettings.youtubeAsrResegment ??
+                        DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS;
+                      handleUpdate({
+                        youtubeAsrResegment: { ...current, enable: checked },
+                      });
+                    }}
+                  />
+                </div>
+              </div>
             </DisabledDimmer>
           </Card>
         </div>

@@ -50,7 +50,9 @@ describe('YouTubeHandler', () => {
       expect(patterns).toHaveLength(1);
       expect(patterns[0].pattern.test('https://www.youtube.com/api/timedtext?v=abc')).toBe(true);
       expect(patterns[0].pattern.test('https://example.com/api/timedtext')).toBe(false);
-      const extractor = patterns[0].languageExtractor!;
+      const extractor = patterns[0].languageExtractor;
+      expect(extractor).toBeTypeOf('function');
+      if (!extractor) throw new Error('expected languageExtractor');
       expect(extractor(new URL('https://www.youtube.com/api/timedtext?lang=en&tlang=vi'))).toBe('vi');
       expect(extractor(new URL('https://www.youtube.com/api/timedtext?lang=en'))).toBe('en');
       expect(extractor(new URL('https://www.youtube.com/api/timedtext?v=abc'))).toBe('');
@@ -232,6 +234,39 @@ describe('YouTubeHandler', () => {
       expect(
         handler.transformResponse('not valid content', 'text/plain', 'https://example.com'),
       ).toEqual([]);
+    });
+  });
+
+  describe('parseWordEvents', () => {
+    it('extracts word-level events with tOffsetMs from ASR-like JSON3', () => {
+      const body = JSON.stringify({
+        events: [
+          {
+            tStartMs: 1000,
+            dDurationMs: 2000,
+            segs: [
+              { utf8: 'Auto ', tOffsetMs: 0 },
+              { utf8: 'generated ', tOffsetMs: 400 },
+              { utf8: 'fragment', tOffsetMs: 900 },
+            ],
+          },
+          {
+            tStartMs: 3500,
+            dDurationMs: 1000,
+            segs: [{ utf8: '\n' }, { utf8: 'Next', tOffsetMs: 0 }],
+          },
+        ],
+      });
+      const words = handler.parseWordEvents(body);
+      expect(words.length).toBe(4);
+      expect(words[0]).toMatchObject({ text: 'Auto', startMs: 1000 });
+      expect(words[1].startMs).toBe(1400);
+      expect(words[3]).toMatchObject({ text: 'Next', startMs: 3500 });
+    });
+
+    it('returns empty for non-JSON3 body', () => {
+      expect(handler.parseWordEvents('')).toEqual([]);
+      expect(handler.parseWordEvents('<transcript></transcript>')).toEqual([]);
     });
   });
 });

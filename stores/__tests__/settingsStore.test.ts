@@ -206,6 +206,32 @@ describe('useSettingsStore', () => {
       expect(state.subtitleSettings.fontFamily).toBe('system');
       expect(state.subtitleSettings.displayMode).toBe('bilingual');
       expect(state.subtitleSettings.translationTimeout).toBe(30);
+      // YouTube ASR resegment defaults (enable true, aiEnable false)
+      expect(state.subtitleSettings.youtubeAsrResegment).toEqual({
+        enable: true,
+        aiEnable: false,
+      });
+    });
+
+    it('persists youtubeAsrResegment toggle writes', async () => {
+      await useSettingsStore.getState().updateSettings({
+        subtitleSettings: {
+          ...DEFAULT_SETTINGS.subtitleSettings,
+          youtubeAsrResegment: { enable: false, aiEnable: false },
+        },
+      });
+
+      const state = useSettingsStore.getState();
+      expect(state.subtitleSettings.youtubeAsrResegment?.enable).toBe(false);
+      expect(chrome.storage.local.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          'anyllm-translate-settings': expect.objectContaining({
+            subtitleSettings: expect.objectContaining({
+              youtubeAsrResegment: { enable: false, aiEnable: false },
+            }),
+          }),
+        }),
+      );
     });
 
     it('updateSettings persists subtitleSettings changes', async () => {

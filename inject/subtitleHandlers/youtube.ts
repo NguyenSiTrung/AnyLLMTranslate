@@ -1,5 +1,9 @@
 import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
+import {
+  parseYoutubeJson3Words,
+  type AsrWord,
+} from '@/lib/youtubeAsrResegment';
 
 export class YouTubeHandler implements SubtitleHandler {
   readonly platform = 'youtube';
@@ -86,6 +90,15 @@ export class YouTubeHandler implements SubtitleHandler {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Word-level parse of JSON3 timedtext (segs + tOffsetMs).
+   * Used by ASR resegment; pure helper lives in lib/youtubeAsrResegment.
+   * Returns [] for non-JSON3 / empty bodies.
+   */
+  parseWordEvents(body: string): AsrWord[] {
+    return parseYoutubeJson3Words(body);
   }
 
   /** Parse YouTube srv3 XML format into SubtitleCue[] */
