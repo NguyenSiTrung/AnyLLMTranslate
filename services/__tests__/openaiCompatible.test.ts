@@ -872,4 +872,58 @@ describe('OpenAICompatibleService', () => {
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
+
+  describe('resegmentYoutubeAsr', () => {
+    const units = [
+      { text: 'Hello', startMs: 0, endMs: 300 },
+      { text: 'there', startMs: 300, endMs: 600 },
+      { text: 'friend', startMs: 600, endMs: 1000 },
+      { text: 'how', startMs: 1200, endMs: 1400 },
+      { text: 'are', startMs: 1400, endMs: 1600 },
+      { text: 'you', startMs: 1600, endMs: 1900 },
+    ];
+
+    it('returns cues from a valid segment partition', async () => {
+      globalThis.fetch = mockFetchResponse(
+        JSON.stringify({ segments: [{ start: 0, end: 2 }, { start: 3, end: 5 }] }),
+      );
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.resegmentYoutubeAsr(units, 'en');
+      expect(result.success).toBe(true);
+      expect(result.cues).toHaveLength(2);
+      expect(result.cues?.[0].text).toMatch(/Hello there friend/i);
+      expect(result.cues?.[1].text).toMatch(/how are you/i);
+    });
+
+    it('returns {success:false} on parse failure', async () => {
+      globalThis.fetch = mockFetchResponse('not json {{{');
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.resegmentYoutubeAsr(units, 'en');
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/parse/i);
+    });
+
+    it('re-throws ApiError on transport 503', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        text: () => Promise.resolve(''),
+      });
+      const service = new OpenAICompatibleService(mockConfigWithKey);
+      await expect(service.resegmentYoutubeAsr(units, 'en')).rejects.toMatchObject({
+        name: 'ApiError',
+        statusCode: 503,
+      });
+    });
+
+    it('short-circuits empty units without fetch', async () => {
+      globalThis.fetch = vi.fn();
+      const service = new OpenAICompatibleService(mockConfig);
+      const result = await service.resegmentYoutubeAsr([], 'en');
+      expect(result.success).toBe(true);
+      expect(result.cues).toEqual([]);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+  });
 });

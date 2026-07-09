@@ -45,6 +45,7 @@ export type MessageAction =
   | 'pageCategoryUpdate'
   | 'DETECT_PAGE_CATEGORY_LLM'
   | 'CLASSIFY_PDF_PARAGRAPHS'
+  | 'RESEGMENT_YOUTUBE_ASR'
   | 'CLEAR_CACHE'
   | 'OPEN_PDF_VIEWER'
   | 'PDF_DETECTED'
@@ -231,6 +232,23 @@ export interface ClassifyPdfParagraphsResult {
   error?: string;
 }
 
+/**
+ * AI/BYOK YouTube ASR sentence re-alignment (Content → Background).
+ * Units are timed words (preferred) or coarse cues; background batches LLM calls.
+ */
+export interface ResegmentYoutubeAsrMessage {
+  action: 'RESEGMENT_YOUTUBE_ASR';
+  language: string;
+  units: Array<{ text: string; startMs: number; endMs: number }>;
+}
+
+/** Response shape for RESEGMENT_YOUTUBE_ASR. */
+export interface ResegmentYoutubeAsrResult {
+  success: boolean;
+  cues?: SubtitleCue[];
+  error?: string;
+}
+
 /** Clear cache request from options page → background */
 export interface ClearCacheMessage {
   action: 'CLEAR_CACHE';
@@ -337,6 +355,7 @@ export type ExtensionMessage =
   | PageCategoryUpdateMessage
   | DetectPageCategoryLlmMessage
   | ClassifyPdfParagraphsMessage
+  | ResegmentYoutubeAsrMessage
   | ClearCacheMessage
   | OpenPdfViewerMessage
   | PdfDetectedMessage

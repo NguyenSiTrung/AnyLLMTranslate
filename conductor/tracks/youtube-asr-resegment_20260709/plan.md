@@ -88,5 +88,25 @@
 
 - [ ] Task 3: Manual smoke (user)
   YouTube video with **auto-generated English** captions: toggle on → more coherent bilingual sentences; toggle off → prior fragmentation behavior. Human-uploaded track unchanged. Confirm no crash if resegment errors.
+  Also: enable **AI re-align** → smarter boundaries via BYOK; disable AI → local rules; AI failure → local fail-open.
 
 - [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
+
+## Phase 5: AI BYOK Resegment
+<!-- execution: sequential -->
+<!-- depends: phase3 -->
+
+- [x] Task 1: Pure AI prompt/parse helpers
+  `buildAiAsrResegment*`, `parseAiAsrSegmentRanges`, `normalizeSegmentRanges`, `cuesFromSegmentRanges`, batching (`AI_ASR_BATCH_SIZE`).
+
+- [x] Task 2: Service + pool + background
+  `OpenAICompatibleService.resegmentYoutubeAsr`, pool delegate, `RESEGMENT_YOUTUBE_ASR` message handler.
+
+- [x] Task 3: Coordinator preference path
+  When `enable && aiEnable` on YouTube ASR: call background AI; fail-open to local rules; log mode.
+
+- [x] Task 4: Options UI AI toggle
+  Nested **AI re-align** toggle (opt-in, disabled when master off); store persist tests.
+
+- [x] Task 5: Unit tests
+  Pure AI helpers + service success/parse/503/empty.

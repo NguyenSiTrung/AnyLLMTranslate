@@ -57,3 +57,12 @@ Patterns, gotchas, and context discovered during implementation.
   - Context: AI path design-only — no Immersive cloud API; future BYOK via provider pool.
 ---
 
+## [2026-07-09] - Phase 5: AI BYOK Resegment
+- **Implemented:** Index-range AI resegment (partition of timed units → cues), batching @120 units, service+pool+`RESEGMENT_YOUTUBE_ASR`, coordinator AI-prefer + local fail-open, Options **AI re-align** toggle.
+- **Files changed:** `lib/youtubeAsrResegment.ts`, `services/{openaiCompatible,providerPool,background,base}.ts`, `types/messages.ts`, `content/subtitleCoordinator.ts`, `SubtitlesSection.tsx`, tests
+- **Learnings:**
+  - Patterns: Prefer LLM returning index ranges (not free text/timestamps) so timing stays deterministic; normalize ranges to full partition.
+  - Gotchas: Pure lib cannot network — AI must go background/pool. Master toggle off should clear aiEnable to avoid surprise cost.
+  - Context: Default `aiEnable: false` (opt-in token cost); Immersive cloud API never used.
+---
+

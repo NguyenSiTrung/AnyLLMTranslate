@@ -5,7 +5,11 @@
 
 import type { TranslationRequest, TranslationResult } from '@/types/translation';
 import type { ProviderConfig, PageContext } from '@/types/config';
-import type { ClassifyPdfParagraphsResult } from '@/types/messages';
+import type {
+  ClassifyPdfParagraphsResult,
+  ResegmentYoutubeAsrResult,
+} from '@/types/messages';
+import type { AsrTimedUnit } from '@/lib/youtubeAsrResegment';
 import { getLanguageName } from '@/lib/languages';
 
 /** Abstract base for all translation services */
@@ -39,6 +43,16 @@ export interface TranslationService {
   classifyPdfParagraphs?(
     paragraphs: Array<{ id: string; text: string }>,
   ): Promise<ClassifyPdfParagraphsResult>;
+
+  /**
+   * YouTube ASR AI re-alignment: group timed word/cue units into sentence cues.
+   * Uses the user's BYOK provider. Transport failures should re-throw ApiError
+   * for pool failover; parse failures return {success:false}.
+   */
+  resegmentYoutubeAsr?(
+    units: AsrTimedUnit[],
+    language: string,
+  ): Promise<ResegmentYoutubeAsrResult>;
 }
 
 /** Default system prompt template with injectable variables */

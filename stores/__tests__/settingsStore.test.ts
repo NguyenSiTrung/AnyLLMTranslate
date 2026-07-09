@@ -234,6 +234,20 @@ describe('useSettingsStore', () => {
       );
     });
 
+    it('persists youtubeAsrResegment aiEnable writes', async () => {
+      await useSettingsStore.getState().updateSettings({
+        subtitleSettings: {
+          ...DEFAULT_SETTINGS.subtitleSettings,
+          youtubeAsrResegment: { enable: true, aiEnable: true },
+        },
+      });
+
+      expect(useSettingsStore.getState().subtitleSettings.youtubeAsrResegment).toEqual({
+        enable: true,
+        aiEnable: true,
+      });
+    });
+
     it('updateSettings persists subtitleSettings changes', async () => {
       await useSettingsStore.getState().updateSettings({
         subtitleSettings: {

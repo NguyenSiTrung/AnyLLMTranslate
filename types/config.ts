@@ -202,9 +202,10 @@ export interface YoutubeAsrResegmentSettings {
    */
   enable: boolean;
   /**
-   * Reserved for a future AI/BYOK resegment path (no network call in v1).
-   * When implemented later: prefer AI over local rules when true.
-   * @see requestAiAsrResegment in lib/youtubeAsrResegment.ts
+   * When true (and `enable` is true), prefer AI/BYOK resegment via the user's
+   * provider pool before local rules. Fail-open to local rules on AI failure.
+   * Default false (opt-in; costs LLM tokens).
+   * @see services resegmentYoutubeAsr / RESEGMENT_YOUTUBE_ASR
    */
   aiEnable: boolean;
 }

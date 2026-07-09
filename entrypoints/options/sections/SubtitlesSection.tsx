@@ -539,19 +539,16 @@ export function SubtitlesSection() {
                 </div>
               )}
 
-              {/* YouTube ASR re-alignment — local rule engine before translate.
+              {/* YouTube ASR re-alignment — local rules + optional AI/BYOK.
                   Independent of per-site disable; only applies to kind=asr tracks. */}
-              <div className="mt-2 pt-3 border-t border-zinc-800/50">
-                <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-2">YouTube</p>
+              <div className="mt-2 pt-3 border-t border-zinc-800/50 space-y-3">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-600">YouTube</p>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-zinc-200">Improve auto-generated captions</p>
                     <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
                       Re-chunk fragmented ASR captions into clearer sentences before
                       translation. Human-uploaded tracks are unchanged.
-                    </p>
-                    <p className="text-[10px] text-zinc-600 mt-1.5 italic">
-                      AI re-align — coming soon
                     </p>
                   </div>
                   <Toggle
@@ -565,7 +562,42 @@ export function SubtitlesSection() {
                         subtitleSettings.youtubeAsrResegment ??
                         DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS;
                       handleUpdate({
-                        youtubeAsrResegment: { ...current, enable: checked },
+                        youtubeAsrResegment: {
+                          ...current,
+                          enable: checked,
+                          // Turning master off also clears AI (avoids surprise cost on re-enable).
+                          aiEnable: checked ? current.aiEnable : false,
+                        },
+                      });
+                    }}
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-3 pl-0 sm:pl-1">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-zinc-300">AI re-align</p>
+                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                      Use your configured LLM (BYOK) for smarter sentence boundaries.
+                      Falls back to local rules if the AI call fails. Uses extra tokens.
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={
+                      subtitleSettings.youtubeAsrResegment?.aiEnable ??
+                      DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.aiEnable
+                    }
+                    disabled={
+                      isDisabled ||
+                      !(
+                        subtitleSettings.youtubeAsrResegment?.enable ??
+                        DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.enable
+                      )
+                    }
+                    onToggle={(checked) => {
+                      const current =
+                        subtitleSettings.youtubeAsrResegment ??
+                        DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS;
+                      handleUpdate({
+                        youtubeAsrResegment: { ...current, aiEnable: checked },
                       });
                     }}
                   />

@@ -83,8 +83,9 @@ export interface AsrLangConfig {
 export interface YoutubeAsrConfig {
   enable: boolean;
   /**
-   * Reserved: future AI resegment. Always false in v1 production path.
-   * @see requestAiAsrResegment
+   * When true (and enable is true), prefer AI/BYOK resegment over local rules.
+   * Fail-open to local rules on AI failure.
+   * @see resegmentYoutubeAsrWithAi / requestAiAsrResegment
    */
   aiEnable: boolean;
   /**
@@ -662,18 +663,267 @@ export function applyYoutubeAsrResegment(options: ApplyYoutubeAsrResegmentOption
   }
 }
 
+// ─── AI resegment (pure prompt/parse; network lives in services/) ────────────
+
+/** Timed unit sent to the LLM (word preferred; cue fallback). */
+export interface AsrTimedUnit {
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
+/** Inclusive index range over timed units → one output cue. */
+export interface AsrSegmentRange {
+  start: number;
+  end: number;
+}
+
+/** Max units per LLM call (keeps prompts within typical context). */
+export const AI_ASR_BATCH_SIZE = 120;
+
 /**
- * Future AI/BYOK resegment hook — **not implemented** in v1.
- * No network call. Always returns null so callers use local rules.
- *
- * When implemented: accept word events + language, return resegmented cues
- * via the user's provider pool; mutually exclusive preference when
- * `aiEnable` is true.
+ * Build timed units for AI resegment: prefer words, else map cues.
+ */
+export function prepareAsrUnitsForAi(
+  words?: AsrWord[],
+  cues?: SubtitleCue[],
+): AsrTimedUnit[] {
+  if (words && words.length > 0) {
+    return words.map((w) => ({
+      text: w.text,
+      startMs: w.startMs,
+      endMs: w.endMs,
+    }));
+  }
+  if (cues && cues.length > 0) {
+    return cues
+      .filter((c) => c.text.trim().length > 0)
+      .map((c) => ({
+        text: c.text.trim(),
+        startMs: Math.round(c.startTime * 1000),
+        endMs: Math.round(c.endTime * 1000),
+      }));
+  }
+  return [];
+}
+
+/** System prompt for AI ASR sentence re-alignment (BYOK, not Immersive cloud). */
+export function buildAiAsrResegmentSystemPrompt(): string {
+  return `You re-align auto-generated speech captions into natural sentence-level subtitle cues.
+
+You receive numbered timed text units (words or short fragments) in source language.
+Group consecutive units into coherent sentences or short clauses suitable for on-screen subtitles.
+
+Rules:
+- Output groups MUST cover every unit index exactly once (full partition, no gaps, no overlaps).
+- Preserve original wording exactly — do NOT translate, paraphrase, or fix grammar.
+- Prefer complete sentences; allow short clauses when a pause is natural.
+- Never invent words or drop units.
+- Respond ONLY with valid JSON:
+  {"segments":[{"start":0,"end":3},{"start":4,"end":8}]}
+  where start/end are inclusive 0-based unit indices within THIS batch only.`;
+}
+
+/** User prompt listing units for one batch (indices are 0-based within the batch). */
+export function buildAiAsrResegmentUserPrompt(
+  units: AsrTimedUnit[],
+  language: string,
+): string {
+  const lines = units.map((u, i) => {
+    const startSec = (u.startMs / 1000).toFixed(2);
+    // Escape newlines so each unit stays one line
+    const text = u.text.replace(/\s+/g, ' ').trim();
+    return `${i}|${startSec}|${text}`;
+  });
+  return `Source language: ${language || 'unknown'}
+Units (index|startSec|text):
+${lines.join('\n')}
+
+Return JSON only with a full partition of indices 0..${Math.max(0, units.length - 1)}.`;
+}
+
+/**
+ * Parse LLM response into segment ranges for a batch of `unitCount` units.
+ * Returns null on unrecoverable parse failure.
+ */
+export function parseAiAsrSegmentRanges(
+  responseText: string,
+  unitCount: number,
+): AsrSegmentRange[] | null {
+  if (!responseText.trim() || unitCount <= 0) return null;
+
+  let parsed: { segments?: unknown };
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    const jsonMatch = responseText.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (!jsonMatch?.[1]) return null;
+    try {
+      parsed = JSON.parse(jsonMatch[1]);
+    } catch {
+      return null;
+    }
+  }
+
+  const raw = parsed.segments;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+
+  const ranges: AsrSegmentRange[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const start = Number((item as { start?: unknown }).start);
+    const end = Number((item as { end?: unknown }).end);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    const s = Math.max(0, Math.min(unitCount - 1, Math.floor(start)));
+    const e = Math.max(0, Math.min(unitCount - 1, Math.floor(end)));
+    if (e < s) continue;
+    ranges.push({ start: s, end: e });
+  }
+  if (ranges.length === 0) return null;
+
+  return normalizeSegmentRanges(ranges, unitCount);
+}
+
+/**
+ * Sort, clip, de-overlap, and fill gaps so ranges form a full partition of [0, n).
+ */
+export function normalizeSegmentRanges(
+  ranges: AsrSegmentRange[],
+  unitCount: number,
+): AsrSegmentRange[] {
+  if (unitCount <= 0) return [];
+
+  const sorted = [...ranges]
+    .map((r) => ({
+      start: Math.max(0, Math.min(unitCount - 1, r.start)),
+      end: Math.max(0, Math.min(unitCount - 1, r.end)),
+    }))
+    .filter((r) => r.end >= r.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const covered = new Array<boolean>(unitCount).fill(false);
+  const accepted: AsrSegmentRange[] = [];
+
+  for (const r of sorted) {
+    // Shrink range to uncovered span (skip already-covered indices)
+    let s = r.start;
+    while (s <= r.end && covered[s]) s++;
+    let e = r.end;
+    while (e >= s && covered[e]) e--;
+    if (e < s) continue;
+    // If middle has holes of covered, take contiguous uncovered from s
+    let endContig = s;
+    while (endContig <= e && !covered[endContig]) endContig++;
+    endContig--;
+    if (endContig < s) continue;
+    for (let i = s; i <= endContig; i++) covered[i] = true;
+    accepted.push({ start: s, end: endContig });
+  }
+
+  // Fill any remaining gaps as singleton (or contiguous uncovered) segments
+  let i = 0;
+  while (i < unitCount) {
+    if (covered[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < unitCount && !covered[j + 1]) j++;
+    accepted.push({ start: i, end: j });
+    for (let k = i; k <= j; k++) covered[k] = true;
+    i = j + 1;
+  }
+
+  return accepted.sort((a, b) => a.start - b.start);
+}
+
+/** Build SubtitleCue[] from units + inclusive ranges. */
+export function cuesFromSegmentRanges(
+  units: AsrTimedUnit[],
+  ranges: AsrSegmentRange[],
+): SubtitleCue[] {
+  const cues: SubtitleCue[] = [];
+  for (const r of ranges) {
+    if (r.start < 0 || r.end >= units.length || r.end < r.start) continue;
+    const slice = units.slice(r.start, r.end + 1);
+    const text = normalizeJoin(slice.map((u) => u.text));
+    if (!text) continue;
+    const startMs = slice[0].startMs;
+    const endMs = Math.max(slice[slice.length - 1].endMs, startMs + 100);
+    cues.push({
+      startTime: startMs / 1000,
+      endTime: endMs / 1000,
+      text,
+    });
+  }
+  return cues;
+}
+
+export interface AiAsrResegmentBatchRequest {
+  systemPrompt: string;
+  userPrompt: string;
+  batchUnits: AsrTimedUnit[];
+  batchOffset: number;
+}
+
+/** Split units into LLM batches with prompts. */
+export function buildAiAsrResegmentBatches(
+  units: AsrTimedUnit[],
+  language: string,
+  batchSize: number = AI_ASR_BATCH_SIZE,
+): AiAsrResegmentBatchRequest[] {
+  if (units.length === 0) return [];
+  const batches: AiAsrResegmentBatchRequest[] = [];
+  const systemPrompt = buildAiAsrResegmentSystemPrompt();
+  for (let offset = 0; offset < units.length; offset += batchSize) {
+    const batchUnits = units.slice(offset, offset + batchSize);
+    batches.push({
+      systemPrompt,
+      userPrompt: buildAiAsrResegmentUserPrompt(batchUnits, language),
+      batchUnits,
+      batchOffset: offset,
+    });
+  }
+  return batches;
+}
+
+/**
+ * Apply AI segment ranges from one batch response onto global units.
+ * Ranges are batch-local; offset is added.
+ */
+export function applyBatchRangesToGlobal(
+  globalUnits: AsrTimedUnit[],
+  batchOffset: number,
+  batchSize: number,
+  responseText: string,
+): SubtitleCue[] | null {
+  const ranges = parseAiAsrSegmentRanges(responseText, batchSize);
+  if (!ranges) return null;
+  const batchUnits = globalUnits.slice(batchOffset, batchOffset + batchSize);
+  return cuesFromSegmentRanges(batchUnits, ranges);
+}
+
+/**
+ * Coordinator-facing: prepare units for AI from intercept body + parsed cues.
+ */
+export function prepareYoutubeAsrAiInput(options: {
+  body: string;
+  cues: SubtitleCue[];
+}): AsrTimedUnit[] {
+  const words = parseYoutubeJson3Words(options.body);
+  return prepareAsrUnitsForAi(words.length > 0 ? words : undefined, options.cues);
+}
+
+/**
+ * @deprecated Prefer background `RESEGMENT_YOUTUBE_ASR` via provider pool.
+ * Kept as a typed hook name for callers/tests: always returns null without a
+ * network adapter — use service.resegmentYoutubeAsr instead.
  */
 export async function requestAiAsrResegment(
-  _events: YoutubeJson3Event[] | AsrWord[],
+  _events: YoutubeJson3Event[] | AsrWord[] | AsrTimedUnit[],
   _language: string,
 ): Promise<SubtitleCue[] | null> {
-  // Design-only stub: AI resegment is out of scope for v1.
+  // Network must go through services/background (BYOK pool). This pure-lib
+  // entry cannot call Chrome APIs or fetch.
   return null;
 }

@@ -12,6 +12,8 @@ import type {
   DetectPageCategoryLlmMessage,
   ClassifyPdfParagraphsMessage,
   ClassifyPdfParagraphsResult,
+  ResegmentYoutubeAsrMessage,
+  ResegmentYoutubeAsrResult,
   PdfDetectedMessage,
   TranslationResultItem,
   PdfStreamPortMessage,
@@ -1443,6 +1445,21 @@ async function handleClassifyPdfParagraphs(
   }
 }
 
+/** Handle RESEGMENT_YOUTUBE_ASR — AI/BYOK sentence re-alignment before translate. */
+async function handleResegmentYoutubeAsr(
+  message: ResegmentYoutubeAsrMessage,
+): Promise<ResegmentYoutubeAsrResult> {
+  try {
+    const service = await initService();
+    if (!service.resegmentYoutubeAsr) {
+      return { success: false, error: 'Provider does not support YouTube ASR resegment' };
+    }
+    return await service.resegmentYoutubeAsr(message.units, message.language);
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 /** Update extension badge based on status */
 function handleStatusUpdate(
   message: { status: { status: string } },
@@ -1608,6 +1625,8 @@ export function handleMessage(
       return handleDetectPageCategoryLLM(message);
     case 'CLASSIFY_PDF_PARAGRAPHS':
       return handleClassifyPdfParagraphs(message);
+    case 'RESEGMENT_YOUTUBE_ASR':
+      return handleResegmentYoutubeAsr(message);
     case 'CLEAR_CACHE':
       return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
     case 'OPEN_PDF_VIEWER': {

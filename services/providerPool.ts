@@ -31,7 +31,11 @@ import type {
   TranslationRequest,
   TranslationResult,
 } from '@/types/translation';
-import type { ClassifyPdfParagraphsResult } from '@/types/messages';
+import type {
+  ClassifyPdfParagraphsResult,
+  ResegmentYoutubeAsrResult,
+} from '@/types/messages';
+import type { AsrTimedUnit } from '@/lib/youtubeAsrResegment';
 import type { TranslationService } from './base';
 import { OpenAICompatibleService, ApiError } from './openaiCompatible';
 import { createCircuitBreaker, type CircuitBreaker, type FailureKind } from '@/lib/circuitBreaker';
@@ -279,6 +283,26 @@ export class ProviderPoolCoordinator implements TranslationService {
       return result;
     } catch (error) {
       return { success: false, error: errorMessage(error), labels: {} };
+    }
+  }
+
+  async resegmentYoutubeAsr(
+    units: AsrTimedUnit[],
+    language: string,
+  ): Promise<ResegmentYoutubeAsrResult> {
+    try {
+      const result = await this.dispatchWithFailover((service) => {
+        if (!service.resegmentYoutubeAsr) {
+          return Promise.resolve({
+            success: false,
+            error: 'resegmentYoutubeAsr not supported',
+          });
+        }
+        return service.resegmentYoutubeAsr(units, language);
+      });
+      return result;
+    } catch (error) {
+      return { success: false, error: errorMessage(error) };
     }
   }
 

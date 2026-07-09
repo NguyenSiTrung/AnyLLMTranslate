@@ -14,7 +14,11 @@ import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
 import { buildSubtitleSystemPrompt } from './subtitlePrompt';
 import { extractProperNouns } from './subtitleResponse';
-import type { ClassifyPdfParagraphsResult, PdfParagraphLabel } from '@/types/messages';
+import type {
+  ClassifyPdfParagraphsResult,
+  PdfParagraphLabel,
+  ResegmentYoutubeAsrResult,
+} from '@/types/messages';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
 import { createRateLimiter, type RateLimiter } from '@/lib/rateLimiter';
@@ -23,6 +27,12 @@ import {
   extractDeltaContent,
   extractCompletedPieces,
 } from '@/lib/sseStreamParser';
+import {
+  buildAiAsrResegmentBatches,
+  applyBatchRangesToGlobal,
+  type AsrTimedUnit,
+} from '@/lib/youtubeAsrResegment';
+import type { SubtitleCue } from '@/types/subtitle';
 
 /** Custom error class carrying the HTTP status code so retry logic can
  *  distinguish 4xx client errors (no retry) from 5xx/network errors (retry)
@@ -495,6 +505,54 @@ Rules:
       labels[id] = rawLabel === 'figure' ? 'figure' : 'prose';
     }
     return { success: true, labels };
+  }
+
+  /**
+   * AI re-align YouTube ASR timed units into sentence-level cues (BYOK).
+   * Batches large tracks; transport/auth/rate-limit re-throw ApiError (pool
+   * failover). Parse failures return {success:false}.
+   */
+  async resegmentYoutubeAsr(
+    units: AsrTimedUnit[],
+    language: string,
+  ): Promise<ResegmentYoutubeAsrResult> {
+    if (units.length === 0) {
+      return { success: true, cues: [] };
+    }
+
+    const batches = buildAiAsrResegmentBatches(units, language);
+    const allCues: SubtitleCue[] = [];
+
+    for (const batch of batches) {
+      const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
+        model: this.config.model,
+        messages: [
+          { role: 'system', content: batch.systemPrompt },
+          { role: 'user', content: batch.userPrompt },
+        ],
+        temperature: 0,
+      });
+
+      // Transport/auth/rate-limit errors propagate for pool failover.
+      const response = await this.fetchCompletion(completionRequest);
+      const responseText = response.choices[0]?.message?.content ?? '';
+      if (!responseText.trim()) {
+        return { success: false, error: 'Empty response from LLM' };
+      }
+
+      const batchCues = applyBatchRangesToGlobal(
+        units,
+        batch.batchOffset,
+        batch.batchUnits.length,
+        responseText,
+      );
+      if (!batchCues || batchCues.length === 0) {
+        return { success: false, error: 'Failed to parse ASR resegment response' };
+      }
+      allCues.push(...batchCues);
+    }
+
+    return { success: true, cues: allCues };
   }
 
   /**

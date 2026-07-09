@@ -17,8 +17,17 @@ import {
   isYoutubeAsrUrl,
   parseYoutubeJson3Words,
   applyYoutubeAsrResegment,
+  parseAiAsrSegmentRanges,
+  normalizeSegmentRanges,
+  cuesFromSegmentRanges,
+  buildAiAsrResegmentBatches,
+  buildAiAsrResegmentSystemPrompt,
+  prepareAsrUnitsForAi,
+  prepareYoutubeAsrAiInput,
+  AI_ASR_BATCH_SIZE,
   type AsrWord,
   type YoutubeJson3Event,
+  type AsrTimedUnit,
 } from '@/lib/youtubeAsrResegment';
 import type { SubtitleCue } from '@/types/subtitle';
 
@@ -356,9 +365,120 @@ describe('resegmentFromCues', () => {
 // ─── AI hook stub ────────────────────────────────────────────────────────────
 
 describe('requestAiAsrResegment', () => {
-  it('is a no-op stub that returns null (no network)', async () => {
+  it('pure-lib hook returns null (network is via background/service)', async () => {
     const result = await requestAiAsrResegment([], 'en');
     expect(result).toBeNull();
+  });
+});
+
+// ─── AI resegment pure helpers ───────────────────────────────────────────────
+
+describe('AI ASR parse / normalize / cues', () => {
+  const units: AsrTimedUnit[] = [
+    { text: 'Hello', startMs: 0, endMs: 300 },
+    { text: 'there', startMs: 300, endMs: 600 },
+    { text: 'friend', startMs: 600, endMs: 1000 },
+    { text: 'how', startMs: 1200, endMs: 1400 },
+    { text: 'are', startMs: 1400, endMs: 1600 },
+    { text: 'you', startMs: 1600, endMs: 1900 },
+  ];
+
+  it('parses segment ranges from JSON and fenced JSON', () => {
+    const a = parseAiAsrSegmentRanges(
+      JSON.stringify({ segments: [{ start: 0, end: 2 }, { start: 3, end: 5 }] }),
+      6,
+    );
+    expect(a).toEqual([
+      { start: 0, end: 2 },
+      { start: 3, end: 5 },
+    ]);
+
+    const b = parseAiAsrSegmentRanges(
+      '```json\n{"segments":[{"start":0,"end":5}]}\n```',
+      6,
+    );
+    expect(b).toEqual([{ start: 0, end: 5 }]);
+  });
+
+  it('returns null for empty / invalid responses', () => {
+    expect(parseAiAsrSegmentRanges('', 6)).toBeNull();
+    expect(parseAiAsrSegmentRanges('not json', 6)).toBeNull();
+    expect(parseAiAsrSegmentRanges('{"segments":[]}', 6)).toBeNull();
+  });
+
+  it('fills gaps and de-overlaps to full partition', () => {
+    // Missing index 2; overlapping 0-2 and 1-3
+    const normalized = normalizeSegmentRanges(
+      [
+        { start: 0, end: 1 },
+        { start: 1, end: 3 },
+        { start: 4, end: 5 },
+      ],
+      6,
+    );
+    const covered = new Set<number>();
+    for (const r of normalized) {
+      for (let i = r.start; i <= r.end; i++) covered.add(i);
+    }
+    expect(covered.size).toBe(6);
+    expect([...covered].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('builds cues from ranges with correct timing and text', () => {
+    const cues = cuesFromSegmentRanges(units, [
+      { start: 0, end: 2 },
+      { start: 3, end: 5 },
+    ]);
+    expect(cues).toHaveLength(2);
+    expect(cues[0].text).toMatch(/Hello there friend/i);
+    expect(cues[0].startTime).toBe(0);
+    expect(cues[0].endTime).toBe(1);
+    expect(cues[1].text).toMatch(/how are you/i);
+    expect(cues[1].startTime).toBe(1.2);
+  });
+
+  it('batches large unit lists and embeds language in prompts', () => {
+    const many: AsrTimedUnit[] = Array.from({ length: AI_ASR_BATCH_SIZE + 5 }, (_, i) => ({
+      text: `w${i}`,
+      startMs: i * 100,
+      endMs: i * 100 + 80,
+    }));
+    const batches = buildAiAsrResegmentBatches(many, 'en-US');
+    expect(batches).toHaveLength(2);
+    expect(batches[0].batchUnits).toHaveLength(AI_ASR_BATCH_SIZE);
+    expect(batches[1].batchUnits).toHaveLength(5);
+    expect(batches[0].userPrompt).toContain('en-US');
+    expect(batches[0].systemPrompt).toBe(buildAiAsrResegmentSystemPrompt());
+    expect(buildAiAsrResegmentSystemPrompt()).toMatch(/do NOT translate/i);
+  });
+
+  it('prepareAsrUnitsForAi prefers words over cues', () => {
+    const words: AsrWord[] = [{ text: 'a', startMs: 0, endMs: 100 }];
+    const cues: SubtitleCue[] = [{ startTime: 0, endTime: 1, text: 'cue' }];
+    expect(prepareAsrUnitsForAi(words, cues)).toHaveLength(1);
+    expect(prepareAsrUnitsForAi(words, cues)[0].text).toBe('a');
+    expect(prepareAsrUnitsForAi(undefined, cues)[0].text).toBe('cue');
+  });
+
+  it('prepareYoutubeAsrAiInput flattens JSON3 body', () => {
+    const body = JSON.stringify({
+      events: [
+        {
+          tStartMs: 0,
+          dDurationMs: 1000,
+          segs: [
+            { utf8: 'Hi ', tOffsetMs: 0 },
+            { utf8: 'there', tOffsetMs: 400 },
+          ],
+        },
+      ],
+    });
+    const units = prepareYoutubeAsrAiInput({
+      body,
+      cues: [{ startTime: 0, endTime: 1, text: 'fallback' }],
+    });
+    expect(units.length).toBe(2);
+    expect(units[0].text).toBe('Hi');
   });
 });
 
