@@ -1,27 +1,28 @@
 {
-  "lastRefresh": "2026-07-08T12:15:00+07:00",
+  "lastRefresh": "2026-07-08T13:55:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: marker + state-file refresh since 2026-07-06 cycle. Major intervening event: test-trim branch ALT-t0w (2350 → 1367 TCs) + web-bilingual-quality_20260707 archive (84 new tests, +6 patterns elevated in commit 788ba05). 40 commits since last refresh.",
-    "product.md: refresh marker bumped 2026-07-06 → 2026-07-08 (2319→1487 tests, 154→135 files, 61→62 archived, 3.92→3.94 MB, tsc no longer clean — 8 pre-existing subtitlePrompt.test.ts errors from test-trim ALT-t0w). Body (Current State, Implementation Status) already synced by archive commit 788ba05 — no body edits.",
-    "patterns.md: refresh marker bumped; 6 web-bilingual-quality patterns already elevated in commit 788ba05 (AdvancedDisclosure testing, viral exports, idb-keyval jsdom, lint neutrality, rich translate anchors, Latin n-gram detection) — no new pattern additions.",
-    "tech-stack.md / workflow.md / tracks.md: no drift (tracks.md already updated by web-bilingual-quality archive commit).",
-    "beads DRIFT: closed 2 stale issues — ALT-hcp (epic) + ALT-hcp.7 (Phase 7) — both left open after web-bilingual-quality archive. Open: ALT-fm8 (P3 flaky test), ALT-j1k (P3 deferred Max in-flight interception).",
-    "backups: product.md.bak, patterns.bak, refresh_state.json.bak.",
-    "verification: wxt build ✅ ~3.94 MB; vitest run 1485/1487 pass (2 intermittent background.test.ts hook-timeout under parallel load, known pre-existing); tsc 8 pre-existing errors; eslint 2 pre-existing errors."
+    "Scope: full refresh. Major intervening event since 12:15 refresh: test-suite trim commit b720491 (1487→999 TCs, 135→65 files). 1 commit since last refresh.",
+    "product.md: refresh marker + Current State updated (999 tests / 65 files / tsc clean / 5 lint errors). Added test-suite trim note.",
+    "tech-stack.md: added test:fast + zip:source scripts from package.json.",
+    "patterns.md: refresh marker bumped; no new pattern additions (web-bilingual-quality patterns already elevated in commit 788ba05).",
+    "workflow.md / tracks.md: no drift.",
+    "beads DRIFT: ALT-hcp.7.2 (manual Settings UI verification) still open — parent ALT-hcp.7 closed; likely stale. Open: ALT-fm8 (P3 flaky test), ALT-j1k (P3 deferred Max interception).",
+    "backups: product.md.bak, patterns.md.bak, tech-stack.md.bak, refresh_state.json.bak.",
+    "verification: wxt build ✅ ~3.94 MB; vitest run 999/999 pass; tsc clean; eslint 5 errors (3 test-trim leftovers + 2 pre-existing)."
   ],
   "codebaseHealth": {
-    "tests": 1487,
-    "testFiles": 135,
+    "tests": 999,
+    "testFiles": 65,
     "buildSize": "~3.94 MB",
-    "lintErrors": 2,
-    "lintErrorsDetail": "subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
-    "tscErrors": 8,
-    "tscErrorsDetail": "services/__tests__/subtitlePrompt.test.ts — subtitle knob type mismatches (formal/casual/literal/idiomatic/terse/soften/remove assigned to narrower union types), left from test-trim track ALT-t0w.",
+    "lintErrors": 5,
+    "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports (test-trim leftover); subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
+    "tscErrors": 0,
+    "tscErrorsDetail": "clean (subtitlePrompt.test.ts removed in test trim)",
     "archivedTracks": 62,
     "activeTracks": 0,
     "failingTests": 0,
-    "flakyTests": "background.test.ts > 2 tests — intermittent hook-timeout (10s) under full parallel suite; pass on re-run / in isolation. Tracked as ALT-fm8."
+    "flakyTests": "ALT-fm8: 'accumulates rolling glossary across chunks' under full-suite load (not reproduced this run — 999/999 pass)"
   },
-  "beadsDrift": "Closed 2 stale (ALT-hcp epic + ALT-hcp.7 Phase 7) left open after web-bilingual-quality archive. Remaining open: ALT-fm8 (P3 flaky test), ALT-j1k (P3 deferred)."
+  "beadsDrift": "ALT-hcp.7.2 (Settings UI manual verification) open but parent epic closed — likely stale. Remaining open: ALT-fm8 (P3 flaky), ALT-j1k (P3 deferred)."
 }

@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (archived web-pipeline-hardening_20260708; 9 patterns elevated; 63 archived; Active Tracks empty) -->
+<!-- conductor-refresh: 2026-07-09 all (post archive sync — 1047 tests / 68 files / 64 archived; 9 web-pipeline patterns already elevated; Beads clean; Active Tracks empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.

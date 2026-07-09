@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-08 all (added test:fast + zip:source scripts) -->
+<!-- conductor-refresh: 2026-07-09 all (no dep/script drift; scripts remain: test:fast + zip:source) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language

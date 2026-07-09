@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-08 all (post web-bilingual-quality archive + test-trim ALT-t0w — 1487 tests / 135 files / 62 archived; 8 pre-existing tsc errors in subtitlePrompt.test.ts; 2 pre-existing lint errors; build ~3.94 MB) -->
+<!-- conductor-refresh: 2026-07-08 all (post test-suite trim b720491 — 999 tests / 65 files / 62 archived; tsc clean; 5 lint errors; build ~3.94 MB) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -182,8 +182,9 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Bilingual Web Translation Quality & Performance** (Archived 2026-07-07, shipped via conductor workflow, commits `f4a2b29`...`3a38f4f`): Closed 7 highest-impact gaps vs Immersive Translate. FR-1 Rich translate (inline markup preservation via `lib/richTranslate.ts` encode/decode with `<z id="N">` placeholders, XSS-safe `createElement` reconstruction). FR-2 Batcher cleanup + char-budget (deleted dead `TranslationBatcher`, new `lib/textBatching.ts` for sub-batching + inter-flush dedup at request boundary). FR-3 Source-language gate (`lib/langDetect.ts` script-range + n-gram heuristics, skips target-language text to save tokens). FR-4 Negative cache (failure cache with configurable TTL, `negative:` namespace, short-circuits retry on flaky providers). FR-5 Per-key concurrency + throttle (`concurrencyLimit`/`interval` on `PoolKey`, FIFO queue in pool coordinator, defaults 0 = no-op). FR-6 Streaming web translation (port-based SSE via `chrome.runtime.connect`, opt-in `enableStreamingTranslation`). FR-7 Cross-session resume (`lib/webResume.ts`, per-URL IndexedDB snapshots, 7-day TTL, 50-URL LRU cap, match by text not piece ID). Settings UI: Options → Advanced → "Translation Quality" card (5 toggles + 3 number fields), Providers → per-key concurrency/interval in AdvancedDisclosure. 8 phases, 84 new tests (1487 total).
 
 ### Current State
-- 1487 tests passing across 135 files (0 failing). Build passing (`wxt build` ✅, ~3.94 MB). Lint: 2 pre-existing errors in project source (`subtitleRenderer.ts` unused import, `jsonParseSubtitleHook.ts` non-null assertion). `tsc --noEmit`: 8 pre-existing errors in `services/__tests__/subtitlePrompt.test.ts` (knob type mismatches, from test-trim track ALT-t0w).
+- 999 tests passing across 65 files (0 failing). Build passing (`wxt build` ✅, ~3.94 MB). `tsc --noEmit`: clean. Lint: 5 errors — 3 unused imports in `content/__tests__/translationDisplay.test.ts` (leftover from test-trim `b720491`), plus 2 pre-existing in project source (`subtitleRenderer.ts` unused import, `jsonParseSubtitleHook.ts` non-null assertion).
 - **0 active tracks**. 62 tracks archived.
+- **Test suite trim** (2026-07-08, commit `b720491`): 1487 → 999 TCs, 135 → 65 files. Removed low-priority UI, perf-benchmark, and redundant edge-case tests; core coverage retained for translation, subtitles, provider pool, and PDF flows.
 
 ## Out of Scope (Initial Release)
 

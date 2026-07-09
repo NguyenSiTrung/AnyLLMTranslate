@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-08 all (post web-bilingual-quality archive — health: 1485/2 intermittent across 135 files, 62 archived; 8 pre-existing tsc errors in subtitlePrompt.test.ts; 6 patterns elevated from web-bilingual-quality_20260707) -->
+<!-- conductor-refresh: 2026-07-09 all (archived web-pipeline-hardening_20260708; 9 patterns elevated; 63 archived; Active Tracks empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -631,3 +631,14 @@ Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on ful
 - **Lint neutrality target for track code.** Track code should introduce 0 new lint errors. Pre-existing errors are excluded. Fix all new non-null assertions (`!`) with if-guards (`if (!x) throw new Error(...)`), unused vars with `_` prefix or removal, and `let` → `const` where never reassigned. (from: web-bilingual-quality_20260707, 2026-07-07)
 - **Rich translate: only attach variables for single-piece anchors.** A piece's `anchorElement.innerHTML` may be larger than the piece's text-node span (multi-piece splits share an anchor). Only attach `variables` when there's a single piece per anchor (no sentence split), so placeholder ids stay aligned. Long pieces degrade to plain text — safe. (from: web-bilingual-quality_20260707, 2026-07-07)
 - **Latin n-gram detection: unique-diacritic fast-paths before stopword scoring.** Latin-script languages share many short stopwords (de, a, que). Per-language unique-diacritic fast-paths run BEFORE stopword scoring — Vietnamese uses ă/ơ/ư/đ + hook/horn tone marks (not shared á/é/í), Portuguese uses ã/õ (tilde, unique), German uses ü/ö/ä/ß. Only English/Spanish/French fall through to pure stopword scoring. (from: web-bilingual-quality_20260707, 2026-07-07)
+
+## Web Pipeline Hardening v2 (2026-07-08)
+- **WeakMap clear pattern:** WeakMap has no `clear()`. Use a mutable holder `{ map: WeakMap }` and swap the inner WeakMap in `__reset*ForTest` instead of reassigning a `const`. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **`matchesCached` absorbs invalid-selector try/catch** — callers no longer need their own try/catch around `.matches()`. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **BatchablePiece field preservation:** `dedupPiecesByText` and `splitPiecesIntoBatches` push the original piece objects, so extra fields like `inArticleContext` survive through the pipeline without code changes in those functions. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Partition after dedup:** Run dedup on ALL uncached pieces first (shared dup map), then partition the deduped array by group flag (`inArticleContext`). Ensures duplicates across groups are handled correctly. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Body-tag whitelist only checks direct children of `<body>`** (`el.parentElement === root && root.tagName === 'BODY'`). Deeper nesting inside allowed tags (e.g. `<nav>` inside `<main>`) is unaffected. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Aside caps in `flushPiece` before sentence-split** so the per-paragraph cap measures full text length, not each split part. Track per-region with `Map<Element, number>` keyed by aside region root; reset between extractions. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Body-swap re-init via `startTranslation()`:** session guard already bumps `translationSession++` and tears down old observers, so the body-swap handler just calls `void startTranslation()` — stale async writes drop automatically. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Background test fetch inspection:** user message content is `"Translate the following texts...\n\n{json}"`, not raw JSON. Extract JSON by finding the first `{` in the content string. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+- **Body-swap MutationObserver tests in jsdom:** wait at least `debounceMs + buffer` (e.g. 150ms for a 100ms debounce) for the debounced callback to fire. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
