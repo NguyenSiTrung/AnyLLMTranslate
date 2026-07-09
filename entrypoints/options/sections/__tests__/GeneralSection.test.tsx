@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 const mockStorageData: Record<string, unknown> = {};
@@ -59,12 +59,14 @@ describe('GeneralSection', () => {
     expect(screen.queryByRole('heading', { name: 'Display & Appearance' })).not.toBeInTheDocument();
   });
 
-  it('swaps source and target languages when source is not auto', () => {
+  it('swaps source and target languages when source is not auto', async () => {
     render(<GeneralSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Swap languages' }));
-    const state = useSettingsStore.getState();
-    expect(state.sourceLanguage).toBe('vi');
-    expect(state.targetLanguage).toBe('en');
+    await waitFor(() => {
+      const state = useSettingsStore.getState();
+      expect(state.sourceLanguage).toBe('vi');
+      expect(state.targetLanguage).toBe('en');
+    });
   });
 
   it('disables swap when source is auto', () => {
@@ -103,25 +105,31 @@ describe('GeneralSection', () => {
     expect(screen.queryByText('Host Page Mode')).not.toBeInTheDocument();
   });
 
-  it('updates theme via quick select', () => {
+  it('updates theme via quick select', async () => {
     render(<GeneralSection />);
     const select = document.getElementById('general-theme') as HTMLSelectElement;
     expect(select).toBeTruthy();
     fireEvent.change(select, { target: { value: 'bubble' } });
-    expect(useSettingsStore.getState().theme).toBe('bubble');
+    await waitFor(() => {
+      expect(useSettingsStore.getState().theme).toBe('bubble');
+    });
   });
 
-  it('updates darkMode (page contrast) via segmented control', () => {
+  it('updates darkMode (page contrast) via segmented control', async () => {
     render(<GeneralSection />);
     const group = document.getElementById('general-host-page-mode') as HTMLElement;
     const darkBtn = within(group).getByRole('radio', { name: /Dark/i });
     fireEvent.click(darkBtn);
-    expect(useSettingsStore.getState().darkMode).toBe('dark');
+    await waitFor(() => {
+      expect(useSettingsStore.getState().darkMode).toBe('dark');
+    });
   });
 
-  it('toggles compact inline setting', () => {
+  it('toggles compact inline setting', async () => {
     render(<GeneralSection />);
     fireEvent.click(screen.getByRole('switch', { name: /Compact inline for short text/i }));
-    expect(useSettingsStore.getState().enableCompactInlineForShortText).toBe(true);
+    await waitFor(() => {
+      expect(useSettingsStore.getState().enableCompactInlineForShortText).toBe(true);
+    });
   });
 });
