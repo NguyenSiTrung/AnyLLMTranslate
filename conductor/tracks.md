@@ -79,6 +79,12 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_(none)_
+---
+
+## [~] Track: Inline Input Translation — Immersive-Parity Hardening
+*Link: [./conductor/tracks/inline-input-parity_20260709/](./conductor/tracks/inline-input-parity_20260709/)*
+*Priority: 🟠 High | Status: in-progress*
+
+Harden inline input-box translation toward Immersive Translate parity: IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command, site blocklist, full advanced Options panel. Default write remains translation-only. Excludes WebView floating-dot.
 
 ---

@@ -280,6 +280,41 @@ export interface InlineTranslateSettings {
   timeWindowMs: number;
   /** Target language for inline translation (ISO 639-1 code) */
   targetLanguage: string;
+  /**
+   * Idle debounce after the last trigger tap before fire (ms).
+   * 0 = fire immediately once tapCount is reached (subject to microtask).
+   * Immersive-style: wait briefly after the space burst settles.
+   */
+  idleMs: number;
+  /**
+   * Minimum gap between consecutive trigger taps (ms). Taps closer than this
+   * still count but gap tolerance can be applied via triggerToleranceCount.
+   */
+  triggerGapMs: number;
+  /**
+   * How many out-of-window / noisy taps may be tolerated before resetting the
+   * gesture counter (0 = strict window filtering only).
+   */
+  triggerToleranceCount: number;
+  /** When true, leading `/en`-style prefixes override target language for one request */
+  enableLanguagePrefix: boolean;
+  /** Prefix character for language override (default `/`) */
+  languagePrefix: string;
+  /**
+   * When true, write original + translation joined; when false (default),
+   * replace field with translation only.
+   */
+  dualMode: boolean;
+  /**
+   * URL/hostname patterns that disable inline translate (wildcards supported).
+   * Merged with built-in seed defaults at runtime when empty at load.
+   */
+  blocklistPatterns: string[];
+  /**
+   * When true, re-trigger gesture/shortcut restores pre-translate text via
+   * undoMap if native Ctrl+Z is unavailable after write-back.
+   */
+  enableFallbackUndo: boolean;
 }
 
 /** Extension settings stored in chrome.storage.local */
@@ -403,6 +438,21 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   knobOverrides: {},
 };
 
+/**
+ * Default site blocklist for hosts where programmatic input write-back is
+ * unreliable (seeded from Immersive Translate input-translate excludes).
+ */
+export const DEFAULT_INLINE_TRANSLATE_BLOCKLIST: string[] = [
+  '*notion.so',
+  '*notion.site',
+  '*figma.com',
+  '*larksuite.com',
+  '*feishu.cn',
+  '*feishu.net',
+  '*docs.google.com',
+  '*sheets.google.com',
+];
+
 /** Default inline translate settings */
 export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   enabled: true,
@@ -410,6 +460,14 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   tapCount: 3,
   timeWindowMs: 500,
   targetLanguage: 'en',
+  idleMs: 100,
+  triggerGapMs: 0,
+  triggerToleranceCount: 0,
+  enableLanguagePrefix: true,
+  languagePrefix: '/',
+  dualMode: false,
+  blocklistPatterns: [...DEFAULT_INLINE_TRANSLATE_BLOCKLIST],
+  enableFallbackUndo: true,
 };
 
 /** Default PDF translator settings — auto-open is OFF by default. */
