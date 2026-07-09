@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post youtube-asr-resegment + Youku ASS; 66 archived; 6 Youku ASS patterns elevated; Beads clean; Active empty) -->
+<!-- conductor-refresh: 2026-07-09 all (post selection-dict-mode archive; 67 archived; 2 selection-dict gotchas elevated; Beads clean; Active empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -101,6 +101,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - Cache namespaces isolate schemas: `dict:` for selection dictionary vs plain selection SHA-256 key (mirrors `subtitle:`). Use `getCachedTranslationByKey` / `cacheTranslationByKey`. (from: selection-dict-mode_20260709, archived 2026-07-09)
 - Dictionary UI branches on `hasDictionaryFields` / response `mode`, not only the client word/sentence classifier — model may return `{translation}` only for short phrases. (from: selection-dict-mode_20260709, archived 2026-07-09)
 - `selectionSession` monotonic id drops stale LLM responses when the user re-selects quickly. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- Glossary is intentionally omitted on the dictionary path (prompt noise); fail-open always yields `translatedText` so the tooltip never empties on bad JSON. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- Dictionary JSON schema source of truth: Immersive `selectionSystemPrompt` / `generalRule.selectionTranslation.prompts` in the vendored dump — word mode returns phonetic/definitions; phrase/sentence may return `{translation}` only. (from: selection-dict-mode_20260709, archived 2026-07-09)
 
 ## Hover Translate
 - `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements. (from: phase4-launch-ready_20260410, archived 2026-04-10)
@@ -568,8 +570,8 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **Test `beforeEach` blocks must only reset variables that are actually declared.** A copy-pasted `beforeEach` referencing `capturedTextTrackCuesHandler`/`capturedMseCuesHandler` — never declared and never captured (the file's `messageBridge` mock returns no-op cleanups for `onTextTrackCues`/`onMseCues`) — threw `ReferenceError` and failed every test in the `describe` block. When a mock factory doesn't *capture* a handler (it returns a no-op teardown), there is nothing to reset — reference only the handlers your mock actually captures. (from: hbomax tier-precedence hotfix test-regression fix, 2026-06-26)
 
 ---
-Last refreshed: 2026-07-09T13:29:13+07:00
-Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1903 after the generic-subtitle-handler track added 111 tests), build ~3.88MB, 3 lint errors in project source (`content/subtitleRenderer.ts` unused `NativeTrackRenderer` import; `inject/jsonParseSubtitleHook.ts` + `tests/unit/netflixHandler.test.ts` `no-non-null-assertion` — note: vendored `ImmersiveTransalteExtensionCode/` reference copy now excluded via eslint ignores, previously inflated `pnpm lint` to 31585 errors), `tsc` clean (0 errors — manifest sendMessage mock + genericHandler extractor guard fixed this cycle), 58 tracks archived, 0 active tracks
+Last refreshed: 2026-07-09T15:19:20+07:00
+Codebase health: 926 tests across 80 files (925 passing / 1 failing: `subtitleCoordinatorManifest` stale seek); build ~3.99 MB; tsc 3 errors; lint 12 errors; 67 tracks archived, 0 active tracks. (Mid-file health blurb above is historical from earlier tracks.)
 
 ## Multi-Provider Pool (2026-06-26)
 - **Round-robin coordinator at the single `initService()` seam:** A `ProviderPoolCoordinator implements TranslationService` returned by `initService()` covers all 7 translation paths (page, subtitle, PDF, selection, hover, inline, category-detect) in one place — no per-path changes. The coordinator holds one `OpenAICompatibleService` per enabled `(provider, key)` slot and delegates per call with round-robin + failover. (from: multi-provider-pool_20260626, 2026-06-26)

@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post youtube-asr + Youku ASS; no dep/script drift; scripts remain: test:fast + zip:source; build ~3.98 MB) -->
+<!-- conductor-refresh: 2026-07-09 all (post selection-dict-mode; no dep/script drift; scripts remain: test:fast + zip:source; build ~3.99 MB) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language

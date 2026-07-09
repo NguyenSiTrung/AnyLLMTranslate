@@ -1,33 +1,33 @@
 {
-  "lastRefresh": "2026-07-09T13:29:13+07:00",
+  "lastRefresh": "2026-07-09T15:19:20+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 2026-07-09 11:23 refresh: Youku ASS fixes (ALT-tl0, ALT-7tj) + youtube-asr-resegment_20260709 implement → archive (ALT-h8m).",
-    "product.md: refresh marker; Completed entries for Youku ASS intercept hardening + YouTube ASR resegment track; Current State → 848 TCs / 73 files / 847 pass + 1 fail / 66 archived / build ~3.98 MB / tsc 3 / lint 12; suite-history note for ASR+Youku.",
-    "patterns.md: refresh marker + 6 Youku ASS patterns (session pre-assign, stale-drop rule, never ASS→WEBVTT, empty-valid ASS hide, .ass-only URL hook, intercept owns track). YouTube ASR patterns already elevated at archive.",
-    "tech-stack.md: marker only — package.json deps/scripts unchanged; build size ~3.98 MB.",
-    "workflow.md / tracks.md: no drift (tracks.md already lists youtube-asr-resegment archived; Active Tracks empty).",
-    "learnings consolidation: 6 new Youku ASS patterns; ASR patterns already present; no duplicate merges.",
-    "beads DRIFT: none — ALT-h8m epic CLOSED 5/5; ALT-tl0 + ALT-7tj CLOSED; 0 open / 0 in_progress.",
+    "Scope: full refresh. Intervening work since 2026-07-09 13:29 refresh: selection-dict-mode_20260709 implement → archive (ALT-fbz 5/5).",
+    "product.md: refresh marker; Completed entry for Selection Translate — Dictionary Mode; Current State → 926 TCs / 80 files / 925 pass + 1 fail / 67 archived / build ~3.99 MB / tsc 3 / lint 12; suite-history note for selection-dict; platform handler list + value prop polish (Generic + Max/Youku).",
+    "patterns.md: refresh marker + footer; 2 selection-dict gotchas elevated (glossary omit + fail-open translatedText; Immersive schema source of truth). Core selection-dict patterns already present from archive.",
+    "tech-stack.md: marker + build size ~3.99 MB — package.json deps/scripts unchanged.",
+    "workflow.md / tracks.md: no content drift (tracks.md already lists selection-dict-mode archived; Active Tracks empty).",
+    "learnings consolidation: 2 new selection-dict gotchas; prior patterns already elevated; no duplicate merges.",
+    "beads DRIFT: none — ALT-fbz epic CLOSED 5/5; 0 open / 0 in_progress (552 closed total).",
     "backups: product.md.bak, patterns.md.bak, tech-stack.md.bak, refresh_state.json.bak.",
-    "verification: wxt build ✅ ~3.98 MB; vitest 847/848 pass (1 fail: subtitleCoordinatorManifest stale seek); tsc 3 errors; eslint 12 errors."
+    "verification: wxt build ✅ ~3.99 MB; vitest 925/926 pass (1 fail: subtitleCoordinatorManifest stale seek); tsc 3 errors; eslint 12 errors."
   ],
   "codebaseHealth": {
-    "tests": 848,
-    "testsPassing": 847,
+    "tests": 926,
+    "testsPassing": 925,
     "testsFailing": 1,
-    "testFiles": 73,
-    "buildSize": "~3.98 MB",
+    "testFiles": 80,
+    "buildSize": "~3.99 MB",
     "lintErrors": 12,
     "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports; inlineTranslate.parity.test.ts: PULSING_CLASS unused; inlineTranslateSettings.test.ts: beforeEach unused; subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion; subtitleCoordinator.test.ts: 2 no-non-null-assertion; youkuHandler.test.ts: 3 no-non-null-assertion.",
     "tscErrors": 3,
     "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; lib/youtubeAsrResegment.ts EN_BREAK_WORDS implicit any[] (2 sites).",
-    "archivedTracks": 66,
+    "archivedTracks": 67,
     "activeTracks": 0,
     "failingTests": [
       "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session"
     ],
-    "flakyTests": "none reproduced this run — prior background.test.ts fake-timer flakes not seen; new hard fail on manifest stale-seek"
+    "flakyTests": "none reproduced this run"
   },
-  "beadsDrift": "none — ALT-h8m / ALT-tl0 / ALT-7tj closed; no open or in_progress beads issues"
+  "beadsDrift": "none — ALT-fbz closed 5/5; 0 open / 0 in_progress"
 }
