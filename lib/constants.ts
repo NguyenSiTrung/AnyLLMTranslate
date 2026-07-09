@@ -98,4 +98,7 @@ export const STORAGE_KEYS = {
   PDF_VIEW_MODE: 'anyllm-pdf-view-mode',
   /** PDF viewer translation-progress snapshots, keyed by context hash (url+lang+provider+model). */
   PDF_PROGRESS: 'anyllm-pdf-progress',
+  /** Stats v2 daily dimensional records (IndexedDB) */
+  STATS_DB: 'anyllm-stats',
+  STATS_STORE: 'daily',
 } as const;
