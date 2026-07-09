@@ -1,13 +1,13 @@
 {
   "track_id": "web-pipeline-hardening_20260708",
   "type": "feature",
-  "status": "new",
+  "status": "archived",
   "priority": "medium",
   "depends_on": [],
   "estimated_hours": null,
   "created_at": "2026-07-08T08:40:29Z",
-  "updated_at": "2026-07-08T08:40:29Z",
-  "description": "Bilingual Page-Translation Pipeline Hardening v2 — close 5 gaps vs ImmersiveTranslate (body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps)",
+  "updated_at": "2026-07-09T00:00:00Z",
+  "description": "Bilingual Page-Translation Pipeline Hardening v2 \u2014 close 5 gaps vs ImmersiveTranslate (body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps)",
   "beads_epic": "ALT-bf6",
   "beads_tasks": {
     "phase1": "ALT-bf6.1",
@@ -27,7 +27,7 @@
     "phase4_task2": "ALT-bf6.4.2"
   },
   "beads_parallel": {
-    "phase_level": "Phase 4 (body-swap) has no phase dependency — can run concurrently with Phase 1. Phases 1→2→3 are sequential (all edit content/domWalker.ts).",
-    "task_level": "All tasks sequential within each phase (TDD write-test→implement→refine)."
+    "phase_level": "Phase 4 (body-swap) has no phase dependency \u2014 can run concurrently with Phase 1. Phases 1\u21922\u21923 are sequential (all edit content/domWalker.ts).",
+    "task_level": "All tasks sequential within each phase (TDD write-test\u2192implement\u2192refine)."
   }
 }
