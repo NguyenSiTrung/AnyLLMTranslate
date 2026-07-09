@@ -75,15 +75,10 @@ This file tracks all major tracks for the project.
 - ✅ **Bilingual Web Translation Quality & Performance** (`web-bilingual-quality_20260707`) — Archived 2026-07-07. Closed 7 highest-impact gaps vs Immersive Translate: rich translate (inline markup via `lib/richTranslate.ts`), batcher cleanup + char-budget (`lib/textBatching.ts`), source-lang gate (`lib/langDetect.ts`), negative cache (failure cache with TTL), per-key concurrency + throttle, web streaming (port-based SSE), cross-session resume (`lib/webResume.ts`). 8 phases, 84 new tests (1487 total). [View](./conductor/archive/web-bilingual-quality_20260707/)
 - ✅ **Bilingual Page-Translation Pipeline Hardening v2** (`web-pipeline-hardening_20260708`) — Archived 2026-07-09. Close 5 gaps vs ImmersiveTranslate: body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps. 48 new tests (1047 total). [View](./conductor/archive/web-pipeline-hardening_20260708/)
 - ✅ **Inline Input Translation — Immersive-Parity Hardening** (`inline-input-parity_20260709`) — Archived 2026-07-09. IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command (no 5th suggested_key), site blocklist, full advanced Options panel; fallback undo only when unedited. Default write remains translation-only. Excludes WebView floating-dot. [View](./conductor/archive/inline-input-parity_20260709/)
+- ✅ **YouTube ASR Subtitle Sentence Re-alignment** (`youtube-asr-resegment_20260709`) — Archived 2026-07-09. Pre-translate re-chunk of YouTube auto-generated captions: pure Immersive-style local rules (`lib/youtubeAsrResegment.ts`) + optional AI/BYOK index-range resegment (`RESEGMENT_YOUTUBE_ASR`, fail-open to local). Options → Subtitles → YouTube toggles (local default on, AI opt-in). 5 phases; Toggle `onChange` fix. [View](./conductor/archive/youtube-asr-resegment_20260709/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [~] Track: YouTube ASR Subtitle Sentence Re-alignment
-*Link: [./conductor/tracks/youtube-asr-resegment_20260709/](./conductor/tracks/youtube-asr-resegment_20260709/)*
-*Priority: 🟠 High — Immersive-style pre-translate re-chunk of auto-generated captions (local rules + AI hook design)*
 
 ---
