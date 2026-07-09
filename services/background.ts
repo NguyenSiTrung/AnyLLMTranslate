@@ -1537,6 +1537,14 @@ async function handleTranslateSelection(
         selectionSettings.cacheTTLDays,
       );
       if (cachedDict !== null) {
+        recordUsage({
+          mode: 'selection',
+          cacheHits: 1,
+          cacheCharacters: message.text.length,
+          host: hostFromSender(sender),
+          sourceLanguage: message.sourceLanguage,
+          targetLanguage: message.targetLanguage,
+        }).catch(() => {});
         return deserializeDictionaryCache(cachedDict);
       }
 
@@ -1618,6 +1626,14 @@ async function handleTranslateSelection(
       selectionSettings.cacheTTLDays,
     );
     if (cached !== null) {
+      recordUsage({
+        mode: 'selection',
+        cacheHits: 1,
+        cacheCharacters: message.text.length,
+        host: hostFromSender(sender),
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+      }).catch(() => {});
       return { success: true, translatedText: cached, mode: 'sentence' };
     }
 

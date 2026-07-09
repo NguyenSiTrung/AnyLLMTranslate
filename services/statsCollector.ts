@@ -79,10 +79,15 @@ function localDateYmd(d: Date = new Date()): string {
   return d.toLocaleDateString('en-CA');
 }
 
-function retentionCutoffYmd(retentionDays: number, today: Date = new Date()): string {
-  const cutoff = new Date(today);
-  cutoff.setDate(cutoff.getDate() - retentionDays);
-  return localDateYmd(cutoff);
+/**
+ * First retained calendar day (YYYY-MM-DD). Days strictly before this key are pruned.
+ * Keeps exactly `retentionDays` days including today: first retained = today - (N - 1).
+ */
+export function retentionCutoffYmd(retentionDays: number, today: Date = new Date()): string {
+  const firstRetained = new Date(today);
+  // Keep N days including today → oldest kept is today-(N-1); delete strictly before that.
+  firstRetained.setDate(firstRetained.getDate() - Math.max(0, retentionDays - 1));
+  return localDateYmd(firstRetained);
 }
 
 /** Build counter delta from a usage event (mode-specific event counters included). */
@@ -221,6 +226,10 @@ export async function updateStatsPreferences(
 // v1 read API (legacy summary shape; prefer getStatsV2)
 // ---------------------------------------------------------------------------
 
+/**
+ * @deprecated Prefer {@link getStatsV2}. Returns the raw storage payload which may be
+ * v1- or v2-shaped without migration normalization.
+ */
 export async function getStats(): Promise<TranslationStats> {
   const result = await chrome.storage.local.get(STATS_STORAGE_KEY);
   return result[STATS_STORAGE_KEY] ?? { ...DEFAULT_STATS };

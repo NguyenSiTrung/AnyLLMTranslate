@@ -5,9 +5,30 @@ import {
   __resetTranslationServiceForTest,
   __resetSettingsCacheForTest,
 } from '../background';
+import { getStatsV2, resetStats } from '../statsCollector';
 
 const mockStorage: Record<string, unknown> = {};
-const idbStore = new Map<string, unknown>();
+/** Per-store maps so stats prune cannot delete translation cache keys (mirrors real multi-DB IDB). */
+const idbStores = new Map<string, Map<string, unknown>>();
+
+function storeMap(store?: { name?: string } | string): Map<string, unknown> {
+  const name =
+    typeof store === 'string'
+      ? store
+      : store && typeof store === 'object' && 'name' in store
+        ? String(store.name)
+        : '__default__';
+  let m = idbStores.get(name);
+  if (!m) {
+    m = new Map();
+    idbStores.set(name, m);
+  }
+  return m;
+}
+
+function clearAllIdb(): void {
+  for (const m of idbStores.values()) m.clear();
+}
 
 vi.stubGlobal('chrome', {
   storage: {
@@ -15,6 +36,9 @@ vi.stubGlobal('chrome', {
       get: vi.fn(async (key: string) => ({ [key]: mockStorage[key] })),
       set: vi.fn(async (items: Record<string, unknown>) => {
         Object.assign(mockStorage, items);
+      }),
+      remove: vi.fn(async (key: string) => {
+        delete mockStorage[key];
       }),
     },
     onChanged: {
@@ -38,17 +62,19 @@ vi.stubGlobal('chrome', {
 });
 
 vi.mock('idb-keyval', () => ({
-  createStore: vi.fn(() => ({})),
-  get: vi.fn(async (key: string) => idbStore.get(key) ?? undefined),
-  set: vi.fn(async (key: string, value: unknown) => {
-    idbStore.set(key, value);
+  createStore: vi.fn((dbName: string, storeName: string) => ({
+    name: `${dbName}::${storeName}`,
+  })),
+  get: vi.fn(async (key: string, store?: { name?: string }) => storeMap(store).get(key)),
+  set: vi.fn(async (key: string, value: unknown, store?: { name?: string }) => {
+    storeMap(store).set(key, value);
   }),
-  del: vi.fn(async (key: string) => {
-    idbStore.delete(key);
+  del: vi.fn(async (key: string, store?: { name?: string }) => {
+    storeMap(store).delete(key);
   }),
-  entries: vi.fn(async () => [...idbStore.entries()]),
-  clear: vi.fn(async () => {
-    idbStore.clear();
+  entries: vi.fn(async (store?: { name?: string }) => [...storeMap(store).entries()]),
+  clear: vi.fn(async (store?: { name?: string }) => {
+    storeMap(store).clear();
   }),
 }));
 
@@ -102,7 +128,10 @@ function baseProviderSettings(extra: Record<string, unknown> = {}) {
 describe('handleTranslateSelection — dictionary mode', () => {
   beforeEach(async () => {
     delete mockStorage['anyllm-translate-settings'];
-    idbStore.clear();
+    for (const k of Object.keys(mockStorage)) {
+      if (k.includes('stats') || k.includes('anyllm-translate-stats')) delete mockStorage[k];
+    }
+    clearAllIdb();
     await new Promise((r) => setTimeout(r, 10));
     __resetSemaphoreForTest();
     __resetTranslationServiceForTest();
@@ -264,5 +293,109 @@ describe('handleTranslateSelection — dictionary mode', () => {
 
     expect(plainAgain.mode).toBe('sentence');
     expect(plainAgain.translatedText).toBe('plain-vi');
+  });
+
+  it('records cacheHits (not apiCalls) on selection sentence cache hit', async () => {
+    mockStorage['anyllm-translate-settings'] = baseProviderSettings();
+    await resetStats();
+
+    mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
+    await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'hello',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    );
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.characters).toBe(5);
+    });
+
+    // Cache hit — no second LLM call
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const callsBefore = fetchMock.mock.calls.length;
+    const result = (await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'hello',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    )) as { success: boolean; translatedText?: string; mode?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.mode).toBe('sentence');
+    expect(result.translatedText).toBe('xin chào');
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.cacheHits).toBe(1);
+      expect(stats.lifetime.cacheCharacters).toBe(5);
+      // Pure cache hit must not inflate LLM counters.
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.characters).toBe(5);
+      expect(stats.lifetime.selectionEvents).toBe(2);
+    });
+  });
+
+  it('records cacheHits (not apiCalls) on selection dictionary cache hit', async () => {
+    mockStorage['anyllm-translate-settings'] = baseProviderSettings();
+    await resetStats();
+
+    const dictJson = JSON.stringify({
+      phonetic: '/həˈloʊ/',
+      definitions: [{ pos: 'excl.', meaning: 'xin chào' }],
+      translation: 'xin chào',
+      contextual_analysis: 'Greeting.',
+    });
+    mockFetch(dictJson);
+    await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'hello',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        dictionaryMode: true,
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    );
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.apiCalls).toBe(1);
+    });
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const callsBefore = fetchMock.mock.calls.length;
+    const result = (await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'hello',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        dictionaryMode: true,
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    )) as { success: boolean; mode?: string; translatedText?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.mode).toBe('dictionary');
+    expect(result.translatedText).toBe('xin chào');
+    expect(fetchMock.mock.calls.length).toBe(callsBefore);
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.cacheHits).toBe(1);
+      expect(stats.lifetime.cacheCharacters).toBe(5);
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.characters).toBe(5);
+    });
   });
 });

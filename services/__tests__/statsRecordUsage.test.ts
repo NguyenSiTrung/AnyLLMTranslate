@@ -35,9 +35,11 @@ import {
   resetStats,
   getStatsV2,
   updateStatsPreferences,
+  retentionCutoffYmd,
   STATS_STORAGE_KEY,
 } from '../statsCollector';
-import { getDailyRecord, getAllDailyRecords } from '../statsIdb';
+import { getDailyRecord, getAllDailyRecords, setDailyRecord } from '../statsIdb';
+import { ZERO_COUNTERS } from '@/types/stats';
 
 describe('recordUsage', () => {
   beforeEach(() => {
@@ -155,5 +157,50 @@ describe('recordUsage', () => {
     expect(stats.lifetime.characters).toBe(10);
     expect(stats.lifetime.apiCalls).toBe(1);
     expect(stats.lifetime.cacheHits).toBe(5);
+  });
+
+  describe('retention window', () => {
+    it('retentionCutoffYmd keeps exactly N days including today', () => {
+      // Fixed local noon avoids DST edge cases around midnight.
+      const today = new Date(2026, 6, 9, 12, 0, 0); // 2026-07-09 local
+      expect(retentionCutoffYmd(30, today)).toBe('2026-06-10'); // today - 29
+      expect(retentionCutoffYmd(1, today)).toBe('2026-07-09');
+      expect(retentionCutoffYmd(90, today)).toBe('2026-04-11');
+    });
+
+    it('recordUsage prunes so at most retentionDays daily records remain', async () => {
+      await updateStatsPreferences({ retentionDays: 30 });
+
+      const today = new Date();
+      // Seed 45 historical days including today (today will be overwritten by recordUsage).
+      for (let i = 0; i < 45; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const date = d.toLocaleDateString('en-CA');
+        await setDailyRecord({
+          date,
+          totals: { ...ZERO_COUNTERS, characters: 1, apiCalls: 1 },
+          byMode: {},
+          byProvider: {},
+          byHost: {},
+          byLanguagePair: {},
+        });
+      }
+
+      expect((await getAllDailyRecords()).length).toBe(45);
+
+      await recordUsage({ mode: 'page', characters: 1, apiCalls: 1 });
+
+      const remaining = await getAllDailyRecords();
+      expect(remaining.length).toBeLessThanOrEqual(30);
+      expect(remaining.length).toBe(30);
+
+      const todayYmd = today.toLocaleDateString('en-CA');
+      const cutoff = retentionCutoffYmd(30, today);
+      for (const day of remaining) {
+        expect(day.date >= cutoff).toBe(true);
+        expect(day.date <= todayYmd).toBe(true);
+      }
+    });
   });
 });

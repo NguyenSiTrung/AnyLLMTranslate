@@ -453,4 +453,38 @@ describe('StatisticsSection', () => {
       expect(mockedLoadDays.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  it('soft-reloads without skeleton when summary already loaded (storage change)', async () => {
+    setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByText('LLM Characters')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('stats-loading-skeleton')).not.toBeInTheDocument();
+
+    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0][0];
+
+    let resolveStats!: (value: TranslationStatsV2) => void;
+    mockedGetStatsV2.mockReturnValue(
+      new Promise((resolve) => {
+        resolveStats = resolve;
+      }),
+    );
+    mockedLoadDays.mockReturnValue(new Promise(() => {}));
+
+    await act(async () => {
+      listener(
+        { [STATS_STORAGE_KEY]: { newValue: makeSummary() } },
+        'local',
+      );
+    });
+
+    // Soft reload: keep current dashboard visible; no skeleton flash.
+    expect(screen.queryByTestId('stats-loading-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByText('LLM Characters')).toBeInTheDocument();
+
+    // Unblock pending promise so act/waiters can settle.
+    resolveStats(makeSummary());
+  });
 });

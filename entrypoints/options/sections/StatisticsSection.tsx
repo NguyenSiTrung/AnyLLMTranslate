@@ -821,9 +821,16 @@ export function StatisticsSection() {
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
+  /** Tracks loaded summary so soft reloads skip the skeleton flash. */
+  const summaryRef = useRef<TranslationStatsV2 | null>(null);
+  summaryRef.current = summary;
 
-  const loadStats = useCallback(async () => {
-    setIsLoading(true);
+  const loadStats = useCallback(async (opts?: { forceLoading?: boolean }) => {
+    // Soft reload when summary is already loaded (storage change / prefs / period).
+    // Hard loading on first load, Retry after error (forceLoading), or empty state.
+    if (opts?.forceLoading || summaryRef.current === null) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const [nextSummary, nextDays, prevTotals] = await Promise.all([
@@ -1041,7 +1048,11 @@ export function StatisticsSection() {
                     Statistics are stored locally in Chrome storage and IndexedDB.
                   </p>
                 </div>
-                <Button variant="secondary" size="sm" onClick={() => void loadStats()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void loadStats({ forceLoading: true })}
+                >
                   Retry
                 </Button>
               </div>
