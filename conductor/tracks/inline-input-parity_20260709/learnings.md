@@ -31,4 +31,17 @@ From `conductor/patterns.md` + archived `inline-translate_20260418`:
 
 ---
 
-<!-- Learnings from implementation will be appended below -->
+## [2026-07-09] - Phase 1–6: Full Immersive-parity implementation
+
+- **Implemented:** Extended settings; package split; IME-safe gesture; race-safe orchestrate; multi-strategy write-back; blocklist; language prefix; Alt+I command; full Options panel; regression + parity tests.
+- **Files changed:** `types/config.ts`, `lib/inlineTranslatePrefix.ts`, `content/inlineTranslate/**`, `content/inlineTranslate.ts`, `entrypoints/{content,background}.ts`, `wxt.config.ts`, `entrypoints/options/sections/InlineTranslateSection.tsx`, tests
+- **Learnings:**
+  - Patterns: Guard own write-back with `isWritingBack` so synthetic `input` events do not cancel in-flight translate or skip toast dismiss.
+  - Patterns: Partial `updateInlineTranslateConfig` must not spread `blocklistPatterns: undefined` over existing arrays.
+  - Gotchas: jsdom KeyboardEvents are never `isTrusted` — allow untrusted under Vitest only.
+  - Gotchas: Chrome only auto-assigns the first 4 `suggested_key` commands; 5th (`translate-input-box` Alt+I) may need manual bind at `chrome://extensions/shortcuts`.
+  - Context: Blocklist policy = user list replaces defaults when non-empty; empty → seed defaults.
+  - Context: Dual mode separators: input uses ` / `; textarea/CE uses newline.
+  - Manual smoke (recommended): Google Search box triple-space; ChatGPT composer; Vietnamese IME composition (should not false-fire).
+---
+

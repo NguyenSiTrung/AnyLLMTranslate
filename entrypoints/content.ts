@@ -21,7 +21,12 @@ import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay, clearHoverCache } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
-import { initInlineTranslate, setInlineTranslateEnabled, updateInlineTranslateConfig } from '@/content/inlineTranslate';
+import {
+  initInlineTranslate,
+  setInlineTranslateEnabled,
+  updateInlineTranslateConfig,
+  translateFocusedInput,
+} from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
 import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
@@ -731,6 +736,9 @@ export function setupMessageListener(): void {
       if (message.text) {
         translateSelectedTextViaContextMenu(message.text);
       }
+    } else if (message.action === 'translateInputBox') {
+      // chrome.commands translate-input-box (Alt+I) → same pipeline as gesture
+      void translateFocusedInput();
     } else if (message.action === 'enterSectionPicker') {
       enterPickerMode((el) => translateSection(el));
     } else if (message.action === 'categoryChanged') {

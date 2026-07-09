@@ -157,6 +157,9 @@ export default defineBackground(() => {
       case 'restore-page':
         sendToActiveTab({ action: 'stopTranslation' });
         break;
+      case 'translate-input-box':
+        sendToActiveTab({ action: 'translateInputBox' });
+        break;
     }
   });
 

@@ -460,7 +460,7 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   tapCount: 3,
   timeWindowMs: 500,
   targetLanguage: 'en',
-  idleMs: 100,
+  idleMs: 0,
   triggerGapMs: 0,
   triggerToleranceCount: 0,
   enableLanguagePrefix: true,

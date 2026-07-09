@@ -14,7 +14,7 @@ describe('InlineTranslateSettings defaults & deep-merge', () => {
     expect(d.triggerKey).toBe(' ');
     expect(d.tapCount).toBe(3);
     expect(d.timeWindowMs).toBe(500);
-    expect(d.idleMs).toBe(100);
+    expect(d.idleMs).toBe(0);
     expect(d.triggerGapMs).toBe(0);
     expect(d.triggerToleranceCount).toBe(0);
     expect(d.enableLanguagePrefix).toBe(true);

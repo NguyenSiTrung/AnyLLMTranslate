@@ -45,6 +45,12 @@ export default defineConfig({
         suggested_key: { default: 'Alt+X' },
         description: 'Restore original page (remove translations)',
       },
+      // 5th command — Chrome only auto-assigns the first 4 suggested_key
+      // entries; if Alt+I does not bind, set it at chrome://extensions/shortcuts.
+      'translate-input-box': {
+        suggested_key: { default: 'Alt+I' },
+        description: 'Translate the focused input box (inline translate)',
+      },
     },
   },
 });
