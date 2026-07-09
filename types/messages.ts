@@ -146,6 +146,37 @@ export interface TranslateSelectionMessage {
   text: string;
   sourceLanguage: string;
   targetLanguage: string;
+  /**
+   * Opt-in dictionary word-mode. Only the selection-translate path should set
+   * this; hover and inline must omit it so they always get plain translation.
+   */
+  dictionaryMode?: boolean;
+  /** Surrounding DOM context for dictionary prompts (optional, capped). */
+  contextText?: string;
+}
+
+/** Structured dictionary payload returned when word-mode succeeds. */
+export interface SelectionDictionaryPayload {
+  phonetic?: string;
+  definitions?: Array<{
+    pos?: string;
+    meaning?: string;
+    example?: { source?: string; target?: string };
+  }>;
+  translation?: string;
+  contextualAnalysis?: string;
+}
+
+/** Translate selection response from background → content script */
+export interface TranslateSelectionResult {
+  success: boolean;
+  /** Always a displayable string (primary translation or fail-open raw text). */
+  translatedText?: string;
+  /** 'dictionary' when structured fields present; otherwise 'sentence'. */
+  mode?: 'dictionary' | 'sentence';
+  /** Present when mode is dictionary. */
+  dictionary?: SelectionDictionaryPayload;
+  error?: string;
 }
 
 /** Status update notification from background → popup */

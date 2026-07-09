@@ -380,6 +380,13 @@ export interface ExtensionSettings {
   debugMode: boolean;
   /** Text selection translate enabled */
   textSelectionEnabled: boolean;
+  /**
+   * When true (default), short selections request Immersive-style dictionary
+   * JSON (phonetic, POS, definitions). When false, selection always uses plain
+   * translation. Opt-in per request via message.dictionaryMode — hover/inline
+   * never use dictionary mode.
+   */
+  selectionDictionaryEnabled: boolean;
   /** Mouse hover translate enabled */
   hoverTranslateEnabled: boolean;
   /** Hover translate delay in ms (200-500, default 300) */
@@ -591,6 +598,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   customSystemPrompt: null,
   debugMode: false,
   textSelectionEnabled: true,
+  selectionDictionaryEnabled: true,
   hoverTranslateEnabled: false,
   hoverDelay: 300,
   inlineTranslate: { ...DEFAULT_INLINE_TRANSLATE_SETTINGS },

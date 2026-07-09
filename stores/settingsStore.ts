@@ -147,6 +147,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     customSystemPrompt: state.customSystemPrompt,
     debugMode: state.debugMode,
     textSelectionEnabled: state.textSelectionEnabled,
+    selectionDictionaryEnabled: state.selectionDictionaryEnabled,
     hoverTranslateEnabled: state.hoverTranslateEnabled,
     hoverDelay: state.hoverDelay,
     inlineTranslate: state.inlineTranslate,

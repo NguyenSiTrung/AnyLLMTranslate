@@ -58,6 +58,14 @@ export interface TranslationRequest {
    *  per-film pre-scan (services/subtitleNameScanner.ts) to inject its own
    *  name-extraction prompt. */
   preScanSystemPrompt?: string;
+  /**
+   * When true, skip translations-map JSON parse and store the full raw model
+   * response under each requested text id. Used by selection dictionary mode
+   * (Immersive-style structured JSON is not a translations map).
+   */
+  returnRawResponse?: boolean;
+  /** Optional verbatim user prompt (overrides buildUserPrompt). */
+  customUserPrompt?: string;
 }
 
 /** Result from the translation service */
