@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post youtube-asr-resegment + Youku ASS; 66 archived; 6 Youku ASS patterns elevated; Beads clean; Active empty) -->
+<!-- conductor-refresh: 2026-07-09 all (post inline-input-parity + suite trim; 65 archived; 6 inline-parity patterns + 2 soft context; Beads clean; Active empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -517,14 +517,6 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **`data-val="default"` is Youku's Simplified-Chinese sentinel, not a real code.** Map it to `zh-Hans` in the code map alongside `chs`. (from: youku-subtitles_20260624)
 - **`getByText` (singular) breaks when two platforms share a `methodHint`.** `SUPPORTED_SUBTITLE_SITES` renders from an array map, so adding a site needs no component change — but test fixtures with hardcoded counts (`getByText('DOM cue scraping')` singular, `toHaveLength(5)`) must switch to `getAllByText(...).toHaveLength(2)` and bump counts. The UI is data-driven; only the tests have stale literals. (from: youku-subtitles_20260624)
 
-## Youku ASS Intercept Hardening (2026-07-09)
-- **Pre-assign content-side `sessionId` before `await translateSubtitle`.** Progressive `SUBTITLE_CHUNK_TRANSLATED` messages can race ahead of the first-chunk response. If `activeSubtitleSessionId` is still `null`, a strict `null !== chunkSessionId` check drops every early chunk as “stale”. Allocate a content-owned id, set `state.activeSubtitleSessionId`, and pass `sessionId` on the outbound message so background echoes the same id. (from: Youku ALT-tl0, commit `64ec9fc`)
-- **Stale-chunk drop only when active session is non-null and differs.** Defense-in-depth: never treat “active is null” as a mismatch; if a chunk arrives with a session id while active is null, adopt it. (from: Youku ALT-tl0, commit `64ec9fc`)
-- **Never rewrite ASS/SSA as empty WEBVTT.** Youku’s KUI player parses ASS and throws `Cannot read properties of undefined (reading 'Dialogue')` when the intercept response is `WEBVTT\n\n`. Detect ASS via `[Script Info]` / `Dialogue:` and pass an ASS body through; blank VTT tracks only. (from: Youku ALT-tl0 / ALT-7tj, commits `64ec9fc`, `6a34892`)
-- **Blank native ASS with empty-but-valid ASS + CSS hide.** To hide native captions under the overlay without crashing the parser: return minimal valid ASS (structure, no Dialogue lines) and use `display:none` on `#subtitle` when full-file intercept owns the track (DOM scrape not needed). (from: Youku ALT-7tj, commit `6a34892`)
-- **Youku URL hook is `.ass` only (Immersive parity).** Intercepting progressive HLS `.vtt` leaf segments creates a new `trackIdentity`/session per URL → thrashing and “Dropping stale subtitle chunk”. Match Immersive `subtitleUrlRegExp: "\\.ass$"`; leave progressive HLS to manifest/DOM paths. (from: Youku ALT-tl0, commit `64ec9fc`)
-- **Full-file intercept owns the track over DOM/MSE/TextTrack.** Once `interceptOriginalCues` is populated, suppress lower tiers in `shouldSuppressSource` so scrapers do not clobber the overlay or spawn competing sessions. (from: Youku ALT-tl0, commit `64ec9fc`)
-
 ## Subtitle Quality sub-projects 5a/5b/6 (2026-06-23/24)
 - **Reading-speed timing adaptation extends short cues and compresses long ones.** Pure `lib/subtitleTiming.ts` helper computes a minimum display duration from word count / WPM and clamps cue end time. Wire it into the coordinator's cue-update loop (after translation arrives, before overlay render) — not in the parser or overlay layer. Keeps timing UX concerns at the orchestration seam. (from: subtitle quality sub-project 5a)
 - **Max DOM scraper seek-collapse: open-cue sentinel prevents stale name retention.** When the user seeks backward past the current cue, the DOM scraper's rolling buffer must reset — otherwise a stale proper-noun name persists in the rolling glossary and pollutes subsequent chunks. Use an open-cue sentinel (the currently displayed cue's start time) to detect seek-collapse and clear the buffer. (from: subtitle quality sub-project 5a, commit `589d6e2`)
@@ -563,7 +555,7 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **Test `beforeEach` blocks must only reset variables that are actually declared.** A copy-pasted `beforeEach` referencing `capturedTextTrackCuesHandler`/`capturedMseCuesHandler` — never declared and never captured (the file's `messageBridge` mock returns no-op cleanups for `onTextTrackCues`/`onMseCues`) — threw `ReferenceError` and failed every test in the `describe` block. When a mock factory doesn't *capture* a handler (it returns a no-op teardown), there is nothing to reset — reference only the handlers your mock actually captures. (from: hbomax tier-precedence hotfix test-regression fix, 2026-06-26)
 
 ---
-Last refreshed: 2026-07-09T13:29:13+07:00
+Last refreshed: 2026-07-02T19:05:00+07:00
 Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on full `pnpm test --run`; up from 1903 after the generic-subtitle-handler track added 111 tests), build ~3.88MB, 3 lint errors in project source (`content/subtitleRenderer.ts` unused `NativeTrackRenderer` import; `inject/jsonParseSubtitleHook.ts` + `tests/unit/netflixHandler.test.ts` `no-non-null-assertion` — note: vendored `ImmersiveTransalteExtensionCode/` reference copy now excluded via eslint ignores, previously inflated `pnpm lint` to 31585 errors), `tsc` clean (0 errors — manifest sendMessage mock + genericHandler extractor guard fixed this cycle), 58 tracks archived, 0 active tracks
 
 ## Multi-Provider Pool (2026-06-26)
