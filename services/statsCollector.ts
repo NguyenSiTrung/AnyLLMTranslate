@@ -257,7 +257,7 @@ function noonUtcIso(dateYmd: string): string {
 }
 
 function normalizeStatsV2(raw: Partial<TranslationStatsV2> & { version?: number }): TranslationStatsV2 {
-  const lifetimePartial = raw.lifetime ?? {};
+  const lifetimePartial: Partial<StatCounters> = raw.lifetime ?? {};
   const lifetime: StatCounters = { ...ZERO_COUNTERS };
   for (const key of Object.keys(ZERO_COUNTERS) as Array<keyof StatCounters>) {
     const value = lifetimePartial[key];
