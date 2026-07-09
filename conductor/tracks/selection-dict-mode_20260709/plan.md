@@ -12,32 +12,36 @@ Sequential by default (shared `textSelection` / messaging / settings surfaces). 
 ## Phase 1: Pure domain — classify, parse, prompts, context
 <!-- execution: parallel -->
 
-- [ ] Task 1: Word vs sentence classifier (TDD)
+- [x] Task 1: Word vs sentence classifier (TDD)
   <!-- files: lib/selectionClassify.ts, tests/lib/selectionClassify.test.ts -->
-  - [ ] `isDictionaryModeCandidate(text): boolean` — ≤3 tokens / single CJK token; no sentence-ending punctuation
-  - [ ] Unit tests: single word, multi-word phrase, long sentence, CJK, punctuation edge cases
+  - [x] `isDictionaryModeCandidate(text): boolean` — ≤3 tokens / single CJK token; no sentence-ending punctuation
+  - [x] Unit tests: single word, multi-word phrase, long sentence, CJK, punctuation edge cases
+  - Commit: `20ee77e`
 
-- [ ] Task 2: Dictionary JSON parser (TDD)
+- [x] Task 2: Dictionary JSON parser (TDD)
   <!-- files: lib/selectionDictionary.ts, tests/lib/selectionDictionary.test.ts -->
-  - [ ] Types: `SelectionDictionaryResult`, definition/example shapes
-  - [ ] `parseSelectionDictionary(raw): SelectionDictionaryResult | null` — strip fences, partial fields, fail-open helpers
-  - [ ] `hasDictionaryFields(result)` for UI branching
-  - [ ] Unit tests: valid, partial, fenced markdown, garbage, empty
+  - [x] Types: `SelectionDictionaryResult`, definition/example shapes
+  - [x] `parseSelectionDictionary(raw): SelectionDictionaryResult | null` — strip fences, partial fields, fail-open helpers
+  - [x] `hasDictionaryFields(result)` for UI branching
+  - [x] Unit tests: valid, partial, fenced markdown, garbage, empty
+  - Commit: `892f153`
 
-- [ ] Task 3: Dictionary selection prompts (TDD)
+- [x] Task 3: Dictionary selection prompts (TDD)
   <!-- files: lib/selectionDictionaryPrompt.ts, tests/lib/selectionDictionaryPrompt.test.ts -->
-  - [ ] System + user prompt templates (Immersive-aligned); substitute `from`, `to`, `text`, `context_text`
-  - [ ] Must not alter page/subtitle default prompts
-  - [ ] Unit tests: variable substitution, isolation
+  - [x] System + user prompt templates (Immersive-aligned); substitute `from`, `to`, `text`, `context_text`
+  - [x] Must not alter page/subtitle default prompts
+  - [x] Unit tests: variable substitution, isolation
+  - Commit: `04d30a4`
 
-- [ ] Task 4: Selection context extractor (TDD-friendly)
+- [x] Task 4: Selection context extractor (TDD-friendly)
   <!-- files: lib/selectionContext.ts, tests/lib/selectionContext.test.ts -->
-  - [ ] Extract capped surrounding text from Range/string helpers (jsdom-friendly API)
-  - [ ] Empty string on failure; max length constant
-  - [ ] Unit tests with synthetic DOM/range where feasible
+  - [x] Extract capped surrounding text from Range/string helpers (jsdom-friendly API)
+  - [x] Empty string on failure; max length constant
+  - [x] Unit tests with synthetic DOM/range where feasible
+  - Commit: `892f153`
 
-- [ ] Task 5: Conductor — Phase 1 verification
-  - [ ] `pnpm test` (new pure tests green) + `pnpm lint` on touched files
+- [x] Task 5: Conductor — Phase 1 verification
+  - [x] `pnpm test` (new pure tests green) + `pnpm lint` on touched files
 
 ---
 
@@ -45,25 +49,25 @@ Sequential by default (shared `textSelection` / messaging / settings surfaces). 
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Settings flag + defaults
+- [x] Task 1: Settings flag + defaults
   <!-- files: types/config.ts, lib/config.ts, stores/settingsStore.ts (if needed) -->
-  - [ ] Add `selectionDictionaryEnabled: boolean` (default `true`)
-  - [ ] Deep-merge / loadDefaults / extractSettings pick it up
-  - [ ] Config/store tests if existing patterns cover settings keys
+  - [x] Add `selectionDictionaryEnabled: boolean` (default `true`)
+  - [x] Deep-merge / loadDefaults / extractSettings pick it up
+  - [x] Config/store tests if existing patterns cover settings keys
 
-- [ ] Task 2: Message contract extension
+- [x] Task 2: Message contract extension
   <!-- files: types/messages.ts -->
-  - [ ] Extend `TranslateSelectionMessage` with opt-in dictionary fields (e.g. `dictionaryMode?`, `contextText?`)
-  - [ ] Response shape: `translatedText`, optional `dictionary`, `mode`
-  - [ ] Backward compatible: missing flags → current plain behavior
+  - [x] Extend `TranslateSelectionMessage` with opt-in dictionary fields (e.g. `dictionaryMode?`, `contextText?`)
+  - [x] Response shape: `translatedText`, optional `dictionary`, `mode`
+  - [x] Backward compatible: missing flags → current plain behavior
 
-- [ ] Task 3: Cache key separation for dictionary mode
+- [x] Task 3: Cache key separation for dictionary mode
   <!-- files: services/cacheManager.ts or selection handler helpers + tests -->
-  - [ ] Namespace/suffix so dictionary JSON does not collide with plain string cache
-  - [ ] Unit tests for key distinction
+  - [x] Namespace/suffix so dictionary JSON does not collide with plain string cache
+  - [x] Unit tests for key distinction
 
-- [ ] Task 4: Conductor — Phase 2 verification
-  - [ ] Tests + lint; no behavior change for hover/inline yet
+- [x] Task 4: Conductor — Phase 2 verification
+  - [x] Tests + lint; no behavior change for hover/inline yet
 
 ---
 
@@ -71,16 +75,16 @@ Sequential by default (shared `textSelection` / messaging / settings surfaces). 
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] Task 1: Wire `handleTranslateSelection` dictionary path
+- [x] Task 1: Wire `handleTranslateSelection` dictionary path
   <!-- files: services/background.ts, tests as appropriate -->
-  - [ ] If `dictionaryMode` && settings enabled: use dictionary system prompt + context; parse JSON; return structured + `translatedText` fallback
-  - [ ] Else: existing plain path
-  - [ ] Cache read/write with mode-aware keys
-  - [ ] Fail-open on parse failure
-  - [ ] Do not enable dictionary for callers that omit the flag
+  - [x] If `dictionaryMode` && settings enabled: use dictionary system prompt + context; parse JSON; return structured + `translatedText` fallback
+  - [x] Else: existing plain path
+  - [x] Cache read/write with mode-aware keys
+  - [x] Fail-open on parse failure
+  - [x] Do not enable dictionary for callers that omit the flag
 
-- [ ] Task 2: Conductor — Phase 3 verification
-  - [ ] Unit/integration tests for both modes; `pnpm test` + lint
+- [x] Task 2: Conductor — Phase 3 verification
+  - [x] Unit/integration tests for both modes; `pnpm test` + lint
 
 ---
 
@@ -88,37 +92,37 @@ Sequential by default (shared `textSelection` / messaging / settings surfaces). 
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] Task 1: Content script orchestration
+- [x] Task 1: Content script orchestration
   <!-- files: content/textSelection.ts -->
-  - [ ] Classify selection; if dictionary candidate && setting on → request with `dictionaryMode` + context
-  - [ ] Preserve `selectionSession` race guard, button, context-menu entry
-  - [ ] Hover/inline call sites unchanged (no dictionary flag)
+  - [x] Classify selection; if dictionary candidate && setting on → request with `dictionaryMode` + context
+  - [x] Preserve `selectionSession` race guard, button, context-menu entry
+  - [x] Hover/inline call sites unchanged (no dictionary flag)
 
-- [ ] Task 2: Dictionary vs sentence tooltip rendering
+- [x] Task 2: Dictionary vs sentence tooltip rendering
   <!-- files: content/textSelection.ts, styles/tooltip.css -->
-  - [ ] Dictionary layout: phonetic, POS, meanings, examples, translation, contextual analysis, copy/close
-  - [ ] Sentence layout: existing plain UI
-  - [ ] Loading/error states; scoped CSS; dark mode
-  - [ ] Tests for render branches (DOM construction helpers if extracted)
+  - [x] Dictionary layout: phonetic, POS, meanings, examples, translation, contextual analysis, copy/close
+  - [x] Sentence layout: existing plain UI
+  - [x] Loading/error states; scoped CSS; dark mode
+  - [x] Tests for render branches (DOM construction helpers if extracted)
 
-- [ ] Task 3: Conductor — Phase 4 verification
-  - [ ] Selection UI manual checklist (word / sentence / invalid JSON) + automated tests
+- [x] Task 3: Conductor — Phase 4 verification
+  - [x] Selection UI manual checklist (word / sentence / invalid JSON) + automated tests
 
 ---
 
-## Phase 5: Options surface + polish
+## Phase 5: Options surface + finalize
 <!-- execution: sequential -->
 <!-- depends: phase4 -->
 
-- [ ] Task 1: Minimal settings UI
+- [x] Task 1: Minimal settings UI
   <!-- files: entrypoints/options/... (General or Advanced near selection toggle) -->
-  - [ ] Toggle for `selectionDictionaryEnabled` with short helper text
-  - [ ] Persist via settings store
+  - [x] Toggle for `selectionDictionaryEnabled` with short helper text
+  - [x] Persist via settings store
 
-- [ ] Task 2: Product/docs touch (light)
+- [x] Task 2: Product/docs touch (light)
   <!-- files: README.md (feature bullet only if needed) -->
-  - [ ] One-line mention of dictionary selection mode if README lists selection translate
+  - [x] One-line mention of dictionary selection mode if README lists selection translate
 
-- [ ] Task 3: Full verification + learnings
-  - [ ] `pnpm test`, `pnpm lint`, smoke build if needed
-  - [ ] Capture learnings; elevate reusable patterns to `patterns.md` if warranted
+- [x] Task 3: Full verification + learnings
+  - [x] `pnpm test`, `pnpm lint`, smoke build if needed
+  - [x] Capture learnings; elevate reusable patterns to `patterns.md` if warranted

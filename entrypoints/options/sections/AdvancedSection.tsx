@@ -39,7 +39,7 @@ const PORTABLE_KEYS = [
   'customSystemPrompt', 'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
   'debugMode', 'customTheme', 'enableContextAwareTranslation',
   'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
-  'textSelectionEnabled', 'hoverTranslateEnabled', 'hoverDelay',
+  'textSelectionEnabled', 'selectionDictionaryEnabled', 'hoverTranslateEnabled', 'hoverDelay',
   'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
   'enableCompactInlineForShortText',
 ] as const;
@@ -422,6 +422,13 @@ export function AdvancedSection() {
         <div className="animate-stagger" style={stagger(2)}>
           <Card title="Translation Quality" icon={<Sparkles className="w-3.5 h-3.5" />} variant="bordered">
             <div className="space-y-4">
+              <Toggle
+                id="selection-dictionary-toggle"
+                checked={settings.selectionDictionaryEnabled}
+                onChange={(checked) => updateSettings({ selectionDictionaryEnabled: checked })}
+                label="Dictionary Mode for Selection"
+                description="For short selections (words/phrases), show phonetic, definitions, and examples instead of translation only. Longer sentences stay translation-only."
+              />
               <Toggle
                 id="rich-translate-toggle"
                 checked={settings.enableRichTranslate}

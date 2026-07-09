@@ -32,3 +32,25 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-07-09] - Phase 1 Tasks 1–4: Pure domain libs
+- **Implemented:** Classifier, dictionary JSON parser, Immersive-aligned prompts, context extractor
+- **Files changed:** `lib/selectionClassify.ts`, `lib/selectionDictionary.ts`, `lib/selectionDictionaryPrompt.ts`, `lib/selectionContext.ts` + tests
+- **Commits:** `20ee77e`, `892f153`, `04d30a4`
+- **Learnings:**
+  - Patterns: Parallel pure-lib workers race on `git commit` HEAD lock — one commit may scoop another's files; still OK if tests green
+  - Patterns: Reuse base.ts parse strategies (think-strip, fences, outermost braces) in selection dictionary parser
+  - Gotchas: jsdom tests must avoid non-null assertions (`textContent ?? ''`) for lint
+  - Context: Immersive `selectionSystemPrompt` is the source of truth for dictionary JSON schema
+---
+
+## [2026-07-09] - Phases 2–5: Settings, background, UI, options
+- **Implemented:** selectionDictionaryEnabled setting; TranslateSelectionMessage opt-in fields; dict: cache keys; background dictionary path via preScanSystemPrompt + returnRawResponse + customUserPrompt; dual tooltip UI; Options Advanced toggle; README bullet
+- **Files changed:** types/*, stores/settingsStore.ts, lib/selectionCacheKey.ts, services/background.ts, services/openaiCompatible.ts, content/textSelection.ts, styles/tooltip.css, AdvancedSection.tsx, README.md + tests
+- **Learnings:**
+  - Patterns: Shared `translateSelection` must stay opt-in dictionary — never default true for all callers
+  - Patterns: Immersive dictionary JSON is not a translations map → `returnRawResponse` + `customUserPrompt` on TranslationRequest avoids breaking page/subtitle parse path
+  - Patterns: Cache namespace `dict:` + `getCachedTranslationByKey` mirrors subtitle `subtitle:` isolation
+  - Gotchas: Glossary omitted on dictionary path intentionally (prompt noise); fail-open always yields `translatedText`
+  - Context: UI branches on `hasDictionaryFields` / response.mode, not only client classifier
+---
