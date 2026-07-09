@@ -76,14 +76,10 @@ This file tracks all major tracks for the project.
 - ✅ **Bilingual Page-Translation Pipeline Hardening v2** (`web-pipeline-hardening_20260708`) — Archived 2026-07-09. Close 5 gaps vs ImmersiveTranslate: body-swap observer, selector-match cache, in/out-of-article batch split, body-tag whitelist, aside caps. 48 new tests (1047 total). [View](./conductor/archive/web-pipeline-hardening_20260708/)
 - ✅ **Inline Input Translation — Immersive-Parity Hardening** (`inline-input-parity_20260709`) — Archived 2026-07-09. IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command (no 5th suggested_key), site blocklist, full advanced Options panel; fallback undo only when unedited. Default write remains translation-only. Excludes WebView floating-dot. [View](./conductor/archive/inline-input-parity_20260709/)
 - ✅ **YouTube ASR Subtitle Sentence Re-alignment** (`youtube-asr-resegment_20260709`) — Archived 2026-07-09. Pre-translate re-chunk of YouTube auto-generated captions: pure Immersive-style local rules (`lib/youtubeAsrResegment.ts`) + optional AI/BYOK index-range resegment (`RESEGMENT_YOUTUBE_ASR`, fail-open to local). Options → Subtitles → YouTube toggles (local default on, AI opt-in). 5 phases; Toggle `onChange` fix. [View](./conductor/archive/youtube-asr-resegment_20260709/)
+- ✅ **Selection Translate — Dictionary Mode** (`selection-dict-mode_20260709`) — Archived 2026-07-09. Immersive-style dictionary popup for short selections (phonetic, POS, definitions, examples, contextual analysis); plain translation for sentences; opt-in `dictionaryMode` on shared `translateSelection`; `dict:` cache namespace; Options → Advanced toggle (default on). 5 phases, 78 track tests. [View](./conductor/archive/selection-dict-mode_20260709/)
 
 ---
 
 ## Active Tracks
 
 ---
-
-## [x] Track: Selection Translate — Dictionary Mode
-*Link: [./conductor/tracks/selection-dict-mode_20260709/](./conductor/tracks/selection-dict-mode_20260709/)*
-*Priority: 🟠 High — Immersive-parity word/phrase dictionary popup for selection translate*
-*ID: `selection-dict-mode_20260709`*

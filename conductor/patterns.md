@@ -96,6 +96,11 @@ Reusable patterns discovered during development. Read this before starting new w
 - Async event handlers (`async function onMouseUp`) fire-and-forget — `dispatchEvent` is synchronous but the handler's promise is not awaited by the DOM. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 - Module-level state (`let isEnabled = true`) persists across test cases — must reset in `beforeEach`. (from: phase4-launch-ready_20260410, archived 2026-04-10)
 - Tooltip positioning requires `window.scrollY` offset to handle scrolled pages correctly. (from: phase4-launch-ready_20260410, archived 2026-04-10)
+- `translateSelection` is shared by selection, hover, and inline — alternate response schemas (e.g. dictionary JSON) must be **opt-in per message** (`dictionaryMode: true`), never the default. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- Non-translations-map LLM JSON (Immersive dictionary): use `preScanSystemPrompt` + `customUserPrompt` + `returnRawResponse` on `TranslationRequest` so `parseTranslationResponse` is skipped; parse in the handler with fail-open to plain text. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- Cache namespaces isolate schemas: `dict:` for selection dictionary vs plain selection SHA-256 key (mirrors `subtitle:`). Use `getCachedTranslationByKey` / `cacheTranslationByKey`. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- Dictionary UI branches on `hasDictionaryFields` / response `mode`, not only the client word/sentence classifier — model may return `{translation}` only for short phrases. (from: selection-dict-mode_20260709, archived 2026-07-09)
+- `selectionSession` monotonic id drops stale LLM responses when the user re-selects quickly. (from: selection-dict-mode_20260709, archived 2026-07-09)
 
 ## Hover Translate
 - `HOVER_TARGETS` set pattern (paragraph-level elements) prevents excessive translation requests on inline elements. (from: phase4-launch-ready_20260410, archived 2026-04-10)
