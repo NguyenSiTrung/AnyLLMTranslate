@@ -174,6 +174,7 @@ export function initPdfStreamPortListener(): void {
         const service = await initService();
         if (!service.translateStream) {
           // No streaming support — post an error so the viewer falls back.
+          // Do not recordUsage here — non-streaming handleTranslate records on fallback.
           port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
           return;
         }
@@ -197,8 +198,26 @@ export function initPdfStreamPortListener(): void {
         const results: TranslationResultItem[] = result.success
           ? Array.from(result.translations, ([id, translatedText]) => ({ id, translatedText }))
           : [];
+        // Success-only stats: error path falls back to non-streaming handleTranslate.
+        if (result.success) {
+          const settings = await loadSettings();
+          const characters = msg.pieces.reduce((sum, p) => sum + p.text.length, 0);
+          recordUsage({
+            mode: 'pdf',
+            characters,
+            apiCalls: 1,
+            cacheHits: 0,
+            cacheMisses: msg.pieces.length,
+            cacheCharacters: 0,
+            host: hostFromSender(port.sender),
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguage: msg.targetLanguage,
+            providerId: bestEffortProviderId(settings),
+          }).catch(() => {});
+        }
         port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
       } catch (err) {
+        // Error → viewer falls back to handleTranslate (which records usage).
         const error = err instanceof Error ? err.message : 'Streaming translation failed';
         port.postMessage({ type: 'error', error } satisfies PdfStreamError);
       }
@@ -222,6 +241,7 @@ export function initWebStreamPortListener(): void {
       try {
         const service = await initService();
         if (!service.translateStream) {
+          // Content script falls back to non-streaming handleTranslate (records there).
           port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
           return;
         }
@@ -257,10 +277,33 @@ export function initWebStreamPortListener(): void {
               }
             }
           }
-          void settings; // settings loaded for cache writes above (TTL via defaults).
+
+          // Stream path does not split cache before the LLM call — all pieces
+          // were sent. Success-only: error path falls back to handleTranslate.
+          const tabId = port.sender?.tab?.id;
+          const pageSession =
+            typeof tabId === 'number' && !translatedTabSessions.has(tabId);
+          if (pageSession && typeof tabId === 'number') {
+            translatedTabSessions.add(tabId);
+          }
+          const characters = msg.pieces.reduce((sum, p) => sum + p.text.length, 0);
+          recordUsage({
+            mode: 'page',
+            characters,
+            apiCalls: 1,
+            cacheHits: 0,
+            cacheMisses: msg.pieces.length,
+            cacheCharacters: 0,
+            ...(pageSession ? { pageSession: true } : {}),
+            host: hostFromSender(port.sender),
+            sourceLanguage: msg.sourceLanguage,
+            targetLanguage: msg.targetLanguage,
+            providerId: bestEffortProviderId(settings),
+          }).catch(() => {});
         }
         port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
       } catch (err) {
+        // Error → content script falls back to handleTranslate (which records usage).
         const error = err instanceof Error ? err.message : 'Streaming translation failed';
         port.postMessage({ type: 'error', error } satisfies PdfStreamError);
       }
