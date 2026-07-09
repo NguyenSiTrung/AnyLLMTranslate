@@ -1,9 +1,10 @@
 /**
- * StatisticsSection — dashboard shell: loading, empty, error, period control, KPIs.
+ * StatisticsSection — dashboard: loading, empty, error, period, KPIs,
+ * host-off CTA, export, reset modal, retention preference.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ZERO_COUNTERS, type DailyStatRecord, type TranslationStatsV2 } from '@/types/stats';
 
 vi.mock('@/services/statsCollector', () => ({
@@ -31,14 +32,32 @@ vi.mock('@/services/statsIdb', () => ({
   getDailyRecord: vi.fn(async () => undefined),
 }));
 
-import { getStatsV2, resetStats, STATS_STORAGE_KEY } from '@/services/statsCollector';
+vi.mock('@/services/statsExport', () => ({
+  buildStatsJsonExport: vi.fn(() => '{"lifetime":{}}'),
+  buildStatsCsvExport: vi.fn(() => 'date,characters\n'),
+  triggerDownload: vi.fn(),
+}));
+
+import {
+  getStatsV2,
+  resetStats,
+  updateStatsPreferences,
+  STATS_STORAGE_KEY,
+} from '@/services/statsCollector';
 import {
   loadDaysForPeriod,
   sumLifetimeOrDays,
   percentDelta,
   previousPeriodDates,
   sumCounters,
+  topEntries,
+  buildInsights,
 } from '@/services/statsQuery';
+import {
+  buildStatsJsonExport,
+  buildStatsCsvExport,
+  triggerDownload,
+} from '@/services/statsExport';
 import { StatisticsSection } from '../StatisticsSection';
 
 const mockedGetStatsV2 = vi.mocked(getStatsV2);
@@ -48,6 +67,12 @@ const mockedPercentDelta = vi.mocked(percentDelta);
 const mockedPreviousPeriodDates = vi.mocked(previousPeriodDates);
 const mockedSumCounters = vi.mocked(sumCounters);
 const mockedResetStats = vi.mocked(resetStats);
+const mockedUpdatePrefs = vi.mocked(updateStatsPreferences);
+const mockedTopEntries = vi.mocked(topEntries);
+const mockedBuildInsights = vi.mocked(buildInsights);
+const mockedBuildJson = vi.mocked(buildStatsJsonExport);
+const mockedBuildCsv = vi.mocked(buildStatsCsvExport);
+const mockedTriggerDownload = vi.mocked(triggerDownload);
 
 function makeSummary(overrides: Partial<TranslationStatsV2> = {}): TranslationStatsV2 {
   return {
@@ -65,15 +90,15 @@ function makeDay(date: string, characters = 100): DailyStatRecord {
   return {
     date,
     totals: { ...ZERO_COUNTERS, characters, apiCalls: 2, cacheHits: 1 },
-    byMode: {},
-    byProvider: {},
-    byHost: {},
-    byLanguagePair: {},
+    byMode: { page: { characters: Math.floor(characters * 0.6) }, subtitle: { characters: Math.floor(characters * 0.4) } },
+    byProvider: { openai: { characters } },
+    byHost: { 'example.com': { characters } },
+    byLanguagePair: { 'en>vi': { characters } },
   };
 }
 
-function setupPopulatedMocks() {
-  const summary = makeSummary();
+function setupPopulatedMocks(summaryOverrides: Partial<TranslationStatsV2> = {}) {
+  const summary = makeSummary(summaryOverrides);
   const days = [makeDay('2026-07-08'), makeDay('2026-07-09', 200)];
   const totals = {
     ...ZERO_COUNTERS,
@@ -93,6 +118,17 @@ function setupPopulatedMocks() {
   mockedPreviousPeriodDates.mockReturnValue([]);
   mockedSumCounters.mockReturnValue({ ...ZERO_COUNTERS });
   mockedPercentDelta.mockReturnValue(25);
+  mockedTopEntries.mockImplementation((maps, _metric, n) => {
+    const first = maps[0] ?? {};
+    return Object.entries(first)
+      .map(([key, partial]) => ({ key, value: partial?.characters ?? 0 }))
+      .slice(0, n);
+  });
+  mockedBuildInsights.mockReturnValue([
+    'Cache served 67% of lookups (4 of 6)',
+    'Peak activity day: 2026-07-09',
+  ]);
+  mockedUpdatePrefs.mockResolvedValue(undefined);
 
   return { summary, days, totals };
 }
@@ -104,6 +140,11 @@ describe('StatisticsSection', () => {
     mockedSumCounters.mockReturnValue({ ...ZERO_COUNTERS });
     mockedPercentDelta.mockReturnValue(null);
     mockedResetStats.mockResolvedValue(undefined);
+    mockedUpdatePrefs.mockResolvedValue(undefined);
+    mockedTopEntries.mockReturnValue([]);
+    mockedBuildInsights.mockReturnValue([]);
+    mockedBuildJson.mockReturnValue('{"lifetime":{}}');
+    mockedBuildCsv.mockReturnValue('date,characters\n');
   });
 
   it('shows loading skeleton then KPIs after load', async () => {
@@ -221,22 +262,159 @@ describe('StatisticsSection', () => {
     });
   });
 
-  it('renders export placeholder as disabled', async () => {
+  it('enables export menu after load and downloads JSON/CSV', async () => {
+    const { summary, days } = setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /export/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const jsonItem = await screen.findByRole('menuitem', { name: /export json/i });
+    fireEvent.click(jsonItem);
+
+    expect(mockedBuildJson).toHaveBeenCalledWith({ summary, daily: days });
+    expect(mockedTriggerDownload).toHaveBeenCalledWith(
+      expect.stringMatching(/^anyllm-stats-\d{4}-\d{2}-\d{2}\.json$/),
+      '{"lifetime":{}}',
+      'application/json',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    const csvItem = await screen.findByRole('menuitem', { name: /export csv/i });
+    fireEvent.click(csvItem);
+
+    expect(mockedBuildCsv).toHaveBeenCalledWith(days);
+    expect(mockedTriggerDownload).toHaveBeenCalledWith(
+      expect.stringMatching(/^anyllm-stats-daily-\d{4}-\d{2}-\d{2}\.csv$/),
+      'date,characters\n',
+      'text/csv',
+    );
+  });
+
+  it('shows host-off CTA when host tracking is disabled', async () => {
+    setupPopulatedMocks({
+      preferences: { hostTrackingEnabled: false, retentionDays: 90 },
+    });
+
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stats-host-off-cta')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/host tracking is off/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enable host tracking/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /enable host tracking/i }));
+
+    await waitFor(() => {
+      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ hostTrackingEnabled: true });
+    });
+  });
+
+  it('updates retention preference when select changes', async () => {
     setupPopulatedMocks();
     render(<StatisticsSection />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /export/i })).toBeDisabled();
+      expect(screen.getByLabelText(/daily detail retention/i)).toBeInTheDocument();
+    });
+
+    const select = screen.getByLabelText(/daily detail retention/i);
+    fireEvent.change(select, { target: { value: '30' } });
+
+    await waitFor(() => {
+      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ retentionDays: 30 });
     });
   });
 
-  it('keeps reset danger action available', async () => {
+  it('opens reset modal and confirms wipe', async () => {
     setupPopulatedMocks();
     render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /reset statistics/i })).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/reset usage statistics\?/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/translation cache is not affected/i)).toBeInTheDocument();
+
+    // Confirm is the danger action inside the modal (same label as opener).
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /reset statistics/i }));
+
+    await waitFor(() => {
+      expect(mockedResetStats).toHaveBeenCalled();
+    });
+  });
+
+  it('cancels reset modal without calling resetStats', async () => {
+    setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /reset statistics/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /keep statistics/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /keep statistics/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/reset usage statistics\?/i)).not.toBeInTheDocument();
+    });
+    expect(mockedResetStats).not.toHaveBeenCalled();
+  });
+
+  it('renders insights chips from buildInsights', async () => {
+    setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stats-insights')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/cache served 67%/i)).toBeInTheDocument();
+    expect(mockedBuildInsights).toHaveBeenCalled();
+  });
+
+  it('renders breakdown panels', async () => {
+    setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stats-breakdowns')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('By mode')).toBeInTheDocument();
+    expect(screen.getByText('Top hosts')).toBeInTheDocument();
+    expect(screen.getByText('By provider')).toBeInTheDocument();
+    expect(screen.getByText('Language pairs')).toBeInTheDocument();
+  });
+
+  it('shows privacy copy near data controls', async () => {
+    setupPopulatedMocks();
+    render(<StatisticsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stats-data-controls')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/statistics stay on this device/i),
+    ).toBeInTheDocument();
   });
 
   it('subscribes to chrome.storage onChanged for stats key', async () => {

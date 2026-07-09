@@ -1,42 +1,60 @@
 /**
- * Statistics Section — local analytics dashboard shell.
- * Period KPIs, hero strip, activity chart, cache efficiency.
- * Breakdowns / export menu / preferences land in Task 10.
+ * Statistics Section — local analytics dashboard.
+ * Period KPIs, hero, activity, cache, insights, breakdowns,
+ * privacy controls, export (JSON/CSV), and danger-zone reset.
  */
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   BarChart3,
   Database,
   Download,
+  FileJson,
+  FileSpreadsheet,
+  Globe2,
+  Languages,
+  Layers,
+  Lightbulb,
   MousePointerClick,
   RefreshCw,
+  Server,
+  Shield,
   Subtitles,
   Trash2,
   FileText,
-  Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import {
   getStatsV2,
   resetStats,
+  updateStatsPreferences,
   STATS_STORAGE_KEY,
 } from '@/services/statsCollector';
 import {
+  buildInsights,
   loadDaysForPeriod,
   percentDelta,
   previousPeriodDates,
   sumCounters,
   sumLifetimeOrDays,
+  topEntries,
   type StatsPeriod,
 } from '@/services/statsQuery';
+import {
+  buildStatsCsvExport,
+  buildStatsJsonExport,
+  triggerDownload,
+} from '@/services/statsExport';
 import { getDailyRecord } from '@/services/statsIdb';
 import {
   ZERO_COUNTERS,
   type DailyStatRecord,
   type StatCounters,
+  type StatsPreferences,
+  type TranslationMode,
   type TranslationStatsV2,
 } from '@/types/stats';
 import { Card } from '@/ui/Card';
@@ -46,6 +64,8 @@ import { EmptyState } from '@/ui/EmptyState';
 import { DangerZone, DangerAction } from '@/ui/DangerZone';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { Badge } from '@/ui/Badge';
+import { Toggle } from '@/ui/Toggle';
+import { Select } from '@/ui/Select';
 import {
   buildChartDays,
   formatCompactNumber,
@@ -68,6 +88,23 @@ const PERIOD_LABELS: Record<StatsPeriod, string> = {
   '90d': 'Last 90 days',
   all: 'All time',
 };
+
+const RETENTION_OPTIONS = [
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: '180', label: '180 days' },
+];
+
+const MODE_LABELS: Record<TranslationMode, string> = {
+  page: 'Page',
+  subtitle: 'Subtitle',
+  selection: 'Selection',
+  inline: 'Inline',
+  pdf: 'PDF',
+};
+
+const PRIVACY_COPY =
+  'Statistics stay on this device. Host names are stored only as site domains (e.g. youtube.com), never page content or API keys.';
 
 function formatNumber(n: number): string {
   return n.toLocaleString();
@@ -111,6 +148,10 @@ function formatLastActive(iso: string | null): string {
   }
 }
 
+function formatExportDateStamp(d = new Date()): string {
+  return d.toLocaleDateString('en-CA');
+}
+
 function isLifetimeEmpty(lifetime: StatCounters): boolean {
   return (
     lifetime.characters === 0 &&
@@ -124,6 +165,30 @@ function isLifetimeEmpty(lifetime: StatCounters): boolean {
     lifetime.inlineEvents === 0 &&
     lifetime.pdfEvents === 0
   );
+}
+
+/** Day with the highest character count; null when empty or all zeros. */
+function peakDateFromDays(days: DailyStatRecord[]): string | null {
+  let best: DailyStatRecord | null = null;
+  for (const day of days) {
+    if (!best || day.totals.characters > best.totals.characters) {
+      best = day;
+    }
+  }
+  if (!best || best.totals.characters <= 0) return null;
+  return best.date;
+}
+
+function formatModeLabel(key: string): string {
+  if (key in MODE_LABELS) return MODE_LABELS[key as TranslationMode];
+  return key === '__other__' ? 'Other' : key;
+}
+
+function formatLanguagePairLabel(key: string): string {
+  if (key === '__other__') return 'Other';
+  const sep = key.indexOf('>');
+  if (sep === -1) return key;
+  return `${key.slice(0, sep)} → ${key.slice(sep + 1)}`;
 }
 
 async function loadPreviousPeriodTotals(period: StatsPeriod): Promise<StatCounters> {
@@ -409,6 +474,343 @@ function StatHero({ period, totals, charDelta, lastActiveAt, trackingSince }: St
   );
 }
 
+interface InsightsChipsProps {
+  insights: string[];
+}
+
+function InsightsChips({ insights }: InsightsChipsProps) {
+  if (insights.length === 0) return null;
+
+  return (
+    <div data-testid="stats-insights" className="flex flex-wrap gap-2" aria-label="Insights">
+      {insights.map((text) => (
+        <span
+          key={text}
+          className="inline-flex max-w-full items-start gap-1.5 rounded-full border border-teal-500/25 bg-teal-500/10 px-2.5 py-1 text-[11px] leading-snug text-teal-200/90"
+        >
+          <Lightbulb className="mt-0.5 h-3 w-3 shrink-0 text-teal-400/80" aria-hidden="true" />
+          <span className="min-w-0">{text}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+interface BreakdownBarRowProps {
+  label: string;
+  value: number;
+  max: number;
+}
+
+function BreakdownBarRow({ label, value, max }: BreakdownBarRowProps) {
+  const width = max > 0 ? Math.max((value / max) * 100, value > 0 ? 2 : 0) : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="min-w-0 truncate text-zinc-300" title={label}>
+          {label}
+        </span>
+        <span className="shrink-0 tabular-nums text-zinc-400">{formatCompactNumber(value)}</span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800/80">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-teal-400 transition-all duration-300"
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface BreakdownListProps {
+  entries: Array<{ key: string; value: number }>;
+  formatLabel: (key: string) => string;
+  emptyMessage: string;
+  emptyIcon?: ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+function BreakdownList({
+  entries,
+  formatLabel,
+  emptyMessage,
+  emptyIcon,
+  actionLabel,
+  onAction,
+}: BreakdownListProps) {
+  if (entries.length === 0) {
+    return (
+      <EmptyState
+        icon={emptyIcon}
+        message={emptyMessage}
+        actionLabel={actionLabel}
+        onAction={onAction}
+      />
+    );
+  }
+
+  const max = Math.max(...entries.map((e) => e.value), 1);
+  return (
+    <div className="space-y-3">
+      {entries.map((entry) => (
+        <BreakdownBarRow
+          key={entry.key}
+          label={formatLabel(entry.key)}
+          value={entry.value}
+          max={max}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface BreakdownPanelsProps {
+  days: DailyStatRecord[];
+  hostTrackingEnabled: boolean;
+  onEnableHostTracking: () => void;
+}
+
+function BreakdownPanels({ days, hostTrackingEnabled, onEnableHostTracking }: BreakdownPanelsProps) {
+  const byMode = useMemo(
+    () => topEntries(days.map((d) => d.byMode as Record<string, Partial<StatCounters>>), 'characters', 5),
+    [days],
+  );
+  const byHost = useMemo(
+    () => topEntries(days.map((d) => d.byHost), 'characters', 8),
+    [days],
+  );
+  const byProvider = useMemo(
+    () => topEntries(days.map((d) => d.byProvider), 'characters', 6),
+    [days],
+  );
+  const byLanguagePair = useMemo(
+    () => topEntries(days.map((d) => d.byLanguagePair), 'characters', 8),
+    [days],
+  );
+
+  return (
+    <div data-testid="stats-breakdowns" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Card
+        title="By mode"
+        description="Characters by translation mode in this period."
+        icon={<Layers className="h-3.5 w-3.5" />}
+        variant="bordered"
+        accent="cyan"
+      >
+        <BreakdownList
+          entries={byMode}
+          formatLabel={formatModeLabel}
+          emptyMessage="No mode breakdown for this period yet."
+          emptyIcon={<Layers className="h-8 w-8" />}
+        />
+      </Card>
+
+      <Card
+        title="Top hosts"
+        description="Sites where you translated the most."
+        icon={<Globe2 className="h-3.5 w-3.5" />}
+        variant="bordered"
+        accent="cyan"
+        headerExtra={
+          !hostTrackingEnabled ? <Badge variant="warning">Off</Badge> : undefined
+        }
+      >
+        {!hostTrackingEnabled ? (
+          <div data-testid="stats-host-off-cta">
+            <EmptyState
+              icon={<Globe2 className="h-8 w-8" />}
+              message="Host tracking is off. Enable it to see which sites you translate on. Only domain names are stored — never page content."
+              actionLabel="Enable host tracking"
+              onAction={onEnableHostTracking}
+            />
+          </div>
+        ) : (
+          <BreakdownList
+            entries={byHost}
+            formatLabel={(key) => (key === '__other__' ? 'Other' : key)}
+            emptyMessage="No host activity in this period yet."
+            emptyIcon={<Globe2 className="h-8 w-8" />}
+          />
+        )}
+      </Card>
+
+      <Card
+        title="By provider"
+        description="Characters attributed to each provider id."
+        icon={<Server className="h-3.5 w-3.5" />}
+        variant="bordered"
+      >
+        <BreakdownList
+          entries={byProvider}
+          formatLabel={(key) => (key === '__other__' ? 'Other' : key)}
+          emptyMessage="No provider breakdown for this period yet."
+          emptyIcon={<Server className="h-8 w-8" />}
+        />
+      </Card>
+
+      <Card
+        title="Language pairs"
+        description="Source → target pairs by characters."
+        icon={<Languages className="h-3.5 w-3.5" />}
+        variant="bordered"
+      >
+        <BreakdownList
+          entries={byLanguagePair}
+          formatLabel={formatLanguagePairLabel}
+          emptyMessage="No language-pair data for this period yet."
+          emptyIcon={<Languages className="h-8 w-8" />}
+        />
+      </Card>
+    </div>
+  );
+}
+
+interface DataControlsProps {
+  preferences: StatsPreferences;
+  isSaving: boolean;
+  onHostTrackingChange: (enabled: boolean) => void;
+  onRetentionChange: (days: StatsPreferences['retentionDays']) => void;
+}
+
+function DataControls({
+  preferences,
+  isSaving,
+  onHostTrackingChange,
+  onRetentionChange,
+}: DataControlsProps) {
+  return (
+    <Card
+      title="Data & privacy"
+      description="Local-only controls for what is stored and how long daily detail is kept."
+      icon={<Shield className="h-3.5 w-3.5" />}
+      variant="bordered"
+      accent="cyan"
+    >
+      <div className="space-y-5" data-testid="stats-data-controls">
+        <Toggle
+          id="stats-host-tracking"
+          checked={preferences.hostTrackingEnabled}
+          onChange={onHostTrackingChange}
+          disabled={isSaving}
+          label="Host tracking"
+          description="Record site domains (e.g. youtube.com) in daily stats. Turning off stops new host writes; existing host data remains until pruned or reset."
+        />
+
+        <div className="space-y-1.5">
+          <label htmlFor="stats-retention" className="block text-sm font-medium text-zinc-200">
+            Daily detail retention
+          </label>
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Older daily records are pruned automatically. Lifetime totals are not removed by retention.
+          </p>
+          <Select
+            id="stats-retention"
+            aria-label="Daily detail retention"
+            options={RETENTION_OPTIONS}
+            value={String(preferences.retentionDays)}
+            disabled={isSaving}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              if (next === 30 || next === 90 || next === 180) {
+                onRetentionChange(next);
+              }
+            }}
+          />
+        </div>
+
+        <p className="rounded-lg border border-cyan-500/15 bg-cyan-500/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+          {PRIVACY_COPY}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+interface StatsExportMenuProps {
+  disabled: boolean;
+  onExportJson: () => void;
+  onExportCsv: () => void;
+}
+
+function StatsExportMenu({ disabled, onExportJson, onExportCsv }: StatsExportMenuProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<Download className="h-3.5 w-3.5" />}
+        disabled={disabled}
+        aria-label="Export"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Export
+        <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-70" aria-hidden="true" />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Export format"
+          className="absolute right-0 z-20 mt-1.5 min-w-[11.5rem] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 py-1 shadow-xl shadow-black/40"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-cyan-500/10 focus-visible:bg-cyan-500/10 focus-visible:outline-none"
+            onClick={() => {
+              setOpen(false);
+              onExportJson();
+            }}
+          >
+            <FileJson className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />
+            Export JSON
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-200 hover:bg-cyan-500/10 focus-visible:bg-cyan-500/10 focus-visible:outline-none"
+            onClick={() => {
+              setOpen(false);
+              onExportCsv();
+            }}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" aria-hidden="true" />
+            Export CSV
+          </button>
+          <p className="border-t border-zinc-800 px-3 py-2 text-[10px] leading-snug text-zinc-500">
+            Local aggregates only — no page content or keys.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StatisticsSection() {
   const [period, setPeriod] = useState<StatsPeriod>('30d');
   const [summary, setSummary] = useState<TranslationStatsV2 | null>(null);
@@ -416,6 +818,7 @@ export function StatisticsSection() {
   const [previousTotals, setPreviousTotals] = useState<StatCounters>({ ...ZERO_COUNTERS });
   const [isLoading, setIsLoading] = useState(true);
   const [isResetting, setIsResetting] = useState(false);
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showResetModal, setShowResetModal] = useState(false);
 
@@ -473,6 +876,41 @@ export function StatisticsSection() {
     }
   }
 
+  async function handlePreferenceUpdate(partial: Partial<StatsPreferences>) {
+    setIsSavingPrefs(true);
+    setError(null);
+    try {
+      await updateStatsPreferences(partial);
+      // Optimistic local merge; storage listener / reload keeps us consistent.
+      setSummary((prev) =>
+        prev
+          ? {
+              ...prev,
+              preferences: { ...prev.preferences, ...partial },
+            }
+          : prev,
+      );
+      await loadStats();
+    } catch {
+      setError('Unable to update statistics preferences');
+    } finally {
+      setIsSavingPrefs(false);
+    }
+  }
+
+  function handleExportJson() {
+    if (!summary) return;
+    const stamp = formatExportDateStamp();
+    const content = buildStatsJsonExport({ summary, daily: days });
+    triggerDownload(`anyllm-stats-${stamp}.json`, content, 'application/json');
+  }
+
+  function handleExportCsv() {
+    const stamp = formatExportDateStamp();
+    const content = buildStatsCsvExport(days);
+    triggerDownload(`anyllm-stats-daily-${stamp}.csv`, content, 'text/csv');
+  }
+
   const periodTotals = useMemo(() => {
     if (!summary) return { ...ZERO_COUNTERS };
     return sumLifetimeOrDays(summary.lifetime, days, period);
@@ -488,6 +926,11 @@ export function StatisticsSection() {
     [days, period],
   );
 
+  const insights = useMemo(() => {
+    const peak = peakDateFromDays(days);
+    return buildInsights(periodTotals, peak);
+  }, [days, periodTotals]);
+
   const isEmpty =
     !isLoading &&
     !error &&
@@ -496,6 +939,7 @@ export function StatisticsSection() {
     days.length === 0;
 
   const retentionDays = summary?.preferences.retentionDays ?? 90;
+  const canExport = !isLoading && summary !== null && !error;
 
   const resetDangerZone = (
     <DangerZone description="Usage metrics only. Translation cache and settings stay intact.">
@@ -579,16 +1023,11 @@ export function StatisticsSection() {
             onChange={setPeriod}
           />
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Download className="h-3.5 w-3.5" />}
-          disabled
-          title="Export arrives in the next update"
-          aria-label="Export"
-        >
-          Export
-        </Button>
+        <StatsExportMenu
+          disabled={!canExport}
+          onExportJson={handleExportJson}
+          onExportCsv={handleExportCsv}
+        />
       </div>
 
       <div className="space-y-4">
@@ -623,6 +1062,18 @@ export function StatisticsSection() {
                 All metrics stay on this device — no page content or API keys are stored in statistics.
               </p>
             </Card>
+            {summary && (
+              <DataControls
+                preferences={summary.preferences}
+                isSaving={isSavingPrefs}
+                onHostTrackingChange={(enabled) =>
+                  void handlePreferenceUpdate({ hostTrackingEnabled: enabled })
+                }
+                onRetentionChange={(daysValue) =>
+                  void handlePreferenceUpdate({ retentionDays: daysValue })
+                }
+              />
+            )}
             {resetDangerZone}
           </div>
         ) : summary ? (
@@ -638,6 +1089,10 @@ export function StatisticsSection() {
             </div>
 
             <div className="animate-stagger" style={stagger(2)}>
+              <InsightsChips insights={insights} />
+            </div>
+
+            <div className="animate-stagger" style={stagger(3)}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {metricCards.map((metric) => (
                   <StatKpiCard key={metric.label} {...metric} />
@@ -646,7 +1101,7 @@ export function StatisticsSection() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
-              <div className="animate-stagger" style={stagger(3)}>
+              <div className="animate-stagger" style={stagger(4)}>
                 <Card
                   title={`Activity (${PERIOD_LABELS[period]})`}
                   description="Characters translated per day in the selected period."
@@ -666,7 +1121,7 @@ export function StatisticsSection() {
                 </Card>
               </div>
 
-              <div className="animate-stagger" style={stagger(4)}>
+              <div className="animate-stagger" style={stagger(5)}>
                 <CacheEfficiencyCard
                   hits={periodTotals.cacheHits}
                   misses={periodTotals.cacheMisses}
@@ -674,7 +1129,30 @@ export function StatisticsSection() {
               </div>
             </div>
 
-            <div className="animate-stagger" style={stagger(5)}>
+            <div className="animate-stagger" style={stagger(6)}>
+              <BreakdownPanels
+                days={days}
+                hostTrackingEnabled={summary.preferences.hostTrackingEnabled}
+                onEnableHostTracking={() =>
+                  void handlePreferenceUpdate({ hostTrackingEnabled: true })
+                }
+              />
+            </div>
+
+            <div className="animate-stagger" style={stagger(7)}>
+              <DataControls
+                preferences={summary.preferences}
+                isSaving={isSavingPrefs}
+                onHostTrackingChange={(enabled) =>
+                  void handlePreferenceUpdate({ hostTrackingEnabled: enabled })
+                }
+                onRetentionChange={(daysValue) =>
+                  void handlePreferenceUpdate({ retentionDays: daysValue })
+                }
+              />
+            </div>
+
+            <div className="animate-stagger" style={stagger(8)}>
               {resetDangerZone}
             </div>
           </>
