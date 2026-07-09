@@ -13,6 +13,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Modal } from '@/ui/Modal';
 import { EmptyState } from '@/ui/EmptyState';
+import { DangerZone, DangerAction } from '@/ui/DangerZone';
 import {
   buildLast30Days,
   getCacheEfficiency,
@@ -318,26 +319,26 @@ export function StatisticsSection() {
             </div>
 
             <div className="animate-stagger" style={stagger(4)}>
-              <Card variant="bordered" accent="red">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Danger Zone</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Reset collected usage statistics. Translation cache and settings are not affected.
-                    </p>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={<Trash2 className="w-3.5 h-3.5" />}
-                    loading={isResetting}
-                    disabled={isResetting}
-                    onClick={() => setShowResetModal(true)}
-                  >
-                    Reset Statistics
-                  </Button>
-                </div>
-              </Card>
+              <DangerZone description="Usage metrics only. Translation cache and settings stay intact.">
+                <DangerAction
+                  severity="caution"
+                  icon={<Trash2 />}
+                  title="Reset usage statistics"
+                  description="Clears collected counters and daily activity charts. Does not touch cache or settings."
+                  action={
+                    <Button
+                      variant="warning"
+                      size="sm"
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
+                      loading={isResetting}
+                      disabled={isResetting}
+                      onClick={() => setShowResetModal(true)}
+                    >
+                      Reset statistics
+                    </Button>
+                  }
+                />
+              </DangerZone>
             </div>
           </>
         )}
@@ -346,11 +347,29 @@ export function StatisticsSection() {
       {/* Reset Confirmation Modal */}
       {showResetModal && (
         <Modal
-          title="Reset Statistics"
-          message="This will permanently clear all translation statistics. Your translation cache and settings will not be affected."
+          title="Reset usage statistics?"
+          message={
+            <div className="space-y-3">
+              <p>This permanently clears collected usage counters and charts.</p>
+              <ul className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2.5 text-xs text-zinc-400">
+                <li className="flex gap-2">
+                  <span className="text-amber-400/80">•</span>
+                  Daily activity and totals are wiped
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-emerald-400/70">•</span>
+                  Translation cache is not affected
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-emerald-400/70">•</span>
+                  Settings and provider config stay intact
+                </li>
+              </ul>
+            </div>
+          }
           variant="danger"
-          confirmLabel="Reset"
-          cancelLabel="Cancel"
+          confirmLabel="Reset statistics"
+          cancelLabel="Keep statistics"
           onConfirm={handleReset}
           onCancel={() => setShowResetModal(false)}
         />

@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw, Sparkles, ShieldAlert } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -19,6 +19,7 @@ import { Badge } from '@/ui/Badge';
 import { Textarea } from '@/ui/Textarea';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
+import { DangerZone, DangerAction } from '@/ui/DangerZone';
 import { useToast } from '@/ui/ToastProvider';
 import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 import { useCacheStats } from '@/entrypoints/options/hooks/useCacheStats';
@@ -729,53 +730,101 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Danger Zone */}
+        {/* Danger Zone — isolated, severity-ranked destructive actions */}
         <div className="animate-stagger" style={stagger(7)}>
-          <Card title="Danger Zone" icon={<AlertTriangle className="w-3.5 h-3.5" />} accent="red" variant="bordered">
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-zinc-200">Clear translation cache</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Deletes all cached translations. Future translations re-fetch from your provider (may incur API costs).</p>
-                <div className="mt-3">
-                  <Button
-                    id="clear-cache-btn"
-                    variant="danger"
-                    onClick={() => setShowClearCacheModal(true)}
-                    disabled={clearStatus === 'clearing'}
-                    loading={clearStatus === 'clearing'}
-                    icon={<Trash2 className="w-4 h-4" />}
-                  >
-                    {clearStatus === 'done' ? 'Cleared!' : 'Clear Cache'}
-                  </Button>
+          <DangerZone description="Irreversible or costly actions. Export a backup first if you plan to reset.">
+            <DangerAction
+              severity="caution"
+              icon={<Trash2 />}
+              title="Clear translation cache"
+              description="Deletes every stored translation. The next pages you open will re-fetch from your provider and may incur API costs."
+              meta={
+                <div className="inline-flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700/80 bg-zinc-900/70 px-2 py-1 font-medium tabular-nums text-zinc-300">
+                    <HardDrive className="h-3 w-3 text-zinc-500" aria-hidden="true" />
+                    {cacheStats.loading
+                      ? 'Measuring cache…'
+                      : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
+                  </span>
+                  {!cacheStats.loading && cacheStats.entryCount === 0 && (
+                    <span className="text-zinc-600">Cache is already empty</span>
+                  )}
                 </div>
-              </div>
-              <div className="border-t border-zinc-800 pt-4">
-                <p className="text-sm font-medium text-zinc-200">Reset all settings</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Restores all settings to defaults — custom dictionary, site rules, and provider configuration will be lost. Cannot be undone.</p>
-                <div className="mt-3">
-                  <Button
-                    id="reset-all-settings-btn"
-                    variant="danger"
-                    onClick={() => setShowResetModal(true)}
-                    icon={<RotateCcw className="w-4 h-4" />}
-                  >
-                    Reset All
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
+              }
+              action={
+                <Button
+                  id="clear-cache-btn"
+                  variant="warning"
+                  size="sm"
+                  onClick={() => setShowClearCacheModal(true)}
+                  disabled={clearStatus === 'clearing'}
+                  loading={clearStatus === 'clearing'}
+                  icon={<Trash2 className="w-3.5 h-3.5" />}
+                >
+                  {clearStatus === 'done' ? 'Cleared' : 'Clear cache'}
+                </Button>
+              }
+            />
+
+            <DangerAction
+              severity="critical"
+              icon={<ShieldAlert />}
+              title="Reset all settings"
+              description="Restores factory defaults. Provider keys, dictionary, site rules, themes, and prompts are wiped. Cannot be undone."
+              meta={
+                <p className="inline-flex items-center gap-1.5 text-[11px] text-zinc-500">
+                  <Download className="h-3 w-3 shrink-0 text-zinc-600" aria-hidden="true" />
+                  Tip: use <span className="font-medium text-zinc-400">Data Portability → Export</span> above first.
+                </p>
+              }
+              action={
+                <Button
+                  id="reset-all-settings-btn"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowResetModal(true)}
+                  icon={<RotateCcw className="w-3.5 h-3.5" />}
+                >
+                  Reset everything
+                </Button>
+              }
+            />
+          </DangerZone>
         </div>
       </div>
 
       {/* Clear Cache Confirmation Modal */}
       {showClearCacheModal && (
         <Modal
-          title="Clear Translation Cache?"
-          message="This will permanently delete all cached translations. Future translations will need to be fetched again from your provider, which may incur additional API costs."
+          title="Clear translation cache?"
+          message={
+            <div className="space-y-3">
+              <p>
+                This permanently deletes all cached translations
+                {!cacheStats.loading && cacheStats.entryCount > 0
+                  ? ` (${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB)`
+                  : ''}
+                .
+              </p>
+              <ul className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2.5 text-xs text-zinc-400">
+                <li className="flex gap-2">
+                  <span className="text-amber-400/80">•</span>
+                  Future pages re-fetch from your provider
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-amber-400/80">•</span>
+                  May incur additional API costs
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-emerald-400/70">•</span>
+                  Settings, dictionary, and site rules are kept
+                </li>
+              </ul>
+            </div>
+          }
           variant="danger"
-          confirmLabel="Clear Cache"
-          cancelLabel="Keep Cache"
+          confirmLabel="Clear cache"
+          cancelLabel="Keep cache"
           onConfirm={handleClearCache}
           onCancel={() => setShowClearCacheModal(false)}
         />
@@ -784,11 +833,32 @@ export function AdvancedSection() {
       {/* Reset Confirmation Modal */}
       {showResetModal && (
         <Modal
-          title="Reset All Settings?"
-          message="This will restore all settings to their default values. Your custom dictionary, site rules, and provider configuration will be lost. This cannot be undone."
+          title="Reset all settings?"
+          message={
+            <div className="space-y-3">
+              <p>Everything returns to factory defaults. This cannot be undone.</p>
+              <ul className="space-y-1.5 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-3 py-2.5 text-xs text-zinc-400">
+                <li className="flex gap-2">
+                  <span className="text-rose-400">•</span>
+                  Provider API keys and endpoints
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-rose-400">•</span>
+                  Custom dictionary and site rules
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-rose-400">•</span>
+                  Themes, prompts, and performance tuning
+                </li>
+              </ul>
+              <p className="text-xs text-amber-300/80">
+                Export a backup from Data Portability first if you might need these later.
+              </p>
+            </div>
+          }
           variant="danger"
-          confirmLabel="Reset Everything"
-          cancelLabel="Keep Settings"
+          confirmLabel="Reset everything"
+          cancelLabel="Keep settings"
           onConfirm={handleReset}
           onCancel={() => setShowResetModal(false)}
         />
