@@ -3,10 +3,10 @@
 ## Phase 1: Types, Config & Pure Algorithm (TDD)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Define settings + ASR resegment types
+- [x] Task 1: Define settings + ASR resegment types
   Add `YoutubeAsrResegmentSettings` (or nested under `SubtitleSettings`): `enable: boolean` (default `true`), `aiEnable: boolean` (default `false`, reserved). Export defaults in `DEFAULT_SUBTITLE_SETTINGS` / `DEFAULT_SETTINGS`. Document AI hook in types (JSDoc). Include language config types: `AsrLangConfig`, `splitConfig`, `mergeConfig`, `endCompatibleConfigs`, `base` + `en` defaults.
 
-- [ ] Task 2: Write failing unit tests for pure resegment engine
+- [x] Task 2: Write failing unit tests for pure resegment engine
   Create `lib/__tests__/youtubeAsrResegment.test.ts` (or `asrResegment.test.ts`):
   (a) flatten JSON3-like word events (segs + tOffsetMs),
   (b) split on gap / breakWords / maxWords,
@@ -17,7 +17,7 @@
   (g) empty / error inputs → fail-open empty or passthrough fixtures,
   (h) punctuation-heavy path if implemented (optional Immersive M6e-style).
 
-- [ ] Task 3: Implement pure resegment library
+- [x] Task 3: Implement pure resegment library
   Implement `lib/youtubeAsrResegment.ts` (pure, no Chrome APIs):
   - `resegmentYoutubeAsr({ words | cues, language, config }) → SubtitleCue[]`
   - word-level path (preferred) + cue-level fallback
@@ -25,10 +25,10 @@
   - Match Immersive intent, not bit-identical minified code
   Make Task 2 tests pass.
 
-- [ ] Task 4: Export default ASR language config constant
+- [x] Task 4: Export default ASR language config constant
   Ship `DEFAULT_YOUTUBE_ASR_CONFIG` (enable, wordsRegex, langsConfig base/en, aiEnable false). Keep tunable values in one place for settings/tests.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: YouTube Parse Surface for Word Events
 <!-- execution: sequential -->

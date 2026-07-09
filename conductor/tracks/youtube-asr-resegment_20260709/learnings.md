@@ -30,3 +30,13 @@ Patterns, gotchas, and context discovered during implementation.
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-07-09] - Phase 1: Types, Config & Pure Algorithm
+- **Implemented:** `YoutubeAsrResegmentSettings` + pure `lib/youtubeAsrResegment.ts` (flatten → split → merge hanging → endCompatible → cues) with English + base configs; 22 unit tests.
+- **Files changed:** `types/config.ts`, `types/__tests__/config.test.ts`, `lib/youtubeAsrResegment.ts`, `lib/__tests__/youtubeAsrResegment.test.ts`
+- **Learnings:**
+  - Patterns: Word-level only when JSON3 segs have explicit `tOffsetMs`; multi-seg without offsets = coarse join (not per-seg words).
+  - Gotchas: `endCompatible` must not merge across large silence gaps or base-lang intentional pauses collapse.
+  - Context: User settings (`enable`/`aiEnable`) live on `subtitleSettings.youtubeAsrResegment`; algorithm tables on `DEFAULT_YOUTUBE_ASR_CONFIG`.
+---
+

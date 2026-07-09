@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SUBTITLE_SETTINGS,
   DEFAULT_PDF_SETTINGS,
+  DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
   PROVIDER_PRESETS,
 } from '@/types/config';
 
@@ -31,6 +32,15 @@ describe('config defaults', () => {
     expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
     expect(DEFAULT_SETTINGS.pdfSettings).toEqual(DEFAULT_PDF_SETTINGS);
     expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
+  });
+
+  it('defaults YouTube ASR resegment to local-on / AI-off', () => {
+    expect(DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS).toEqual({ enable: true, aiEnable: false });
+    expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(
+      DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
+    );
+    expect(DEFAULT_SETTINGS.subtitleSettings.youtubeAsrResegment?.enable).toBe(true);
+    expect(DEFAULT_SETTINGS.subtitleSettings.youtubeAsrResegment?.aiEnable).toBe(false);
   });
 
   it('exposes a single custom provider preset', () => {

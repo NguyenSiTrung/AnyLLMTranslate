@@ -82,7 +82,7 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [ ] Track: YouTube ASR Subtitle Sentence Re-alignment
+## [~] Track: YouTube ASR Subtitle Sentence Re-alignment
 *Link: [./conductor/tracks/youtube-asr-resegment_20260709/](./conductor/tracks/youtube-asr-resegment_20260709/)*
 *Priority: 🟠 High — Immersive-style pre-translate re-chunk of auto-generated captions (local rules + AI hook design)*
 
