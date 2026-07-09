@@ -82,3 +82,8 @@ This file tracks all major tracks for the project.
 ## Active Tracks
 
 ---
+
+## [ ] Track: Selection Translate — Dictionary Mode
+*Link: [./conductor/tracks/selection-dict-mode_20260709/](./conductor/tracks/selection-dict-mode_20260709/)*
+*Priority: 🟠 High — Immersive-parity word/phrase dictionary popup for selection translate*
+*ID: `selection-dict-mode_20260709`*
