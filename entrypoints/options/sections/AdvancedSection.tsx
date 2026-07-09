@@ -327,7 +327,7 @@ export function AdvancedSection() {
             <p className="text-sm font-semibold tabular-nums text-zinc-100">
               {cacheStats.loading
                 ? 'Measuring…'
-                : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
+                : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeLabel}`}
             </p>
             <div
               className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800"
@@ -526,7 +526,7 @@ export function AdvancedSection() {
                       <div className="mb-1 flex justify-between text-[11px] text-zinc-500">
                         <span>Current use</span>
                         <span className="tabular-nums">
-                          {cacheStats.sizeMb.toFixed(1)} / {cacheLimitMb} MB
+                          {cacheStats.sizeLabel} / {cacheLimitMb} MB
                         </span>
                       </div>
                       <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
@@ -1029,7 +1029,7 @@ export function AdvancedSection() {
                     <HardDrive className="h-3 w-3 text-zinc-500" aria-hidden="true" />
                     {cacheStats.loading
                       ? 'Measuring cache…'
-                      : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
+                      : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeLabel}`}
                   </span>
                   {!cacheStats.loading && cacheStats.entryCount === 0 && (
                     <span className="text-zinc-600">Cache is already empty</span>
@@ -1087,7 +1087,7 @@ export function AdvancedSection() {
               <p>
                 This permanently deletes all cached translations
                 {!cacheStats.loading && cacheStats.entryCount > 0
-                  ? ` (${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB)`
+                  ? ` (${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeLabel})`
                   : ''}
                 .
               </p>

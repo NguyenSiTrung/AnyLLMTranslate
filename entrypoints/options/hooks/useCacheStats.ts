@@ -1,19 +1,22 @@
 /**
  * useCacheStats — live translation-cache usage for the Advanced tab (FR-8).
  *
- * Wraps the existing `getCacheStats()` in `services/cacheManager.ts` (which
- * reads the idb-keyval store the runtime already uses) so the Performance card
- * and hero strip can show "X entries · Y MB" instead of forcing users to tune
- * Max Cache Size blind. Queries on mount; `refresh()` re-queries (called after
- * Clear Cache succeeds).
+ * Wraps `getCacheStats()` so the overview strip / Performance card can show
+ * entry counts and a human-readable size (B / KB / MB). Queries on mount;
+ * `refresh()` re-queries after Clear Cache.
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getCacheStats } from '@/services/cacheManager';
+import { formatCacheSize, getCacheStats } from '@/services/cacheManager';
 
 export interface CacheStatsState {
   entryCount: number;
+  /** Raw total bytes (for progress bars vs max cache MB). */
+  totalSizeBytes: number;
+  /** totalSizeBytes / 1 MiB — fractional; do not toFixed(1) for display. */
   sizeMb: number;
+  /** Human-readable size, e.g. "42.3 KB" or "1.25 MB". */
+  sizeLabel: string;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -22,7 +25,7 @@ const BYTES_PER_MB = 1024 * 1024;
 
 export function useCacheStats(): CacheStatsState {
   const [entryCount, setEntryCount] = useState(0);
-  const [sizeMb, setSizeMb] = useState(0);
+  const [totalSizeBytes, setTotalSizeBytes] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -30,7 +33,7 @@ export function useCacheStats(): CacheStatsState {
     try {
       const stats = await getCacheStats();
       setEntryCount(stats.entryCount);
-      setSizeMb(stats.totalSizeBytes / BYTES_PER_MB);
+      setTotalSizeBytes(stats.totalSizeBytes);
     } catch {
       // Leave the last known values on error — the readout degrades gracefully.
     } finally {
@@ -44,5 +47,12 @@ export function useCacheStats(): CacheStatsState {
 
   const refresh = useCallback(() => load(), [load]);
 
-  return { entryCount, sizeMb, loading, refresh };
+  return {
+    entryCount,
+    totalSizeBytes,
+    sizeMb: totalSizeBytes / BYTES_PER_MB,
+    sizeLabel: formatCacheSize(totalSizeBytes),
+    loading,
+    refresh,
+  };
 }

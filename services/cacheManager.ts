@@ -134,15 +134,7 @@ export async function cacheTranslation(
 ): Promise<void> {
   try {
     const key = await generateCacheKey(text, sourceLanguage, targetLanguage);
-    const entry: CacheEntry = {
-      key,
-      translatedText,
-      sourceLanguage,
-      targetLanguage,
-      cachedAt: Date.now(),
-      lastAccessedAt: Date.now(),
-      sizeBytes: new TextEncoder().encode(translatedText).length,
-    };
+    const entry = buildCacheEntry(key, translatedText, sourceLanguage, targetLanguage);
     await set(key, entry, getStore());
   } catch {
     // Silently fail — cache is best-effort
@@ -194,15 +186,7 @@ export async function cacheTranslationByKey(
   targetLanguage: string,
 ): Promise<void> {
   try {
-    const entry: CacheEntry = {
-      key,
-      translatedText,
-      sourceLanguage,
-      targetLanguage,
-      cachedAt: Date.now(),
-      lastAccessedAt: Date.now(),
-      sizeBytes: new TextEncoder().encode(translatedText).length,
-    };
+    const entry = buildCacheEntry(key, translatedText, sourceLanguage, targetLanguage);
     await set(key, entry, getStore());
   } catch {
     // Silently fail — cache is best-effort
@@ -312,7 +296,10 @@ export async function evictCache(
     // Phase 2: LRU eviction if still over size (clamp to minimum 10 MB)
     const safeMaxSizeMB = Math.max(10, maxSizeMB);
     const maxSizeBytes = safeMaxSizeMB * 1024 * 1024;
-    let totalSize = validEntries.reduce((sum, [, e]) => sum + (e.sizeBytes ?? 0), 0);
+    let totalSize = validEntries.reduce(
+      (sum, [key, e]) => sum + resolveEntrySizeBytes(key, e),
+      0,
+    );
 
     if (totalSize > maxSizeBytes) {
       // Sort by lastAccessedAt ascending (oldest first)
@@ -321,7 +308,7 @@ export async function evictCache(
       for (const [key, entry] of validEntries) {
         if (totalSize <= maxSizeBytes) break;
         await del(key, getStore());
-        totalSize -= entry.sizeBytes ?? 0;
+        totalSize -= resolveEntrySizeBytes(key, entry);
         evicted++;
       }
     }
@@ -352,17 +339,97 @@ export async function clearCache(): Promise<void> {
   }
 }
 
+/**
+ * Approximate IndexedDB footprint for a key/value pair.
+ *
+ * Why not trust `CacheEntry.sizeBytes` alone?
+ * - Older / negative / classify entries often omit it (treated as 0).
+ * - Historical writes only counted `translatedText` UTF-8 length, so totals
+ *   under-reported envelope fields (key, langs, timestamps) by a large factor.
+ * Measuring key + serialized value matches what the UI and LRU care about.
+ */
+export function estimateStoredBytes(key: string, value: unknown): number {
+  const enc = new TextEncoder();
+  const keyBytes = enc.encode(key).length;
+  if (value == null) return keyBytes;
+  if (typeof value === 'string') {
+    return keyBytes + enc.encode(value).length;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return keyBytes + String(value).length;
+  }
+  try {
+    // Strip sizeBytes when present so the estimate is independent of the field
+    // we are trying to populate (avoids chicken-and-egg on write).
+    let payload: unknown = value;
+    if (typeof value === 'object' && value !== null && 'sizeBytes' in value) {
+      const { sizeBytes: _ignored, ...rest } = value as Record<string, unknown>;
+      payload = rest;
+    }
+    return keyBytes + enc.encode(JSON.stringify(payload)).length;
+  } catch {
+    return keyBytes;
+  }
+}
+
+/**
+ * Human-readable cache size for the options UI.
+ * Small caches must not round to "0.0 MB" (a few hundred KB used to).
+ */
+export function formatCacheSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) {
+    const kb = bytes / 1024;
+    return `${kb < 10 ? kb.toFixed(1) : Math.round(kb).toString()} KB`;
+  }
+  const mb = bytes / (1024 * 1024);
+  if (mb < 10) return `${mb.toFixed(2)} MB`;
+  return `${mb.toFixed(1)} MB`;
+}
+
+/** Build a CacheEntry with an accurate sizeBytes estimate. */
+function buildCacheEntry(
+  key: string,
+  translatedText: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+): CacheEntry {
+  const now = Date.now();
+  const base = {
+    key,
+    translatedText,
+    sourceLanguage,
+    targetLanguage,
+    cachedAt: now,
+    lastAccessedAt: now,
+  };
+  return {
+    ...base,
+    sizeBytes: estimateStoredBytes(key, base),
+  };
+}
+
+/**
+ * Resolve byte size for stats/LRU.
+ * Always re-estimates from key + payload so legacy entries (missing or
+ * undercounted sizeBytes) and non-CacheEntry values still contribute.
+ */
+export function resolveEntrySizeBytes(key: string, entry: unknown): number {
+  return estimateStoredBytes(key, entry);
+}
+
 /** Get cache statistics */
 export async function getCacheStats(): Promise<{
   entryCount: number;
   totalSizeBytes: number;
 }> {
   try {
-    const allEntries = await entries<string, CacheEntry>(getStore());
-    const totalSizeBytes = allEntries.reduce(
-      (sum, [, entry]) => sum + (entry.sizeBytes ?? 0),
-      0,
-    );
+    const allEntries = await entries<string, unknown>(getStore());
+    let totalSizeBytes = 0;
+    for (const [key, entry] of allEntries) {
+      totalSizeBytes += resolveEntrySizeBytes(key, entry);
+    }
     return { entryCount: allEntries.length, totalSizeBytes };
   } catch {
     return { entryCount: 0, totalSizeBytes: 0 };
