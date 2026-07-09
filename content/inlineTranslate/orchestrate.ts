@@ -32,6 +32,13 @@ export interface OrchestrateOptions {
 /** Fallback undo: element → original text before last successful/attempted translation */
 export const undoMap = new WeakMap<Element, string>();
 
+/**
+ * Last successful write-back text per element. Fallback undo only runs when the
+ * field still holds this value (user has not edited). If they typed/deleted,
+ * re-trigger translates the new content instead of restoring the original.
+ */
+export const lastWrittenMap = new WeakMap<Element, string>();
+
 let isTranslating = false;
 /** True while our own write-back dispatches synthetic input/change events */
 let isWritingBack = false;
@@ -96,11 +103,36 @@ export function tryFallbackUndo(el: HTMLElement): boolean {
   const result = writeElementText(el, original);
   if (result.success) {
     undoMap.delete(el);
+    lastWrittenMap.delete(el);
+    el.removeAttribute('data-anyllm-inline-translated');
     showToast(el, 'Restored original', 'success');
     scheduleToastDismiss(2000);
     return true;
   }
   return false;
+}
+
+/**
+ * True only when the field still contains the last successful translation
+ * (ignoring trailing trigger keys from the current gesture). If the user
+ * edited after translate, returns false so we re-translate instead of undo.
+ */
+export function shouldFallbackUndo(
+  el: HTMLElement,
+  currentTextAfterStrip: string,
+): boolean {
+  if (el.getAttribute('data-anyllm-inline-translated') !== '1') return false;
+  if (!undoMap.has(el)) return false;
+  const lastWritten = lastWrittenMap.get(el);
+  if (lastWritten == null) return false;
+  return currentTextAfterStrip === lastWritten;
+}
+
+/** Clear translate/undo bookkeeping so the next trigger always translates. */
+export function clearInlineTranslateState(el: HTMLElement): void {
+  undoMap.delete(el);
+  lastWrittenMap.delete(el);
+  el.removeAttribute('data-anyllm-inline-translated');
 }
 
 /**
@@ -165,16 +197,20 @@ export async function runInlineTranslate(
     return;
   }
 
-  // Fallback undo: re-trigger on already-translated field restores original
-  if (
-    config.enableFallbackUndo &&
-    undoMap.has(targetEl) &&
-    targetEl.getAttribute('data-anyllm-inline-translated') === '1'
-  ) {
-    const restored = tryFallbackUndo(targetEl);
-    if (restored) {
-      targetEl.removeAttribute('data-anyllm-inline-translated');
-      return;
+  // Fallback undo ONLY when the field is still exactly the last translation.
+  // If the user deleted/typed new content, re-trigger translates that content.
+  // Compare against full stripped raw (before prefix strip) and against body
+  // so dual-mode / prefix edge cases still match when unedited.
+  if (config.enableFallbackUndo) {
+    const candidates = [rawText.trim(), text, getElementText(targetEl)];
+    const unchanged = candidates.some((c) => shouldFallbackUndo(targetEl, c));
+    if (unchanged) {
+      const restored = tryFallbackUndo(targetEl);
+      if (restored) return;
+    }
+    // Edited after last translate — drop stale undo so we translate fresh
+    if (targetEl.getAttribute('data-anyllm-inline-translated') === '1') {
+      clearInlineTranslateState(targetEl);
     }
   }
 
@@ -263,6 +299,7 @@ export async function runInlineTranslate(
         console.warn('[AnyLLMTranslate:inline] write-back failed');
       } else {
         snapshotEl.setAttribute('data-anyllm-inline-translated', '1');
+        lastWrittenMap.set(snapshotEl, out);
         showToast(snapshotEl, 'Translated ✓', 'success');
       }
     } else {

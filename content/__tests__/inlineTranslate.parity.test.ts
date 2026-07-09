@@ -265,6 +265,67 @@ describe('fallback undo', () => {
     expect(tryFallbackUndo(input)).toBe(true);
     expect(input.value).toBe('original text');
   });
+
+  it('re-trigger undoes only when field is still the last translation', async () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = 'xin chào';
+    document.body.appendChild(input);
+
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'hello',
+    });
+
+    await runInlineTranslate(baseConfig(), {
+      element: input,
+      skipStripTrailing: true,
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(input.value).toBe('hello');
+
+    // Unedited re-trigger → restore original
+    await runInlineTranslate(baseConfig(), {
+      element: input,
+      skipStripTrailing: true,
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(input.value).toBe('xin chào');
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-trigger translates again after user edits the field', async () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = 'xin chào';
+    document.body.appendChild(input);
+
+    mockSendMessage
+      .mockResolvedValueOnce({ success: true, translatedText: 'hello' })
+      .mockResolvedValueOnce({ success: true, translatedText: 'new text' });
+
+    await runInlineTranslate(baseConfig(), {
+      element: input,
+      skipStripTrailing: true,
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(input.value).toBe('hello');
+
+    // User edits after translate
+    input.value = 'user typed something new';
+
+    await runInlineTranslate(baseConfig(), {
+      element: input,
+      skipStripTrailing: true,
+    });
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    expect(mockSendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'user typed something new' }),
+    );
+    expect(input.value).toBe('new text');
+  });
 });
 
 describe('translateFocusedInput (Alt+I path)', () => {
