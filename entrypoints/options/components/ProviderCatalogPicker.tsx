@@ -76,7 +76,7 @@ export function ProviderCatalogPicker({
         />
       </div>
       <div
-        className={`${compact ? 'max-h-32' : 'max-h-48'} overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800 divide-y divide-zinc-800/80`}
+        className={`${compact ? 'max-h-40 sm:max-h-48' : 'max-h-48'} overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800 divide-y divide-zinc-800/80`}
         role="listbox"
         aria-label="Provider catalog"
       >

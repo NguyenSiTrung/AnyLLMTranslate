@@ -16,6 +16,12 @@ import { AdvancedSection } from './sections/AdvancedSection';
 import { InlineTranslateSection } from './sections/InlineTranslateSection';
 import { StatisticsSection } from './sections/StatisticsSection';
 import { SetupWizard } from './SetupWizard';
+import {
+  isTranslatablePageUrl,
+  type TranslatePageResult,
+  type WizardStep,
+  WIZARD_STEPS,
+} from '@/lib/setupWizard';
 
 /* ── Grouped Navigation ─────────────────────────────────────── */
 
@@ -72,6 +78,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [showSaved, setShowSaved] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [wizardForceStep, setWizardForceStep] = useState<WizardStep | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const contentRef = useRef<HTMLDivElement>(null);
   const settings = useSettingsStore();
@@ -90,6 +97,10 @@ export default function App() {
     const url = new URL(window.location.href);
     const requestedSetup = url.searchParams.get('setup') === '1' || window.location.hash === '#setup';
     const shouldAutoOpen = !settings.onboarding.completed && !settings.onboarding.skipped;
+    const stepParam = url.searchParams.get('step');
+    if (stepParam && (WIZARD_STEPS as readonly string[]).includes(stepParam)) {
+      setWizardForceStep(stepParam as WizardStep);
+    }
 
     if (requestedSetup || shouldAutoOpen) {
       setShowSetupWizard(true);
@@ -132,19 +143,38 @@ export default function App() {
     }
   };
 
-  /** Translate the active tab's page — wired to the SetupWizard "done" step. */
-  const handleTranslateCurrentPage = useCallback(async () => {
+  /**
+   * Translate a normal webpage tab — wired to the SetupWizard "done" step.
+   * Prefer the active tab in the last focused window when it is http(s);
+   * otherwise any active http(s) tab (setup may be open in a popup window).
+   */
+  const handleTranslateCurrentPage = useCallback(async (): Promise<TranslatePageResult> => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (tab?.id && tab.url) {
-        try {
-          await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
-        } catch {
-          // Content script not loaded — ignore silently
+      const preferred = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const allActive = await chrome.tabs.query({ active: true });
+      const candidates = [...preferred, ...allActive];
+      const seen = new Set<number>();
+      let target: chrome.tabs.Tab | undefined;
+      for (const tab of candidates) {
+        if (tab.id == null || seen.has(tab.id)) continue;
+        seen.add(tab.id);
+        if (isTranslatablePageUrl(tab.url)) {
+          target = tab;
+          break;
         }
       }
-      setShowSetupWizard(false);
-    } catch { /* tab query failed */ }
+      if (!target?.id) {
+        return { ok: false, reason: 'no-tab' };
+      }
+      try {
+        await chrome.tabs.sendMessage(target.id, { action: 'startTranslation' });
+        return { ok: true };
+      } catch {
+        return { ok: false, reason: 'no-content-script' };
+      }
+    } catch {
+      return { ok: false, reason: 'query-failed' };
+    }
   }, []);
 
   if (!isLoaded) {
@@ -160,7 +190,10 @@ export default function App() {
       case 'general': return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;
       case 'providers': return (
         <ProvidersSection
-          onOpenSetup={() => setShowSetupWizard(true)}
+          onOpenSetup={() => {
+            setWizardForceStep(null);
+            setShowSetupWizard(true);
+          }}
           onNavigateToAdvanced={() => setActiveTab('advanced')}
         />
       );
@@ -260,8 +293,12 @@ export default function App() {
       </div>
       <SetupWizard
         open={showSetupWizard}
-        onClose={() => setShowSetupWizard(false)}
+        onClose={() => {
+          setShowSetupWizard(false);
+          setWizardForceStep(null);
+        }}
         onTranslateCurrentPage={handleTranslateCurrentPage}
+        forceEntryStep={wizardForceStep}
       />
     </ToastProvider>
   );

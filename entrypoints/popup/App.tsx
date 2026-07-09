@@ -987,9 +987,11 @@ export default function App() {
     }
   }, [isTranslating, status.status]);
 
-  const openSetupGuide = useCallback(() => {
+  const openSetupGuide = useCallback((step?: 'provider' | 'test' | 'language') => {
+    const params = new URLSearchParams({ setup: '1' });
+    if (step) params.set('step', step);
     chrome.windows.create({
-      url: chrome.runtime.getURL('options.html?setup=1'),
+      url: chrome.runtime.getURL(`options.html?${params.toString()}`),
       type: 'popup',
       width: 1200,
       height: 800,
@@ -1225,7 +1227,7 @@ export default function App() {
             <div className="mt-4 grid grid-cols-1 gap-2">
               <button
                 type="button"
-                onClick={openSetupGuide}
+                onClick={() => openSetupGuide(settings.onboarding.skipped ? undefined : 'provider')}
                 className="w-full rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.01] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               >
                 {settings.onboarding.skipped ? 'Resume setup' : 'Set up provider'}
@@ -1233,7 +1235,7 @@ export default function App() {
               {providerReadiness.canTest && (
                 <button
                   type="button"
-                  onClick={openSetupGuide}
+                  onClick={() => openSetupGuide('test')}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
                 >
                   Test connection in setup guide
