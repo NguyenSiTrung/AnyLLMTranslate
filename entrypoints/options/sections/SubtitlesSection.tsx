@@ -552,12 +552,14 @@ export function SubtitlesSection() {
                     </p>
                   </div>
                   <Toggle
+                    id="youtube-asr-resegment-enable"
+                    ariaLabel="Improve auto-generated captions"
                     checked={
                       subtitleSettings.youtubeAsrResegment?.enable ??
                       DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.enable
                     }
                     disabled={isDisabled}
-                    onToggle={(checked) => {
+                    onChange={(checked) => {
                       const current =
                         subtitleSettings.youtubeAsrResegment ??
                         DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS;
@@ -581,6 +583,8 @@ export function SubtitlesSection() {
                     </p>
                   </div>
                   <Toggle
+                    id="youtube-asr-resegment-ai-enable"
+                    ariaLabel="AI re-align auto-generated captions"
                     checked={
                       subtitleSettings.youtubeAsrResegment?.aiEnable ??
                       DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.aiEnable
@@ -592,7 +596,7 @@ export function SubtitlesSection() {
                         DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS.enable
                       )
                     }
-                    onToggle={(checked) => {
+                    onChange={(checked) => {
                       const current =
                         subtitleSettings.youtubeAsrResegment ??
                         DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS;
