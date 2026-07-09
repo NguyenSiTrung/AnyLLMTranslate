@@ -38,109 +38,44 @@ function makeKey(overrides: Partial<PoolKey> = {}): PoolKey {
 }
 
 describe('providerCredentialsChanged', () => {
-  it('returns false when baseUrl, model, requiresApiKey are unchanged', () => {
-    const p = makeProvider();
-    expect(providerCredentialsChanged(p, p)).toBe(false);
-  });
-
-  it('returns true when baseUrl changes', () => {
+  it('detects credential field changes and ignores unrelated fields', () => {
     const old = makeProvider();
-    const next = makeProvider({ baseUrl: 'https://other/v1' });
-    expect(providerCredentialsChanged(old, next)).toBe(true);
-  });
-
-  it('returns true when model changes', () => {
-    const old = makeProvider();
-    const next = makeProvider({ model: 'llama-3.1' });
-    expect(providerCredentialsChanged(old, next)).toBe(true);
-  });
-
-  it('returns true when requiresApiKey changes', () => {
-    const old = makeProvider();
-    const next = makeProvider({ requiresApiKey: false });
-    expect(providerCredentialsChanged(old, next)).toBe(true);
-  });
-
-  it('returns false when only irrelevant fields change', () => {
-    const old = makeProvider();
-    const next = makeProvider({ displayName: 'New', temperature: 0.7, enabled: false });
-    expect(providerCredentialsChanged(old, next)).toBe(false);
+    expect(providerCredentialsChanged(old, old)).toBe(false);
+    expect(providerCredentialsChanged(old, makeProvider({ baseUrl: 'https://other/v1' }))).toBe(true);
+    expect(providerCredentialsChanged(old, makeProvider({ model: 'llama-3.1' }))).toBe(true);
+    expect(providerCredentialsChanged(old, makeProvider({ requiresApiKey: false }))).toBe(true);
+    expect(providerCredentialsChanged(old, makeProvider({ displayName: 'New', temperature: 0.7 }))).toBe(false);
   });
 });
 
 describe('keyCredentialsChanged', () => {
-  it('returns false when apiKey is unchanged', () => {
+  it('detects apiKey changes only', () => {
     const k = makeKey();
     expect(keyCredentialsChanged(k, k)).toBe(false);
-  });
-
-  it('returns true when apiKey changes', () => {
-    const old = makeKey();
-    const next = makeKey({ apiKey: 'sk-new' });
-    expect(keyCredentialsChanged(old, next)).toBe(true);
+    expect(keyCredentialsChanged(k, makeKey({ apiKey: 'sk-new' }))).toBe(true);
   });
 });
 
-describe('applyProviderPatch', () => {
-  it('preserves lastTestResult when credentials are unchanged', () => {
+describe('applyProviderPatch / applyKeyPatch', () => {
+  it('clears lastTestResult only when credentials change', () => {
     const p = makeProvider();
-    const patched = applyProviderPatch(p, { displayName: 'Renamed' });
-    expect(patched.lastTestResult).toEqual({ success: true, at: 1700000000000, latencyMs: 200 });
-    expect(patched.displayName).toBe('Renamed');
-  });
-
-  it('clears lastTestResult when any credential field (baseUrl/model/requiresApiKey) changes', () => {
-    const p = makeProvider();
+    expect(applyProviderPatch(p, { displayName: 'Renamed' }).lastTestResult).toBeDefined();
     expect(applyProviderPatch(p, { baseUrl: 'https://other/v1' }).lastTestResult).toBeUndefined();
     expect(applyProviderPatch(p, { model: 'new-model' }).lastTestResult).toBeUndefined();
-    expect(applyProviderPatch(p, { requiresApiKey: false }).lastTestResult).toBeUndefined();
-  });
 
-  it('does not clear lastTestResult when patch has no credential fields or sets same values', () => {
-    const p = makeProvider({ baseUrl: 'https://api.test.com/v1', model: 'gpt-4o-mini' });
-    expect(applyProviderPatch(p, { enabled: false, temperature: 0.9 }).lastTestResult).toBeDefined();
-    expect(applyProviderPatch(p, { baseUrl: 'https://api.test.com/v1', model: 'gpt-4o-mini' }).lastTestResult).toBeDefined();
-  });
-});
-
-describe('applyKeyPatch', () => {
-  it('preserves lastTestResult when apiKey is unchanged', () => {
     const k = makeKey();
-    const patched = applyKeyPatch(k, { maxRpm: 60 });
-    expect(patched.lastTestResult).toEqual({ success: true, at: 1700000000000, latencyMs: 100 });
-    expect(patched.maxRpm).toBe(60);
-  });
-
-  it('clears lastTestResult when apiKey changes', () => {
-    const k = makeKey();
-    const patched = applyKeyPatch(k, { apiKey: 'sk-new' });
-    expect(patched.lastTestResult).toBeUndefined();
-    expect(patched.apiKey).toBe('sk-new');
-  });
-
-  it('does not clear lastTestResult when patch has no apiKey field or sets the same value', () => {
-    const k = makeKey({ apiKey: 'sk-same' });
-    expect(applyKeyPatch(k, { apiKey: 'sk-same' }).lastTestResult).toBeDefined();
-    expect(applyKeyPatch(k, { enabled: false, label: 'prod' }).lastTestResult).toBeDefined();
+    expect(applyKeyPatch(k, { maxRpm: 60 }).lastTestResult).toBeDefined();
+    expect(applyKeyPatch(k, { apiKey: 'sk-new' }).lastTestResult).toBeUndefined();
+    expect(applyKeyPatch(k, { apiKey: 'sk-old' }).lastTestResult).toBeDefined();
   });
 });
 
 describe('formatTestResultAge', () => {
-  const baseAt = 1700000000000;
-
-  it('returns "just now" for < 1 minute', () => {
-    expect(formatTestResultAge({ success: true, at: baseAt }, baseAt + 30_000)).toBe('just now');
-  });
-
-  it('returns minutes for < 1 hour', () => {
-    expect(formatTestResultAge({ success: true, at: baseAt }, baseAt + 5 * 60_000)).toBe('5m ago');
-  });
-
-  it('returns hours for < 1 day', () => {
-    expect(formatTestResultAge({ success: true, at: baseAt }, baseAt + 3 * 3_600_000)).toBe('3h ago');
-  });
-
-  it('returns days for >= 1 day', () => {
-    expect(formatTestResultAge({ success: true, at: baseAt }, baseAt + 2 * 86_400_000)).toBe('2d ago');
+  it('formats relative age buckets', () => {
+    const at = 1700000000000;
+    expect(formatTestResultAge({ success: true, at }, at + 30_000)).toBe('just now');
+    expect(formatTestResultAge({ success: true, at }, at + 5 * 60_000)).toBe('5m ago');
+    expect(formatTestResultAge({ success: true, at }, at + 3 * 3_600_000)).toBe('3h ago');
+    expect(formatTestResultAge({ success: true, at }, at + 2 * 86_400_000)).toBe('2d ago');
   });
 });

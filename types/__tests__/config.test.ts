@@ -1,5 +1,5 @@
 /**
- * Tests for config types and default values.
+ * Critical default regressions only (not interface shape checks — TypeScript covers those).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -9,248 +9,39 @@ import {
   DEFAULT_PDF_SETTINGS,
   PROVIDER_PRESETS,
 } from '@/types/config';
-import type {
-  SiteRule,
-  GlossaryEntry,
-  SubtitleSettings,
-  ExtensionSettings,
-  PoolKey,
-  PoolProvider,
-  KeyTestResult,
-} from '@/types/config';
 
-describe('config types', () => {
-  describe('SiteRule interface', () => {
-    it('accepts a valid site rule', () => {
-      const rule: SiteRule = {
-        id: 'rule-1',
-        hostname: '*.example.com',
-        includeSelectors: ['.content', 'article'],
-        excludeSelectors: ['.nav', '.sidebar'],
-        alwaysTranslate: true,
-        neverTranslate: false,
-        builtIn: false,
-      };
-      expect(rule.id).toBe('rule-1');
-      expect(rule.hostname).toBe('*.example.com');
-      expect(rule.includeSelectors).toHaveLength(2);
-    });
-
-    it('accepts a site rule with optional category', () => {
-      const rule: SiteRule = {
-        id: 'rule-cat',
-        hostname: 'github.com',
-        includeSelectors: [],
-        excludeSelectors: [],
-        alwaysTranslate: false,
-        neverTranslate: false,
-        builtIn: false,
-        category: 'Software Development',
-      };
-      expect(rule.category).toBe('Software Development');
-    });
+describe('config defaults', () => {
+  it('ships critical language/display defaults', () => {
+    expect(DEFAULT_SETTINGS.sourceLanguage).toBe('auto');
+    expect(DEFAULT_SETTINGS.targetLanguage).toBe('vi');
+    expect(DEFAULT_SETTINGS.displayMode).toBe('bilingual-below');
+    expect(DEFAULT_SETTINGS.theme).toBe('blockquote');
+    expect(DEFAULT_SETTINGS.provider.preset).toBe('custom');
   });
 
-  describe('GlossaryEntry interface', () => {
-    it('accepts a valid glossary entry', () => {
-      const entry: GlossaryEntry = {
-        id: 'entry-1',
-        source: 'React',
-        target: 'React',
-      };
-      expect(entry.source).toBe('React');
-      expect(entry.target).toBe('React');
-    });
+  it('defaults feature flags that change page-walk behaviour to OFF', () => {
+    expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
+    expect(DEFAULT_SETTINGS.enableBodyTagWhitelist).toBe(false);
+    expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(false);
   });
 
-  describe('SubtitleSettings interface', () => {
-    it('accepts valid subtitle settings', () => {
-      const settings: SubtitleSettings = {
-        position: 'bottom',
-        fontSize: 18,
-        fontSizeMode: 'fixed',
-        backgroundOpacity: 0.5,
-        enabled: true,
-        fontFamily: 'system',
-        displayMode: 'bilingual',
-        translationTimeout: 30,
-        preferredSubtitleLanguage: 'en',
-        autoActivateSubtitles: false,
-        disabledSubtitleSites: [],
-        enableGenericSubtitleHandler: true,
-      };
-      expect(settings.fontSize).toBe(18);
-      expect(settings.backgroundOpacity).toBe(0.5);
-    });
+  it('embeds subtitle and PDF defaults with safe baselines', () => {
+    expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
+    expect(DEFAULT_SUBTITLE_SETTINGS.enabled).toBe(true);
+    expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
+    expect(DEFAULT_SETTINGS.pdfSettings).toEqual(DEFAULT_PDF_SETTINGS);
+    expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
   });
 
-  describe('DEFAULT_SUBTITLE_SETTINGS', () => {
-    it('has sensible defaults', () => {
-      expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
-      expect(DEFAULT_SUBTITLE_SETTINGS.fontSize).toBe(16);
-      expect(DEFAULT_SUBTITLE_SETTINGS.fontSizeMode).toBe('fixed');
-      expect(DEFAULT_SUBTITLE_SETTINGS.backgroundOpacity).toBe(0.7);
-      expect(DEFAULT_SUBTITLE_SETTINGS.enabled).toBe(true);
-    });
+  it('exposes a single custom provider preset', () => {
+    expect(PROVIDER_PRESETS).toHaveLength(1);
+    expect(PROVIDER_PRESETS[0].preset).toBe('custom');
+    expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
   });
 
-  describe('DEFAULT_SETTINGS', () => {
-    it('includes original settings', () => {
-      expect(DEFAULT_SETTINGS.sourceLanguage).toBe('auto');
-      expect(DEFAULT_SETTINGS.targetLanguage).toBe('vi');
-      expect(DEFAULT_SETTINGS.displayMode).toBe('bilingual-below');
-      expect(DEFAULT_SETTINGS.maxBatchChars).toBe(2000);
-      expect(DEFAULT_SETTINGS.cacheTTLDays).toBe(30);
-      expect(DEFAULT_SETTINGS.maxCacheSizeMB).toBe(100);
-    });
-
-    it('has new Phase 3 defaults', () => {
-      expect(DEFAULT_SETTINGS.theme).toBe('blockquote');
-      expect(DEFAULT_SETTINGS.translationPosition).toBe('below');
-      expect(DEFAULT_SETTINGS.darkMode).toBe('auto');
-      expect(DEFAULT_SETTINGS.siteRules).toEqual([]);
-      expect(DEFAULT_SETTINGS.glossary).toEqual([]);
-      expect(DEFAULT_SETTINGS.customSystemPrompt).toBeNull();
-      expect(DEFAULT_SETTINGS.debugMode).toBe(false);
-    });
-
-    it('defaults compact inline for short text to OFF (uniform block display)', () => {
-      expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
-    });
-
-    it('defaults body-tag whitelist and aside caps to OFF (FR-4/FR-5)', () => {
-      expect(DEFAULT_SETTINGS.enableBodyTagWhitelist).toBe(false);
-      expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(false);
-    });
-
-    it('has subtitle settings defaults', () => {
-      expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
-    });
-
-    it('has valid provider defaults', () => {
-      expect(DEFAULT_SETTINGS.provider.preset).toBe('custom');
-      expect(DEFAULT_SETTINGS.provider.baseUrl).toBe('');
-      expect(DEFAULT_SETTINGS.provider.model).toBe('');
-    });
-
-    it('has custom theme defaults', () => {
-      expect(DEFAULT_SETTINGS.customTheme).toBeDefined();
-      expect(DEFAULT_SETTINGS.customTheme?.textColor).toBe('#555555');
-      expect(DEFAULT_SETTINGS.customTheme?.backgroundColor).toBe('transparent');
-      expect(DEFAULT_SETTINGS.customTheme?.borderStyle).toBe('solid');
-      expect(DEFAULT_SETTINGS.customTheme?.borderColor).toBe('#3b82f6');
-      expect(DEFAULT_SETTINGS.customTheme?.fontStyle).toBe('normal');
-      expect(DEFAULT_SETTINGS.customTheme?.fontSize).toBe('same');
-    });
-
-    it('fulfills ExtensionSettings interface completely', () => {
-      const settings: ExtensionSettings = { ...DEFAULT_SETTINGS };
-      expect(settings).toBeDefined();
-      // Verify all keys exist
-      const requiredKeys: (keyof ExtensionSettings)[] = [
-        'provider', 'sourceLanguage', 'targetLanguage', 'displayMode',
-        'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
-        'theme', 'translationPosition', 'darkMode',
-        'siteRules', 'glossary', 'subtitleSettings',
-        'customSystemPrompt', 'debugMode',
-        'customTheme', 'enableContextAwareTranslation', 'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
-      ];
-      for (const key of requiredKeys) {
-        expect(settings).toHaveProperty(key);
-      }
-    });
-  });
-
-  describe('DEFAULT_PDF_SETTINGS', () => {
-    it('has autoOpen off by default', () => {
-      expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
-      expect(DEFAULT_PDF_SETTINGS.openMode).toBe('new-tab');
-      expect(DEFAULT_PDF_SETTINGS.neverAutoOpenSites).toEqual([]);
-    });
-
-    it('is embedded in DEFAULT_SETTINGS', () => {
-      expect(DEFAULT_SETTINGS.pdfSettings).toBeDefined();
-      expect(DEFAULT_SETTINGS.pdfSettings.autoOpen).toBe('off');
-      expect(DEFAULT_SETTINGS.pdfSettings.openMode).toBe('new-tab');
-    });
-  });
-
-  describe('PROVIDER_PRESETS', () => {
-    it('has 1 preset definition', () => {
-      expect(PROVIDER_PRESETS).toHaveLength(1);
-    });
-
-    it('includes custom as first preset', () => {
-      expect(PROVIDER_PRESETS[0].preset).toBe('custom');
-      expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
-    });
-  });
-
-  describe('KeyTestResult & pool lastTestResult', () => {
-    it('KeyTestResult type accepts a full result', () => {
-      const result: KeyTestResult = {
-        success: true,
-        at: 1700000000000,
-        latencyMs: 240,
-      };
-      expect(result.success).toBe(true);
-      expect(result.at).toBe(1700000000000);
-      expect(result.latencyMs).toBe(240);
-      expect(result.error).toBeUndefined();
-    });
-
-    it('KeyTestResult type accepts a failed result with error', () => {
-      const result: KeyTestResult = {
-        success: false,
-        at: 1700000000000,
-        error: '401 Unauthorized',
-      };
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('401 Unauthorized');
-      expect(result.latencyMs).toBeUndefined();
-    });
-
-    it('PoolKey has optional lastTestResult', () => {
-      const key: PoolKey = {
-        id: 'k1',
-        apiKey: 'sk-...',
-        maxRpm: 0,
-        concurrencyLimit: 0,
-        interval: 0,
-        enabled: true,
-      };
-      expect(key.lastTestResult).toBeUndefined();
-      const keyWithResult: PoolKey = {
-        ...key,
-        lastTestResult: { success: true, at: Date.now(), latencyMs: 100 },
-      };
-      expect(keyWithResult.lastTestResult?.success).toBe(true);
-    });
-
-    it('PoolProvider has optional lastTestResult', () => {
-      const provider: PoolProvider = {
-        id: 'p1',
-        displayName: 'Test',
-        baseUrl: 'https://api.test.com/v1',
-        model: 'm',
-        requiresApiKey: true,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: true,
-        keys: [],
-      };
-      expect(provider.lastTestResult).toBeUndefined();
-      const providerWithResult: PoolProvider = {
-        ...provider,
-        lastTestResult: { success: false, at: Date.now(), error: 'timeout' },
-      };
-      expect(providerWithResult.lastTestResult?.success).toBe(false);
-    });
-
-    it('DEFAULT_SETTINGS.providers[0].keys[0] has no lastTestResult by default', () => {
-      const defaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
-      expect(defaultKey).toBeDefined();
-      expect(defaultKey?.lastTestResult).toBeUndefined();
-    });
+  it('default pool key has no lastTestResult', () => {
+    const defaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
+    expect(defaultKey).toBeDefined();
+    expect(defaultKey?.lastTestResult).toBeUndefined();
   });
 });

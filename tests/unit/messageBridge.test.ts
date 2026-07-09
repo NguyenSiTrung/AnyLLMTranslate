@@ -10,9 +10,7 @@ describe('messageBridge', () => {
     postedMessages = [];
     vi.spyOn(window, 'addEventListener').mockImplementation(
       (event: string, handler: EventListenerOrEventListenerObject) => {
-        if (event === 'message') {
-          registeredListeners.push({ handler });
-        }
+        if (event === 'message') registeredListeners.push({ handler });
       },
     );
     vi.spyOn(window, 'removeEventListener').mockImplementation(
@@ -40,120 +38,79 @@ describe('messageBridge', () => {
     }
   }
 
-  describe('sendMessage', () => {
-    it('posts a message with correct channel', () => {
-      const requestId = sendMessage('SUBTITLE_INTERCEPTED', { test: true });
-      expect(postedMessages[0]).toEqual(
-        expect.objectContaining({
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_INTERCEPTED',
-          requestId,
-          payload: { test: true },
-        }),
-      );
-    });
-
-    it('returns a unique requestId', () => {
-      const id1 = sendMessage('SUBTITLE_INTERCEPTED', {});
-      const id2 = sendMessage('SUBTITLE_INTERCEPTED', {});
-      expect(id1).not.toBe(id2);
-    });
+  it('sendMessage posts channel payload with unique requestIds', () => {
+    const id1 = sendMessage('SUBTITLE_INTERCEPTED', { test: true });
+    const id2 = sendMessage('SUBTITLE_INTERCEPTED', {});
+    expect(id1).not.toBe(id2);
+    expect(postedMessages[0]).toEqual(
+      expect.objectContaining({
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_INTERCEPTED',
+        requestId: id1,
+        payload: { test: true },
+      }),
+    );
   });
 
-  describe('onMessage', () => {
-    it('calls handler for matching channel and type', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_TRANSLATED', handler);
+  it('onMessage matches channel+type, rejects foreign origins/mismatches, supports once+cleanup', () => {
+    const handler = vi.fn();
+    const cleanup = onMessage('SUBTITLE_TRANSLATED', handler);
 
-      fireMessageEvent({
+    fireMessageEvent({
+      channel: 'anyllm-translate',
+      type: 'SUBTITLE_TRANSLATED',
+      requestId: 'test-123',
+      payload: { vttContent: 'test' },
+    });
+    expect(handler).toHaveBeenCalledWith({ vttContent: 'test' }, 'test-123');
+
+    handler.mockClear();
+    fireMessageEvent({
+      channel: 'other-channel',
+      type: 'SUBTITLE_TRANSLATED',
+      requestId: 'x',
+      payload: {},
+    });
+    fireMessageEvent({
+      channel: 'anyllm-translate',
+      type: 'SUBTITLE_INTERCEPTED',
+      requestId: 'x',
+      payload: {},
+    });
+    fireMessageEvent(
+      {
         channel: 'anyllm-translate',
         type: 'SUBTITLE_TRANSLATED',
-        requestId: 'test-123',
-        payload: { vttContent: 'test' },
-      });
-
-      expect(handler).toHaveBeenCalledWith({ vttContent: 'test' }, 'test-123');
-    });
-
-    it('ignores messages from different channel', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_TRANSLATED', handler);
-
-      fireMessageEvent({
-        channel: 'other-channel',
-        type: 'SUBTITLE_TRANSLATED',
-        requestId: 'test-123',
+        requestId: 'x',
         payload: {},
-      });
+      },
+      'https://evil.example.com',
+    );
+    expect(handler).not.toHaveBeenCalled();
 
-      expect(handler).not.toHaveBeenCalled();
+    cleanup();
+    fireMessageEvent({
+      channel: 'anyllm-translate',
+      type: 'SUBTITLE_TRANSLATED',
+      requestId: 'y',
+      payload: {},
     });
+    expect(handler).not.toHaveBeenCalled();
 
-    it('ignores messages of different type', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_TRANSLATED', handler);
-
-      fireMessageEvent({
-        channel: 'anyllm-translate',
-        type: 'SUBTITLE_INTERCEPTED',
-        requestId: 'test-123',
-        payload: {},
-      });
-
-      expect(handler).not.toHaveBeenCalled();
+    const once = vi.fn();
+    onMessage('SUBTITLE_INTERCEPTED', once, { once: true });
+    fireMessageEvent({
+      channel: 'anyllm-translate',
+      type: 'SUBTITLE_INTERCEPTED',
+      requestId: 'a',
+      payload: {},
     });
-
-    it('returns a cleanup function that removes the listener', () => {
-      const handler = vi.fn();
-      const cleanup = onMessage('SUBTITLE_INTERCEPTED', handler);
-      cleanup();
-
-      fireMessageEvent({
-        channel: 'anyllm-translate',
-        type: 'SUBTITLE_INTERCEPTED',
-        requestId: 'test',
-        payload: {},
-      });
-
-      expect(handler).not.toHaveBeenCalled();
+    fireMessageEvent({
+      channel: 'anyllm-translate',
+      type: 'SUBTITLE_INTERCEPTED',
+      requestId: 'b',
+      payload: {},
     });
-
-    it('rejects messages from foreign origins', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_TRANSLATED', handler);
-
-      fireMessageEvent(
-        {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'test-123',
-          payload: { vttContent: 'test' },
-        },
-        'https://evil.example.com',
-      );
-
-      expect(handler).not.toHaveBeenCalled();
-    });
-
-    it('removes listener after once callback', () => {
-      const handler = vi.fn();
-      onMessage('SUBTITLE_INTERCEPTED', handler, { once: true });
-
-      fireMessageEvent({
-        channel: 'anyllm-translate',
-        type: 'SUBTITLE_INTERCEPTED',
-        requestId: 'test',
-        payload: {},
-      });
-
-      fireMessageEvent({
-        channel: 'anyllm-translate',
-        type: 'SUBTITLE_INTERCEPTED',
-        requestId: 'test2',
-        payload: {},
-      });
-
-      expect(handler).toHaveBeenCalledTimes(1);
-    });
+    expect(once).toHaveBeenCalledTimes(1);
   });
 });

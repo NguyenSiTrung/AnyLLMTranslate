@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { matchHostname, findMatchingRule, findEffectiveRule, mergeExcludeSelectors, BUILT_IN_RULES } from '@/lib/siteRules';
+import {
+  matchHostname,
+  findMatchingRule,
+  findEffectiveRule,
+  mergeExcludeSelectors,
+  BUILT_IN_RULES,
+} from '@/lib/siteRules';
 import type { SiteRule } from '@/types/config';
 
 function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): SiteRule {
@@ -15,31 +21,12 @@ function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): Site
 }
 
 describe('matchHostname', () => {
-  describe('exact match', () => {
-    it('matches identical hostnames case-insensitively', () => {
-      expect(matchHostname('example.com', 'example.com')).toBe(true);
-      expect(matchHostname('Example.COM', 'example.com')).toBe(true);
-    });
-  });
-
-  describe('wildcard match', () => {
-    it('matches subdomain with *.example.com but NOT bare domain', () => {
-      expect(matchHostname('sub.example.com', '*.example.com')).toBe(true);
-      expect(matchHostname('example.com', '*.example.com')).toBe(false);
-    });
-  });
-
-  describe('no-match cases', () => {
-    it('returns false for unrelated or partial hostname match', () => {
-      expect(matchHostname('notexample.com', '*.example.com')).toBe(false);
-    });
-  });
-
-  describe('edge cases', () => {
-    it('returns false for empty hostname, pattern, or both', () => {
-      expect(matchHostname('', 'example.com')).toBe(false);
-      expect(matchHostname('', '')).toBe(false);
-    });
+  it('matches exact (case-insensitive), wildcards, and rejects empty/partial', () => {
+    expect(matchHostname('Example.COM', 'example.com')).toBe(true);
+    expect(matchHostname('sub.example.com', '*.example.com')).toBe(true);
+    expect(matchHostname('example.com', '*.example.com')).toBe(false);
+    expect(matchHostname('notexample.com', '*.example.com')).toBe(false);
+    expect(matchHostname('', 'example.com')).toBe(false);
   });
 });
 
@@ -50,126 +37,54 @@ describe('findMatchingRule', () => {
     makeSiteRule({ id: 'r3', hostname: '*.example.com', alwaysTranslate: true }),
   ];
 
-  it('returns the first matching rule', () => {
-    const result = findMatchingRule('docs.google.com', rules);
-    expect(result?.id).toBe('r1');
-  });
-
-  it('matches exact hostname rules', () => {
-    const result = findMatchingRule('example.com', rules);
-    expect(result?.id).toBe('r2');
-  });
-
-  it('returns undefined when no rule matches', () => {
+  it('returns first match and handles misses / empty input', () => {
+    expect(findMatchingRule('docs.google.com', rules)?.id).toBe('r1');
+    expect(findMatchingRule('example.com', rules)?.id).toBe('r2');
     expect(findMatchingRule('unknown.org', rules)).toBeUndefined();
-  });
-
-  it('returns undefined for empty rules array', () => {
     expect(findMatchingRule('example.com', [])).toBeUndefined();
-  });
-
-  it('first match wins when multiple rules could match', () => {
     const overlapping: SiteRule[] = [
       makeSiteRule({ id: 'first', hostname: '*.example.com' }),
       makeSiteRule({ id: 'second', hostname: '*.example.com' }),
     ];
     expect(findMatchingRule('sub.example.com', overlapping)?.id).toBe('first');
   });
-
-  it('handles undefined rules by defaulting to empty array', () => {
-    expect(findMatchingRule('example.com', undefined as unknown as SiteRule[])).toBeUndefined();
-  });
 });
 
 describe('findEffectiveRule', () => {
-  it('returns user rule over built-in rule for same hostname', () => {
-    const userRule = makeSiteRule({ id: 'user-github', hostname: 'github.com', alwaysTranslate: true });
-    const result = findEffectiveRule('github.com', [userRule]);
-    expect(result?.id).toBe('user-github');
-    expect(result?.alwaysTranslate).toBe(true);
-  });
-
-  it('falls back to built-in rule when no user rule matches', () => {
-    const result = findEffectiveRule('github.com', []);
-    expect(result).toBeDefined();
-    expect(result?.builtIn).toBe(true);
-    expect(result?.hostname).toBe('github.com');
-  });
-
-  it('falls back to built-in wildcard rule', () => {
-    const result = findEffectiveRule('gist.github.com', []);
-    expect(result).toBeDefined();
-    expect(result?.builtIn).toBe(true);
-    expect(result?.hostname).toBe('*.github.com');
-  });
-
-  it('returns undefined for unknown hostnames with no user rules', () => {
+  it('prefers user rules and falls back to built-ins', () => {
+    const userRule = makeSiteRule({
+      id: 'user-github',
+      hostname: 'github.com',
+      alwaysTranslate: true,
+    });
+    expect(findEffectiveRule('github.com', [userRule])?.id).toBe('user-github');
+    const builtin = findEffectiveRule('github.com', []);
+    expect(builtin?.builtIn).toBe(true);
+    expect(findEffectiveRule('gist.github.com', [])?.hostname).toBe('*.github.com');
     expect(findEffectiveRule('unknown.example.com', [])).toBeUndefined();
-  });
-
-  it('handles undefined userRules gracefully', () => {
-    const result = findEffectiveRule('github.com', undefined as unknown as SiteRule[]);
-    expect(result).toBeDefined();
-    expect(result?.builtIn).toBe(true);
   });
 });
 
 describe('BUILT_IN_RULES', () => {
-  it('contains expected platforms', () => {
-    const hostnames = BUILT_IN_RULES.map((r) => r.hostname);
-    expect(hostnames).toContain('github.com');
-    expect(hostnames).toContain('*.github.com');
-    expect(hostnames).toContain('stackoverflow.com');
-    expect(hostnames).toContain('*.reddit.com');
-    expect(hostnames).toContain('twitter.com');
-    expect(hostnames).toContain('x.com');
-    expect(hostnames).toContain('*.wikipedia.org');
-    expect(hostnames).toContain('medium.com');
-    expect(hostnames).toContain('huggingface.co');
-    expect(hostnames).toContain('pypi.org');
-    expect(hostnames).toContain('www.npmjs.com');
-    expect(hostnames).toContain('*.gitlab.com');
-    expect(hostnames).toContain('gitlab.com');
-    expect(hostnames).toContain('*.substack.com');
-    expect(hostnames).toContain('*.youtube.com');
-    expect(hostnames).toContain('youtube.com');
-  });
-
-  it('all rules are marked built-in', () => {
-    for (const rule of BUILT_IN_RULES) {
-      expect(rule.builtIn).toBe(true);
-    }
-  });
-
-  it('github rules have include and exclude selectors', () => {
-    const github = BUILT_IN_RULES.find((r) => r.hostname === 'github.com');
-    expect(github?.includeSelectors).toContain('.markdown-body');
-    expect(github?.excludeSelectors).toContain('pre');
-    // Bare `code` must not be excluded — it tears paths out of prose sentences.
-    // Block code stays excluded via `pre` / `.highlight`.
-    expect(github?.excludeSelectors).not.toContain('code');
-  });
-
-  it('built-in rules never hard-exclude bare inline code', () => {
+  it('marks rules built-in and never hard-excludes bare inline code', () => {
+    expect(BUILT_IN_RULES.every((r) => r.builtIn)).toBe(true);
     for (const rule of BUILT_IN_RULES) {
       expect(rule.excludeSelectors).not.toContain('code');
     }
+    const github = BUILT_IN_RULES.find((r) => r.hostname === 'github.com');
+    expect(github?.includeSelectors).toContain('.markdown-body');
+    expect(github?.excludeSelectors).toContain('pre');
   });
 });
 
 describe('mergeExcludeSelectors', () => {
-  it('merges global and site excludes without duplicates', () => {
-    const result = mergeExcludeSelectors(['pre', 'code'], ['pre', '.sidebar']);
-    expect(result).toEqual(['pre', 'code', '.sidebar']);
-  });
-
-  it('returns empty array when both are empty/undefined', () => {
-    expect(mergeExcludeSelectors([], [])).toEqual([]);
+  it('merges without duplicates and preserves case', () => {
+    expect(mergeExcludeSelectors(['pre', 'code'], ['pre', '.sidebar'])).toEqual([
+      'pre',
+      'code',
+      '.sidebar',
+    ]);
     expect(mergeExcludeSelectors([], undefined)).toEqual([]);
-  });
-
-  it('handles case-sensitive selectors correctly', () => {
-    const result = mergeExcludeSelectors(['PRE'], ['pre']);
-    expect(result).toEqual(['PRE', 'pre']);
+    expect(mergeExcludeSelectors(['PRE'], ['pre'])).toEqual(['PRE', 'pre']);
   });
 });

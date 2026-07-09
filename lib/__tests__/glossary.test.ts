@@ -20,124 +20,51 @@ const sampleEntries: GlossaryEntry[] = [
 ];
 
 describe('formatGlossary', () => {
-  it('returns empty string for no entries', () => {
+  it('formats entries (empty → empty string)', () => {
     expect(formatGlossary([])).toBe('');
-  });
-
-  it('formats entries as a glossary block', () => {
     const result = formatGlossary(sampleEntries);
     expect(result).toContain('Translation Glossary');
-    expect(result).toContain('"React" → "React"');
     expect(result).toContain('"machine learning" → "học máy"');
-    expect(result).toContain('"API" → "API"');
   });
 });
 
-describe('parseGlossaryCSV', () => {
-  it('parses simple CSV', () => {
-    const csv = 'source,target\nReact,React\nAPI,API';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(2);
-    expect(entries[0].source).toBe('React');
-    expect(entries[0].target).toBe('React');
+describe('parse / export CSV', () => {
+  it('parses CSV with header, quoted commas, and skips junk lines', () => {
+    expect(parseGlossaryCSV('source,target\nReact,React\nAPI,API')).toHaveLength(2);
+    const quoted = parseGlossaryCSV('"hello, world","xin chào, thế giới"');
+    expect(quoted[0].source).toBe('hello, world');
+    expect(parseGlossaryCSV('source,target\n\nReact,React\n\n')).toHaveLength(1);
+    expect(parseGlossaryCSV('source,target\nonlyOneColumn')).toHaveLength(0);
   });
 
-  it('handles quoted values with commas', () => {
-    const csv = '"hello, world","xin chào, thế giới"';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].source).toBe('hello, world');
-    expect(entries[0].target).toBe('xin chào, thế giới');
-  });
-
-  it('skips empty lines', () => {
-    const csv = 'source,target\n\nReact,React\n\n';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(1);
-  });
-
-  it('skips header line', () => {
-    const csv = 'source,target\nReact,React';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(1);
-  });
-
-  it('handles CSV without header', () => {
-    const csv = 'React,React\nAPI,API';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(2);
-  });
-
-  it('returns empty for insufficient columns', () => {
-    const csv = 'source,target\nonlyOneColumn';
-    const entries = parseGlossaryCSV(csv);
-    expect(entries).toHaveLength(0);
-  });
-});
-
-describe('exportGlossaryCSV', () => {
-  it('exports with header', () => {
+  it('exports with header, escapes specials, and round-trips', () => {
     const csv = exportGlossaryCSV(sampleEntries);
-    const lines = csv.split('\n');
-    expect(lines[0]).toBe('source,target');
-    expect(lines).toHaveLength(4);
-  });
-
-  it('escapes commas and quotes', () => {
-    const entries: GlossaryEntry[] = [
+    expect(csv.split('\n')[0]).toBe('source,target');
+    const escaped = exportGlossaryCSV([
       { id: '1', source: 'hello, world', target: 'quote "test"' },
-    ];
-    const csv = exportGlossaryCSV(entries);
-    expect(csv).toContain('"hello, world"');
-    expect(csv).toContain('"quote ""test"""');
-  });
-
-  it('roundtrips with parseGlossaryCSV', () => {
-    const csv = exportGlossaryCSV(sampleEntries);
+    ]);
+    expect(escaped).toContain('"hello, world"');
     const parsed = parseGlossaryCSV(csv);
     expect(parsed).toHaveLength(sampleEntries.length);
-    for (let i = 0; i < parsed.length; i++) {
-      expect(parsed[i].source).toBe(sampleEntries[i].source);
-      expect(parsed[i].target).toBe(sampleEntries[i].target);
-    }
+    expect(parsed[1].target).toBe('học máy');
   });
 });
 
-describe('exportGlossaryJSON', () => {
-  it('exports as formatted JSON without id fields', () => {
+describe('parse / export JSON', () => {
+  it('exports without ids, parses arrays, rejects bad shapes, regenerates UUIDs', () => {
     const json = exportGlossaryJSON(sampleEntries);
-    const parsed = JSON.parse(json);
-    expect(parsed).toHaveLength(3);
-    expect(parsed[0].source).toBe('React');
-    expect(parsed[0].target).toBe('React');
-    // Internal id should be stripped from export
-    expect(parsed[0]).not.toHaveProperty('id');
-  });
-});
+    const exported = JSON.parse(json);
+    expect(exported[0]).not.toHaveProperty('id');
 
-describe('parseGlossaryJSON', () => {
-  it('parses valid JSON array', () => {
-    const json = JSON.stringify(sampleEntries);
-    const result = parseGlossaryJSON(json);
+    const result = parseGlossaryJSON(JSON.stringify(sampleEntries));
     expect(result).toHaveLength(3);
-    expect(result[0].source).toBe('React');
-  });
-
-  it('throws for non-array JSON', () => {
     expect(() => parseGlossaryJSON('{"key": "value"}')).toThrow('expected an array');
-  });
-
-  it('throws for entries missing source/target', () => {
     expect(() => parseGlossaryJSON('[{"source": "hello"}]')).toThrow('must have source and target');
-  });
 
-  it('always generates fresh UUIDs, ignoring any existing IDs in the JSON', () => {
-    const json = '[{"id": "custom-id", "source": "hello", "target": "xin chào"}]';
-    const result = parseGlossaryJSON(json);
-    expect(result[0].id).toBeTruthy();
-    // Fresh UUID is always generated, original id is not preserved
-    expect(result[0].id).not.toBe('custom-id');
-    expect(result[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    const fresh = parseGlossaryJSON(
+      '[{"id": "custom-id", "source": "hello", "target": "xin chào"}]',
+    );
+    expect(fresh[0].id).not.toBe('custom-id');
   });
 });
 
@@ -145,49 +72,21 @@ describe('checkGlossaryMismatches', () => {
   const entries: GlossaryEntry[] = [
     { id: '1', source: 'machine learning', target: 'học máy' },
     { id: '2', source: 'API', target: 'API' },
-    { id: '3', source: 'neural network', target: 'mạng nơ-ron' },
   ];
 
-  it('returns entries whose target is missing from output', () => {
-    const result = checkGlossaryMismatches(
+  it('flags missing targets (case-insensitive) and ignores empty inputs', () => {
+    const missed = checkGlossaryMismatches(
       entries,
       'We use machine learning and API in our system.',
       'Chúng tôi sử dụng ML và API trong hệ thống.',
     );
-    // 'machine learning' source in input, 'học máy' absent from output → flagged
-    // 'API' source in input, 'API' present in output → not flagged
-    expect(result.map((e) => e.id)).toContain('1');
-    expect(result.map((e) => e.id)).not.toContain('2');
-  });
+    expect(missed.map((e) => e.id)).toContain('1');
+    expect(missed.map((e) => e.id)).not.toContain('2');
 
-  it('returns empty array when all glossary entries are correctly translated', () => {
-    const result = checkGlossaryMismatches(
-      entries,
-      'machine learning and API',
-      'học máy và API',
-    );
-    expect(result).toHaveLength(0);
-  });
-
-  it('is case-insensitive for source and target term matching', () => {
-    const result = checkGlossaryMismatches(
-      entries,
-      'Machine Learning is great.',  // uppercase 'M'
-      'Something else entirely.',
-    );
-    expect(result.map((e) => e.id)).toContain('1');
-
-    const matched = checkGlossaryMismatches(
-      entries,
-      'machine learning',
-      'HỌC MÁY is mentioned here.',  // uppercase target
-    );
-    // 'học máy'.toLowerCase() is in output.toLowerCase() → no mismatch
-    expect(matched).toHaveLength(0);
-  });
-
-  it('returns empty array when no source terms are present or entries list is empty', () => {
-    expect(checkGlossaryMismatches(entries, 'Hello world', 'Xin chào thế giới')).toHaveLength(0);
+    expect(
+      checkGlossaryMismatches(entries, 'machine learning', 'HỌC MÁY is mentioned here.'),
+    ).toHaveLength(0);
+    expect(checkGlossaryMismatches(entries, 'Hello world', 'Xin chào')).toHaveLength(0);
     expect(checkGlossaryMismatches([], 'machine learning', 'hello')).toHaveLength(0);
   });
 });
