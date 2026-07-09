@@ -35,6 +35,8 @@ import {
   resetStats,
   getStatsV2,
   updateStatsPreferences,
+  incrementStats,
+  recordDailyStats,
   STATS_STORAGE_KEY,
 } from '../statsCollector';
 import { getDailyRecord, getAllDailyRecords } from '../statsIdb';
@@ -142,5 +144,14 @@ describe('recordUsage', () => {
     await p2;
     const stats = await getStatsV2();
     expect(stats.lifetime.characters).toBe(0);
+  });
+
+  it('does not double-count when incrementStats is paired with recordDailyStats', async () => {
+    // Background still calls both for the same event until Task 7 rewires sites.
+    await incrementStats({ totalCharactersTranslated: 10, totalApiCalls: 1 });
+    await recordDailyStats(10, 1, 5);
+    const stats = await getStatsV2();
+    expect(stats.lifetime.characters).toBe(10);
+    expect(stats.lifetime.apiCalls).toBe(1);
   });
 });

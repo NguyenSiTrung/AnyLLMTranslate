@@ -249,18 +249,18 @@ export async function incrementStats(
   });
 }
 
-/** Thin adapter → recordUsage for legacy daily counters. */
+/**
+ * Deprecated: daily totals now written by incrementStats/recordUsage.
+ * Kept for call-site compatibility until Task 7 rewires background.
+ * Full no-op — do not re-apply characters/apiCalls/cacheHits (would double-count
+ * when background pairs this with incrementStats for the same event).
+ */
 export async function recordDailyStats(
-  chars: number,
-  apiCalls: number,
-  cacheHits: number,
+  _chars: number,
+  _apiCalls: number,
+  _cacheHits: number,
 ): Promise<void> {
-  await recordUsage({
-    mode: 'page',
-    characters: chars,
-    apiCalls,
-    cacheHits,
-  });
+  return;
 }
 
 // ---------------------------------------------------------------------------
