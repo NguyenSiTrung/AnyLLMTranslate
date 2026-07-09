@@ -1,7 +1,7 @@
 /**
  * Shared Card component with variant support.
- * bordered variant: subtle bg-zinc-900/50 for depth on dark background.
- * Title uses category-label style (xs, uppercase, tracked) for clear hierarchy.
+ * bordered variant: subtle bg for depth on dark background.
+ * Optional description + headerExtra keep section headers scannable.
  */
 
 import type { ReactNode } from 'react';
@@ -11,8 +11,12 @@ type CardVariant = 'default' | 'bordered' | 'elevated';
 interface CardProps {
   variant?: CardVariant;
   title?: string;
+  /** Short subtitle under the title — sets expectation for the card. */
+  description?: string;
   icon?: ReactNode;
-  accent?: 'blue' | 'emerald' | 'amber' | 'red';
+  accent?: 'blue' | 'emerald' | 'amber' | 'red' | 'cyan';
+  /** Badge, status chip, or action aligned to the header right. */
+  headerExtra?: ReactNode;
   className?: string;
   style?: React.CSSProperties;
   children: ReactNode;
@@ -29,19 +33,51 @@ const accentBorders: Record<string, string> = {
   emerald: 'border-l-emerald-500',
   amber: 'border-l-amber-500',
   red: 'border-l-red-500',
+  cyan: 'border-l-cyan-500',
 };
 
-export function Card({ variant = 'default', title, icon, accent, className = '', style, children }: CardProps) {
+const accentIcon: Record<string, string> = {
+  blue: 'text-blue-400',
+  emerald: 'text-emerald-400',
+  amber: 'text-amber-400',
+  red: 'text-rose-400',
+  cyan: 'text-cyan-400',
+};
+
+export function Card({
+  variant = 'default',
+  title,
+  description,
+  icon,
+  accent,
+  headerExtra,
+  className = '',
+  style,
+  children,
+}: CardProps) {
+  const showHeader = Boolean(title || icon || headerExtra);
+
   return (
-    <div className={`${variantStyles[variant]} ${accent ? `border-l-4 ${accentBorders[accent]}` : ''} p-5 ${className}`} style={style}>
-      {(title || icon) && (
-        <div className="flex items-center gap-2 mb-4">
-          {icon && <span className="text-zinc-500 shrink-0">{icon}</span>}
-          {title && (
-            <h3 className="text-sm font-semibold text-zinc-200">
-              {title}
-            </h3>
+    <div
+      className={`${variantStyles[variant]} ${accent ? `border-l-4 ${accentBorders[accent]}` : ''} p-5 ${className}`}
+      style={style}
+    >
+      {showHeader && (
+        <div className={`flex items-start gap-2.5 ${description ? 'mb-5' : 'mb-4'}`}>
+          {icon && (
+            <span className={`mt-0.5 shrink-0 ${accent ? accentIcon[accent] : 'text-zinc-500'}`}>
+              {icon}
+            </span>
           )}
+          <div className="min-w-0 flex-1">
+            {title && (
+              <h3 className="text-sm font-semibold text-zinc-100 tracking-tight">{title}</h3>
+            )}
+            {description && (
+              <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{description}</p>
+            )}
+          </div>
+          {headerExtra ? <div className="shrink-0 pt-0.5">{headerExtra}</div> : null}
         </div>
       )}
       {children}

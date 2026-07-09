@@ -3,7 +3,25 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Upload, Trash2, HardDrive, Wrench, Database, BrainCircuit, FileText, Braces, Bug, AlertTriangle, RotateCcw, Sparkles, ShieldAlert } from 'lucide-react';
+import {
+  Download,
+  Upload,
+  Trash2,
+  HardDrive,
+  Wrench,
+  Database,
+  BrainCircuit,
+  FileText,
+  Braces,
+  Bug,
+  AlertTriangle,
+  RotateCcw,
+  Sparkles,
+  ShieldAlert,
+  Gauge,
+  Zap,
+  CheckCircle2,
+} from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -20,6 +38,7 @@ import { Textarea } from '@/ui/Textarea';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
 import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { DangerZone, DangerAction } from '@/ui/DangerZone';
+import { SettingsGroup } from '@/ui/SettingsGroup';
 import { useToast } from '@/ui/ToastProvider';
 import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 import { useCacheStats } from '@/entrypoints/options/hooks/useCacheStats';
@@ -234,58 +253,180 @@ export function AdvancedSection() {
     maxRpmField.commit();
   };
 
+  const cacheLimitMb = Number(maxCacheField.value) || settings.maxCacheSizeMB || 1;
+  const cacheUsagePct = cacheStats.loading
+    ? 0
+    : Math.min(100, Math.round((cacheStats.sizeMb / cacheLimitMb) * 100));
+  const cacheBarTone =
+    cacheUsagePct >= 90 ? 'bg-rose-500' : cacheUsagePct >= 70 ? 'bg-amber-500' : 'bg-cyan-500';
+  const pdfAutoOpen = settings.pdfSettings?.autoOpen ?? 'off';
+  const pdfOpenMode = settings.pdfSettings?.openMode ?? 'new-tab';
+  const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
+  const defaultPdfSettings = {
+    autoOpen: 'off' as const,
+    openMode: 'new-tab' as const,
+    neverAutoOpenSites: [] as string[],
+  };
+  const isPromptCustom = settings.customSystemPrompt !== null;
+  const promptWarnings =
+    promptValidation && !promptValidation.valid ? promptValidation.warnings : [];
+
+  const overviewChips = [
+    {
+      key: 'prompt',
+      active: isPromptCustom,
+      icon: <Braces className="h-3 w-3" />,
+      label: isPromptCustom ? 'Custom prompt' : 'Default prompt',
+      activeClass: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300',
+    },
+    {
+      key: 'context',
+      active: settings.enableContextAwareTranslation,
+      icon: <BrainCircuit className="h-3 w-3" />,
+      label: 'Context',
+      activeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    },
+    {
+      key: 'stream',
+      active: settings.enableStreamingTranslation,
+      icon: <Zap className="h-3 w-3" />,
+      label: 'Streaming',
+      activeClass: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
+    },
+    {
+      key: 'debug',
+      active: settings.debugMode,
+      icon: <Bug className="h-3 w-3" />,
+      label: 'Debug',
+      activeClass: 'border-amber-500/35 bg-amber-500/15 text-amber-300',
+    },
+  ] as const;
+
   return (
     <div className="animate-fade-in-up">
       <SectionHeader
         title="Advanced"
-        description="Performance tuning, data portability, and intelligence settings."
+        description="Performance tuning, intelligence, data portability, and developer tools."
         icon={<Wrench className="w-4 h-4" />}
         accentColor="zinc"
       />
 
-      {/* Hero status strip (FR-3): live cache usage + state chips at a glance */}
-      <div className="mb-4 rounded-xl border border-zinc-500/20 bg-zinc-600/[0.04] p-4">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-          <div className="flex items-center gap-1.5">
-            <HardDrive className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="text-zinc-500">Cache:</span>
-            <span className="text-zinc-200 font-medium tabular-nums">
+      {/* Overview strip — live cache + feature chips at a glance */}
+      <div className="mb-5 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] via-zinc-950/40 to-zinc-950/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="grid gap-0 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <div className="border-b border-white/5 p-4 sm:border-b-0 sm:border-r">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                <HardDrive className="h-3.5 w-3.5 text-cyan-500/80" aria-hidden="true" />
+                Translation cache
+              </div>
+              <span className="text-[11px] tabular-nums text-zinc-400">
+                {cacheStats.loading ? '…' : `${cacheUsagePct}% of ${cacheLimitMb} MB`}
+              </span>
+            </div>
+            <p className="text-sm font-semibold tabular-nums text-zinc-100">
               {cacheStats.loading
-                ? '…'
-                : `${cacheStats.entryCount} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
-            </span>
+                ? 'Measuring…'
+                : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeMb.toFixed(1)} MB`}
+            </p>
+            <div
+              className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800"
+              role="progressbar"
+              aria-valuenow={cacheUsagePct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Cache usage"
+            >
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${cacheBarTone}`}
+                style={{ width: `${cacheStats.loading ? 8 : Math.max(cacheUsagePct, cacheStats.entryCount > 0 ? 4 : 0)}%` }}
+              />
+            </div>
           </div>
-          {settings.customSystemPrompt !== null && (
-            <span className="inline-flex items-center gap-1 text-zinc-300">
-              <Braces className="w-3.5 h-3.5 text-zinc-400" />
-              Custom prompt
-            </span>
-          )}
-          {settings.debugMode && (
-            <span className="inline-flex items-center gap-1 text-amber-400">
-              <Bug className="w-3.5 h-3.5" />
-              Debug on
-            </span>
-          )}
+
+          <div className="p-4">
+            <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+              Active features
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {overviewChips.map((chip) => (
+                <span
+                  key={chip.key}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    chip.active
+                      ? chip.activeClass
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                  }`}
+                >
+                  {chip.icon}
+                  {chip.label}
+                </span>
+              ))}
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                  maxRpmField.value === 0
+                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                    : 'border-blue-500/30 bg-blue-500/10 text-blue-300'
+                }`}
+              >
+                <Gauge className="h-3 w-3" aria-hidden="true" />
+                {maxRpmField.value === 0 ? 'RPM unlimited' : `${maxRpmField.value} RPM`}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                  pdfAutoOpen === 'off'
+                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                    : 'border-orange-500/30 bg-orange-500/10 text-orange-300'
+                }`}
+              >
+                <FileText className="h-3 w-3" aria-hidden="true" />
+                PDF {pdfAutoOpen}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        {/* Translation System Prompt (relocated from Providers; elevated above tuning) */}
+        {/* Translation System Prompt */}
         <div className="animate-stagger" style={stagger(0)}>
-          <Card variant="bordered">
-            <div className="flex items-center gap-2 mb-4">
-              <Braces className="w-3.5 h-3.5 text-zinc-500" />
-              <h3 className="text-sm font-semibold text-zinc-200">Translation System Prompt</h3>
-              {settings.customSystemPrompt !== null && (
+          <Card
+            variant="bordered"
+            accent="cyan"
+            title="Translation System Prompt"
+            description="Instructions sent with every translation. Use template variables so language and glossary stay dynamic."
+            icon={<Braces className="w-3.5 h-3.5" />}
+            headerExtra={
+              isPromptCustom ? (
                 <Badge variant="info">Customized</Badge>
-              )}
-            </div>
-            <FieldGroup
-              label="Custom prompt template"
-              description="Customize translation instructions. Use {{targetLanguage}} and {{glossary}} variables."
-              htmlFor="advanced-system-prompt"
-            >
+              ) : (
+                <Badge variant="success">Default</Badge>
+              )
+            }
+          >
+            <div className="overflow-hidden rounded-xl border border-zinc-800/90 bg-zinc-950/50">
+              <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/90 bg-zinc-900/40 px-3 py-2">
+                <span className="text-[11px] font-medium text-zinc-500">Insert</span>
+                {(
+                  [
+                    { token: '{{targetLanguage}}', tip: 'Target language name' },
+                    { token: '{{glossary}}', tip: 'Active glossary terms' },
+                  ] as const
+                ).map(({ token, tip }) => (
+                  <button
+                    key={token}
+                    type="button"
+                    title={tip}
+                    onClick={() => insertVariable(token)}
+                    className="inline-flex items-center rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 font-mono text-[11px] text-cyan-200/90 transition-colors hover:border-cyan-400/40 hover:bg-cyan-500/20 hover:text-cyan-100 cursor-pointer"
+                  >
+                    {token}
+                  </button>
+                ))}
+                <span className="ml-auto hidden text-[11px] text-zinc-600 sm:inline">
+                  Click to insert at cursor
+                </span>
+              </div>
               <Textarea
                 id="advanced-system-prompt"
                 value={draftPrompt}
@@ -296,107 +437,130 @@ export function AdvancedSection() {
                 }}
                 rows={8}
                 mono
+                flush
+                aria-label="Custom prompt template"
               />
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-xs text-zinc-500">Insert variable:</span>
-                <button
-                  type="button"
-                  onClick={() => insertVariable('{{targetLanguage}}')}
-                  className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 transition-colors cursor-pointer"
-                >
-                  {'{{targetLanguage}}'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertVariable('{{glossary}}')}
-                  className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] font-mono text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 transition-colors cursor-pointer"
-                >
-                  {'{{glossary}}'}
-                </button>
-              </div>
-              <div className="flex items-start justify-between gap-3 mt-2">
-                <ul className="space-y-1">
-                  {promptValidation &&
-                    !promptValidation.valid &&
-                    promptValidation.warnings.map((w) => (
-                      <li key={w} className="flex items-start gap-1 text-amber-400 text-xs">
-                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                </ul>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<RotateCcw className="w-3 h-3" />}
-                  onClick={() => updateSettings({ customSystemPrompt: null })}
-                >
-                  Reset to Default
-                </Button>
-              </div>
-            </FieldGroup>
+            </div>
+
+            {promptWarnings.length > 0 && (
+              <ul className="mt-3 space-y-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+                {promptWarnings.map((w) => (
+                  <li key={w} className="flex items-start gap-2 text-xs text-amber-300">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{w}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-zinc-600">
+                Changes save automatically. Reset restores the built-in template.
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<RotateCcw className="w-3 h-3" />}
+                onClick={() => updateSettings({ customSystemPrompt: null })}
+                disabled={!isPromptCustom}
+              >
+                Reset to default
+              </Button>
+            </div>
           </Card>
         </div>
 
-        {/* Performance & Throughput (cache + rate limiting merged) */}
+        {/* Performance & Throughput */}
         <div className="animate-stagger" style={stagger(1)}>
-          <Card title="Performance & Throughput" icon={<HardDrive className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-5">
-              <FieldGroup
-                label="Cache TTL (days)"
-                description="How long translations are cached before expiration."
-                htmlFor="cache-ttl-input"
-              >
-                <Input
-                  id="cache-ttl-input"
-                  type="number"
-                  value={ttlField.value}
-                  onChange={(e) => ttlField.setValue(Number(e.target.value))}
-                  onBlur={handleCacheTTLBlur}
-                  min={1}
-                  max={365}
-                  error={cacheTTLError}
-                  hint="1–365 days"
-                />
-              </FieldGroup>
-              <FieldGroup
-                label="Max Cache Size (MB)"
-                description="Maximum storage limit for the translation cache."
-                htmlFor="max-cache-size-input"
-              >
-                <Input
-                  id="max-cache-size-input"
-                  type="number"
-                  value={maxCacheField.value}
-                  onChange={(e) => maxCacheField.setValue(Number(e.target.value))}
-                  onBlur={handleMaxCacheSizeBlur}
-                  min={10}
-                  max={1000}
-                  error={maxCacheSizeError}
-                  hint="10–1000 MB"
-                />
-              </FieldGroup>
-              <FieldGroup
-                label="Max Batch Characters"
-                description="Maximum characters sent per translation batch."
-                htmlFor="max-batch-chars-input"
-              >
-                <Input
-                  id="max-batch-chars-input"
-                  type="number"
-                  value={maxBatchField.value}
-                  onChange={(e) => maxBatchField.setValue(Number(e.target.value))}
-                  onBlur={handleMaxBatchCharsBlur}
-                  min={500}
-                  max={10000}
-                  error={maxBatchCharsError}
-                  hint="500–10000 chars"
-                />
-              </FieldGroup>
-              <div className="border-t border-zinc-800 pt-5">
+          <Card
+            variant="bordered"
+            accent="blue"
+            title="Performance & Throughput"
+            description="Cache lifetime, storage ceiling, batch size, and provider rate limits."
+            icon={<HardDrive className="w-3.5 h-3.5" />}
+            headerExtra={
+              !cacheStats.loading ? (
+                <span className="text-[11px] tabular-nums text-zinc-500">
+                  {cacheStats.entryCount.toLocaleString()} cached
+                </span>
+              ) : null
+            }
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              <SettingsGroup title="Cache" description="How long and how much translation data is stored locally.">
+                <FieldGroup
+                  label="Cache TTL (days)"
+                  description="How long translations stay cached before expiring."
+                  htmlFor="cache-ttl-input"
+                >
+                  <Input
+                    id="cache-ttl-input"
+                    type="number"
+                    value={ttlField.value}
+                    onChange={(e) => ttlField.setValue(Number(e.target.value))}
+                    onBlur={handleCacheTTLBlur}
+                    min={1}
+                    max={365}
+                    error={cacheTTLError}
+                    hint="1–365 days"
+                  />
+                </FieldGroup>
+                <FieldGroup
+                  label="Max cache size (MB)"
+                  description="Hard ceiling for local cache storage."
+                  htmlFor="max-cache-size-input"
+                >
+                  <Input
+                    id="max-cache-size-input"
+                    type="number"
+                    value={maxCacheField.value}
+                    onChange={(e) => maxCacheField.setValue(Number(e.target.value))}
+                    onBlur={handleMaxCacheSizeBlur}
+                    min={10}
+                    max={1000}
+                    error={maxCacheSizeError}
+                    hint="10–1000 MB"
+                  />
+                  {!cacheStats.loading && (
+                    <div className="mt-2">
+                      <div className="mb-1 flex justify-between text-[11px] text-zinc-500">
+                        <span>Current use</span>
+                        <span className="tabular-nums">
+                          {cacheStats.sizeMb.toFixed(1)} / {cacheLimitMb} MB
+                        </span>
+                      </div>
+                      <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${cacheBarTone}`}
+                          style={{ width: `${Math.max(cacheUsagePct, cacheStats.entryCount > 0 ? 3 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </FieldGroup>
+              </SettingsGroup>
+
+              <SettingsGroup title="Throughput" description="Batch size and calls per minute to your provider.">
+                <FieldGroup
+                  label="Max batch characters"
+                  description="Maximum characters grouped into one translation request."
+                  htmlFor="max-batch-chars-input"
+                >
+                  <Input
+                    id="max-batch-chars-input"
+                    type="number"
+                    value={maxBatchField.value}
+                    onChange={(e) => maxBatchField.setValue(Number(e.target.value))}
+                    onBlur={handleMaxBatchCharsBlur}
+                    min={500}
+                    max={10000}
+                    error={maxBatchCharsError}
+                    hint="500–10000 chars"
+                  />
+                </FieldGroup>
                 <FieldGroup
                   label="Max requests per minute"
-                  description="Limit provider calls per minute to avoid hitting rate limits (0 = unlimited). Leave at 0 for local LLMs like Ollama/LM Studio."
+                  description="Cap provider calls to avoid rate limits. Use 0 for unlimited (local LLMs)."
                   htmlFor="max-rpm-input"
                 >
                   <Input
@@ -411,66 +575,84 @@ export function AdvancedSection() {
                     hint="0–600 rpm"
                   />
                   {maxRpmField.value === 0 && !maxRpmError && (
-                    <Badge variant="info" className="mt-1">Unlimited</Badge>
+                    <div className="mt-2">
+                      <Badge variant="info">Unlimited · good for Ollama / LM Studio</Badge>
+                    </div>
                   )}
                 </FieldGroup>
-              </div>
+              </SettingsGroup>
             </div>
           </Card>
         </div>
 
-        {/* Translation Quality (FR-1/2/3/4/6/7 toggles + request budgets) */}
+        {/* Translation Quality */}
         <div className="animate-stagger" style={stagger(2)}>
-          <Card title="Translation Quality" icon={<Sparkles className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-4">
-              <Toggle
-                id="selection-dictionary-toggle"
-                checked={settings.selectionDictionaryEnabled}
-                onChange={(checked) => updateSettings({ selectionDictionaryEnabled: checked })}
-                label="Dictionary Mode for Selection"
-                description="For short selections (words/phrases), show phonetic, definitions, and examples instead of translation only. Longer sentences stay translation-only."
-              />
-              <Toggle
-                id="rich-translate-toggle"
-                checked={settings.enableRichTranslate}
-                onChange={(checked) => updateSettings({ enableRichTranslate: checked })}
-                label="Rich Translate (inline markup)"
-                description="Preserve bold, links, code, and other inline formatting in translated paragraphs."
-              />
-              <Toggle
-                id="source-lang-detect-toggle"
-                checked={settings.enableSourceLanguageDetection}
-                onChange={(checked) => updateSettings({ enableSourceLanguageDetection: checked })}
-                label="Source-Language Detection"
-                description="Skip translation for text already in the target language (saves tokens + latency)."
-              />
-              <Toggle
-                id="failure-cache-toggle"
-                checked={settings.enableFailureCache}
-                onChange={(checked) => updateSettings({ enableFailureCache: checked })}
-                label="Failure Cache"
-                description="Temporarily remember translation failures so flaky providers aren't retried every scroll-past."
-              />
-              <Toggle
-                id="web-resume-toggle"
-                checked={settings.enableWebResume}
-                onChange={(checked) => updateSettings({ enableWebResume: checked })}
-                label="Cross-Session Resume"
-                description="Restore translated state after a page refresh (when the cache still holds translations)."
-              />
-              <Toggle
-                id="streaming-toggle"
-                checked={settings.enableStreamingTranslation}
-                onChange={(checked) => updateSettings({ enableStreamingTranslation: checked })}
-                label="Streaming Translation (experimental)"
-                description="Fill translations incrementally as the response streams, instead of waiting for the full batch."
-              />
+          <Card
+            variant="bordered"
+            title="Translation Quality"
+            description="How text is selected, formatted, skipped, and recovered on the page."
+            icon={<Sparkles className="w-3.5 h-3.5" />}
+          >
+            <div className="space-y-6">
+              <SettingsGroup title="Selection & formatting" description="Richer output for short and structured text.">
+                <Toggle
+                  id="selection-dictionary-toggle"
+                  checked={settings.selectionDictionaryEnabled}
+                  onChange={(checked) => updateSettings({ selectionDictionaryEnabled: checked })}
+                  label="Dictionary mode for selection"
+                  description="Short selections get phonetics, definitions, and examples. Longer sentences stay translation-only."
+                />
+                <Toggle
+                  id="rich-translate-toggle"
+                  checked={settings.enableRichTranslate}
+                  onChange={(checked) => updateSettings({ enableRichTranslate: checked })}
+                  label="Rich translate (inline markup)"
+                  description="Preserve bold, links, code, and other inline formatting in translated paragraphs."
+                />
+              </SettingsGroup>
 
-              <AdvancedDisclosure label="Request budget & failure TTL">
-                <div className="space-y-5">
+              <div className="border-t border-zinc-800/80 pt-5">
+                <SettingsGroup title="Efficiency & reliability" description="Spend fewer tokens and recover faster from flaky providers.">
+                  <Toggle
+                    id="source-lang-detect-toggle"
+                    checked={settings.enableSourceLanguageDetection}
+                    onChange={(checked) => updateSettings({ enableSourceLanguageDetection: checked })}
+                    label="Source-language detection"
+                    description="Skip text already in the target language — saves tokens and latency."
+                  />
+                  <Toggle
+                    id="failure-cache-toggle"
+                    checked={settings.enableFailureCache}
+                    onChange={(checked) => updateSettings({ enableFailureCache: checked })}
+                    label="Failure cache"
+                    description="Remember recent failures so flaky providers aren't retried on every scroll."
+                  />
+                  <Toggle
+                    id="web-resume-toggle"
+                    checked={settings.enableWebResume}
+                    onChange={(checked) => updateSettings({ enableWebResume: checked })}
+                    label="Cross-session resume"
+                    description="Restore translated state after refresh when the cache still holds results."
+                  />
+                </SettingsGroup>
+              </div>
+
+              <div className="rounded-xl border border-sky-500/20 bg-sky-500/[0.04] px-4 py-3.5">
+                <Toggle
+                  id="streaming-toggle"
+                  checked={settings.enableStreamingTranslation}
+                  onChange={(checked) => updateSettings({ enableStreamingTranslation: checked })}
+                  label="Streaming translation"
+                  labelExtra={<Badge variant="experimental">Experimental</Badge>}
+                  description="Fill translations as the response streams instead of waiting for the full batch."
+                />
+              </div>
+
+              <AdvancedDisclosure label="Request budget & failure TTL" idPrefix="quality-budgets">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   <FieldGroup
                     label="Max pieces per request"
-                    description="How many paragraphs are grouped into a single LLM call (0 = unlimited)."
+                    description="Paragraphs grouped into one LLM call (0 = unlimited)."
                     htmlFor="max-text-group-input"
                   >
                     <Input
@@ -481,12 +663,12 @@ export function AdvancedSection() {
                       onBlur={maxGroupField.commit}
                       min={0}
                       max={50}
-                      hint="0–50 (default 4)"
+                      hint="0–50 · default 4"
                     />
                   </FieldGroup>
                   <FieldGroup
                     label="Max characters per request"
-                    description="Maximum total characters sent in one LLM request (0 = unlimited)."
+                    description="Total characters in one LLM request (0 = unlimited)."
                     htmlFor="max-text-length-input"
                   >
                     <Input
@@ -497,12 +679,12 @@ export function AdvancedSection() {
                       onBlur={maxLengthField.commit}
                       min={0}
                       max={20000}
-                      hint="0–20000 (default 2000)"
+                      hint="0–20000 · default 2000"
                     />
                   </FieldGroup>
                   <FieldGroup
                     label="Failure cache TTL (minutes)"
-                    description="How long a failed translation is remembered before retrying."
+                    description="How long failures are remembered before retry."
                     htmlFor="failure-ttl-input"
                   >
                     <Input
@@ -513,29 +695,32 @@ export function AdvancedSection() {
                       onBlur={failureTtlField.commit}
                       min={1}
                       max={1440}
-                      hint="1–1440 minutes (default 120)"
+                      hint="1–1440 · default 120"
                     />
                   </FieldGroup>
                 </div>
               </AdvancedDisclosure>
 
-              {/* FR-4/FR-5: Page Walk Tuning */}
-              <div className="border-t border-zinc-800 pt-4 space-y-4">
-                <p className="text-[10px] uppercase tracking-widest text-zinc-600">Page Walk Tuning</p>
-                <Toggle
-                  id="body-tag-whitelist-toggle"
-                  checked={settings.enableBodyTagWhitelist}
-                  onChange={(checked) => updateSettings({ enableBodyTagWhitelist: checked })}
-                  label="Body-Tag Whitelist"
-                  description="Only translate direct children of <body> that are MAIN, ARTICLE, SECTION, or DIV. Skips top-level nav, aside, header, footer entirely."
-                />
-                <Toggle
-                  id="aside-caps-toggle"
-                  checked={settings.enableAsideCaps}
-                  onChange={(checked) => updateSettings({ enableAsideCaps: checked })}
-                  label="Aside Text Caps"
-                  description="Limit translation in sidebar/aside regions: skip paragraphs over 67 chars and cap each region at 1000 chars total."
-                />
+              <div className="border-t border-zinc-800/80 pt-5">
+                <SettingsGroup
+                  title="Page walk tuning"
+                  description="What parts of the DOM are eligible for translation."
+                >
+                  <Toggle
+                    id="body-tag-whitelist-toggle"
+                    checked={settings.enableBodyTagWhitelist}
+                    onChange={(checked) => updateSettings({ enableBodyTagWhitelist: checked })}
+                    label="Body-tag whitelist"
+                    description="Only translate direct body children that are MAIN, ARTICLE, SECTION, or DIV — skips nav, aside, header, footer."
+                  />
+                  <Toggle
+                    id="aside-caps-toggle"
+                    checked={settings.enableAsideCaps}
+                    onChange={(checked) => updateSettings({ enableAsideCaps: checked })}
+                    label="Aside text caps"
+                    description="Limit sidebar/aside work: skip long paragraphs and cap each region at 1000 characters."
+                  />
+                </SettingsGroup>
               </div>
             </div>
           </Card>
@@ -543,44 +728,65 @@ export function AdvancedSection() {
 
         {/* Context & Intelligence */}
         <div className="animate-stagger" style={stagger(3)}>
-          <Card title="Context & Intelligence" icon={<BrainCircuit className="w-3.5 h-3.5" />} variant="bordered">
+          <Card
+            variant="bordered"
+            accent="emerald"
+            title="Context & Intelligence"
+            description="Give the model page context so terminology stays consistent across a site."
+            icon={<BrainCircuit className="w-3.5 h-3.5" />}
+            headerExtra={
+              settings.enableContextAwareTranslation ? (
+                <Badge variant="success">On</Badge>
+              ) : (
+                <Badge variant="info">Off</Badge>
+              )
+            }
+          >
             <div className="space-y-4">
               <Toggle
                 id="context-aware-toggle"
                 checked={settings.enableContextAwareTranslation}
                 onChange={(checked) => updateSettings({ enableContextAwareTranslation: checked })}
-                label="Context-Aware Translation"
-                description="Inject page title, description, and domain into translation prompts for more consistent terminology."
+                label="Context-aware translation"
+                description="Inject page title, description, and domain into prompts for more consistent wording."
               />
-              
+
               <DisabledDimmer
                 disabled={!settings.enableContextAwareTranslation}
-                className="pt-4 border-t border-zinc-800 space-y-4"
+                className="space-y-4 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4"
               >
                 <Toggle
                   id="page-category-detection-toggle"
                   checked={settings.enableLLMPageCategoryDetection}
                   onChange={(checked) => updateSettings({ enableLLMPageCategoryDetection: checked })}
                   disabled={!settings.enableContextAwareTranslation}
-                  label="LLM-based Page Category Detection"
-                  description="Auto-detect page topic using LLM for better terminology. Requires background API call."
+                  label="LLM page category detection"
+                  description="Detect the page topic with a background LLM call for better terminology. Uses a small extra request."
                 />
-                
+
                 {settings.enableLLMPageCategoryDetection && (
-                  <AdvancedDisclosure label="Detection mode">
-                    <FieldGroup label="Detection Mode" htmlFor="llm-category-mode-select">
+                  <div className="animate-fade-in-up border-t border-emerald-500/10 pt-4">
+                    <FieldGroup
+                      label="Detection mode"
+                      description="Async upgrades context after the first paints; blocking waits for a category before translating."
+                      htmlFor="llm-category-mode-select"
+                    >
                       <Select
                         id="llm-category-mode-select"
                         value={settings.llmCategoryDetectionMode}
-                        onChange={(e) => updateSettings({ llmCategoryDetectionMode: e.target.value as 'async' | 'blocking' })}
+                        onChange={(e) =>
+                          updateSettings({
+                            llmCategoryDetectionMode: e.target.value as 'async' | 'blocking',
+                          })
+                        }
                         disabled={!settings.enableContextAwareTranslation}
                         options={[
-                          { value: 'async', label: 'Async (No delay, progressive context upgrade)' },
-                          { value: 'blocking', label: 'Blocking (Wait for exact context before first translation)' },
+                          { value: 'async', label: 'Async — no delay, progressive upgrade' },
+                          { value: 'blocking', label: 'Blocking — wait before first translation' },
                         ]}
                       />
                     </FieldGroup>
-                  </AdvancedDisclosure>
+                  </div>
                 )}
               </DisabledDimmer>
             </div>
@@ -589,144 +795,223 @@ export function AdvancedSection() {
 
         {/* PDF Translator */}
         <div className="animate-stagger" style={stagger(4)}>
-          <Card title="PDF Translator" icon={<FileText className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="space-y-4">
+          <Card
+            variant="bordered"
+            accent="amber"
+            title="PDF Translator"
+            description="Detect PDF tabs and open the built-in translator. Works with extensionless URLs like arXiv."
+            icon={<FileText className="w-3.5 h-3.5" />}
+            headerExtra={
+              <Badge variant={pdfAutoOpen === 'off' ? 'info' : 'warning'}>
+                {pdfAutoOpen === 'off' ? 'Manual' : pdfAutoOpen === 'prompt' ? 'Prompt' : 'Auto'}
+              </Badge>
+            }
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
               <FieldGroup
                 label="Auto-open mode"
-                description="Detect PDF tabs (including extensionless URLs like arxiv.org/pdf/2606.20543) and open the translator automatically. Default is off."
+                description="When a PDF tab is detected, how aggressively to open the translator."
                 htmlFor="pdf-auto-open-select"
               >
                 <Select
                   id="pdf-auto-open-select"
-                  value={settings.pdfSettings?.autoOpen ?? 'off'}
-                  onChange={(e) => updateSettings({
-                    pdfSettings: {
-                      ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
-                      autoOpen: e.target.value as 'off' | 'prompt' | 'auto',
-                    },
-                  })}
+                  value={pdfAutoOpen}
+                  onChange={(e) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        autoOpen: e.target.value as 'off' | 'prompt' | 'auto',
+                      },
+                    })
+                  }
                   options={[
-                    { value: 'off', label: 'Off (manual only)' },
-                    { value: 'prompt', label: 'Prompt (show banner button)' },
-                    { value: 'auto', label: 'Auto (open immediately)' },
+                    { value: 'off', label: 'Off — manual only' },
+                    { value: 'prompt', label: 'Prompt — show banner button' },
+                    { value: 'auto', label: 'Auto — open immediately' },
                   ]}
                 />
               </FieldGroup>
 
               <FieldGroup
                 label="Open mode"
-                description="New tab keeps the native viewer; same tab replaces it in place."
+                description="New tab keeps the native viewer; same tab replaces it."
                 htmlFor="pdf-open-mode-select"
               >
                 <Select
                   id="pdf-open-mode-select"
-                  value={settings.pdfSettings?.openMode ?? 'new-tab'}
-                  onChange={(e) => updateSettings({
-                    pdfSettings: {
-                      ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
-                      openMode: e.target.value as 'new-tab' | 'same-tab',
-                    },
-                  })}
+                  value={pdfOpenMode}
+                  onChange={(e) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        openMode: e.target.value as 'new-tab' | 'same-tab',
+                      },
+                    })
+                  }
                   options={[
                     { value: 'new-tab', label: 'New tab' },
                     { value: 'same-tab', label: 'Same tab (replace)' },
                   ]}
                 />
               </FieldGroup>
+            </div>
 
-              {settings.pdfSettings?.autoOpen && settings.pdfSettings.autoOpen !== 'off' && (
-                <div className="animate-fade-in-up" aria-live="polite">
-                  <FieldGroup
-                    label="Never auto-open these sites"
-                    description="Comma-separated hostnames. Auto-open is suppressed for these even when enabled above."
-                    htmlFor="pdf-never-open-input"
-                  >
-                    <Input
-                      id="pdf-never-open-input"
-                      type="text"
-                      placeholder="example.com, arxiv.org"
-                      value={(settings.pdfSettings?.neverAutoOpenSites ?? []).join(', ')}
-                      onChange={(e) => updateSettings({
+            {pdfAutoOpen !== 'off' && (
+              <div className="mt-5 animate-fade-in-up" aria-live="polite">
+                <FieldGroup
+                  label="Never auto-open these sites"
+                  description="Comma-separated hostnames. Auto-open stays suppressed even when enabled above."
+                  htmlFor="pdf-never-open-input"
+                >
+                  <Input
+                    id="pdf-never-open-input"
+                    type="text"
+                    placeholder="example.com, arxiv.org"
+                    value={neverAutoOpenSites.join(', ')}
+                    onChange={(e) =>
+                      updateSettings({
                         pdfSettings: {
-                          ...(settings.pdfSettings ?? { autoOpen: 'off', openMode: 'new-tab', neverAutoOpenSites: [] }),
-                          neverAutoOpenSites: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                          ...(settings.pdfSettings ?? defaultPdfSettings),
+                          neverAutoOpenSites: e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean),
                         },
-                      })}
-                    />
-                    {(settings.pdfSettings?.neverAutoOpenSites ?? []).length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                        <span className="text-xs text-zinc-500">Will skip:</span>
-                        {(settings.pdfSettings?.neverAutoOpenSites ?? []).map((host) => (
-                          <span
-                            key={host}
-                            className="inline-flex items-center rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-400"
-                          >
-                            {host}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </FieldGroup>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Data Portability */}
-        <div className="animate-stagger" style={stagger(5)}>
-          <Card title="Data Portability" icon={<Database className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="flex gap-3">
-              <Button
-                id="export-settings-btn"
-                variant="secondary"
-                onClick={handleExportSettings}
-                icon={<Download className="w-4 h-4" />}
-              >
-                Export Settings
-              </Button>
-              <Button
-                id="import-settings-btn"
-                variant="secondary"
-                onClick={() => fileInputRef.current?.click()}
-                icon={<Upload className="w-4 h-4" />}
-              >
-                Import Settings
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImportSettings(file);
-                  e.target.value = '';
-                }}
-              />
-            </div>
-            {settings.provider?.apiKey && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-400 text-xs mt-3">
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <span>
-                  Your export will include the provider API key in cleartext.
-                  Treat the file as a secret and don't share it.
-                </span>
+                      })
+                    }
+                  />
+                  {neverAutoOpenSites.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-zinc-500">Skipping:</span>
+                      {neverAutoOpenSites.map((host) => (
+                        <span
+                          key={host}
+                          className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200/90"
+                        >
+                          {host}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </FieldGroup>
               </div>
             )}
           </Card>
         </div>
 
+        {/* Data Portability */}
+        <div className="animate-stagger" style={stagger(5)}>
+          <Card
+            variant="bordered"
+            title="Data Portability"
+            description="Back up or restore settings as JSON. Useful before resets or when moving browsers."
+            icon={<Database className="w-3.5 h-3.5" />}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-white/15 hover:bg-white/[0.03]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-500/25 bg-blue-500/10 text-blue-400">
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-100">Export settings</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
+                    Download a JSON backup of providers, rules, glossary, and preferences.
+                  </p>
+                </div>
+                <Button
+                  id="export-settings-btn"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExportSettings}
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  className="w-full sm:w-auto"
+                >
+                  Export JSON
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-white/15 hover:bg-white/[0.03]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-100">Import settings</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
+                    Merge a previous export. Unknown keys are ignored safely.
+                  </p>
+                </div>
+                <Button
+                  id="import-settings-btn"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  icon={<Upload className="w-3.5 h-3.5" />}
+                  className="w-full sm:w-auto"
+                >
+                  Import JSON
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleImportSettings(file);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${
+                settings.provider?.apiKey
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  : 'border-zinc-800 bg-zinc-900/40 text-zinc-500'
+              }`}
+            >
+              {settings.provider?.apiKey ? (
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" aria-hidden="true" />
+              )}
+              <span>
+                {settings.provider?.apiKey
+                  ? 'Export includes your provider API key in cleartext. Treat the file as a secret and never share it.'
+                  : 'Exports include provider configuration. Add an API key and it will be stored in the file as cleartext — keep backups private.'}
+              </span>
+            </div>
+          </Card>
+        </div>
+
         {/* Developer */}
         <div className="animate-stagger" style={stagger(6)}>
-          <Card title="Developer" icon={<Wrench className="w-3.5 h-3.5" />} variant="bordered">
-            <Toggle
-              id="debug-mode-toggle"
-              checked={settings.debugMode}
-              onChange={(checked) => updateSettings({ debugMode: checked })}
-              label="Debug Mode"
-              description="Enable verbose logging in the browser console."
-            />
+          <Card
+            variant="bordered"
+            accent={settings.debugMode ? 'amber' : undefined}
+            title="Developer"
+            description="Diagnostics for troubleshooting translation and content-script issues."
+            icon={<Bug className="w-3.5 h-3.5" />}
+            headerExtra={
+              settings.debugMode ? <Badge variant="warning">Logging on</Badge> : undefined
+            }
+          >
+            <div
+              className={`rounded-xl border px-4 py-3.5 transition-colors ${
+                settings.debugMode
+                  ? 'border-amber-500/25 bg-amber-500/[0.06]'
+                  : 'border-zinc-800/80 bg-zinc-950/30'
+              }`}
+            >
+              <Toggle
+                id="debug-mode-toggle"
+                checked={settings.debugMode}
+                onChange={(checked) => updateSettings({ debugMode: checked })}
+                label="Debug mode"
+                description="Verbose logs in the browser console (background + content scripts). Turn off after debugging — it can be noisy."
+              />
+            </div>
           </Card>
         </div>
 

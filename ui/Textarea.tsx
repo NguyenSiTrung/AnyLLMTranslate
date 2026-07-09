@@ -13,27 +13,39 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   hint?: string;
   /** Render in a monospace face (e.g. prompt templates, code). */
   mono?: boolean;
+  /**
+   * Embed inside a parent chrome (toolbar + border). Drops own surface border/bg
+   * so the surrounding panel owns the visual frame.
+   */
+  flush?: boolean;
 }
 
 export function Textarea({
   error,
   hint,
   mono = false,
+  flush = false,
   rows = 4,
   className = '',
   ...props
 }: TextareaProps) {
+  const surface = flush
+    ? 'bg-transparent border-0 rounded-none focus:ring-0 focus:border-transparent shadow-none'
+    : `bg-zinc-800 border rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 ${
+        error ? 'border-red-500/50' : 'border-zinc-700'
+      }`;
+
   return (
-    <div>
+    <div className={flush ? 'contents' : undefined}>
       <textarea
         rows={rows}
-        className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors resize-y ${
+        className={`w-full px-3 py-2 text-sm text-zinc-200 focus:outline-none transition-colors resize-y ${surface} ${
           mono ? 'font-mono' : ''
-        } ${error ? 'border-red-500/50' : 'border-zinc-700'} ${className}`}
+        } ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-      {hint && !error && <p className="text-xs text-zinc-500 mt-1">{hint}</p>}
+      {error && <p className="text-xs text-red-400 mt-1 px-1">{error}</p>}
+      {hint && !error && <p className="text-xs text-zinc-500 mt-1 px-1">{hint}</p>}
     </div>
   );
 }
