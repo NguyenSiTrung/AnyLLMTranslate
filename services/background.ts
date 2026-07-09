@@ -64,11 +64,28 @@ import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary'
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
 import { preScanNames } from '@/services/subtitleNameScanner';
-import { incrementStats, recordDailyStats } from '@/services/statsCollector';
+import { recordUsage } from '@/services/statsCollector';
+import { normalizeHost } from '@/services/statsCounters';
 import { invalidateDebugCache } from '@/services/debugLog';
 import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
 
 const MAX_PROGRESSIVE_DASH_SEGMENTS = 500;
+
+/** Best-effort host for dimensional stats (tab URL → normalized hostname). */
+function hostFromSender(sender?: chrome.runtime.MessageSender): string | undefined {
+  try {
+    const url = sender?.tab?.url ?? sender?.url;
+    if (!url) return undefined;
+    return normalizeHost(new URL(url).hostname);
+  } catch {
+    return undefined;
+  }
+}
+
+/** First enabled pool provider id, if any (rotation makes exact slot hard). */
+function bestEffortProviderId(settings: ExtensionSettings): string | undefined {
+  return settings.providers?.find((p) => p.enabled)?.id;
+}
 
 /** Priority queue state for active translation sessions */
 interface TranslationSession {
@@ -496,21 +513,34 @@ async function handleTranslate(
 
   await acquire();
   try {
-    // Track page translation (once per tab session)
+    const usageMode = isPdf ? 'pdf' : 'page';
+    // Track page translation (once per tab session). PDF uses mode 'pdf' on
+    // usage events (pdfEvents) rather than pageSessions.
     const tabId = sender?.tab?.id;
     if (tabId && !translatedTabSessions.has(tabId)) {
       translatedTabSessions.add(tabId);
-      incrementStats({ totalPagesTranslated: 1 }).catch(() => {});
+      if (!isPdf) {
+        recordUsage({
+          mode: 'page',
+          pageSession: true,
+          host: hostFromSender(sender),
+          sourceLanguage: message.sourceLanguage,
+          targetLanguage: message.targetLanguage,
+        }).catch(() => {});
+      }
     }
 
     const settings = await loadSettings();
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
+    const providerId = bestEffortProviderId(settings);
+    const host = hostFromSender(sender);
 
     // FR-1: Split pieces into cached and uncached
     const cachedResults: Array<{ id: string; translatedText: string }> = [];
     const uncachedPieces: Array<{ id: string; text: string }> = [];
     // FR-4: per-piece failures (from negative-cache hits or batch failures).
     const failedResults: Array<{ id: string; error: string }> = [];
+    let cacheCharacters = 0;
 
     for (const piece of message.pieces) {
       const cached = await getCachedTranslation(
@@ -521,6 +551,7 @@ async function handleTranslate(
       );
       if (cached !== null) {
         cachedResults.push({ id: piece.id, translatedText: cached });
+        cacheCharacters += piece.text.length;
         continue;
       }
       // FR-4: negative cache — if a recent failure is cached for this piece,
@@ -552,17 +583,21 @@ async function handleTranslate(
       uncachedPieces.push(piece);
     }
 
-    // Track cache hit/miss stats (fire-and-forget)
-    if (cachedResults.length > 0 || uncachedPieces.length > 0) {
-      incrementStats({
-        totalCacheHits: cachedResults.length,
-        totalCacheMisses: uncachedPieces.length,
-      }).catch(() => {});
-    }
-
     // If all pieces were cached or negative-cached, return immediately — no LLM call.
     // FR-4: surface negative-cached failures so the content script shows error states.
     if (uncachedPieces.length === 0) {
+      if (cachedResults.length > 0) {
+        recordUsage({
+          mode: usageMode,
+          cacheHits: cachedResults.length,
+          cacheMisses: 0,
+          cacheCharacters,
+          host,
+          sourceLanguage: message.sourceLanguage,
+          targetLanguage: message.targetLanguage,
+          providerId,
+        }).catch(() => {});
+      }
       return {
         success: true,
         results: cachedResults,
@@ -676,11 +711,18 @@ async function handleTranslate(
 
     // Track translation stats (fire-and-forget)
     const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
-    incrementStats({
-      totalApiCalls,
-      totalCharactersTranslated: totalChars,
+    recordUsage({
+      mode: usageMode,
+      characters: totalChars,
+      apiCalls: totalApiCalls,
+      cacheHits: cachedResults.length,
+      cacheMisses: uncachedPieces.length,
+      cacheCharacters,
+      host,
+      sourceLanguage: message.sourceLanguage,
+      targetLanguage: message.targetLanguage,
+      providerId,
     }).catch(() => {});
-    recordDailyStats(totalChars, totalApiCalls, cachedResults.length).catch(() => {});
 
     if (freshResults.length > 0) {
       return {
@@ -806,6 +848,9 @@ async function handleTranslateSubtitle(
     // Mutate a copy of cues as we go
     const translatedCues = [...cues];
 
+    const host = hostFromSender(sender);
+    const providerId = bestEffortProviderId(subtitleSettings);
+
     // Helper to translate a chunk
     const translateChunk = async (chunkCues: SubtitleCue[], contextCues: SubtitleCue[]) => {
       // Each chunk holds its own semaphore slot so MAX_CONCURRENT is enforced
@@ -815,6 +860,7 @@ async function handleTranslateSubtitle(
         const chunkResult: SubtitleCue[] = new Array(chunkCues.length);
         const uncachedIndices: number[] = [];
         const uniqueTexts = new Set<string>();
+        let cacheCharacters = 0;
 
         for (let i = 0; i < chunkCues.length; i++) {
           const cue = chunkCues[i];
@@ -829,10 +875,27 @@ async function handleTranslateSubtitle(
               text: cached,
               originalText: cue.text,
             };
+            cacheCharacters += cue.text.length;
           } else {
             uncachedIndices.push(i);
             uniqueTexts.add(cue.text);
           }
+        }
+
+        if (uniqueTexts.size === 0) {
+          // All cues served from cache — still record cache + cue stats.
+          recordUsage({
+            mode: 'subtitle',
+            cacheHits: chunkCues.length,
+            cacheMisses: 0,
+            cacheCharacters,
+            subtitleCues: chunkCues.length,
+            host,
+            sourceLanguage,
+            targetLanguage,
+            providerId,
+          }).catch(() => {});
+          return chunkResult;
         }
 
         if (uniqueTexts.size > 0) {
@@ -926,13 +989,21 @@ async function handleTranslateSubtitle(
               }
             }
 
-            // Track subtitle API call + character stats (fire-and-forget)
+            // Track subtitle API + cache + cue stats (fire-and-forget)
             const chunkChars = [...uniqueTexts].reduce((sum, t) => sum + t.length, 0);
-            incrementStats({
-              totalApiCalls: 1,
-              totalCharactersTranslated: chunkChars,
+            recordUsage({
+              mode: 'subtitle',
+              characters: chunkChars,
+              apiCalls: 1,
+              cacheHits: chunkCues.length - uncachedIndices.length,
+              cacheMisses: uncachedIndices.length,
+              cacheCharacters,
+              subtitleCues: chunkCues.length,
+              host,
+              sourceLanguage,
+              targetLanguage,
+              providerId,
             }).catch(() => {});
-            recordDailyStats(chunkChars, 1, chunkCues.length - uncachedIndices.length).catch(() => {});
 
             // Merge extracted proper nouns into the rolling glossary so the
             // next chunk's prompt carries forward name consistency.
@@ -1016,11 +1087,7 @@ async function handleTranslateSubtitle(
                     chunkCues: chunkResult,
                     sessionId: session.sessionId,
                  });
-                 // Track per-chunk subtitle stats (fire-and-forget) — avoids
-                 // overcounting upfront when background chunks may fail.
-                 incrementStats({
-                   totalSubtitlesCuesTranslated: chunkResult.length,
-                 }).catch(() => {});
+                 // subtitleCues counted inside translateChunk via recordUsage
                }
             } catch (error) {
                console.warn("AnyLLMTranslate: Background chunk translation failed", error);
@@ -1041,12 +1108,9 @@ async function handleTranslateSubtitle(
       })();
     }
 
-    // Track subtitle stats for the first chunk only (fire-and-forget).
-    // Background chunk stats are tracked per-chunk in the async loop above
-    // to avoid overcounting cues that may fail in later chunks.
-    incrementStats({
-      totalSubtitlesCuesTranslated: Math.min(cues.length, CHUNK_SIZE),
-    }).catch(() => {});
+    // subtitleCues for the first chunk are recorded inside translateChunk.
+    // Background chunks also record per successful translateChunk (avoids
+    // overcounting cues that fail in later chunks).
 
     return { success: true, cues: translatedCues, sessionId };
   } catch (error) {
@@ -1408,9 +1472,12 @@ function deserializeDictionaryCache(cached: string): TranslateSelectionResult {
  *  Dictionary mode is opt-in via message.dictionaryMode + settings flag. */
 async function handleTranslateSelection(
   message: TranslateSelectionMessage,
+  sender?: chrome.runtime.MessageSender,
 ): Promise<TranslateSelectionResult> {
   try {
     const selectionSettings = await loadSettings();
+    const host = hostFromSender(sender);
+    const providerId = bestEffortProviderId(selectionSettings);
     const useDictionary =
       message.dictionaryMode === true &&
       selectionSettings.selectionDictionaryEnabled !== false;
@@ -1472,11 +1539,15 @@ async function handleTranslateSelection(
         message.targetLanguage,
       );
 
-      incrementStats({
-        totalApiCalls: 1,
-        totalCharactersTranslated: message.text.length,
+      recordUsage({
+        mode: 'selection',
+        characters: message.text.length,
+        apiCalls: 1,
+        host,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        providerId,
       }).catch(() => {});
-      recordDailyStats(message.text.length, 1, 0).catch(() => {});
 
       if (hasDictionaryFields(parsed)) {
         return {
@@ -1530,11 +1601,15 @@ async function handleTranslateSelection(
         message.targetLanguage,
       );
 
-      incrementStats({
-        totalApiCalls: 1,
-        totalCharactersTranslated: message.text.length,
+      recordUsage({
+        mode: 'selection',
+        characters: message.text.length,
+        apiCalls: 1,
+        host,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        providerId,
       }).catch(() => {});
-      recordDailyStats(message.text.length, 1, 0).catch(() => {});
 
       return { success: true, translatedText: translated, mode: 'sentence' };
     } else {
@@ -1701,7 +1776,7 @@ export function handleMessage(
     case 'FETCH_MANIFEST_SUBTITLES':
       return handleFetchManifestSubtitles(message);
     case 'translateSelection':
-      return handleTranslateSelection(message);
+      return handleTranslateSelection(message, _sender);
     case 'restore': {
       // Clear page translation session tracking and stop any active subtitle
       // session for this tab so progressive chunk work and the keep-alive alarm

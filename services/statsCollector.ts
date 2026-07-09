@@ -218,7 +218,7 @@ export async function updateStatsPreferences(
 }
 
 // ---------------------------------------------------------------------------
-// v1 API (adapters / thin wrappers until call sites migrate)
+// v1 read API (legacy summary shape; prefer getStatsV2)
 // ---------------------------------------------------------------------------
 
 export async function getStats(): Promise<TranslationStats> {
@@ -232,35 +232,6 @@ export async function resetStats(): Promise<void> {
     await chrome.storage.local.remove(STATS_STORAGE_KEY);
     await clearAllDailyRecords();
   });
-}
-
-/** Thin adapter → recordUsage (mode page). Avoids v1 field corruption after v2 storage. */
-export async function incrementStats(
-  partial: Partial<Omit<TranslationStats, 'dailyStats'>>,
-): Promise<void> {
-  await recordUsage({
-    mode: 'page',
-    characters: partial.totalCharactersTranslated,
-    apiCalls: partial.totalApiCalls,
-    cacheHits: partial.totalCacheHits,
-    cacheMisses: partial.totalCacheMisses,
-    pageSession: (partial.totalPagesTranslated ?? 0) > 0,
-    subtitleCues: partial.totalSubtitlesCuesTranslated,
-  });
-}
-
-/**
- * Deprecated: daily totals now written by incrementStats/recordUsage.
- * Kept for call-site compatibility until Task 7 rewires background.
- * Full no-op — do not re-apply characters/apiCalls/cacheHits (would double-count
- * when background pairs this with incrementStats for the same event).
- */
-export async function recordDailyStats(
-  _chars: number,
-  _apiCalls: number,
-  _cacheHits: number,
-): Promise<void> {
-  return;
 }
 
 // ---------------------------------------------------------------------------
