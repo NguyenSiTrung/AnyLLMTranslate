@@ -5,12 +5,34 @@ import {
   type DailyStat,
   type DailyStatRecord,
   type StatCounters,
+  type StatsPreferences,
+  type TranslationMode,
   type TranslationStats,
   type TranslationStatsV2,
 } from '@/types/stats';
-import { setDailyRecord } from '@/services/statsIdb';
+import {
+  clearAllDailyRecords,
+  deleteDailyRecordsBefore,
+  getAllDailyRecords,
+  getDailyRecord,
+  setDailyRecord,
+} from '@/services/statsIdb';
+import {
+  addPartialCounters,
+  languagePairKey,
+  mergeCounters,
+  mergeDimensionMap,
+  normalizeHost,
+} from '@/services/statsCounters';
 
 export const STATS_STORAGE_KEY = 'anyllm-translate-stats';
+
+/** Max host keys retained per daily record (remainder rolled into `__other__`). */
+const MAX_HOSTS_PER_DAY = 25;
+/** Max language-pair keys retained per daily record. */
+const MAX_LANGUAGE_PAIRS_PER_DAY = 40;
+/** Days of totals kept in chrome.storage `recentDailySummary`. */
+const RECENT_SUMMARY_DAYS = 30;
 
 /** Promise chain to serialize all stats storage updates and prevent race conditions. */
 let updateChain: Promise<unknown> = Promise.resolve();
@@ -24,7 +46,179 @@ function chainUpdate<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
-// v1 API (kept for current UI until later tasks migrate readers/writers)
+// Usage event + v2 write API
+// ---------------------------------------------------------------------------
+
+export interface UsageEvent {
+  mode: TranslationMode;
+  characters?: number;
+  apiCalls?: number;
+  cacheHits?: number;
+  cacheMisses?: number;
+  cacheCharacters?: number;
+  pageSession?: boolean;
+  subtitleCues?: number;
+  providerId?: string;
+  host?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}
+
+function emptyDay(date: string): DailyStatRecord {
+  return {
+    date,
+    totals: { ...ZERO_COUNTERS },
+    byMode: {},
+    byProvider: {},
+    byHost: {},
+    byLanguagePair: {},
+  };
+}
+
+function localDateYmd(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-CA');
+}
+
+function retentionCutoffYmd(retentionDays: number, today: Date = new Date()): string {
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() - retentionDays);
+  return localDateYmd(cutoff);
+}
+
+/** Build counter delta from a usage event (mode-specific event counters included). */
+function countersFromEvent(event: UsageEvent): StatCounters {
+  return addPartialCounters(
+    { ...ZERO_COUNTERS },
+    {
+      characters: event.characters,
+      apiCalls: event.apiCalls,
+      cacheHits: event.cacheHits,
+      cacheMisses: event.cacheMisses,
+      cacheCharacters: event.cacheCharacters,
+      pageSessions: event.pageSession ? 1 : undefined,
+      subtitleCues: event.subtitleCues,
+      selectionEvents: event.mode === 'selection' ? 1 : undefined,
+      inlineEvents: event.mode === 'inline' ? 1 : undefined,
+      pdfEvents: event.mode === 'pdf' ? 1 : undefined,
+    },
+  );
+}
+
+async function pruneIdbToRetention(retentionDays: number): Promise<void> {
+  await deleteDailyRecordsBefore(retentionCutoffYmd(retentionDays));
+}
+
+/**
+ * Load summary as v2 (migrate v1 if needed). Same semantics as getStatsV2.
+ * Prefer calling inside chainUpdate for write paths.
+ */
+async function readSummary(): Promise<TranslationStatsV2> {
+  return getStatsV2();
+}
+
+/**
+ * Record a single translation usage event into lifetime summary + today's IDB day.
+ * Serialized via chainUpdate with all other stats writers (including reset).
+ */
+export async function recordUsage(event: UsageEvent): Promise<void> {
+  return chainUpdate(async () => {
+    const summary = await readSummary();
+    const partial = countersFromEvent(event);
+    const nowIso = new Date().toISOString();
+    const today = localDateYmd();
+
+    summary.lifetime = mergeCounters(summary.lifetime, partial);
+    summary.lastActiveAt = nowIso;
+
+    const existing = await getDailyRecord(today);
+    const day: DailyStatRecord = existing
+      ? {
+          date: existing.date,
+          totals: { ...ZERO_COUNTERS, ...existing.totals },
+          byMode: { ...existing.byMode },
+          byProvider: { ...existing.byProvider },
+          byHost: { ...existing.byHost },
+          byLanguagePair: { ...existing.byLanguagePair },
+        }
+      : emptyDay(today);
+
+    day.totals = mergeCounters(day.totals, partial);
+
+    const modePartial = addPartialCounters(
+      addPartialCounters(ZERO_COUNTERS, day.byMode[event.mode] ?? {}),
+      partial,
+    );
+    day.byMode = { ...day.byMode, [event.mode]: modePartial };
+
+    if (event.providerId) {
+      day.byProvider = mergeDimensionMap(
+        day.byProvider,
+        event.providerId,
+        partial,
+        Number.MAX_SAFE_INTEGER,
+      );
+    }
+
+    if (summary.preferences.hostTrackingEnabled) {
+      const host = normalizeHost(event.host);
+      if (host) {
+        day.byHost = mergeDimensionMap(day.byHost, host, partial, MAX_HOSTS_PER_DAY);
+      }
+    }
+
+    if (event.sourceLanguage && event.targetLanguage) {
+      const pair = languagePairKey(event.sourceLanguage, event.targetLanguage);
+      day.byLanguagePair = mergeDimensionMap(
+        day.byLanguagePair,
+        pair,
+        partial,
+        MAX_LANGUAGE_PAIRS_PER_DAY,
+      );
+    }
+
+    await setDailyRecord(day);
+    await pruneIdbToRetention(summary.preferences.retentionDays);
+
+    const allDays = await getAllDailyRecords();
+    summary.recentDailySummary = buildRecentDailySummary(allDays);
+
+    await chrome.storage.local.set({ [STATS_STORAGE_KEY]: summary });
+  });
+}
+
+/**
+ * Merge stats preferences. When retention is lowered, prune IDB immediately.
+ */
+export async function updateStatsPreferences(
+  partial: Partial<StatsPreferences>,
+): Promise<void> {
+  return chainUpdate(async () => {
+    const summary = await readSummary();
+    const previousRetention = summary.preferences.retentionDays;
+
+    if (typeof partial.hostTrackingEnabled === 'boolean') {
+      summary.preferences.hostTrackingEnabled = partial.hostTrackingEnabled;
+    }
+    if (
+      partial.retentionDays === 30 ||
+      partial.retentionDays === 90 ||
+      partial.retentionDays === 180
+    ) {
+      summary.preferences.retentionDays = partial.retentionDays;
+    }
+
+    if (summary.preferences.retentionDays < previousRetention) {
+      await pruneIdbToRetention(summary.preferences.retentionDays);
+      const allDays = await getAllDailyRecords();
+      summary.recentDailySummary = buildRecentDailySummary(allDays);
+    }
+
+    await chrome.storage.local.set({ [STATS_STORAGE_KEY]: summary });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// v1 API (adapters / thin wrappers until call sites migrate)
 // ---------------------------------------------------------------------------
 
 export async function getStats(): Promise<TranslationStats> {
@@ -32,61 +226,40 @@ export async function getStats(): Promise<TranslationStats> {
   return result[STATS_STORAGE_KEY] ?? { ...DEFAULT_STATS };
 }
 
+/** Clear chrome.storage stats key + IDB daily store. Serialized behind other writers. */
 export async function resetStats(): Promise<void> {
   return chainUpdate(async () => {
     await chrome.storage.local.remove(STATS_STORAGE_KEY);
+    await clearAllDailyRecords();
   });
 }
 
+/** Thin adapter → recordUsage (mode page). Avoids v1 field corruption after v2 storage. */
 export async function incrementStats(
   partial: Partial<Omit<TranslationStats, 'dailyStats'>>,
 ): Promise<void> {
-  return chainUpdate(async () => {
-    const current = await getStats();
-    const updated: TranslationStats = {
-      ...current,
-      totalCharactersTranslated:
-        current.totalCharactersTranslated + (partial.totalCharactersTranslated ?? 0),
-      totalApiCalls: current.totalApiCalls + (partial.totalApiCalls ?? 0),
-      totalCacheHits: current.totalCacheHits + (partial.totalCacheHits ?? 0),
-      totalCacheMisses: current.totalCacheMisses + (partial.totalCacheMisses ?? 0),
-      totalPagesTranslated:
-        current.totalPagesTranslated + (partial.totalPagesTranslated ?? 0),
-      totalSubtitlesCuesTranslated:
-        current.totalSubtitlesCuesTranslated + (partial.totalSubtitlesCuesTranslated ?? 0),
-    };
-    await chrome.storage.local.set({ [STATS_STORAGE_KEY]: updated });
+  await recordUsage({
+    mode: 'page',
+    characters: partial.totalCharactersTranslated,
+    apiCalls: partial.totalApiCalls,
+    cacheHits: partial.totalCacheHits,
+    cacheMisses: partial.totalCacheMisses,
+    pageSession: (partial.totalPagesTranslated ?? 0) > 0,
+    subtitleCues: partial.totalSubtitlesCuesTranslated,
   });
 }
 
+/** Thin adapter → recordUsage for legacy daily counters. */
 export async function recordDailyStats(
   chars: number,
   apiCalls: number,
   cacheHits: number,
 ): Promise<void> {
-  return chainUpdate(async () => {
-    const current = await getStats();
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-    const daily = [...current.dailyStats];
-    const idx = daily.findIndex((d) => d.date === today);
-    if (idx >= 0) {
-      daily[idx] = {
-        date: today,
-        chars: daily[idx].chars + chars,
-        apiCalls: daily[idx].apiCalls + apiCalls,
-        cacheHits: daily[idx].cacheHits + cacheHits,
-      };
-    } else {
-      daily.push({ date: today, chars, apiCalls, cacheHits });
-    }
-    // Prune entries older than 30 days
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffStr = cutoff.toLocaleDateString('en-CA');
-    const pruned = daily.filter((d) => d.date >= cutoffStr);
-    await chrome.storage.local.set({
-      [STATS_STORAGE_KEY]: { ...current, dailyStats: pruned },
-    });
+  await recordUsage({
+    mode: 'page',
+    characters: chars,
+    apiCalls,
+    cacheHits,
   });
 }
 
@@ -184,10 +357,10 @@ function buildRecentDailySummary(
   records: DailyStatRecord[],
 ): TranslationStatsV2['recentDailySummary'] {
   const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-  const recent = sorted.slice(-30);
+  const recent = sorted.slice(-RECENT_SUMMARY_DAYS);
   return recent.map((r) => ({
     date: r.date,
-    totals: { ...r.totals },
+    totals: { ...ZERO_COUNTERS, ...r.totals },
   }));
 }
 
