@@ -88,7 +88,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Global default exclude selectors — CRITICAL_GLOBAL_EXCLUDES (pre, .code-block, contenteditable, textarea, input, translate="no", .notranslate, script, style) force-merged at load time
 - Smart excludes — structural/navigation elements (nav, TOC, footer, breadcrumb, sidebar, pagination, infobox) auto-skipped when enabled
 - Side panel (reading view)
-- Text selection translate popup
+- Text selection translate popup — short selections use Immersive-style **dictionary mode** (phonetic, POS, definitions, examples, contextual analysis; default on, Options → Advanced); longer sentences stay translation-only; hover/inline remain plain translation
 - Mouse hover translation
 - Keyboard shortcuts (10+)
 - Context menu integration
