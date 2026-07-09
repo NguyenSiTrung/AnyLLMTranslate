@@ -98,10 +98,38 @@ function armMpdDomGraceWindow(): void {
 /**
  * Check whether a new source tier should be suppressed by the currently active source.
  * Returns true if the new source is lower-precedence than the active one.
+ *
+ * Full-file intercept (Youku ASS, etc.) is higher fidelity than DOM/MSE/TextTrack
+ * scrapers: once `interceptOriginalCues` is populated, lower tiers must not
+ * clobber the overlay or spawn competing translation sessions.
  */
 function shouldSuppressSource(newSource: 'manifest' | 'texttrack' | 'mse' | 'dom'): boolean {
+  if (state.interceptOriginalCues.length > 0 && newSource !== 'manifest') {
+    return true;
+  }
   if (!state.activeSource) return false;
   return SOURCE_RANK[newSource] > SOURCE_RANK[state.activeSource];
+}
+
+/**
+ * Whether the intercepted body is ASS/SSA. Used to avoid rewriting ASS
+ * responses as empty WEBVTT (Youku's player crashes: missing Dialogue).
+ */
+function isAssSubtitleBody(body: string): boolean {
+  const stripped = body.replace(/^\uFEFF/, '').trim();
+  return /^\[Script Info\]/im.test(stripped) || /^Dialogue:/im.test(stripped);
+}
+
+/**
+ * Content script-owned session ids for intercept/translate requests.
+ * Pre-assigning before `await translateSubtitle` lets progressive chunks that
+ * race ahead of the first-chunk response match `activeSubtitleSessionId`
+ * instead of being dropped as stale (null !== sessionId).
+ */
+let nextContentSubtitleSessionId = 1;
+
+function allocateSubtitleSessionId(): number {
+  return nextContentSubtitleSessionId++;
 }
 
 /** Reset the active source (e.g. on track switch / seek) to allow re-resolution. */
@@ -528,6 +556,8 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
         previous: state.activeTrackIdentity,
         current: trackIdentity,
       });
+      cancelBackgroundSubtitleSession();
+      state.activeSubtitleSessionId = null;
       cleanupActiveOverlay();
       state.translatedCues = null;
     }
@@ -582,6 +612,12 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     const pageContext = await buildSubtitlePageContext();
 
+    // Pre-assign session id so progressive SUBTITLE_CHUNK_TRANSLATED messages
+    // that arrive before this await resolves are not dropped as stale
+    // (activeSubtitleSessionId was previously still null).
+    const sessionId = allocateSubtitleSessionId();
+    state.activeSubtitleSessionId = sessionId;
+
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
       cues,
@@ -590,6 +626,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       pageContext,
       profile: currentSubtitleProfile(),
       knobOverrides: state.subtitleKnobOverride,
+      sessionId,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
@@ -602,10 +639,16 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       return;
     }
 
-    // Translation succeeded — now blank native subtitles (overlay takes over)
-    sendTranslatedSubtitle({ requestId, vttContent: 'WEBVTT\n\n' });
+    // Translation succeeded. Blank native VTT tracks with empty WEBVTT so the
+    // overlay owns display — but NEVER rewrite ASS/SSA as WEBVTT (Youku KUI
+    // ASS parser throws "Cannot read properties of undefined (reading
+    // 'Dialogue')"). ASS platforms hide native captions via CSS instead.
+    sendTranslatedSubtitle({
+      requestId,
+      vttContent: isAssSubtitleBody(body) ? body : 'WEBVTT\n\n',
+    });
 
-    // Track the active session so stale chunks from older sessions are dropped
+    // Keep session id from our pre-assignment (background echoes the same id).
     if (response.sessionId !== undefined) {
       state.activeSubtitleSessionId = response.sessionId;
     }
@@ -2006,10 +2049,15 @@ export function startCoordinator(): () => void {
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; chunkStart?: number; chunkCues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED') {
-      // Drop stale chunks from old subtitle sessions
+      // Drop stale chunks from old subtitle sessions. Only drop when we already
+      // have an active session id and it differs — never treat "active is null"
+      // as a mismatch (that raced with progressive chunks before the first
+      // translateSubtitle response set the id; fixed by pre-assigning, kept as
+      // defense-in-depth).
       const chunkSessionId = (message as { sessionId?: number }).sessionId;
       if (
         chunkSessionId !== undefined &&
+        state.activeSubtitleSessionId !== null &&
         chunkSessionId !== state.activeSubtitleSessionId
       ) {
         console.log('AnyLLMTranslate: Dropping stale subtitle chunk', {
@@ -2017,6 +2065,9 @@ export function startCoordinator(): () => void {
           received: chunkSessionId,
         });
         return;
+      }
+      if (chunkSessionId !== undefined && state.activeSubtitleSessionId === null) {
+        state.activeSubtitleSessionId = chunkSessionId;
       }
       // Handle chunk delta format (chunkStart + chunkCues)
       const useManifestChunkPath =

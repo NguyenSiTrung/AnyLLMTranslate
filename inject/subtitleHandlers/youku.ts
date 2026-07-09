@@ -43,16 +43,19 @@ export function youkuCodeToLanguage(code: string): string {
 
 /**
  * Youku subtitle handler — DRM/MSE H5 player (KUI framework) that renders
- * captions as SVG `<text>/<tspan>` inside `<div id="subtitle">`. There is no
- * `<track>`/`textTracks` and no interceptable VTT URL in the static HTML, so
- * this is a DOM cue-scraping handler (mirrors {@link HboMaxHandler}).
+ * captions as SVG `<text>/<tspan>` inside `<div id="subtitle">`.
  *
- * Subtitle delivery (confirmed via DevTools, see conductor archive learnings):
- * Youku embeds subtitle tracks as WebVTT segments inside HLS (CMAF) m3u8
- * manifests (e.g. `pl-ali.youku.tv/playlist/m3u8?vid=...`). There is no
- * separate subtitle API endpoint. The coordinator source-tier precedence
- * (manifest > URL intercept > DOM) ensures we try the higher-fidelity paths
- * first, falling back to DOM scraping only when no file/manifest is caught.
+ * Capture strategy (Immersive Translate parity + local learnings):
+ * 1. **Fetch-intercept full `.ass` files** (highest fidelity) — Youku serves
+ *    ASS on many titles; Immersive uses `subtitleUrlRegExp: "\\.ass$"` /
+ *    `subsrtFormat: "ass"`. Do not intercept progressive `.vtt` leaf segments
+ *    (each URL thrashes translation sessions).
+ * 2. **HLS m3u8 manifest discovery** for subtitle playlists when present.
+ * 3. **DOM cue scrape** of `#subtitle` as fallback when no file is intercepted.
+ *
+ * On successful ASS intercept the coordinator must pass the original ASS body
+ * back to the player (never rewrite as empty WEBVTT) — the KUI ASS parser
+ * throws if Dialogue is missing.
  */
 export class YoukuHandler implements SubtitleHandler {
   readonly platform = 'youku';
@@ -74,14 +77,17 @@ export class YoukuHandler implements SubtitleHandler {
   }
 
   getPatterns(): SubtitleUrlPattern[] {
-    // Intercept direct subtitle file URLs (.vtt, .srt, .ass) on any CDN.
-    // Youku's HLS subtitle segments are WebVTT; some older content may use
-    // ASS or SRT. The language is extracted from query params (lang/language)
-    // or the filename suffix (e.g. _en.vtt, _chs.ass).
+    // Immersive Translate parity: hook fetch for full `.ass` subtitle files only
+    // (`subtitleUrlRegExp: "\\.ass$"`, `subsrtFormat: "ass"`).
+    //
+    // Do NOT intercept `.vtt` / HLS leaf segments here — each segment has a
+    // distinct URL, which previously thrashed trackIdentity / translation
+    // sessions ("Dropping stale subtitle chunk") and never assembled a full
+    // track. Progressive HLS is handled via getManifestPatterns() + DOM scrape.
     return [
       {
         platform: 'youku',
-        pattern: /\.(?:vtt|srt|ass)(?:\?|$)/i,
+        pattern: /\.ass(?:\?|$)/i,
         languageExtractor: (url) => {
           const lang =
             url.searchParams.get('lang') ||
@@ -89,7 +95,7 @@ export class YoukuHandler implements SubtitleHandler {
             '';
           if (lang) return youkuCodeToLanguage(lang);
           const file = url.pathname.split('/').pop() || '';
-          const m = file.match(/[_-]([a-z]{2,3}|default|chs|cht)(?:\.(?:vtt|srt|ass))?$/i);
+          const m = file.match(/[_-]([a-z]{2,3}|default|chs|cht)(?:\.ass)?$/i);
           return m ? youkuCodeToLanguage(m[1]) : '';
         },
       },

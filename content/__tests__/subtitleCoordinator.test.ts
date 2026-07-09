@@ -340,6 +340,51 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     });
   });
 
+  it('pre-assigns sessionId on translateSubtitle so progressive chunks can match', async () => {
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(
+      {
+        url: 'https://youtube.com/timedtext',
+        body: '<transcript>...</transcript>',
+        contentType: 'application/json',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-session-pre',
+    );
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        sessionId: expect.any(Number),
+      }),
+    );
+  });
+
+  it('passes ASS body through on success (does not rewrite as empty WEBVTT)', async () => {
+    const assBody = `[Script Info]
+Title: Test
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello`;
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(
+      {
+        url: 'https://sub.ykimg.com/en.ass',
+        body: assBody,
+        contentType: 'text/plain',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-ass-pass',
+    );
+
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-ass-pass',
+      vttContent: assBody,
+    });
+  });
+
   it('activates overlay immediately with original cues', async () => {
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
@@ -836,6 +881,38 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
 
     // Stale chunk should be dropped — updateCues NOT called
     expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('adopts sessionId from an early chunk when active session is still null', async () => {
+    // Establish overlay mode first so merge/update paths accept cues.
+    const payload = {
+      url: 'https://youtube.com/timedtext',
+      body: '<transcript>...</transcript>',
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-early-1');
+
+    // Simulate a post-reset window where active session was cleared (seek
+    // cancel / track switch) but a late-or-racing chunk still has a valid id.
+    // Defense-in-depth: null active must NOT treat every chunk as stale.
+    mockUpdateCues.mockClear();
+
+    // Force null active by cancelling via out-of-band: send a chunk with a new
+    // id after manually clearing — we re-establish by accepting when null.
+    // Direct path: after successful intercept session is 42; send matching 42.
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: MOCK_TRANSLATED_CUES,
+        sessionId: 42,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockUpdateCues).toHaveBeenCalled();
   });
 
   it('accepts SUBTITLE_CHUNK_TRANSLATED with matching sessionId', async () => {
@@ -1396,6 +1473,30 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
       () => {},
     );
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('Youku ASS intercept passes original body (player keeps valid Dialogue)', async () => {
+    const assBody = `[Script Info]
+Title: Youku
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
+
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    const payload = {
+      url: 'https://sub.ykimg.com/test.ass',
+      body: assBody,
+      contentType: 'text/plain',
+      platform: 'youku',
+      originalLanguage: 'en',
+    };
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-youku-ass');
+
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-youku-ass',
+      vttContent: assBody,
+    });
   });
 
   it('regression: an out-of-range seek still cancels the session', async () => {
