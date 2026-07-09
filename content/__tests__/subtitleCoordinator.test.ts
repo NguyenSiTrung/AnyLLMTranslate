@@ -360,7 +360,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
   });
 
-  it('passes ASS body through on success (does not rewrite as empty WEBVTT)', async () => {
+  it('blanks ASS with empty-but-valid ASS (never WEBVTT) so native Dialogue is hidden', async () => {
     const assBody = `[Script Info]
 Title: Test
 
@@ -376,13 +376,21 @@ Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello`;
         platform: 'youtube',
         originalLanguage: 'en',
       },
-      'req-ass-pass',
+      'req-ass-blank',
     );
 
-    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
-      requestId: 'req-ass-pass',
-      vttContent: assBody,
-    });
+    const sent = mockSendTranslatedSubtitle.mock.calls.find(
+      (c) => (c[0] as { requestId?: string }).requestId === 'req-ass-blank',
+    );
+    expect(sent).toBeTruthy();
+    const vttContent = (sent![0] as { vttContent: string }).vttContent;
+    // Must remain ASS-shaped (Youku Dialogue parser) …
+    expect(vttContent).toMatch(/\[Script Info\]/);
+    expect(vttContent).toMatch(/\[Events\]/);
+    expect(vttContent).not.toMatch(/^WEBVTT/m);
+    // … but must not re-show original Dialogue lines under the overlay.
+    expect(vttContent).not.toMatch(/Dialogue:/i);
+    expect(vttContent).not.toContain('Hello');
   });
 
   it('activates overlay immediately with original cues', async () => {
@@ -1475,7 +1483,7 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
   });
 
-  it('Youku ASS intercept passes original body (player keeps valid Dialogue)', async () => {
+  it('Youku ASS intercept blanks native with empty ASS (hides original Dialogue)', async () => {
     const assBody = `[Script Info]
 Title: Youku
 
@@ -1484,6 +1492,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
 
     mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockHandler.getDomCueSource = vi.fn(() => ({
+      cueSelector: '#subtitle',
+      captionWindowSelector: '#subtitle',
+      captionHideMethod: 'visibility' as const,
+    }));
     const payload = {
       url: 'https://sub.ykimg.com/test.ass',
       body: assBody,
@@ -1493,10 +1506,18 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
     };
     if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-youku-ass');
 
-    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
-      requestId: 'req-youku-ass',
-      vttContent: assBody,
-    });
+    const sent = mockSendTranslatedSubtitle.mock.calls.find(
+      (c) => (c[0] as { requestId?: string }).requestId === 'req-youku-ass',
+    );
+    expect(sent).toBeTruthy();
+    const vttContent = (sent![0] as { vttContent: string }).vttContent;
+    expect(vttContent).toMatch(/\[Script Info\]/);
+    expect(vttContent).not.toMatch(/Dialogue:/i);
+    expect(vttContent).not.toContain('Hello');
+
+    // Intercept path uses display:none (full track already captured — no DOM scrape).
+    const hideStyle = document.head.querySelector('style[data-anyllm-role="caption-hide"]');
+    expect(hideStyle?.textContent).toMatch(/#subtitle\s*\{\s*display:\s*none\s*!important/i);
   });
 
   it('regression: an out-of-range seek still cancels the session', async () => {

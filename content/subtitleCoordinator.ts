@@ -121,6 +121,34 @@ function isAssSubtitleBody(body: string): boolean {
 }
 
 /**
+ * Minimal valid ASS with zero Dialogue events. Youku's ASS.js parser requires
+ * a real Events section (empty WEBVTT crashes with "reading 'Dialogue'"); an
+ * empty-but-valid ASS file keeps the player alive while showing nothing so
+ * our overlay owns the captions.
+ */
+const EMPTY_ASS_BODY = `[Script Info]
+Title: AnyLLMTranslate
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+/**
+ * Body to return to the player after successful intercept-path translation.
+ * - VTT / generic: empty WEBVTT blanks the native track.
+ * - ASS/SSA: empty-but-valid ASS (never WEBVTT — breaks Youku KUI ASS parser).
+ *   Returning the original ASS would re-show native Dialogue under the overlay.
+ */
+function blankNativeSubtitleBody(body: string): string {
+  return isAssSubtitleBody(body) ? EMPTY_ASS_BODY : 'WEBVTT\n\n';
+}
+
+/**
  * Content script-owned session ids for intercept/translate requests.
  * Pre-assigning before `await translateSubtitle` lets progressive chunks that
  * race ahead of the first-chunk response match `activeSubtitleSessionId`
@@ -578,7 +606,15 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     if (!state.isOverlayMode) {
       console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
       state.isOverlayMode = true;
-      applyNativeCaptionHideForHandler(handler);
+      // Full-file intercept already has all cues — DOM scrape is not needed, so
+      // display:none is safe (and more reliable than visibility:hidden, which
+      // Youku sometimes overrides on SVG text children of #subtitle).
+      const domSource = handler.getDomCueSource?.();
+      if (domSource) {
+        hideNativeCaptions(domSource.captionWindowSelector, 'display');
+      } else {
+        applyNativeCaptionHideForHandler(handler);
+      }
 
       const savedPrefs = await initializeControls();
       const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
@@ -639,13 +675,12 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       return;
     }
 
-    // Translation succeeded. Blank native VTT tracks with empty WEBVTT so the
-    // overlay owns display — but NEVER rewrite ASS/SSA as WEBVTT (Youku KUI
-    // ASS parser throws "Cannot read properties of undefined (reading
-    // 'Dialogue')"). ASS platforms hide native captions via CSS instead.
+    // Translation succeeded — blank the native track so only the overlay shows.
+    // ASS must stay ASS-shaped (empty WEBVTT crashes Youku's Dialogue parser);
+    // an empty-but-valid ASS removes native Dialogue without breaking the player.
     sendTranslatedSubtitle({
       requestId,
-      vttContent: isAssSubtitleBody(body) ? body : 'WEBVTT\n\n',
+      vttContent: blankNativeSubtitleBody(body),
     });
 
     // Keep session id from our pre-assignment (background echoes the same id).
