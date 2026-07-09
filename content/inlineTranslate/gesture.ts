@@ -120,11 +120,12 @@ export function createGestureController(
     if (!config.enabled) return;
 
     // P0: ignore untrusted, composing, and key-repeat.
-    // jsdom/Vitest KeyboardEvents are never trusted — allow them only under test.
+    // jsdom KeyboardEvents are never trusted — allow them only under Vitest.
+    // Use process.env only (no import.meta): content scripts are bundled as IIFE.
     const isTestEnv =
-      (typeof process !== 'undefined' && process.env?.VITEST === 'true') ||
-      (typeof import.meta !== 'undefined' &&
-        Boolean((import.meta as ImportMeta & { env?: { VITEST?: boolean } }).env?.VITEST));
+      typeof process !== 'undefined' &&
+      typeof process.env === 'object' &&
+      process.env.VITEST === 'true';
     if (!event.isTrusted && !isTestEnv) return;
     if (event.isComposing || composing) {
       reset();
