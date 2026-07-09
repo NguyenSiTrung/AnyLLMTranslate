@@ -64,6 +64,8 @@ export async function translateSection(element: Element): Promise<void> {
   );
   const pieces = extractPieces(element, {
     excludeSelectors: effectiveExcludes,
+    enableRichTranslate: settings.enableRichTranslate,
+    enableAsideCaps: settings.enableAsideCaps,
   });
   if (pieces.length === 0) return;
 

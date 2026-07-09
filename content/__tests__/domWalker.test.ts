@@ -338,3 +338,133 @@ describe('domWalker — aside caps (FR-5)', () => {
     expect(pieces.length).toBe(0); // skipped due to per-paragraph cap
   });
 });
+
+describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+  });
+
+  it('keeps inline <code> text in the parent piece when code is excluded', () => {
+    const p = document.createElement('p');
+    p.innerHTML =
+      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
+    document.body.appendChild(p);
+
+    const pieces = extractPieces(document.body, {
+      excludeSelectors: ['code', 'pre'],
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('~/.config/sway/config');
+    expect(pieces[0].text).toContain('~/.config/i3/config');
+    expect(pieces[0].text).toMatch(/Add to your config file/);
+  });
+
+  it('still hard-skips block <pre> when pre is excluded', () => {
+    const container = document.createElement('div');
+    const prose = document.createElement('p');
+    prose.textContent = 'See the example below.';
+    const pre = document.createElement('pre');
+    pre.textContent = 'const x = 1;\nconsole.log(x);';
+    container.appendChild(prose);
+    container.appendChild(pre);
+    document.body.appendChild(container);
+
+    const pieces = extractPieces(document.body, {
+      excludeSelectors: ['pre', 'code'],
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toBe('See the example below.');
+    expect(pieces.every((p) => !p.text.includes('console.log'))).toBe(true);
+  });
+
+  it('keeps excluded inline class (e.g. span.term) inside the surrounding sentence', () => {
+    const p = document.createElement('p');
+    p.innerHTML = 'Use the <span class="term">API_KEY</span> from your dashboard.';
+    document.body.appendChild(p);
+
+    const pieces = extractPieces(document.body, {
+      excludeSelectors: ['.term'],
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toBe('Use the API_KEY from your dashboard.');
+  });
+
+  it('hard-skips block containers matched by exclude class', () => {
+    const article = document.createElement('article');
+    const p = document.createElement('p');
+    p.textContent = 'Article prose here.';
+    const sidebar = document.createElement('div');
+    sidebar.className = 'sidebar';
+    const sideP = document.createElement('p');
+    sideP.textContent = 'Sidebar noise.';
+    sidebar.appendChild(sideP);
+    article.appendChild(p);
+    article.appendChild(sidebar);
+    document.body.appendChild(article);
+
+    const pieces = extractPieces(document.body, {
+      excludeSelectors: ['.sidebar'],
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toBe('Article prose here.');
+  });
+
+  it('keeps inline translate="no" content in the parent piece', () => {
+    const p = document.createElement('p');
+    p.innerHTML = 'Open <span translate="no">Settings → Advanced</span> to configure.';
+    document.body.appendChild(p);
+
+    const pieces = extractPieces(document.body, {});
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('Settings → Advanced');
+    expect(pieces[0].text).toMatch(/Open .* to configure/);
+  });
+
+  it('passes enableRichTranslate through includeSelectors nested extraction', () => {
+    const md = document.createElement('div');
+    md.className = 'markdown-body';
+    const p = document.createElement('p');
+    p.innerHTML = 'Run <code>npm install</code> first.';
+    md.appendChild(p);
+    document.body.appendChild(md);
+
+    const pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['code', 'pre'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('<z id=');
+    expect(pieces[0].text).toContain('npm install');
+    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
+  });
+
+  it('GitHub-like: include markdown-body + exclude code keeps paths with rich placeholders', () => {
+    const md = document.createElement('div');
+    md.className = 'markdown-body';
+    const p = document.createElement('p');
+    p.setAttribute('dir', 'auto');
+    p.innerHTML =
+      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
+    md.appendChild(p);
+    document.body.appendChild(md);
+
+    const pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['.highlight', 'pre', 'code'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('~/.config/sway/config');
+    expect(pieces[0].text).toContain('~/.config/i3/config');
+    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
+  });
+});

@@ -213,6 +213,18 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     const mergedExcludes = new Set([...storedExcludes, ...CRITICAL_GLOBAL_EXCLUDES]);
     merged.globalExcludeSelectors = Array.from(mergedExcludes);
 
+    // Same strip for per-site excludes (old built-ins listed bare `code`).
+    // Block-level code remains via `pre` / `.code-block` / `.highlight`.
+    const deprecatedInlineSiteExcludes = new Set(['code', 'kbd']);
+    if (Array.isArray(merged.siteRules)) {
+      merged.siteRules = merged.siteRules.map((rule) => ({
+        ...rule,
+        excludeSelectors: (rule.excludeSelectors ?? []).filter(
+          (s) => !deprecatedInlineSiteExcludes.has(s),
+        ),
+      }));
+    }
+
     // Decrypt API key at rest (backward compat: returns plaintext if not encrypted).
     // If an encrypted value cannot be decrypted (e.g. changed extension ID or a
     // corrupted/rotated salt), blank the key so the provider surfaces a

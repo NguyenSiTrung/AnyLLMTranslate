@@ -32,7 +32,21 @@ export interface ExtractOptions {
   enableAsideCaps?: boolean;
 }
 
-/** Check if an element should be skipped */
+/**
+ * Inline elements matched by exclude / translate="no" stay inside the parent
+ * piece so surrounding prose still forms a complete sentence. Hard-skip only
+ * applies to non-inline (block/container) matches.
+ *
+ * Example: exclude `code` must not turn
+ *   "Add to config (<code>~/.x</code>):"
+ * into "Add to config ( ):" — the path stays in the piece; rich-translate +
+ * the system prompt keep the path untranslated.
+ */
+function isSoftPreserveInline(element: Element): boolean {
+  return INLINE_ELEMENTS.has(element.tagName);
+}
+
+/** Check if an element should be hard-skipped (TreeWalker FILTER_REJECT). */
 function shouldSkipElement(element: Element, excludeSelectors?: string[]): boolean {
   // Skip known non-translatable elements
   if (SKIP_ELEMENTS.has(element.tagName)) return true;
@@ -41,19 +55,21 @@ function shouldSkipElement(element: Element, excludeSelectors?: string[]): boole
   if (element.hasAttribute(DATA_ATTRS.TRANSLATED)) return true;
   if (element.getAttribute(DATA_ATTRS.ROLE) === 'translation') return true;
 
-  // Skip translate="no" and .notranslate
-  if (element.getAttribute('translate') === 'no') return true;
-  if (element.classList.contains('notranslate')) return true;
-
   // Skip contentEditable regions (attribute check as fallback for jsdom)
   if (element.getAttribute('contenteditable') === 'true') return true;
   if ('isContentEditable' in element && (element as HTMLElement).isContentEditable) return true;
 
-  // Skip elements matching any exclude selector
+  // translate="no" / .notranslate: hard-skip block regions only.
+  // Inline spans keep their text in the parent piece (soft preserve).
+  if (element.getAttribute('translate') === 'no' && !isSoftPreserveInline(element)) return true;
+  if (element.classList.contains('notranslate') && !isSoftPreserveInline(element)) return true;
+
+  // Exclude selectors: hard-skip only non-inline matches (pre, .sidebar, …).
+  // Inline matches (code, kbd, span.term, …) stay in the surrounding piece.
   if (excludeSelectors && excludeSelectors.length > 0) {
     for (const selector of excludeSelectors) {
       if (!selector) continue;
-      if (matchesCached(element, selector)) return true;
+      if (matchesCached(element, selector) && !isSoftPreserveInline(element)) return true;
     }
   }
 
@@ -138,7 +154,12 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
 
     const allPieces: TranslationPiece[] = [];
     for (const el of outermost) {
-      const nested = extractPieces(el, { excludeSelectors: options.excludeSelectors });
+      // Forward walker flags; do not re-pass includeSelectors (already scoped to el).
+      const nested = extractPieces(el, {
+        excludeSelectors: options.excludeSelectors,
+        enableRichTranslate: options.enableRichTranslate,
+        enableAsideCaps: options.enableAsideCaps,
+      });
       allPieces.push(...nested);
     }
     return allPieces;

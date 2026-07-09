@@ -145,6 +145,15 @@ describe('BUILT_IN_RULES', () => {
     const github = BUILT_IN_RULES.find((r) => r.hostname === 'github.com');
     expect(github?.includeSelectors).toContain('.markdown-body');
     expect(github?.excludeSelectors).toContain('pre');
+    // Bare `code` must not be excluded — it tears paths out of prose sentences.
+    // Block code stays excluded via `pre` / `.highlight`.
+    expect(github?.excludeSelectors).not.toContain('code');
+  });
+
+  it('built-in rules never hard-exclude bare inline code', () => {
+    for (const rule of BUILT_IN_RULES) {
+      expect(rule.excludeSelectors).not.toContain('code');
+    }
   });
 });
 

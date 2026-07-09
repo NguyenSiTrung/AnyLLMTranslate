@@ -55,6 +55,31 @@ describe('loadSettings migration', () => {
     expect(settings.globalExcludeSelectors).not.toContain('.katex');
   });
 
+  it('strips bare inline excludes from stored site rules', async () => {
+    mockGet.mockResolvedValue({
+      [STORAGE_KEYS.SETTINGS]: {
+        siteRules: [
+          {
+            id: 'builtin-github-root',
+            hostname: 'github.com',
+            includeSelectors: ['.markdown-body'],
+            excludeSelectors: ['.highlight', 'pre', 'code', 'kbd'],
+            alwaysTranslate: false,
+            neverTranslate: false,
+            builtIn: true,
+          },
+        ],
+        provider: { apiKey: 'test' },
+      },
+    });
+
+    const settings = await loadSettings();
+    const github = settings.siteRules.find((r) => r.hostname === 'github.com');
+    expect(github?.excludeSelectors).toEqual(['.highlight', 'pre']);
+    expect(github?.excludeSelectors).not.toContain('code');
+    expect(github?.excludeSelectors).not.toContain('kbd');
+  });
+
   it('blanks the API key when an encrypted value cannot be decrypted', async () => {
     mockGet.mockResolvedValue({
       [STORAGE_KEYS.SETTINGS]: {
