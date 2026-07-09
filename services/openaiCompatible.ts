@@ -126,7 +126,8 @@ export class OpenAICompatibleService implements TranslationService {
             request.glossaryBlock,
             request.pageContext,
           );
-    const userPrompt = buildUserPrompt(request.texts, request.sourceLanguage);
+    const userPrompt =
+      request.customUserPrompt ?? buildUserPrompt(request.texts, request.sourceLanguage);
 
     const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
       model: this.config.model,
@@ -163,6 +164,16 @@ export class OpenAICompatibleService implements TranslationService {
     }
 
     const expectedIds = Array.from(request.texts.keys());
+
+    // Selection dictionary mode: Immersive JSON is not a translations map.
+    // Return the raw model text under each id so the caller can parse it.
+    if (request.returnRawResponse) {
+      const rawMap = new Map<string, string>();
+      for (const id of expectedIds) {
+        rawMap.set(id, responseText);
+      }
+      return { success: true, translations: rawMap };
+    }
 
     // Parse is a CONTENT concern, not a transport concern: a malformed JSON from
     // key 2 would likely also fail to parse, so failover wouldn't help. Wrap

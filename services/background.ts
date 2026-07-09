@@ -8,6 +8,7 @@ import type {
   TranslationResultMessage,
   TranslateSubtitleMessage,
   TranslateSelectionMessage,
+  TranslateSelectionResult,
   FetchSubtitleMessage,
   DetectPageCategoryLlmMessage,
   ClassifyPdfParagraphsMessage,
@@ -21,6 +22,18 @@ import type {
   PdfStreamDone,
   PdfStreamError,
 } from '@/types/messages';
+import {
+  parseSelectionDictionary,
+  hasDictionaryFields,
+  extractTranslationFallback,
+  type SelectionDictionaryResult,
+} from '@/lib/selectionDictionary';
+import {
+  buildSelectionDictionarySystemPrompt,
+  buildSelectionDictionaryUserPrompt,
+} from '@/lib/selectionDictionaryPrompt';
+import { generateSelectionDictionaryCacheKey } from '@/lib/selectionCacheKey';
+import { getLanguageName } from '@/lib/languages';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { ExtensionSettings } from '@/types/config';
@@ -1357,13 +1370,133 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
-/** Handle translateSelection message — translate a single text string */
+/** Serialize dictionary result for cache storage (string payload). */
+function serializeDictionaryCache(raw: string, parsed: SelectionDictionaryResult | null): string {
+  if (parsed && hasDictionaryFields(parsed)) {
+    return JSON.stringify({
+      phonetic: parsed.phonetic,
+      definitions: parsed.definitions,
+      translation: parsed.translation,
+      contextual_analysis: parsed.contextualAnalysis,
+      _raw: raw,
+    });
+  }
+  return raw;
+}
+
+/** Deserialize a dictionary cache entry into a selection result. */
+function deserializeDictionaryCache(cached: string): TranslateSelectionResult {
+  const parsed = parseSelectionDictionary(cached);
+  const translatedText = extractTranslationFallback(cached, parsed);
+  if (hasDictionaryFields(parsed)) {
+    return {
+      success: true,
+      translatedText,
+      mode: 'dictionary',
+      dictionary: {
+        phonetic: parsed?.phonetic,
+        definitions: parsed?.definitions,
+        translation: parsed?.translation,
+        contextualAnalysis: parsed?.contextualAnalysis,
+      },
+    };
+  }
+  return { success: true, translatedText, mode: 'sentence' };
+}
+
+/** Handle translateSelection message — translate a single text string.
+ *  Dictionary mode is opt-in via message.dictionaryMode + settings flag. */
 async function handleTranslateSelection(
   message: TranslateSelectionMessage,
-): Promise<{ success: boolean; translatedText?: string; error?: string }> {
+): Promise<TranslateSelectionResult> {
   try {
-    // FR-2: Check cache before calling LLM
     const selectionSettings = await loadSettings();
+    const useDictionary =
+      message.dictionaryMode === true &&
+      selectionSettings.selectionDictionaryEnabled !== false;
+
+    // --- Dictionary word-mode path (opt-in only) ---
+    if (useDictionary) {
+      const dictKey = await generateSelectionDictionaryCacheKey(
+        message.text,
+        message.sourceLanguage,
+        message.targetLanguage,
+      );
+      const cachedDict = await getCachedTranslationByKey(
+        dictKey,
+        selectionSettings.cacheTTLDays,
+      );
+      if (cachedDict !== null) {
+        return deserializeDictionaryCache(cachedDict);
+      }
+
+      const service = await initService();
+      const fromLabel =
+        message.sourceLanguage === 'auto'
+          ? 'auto'
+          : getLanguageName(message.sourceLanguage);
+      const toLabel = getLanguageName(message.targetLanguage);
+      const systemPrompt = buildSelectionDictionarySystemPrompt({
+        from: fromLabel,
+        to: toLabel,
+        text: message.text,
+        contextText: message.contextText ?? '',
+      });
+      const userPrompt = buildSelectionDictionaryUserPrompt({ text: message.text });
+      // Dictionary path omits glossary injection to avoid prompt noise (FR-5.3).
+      const texts = new Map<string, string>();
+      texts.set('selection', message.text);
+
+      const result = await service.translate({
+        texts,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        preScanSystemPrompt: systemPrompt,
+        customUserPrompt: userPrompt,
+        returnRawResponse: true,
+      });
+
+      if (!result.success) {
+        return { success: false, error: result.error ?? 'Translation failed' };
+      }
+
+      const raw = result.translations.get('selection') ?? '';
+      const parsed = parseSelectionDictionary(raw);
+      const translatedText = extractTranslationFallback(raw, parsed);
+
+      // Cache the structured (or fail-open) payload under the dict: key.
+      await cacheTranslationByKey(
+        dictKey,
+        serializeDictionaryCache(raw, parsed),
+        message.sourceLanguage,
+        message.targetLanguage,
+      );
+
+      incrementStats({
+        totalApiCalls: 1,
+        totalCharactersTranslated: message.text.length,
+      }).catch(() => {});
+      recordDailyStats(message.text.length, 1, 0).catch(() => {});
+
+      if (hasDictionaryFields(parsed)) {
+        return {
+          success: true,
+          translatedText,
+          mode: 'dictionary',
+          dictionary: {
+            phonetic: parsed?.phonetic,
+            definitions: parsed?.definitions,
+            translation: parsed?.translation,
+            contextualAnalysis: parsed?.contextualAnalysis,
+          },
+        };
+      }
+
+      // Fail-open: invalid/partial JSON still shows a usable string (NFR-1).
+      return { success: true, translatedText, mode: 'sentence' };
+    }
+
+    // --- Plain sentence path (default; hover/inline/dictionary-off) ---
     const cached = await getCachedTranslation(
       message.text,
       message.sourceLanguage,
@@ -1371,7 +1504,7 @@ async function handleTranslateSelection(
       selectionSettings.cacheTTLDays,
     );
     if (cached !== null) {
-      return { success: true, translatedText: cached };
+      return { success: true, translatedText: cached, mode: 'sentence' };
     }
 
     const service = await initService();
@@ -1390,7 +1523,6 @@ async function handleTranslateSelection(
     if (result.success) {
       const translated = result.translations.get('selection') ?? '';
 
-      // Write-back to cache after successful LLM call
       await cacheTranslation(
         message.text,
         translated,
@@ -1398,14 +1530,13 @@ async function handleTranslateSelection(
         message.targetLanguage,
       );
 
-      // Track selection stats (fire-and-forget)
       incrementStats({
         totalApiCalls: 1,
         totalCharactersTranslated: message.text.length,
       }).catch(() => {});
       recordDailyStats(message.text.length, 1, 0).catch(() => {});
 
-      return { success: true, translatedText: translated };
+      return { success: true, translatedText: translated, mode: 'sentence' };
     } else {
       return { success: false, error: result.error ?? 'Translation failed' };
     }
