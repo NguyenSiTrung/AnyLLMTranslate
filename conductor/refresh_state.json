@@ -1,29 +1,34 @@
 {
-  "lastRefresh": "2026-07-09T09:29:45+07:00",
+  "lastRefresh": "2026-07-09T11:23:08+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Major intervening work since 2026-07-08 refresh: web-pipeline-hardening_20260708 (newtrack → implement → archive) + post-track polish (compact inline, failure-cache retry bypass, Danger Zone layout) + beads backlog close.",
-    "product.md: refresh marker + Page Translation bullets (body-swap, matchesCached, inArticleContext batch split, Page Walk Tuning, compact inline, failure-cache retry). Added archived track entry for web-pipeline-hardening_20260708 + incremental polish note. Current State → 1047 tests / 68 files / 64 archived / build ~3.95 MB.",
-    "patterns.md: refresh marker only — 9 web-pipeline patterns already elevated at archive (ec3ae9f); no new consolidation candidates.",
-    "tech-stack.md: marker only — package.json deps/scripts unchanged.",
-    "workflow.md / tracks.md: no drift (tracks.md already lists web-pipeline archived; Active Tracks empty).",
-    "learnings consolidation: no new patterns to add (all web-pipeline learnings already in patterns.md).",
-    "beads DRIFT: none — 0 open / 0 in_progress (prior ALT-hcp.7.2 / ALT-fm8 / ALT-j1k closed via aec2c63).",
+    "Scope: full refresh. Major intervening work since 2026-07-09 09:29 refresh: inline-input-parity_20260709 (implement → archive) + post-track fixes (import.meta, suggested_key, fallback-undo) + suite trim 0f1d632 (~1053→788 TCs).",
+    "product.md: refresh marker + UI&Settings bullet for Immersive-parity inline translation; Completed entry for inline-input-parity_20260709; Current State → 788 TCs / 71 files / 786 pass + 2 fail / 65 archived / build ~3.97 MB / 8 lint; suite-history note for 0f1d632.",
+    "patterns.md: refresh marker + 2 soft-context patterns (dual-mode separators; blocklist replace-when-non-empty). 6 core inline-parity patterns already elevated at archive.",
+    "tech-stack.md: marker only — package.json deps/scripts unchanged; build size ~3.97 MB.",
+    "workflow.md / tracks.md: no drift (tracks.md already lists inline-input-parity archived; Active Tracks empty).",
+    "learnings consolidation: 2 soft context added; no duplicate merges required.",
+    "beads DRIFT: none — ALT-slx epic CLOSED 6/6; 0 open / 0 in_progress.",
     "backups: product.md.bak, patterns.md.bak, tech-stack.md.bak, refresh_state.json.bak.",
-    "verification: wxt build ✅ ~3.95 MB; vitest run 1047/1047 pass (68 files); tsc clean; eslint 5 errors (unchanged: 3 test-trim leftovers + 2 pre-existing)."
+    "verification: wxt build ✅ ~3.97 MB; vitest 786/788 pass (2 flaky fake-timer timeouts in background.test.ts subtitle cache/retry); tsc clean; eslint 8 errors."
   ],
   "codebaseHealth": {
-    "tests": 1047,
-    "testFiles": 68,
-    "buildSize": "~3.95 MB",
-    "lintErrors": 5,
-    "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports (test-trim leftover); subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
+    "tests": 788,
+    "testsPassing": 786,
+    "testsFailing": 2,
+    "testFiles": 71,
+    "buildSize": "~3.97 MB",
+    "lintErrors": 8,
+    "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports; inlineTranslate.parity.test.ts: PULSING_CLASS unused; inlineTranslateSettings.test.ts: beforeEach unused; subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion; youtubeHandler.test.ts no-non-null-assertion.",
     "tscErrors": 0,
     "tscErrorsDetail": "clean",
-    "archivedTracks": 64,
+    "archivedTracks": 65,
     "activeTracks": 0,
-    "failingTests": 0,
-    "flakyTests": "none observed this run (1047/1047 pass)"
+    "failingTests": [
+      "services/__tests__/background.test.ts > emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries (fake-timer / 5s testTimeout)",
+      "services/__tests__/background.test.ts > does not cache a partial (source-back-filled) translation (beforeEach hookTimeout after prior failure)"
+    ],
+    "flakyTests": "background subtitle cache/retry fake-timer tests — reproduced on full suite and isolated re-run"
   },
-  "beadsDrift": "none — no open or in_progress beads issues"
+  "beadsDrift": "none — ALT-slx closed; no open or in_progress beads issues"
 }

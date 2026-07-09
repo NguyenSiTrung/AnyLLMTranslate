@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (no dep/script drift; scripts remain: test:fast + zip:source) -->
+<!-- conductor-refresh: 2026-07-09 all (post inline-input-parity; no dep/script drift; scripts remain: test:fast + zip:source; build ~3.97 MB) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language

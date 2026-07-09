@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (archived web-pipeline-hardening_20260708; 9 patterns elevated; 63 archived; Active Tracks empty) -->
+<!-- conductor-refresh: 2026-07-09 all (post inline-input-parity archive — 65 archived; 9 web-pipeline patterns already elevated; Beads clean; Active Tracks empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -642,3 +642,11 @@ Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on ful
 - **Body-swap re-init via `startTranslation()`:** session guard already bumps `translationSession++` and tears down old observers, so the body-swap handler just calls `void startTranslation()` — stale async writes drop automatically. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
 - **Background test fetch inspection:** user message content is `"Translate the following texts...\n\n{json}"`, not raw JSON. Extract JSON by finding the first `{` in the content string. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
 - **Body-swap MutationObserver tests in jsdom:** wait at least `debounceMs + buffer` (e.g. 150ms for a 100ms debounce) for the debounced callback to fire. (from: web-pipeline-hardening_20260708, archived 2026-07-09)
+
+## Inline Input Translation Parity (2026-07-09)
+- **Guard own write-back with `isWritingBack`:** Synthetic `input`/`change` from multi-strategy write-back must not cancel in-flight translate or skip toast dismiss. Set a module flag around write, and ignore cancel-on-type while it is true. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **Partial nested config updates must not clobber arrays with `undefined`:** When merging `Partial<InlineTranslateRuntimeConfig>`, omit keys that are absent (especially `blocklistPatterns`) instead of spreading `undefined` over existing values. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **Fallback undo only when field is still the last write:** Store `lastWrittenMap` alongside `undoMap`. Re-trigger restores original only if current text still matches last successful write; after user edit, clear state and translate again. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **No `import.meta` in content-script modules:** Content scripts bundle as IIFE; `import.meta` becomes `{}` and warns at build. Detect Vitest via `process.env.VITEST` only. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **Chrome `commands` max 4 `suggested_key` entries — extra commands without defaults:** A 5th command (e.g. `translate-input-box`) may exist with description only; users bind it at `chrome://extensions/shortcuts`. Exceeding 4 suggested keys fails extension load. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **jsdom KeyboardEvents are never `isTrusted`:** Production must ignore untrusted events for gesture counting; under Vitest allow untrusted so synthetic keydown tests work. (from: inline-input-parity_20260709, archived 2026-07-09)

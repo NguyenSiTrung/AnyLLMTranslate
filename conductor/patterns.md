@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post inline-input-parity archive — 65 archived; 9 web-pipeline patterns already elevated; Beads clean; Active Tracks empty) -->
+<!-- conductor-refresh: 2026-07-09 all (post inline-input-parity + suite trim; 65 archived; 6 inline-parity patterns + 2 soft context; Beads clean; Active empty) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -650,3 +650,5 @@ Codebase health: 2014 tests passing across 140 files (0 failing / 0 flaky on ful
 - **No `import.meta` in content-script modules:** Content scripts bundle as IIFE; `import.meta` becomes `{}` and warns at build. Detect Vitest via `process.env.VITEST` only. (from: inline-input-parity_20260709, archived 2026-07-09)
 - **Chrome `commands` max 4 `suggested_key` entries — extra commands without defaults:** A 5th command (e.g. `translate-input-box`) may exist with description only; users bind it at `chrome://extensions/shortcuts`. Exceeding 4 suggested keys fails extension load. (from: inline-input-parity_20260709, archived 2026-07-09)
 - **jsdom KeyboardEvents are never `isTrusted`:** Production must ignore untrusted events for gesture counting; under Vitest allow untrusted so synthetic keydown tests work. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **Dual-mode join separators differ by editable type:** When dual mode is on, plain `input` joins original + translation with ` / `; `textarea` and contentEditable use a newline. Default remains translation-only. (from: inline-input-parity_20260709, archived 2026-07-09)
+- **Blocklist policy = replace when non-empty:** If the user supplies any `blocklistPatterns`, that list fully replaces the seeded defaults; empty/absent → seed defaults (Notion/Figma/Lark-class hosts). (from: inline-input-parity_20260709, archived 2026-07-09)

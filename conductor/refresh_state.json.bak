@@ -1,28 +1,29 @@
 {
-  "lastRefresh": "2026-07-08T13:55:00+07:00",
+  "lastRefresh": "2026-07-09T09:29:45+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Major intervening event since 12:15 refresh: test-suite trim commit b720491 (1487→999 TCs, 135→65 files). 1 commit since last refresh.",
-    "product.md: refresh marker + Current State updated (999 tests / 65 files / tsc clean / 5 lint errors). Added test-suite trim note.",
-    "tech-stack.md: added test:fast + zip:source scripts from package.json.",
-    "patterns.md: refresh marker bumped; no new pattern additions (web-bilingual-quality patterns already elevated in commit 788ba05).",
-    "workflow.md / tracks.md: no drift.",
-    "beads DRIFT: ALT-hcp.7.2 (manual Settings UI verification) still open — parent ALT-hcp.7 closed; likely stale. Open: ALT-fm8 (P3 flaky test), ALT-j1k (P3 deferred Max interception).",
+    "Scope: full refresh. Major intervening work since 2026-07-08 refresh: web-pipeline-hardening_20260708 (newtrack → implement → archive) + post-track polish (compact inline, failure-cache retry bypass, Danger Zone layout) + beads backlog close.",
+    "product.md: refresh marker + Page Translation bullets (body-swap, matchesCached, inArticleContext batch split, Page Walk Tuning, compact inline, failure-cache retry). Added archived track entry for web-pipeline-hardening_20260708 + incremental polish note. Current State → 1047 tests / 68 files / 64 archived / build ~3.95 MB.",
+    "patterns.md: refresh marker only — 9 web-pipeline patterns already elevated at archive (ec3ae9f); no new consolidation candidates.",
+    "tech-stack.md: marker only — package.json deps/scripts unchanged.",
+    "workflow.md / tracks.md: no drift (tracks.md already lists web-pipeline archived; Active Tracks empty).",
+    "learnings consolidation: no new patterns to add (all web-pipeline learnings already in patterns.md).",
+    "beads DRIFT: none — 0 open / 0 in_progress (prior ALT-hcp.7.2 / ALT-fm8 / ALT-j1k closed via aec2c63).",
     "backups: product.md.bak, patterns.md.bak, tech-stack.md.bak, refresh_state.json.bak.",
-    "verification: wxt build ✅ ~3.94 MB; vitest run 999/999 pass; tsc clean; eslint 5 errors (3 test-trim leftovers + 2 pre-existing)."
+    "verification: wxt build ✅ ~3.95 MB; vitest run 1047/1047 pass (68 files); tsc clean; eslint 5 errors (unchanged: 3 test-trim leftovers + 2 pre-existing)."
   ],
   "codebaseHealth": {
-    "tests": 999,
-    "testFiles": 65,
-    "buildSize": "~3.94 MB",
+    "tests": 1047,
+    "testFiles": 68,
+    "buildSize": "~3.95 MB",
     "lintErrors": 5,
     "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports (test-trim leftover); subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion.",
     "tscErrors": 0,
-    "tscErrorsDetail": "clean (subtitlePrompt.test.ts removed in test trim)",
-    "archivedTracks": 62,
+    "tscErrorsDetail": "clean",
+    "archivedTracks": 64,
     "activeTracks": 0,
     "failingTests": 0,
-    "flakyTests": "ALT-fm8: 'accumulates rolling glossary across chunks' under full-suite load (not reproduced this run — 999/999 pass)"
+    "flakyTests": "none observed this run (1047/1047 pass)"
   },
-  "beadsDrift": "ALT-hcp.7.2 (Settings UI manual verification) open but parent epic closed — likely stale. Remaining open: ALT-fm8 (P3 flaky), ALT-j1k (P3 deferred)."
+  "beadsDrift": "none — no open or in_progress beads issues"
 }
