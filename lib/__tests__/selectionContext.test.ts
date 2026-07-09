@@ -115,7 +115,7 @@ describe('selectionContext', () => {
       const textNode = p.firstChild as Text;
       const range = document.createRange();
       // select "selected"
-      const start = p.textContent!.indexOf('selected');
+      const start = (p.textContent ?? '').indexOf('selected');
       range.setStart(textNode, start);
       range.setEnd(textNode, start + 'selected'.length);
 
