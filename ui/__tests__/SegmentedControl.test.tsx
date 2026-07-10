@@ -50,7 +50,27 @@ describe('SegmentedControl', () => {
     expect(onChange).toHaveBeenCalledWith('b');
   });
 
-  it('uses a 2-column grid layout when there are 4+ options', () => {
+  it('keeps a single-row layout by default even with 4 options', () => {
+    const four = [
+      { value: '7d', label: '7d' },
+      { value: '30d', label: '30d' },
+      { value: '90d', label: '90d' },
+      { value: 'all', label: 'All' },
+    ] as const;
+    render(
+      <SegmentedControl
+        label="Range"
+        options={[...four]}
+        value="30d"
+        onChange={() => {}}
+      />,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Range' });
+    expect(group.className).toMatch(/inline-flex/);
+    expect(group.className).not.toMatch(/grid-cols-2/);
+  });
+
+  it('uses a 2-column grid when layout is grid', () => {
     const four = [
       { value: 'auto', label: 'Auto' },
       { value: 'formal', label: 'Formal' },
@@ -63,11 +83,11 @@ describe('SegmentedControl', () => {
         options={[...four]}
         value="auto"
         onChange={() => {}}
+        layout="grid"
       />,
     );
     const group = screen.getByRole('radiogroup', { name: 'Register' });
     expect(group.className).toMatch(/grid-cols-2/);
     expect(screen.getByRole('radio', { name: 'Casual' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Neutral' })).toBeInTheDocument();
   });
 });

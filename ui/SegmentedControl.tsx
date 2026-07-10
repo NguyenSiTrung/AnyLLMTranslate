@@ -22,6 +22,12 @@ interface SegmentedControlProps<T extends string> {
   disabled?: boolean;
   /** Active fill color. Default blue for most tabs; cyan for Subtitle Studio. */
   accent?: 'blue' | 'cyan';
+  /**
+   * Layout of options.
+   * - `row` (default): single horizontal strip — use for short labels (7d / 30d / All).
+   * - `grid`: 2-column pill grid — use for 4 long labels in narrow cards (e.g. Formal / Idiomatic).
+   */
+  layout?: 'row' | 'grid';
 }
 
 export function SegmentedControl<T extends string>({
@@ -33,18 +39,18 @@ export function SegmentedControl<T extends string>({
   id,
   disabled = false,
   accent = 'blue',
+  layout = 'row',
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
-    sm: 'py-1 px-2 text-xs',
-    md: 'py-1.5 px-3 text-sm',
+    sm: 'py-1 px-3 text-xs',
+    md: 'py-1.5 px-4 text-sm',
   };
   const activeStyles =
     accent === 'cyan'
       ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-900/40'
       : 'bg-blue-600 text-white shadow-sm shadow-blue-900/40';
 
-  // 4+ options overflow a single row in narrow cards — use a 2-col pill grid.
-  const multiRow = options.length >= 4;
+  const multiRow = layout === 'grid';
 
   return (
     <div

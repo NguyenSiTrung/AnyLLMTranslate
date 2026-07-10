@@ -71,6 +71,7 @@ export function TranslationStyleCard({ settings, disabled, onUpdate }: SubtitleC
                     disabled={disabled}
                     size="sm"
                     accent="cyan"
+                    layout="grid"
                   />
                 </div>
               );
