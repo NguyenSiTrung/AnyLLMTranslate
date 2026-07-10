@@ -202,7 +202,8 @@ export default function App() {
       case 'dictionary': return <DictionarySection />;
       case 'subtitles': return <SubtitlesSection />;
       case 'statistics': return <StatisticsSection />;
-      case 'shortcuts': return <ShortcutsSection />;
+      case 'shortcuts':
+        return <ShortcutsSection onNavigateToInline={() => setActiveTab('inline')} />;
       case 'inline': return <InlineTranslateSection />;
       case 'advanced': return <AdvancedSection />;
       default: return <GeneralSection onNavigateToThemes={() => setActiveTab('themes')} />;

@@ -1,86 +1,243 @@
 /**
- * Keyboard Shortcuts Section — display current bindings, link to Chrome management.
- * Header uses inline SectionHeader pattern (consistent with GeneralSection).
+ * Shortcut Studio — live global commands, page keys, gestures, copy & manage.
  */
 
-import { Keyboard as KeyboardIcon, ExternalLink } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Keyboard as KeyboardIcon,
+  Globe2,
+  AppWindow,
+  Hand,
+  Lightbulb,
+  ExternalLink,
+} from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
-import { stagger } from '@/lib/styleUtils';
 import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { stagger } from '@/lib/styleUtils';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { useToast } from '@/ui/ToastProvider';
+import {
+  type ScopeFilter,
+  type ShortcutDisplayRow,
+  PAGE_SHORTCUT_ROWS,
+  buildGestureRow,
+  buildGlobalRows,
+  countGlobalBound,
+  filterShortcutRows,
+  formatCheatsheet,
+  groupRowsByScope,
+} from '@/lib/shortcutDisplay';
+import { ShortcutStudioBar } from '../components/ShortcutStudioBar';
+import { ShortcutGroup } from '../components/ShortcutGroup';
 
-const DEFAULT_SHORTCUTS = [
-  { action: 'Toggle Translation', shortcut: 'Alt+T', description: 'Start or stop translating the current page' },
-  { action: 'Open Options', shortcut: 'Alt+O', description: 'Open the AnyLLMTranslate settings page' },
-  { action: 'Inline Translate', shortcut: 'Space × 3', description: 'Translate text in the focused input field (configurable)' },
-];
+const BROWSER_SHORTCUTS_URL = 'chrome://extensions/shortcuts';
 
-export function ShortcutsSection() {
+export interface ShortcutsSectionProps {
+  onNavigateToInline?: () => void;
+}
+
+async function loadChromeCommands(): Promise<
+  Array<{ name: string; description?: string; shortcut?: string }>
+> {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.commands?.getAll) {
+      const list = await chrome.commands.getAll();
+      return list.map((c) => ({
+        name: c.name ?? '',
+        description: c.description,
+        shortcut: c.shortcut,
+      }));
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return [];
+}
+
+export function ShortcutsSection({ onNavigateToInline }: ShortcutsSectionProps = {}) {
+  const tapCount = useSettingsStore((s) => s.inlineTranslate.tapCount);
+  const timeWindowMs = useSettingsStore((s) => s.inlineTranslate.timeWindowMs);
+  const { success: showSuccess, error: showError } = useToast();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [scope, setScope] = useState<ScopeFilter>('all');
+  const [globalRows, setGlobalRows] = useState<ShortcutDisplayRow[]>(() => buildGlobalRows([]));
+
+  const refreshCommands = useCallback(async () => {
+    const commands = await loadChromeCommands();
+    setGlobalRows(buildGlobalRows(commands));
+  }, []);
+
+  useEffect(() => {
+    void refreshCommands();
+  }, [refreshCommands]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void refreshCommands();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [refreshCommands]);
+
+  const gestureRow = useMemo(
+    () => buildGestureRow(tapCount, timeWindowMs),
+    [tapCount, timeWindowMs],
+  );
+
+  const allRows = useMemo(
+    () => [...globalRows, ...PAGE_SHORTCUT_ROWS, gestureRow],
+    [globalRows, gestureRow],
+  );
+
+  const visibleRows = useMemo(
+    () => filterShortcutRows(allRows, searchQuery, scope),
+    [allRows, searchQuery, scope],
+  );
+
+  const grouped = useMemo(() => groupRowsByScope(visibleRows), [visibleRows]);
+  const { bound, total } = useMemo(() => countGlobalBound(globalRows), [globalRows]);
+
+  const handleCopy = async () => {
+    const text = formatCheatsheet(visibleRows);
+    try {
+      await navigator.clipboard.writeText(text);
+      showSuccess('Cheatsheet copied');
+    } catch {
+      showError('Could not copy cheatsheet');
+    }
+  };
+
+  const handleManage = () => {
+    try {
+      chrome.tabs.create({ url: BROWSER_SHORTCUTS_URL });
+    } catch {
+      showError(`Open ${BROWSER_SHORTCUTS_URL} manually in the address bar`);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setScope('all');
+  };
+
+  const noMatches = visibleRows.length === 0;
+
   return (
     <div className="animate-fade-in-up">
       <SectionHeader
-        title="Keyboard Shortcuts"
-        description="View and customize keyboard shortcuts for AnyLLMTranslate."
+        title="Shortcut Studio"
+        description="See every trigger — live browser bindings, page keys, and gestures."
         icon={<KeyboardIcon className="w-4 h-4" />}
         accentColor="orange"
       />
 
       <div className="space-y-4">
-        {/* Current Shortcuts */}
         <div className="animate-stagger" style={stagger(0)}>
-          <Card title="Active Shortcuts" icon={<KeyboardIcon className="w-3.5 h-3.5" />} variant="bordered" className="p-0 overflow-hidden">
-            <div className="divide-y divide-zinc-800" role="list" aria-label="Keyboard shortcuts">
-              {DEFAULT_SHORTCUTS.map((shortcut, idx) => (
-                <div
-                  key={shortcut.action}
-                  role="listitem"
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-zinc-800/30 transition-colors animate-stagger"
-                  style={stagger(idx)}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{shortcut.action}</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">{shortcut.description}</p>
-                  </div>
-                  <kbd
-                    className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 font-mono shrink-0 transition-transform duration-150 hover:-translate-y-[2px] hover:shadow-md active:translate-y-[1px] motion-reduce:hover:translate-y-0"
-                    aria-label={`Shortcut: ${shortcut.shortcut}`}
-                  >
-                    {shortcut.shortcut}
-                  </kbd>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <ShortcutStudioBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            scope={scope}
+            onScopeChange={setScope}
+            bound={bound}
+            total={total}
+            onCopy={() => void handleCopy()}
+            onManage={handleManage}
+          />
         </div>
 
-        {/* Chrome Shortcuts Link */}
-        <div className="animate-stagger" style={stagger(1)}>
-          <Card title="Customize Shortcuts" icon={<ExternalLink className="w-3.5 h-3.5" />} variant="bordered">
-            <div className="flex items-start gap-3">
-              <KeyboardIcon className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-zinc-200 mb-1">Customize Shortcuts</p>
-                <p className="text-xs text-zinc-400 mb-3">
-                  Chrome manages extension keyboard shortcuts. Click the link below to customize your shortcuts in Chrome settings.
-                </p>
-                <a
-                  href="chrome://extensions/shortcuts"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    try {
-                      chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-                    } catch {
-                      // Fallback: user will need to type the URL manually
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Open Chrome Shortcuts Settings
-                </a>
-              </div>
+        {noMatches ? (
+          <div
+            className="animate-stagger rounded-xl border border-zinc-800 bg-zinc-900/40 px-5 py-10 text-center"
+            style={stagger(1)}
+          >
+            <p className="text-sm text-zinc-400">No shortcuts match your filters.</p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="animate-stagger" style={stagger(1)}>
+              <ShortcutGroup
+                title="Global commands"
+                description="Managed by the browser. Values refresh when you return to this tab."
+                icon={<Globe2 className="w-3.5 h-3.5" />}
+                rows={grouped.global}
+              />
             </div>
+            <div className="animate-stagger" style={stagger(2)}>
+              <ShortcutGroup
+                title="On this page"
+                description="Content-script keys while a web page is focused. Not customizable here."
+                icon={<AppWindow className="w-3.5 h-3.5" />}
+                rows={grouped.page}
+              />
+            </div>
+            <div className="animate-stagger" style={stagger(3)}>
+              <ShortcutGroup
+                title="Gestures"
+                description="Input-field gesture from Inline settings."
+                icon={<Hand className="w-3.5 h-3.5" />}
+                rows={grouped.gesture}
+                rowAction={
+                  onNavigateToInline
+                    ? (row) =>
+                        row.id === 'gesture-inline' ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={onNavigateToInline}
+                          >
+                            Configure on Inline
+                          </Button>
+                        ) : null
+                    : undefined
+                }
+              />
+            </div>
+          </>
+        )}
+
+        <div className="animate-stagger" style={stagger(4)}>
+          <Card
+            title="Tips"
+            description="How shortcuts work in Chromium browsers."
+            icon={<Lightbulb className="w-3.5 h-3.5" />}
+            variant="bordered"
+          >
+            <ul className="space-y-2 text-xs text-zinc-400 list-disc pl-4">
+              <li>
+                Global shortcuts are managed by the browser; this studio shows live assignments.
+              </li>
+              <li>
+                Chrome allows only four default suggested keys — the fifth command may need manual
+                binding.
+              </li>
+              <li>
+                Page shortcuts work when a web page is focused (not only inside this options UI).
+              </li>
+              <li>
+                Open{' '}
+                <button
+                  type="button"
+                  className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
+                  onClick={handleManage}
+                >
+                  browser shortcuts
+                  <ExternalLink className="w-3 h-3" />
+                </button>{' '}
+                to rebind global commands.
+              </li>
+            </ul>
           </Card>
         </div>
       </div>
