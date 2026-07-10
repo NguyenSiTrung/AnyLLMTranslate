@@ -197,7 +197,7 @@ export default function App() {
           onNavigateToAdvanced={() => setActiveTab('advanced')}
         />
       );
-      case 'themes': return <ThemesSection />;
+      case 'themes': return <ThemesSection onNavigateToGeneral={() => setActiveTab('general')} />;
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;
       case 'subtitles': return <SubtitlesSection />;
