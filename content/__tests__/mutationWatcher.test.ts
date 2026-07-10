@@ -147,3 +147,88 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     watcher.stop();
   });
 });
+
+describe('MutationWatcher — skip already-translated regions', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not re-queue children moved into a marked original wrapper', async () => {
+    const onMutation = vi.fn();
+    const watcher = new MutationWatcher(onMutation, 30);
+    watcher.start(document.body);
+
+    const li = document.createElement('li');
+    const span = document.createElement('span');
+    span.textContent = 'List item content that is long enough';
+    li.appendChild(span);
+    document.body.appendChild(li);
+
+    // Allow the initial add to flush (if any)
+    await new Promise((r) => setTimeout(r, 100));
+    onMutation.mockClear();
+
+    // Simulate ensureOriginalWrapper: mark wrapper as original/translated and
+    // move existing children into it (childList adds under the wrapper).
+    const wrapper = document.createElement('span');
+    wrapper.setAttribute('data-anyllm-role', 'original');
+    wrapper.setAttribute('data-anyllm-translated', '');
+    while (li.firstChild) {
+      wrapper.appendChild(li.firstChild);
+    }
+    li.appendChild(wrapper);
+
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(onMutation).not.toHaveBeenCalled();
+    watcher.stop();
+  });
+
+  it('does not re-queue characterData changes inside a translated paragraph', async () => {
+    const onMutation = vi.fn();
+    const watcher = new MutationWatcher(onMutation, 30);
+    watcher.start(document.body);
+
+    const p = document.createElement('p');
+    p.setAttribute('data-anyllm-role', 'original');
+    p.setAttribute('data-anyllm-translated', '');
+    const text = document.createTextNode('Hello world text content');
+    p.appendChild(text);
+    document.body.appendChild(p);
+
+    await new Promise((r) => setTimeout(r, 100));
+    onMutation.mockClear();
+
+    text.textContent = 'Hello world text content updated';
+
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(onMutation).not.toHaveBeenCalled();
+    watcher.stop();
+  });
+
+  it('still queues genuine new content outside translated regions', async () => {
+    const onMutation = vi.fn();
+    const watcher = new MutationWatcher(onMutation, 30);
+    watcher.start(document.body);
+
+    const existing = document.createElement('p');
+    existing.setAttribute('data-anyllm-translated', '');
+    existing.textContent = 'Already translated paragraph';
+    document.body.appendChild(existing);
+
+    await new Promise((r) => setTimeout(r, 100));
+    onMutation.mockClear();
+
+    const fresh = document.createElement('p');
+    fresh.textContent = 'Brand new dynamic paragraph content.';
+    document.body.appendChild(fresh);
+
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(onMutation).toHaveBeenCalled();
+    const added = onMutation.mock.calls[0][0] as Element[];
+    expect(added.some((el) => el === fresh || el.contains(fresh) || fresh.contains(el))).toBe(true);
+    watcher.stop();
+  });
+});

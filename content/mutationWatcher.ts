@@ -36,12 +36,35 @@ export class MutationWatcher {
     this.onBodySwapped = onBodySwapped ?? null;
   }
 
+  /**
+   * True when `el` is (or lives under) an extension-owned translation region.
+   * Without the ancestor check, moving children into an original wrapper (LI/TD)
+   * or characterData inside a marked paragraph re-queues the same content with
+   * a new piece id — producing duplicate bilingual blocks / repeated errors.
+   */
+  private isExtensionOwned(el: Element): boolean {
+    if (el.hasAttribute(DATA_ATTRS.TRANSLATED)) return true;
+    if (el.hasAttribute(DATA_ATTRS.PIECE_ID)) return true;
+    if (el.getAttribute(DATA_ATTRS.ROLE) === 'translation') return true;
+    if (el.getAttribute(DATA_ATTRS.ROLE) === 'original') return true;
+    if (el.classList.contains('anyllm-translate-translation')) return true;
+    if (el.classList.contains('anyllm-inline-bilingual')) return true;
+    // Descendants of already-translated / translation / original wrappers
+    if (
+      el.closest(
+        `[${DATA_ATTRS.TRANSLATED}], [${DATA_ATTRS.PIECE_ID}], ` +
+          `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.ROLE}="original"], ` +
+          `.anyllm-translate-translation, .anyllm-inline-bilingual`,
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   private processElement(el: Element): void {
-    // Skip our own injected nodes
-    if (el.hasAttribute(DATA_ATTRS.TRANSLATED)) return;
-    if (el.getAttribute(DATA_ATTRS.ROLE) === 'translation') return;
-    if (el.classList.contains('anyllm-translate-translation')) return;
-    if (el.classList.contains('anyllm-inline-bilingual')) return;
+    // Skip our own injected nodes and anything inside them
+    if (this.isExtensionOwned(el)) return;
 
     // Skip non-translatable elements
     if (SKIP_ELEMENTS.has(el.tagName)) return;

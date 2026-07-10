@@ -553,13 +553,18 @@ export function setErrorState(
 
   parentElement.setAttribute('data-anyllm-error', '');
 
+  // Compact visible label — full error lives in the title so a batch/pool
+  // failure does not flood bilingual view with the same long sentence N times.
+  const compactLabel = '⚠ Translation failed';
+  const fullTitle = `${errorMessage}. Click to retry.`;
+
   const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
   if (existing) {
     // Update placeholder in-place: swap loading class for error state
     existing.classList.remove('anyllm-translate-loading');
     existing.setAttribute('data-anyllm-error', '');
-    existing.textContent = `⚠ Translation failed: ${errorMessage}`;
-    existing.setAttribute('title', 'Click to retry');
+    existing.textContent = compactLabel;
+    existing.setAttribute('title', fullTitle);
     existing.setAttribute('role', 'alert');
     existing.removeAttribute('aria-label');
 
@@ -579,8 +584,8 @@ export function setErrorState(
   errorEl.className = 'anyllm-translate-translation';
   errorEl.setAttribute('data-anyllm-error', '');
   errorEl.setAttribute('role', 'alert');
-  errorEl.textContent = `⚠ Translation failed: ${errorMessage}`;
-  errorEl.title = 'Click to retry';
+  errorEl.textContent = compactLabel;
+  errorEl.title = fullTitle;
 
   if (onRetry) {
     errorEl.addEventListener('click', () => {

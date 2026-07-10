@@ -347,6 +347,8 @@ export interface PdfStreamPiece {
 export interface PdfStreamDone {
   type: 'done';
   results: TranslationResultItem[];
+  /** True when missing ids were back-filled with source text (partial LLM response). */
+  partial?: boolean;
 }
 
 /** Terminal error message (caller should fall back to non-streaming). */

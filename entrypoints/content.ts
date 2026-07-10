@@ -29,7 +29,12 @@ import {
 } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
 import { flushLruUpdates } from '@/services/cacheManager';
-import { showAutoTranslateNotification, hideAutoTranslateNotification } from '@/content/autoTranslateNotification';
+import {
+  showAutoTranslateNotification,
+  hideAutoTranslateNotification,
+  showTranslationErrorNotification,
+  hideTranslationErrorNotification,
+} from '@/content/autoTranslateNotification';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS } from '@/lib/constants';
@@ -66,6 +71,11 @@ let currentTargetLanguage = 'vi';
 let coordinatorCleanup: (() => void) | null = null;
 let _beforeUnloadCleanup: (() => void) | null = null;
 let activeRequests = 0;
+/**
+ * Piece ids currently being translated. Prevents concurrent batches (viewport
+ * flush + mutation re-extract race) from double-applying the same piece.
+ */
+const inFlightPieceIds = new Set<string>();
 /** Monotonically increasing translation session id.
  *  Bumped on startTranslation and stopTranslation so that in-flight
  *  responses from previous sessions are recognized as stale and
@@ -87,6 +97,15 @@ function selectorAppliesToElementOrAncestor(element: Element, selector: string):
   }
 }
 
+function isInsideTranslatedRegion(element: Element): boolean {
+  return (
+    element.closest(
+      `[${DATA_ATTRS.TRANSLATED}], [${DATA_ATTRS.PIECE_ID}], ` +
+        `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.ROLE}="original"]`,
+    ) !== null
+  );
+}
+
 function extractDynamicPieces(
   element: Element,
   includeSelectors: string[] | undefined,
@@ -94,7 +113,12 @@ function extractDynamicPieces(
   enableRichTranslate?: boolean,
   enableAsideCaps?: boolean,
 ): TranslationPiece[] {
-  if (excludeSelectors.some((_selector) => selectorAppliesToElementOrAncestor(element, excludeSelectors as unknown as string))) {
+  // Never re-walk regions that already have translations / original markers.
+  if (isInsideTranslatedRegion(element)) {
+    return [];
+  }
+
+  if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, selector))) {
     return [];
   }
 
@@ -142,7 +166,14 @@ function streamTranslate(
       targetLanguage,
     });
 
-    port.onMessage.addListener((msg: { type: string; id?: string; text?: string; results?: TranslationResultItem[]; error?: string }) => {
+    port.onMessage.addListener((msg: {
+      type: string;
+      id?: string;
+      text?: string;
+      results?: TranslationResultItem[];
+      error?: string;
+      partial?: boolean;
+    }) => {
       if (msg.type === 'piece' && msg.id && msg.text) {
         // Incremental in-place update: find the piece + swap its spinner.
         const piece = pieceById.get(msg.id);
@@ -158,7 +189,11 @@ function streamTranslate(
       } else if (msg.type === 'done') {
         settled = true;
         port.disconnect();
-        resolve({ success: true, results: msg.results ?? results });
+        resolve({
+          success: true,
+          results: msg.results ?? results,
+          ...(msg.partial ? { partial: true } : {}),
+        });
       } else if (msg.type === 'error') {
         settled = true;
         port.disconnect();
@@ -177,6 +212,21 @@ function streamTranslate(
   });
 }
 
+/** Apply a compact per-piece error without overwriting a successful translation. */
+function applyPieceError(
+  piece: TranslationPiece,
+  errorMessage: string,
+  compactInlineEnabled: boolean,
+): void {
+  if (piece.isTranslated) return;
+  const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
+  if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
+    setInlineErrorState(piece.parentElement, piece.id, errorMessage, retryPiece);
+  } else {
+    setErrorState(piece.parentElement, piece.id, errorMessage, retryPiece);
+  }
+}
+
 /** Send translation request to background and apply results.
  *  When `options.skipFailureCache` is set (user-initiated retry), the background
  *  bypasses the FR-4 negative cache so the retry actually re-calls the LLM. */
@@ -186,6 +236,14 @@ async function translatePieces(
 ): Promise<void> {
   if (pieces.length === 0) return;
   const { skipFailureCache = false } = options;
+
+  // Drop pieces already done or already mid-request (viewport + mutation races).
+  const workPieces = pieces.filter((p) => !p.isTranslated && !inFlightPieceIds.has(p.id));
+  if (workPieces.length === 0) return;
+
+  for (const piece of workPieces) {
+    inFlightPieceIds.add(piece.id);
+  }
 
   // Capture session at request start; if the page is restored or
   // re-translated before the response arrives, the session will have
@@ -199,7 +257,7 @@ async function translatePieces(
 
   // Show spinner placeholder for each piece immediately (before async call)
   // Short pieces get compact inline spinner, long pieces get block spinner
-  for (const piece of pieces) {
+  for (const piece of workPieces) {
     if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
       showInlineLoadingPlaceholder(piece.parentElement, piece.id);
     } else {
@@ -259,9 +317,9 @@ async function translatePieces(
     // they would round-trip through the LLM unchanged (wasted tokens + latency).
     // Confidence threshold guards against false positives on ambiguous text.
     const SAME_LANG_CONFIDENCE = 0.55;
-    let translatablePieces = pieces;
+    let translatablePieces = workPieces;
     if (settings.enableSourceLanguageDetection && settings.sourceLanguage === 'auto') {
-      translatablePieces = pieces.filter((piece) => {
+      translatablePieces = workPieces.filter((piece) => {
         const detected = detectLanguage(piece.text);
         if (detected.lang && isSameLanguage(detected.lang, settings.targetLanguage) && detected.confidence >= SAME_LANG_CONFIDENCE) {
           // Already in the target language — mark translated (source = target),
@@ -315,41 +373,42 @@ async function translatePieces(
 
     if (response.success && response.results) {
       for (const result of response.results) {
-        const piece = pieces.find((p) => p.id === result.id);
-        if (piece) {
-          piece.isTranslated = true;
-          piece.translatedText = result.translatedText;
-          // Short pieces → inline parenthetical, long pieces → block themed display
-          if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-            applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
-          } else {
-            applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
-          }
+        const piece = workPieces.find((p) => p.id === result.id);
+        if (!piece) continue;
+
+        // Partial LLM responses back-fill missing ids with the source text.
+        // Injecting that as a bilingual line looks like duplicate content.
+        // Leave a retryable error instead of echoing the original below itself.
+        if (response.partial === true && result.translatedText === piece.text) {
+          applyPieceError(piece, 'Incomplete translation — click to retry', compactInlineEnabled);
+          continue;
+        }
+
+        piece.isTranslated = true;
+        piece.translatedText = result.translatedText;
+        // Short pieces → inline parenthetical, long pieces → block themed display
+        if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
+          applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
+        } else {
+          applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
         }
       }
       // FR-4: per-piece failures (negative-cache hits) — show error state with
       // retry for each failed piece without failing the whole batch.
       if (response.failed) {
         for (const failure of response.failed) {
-          const piece = pieces.find((p) => p.id === failure.id);
+          const piece = workPieces.find((p) => p.id === failure.id);
           if (!piece) continue;
-          const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
-          if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-            setInlineErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
-          } else {
-            setErrorState(piece.parentElement, piece.id, failure.error, retryPiece);
-          }
+          applyPieceError(piece, failure.error, compactInlineEnabled);
         }
       }
     } else if (!response.success && response.error) {
-      // Batch-level failure: mark all pieces as error with retry
-      for (const piece of pieces) {
-        const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
-        if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-          setInlineErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
-        } else {
-          setErrorState(piece.parentElement, piece.id, response.error ?? 'Unknown error', retryPiece);
-        }
+      // Batch-level failure (e.g. pool exhausted): one page banner + compact
+      // per-piece markers. Do not overwrite pieces that already succeeded
+      // (streaming partial apply before a non-streaming fallback failed).
+      showTranslationErrorNotification(response.error);
+      for (const piece of workPieces) {
+        applyPieceError(piece, response.error, compactInlineEnabled);
       }
     }
   } catch (err) {
@@ -358,15 +417,14 @@ async function translatePieces(
       return;
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    for (const piece of pieces) {
-      const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
-      if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-        setInlineErrorState(piece.parentElement, piece.id, message, retryPiece);
-      } else {
-        setErrorState(piece.parentElement, piece.id, message, retryPiece);
-      }
+    showTranslationErrorNotification(message);
+    for (const piece of workPieces) {
+      applyPieceError(piece, message, compactInlineEnabled);
     }
   } finally {
+    for (const piece of workPieces) {
+      inFlightPieceIds.delete(piece.id);
+    }
     activeRequests = Math.max(0, activeRequests - 1);
     sendStatusUpdate();
   }
@@ -513,6 +571,8 @@ export async function startTranslation(): Promise<void> {
   // Reset accounting so progress reflects this session's pieces only.
   allPieces = [];
   activeRequests = 0;
+  inFlightPieceIds.clear();
+  hideTranslationErrorNotification();
 
   // Load settings to apply visual settings
   const settings = await loadSettings();
@@ -625,8 +685,10 @@ export function stopTranslation(): void {
   removeAllSectionTranslations();
   clearHoverCache();
   hideAutoTranslateNotification();
+  hideTranslationErrorNotification();
   allPieces = [];
   activeRequests = 0;
+  inFlightPieceIds.clear();
   // FR-7: write a final snapshot before clearing so the next session can resume,
   // then reset the writer-registration flag.
   writeResumeSnapshot();

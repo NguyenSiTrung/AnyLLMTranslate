@@ -81,3 +81,68 @@ export function showAutoTranslateNotification(onDisable: () => void): void {
 export function hideAutoTranslateNotification(): void {
   removeNotification();
 }
+
+const ERROR_NOTIFICATION_ROLE = 'translation-error-notification';
+const ERROR_AUTO_DISMISS_MS = 8000;
+
+let errorNotificationEl: HTMLElement | null = null;
+let errorDismissTimeout: ReturnType<typeof setTimeout> | null = null;
+let errorFadeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function removeErrorNotification(): void {
+  if (errorDismissTimeout) {
+    clearTimeout(errorDismissTimeout);
+    errorDismissTimeout = null;
+  }
+  if (errorFadeTimeout) {
+    clearTimeout(errorFadeTimeout);
+    errorFadeTimeout = null;
+  }
+  if (errorNotificationEl) {
+    errorNotificationEl.remove();
+    errorNotificationEl = null;
+  }
+}
+
+/**
+ * One-shot page-level banner for systemic translation failures (pool exhausted,
+ * all keys rate-limited, etc.). Per-piece UI stays compact; this surfaces the
+ * full message once instead of under every paragraph.
+ */
+export function showTranslationErrorNotification(message: string): void {
+  removeErrorNotification();
+
+  const bar = document.createElement('div');
+  bar.setAttribute(NOTIFICATION_ATTR, ERROR_NOTIFICATION_ROLE);
+  bar.className = 'anyllm-translation-error-notification';
+
+  const label = document.createElement('span');
+  label.textContent = `⚠ ${message}`;
+  bar.appendChild(label);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'anyllm-notification-close';
+  closeBtn.textContent = '×';
+  closeBtn.setAttribute('aria-label', 'Dismiss');
+  closeBtn.addEventListener('click', () => {
+    removeErrorNotification();
+  });
+  bar.appendChild(closeBtn);
+
+  document.body.appendChild(bar);
+  errorNotificationEl = bar;
+
+  errorDismissTimeout = setTimeout(() => {
+    if (errorNotificationEl) {
+      errorNotificationEl.classList.add(HIDING_CLASS);
+      errorFadeTimeout = setTimeout(() => {
+        errorFadeTimeout = null;
+        removeErrorNotification();
+      }, FADE_DURATION_MS);
+    }
+  }, ERROR_AUTO_DISMISS_MS);
+}
+
+export function hideTranslationErrorNotification(): void {
+  removeErrorNotification();
+}

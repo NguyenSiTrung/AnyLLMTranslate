@@ -216,7 +216,11 @@ export function initPdfStreamPortListener(): void {
             providerId: bestEffortProviderId(settings),
           }).catch(() => {});
         }
-        port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
+        port.postMessage({
+          type: 'done',
+          results,
+          ...(result.partial ? { partial: true } : {}),
+        } satisfies PdfStreamDone);
       } catch (err) {
         // Error → viewer falls back to handleTranslate (which records usage).
         const error = err instanceof Error ? err.message : 'Streaming translation failed';
@@ -302,7 +306,11 @@ export function initWebStreamPortListener(): void {
             providerId: bestEffortProviderId(settings),
           }).catch(() => {});
         }
-        port.postMessage({ type: 'done', results } satisfies PdfStreamDone);
+        port.postMessage({
+          type: 'done',
+          results,
+          ...(result.partial ? { partial: true } : {}),
+        } satisfies PdfStreamDone);
       } catch (err) {
         // Error → content script falls back to handleTranslate (which records usage).
         const error = err instanceof Error ? err.message : 'Streaming translation failed';

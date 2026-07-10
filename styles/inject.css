@@ -900,6 +900,42 @@ html:not([data-anyllm-state]) .anyllm-inline-bilingual {
   opacity: 1;
 }
 
+/* Systemic translation failure banner (pool exhausted, etc.) — shown once */
+[data-anyllm-role="translation-error-notification"] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%);
+  color: #fecaca;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+[data-anyllm-role="translation-error-notification"].anyllm-notification-hiding {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+[data-anyllm-role="translation-error-notification"] button {
+  background: none;
+  border: none;
+  color: #fecaca;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.8;
+}
+[data-anyllm-role="translation-error-notification"] button:hover {
+  opacity: 1;
+}
+
 /* Section picker highlight */
 .anyllm-section-highlight {
   outline: 2px dashed var(--anyllm-accent, #3b82f6) !important;

@@ -281,8 +281,9 @@ export function ThemeStudioCanvas({
               className="anyllm-translate-translation text-sm"
               data-anyllm-error=""
               role="alert"
+              title="example error. Click to retry."
             >
-              ⚠ Translation failed: example error
+              ⚠ Translation failed
             </span>
           </div>
         </div>

@@ -258,7 +258,7 @@ describe('translationDisplay', () => {
 
 
   describe('setErrorState', () => {
-    it('adds data-anyllm-error attribute on parent and creates error element', () => {
+    it('adds data-anyllm-error attribute on parent and creates compact error element', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -266,8 +266,11 @@ describe('translationDisplay', () => {
 
       expect(parent.hasAttribute('data-anyllm-error')).toBe(true);
       const errorEl = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(errorEl?.textContent).toContain('Translation failed');
-      expect(errorEl?.textContent).toContain('Network error');
+      // Visible label stays compact so batch/pool failures do not spam long copy.
+      expect(errorEl?.textContent).toBe('⚠ Translation failed');
+      expect(errorEl?.textContent).not.toContain('Network error');
+      expect((errorEl as HTMLElement).title).toContain('Network error');
+      expect((errorEl as HTMLElement).title).toContain('Click to retry');
     });
 
     it('updates placeholder in-place for error state', () => {
@@ -281,7 +284,19 @@ describe('translationDisplay', () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].classList.contains('anyllm-translate-loading')).toBe(false);
       expect(errors[0].getAttribute('data-anyllm-error')).toBe('');
-      expect(errors[0].textContent).toContain('API error');
+      expect(errors[0].textContent).toBe('⚠ Translation failed');
+      expect((errors[0] as HTMLElement).title).toContain('API error');
+    });
+
+    it('does not embed long pool-failure message in visible text', () => {
+      const parent = document.createElement('p');
+      document.body.appendChild(parent);
+      const long =
+        'All provider pool slots failed during this request.';
+      setErrorState(parent, 'piece-1', long);
+      const errorEl = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(errorEl?.textContent).toBe('⚠ Translation failed');
+      expect((errorEl as HTMLElement).title).toContain(long);
     });
   });
 
