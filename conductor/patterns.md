@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post selection-dict-mode archive; 67 archived; 2 selection-dict gotchas elevated; Beads clean; Active empty) -->
+<!-- conductor-refresh: 2026-07-10 all (stats v2 + cache size + setup wizard patterns elevated; 1042 TCs / 1 fail; Beads ALT-d41 open; 67 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -219,6 +219,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - Export scheduling/eviction logic from `services/background.ts`, not from WXT entrypoints — WXT's `defineBackground` is not available in the Vitest jsdom environment. (from: cache-hardening_20260415, 2026-04-16)
 - Debounce LRU writes with a module-level Map + setTimeout: Map gives per-key dedup (latest wins), snapshot+clear before async flush prevents races. (from: cache-hardening_20260415, 2026-04-16)
 - `vi.clearAllMocks()` resets mock implementations but NOT module-level variables — re-acquire mocks via `await import(...)` after clearAllMocks; use `vi.useFakeTimers()` / `vi.useRealTimers()` per test to manage timer state. (from: cache-hardening_20260415, 2026-04-16)
+- **Do not trust `CacheEntry.sizeBytes` alone for UI/LRU stats.** Older or partial entries undercount (missing field or text-only). Re-estimate with `estimateStoredBytes(key, payload)` (strip `sizeBytes` before measuring), write accurate `sizeBytes` on write, and display with `formatCacheSize` (B / KB / MB — not always `toFixed(1)` MB, which rounds modest caches to 0.0). (from: cache size fix `2e0cfa4`, 2026-07-09)
 
 ## Cache Settings UI
 - Input component from shared UI library doesn't have a `label` prop - must add manual `<label>` elements with `htmlFor` attribute. (from: cache-settings-ui_20260416, archived 2026-04-16)
@@ -306,12 +307,20 @@ Reusable patterns discovered during development. Read this before starting new w
 - Content-script re-injection guard: WXT content scripts can be re-injected on SPA navigations; set `window.__anyllmTranslateInitialized` flag and return early if already set. (from: hardening-fixes_20260421, archived 2026-04-22)
 - React error boundaries: Wrap popup and options entrypoints with a minimal class component error boundary; provide reload button and log to console. (from: hardening-fixes_20260421, archived 2026-04-22)
 
-## Statistics & Fire-and-Forget Patterns (2026-04-22)
-- Fire-and-forget stats with `.catch(() => {})` — non-blocking, never interfere with translation pipeline. (from: ux-power-features_20260422, archived 2026-04-22)
+## Statistics & Fire-and-Forget Patterns (2026-04-22; elevated 2026-07-10 for v2)
+- Fire-and-forget stats with `.catch(() => {})` — non-blocking, never interfere with translation pipeline. (from: ux-power-features_20260422, archived 2026-04-22; still required on `recordUsage` call sites in stats v2, 2026-07-09)
 - Per-tab session tracking via `Set<number>` for `totalPagesTranslated` — cleared on `restore` action. (from: ux-power-features_20260422, archived 2026-04-22)
 - `@typescript-eslint/no-dynamic-delete` prohibits `delete obj[key]` — use `Object.fromEntries(filter)` instead. (from: ux-power-features_20260422, archived 2026-04-22)
-- CSS-only bar chart with hover tooltips — no charting library needed for simple data visualization. (from: ux-power-features_20260422, archived 2026-04-22)
+- CSS-only bar chart with hover tooltips — no charting library needed for simple data visualization. (from: ux-power-features_20260422, archived 2026-04-22; retained for stats v2 dashboard SVG/CSS charts, 2026-07-09)
 - Section picker uses capture phase listeners to intercept before page handlers. (from: ux-power-features_20260422, archived 2026-04-22)
+- **Single serialized write API for analytics:** All stats mutations go through `recordUsage` / `chainUpdate` so concurrent page/subtitle/selection/PDF events cannot race chrome.storage or IDB. Prefer one API over ad-hoc `incrementStats` + `recordDailyStats`. (from: statistics analytics platform ALT-88u, 2026-07-09)
+- **Dual-store stats model:** `chrome.storage.local` holds compact v2 summary (lifetime, preferences, recent daily totals for fast paint + `onChanged`); IndexedDB (`anyllm-stats` via idb-keyval) holds full dimensional daily records for the retention window. Avoid packing host/language maps into chrome.storage. (from: statistics analytics platform ALT-88u, 2026-07-09)
+- **Dimension map caps:** Cap hosts per day (`MAX_HOSTS_PER_DAY = 25`) and language pairs (`MAX_LANGUAGE_PAIRS_PER_DAY = 40`); remainder rolls into `__other__` so daily records stay bounded. (from: statistics analytics platform ALT-88u, 2026-07-09)
+- **v1→v2 migration on read:** Detect pre-v2 shapes in storage, map lifetime counters, write dailies to IDB, persist v2 summary — do not require a one-shot migration job. (from: statistics analytics platform ALT-88u, 2026-07-09)
+- **Avoid double-count from paired v1 adapters:** When migrating or bridging legacy increment paths, ensure each logical event maps to one `recordUsage` (paired adapters can inflate characters/apiCalls). (from: statistics analytics platform ALT-88u, 2026-07-09)
+- **Stream path cache split is still incomplete:** Web/PDF stream success may record `cacheHits=0` and all pieces as LLM characters until pre-split mirrors non-stream `handleTranslate` (open Beads `ALT-d41`). (from: statistics analytics platform follow-up, 2026-07-09)
+- **Setup wizard pure helpers:** Entry step, popular languages, and provider-patch invalidation live in pure `lib/setupWizard.ts` (unit-testable without React); completed setup reopens at provider, not the success screen. (from: setup wizard redesign `e8b4776`, 2026-07-09)
+- **General tab single-concern cards:** Prefer one primary concern per Card (Language / Layout / Style / Advanced) over kitchen-sink Display cards; share theme metadata via `GENERAL_THEME_OPTIONS` in `lib/themes.ts`. (from: General tab restructure ALT-6l9, 2026-07-09)
 
 ## Custom Theme & Context-Aware (2026-04-22)
 - CSS custom properties (`--anyllm-custom-*`) on `<html>` for dynamic theme injection without shadow DOM complexity. (from: theme-context_20260422, archived 2026-04-22)
@@ -570,8 +579,8 @@ Codebase health: 1570 tests passing across 115 files (0 failing / 0 flaky), buil
 - **Test `beforeEach` blocks must only reset variables that are actually declared.** A copy-pasted `beforeEach` referencing `capturedTextTrackCuesHandler`/`capturedMseCuesHandler` — never declared and never captured (the file's `messageBridge` mock returns no-op cleanups for `onTextTrackCues`/`onMseCues`) — threw `ReferenceError` and failed every test in the `describe` block. When a mock factory doesn't *capture* a handler (it returns a no-op teardown), there is nothing to reset — reference only the handlers your mock actually captures. (from: hbomax tier-precedence hotfix test-regression fix, 2026-06-26)
 
 ---
-Last refreshed: 2026-07-09T15:19:20+07:00
-Codebase health: 926 tests across 80 files (925 passing / 1 failing: `subtitleCoordinatorManifest` stale seek); build ~3.99 MB; tsc 3 errors; lint 12 errors; 67 tracks archived, 0 active tracks. (Mid-file health blurb above is historical from earlier tracks.)
+Last refreshed: 2026-07-10T09:39:23+07:00
+Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitleCoordinatorManifest` stale seek); build ~3.94 MB; tsc 3 errors; lint 23 errors; 67 tracks archived, 0 active Conductor tracks; Beads 1 open (`ALT-d41`). (Mid-file health blurbs above may be historical from earlier tracks.)
 
 ## Multi-Provider Pool (2026-06-26)
 - **Round-robin coordinator at the single `initService()` seam:** A `ProviderPoolCoordinator implements TranslationService` returned by `initService()` covers all 7 translation paths (page, subtitle, PDF, selection, hover, inline, category-detect) in one place — no per-path changes. The coordinator holds one `OpenAICompatibleService` per enabled `(provider, key)` slot and delegates per call with round-robin + failover. (from: multi-provider-pool_20260626, 2026-06-26)

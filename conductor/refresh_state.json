@@ -1,25 +1,26 @@
 {
-  "lastRefresh": "2026-07-09T15:19:20+07:00",
+  "lastRefresh": "2026-07-10T09:39:23+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 2026-07-09 13:29 refresh: selection-dict-mode_20260709 implement → archive (ALT-fbz 5/5).",
-    "product.md: refresh marker; Completed entry for Selection Translate — Dictionary Mode; Current State → 926 TCs / 80 files / 925 pass + 1 fail / 67 archived / build ~3.99 MB / tsc 3 / lint 12; suite-history note for selection-dict; platform handler list + value prop polish (Generic + Max/Youku).",
-    "patterns.md: refresh marker + footer; 2 selection-dict gotchas elevated (glossary omit + fail-open translatedText; Immersive schema source of truth). Core selection-dict patterns already present from archive.",
-    "tech-stack.md: marker + build size ~3.99 MB — package.json deps/scripts unchanged.",
-    "workflow.md / tracks.md: no content drift (tracks.md already lists selection-dict-mode archived; Active Tracks empty).",
-    "learnings consolidation: 2 new selection-dict gotchas; prior patterns already elevated; no duplicate merges.",
-    "beads DRIFT: none — ALT-fbz epic CLOSED 5/5; 0 open / 0 in_progress (552 closed total).",
+    "Scope: full refresh. Intervening work since 2026-07-09 15:19 refresh: Advanced polish (a522351); cache size fix (2e0cfa4); setup wizard redesign (e8b4776); General tab 4-card IA (ALT-6l9); Statistics analytics platform v2 (ALT-88u, 2c9de19…63587dc); beads closes ALT-6l9 / ALT-88u; open follow-up ALT-d41.",
+    "product.md: refresh marker; Key Features for stats v2 dashboard, General 4-card IA, setup wizard helpers, accurate cache size, expanded UI library; Completed bullets for Advanced polish, cache size fix, setup wizard, General restructure, Statistics platform; Current State → 1042 TCs / 92 files / 1041 pass + 1 fail / tsc 3 / lint 23 / build ~3.94 MB / 67 archived / 0 active Conductor tracks / Beads 1 open ALT-d41.",
+    "tech-stack.md: marker + build size ~3.94 MB — package.json deps/scripts unchanged (idb-keyval already listed for IDB including anyllm-stats dailies).",
+    "patterns.md: refresh marker + footer; elevated stats v2 patterns (serialized recordUsage, dual-store, dimension caps, v1→v2 migration, double-count guard, stream cache gap ALT-d41), cache size re-estimate/formatCacheSize, setup wizard pure helpers, General single-concern cards.",
+    "tracks.md: refresh marker only — still 67 archived / Active empty; note superpowers/Beads ship path for stats/General.",
+    "workflow.md: no content drift.",
+    "learnings consolidation: 6+ new patterns from stats/cache/wizard/General; no new Conductor track learnings.md (work outside tracks); prior selection-dict patterns already elevated.",
+    "beads DRIFT: product docs lagged closed ALT-88u/ALT-6l9 (fixed in this refresh); 1 open ALT-d41 P3; 0 in_progress; 570 total / 569 closed.",
     "backups: product.md.bak, patterns.md.bak, tech-stack.md.bak, refresh_state.json.bak.",
-    "verification: wxt build ✅ ~3.99 MB; vitest 925/926 pass (1 fail: subtitleCoordinatorManifest stale seek); tsc 3 errors; eslint 12 errors."
+    "verification: vitest 1041/1042 pass (1 fail: subtitleCoordinatorManifest stale seek); tsc 3 errors; eslint 23 errors; build output ~3.94 MB."
   ],
   "codebaseHealth": {
-    "tests": 926,
-    "testsPassing": 925,
+    "tests": 1042,
+    "testsPassing": 1041,
     "testsFailing": 1,
-    "testFiles": 80,
-    "buildSize": "~3.99 MB",
-    "lintErrors": 12,
-    "lintErrorsDetail": "translationDisplay.test.ts: 3 unused imports; inlineTranslate.parity.test.ts: PULSING_CLASS unused; inlineTranslateSettings.test.ts: beforeEach unused; subtitleRenderer.ts unused NativeTrackRenderer; jsonParseSubtitleHook.ts no-non-null-assertion; subtitleCoordinator.test.ts: 2 no-non-null-assertion; youkuHandler.test.ts: 3 no-non-null-assertion.",
+    "testFiles": 92,
+    "buildSize": "~3.94 MB",
+    "lintErrors": 23,
+    "lintErrorsDetail": "Prior unused imports / non-null assertions; new: StatisticsSection consistent-type-imports; stats/selection tests no-dynamic-delete; unused imports in statsCounters/statsRecordUsage/inlineTranslateSettings; background.streamStats dynamic-delete.",
     "tscErrors": 3,
     "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; lib/youtubeAsrResegment.ts EN_BREAK_WORDS implicit any[] (2 sites).",
     "archivedTracks": 67,
@@ -27,7 +28,14 @@
     "failingTests": [
       "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session"
     ],
-    "flakyTests": "none reproduced this run"
+    "flakyTests": "none reproduced this run",
+    "shippedOutsideConductorTracks": [
+      "Statistics analytics platform (ALT-88u)",
+      "General tab 4-card IA (ALT-6l9)",
+      "Setup wizard redesign (e8b4776)",
+      "Advanced settings polish (a522351)",
+      "Cache size display fix (2e0cfa4)"
+    ]
   },
-  "beadsDrift": "none — ALT-fbz closed 5/5; 0 open / 0 in_progress"
+  "beadsDrift": "docs lag closed ALT-88u/ALT-6l9 resolved in product.md; 1 open ALT-d41 P3 stream cache pre-split; 0 in_progress"
 }

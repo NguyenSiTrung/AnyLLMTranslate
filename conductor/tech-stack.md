@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-09 all (post selection-dict-mode; no dep/script drift; scripts remain: test:fast + zip:source; build ~3.99 MB) -->
+<!-- conductor-refresh: 2026-07-10 all (no dep/script drift; build ~3.94 MB; stats v2 uses idb-keyval for anyllm-stats dailies — already in stack) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
