@@ -729,11 +729,12 @@ async function handleTranslate(
         // surface (a later batch may succeed). If ALL batches fail, the final
         // return reports the error.
         lastError = result.error ?? 'Translation failed';
-        // FR-4: write negative-cache entries for the failed pieces so a retry
-        // within the TTL short-circuits without another LLM round-trip.
-        if (settings.enableFailureCache) {
-          for (const piece of batch) {
-            failedResults.push({ id: piece.id, error: lastError });
+        // Surface per-piece failures for this request. Negative-cache only for
+        // content-scoped permanent errors — never for pool/rate-limit/network
+        // (those caused spinner→fail then instant-OK on manual retry).
+        for (const piece of batch) {
+          failedResults.push({ id: piece.id, error: lastError });
+          if (settings.enableFailureCache) {
             cacheFailure(
               piece.text,
               lastError,

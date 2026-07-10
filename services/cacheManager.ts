@@ -6,6 +6,10 @@
 import { createStore, get, set, del, entries, clear } from 'idb-keyval';
 import type { CacheEntry } from '@/types/translation';
 import { STORAGE_KEYS } from '@/lib/constants';
+import {
+  isTransientTranslationError,
+  shouldNegativeCacheFailure,
+} from '@/lib/translationErrors';
 
 /** Cache store — lazy initialized */
 let store: ReturnType<typeof createStore> | null = null;
@@ -210,7 +214,11 @@ interface NegativeCacheEntry {
 }
 
 /** Read a cached failure for this text/lang pair. Returns the error string if a
- *  fresh negative entry exists, or null on miss/expiry/disabled. */
+ *  fresh negative entry exists, or null on miss/expiry/disabled.
+ *
+ *  Transient/systemic errors (pool exhausted, rate limit, network) are never
+ *  returned — if an older build wrote them, they are purged so the next attempt
+ *  can hit the LLM / success cache instead of spinner→instant-fail. */
 export async function getCachedFailure(
   text: string,
   sourceLanguage: string,
@@ -226,19 +234,28 @@ export async function getCachedFailure(
       await del(key, getStore());
       return null;
     }
+    // Purge poisoned entries from before we stopped caching pool failures.
+    if (isTransientTranslationError(entry.error) || !shouldNegativeCacheFailure(entry.error)) {
+      await del(key, getStore());
+      return null;
+    }
     return entry.error;
   } catch {
     return null;
   }
 }
 
-/** Record a translation failure so it isn't retried within the TTL. */
+/** Record a translation failure so it isn't retried within the TTL.
+ *  No-ops for transient/provider errors — those must not poison the text key. */
 export async function cacheFailure(
   text: string,
   error: string,
   sourceLanguage: string,
   targetLanguage: string,
 ): Promise<void> {
+  if (!shouldNegativeCacheFailure(error)) {
+    return;
+  }
   try {
     const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
     const entry: NegativeCacheEntry = { key, error, cachedAt: Date.now() };

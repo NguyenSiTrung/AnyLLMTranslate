@@ -53,6 +53,7 @@ import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 import { isContextInvalidated } from '@/lib/utils';
 import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
+import { isTransientTranslationError } from '@/lib/translationErrors';
 import {
   loadSnapshot,
   saveSnapshot,
@@ -148,6 +149,7 @@ function isContentHandled(piece: TranslationPiece): boolean {
   return handledContentKeys.has(contentKeyForPiece(piece));
 }
 
+/** Pool/rate-limit style failures that should pause further scroll batches. */
 function isSystemicFailureMessage(message: string): boolean {
   return /provider pool|all .* (failed|open)|rate.?limit|pool is empty|no providers/i.test(
     message,
@@ -314,13 +316,15 @@ function applyPieceError(
 
 /** Send translation request to background and apply results.
  *  When `options.skipFailureCache` is set (user-initiated retry), the background
- *  bypasses the FR-4 negative cache so the retry actually re-calls the LLM. */
+ *  bypasses the FR-4 negative cache so the retry actually re-calls the LLM.
+ *  `autoRetriedOnce` is set after a silent one-shot retry for transient failures
+ *  so we don't loop forever when the pool is truly down. */
 async function translatePieces(
   pieces: TranslationPiece[],
-  options: { skipFailureCache?: boolean } = {},
+  options: { skipFailureCache?: boolean; autoRetriedOnce?: boolean } = {},
 ): Promise<void> {
   if (pieces.length === 0) return;
-  const { skipFailureCache = false } = options;
+  const { skipFailureCache = false, autoRetriedOnce = false } = options;
 
   // User retry clears the scroll-pause so further content can translate again.
   if (skipFailureCache) {
@@ -361,6 +365,9 @@ async function translatePieces(
       showLoadingPlaceholder(piece.parentElement, piece.id);
     }
   }
+
+  /** Pieces to silently re-attempt once after this call fully cleans up. */
+  let pendingAutoRetry: TranslationPiece[] | null = null;
 
   try {
     activeRequests++;
@@ -496,42 +503,62 @@ async function translatePieces(
       if (response.results.length > 0) {
         clearSystemicPause();
       }
-      // FR-4: per-piece failures (negative-cache hits) — show error state with
-      // retry for each failed piece without failing the whole batch.
-      if (response.failed) {
+      // FR-4: per-piece failures — auto-retry transient ones once (often a
+      // sibling batch already wrote the success cache); otherwise show error.
+      if (response.failed && response.failed.length > 0) {
+        const failedPieces: TranslationPiece[] = [];
+        let anyTransient = false;
         for (const failure of response.failed) {
           const piece = workPieces.find((p) => p.id === failure.id);
-          if (!piece) continue;
-          applyPieceError(piece, failure.error, compactInlineEnabled);
-          if (isSystemicFailureMessage(failure.error)) {
-            enterSystemicPause(failure.error);
+          if (!piece || piece.isTranslated) continue;
+          failedPieces.push(piece);
+          if (isTransientTranslationError(failure.error)) {
+            anyTransient = true;
+          }
+        }
+        if (failedPieces.length > 0 && !autoRetriedOnce && anyTransient) {
+          pendingAutoRetry = failedPieces;
+        } else {
+          for (const failure of response.failed) {
+            const piece = workPieces.find((p) => p.id === failure.id);
+            if (!piece || piece.isTranslated) continue;
+            applyPieceError(piece, failure.error, compactInlineEnabled);
+            if (isSystemicFailureMessage(failure.error)) {
+              enterSystemicPause(failure.error);
+            }
           }
         }
       }
     } else if (!response.success && response.error) {
-      // Batch-level failure (e.g. pool exhausted): one page banner + compact
-      // per-piece markers. Do not overwrite pieces that already succeeded
-      // (streaming partial apply before a non-streaming fallback failed).
-      showTranslationErrorNotification(response.error);
-      for (const piece of workPieces) {
-        applyPieceError(piece, response.error, compactInlineEnabled);
-      }
-      if (isSystemicFailureMessage(response.error)) {
-        enterSystemicPause(response.error);
+      // Silent one-shot auto-retry for transient pool/network failures so a
+      // concurrent success-cache fill or brief blip doesn't force a manual click.
+      if (!autoRetriedOnce && isTransientTranslationError(response.error)) {
+        pendingAutoRetry = workPieces.filter((p) => !p.isTranslated);
+      } else {
+        showTranslationErrorNotification(response.error);
+        for (const piece of workPieces) {
+          applyPieceError(piece, response.error, compactInlineEnabled);
+        }
+        if (isSystemicFailureMessage(response.error)) {
+          enterSystemicPause(response.error);
+        }
       }
     }
   } catch (err) {
     if (requestSession !== translationSession) {
-      // Stale rejection — ignore.
       return;
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    showTranslationErrorNotification(message);
-    for (const piece of workPieces) {
-      applyPieceError(piece, message, compactInlineEnabled);
-    }
-    if (isSystemicFailureMessage(message)) {
-      enterSystemicPause(message);
+    if (!autoRetriedOnce && isTransientTranslationError(message)) {
+      pendingAutoRetry = workPieces.filter((p) => !p.isTranslated);
+    } else {
+      showTranslationErrorNotification(message);
+      for (const piece of workPieces) {
+        applyPieceError(piece, message, compactInlineEnabled);
+      }
+      if (isSystemicFailureMessage(message)) {
+        enterSystemicPause(message);
+      }
     }
   } finally {
     for (const piece of workPieces) {
@@ -539,6 +566,17 @@ async function translatePieces(
     }
     activeRequests = Math.max(0, activeRequests - 1);
     sendStatusUpdate();
+  }
+
+  if (
+    pendingAutoRetry &&
+    pendingAutoRetry.length > 0 &&
+    requestSession === translationSession
+  ) {
+    await translatePieces(pendingAutoRetry, {
+      skipFailureCache: true,
+      autoRetriedOnce: true,
+    });
   }
 }
 
