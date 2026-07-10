@@ -113,7 +113,8 @@ describe('ShortcutsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /copy all/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
-    expect(String(writeText.mock.calls[0]?.[0])).toContain('AnyLLMTranslate shortcuts');
+    const copied = writeText.mock.calls.at(0)?.at(0);
+    expect(String(copied ?? '')).toContain('AnyLLMTranslate shortcuts');
     expect(toastSuccess).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /^manage$/i }));
