@@ -41,10 +41,11 @@ export function ThemeGallery({
 
   return (
     <div className="space-y-3">
+      {/* Sticky within the gallery scroll pane so filters stay visible */}
       <div
         role="tablist"
         aria-label="Theme categories"
-        className="flex flex-wrap gap-1.5"
+        className="flex flex-wrap gap-1.5 sticky top-0 z-[1] bg-[#09090b]/95 backdrop-blur-sm pb-2 pt-0.5 -mx-0.5 px-0.5"
       >
         {CATEGORY_CHIPS.map((chip) => {
           const active = category === chip.id;

@@ -1,5 +1,8 @@
 /**
  * Theme Studio — article canvas, categorized gallery, soft-preview, custom editor.
+ *
+ * Desktop: split panes with independent scroll so a long theme list never
+ * pushes the live preview out of view. Mobile: stacked canvas-then-gallery.
  */
 
 import { useState } from 'react';
@@ -39,16 +42,23 @@ export function ThemesSection({ onNavigateToGeneral }: ThemesSectionProps = {}) 
   const showCustomEditor = theme === 'custom' || previewTheme === 'custom';
 
   return (
-    <div className="animate-fade-in-up">
-      <SectionHeader
-        title="Theme Studio"
-        description="See how translations look on a real page, then pick a style."
-        icon={<Palette className="w-4 h-4" />}
-        accentColor="cyan"
-      />
+    <div className="animate-fade-in-up flex flex-col lg:h-[calc(100dvh-4.5rem)] lg:min-h-[28rem] lg:max-h-[calc(100dvh-4.5rem)]">
+      <div className="shrink-0">
+        <SectionHeader
+          title="Theme Studio"
+          description="See how translations look on a real page, then pick a style."
+          icon={<Palette className="w-4 h-4" />}
+          accentColor="cyan"
+        />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
-        <div className="lg:col-span-2 order-2 lg:order-1">
+      {/*
+        Desktop: fixed-height split panes — left gallery scrolls independently,
+        right preview stays on screen. Avoids broken position:sticky when the
+        preview column is shorter than the gallery (items-start + sticky fails).
+      */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 flex-1 min-h-0 items-stretch">
+        <div className="lg:col-span-2 order-2 lg:order-1 min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-1 [scrollbar-gutter:stable]">
           <ThemeGallery
             category={category}
             onCategoryChange={setCategory}
@@ -61,7 +71,7 @@ export function ThemesSection({ onNavigateToGeneral }: ThemesSectionProps = {}) 
           />
         </div>
 
-        <div className="lg:col-span-3 order-1 lg:order-2 lg:sticky lg:top-14 space-y-4">
+        <div className="lg:col-span-3 order-1 lg:order-2 min-h-0 lg:overflow-y-auto lg:overscroll-contain space-y-4 [scrollbar-gutter:stable]">
           <ThemeStudioCanvas
             theme={effectiveTheme}
             isPreviewing={previewTheme != null && previewTheme !== theme}
@@ -82,7 +92,7 @@ export function ThemesSection({ onNavigateToGeneral }: ThemesSectionProps = {}) 
         </div>
       </div>
 
-      <p className="mt-6 text-xs text-zinc-500">
+      <p className="mt-3 shrink-0 text-xs text-zinc-500">
         Translation position and display mode are set in General.
         {onNavigateToGeneral ? (
           <>
