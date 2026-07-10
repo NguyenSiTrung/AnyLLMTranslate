@@ -81,6 +81,8 @@ describe('ShortcutsSection', () => {
       expect(screen.getByText('Translate page')).toBeInTheDocument();
     });
     expect(screen.getByText('Toggle hover translate')).toBeInTheDocument();
+    expect(screen.getByText('On web pages')).toBeInTheDocument();
+    expect(screen.getByText(/not inside this Settings page/i)).toBeInTheDocument();
     expect(screen.getByText('Space × 3')).toBeInTheDocument();
     expect(screen.queryByText('Alt+T')).not.toBeInTheDocument();
     expect(screen.queryByText('Alt+O')).not.toBeInTheDocument();

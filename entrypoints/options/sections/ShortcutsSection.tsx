@@ -175,8 +175,8 @@ export function ShortcutsSection({ onNavigateToInline }: ShortcutsSectionProps =
             </div>
             <div className="animate-stagger" style={stagger(2)}>
               <ShortcutGroup
-                title="On this page"
-                description="Content-script keys while a web page is focused. Not customizable here."
+                title="On web pages"
+                description="Work on normal websites (http/https) only — not inside this Settings page. Not customizable here."
                 icon={<AppWindow className="w-3.5 h-3.5" />}
                 rows={grouped.page}
               />
@@ -223,7 +223,8 @@ export function ShortcutsSection({ onNavigateToInline }: ShortcutsSectionProps =
                 binding.
               </li>
               <li>
-                Page shortcuts work when a web page is focused (not only inside this options UI).
+                Page shortcuts (Alt+H/D/Q, Esc) run only on normal websites — open a tab like
+                wikipedia.org to try them. They do nothing on this Settings screen.
               </li>
               <li>
                 Open{' '}

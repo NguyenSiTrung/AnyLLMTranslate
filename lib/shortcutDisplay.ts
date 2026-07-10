@@ -60,7 +60,8 @@ export const DEFAULT_GLOBAL_SHORTCUTS: Record<string, string> = {
 };
 
 const GLOBAL_WHERE = 'Any tab (when the page is focused)';
-const PAGE_WHERE = 'Web pages with the extension active';
+/** Content-script keys only run on normal web pages — not Settings/popup. */
+const PAGE_WHERE = 'Normal websites only (http/https) — not this Settings page';
 
 /** Mirrors content/keyboardShortcuts.ts defaults (labels only). */
 export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
@@ -68,7 +69,7 @@ export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
     id: 'page-hover',
     scope: 'page',
     label: 'Toggle hover translate',
-    description: 'Enable or disable hover translate on the page',
+    description: 'Turn hover translate on/off (toast confirms). Default is often off until you toggle.',
     where: PAGE_WHERE,
     shortcut: 'Alt+H',
     keyLabel: 'Alt+H',
@@ -77,7 +78,7 @@ export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
     id: 'page-selection',
     scope: 'page',
     label: 'Toggle selection translate',
-    description: 'Enable or disable selection translate on the page',
+    description: 'Turn selection translate on/off (toast confirms)',
     where: PAGE_WHERE,
     shortcut: 'Alt+D',
     keyLabel: 'Alt+D',
@@ -86,7 +87,7 @@ export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
     id: 'page-section-picker',
     scope: 'page',
     label: 'Translate section (picker)',
-    description: 'Enter or exit section picker mode',
+    description: 'Enter or exit section picker mode, then click a block to translate',
     where: PAGE_WHERE,
     shortcut: 'Alt+Q',
     keyLabel: 'Alt+Q',
@@ -95,7 +96,7 @@ export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
     id: 'page-dismiss',
     scope: 'page',
     label: 'Dismiss tooltip',
-    description: 'Close translate tooltip or floating button',
+    description: 'Closes the selection tooltip or floating translate button when one is open',
     where: PAGE_WHERE,
     shortcut: 'Escape',
     keyLabel: 'Escape',
