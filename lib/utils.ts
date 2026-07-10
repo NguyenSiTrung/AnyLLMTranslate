@@ -7,23 +7,23 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, source: 
   for (const key of Object.keys(source)) {
     const sourceVal = source[key];
     const targetVal = result[key];
-    if (
-      typeof sourceVal === 'object' &&
-      sourceVal !== null &&
-      !Array.isArray(sourceVal) &&
-      !(sourceVal instanceof Date) &&
-      !(sourceVal instanceof RegExp) &&
-      !(sourceVal instanceof Map) &&
-      !(sourceVal instanceof Set) &&
-      typeof targetVal === 'object' &&
-      targetVal !== null &&
-      !Array.isArray(targetVal) &&
-      !(targetVal instanceof Date) &&
-      !(targetVal instanceof RegExp) &&
-      !(targetVal instanceof Map) &&
-      !(targetVal instanceof Set)
-    ) {
-      result[key] = deepMerge(targetVal as Record<string, unknown>, sourceVal as Record<string, unknown>);
+    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' &&
+      v !== null &&
+      !Array.isArray(v) &&
+      !(v instanceof Date) &&
+      !(v instanceof RegExp) &&
+      !(v instanceof Map) &&
+      !(v instanceof Set);
+
+    if (isPlainObject(sourceVal) && isPlainObject(targetVal)) {
+      // Empty source objects replace (e.g. knobOverrides: {} clears overrides).
+      // Recursive merge would leave old keys when source has no keys.
+      if (Object.keys(sourceVal).length === 0) {
+        result[key] = sourceVal;
+      } else {
+        result[key] = deepMerge(targetVal, sourceVal);
+      }
     } else if (sourceVal !== undefined) {
       result[key] = sourceVal;
     }

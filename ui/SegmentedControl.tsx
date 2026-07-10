@@ -20,6 +20,8 @@ interface SegmentedControlProps<T extends string> {
   size?: 'sm' | 'md';
   id?: string;    // DOM id for testing and accessibility
   disabled?: boolean;
+  /** Active fill color. Default blue for most tabs; cyan for Subtitle Studio. */
+  accent?: 'blue' | 'cyan';
 }
 
 export function SegmentedControl<T extends string>({
@@ -30,11 +32,16 @@ export function SegmentedControl<T extends string>({
   size = 'md',
   id,
   disabled = false,
+  accent = 'blue',
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
     sm: 'py-1 px-3 text-xs',
     md: 'py-1.5 px-4 text-sm',
   };
+  const activeStyles =
+    accent === 'cyan'
+      ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-900/40'
+      : 'bg-blue-600 text-white shadow-sm shadow-blue-900/40';
 
   return (
     <div
@@ -61,7 +68,7 @@ export function SegmentedControl<T extends string>({
               ${sizeStyles[size]}
               ${
                 active
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-900/40'
+                  ? activeStyles
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 disabled:hover:text-zinc-400 disabled:hover:bg-transparent'
               }
             `}
