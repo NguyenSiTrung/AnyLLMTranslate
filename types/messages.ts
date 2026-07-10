@@ -51,7 +51,8 @@ export type MessageAction =
   | 'PDF_DETECTED'
   | 'REGISTER_PDF_SESSION'
   | 'UNREGISTER_PDF_SESSION'
-  | 'TRANSLATE_PDF_STREAM';
+  | 'TRANSLATE_PDF_STREAM'
+  | 'GET_POOL_KEY_STATUSES';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -361,6 +362,28 @@ export type PdfStreamPortMessage =
   | PdfStreamDone
   | PdfStreamError;
 
+/** Options UI → background: snapshot live pool key circuit-breaker status */
+export interface GetPoolKeyStatusesMessage {
+  action: 'GET_POOL_KEY_STATUSES';
+}
+
+/** Serializable key status returned to options (mirrors coordinator KeyStatus). */
+export interface PoolKeyStatusPayload {
+  keyId: string;
+  providerId: string;
+  open: boolean;
+  openUntil: number;
+  credentialInvalid: boolean;
+  lastFailureKind?: string;
+  disabled: boolean;
+}
+
+export interface GetPoolKeyStatusesResponse {
+  success: boolean;
+  statuses?: Record<string, PoolKeyStatusPayload>;
+  error?: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -391,7 +414,8 @@ export type ExtensionMessage =
   | OpenPdfViewerMessage
   | PdfDetectedMessage
   | RegisterPdfSessionMessage
-  | UnregisterPdfSessionMessage;
+  | UnregisterPdfSessionMessage
+  | GetPoolKeyStatusesMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

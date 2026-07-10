@@ -52,6 +52,7 @@ import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { ProviderPoolCoordinator } from '@/services/providerPool';
+import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
@@ -1826,6 +1827,8 @@ export function handleMessage(
       return handleTranslate(message, _sender);
     case 'testConnection':
       return handleTestConnection();
+    case 'GET_POOL_KEY_STATUSES':
+      return queryPoolKeyStatuses(() => initService());
     case 'updateSettings':
       return initService().then(() => ({ success: true })).catch(() => ({ success: false, error: 'Failed to update settings' }));
     case 'translateSubtitle':
