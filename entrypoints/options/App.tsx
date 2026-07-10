@@ -48,7 +48,7 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'TRANSLATION',
     tabs: [
       { id: 'providers', label: 'Providers', icon: Layers },
-      { id: 'dictionary', label: 'Dictionary', icon: BookOpen },
+      { id: 'dictionary', label: 'Custom terms', icon: BookOpen },
       { id: 'site-rules', label: 'Site Rules', icon: Globe },
     ],
   },
@@ -63,7 +63,7 @@ const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { id: 'statistics', label: 'Statistics', icon: BarChart3 },
       { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-      { id: 'inline', label: 'Inline', icon: TextCursorInput },
+      { id: 'inline', label: 'Inline Translate', icon: TextCursorInput },
       { id: 'advanced', label: 'Advanced', icon: Wrench },
     ],
   },
