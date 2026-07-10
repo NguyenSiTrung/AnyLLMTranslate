@@ -75,7 +75,7 @@ export function Modal({
   const panelBorder = variant === 'danger' ? 'border-rose-500/25' : 'border-zinc-700';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" role="dialog" aria-modal="true" aria-label={title}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
       {/* Dialog */}
