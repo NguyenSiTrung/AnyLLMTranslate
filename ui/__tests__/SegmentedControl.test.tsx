@@ -49,4 +49,25 @@ describe('SegmentedControl', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Beta' }));
     expect(onChange).toHaveBeenCalledWith('b');
   });
+
+  it('uses a 2-column grid layout when there are 4+ options', () => {
+    const four = [
+      { value: 'auto', label: 'Auto' },
+      { value: 'formal', label: 'Formal' },
+      { value: 'neutral', label: 'Neutral' },
+      { value: 'casual', label: 'Casual' },
+    ] as const;
+    render(
+      <SegmentedControl
+        label="Register"
+        options={[...four]}
+        value="auto"
+        onChange={() => {}}
+      />,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Register' });
+    expect(group.className).toMatch(/grid-cols-2/);
+    expect(screen.getByRole('radio', { name: 'Casual' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Neutral' })).toBeInTheDocument();
+  });
 });

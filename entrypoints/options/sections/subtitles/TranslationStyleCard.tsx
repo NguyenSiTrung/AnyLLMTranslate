@@ -1,5 +1,6 @@
 /**
- * Compact 2×2 translation-style knobs + Advanced timeout.
+ * Translation-style knobs (full-width stack) + Advanced timeout.
+ * Four-option segments use SegmentedControl multi-row layout so labels never clip.
  */
 
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
@@ -40,14 +41,27 @@ export function TranslationStyleCard({ settings, disabled, onUpdate }: SubtitleC
     >
       <DisabledDimmer disabled={disabled}>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Full-width stack: 4-option segments need the full controls-rail width. */}
+          <div className="space-y-5">
             {KNOB_SPEC.map((knob) => {
               const overridden = overrides[knob.key] !== undefined;
               return (
                 <div key={knob.key} className="min-w-0 space-y-2">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">{knob.label}</p>
-                    <p className="text-[11px] text-zinc-500 leading-relaxed">{knob.description}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-200">{knob.label}</p>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">{knob.description}</p>
+                    </div>
+                    <div className="shrink-0 pt-0.5 text-[10px] text-zinc-500">
+                      {overridden ? (
+                        <span className="inline-flex items-center gap-1 text-cyan-400">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                          Custom
+                        </span>
+                      ) : (
+                        <span>Profile default</span>
+                      )}
+                    </div>
                   </div>
                   <SegmentedControl
                     label={knob.label}
@@ -58,16 +72,6 @@ export function TranslationStyleCard({ settings, disabled, onUpdate }: SubtitleC
                     size="sm"
                     accent="cyan"
                   />
-                  <div className="text-[10px] text-zinc-500">
-                    {overridden ? (
-                      <span className="inline-flex items-center gap-1 text-cyan-400">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                        Custom
-                      </span>
-                    ) : (
-                      <span>Profile default</span>
-                    )}
-                  </div>
                 </div>
               );
             })}

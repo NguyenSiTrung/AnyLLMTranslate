@@ -35,13 +35,16 @@ export function SegmentedControl<T extends string>({
   accent = 'blue',
 }: SegmentedControlProps<T>) {
   const sizeStyles = {
-    sm: 'py-1 px-3 text-xs',
-    md: 'py-1.5 px-4 text-sm',
+    sm: 'py-1 px-2 text-xs',
+    md: 'py-1.5 px-3 text-sm',
   };
   const activeStyles =
     accent === 'cyan'
       ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-900/40'
       : 'bg-blue-600 text-white shadow-sm shadow-blue-900/40';
+
+  // 4+ options overflow a single row in narrow cards — use a 2-col pill grid.
+  const multiRow = options.length >= 4;
 
   return (
     <div
@@ -49,7 +52,11 @@ export function SegmentedControl<T extends string>({
       aria-label={label}
       aria-disabled={disabled}
       id={id}
-      className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-900 border border-zinc-700/60 p-1 w-full"
+      className={
+        multiRow
+          ? 'grid grid-cols-2 gap-0.5 rounded-lg bg-zinc-900 border border-zinc-700/60 p-1 w-full min-w-0'
+          : 'inline-flex items-center gap-0.5 rounded-lg bg-zinc-900 border border-zinc-700/60 p-1 w-full min-w-0'
+      }
     >
       {options.map((opt) => {
         const active = opt.value === value;
@@ -62,8 +69,10 @@ export function SegmentedControl<T extends string>({
             disabled={disabled}
             onClick={() => onChange(opt.value)}
             className={`
-              flex-1 flex items-center justify-center gap-1.5 rounded-md font-medium
-              transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60
+              ${multiRow ? 'w-full' : 'flex-1 min-w-0'}
+              flex items-center justify-center gap-1.5 rounded-md font-medium
+              whitespace-nowrap transition-all duration-200 cursor-pointer
+              disabled:cursor-not-allowed disabled:opacity-60
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60
               ${sizeStyles[size]}
               ${
@@ -74,7 +83,7 @@ export function SegmentedControl<T extends string>({
             `}
           >
             {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-            {opt.label}
+            <span className="truncate">{opt.label}</span>
           </button>
         );
       })}
