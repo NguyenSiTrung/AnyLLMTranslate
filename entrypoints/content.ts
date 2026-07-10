@@ -76,6 +76,18 @@ let activeRequests = 0;
  * flush + mutation re-extract race) from double-applying the same piece.
  */
 const inFlightPieceIds = new Set<string>();
+/**
+ * Parent+text keys already handled (success, failure, or same-lang skip).
+ * Stops mutation re-extraction during SPA scroll/virtualization from creating
+ * a second piece id for the same paragraph content.
+ */
+const handledContentKeys = new Set<string>();
+/**
+ * After a systemic provider-pool failure, stop issuing new LLM batches while
+ * the user scrolls. Cleared on explicit retry or a successful batch.
+ */
+let systemicPause = false;
+let lastSystemicError = '';
 /** Monotonically increasing translation session id.
  *  Bumped on startTranslation and stopTranslation so that in-flight
  *  responses from previous sessions are recognized as stale and
@@ -106,6 +118,61 @@ function isInsideTranslatedRegion(element: Element): boolean {
   );
 }
 
+/** Per-element identity for content keys (WeakMap survives only while nodes live). */
+const parentIdentity = new WeakMap<Element, number>();
+let parentIdentitySeq = 0;
+
+function parentId(parent: Element): number {
+  let id = parentIdentity.get(parent);
+  if (id === undefined) {
+    id = ++parentIdentitySeq;
+    parentIdentity.set(parent, id);
+  }
+  return id;
+}
+
+/** Stable key for parent+text so re-extracted SPA nodes can be deduped. */
+function contentKey(parent: Element, text: string): string {
+  return `${parentId(parent)}::${text}`;
+}
+
+function contentKeyForPiece(piece: TranslationPiece): string {
+  return contentKey(piece.parentElement, piece.text);
+}
+
+function markContentHandled(piece: TranslationPiece): void {
+  handledContentKeys.add(contentKeyForPiece(piece));
+}
+
+function isContentHandled(piece: TranslationPiece): boolean {
+  return handledContentKeys.has(contentKeyForPiece(piece));
+}
+
+function isSystemicFailureMessage(message: string): boolean {
+  return /provider pool|all .* (failed|open)|rate.?limit|pool is empty|no providers/i.test(
+    message,
+  );
+}
+
+function enterSystemicPause(error: string): void {
+  systemicPause = true;
+  lastSystemicError = error;
+  viewportObserver?.setPaused(true);
+}
+
+function clearSystemicPause(): void {
+  if (!systemicPause && !viewportObserver?.isPaused) return;
+  systemicPause = false;
+  lastSystemicError = '';
+  viewportObserver?.setPaused(false);
+  // Re-observe unfinished pieces so scrolling/resume can continue after recovery.
+  if (viewportObserver) {
+    const pending = allPieces.filter((p) => !p.isTranslated && !inFlightPieceIds.has(p.id));
+    viewportObserver.releaseAll(pending.map((p) => p.id));
+    viewportObserver.observeAll(pending);
+  }
+}
+
 function extractDynamicPieces(
   element: Element,
   includeSelectors: string[] | undefined,
@@ -126,11 +193,21 @@ function extractDynamicPieces(
     selectorAppliesToElementOrAncestor(element, selector),
   ) ?? false;
 
-  return extractPieces(element, {
+  const extracted = extractPieces(element, {
     includeSelectors: rootIsIncluded ? undefined : includeSelectors,
     excludeSelectors,
     enableRichTranslate,
     enableAsideCaps,
+  });
+
+  // Drop pieces we already tracked (same parent + same text) — common when
+  // scrolling SPAs re-insert or mutate nodes under a large container.
+  return extracted.filter((piece) => {
+    if (isContentHandled(piece)) return false;
+    const dup = allPieces.some(
+      (p) => p.parentElement === piece.parentElement && p.text === piece.text,
+    );
+    return !dup;
   });
 }
 
@@ -180,6 +257,7 @@ function streamTranslate(
         if (piece) {
           piece.isTranslated = true;
           piece.translatedText = msg.text;
+          markContentHandled(piece);
           if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
             applyInlineTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
           } else {
@@ -219,7 +297,14 @@ function applyPieceError(
   compactInlineEnabled: boolean,
 ): void {
   if (piece.isTranslated) return;
-  const retryPiece = () => translatePieces([piece], { skipFailureCache: true });
+  markContentHandled(piece);
+  const retryPiece = () => {
+    // User-initiated retry: allow this piece (and the page) to try again.
+    handledContentKeys.delete(contentKeyForPiece(piece));
+    viewportObserver?.release(piece.id);
+    clearSystemicPause();
+    void translatePieces([piece], { skipFailureCache: true });
+  };
   if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
     setInlineErrorState(piece.parentElement, piece.id, errorMessage, retryPiece);
   } else {
@@ -236,6 +321,18 @@ async function translatePieces(
 ): Promise<void> {
   if (pieces.length === 0) return;
   const { skipFailureCache = false } = options;
+
+  // User retry clears the scroll-pause so further content can translate again.
+  if (skipFailureCache) {
+    clearSystemicPause();
+  }
+
+  // While the provider pool is exhausted, do not issue more LLM calls as the
+  // user scrolls — that only multiplies identical failures. Pieces stay
+  // unobserved-until-resume via ViewportObserver.setPaused.
+  if (systemicPause && !skipFailureCache) {
+    return;
+  }
 
   // Drop pieces already done or already mid-request (viewport + mutation races).
   const workPieces = pieces.filter((p) => !p.isTranslated && !inFlightPieceIds.has(p.id));
@@ -326,6 +423,7 @@ async function translatePieces(
           // clear the loading spinner, and skip injection entirely.
           piece.isTranslated = true;
           piece.translatedText = piece.text;
+          markContentHandled(piece);
           const el = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${piece.id}"]`);
           if (el) el.remove();
           return false;
@@ -386,12 +484,17 @@ async function translatePieces(
 
         piece.isTranslated = true;
         piece.translatedText = result.translatedText;
+        markContentHandled(piece);
         // Short pieces → inline parenthetical, long pieces → block themed display
         if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
           applyInlineTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
         } else {
           applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
         }
+      }
+      // A successful batch means the pool is healthy again — allow scroll work.
+      if (response.results.length > 0) {
+        clearSystemicPause();
       }
       // FR-4: per-piece failures (negative-cache hits) — show error state with
       // retry for each failed piece without failing the whole batch.
@@ -400,6 +503,9 @@ async function translatePieces(
           const piece = workPieces.find((p) => p.id === failure.id);
           if (!piece) continue;
           applyPieceError(piece, failure.error, compactInlineEnabled);
+          if (isSystemicFailureMessage(failure.error)) {
+            enterSystemicPause(failure.error);
+          }
         }
       }
     } else if (!response.success && response.error) {
@@ -409,6 +515,9 @@ async function translatePieces(
       showTranslationErrorNotification(response.error);
       for (const piece of workPieces) {
         applyPieceError(piece, response.error, compactInlineEnabled);
+      }
+      if (isSystemicFailureMessage(response.error)) {
+        enterSystemicPause(response.error);
       }
     }
   } catch (err) {
@@ -420,6 +529,9 @@ async function translatePieces(
     showTranslationErrorNotification(message);
     for (const piece of workPieces) {
       applyPieceError(piece, message, compactInlineEnabled);
+    }
+    if (isSystemicFailureMessage(message)) {
+      enterSystemicPause(message);
     }
   } finally {
     for (const piece of workPieces) {
@@ -502,6 +614,7 @@ async function restoreFromSnapshot(
       if (cached !== undefined) {
         piece.isTranslated = true;
         piece.translatedText = cached;
+        markContentHandled(piece);
         if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
           applyInlineTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
         } else {
@@ -572,6 +685,9 @@ export async function startTranslation(): Promise<void> {
   allPieces = [];
   activeRequests = 0;
   inFlightPieceIds.clear();
+  handledContentKeys.clear();
+  systemicPause = false;
+  lastSystemicError = '';
   hideTranslationErrorNotification();
 
   // Load settings to apply visual settings
@@ -646,6 +762,7 @@ export async function startTranslation(): Promise<void> {
       if (newPieces.length === 0) return;
 
       allPieces.push(...newPieces);
+      // While paused, observe still tracks pieces; dispatch stays gated by setPaused.
       viewportObserver.observeAll(newPieces);
       sendStatusUpdate();
     },
@@ -689,6 +806,9 @@ export function stopTranslation(): void {
   allPieces = [];
   activeRequests = 0;
   inFlightPieceIds.clear();
+  handledContentKeys.clear();
+  systemicPause = false;
+  lastSystemicError = '';
   // FR-7: write a final snapshot before clearing so the next session can resume,
   // then reset the writer-registration flag.
   writeResumeSnapshot();

@@ -84,10 +84,14 @@ export function hideAutoTranslateNotification(): void {
 
 const ERROR_NOTIFICATION_ROLE = 'translation-error-notification';
 const ERROR_AUTO_DISMISS_MS = 8000;
+/** Ignore re-shows of the same message while scrolling through many failed batches. */
+const ERROR_THROTTLE_MS = 15_000;
 
 let errorNotificationEl: HTMLElement | null = null;
 let errorDismissTimeout: ReturnType<typeof setTimeout> | null = null;
 let errorFadeTimeout: ReturnType<typeof setTimeout> | null = null;
+let lastErrorMessage = '';
+let lastErrorShownAt = 0;
 
 function removeErrorNotification(): void {
   if (errorDismissTimeout) {
@@ -108,9 +112,30 @@ function removeErrorNotification(): void {
  * One-shot page-level banner for systemic translation failures (pool exhausted,
  * all keys rate-limited, etc.). Per-piece UI stays compact; this surfaces the
  * full message once instead of under every paragraph.
+ *
+ * Throttled: scrolling through a long page with a dead pool must not flash a
+ * new banner on every viewport batch.
  */
 export function showTranslationErrorNotification(message: string): void {
+  const now = Date.now();
+  if (
+    errorNotificationEl &&
+    message === lastErrorMessage &&
+    now - lastErrorShownAt < ERROR_THROTTLE_MS
+  ) {
+    return;
+  }
+  if (
+    !errorNotificationEl &&
+    message === lastErrorMessage &&
+    now - lastErrorShownAt < ERROR_THROTTLE_MS
+  ) {
+    return;
+  }
+
   removeErrorNotification();
+  lastErrorMessage = message;
+  lastErrorShownAt = now;
 
   const bar = document.createElement('div');
   bar.setAttribute(NOTIFICATION_ATTR, ERROR_NOTIFICATION_ROLE);
@@ -145,4 +170,6 @@ export function showTranslationErrorNotification(message: string): void {
 
 export function hideTranslationErrorNotification(): void {
   removeErrorNotification();
+  lastErrorMessage = '';
+  lastErrorShownAt = 0;
 }
