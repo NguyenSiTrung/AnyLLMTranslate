@@ -10,6 +10,9 @@ import {
   exportGlossaryJSON,
   parseGlossaryJSON,
   checkGlossaryMismatches,
+  findDuplicateSource,
+  filterGlossaryEntries,
+  sortMismatchesFirst,
 } from '@/lib/glossary';
 import type { GlossaryEntry } from '@/types/config';
 
@@ -88,5 +91,44 @@ describe('checkGlossaryMismatches', () => {
     ).toHaveLength(0);
     expect(checkGlossaryMismatches(entries, 'Hello world', 'Xin chào')).toHaveLength(0);
     expect(checkGlossaryMismatches([], 'machine learning', 'hello')).toHaveLength(0);
+  });
+});
+
+describe('findDuplicateSource', () => {
+  const entries: GlossaryEntry[] = [
+    { id: '1', source: 'React', target: 'React' },
+    { id: '2', source: 'API', target: 'API' },
+  ];
+
+  it('finds case-insensitive duplicates and respects excludeId', () => {
+    expect(findDuplicateSource(entries, 'react')?.id).toBe('1');
+    expect(findDuplicateSource(entries, '  API  ')?.id).toBe('2');
+    expect(findDuplicateSource(entries, 'Vue')).toBeUndefined();
+    expect(findDuplicateSource(entries, 'React', '1')).toBeUndefined();
+    expect(findDuplicateSource(entries, 'React', '2')?.id).toBe('1');
+  });
+});
+
+describe('filterGlossaryEntries', () => {
+  it('filters source and target; empty query returns all', () => {
+    expect(filterGlossaryEntries(sampleEntries, '')).toHaveLength(3);
+    expect(filterGlossaryEntries(sampleEntries, '  ').map((e) => e.id)).toEqual(
+      sampleEntries.map((e) => e.id),
+    );
+    expect(filterGlossaryEntries(sampleEntries, 'học').map((e) => e.id)).toEqual(['2']);
+    expect(filterGlossaryEntries(sampleEntries, 'react').map((e) => e.id)).toEqual(['1']);
+  });
+});
+
+describe('sortMismatchesFirst', () => {
+  it('stable-sorts mismatched ids to the front', () => {
+    const entries: GlossaryEntry[] = [
+      { id: 'a', source: 'a', target: 'a' },
+      { id: 'b', source: 'b', target: 'b' },
+      { id: 'c', source: 'c', target: 'c' },
+    ];
+    const sorted = sortMismatchesFirst(entries, new Set(['c', 'a']));
+    expect(sorted.map((e) => e.id)).toEqual(['a', 'c', 'b']);
+    expect(sortMismatchesFirst(entries, new Set()).map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
 });

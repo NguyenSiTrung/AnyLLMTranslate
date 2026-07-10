@@ -91,6 +91,50 @@ export function parseGlossaryJSON(json: string): GlossaryEntry[] {
   });
 }
 
+/** Case-insensitive duplicate source lookup; optional excludeId for edit-self. */
+export function findDuplicateSource(
+  entries: GlossaryEntry[],
+  source: string,
+  excludeId?: string,
+): GlossaryEntry | undefined {
+  const needle = source.trim().toLowerCase();
+  if (!needle) return undefined;
+  return entries.find(
+    (e) => e.id !== excludeId && e.source.trim().toLowerCase() === needle,
+  );
+}
+
+/** Filter entries by substring match on source or target (case-insensitive). */
+export function filterGlossaryEntries(
+  entries: GlossaryEntry[],
+  query: string,
+): GlossaryEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return entries;
+  return entries.filter(
+    (e) =>
+      e.source.toLowerCase().includes(q) || e.target.toLowerCase().includes(q),
+  );
+}
+
+/**
+ * Returns a new array with mismatched entries first, preserving relative order
+ * within each partition (stable partition).
+ */
+export function sortMismatchesFirst(
+  entries: GlossaryEntry[],
+  mismatchedIds: ReadonlySet<string>,
+): GlossaryEntry[] {
+  if (mismatchedIds.size === 0) return entries;
+  const hit: GlossaryEntry[] = [];
+  const rest: GlossaryEntry[] = [];
+  for (const e of entries) {
+    if (mismatchedIds.has(e.id)) hit.push(e);
+    else rest.push(e);
+  }
+  return [...hit, ...rest];
+}
+
 function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
