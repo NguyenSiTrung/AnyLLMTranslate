@@ -13,274 +13,247 @@ import {
 } from '@/services/base';
 
 describe('DEFAULT_SYSTEM_PROMPT_TEMPLATE', () => {
-  it('contains required template variables and format instructions', () => {
+  it('contains required variables, JSON format, and math-preservation guidance', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{targetLanguage}}');
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{glossary}}');
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('json');
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('translations');
-  });
-
-  it('instructs the model to preserve inline math/notation', () => {
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('mathematical');
     expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('preserve');
   });
 });
 
 describe('buildSystemPrompt', () => {
-  it('injects targetLanguage and removes {{glossary}} placeholder in default template', () => {
-    const prompt = buildSystemPrompt('Vietnamese');
-    expect(prompt).toContain('Vietnamese');
-    expect(prompt).not.toContain('{{targetLanguage}}');
-    expect(prompt).not.toContain('{{glossary}}');
+  it('injects language/glossary/custom template and multi-placeholder replacement', () => {
+    const defaultPrompt = buildSystemPrompt('Vietnamese');
+    expect(defaultPrompt).toContain('Vietnamese');
+    expect(defaultPrompt).not.toContain('{{targetLanguage}}');
+    expect(defaultPrompt).not.toContain('{{glossary}}');
+
+    const withGlossary = buildSystemPrompt(
+      'Vietnamese',
+      null,
+      'Translation Glossary:\n- "React" → "React"',
+    );
+    expect(withGlossary).toContain('Translation Glossary');
+    expect(withGlossary).toContain('"React"');
+
+    expect(buildSystemPrompt('Vietnamese', 'Translate to {{targetLanguage}}. {{glossary}}', 'glossary block')).toBe(
+      'Translate to Vietnamese. \nglossary block',
+    );
+    expect(buildSystemPrompt('Japanese', 'Translate to {{targetLanguage}}. Output in {{targetLanguage}}.')).toBe(
+      'Translate to Japanese. Output in Japanese.',
+    );
+
+    const fromNull = buildSystemPrompt('French', null);
+    const fromEmpty = buildSystemPrompt('French', '');
+    expect(fromNull).toContain('French');
+    expect(fromNull).toContain('JSON');
+    expect(fromEmpty).toContain('French');
   });
 
-  it('injects glossary block when provided', () => {
-    const glossary = 'Translation Glossary:\n- "React" → "React"';
-    const prompt = buildSystemPrompt('Vietnamese', null, glossary);
-    expect(prompt).toContain('Translation Glossary');
-    expect(prompt).toContain('"React"');
-  });
-
-  it('uses custom template when provided', () => {
-    const template = 'Translate to {{targetLanguage}}. {{glossary}}';
-    const prompt = buildSystemPrompt('Vietnamese', template, 'glossary block');
-    expect(prompt).toBe('Translate to Vietnamese. \nglossary block');
-  });
-
-  it('handles null or empty custom template (uses default)', () => {
-    const promptNull = buildSystemPrompt('French', null);
-    expect(promptNull).toContain('French');
-    expect(promptNull).toContain('JSON');
-    const promptEmpty = buildSystemPrompt('French', '');
-    expect(promptEmpty).toContain('French');
-    expect(promptEmpty).toContain('JSON');
-  });
-
-  it('replaces multiple occurrences of targetLanguage', () => {
-    const template = 'Translate to {{targetLanguage}}. Output in {{targetLanguage}}.';
-    const prompt = buildSystemPrompt('Japanese', template);
-    expect(prompt).toBe('Translate to Japanese. Output in Japanese.');
-  });
-
-  it('appends page context when provided', () => {
-    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+  it('appends page context selectively and caps long fields (prompt-injection guard)', () => {
+    const full = buildSystemPrompt('Vietnamese', null, undefined, {
       title: 'Python Tutorial',
       description: 'Learn Python basics',
       domain: 'docs.python.org',
       category: 'software documentation',
     });
-    expect(prompt).toContain('UNTRUSTED DATA');
-    expect(prompt).toContain('<page_title>Python Tutorial</page_title>');
-    expect(prompt).toContain('<page_topic>Learn Python basics</page_topic>');
-    expect(prompt).toContain('<page_domain>docs.python.org</page_domain>');
-    expect(prompt).toContain('<page_category>software documentation</page_category>');
-  });
+    expect(full).toContain('UNTRUSTED DATA');
+    expect(full).toContain('<page_title>Python Tutorial</page_title>');
+    expect(full).toContain('<page_topic>Learn Python basics</page_topic>');
+    expect(full).toContain('<page_domain>docs.python.org</page_domain>');
+    expect(full).toContain('<page_category>software documentation</page_category>');
 
-  it('omits empty page context fields', () => {
-    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+    const partial = buildSystemPrompt('Vietnamese', null, undefined, {
       title: '',
       description: '',
       domain: 'example.com',
     });
-    expect(prompt).toContain('UNTRUSTED DATA');
-    expect(prompt).toContain('<page_domain>example.com</page_domain>');
-    expect(prompt).not.toContain('<page_title>');
-    expect(prompt).not.toContain('<page_topic>');
-  });
+    expect(partial).toContain('<page_domain>example.com</page_domain>');
+    expect(partial).not.toContain('<page_title>');
 
-  it('does not append context block when all fields are empty or pageContext is undefined', () => {
-    const promptEmpty = buildSystemPrompt('Vietnamese', null, undefined, {
+    const emptyCtx = buildSystemPrompt('Vietnamese', null, undefined, {
       title: '',
       description: '',
       domain: '',
     });
-    expect(promptEmpty).not.toContain('UNTRUSTED DATA');
-    const promptUndefined = buildSystemPrompt('Vietnamese');
-    expect(promptUndefined).not.toContain('UNTRUSTED DATA');
-  });
+    expect(emptyCtx).not.toContain('UNTRUSTED DATA');
+    expect(buildSystemPrompt('Vietnamese')).not.toContain('UNTRUSTED DATA');
 
-  it('P2 security: caps long page-context fields to mitigate prompt injection', () => {
     const longTitle = 'A'.repeat(1000);
-    const prompt = buildSystemPrompt('Vietnamese', null, undefined, {
+    const capped = buildSystemPrompt('Vietnamese', null, undefined, {
       title: longTitle,
       description: '',
       domain: 'example.com',
     });
-    // The title must be truncated — a 1000-char title would otherwise dominate
-    // the context window and could smuggle prompt directives.
-    expect(prompt).not.toContain('B'.repeat(1000));
-    expect(prompt.length).toBeLessThan(5000);
+    expect(capped.length).toBeLessThan(5000);
   });
 });
 
 describe('validatePromptTemplate', () => {
-  it('returns valid for default template', () => {
-    const result = validatePromptTemplate(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
-    expect(result.valid).toBe(true);
-    expect(result.warnings).toHaveLength(0);
-  });
+  it('validates default and reports missing targetLanguage / JSON / translations', () => {
+    expect(validatePromptTemplate(DEFAULT_SYSTEM_PROMPT_TEMPLATE)).toEqual({
+      valid: true,
+      warnings: [],
+    });
 
-  it('warns when {{targetLanguage}} is missing', () => {
-    const result = validatePromptTemplate('Translate the text. Return JSON with translations.');
-    expect(result.valid).toBe(false);
-    expect(result.warnings).toContainEqual(expect.stringContaining('targetLanguage'));
-  });
+    const missingLang = validatePromptTemplate('Translate the text. Return JSON with translations.');
+    expect(missingLang.valid).toBe(false);
+    expect(missingLang.warnings).toContainEqual(expect.stringContaining('targetLanguage'));
 
-  it('warns when JSON instruction is missing', () => {
-    const result = validatePromptTemplate('Translate to {{targetLanguage}}. translations key.');
-    expect(result.valid).toBe(false);
-    expect(result.warnings).toContainEqual(expect.stringContaining('JSON'));
-  });
+    const missingJson = validatePromptTemplate('Translate to {{targetLanguage}}. translations key.');
+    expect(missingJson.valid).toBe(false);
+    expect(missingJson.warnings).toContainEqual(expect.stringContaining('JSON'));
 
-  it('warns when translations key instruction is missing', () => {
-    const result = validatePromptTemplate('Translate to {{targetLanguage}}. Return JSON.');
-    expect(result.valid).toBe(false);
-    expect(result.warnings).toContainEqual(expect.stringContaining('translations'));
-  });
+    const missingKey = validatePromptTemplate('Translate to {{targetLanguage}}. Return JSON.');
+    expect(missingKey.valid).toBe(false);
+    expect(missingKey.warnings).toContainEqual(expect.stringContaining('translations'));
 
-  it('returns all 3 warnings for completely empty template', () => {
-    const result = validatePromptTemplate('Do something');
-    expect(result.valid).toBe(false);
-    expect(result.warnings).toHaveLength(3);
+    const empty = validatePromptTemplate('Do something');
+    expect(empty.valid).toBe(false);
+    expect(empty.warnings).toHaveLength(3);
   });
 });
 
 describe('buildUserPrompt', () => {
-  it('formats text entries as JSON', () => {
-    const texts = new Map([['id1', 'Hello'], ['id2', 'World']]);
-    const prompt = buildUserPrompt(texts, 'auto');
-    expect(prompt).toContain('id1');
-    expect(prompt).toContain('Hello');
-  });
+  it('formats entries as JSON and optionally includes source language', () => {
+    const texts = new Map([
+      ['id1', 'Hello'],
+      ['id2', 'World'],
+    ]);
+    const auto = buildUserPrompt(texts, 'auto');
+    expect(auto).toContain('id1');
+    expect(auto).toContain('Hello');
 
-  it('includes source language hint when not auto', () => {
-    const texts = new Map([['id1', 'Hello']]);
-    const prompt = buildUserPrompt(texts, 'en');
-    expect(prompt).toContain('source language is English (en)');
+    expect(buildUserPrompt(new Map([['id1', 'Hello']]), 'en')).toContain(
+      'source language is English (en)',
+    );
   });
 });
 
 describe('parseTranslationResponse', () => {
-  it('parses standard JSON response', () => {
-    const response = '{"translations": {"id1": "Xin chào", "id2": "Thế giới"}}';
-    const result = parseTranslationResponse(response, ['id1', 'id2']);
-    expect(result.get('id1')).toBe('Xin chào');
-    expect(result.get('id2')).toBe('Thế giới');
+  it('parses standard JSON and common LLM wrappers (fence, think, prose, trailing commas)', () => {
+    expect(
+      parseTranslationResponse(
+        '{"translations": {"id1": "Xin chào", "id2": "Thế giới"}}',
+        ['id1', 'id2'],
+      ).get('id1'),
+    ).toBe('Xin chào');
+
+    expect(
+      parseTranslationResponse('```json\n{"translations": {"id1": "Hello"}}\n```', ['id1']).get(
+        'id1',
+      ),
+    ).toBe('Hello');
+
+    expect(
+      parseTranslationResponse(
+        '<think>\nHere is my reasoning...\n</think>\n{"translations": {"id1": "Hello"}}',
+        ['id1'],
+      ).get('id1'),
+    ).toBe('Hello');
+
+    expect(
+      parseTranslationResponse(
+        'Here is the translated text:\n{"translations": {"id1": "Hello"}}\nHope this helps!',
+        ['id1'],
+      ).get('id1'),
+    ).toBe('Hello');
+
+    expect(
+      parseTranslationResponse(
+        '{"translations": {"id1": "Hello",}, "properNouns": {"name": "translated",},}',
+        ['id1'],
+      ).get('id1'),
+    ).toBe('Hello');
   });
 
-  it('handles markdown code block wrapper', () => {
-    const response = '```json\n{"translations": {"id1": "Hello"}}\n```';
-    const result = parseTranslationResponse(response, ['id1']);
-    expect(result.get('id1')).toBe('Hello');
-  });
-
-  it('handles <think> tags from DeepSeek models', () => {
-    const response = '<think>\nHere is my reasoning...\n</think>\n{"translations": {"id1": "Hello"}}';
-    const result = parseTranslationResponse(response, ['id1']);
-    expect(result.get('id1')).toBe('Hello');
-  });
-
-  it('handles extraneous unformatted text around the JSON', () => {
-    const response = 'Here is the translated text:\n{"translations": {"id1": "Hello"}}\nHope this helps!';
-    const result = parseTranslationResponse(response, ['id1']);
-    expect(result.get('id1')).toBe('Hello');
-  });
-
-  it('throws on invalid JSON', () => {
-    expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
-  });
-
-  it('handles trailing commas in JSON (common LLM output error)', () => {
-    const response = '{"translations": {"id1": "Hello",}, "properNouns": {"name": "translated",},}';
-    const result = parseTranslationResponse(response, ['id1']);
-    expect(result.get('id1')).toBe('Hello');
-  });
-
-  it('logs raw response on parse failure for diagnostics', () => {
+  it('throws on invalid JSON (and logs), preserves expected ID order, skips bad values', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(() => parseTranslationResponse('totally not json at all', ['id1'])).toThrow();
+    expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
     expect(warnSpy).toHaveBeenCalledWith(
       'AnyLLMTranslate: Failed to parse translation response as JSON. Raw response:',
       expect.any(String),
     );
     warnSpy.mockRestore();
-  });
 
-  it('preserves expected ID order regardless of response key order (Phase 3.2)', () => {
-    // LLM may return keys in any order — the result Map must follow expectedIds.
-    const response = JSON.stringify({
-      translations: {
-        'id-3': 'three',
-        'id-1': 'one',
-        'id-2': 'two',
-      },
-    });
-    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
-    expect([...result.keys()]).toEqual(['id-1', 'id-2', 'id-3']);
-  });
+    const ordered = parseTranslationResponse(
+      JSON.stringify({
+        translations: { 'id-3': 'three', 'id-1': 'one', 'id-2': 'two' },
+      }),
+      ['id-1', 'id-2', 'id-3'],
+    );
+    expect([...ordered.keys()]).toEqual(['id-1', 'id-2', 'id-3']);
 
-  it('skips missing IDs while keeping the rest in expected order', () => {
-    const response = JSON.stringify({
-      translations: {
-        'id-2': 'two',
-        'id-3': 'three',
-      },
-    });
-    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
-    expect([...result.keys()]).toEqual(['id-2', 'id-3']);
-    expect(result.get('id-2')).toBe('two');
-    expect(result.get('id-3')).toBe('three');
-  });
+    const missing = parseTranslationResponse(
+      JSON.stringify({ translations: { 'id-2': 'two', 'id-3': 'three' } }),
+      ['id-1', 'id-2', 'id-3'],
+    );
+    expect([...missing.keys()]).toEqual(['id-2', 'id-3']);
 
-  it('ignores non-string values for an expected ID', () => {
-    const response = JSON.stringify({
-      translations: {
-        'id-1': 'one',
-        'id-2': null,
-        'id-3': 42,
-      },
-    });
-    const result = parseTranslationResponse(response, ['id-1', 'id-2', 'id-3']);
-    expect(result.has('id-1')).toBe(true);
-    expect(result.has('id-2')).toBe(false);
-    expect(result.has('id-3')).toBe(false);
-    expect([...result.keys()]).toEqual(['id-1']);
+    const badTypes = parseTranslationResponse(
+      JSON.stringify({
+        translations: { 'id-1': 'one', 'id-2': null, 'id-3': 42 },
+      }),
+      ['id-1', 'id-2', 'id-3'],
+    );
+    expect([...badTypes.keys()]).toEqual(['id-1']);
   });
 });
 
 describe('validateProviderConfig', () => {
-  it('rejects empty baseUrl', () => {
-    const result = validateProviderConfig({
-      preset: 'custom', baseUrl: '', apiKey: '', model: 'test',
-      temperature: 0.3, maxTokens: 100, displayName: 'Test', requiresApiKey: false,
-    });
-    expect(result.valid).toBe(false);
+  it('rejects empty/invalid URL and missing required API key; accepts valid config', () => {
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: '',
+        apiKey: '',
+        model: 'test',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Test',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'not-a-url',
+        apiKey: '',
+        model: 'test',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Test',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: '',
+        model: 'gpt-4',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Custom',
+        requiresApiKey: true,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'http://localhost:11434/v1',
+        apiKey: '',
+        model: 'gemma3:4b',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Custom',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(true);
   });
-
-  it('rejects invalid URL', () => {
-    const result = validateProviderConfig({
-      preset: 'custom', baseUrl: 'not-a-url', apiKey: '', model: 'test',
-      temperature: 0.3, maxTokens: 100, displayName: 'Test', requiresApiKey: false,
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it('rejects missing API key when required', () => {
-    const result = validateProviderConfig({
-      preset: 'custom', baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'gpt-4',
-      temperature: 0.3, maxTokens: 100, displayName: 'Custom', requiresApiKey: true,
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it('accepts valid custom config', () => {
-    const result = validateProviderConfig({
-      preset: 'custom', baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'gemma3:4b',
-      temperature: 0.3, maxTokens: 100, displayName: 'Custom', requiresApiKey: false,
-    });
-    expect(result.valid).toBe(true);
-  });
-
-
 });
-

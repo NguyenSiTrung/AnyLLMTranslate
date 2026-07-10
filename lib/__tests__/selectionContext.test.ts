@@ -11,87 +11,73 @@ describe('selectionContext', () => {
     document.body.innerHTML = '';
   });
 
-  describe('SELECTION_CONTEXT_MAX_CHARS', () => {
-    it('defaults to 300', () => {
-      expect(SELECTION_CONTEXT_MAX_CHARS).toBe(300);
-    });
-  });
-
   describe('extractSelectionContext', () => {
-    it('uses parentText when provided', () => {
-      const result = extractSelectionContext({
-        selectedText: 'word',
-        parentText: 'This is a parent sentence with word inside.',
-      });
-      expect(result).toBe('This is a parent sentence with word inside.');
-    });
+    it('uses parentText with whitespace collapse, maxChars, and centered window', () => {
+      expect(SELECTION_CONTEXT_MAX_CHARS).toBe(300);
 
-    it('collapses whitespace runs in parentText', () => {
-      const result = extractSelectionContext({
-        selectedText: 'hello',
-        parentText: '  Hello   world\n\tfoo  ',
-      });
-      expect(result).toBe('Hello world foo');
-    });
+      expect(
+        extractSelectionContext({
+          selectedText: 'word',
+          parentText: 'This is a parent sentence with word inside.',
+        }),
+      ).toBe('This is a parent sentence with word inside.');
 
-    it('caps long parentText to maxChars', () => {
+      expect(
+        extractSelectionContext({
+          selectedText: 'hello',
+          parentText: '  Hello   world\n\tfoo  ',
+        }),
+      ).toBe('Hello world foo');
+
       const long = 'a'.repeat(500);
-      const result = extractSelectionContext({
-        selectedText: 'x',
-        parentText: long,
-        maxChars: 100,
-      });
-      expect(result.length).toBe(100);
-    });
+      expect(
+        extractSelectionContext({
+          selectedText: 'x',
+          parentText: long,
+          maxChars: 100,
+        }).length,
+      ).toBe(100);
 
-    it('windows context centered around selected word when possible', () => {
-      const prefix = 'PREFIX_'.repeat(40); // 280 chars
+      const prefix = 'PREFIX_'.repeat(40);
       const selected = 'TARGET';
-      const suffix = '_SUFFIX'.repeat(40); // 280 chars
+      const suffix = '_SUFFIX'.repeat(40);
       const parentText = `${prefix}${selected}${suffix}`;
-
-      const result = extractSelectionContext({
+      const windowed = extractSelectionContext({
         selectedText: selected,
         parentText,
         maxChars: 60,
       });
+      expect(windowed.length).toBeLessThanOrEqual(60);
+      expect(windowed).toContain(selected);
+      expect(windowed).not.toBe(parentText.slice(0, 60));
 
-      expect(result.length).toBeLessThanOrEqual(60);
-      expect(result).toContain(selected);
-      // Not just a prefix of the parent (which would miss TARGET at index 280)
-      expect(result).not.toBe(parentText.slice(0, 60));
+      const missing = 'abcdefghij'.repeat(40);
+      expect(
+        extractSelectionContext({
+          selectedText: 'NOTFOUND',
+          parentText: missing,
+          maxChars: 50,
+        }),
+      ).toBe(missing.slice(0, 50));
     });
 
-    it('falls back to prefix slice when selected text is not in parent', () => {
-      const parentText = 'abcdefghij'.repeat(40); // 400 chars
-      const result = extractSelectionContext({
-        selectedText: 'NOTFOUND',
-        parentText,
-        maxChars: 50,
-      });
-      expect(result).toBe(parentText.slice(0, 50));
-    });
-
-    it('returns empty string when parent and range are missing', () => {
+    it('returns empty for missing/blank inputs and never throws on bad range', () => {
       expect(extractSelectionContext({ selectedText: 'word' })).toBe('');
-    });
-
-    it('returns empty string when parentText is empty/whitespace', () => {
+      expect(extractSelectionContext({ selectedText: 'word', parentText: '   ' })).toBe('');
+      expect(extractSelectionContext({ selectedText: '', parentText: '' })).toBe('');
       expect(
-        extractSelectionContext({ selectedText: 'word', parentText: '   ' })
-      ).toBe('');
-      expect(
-        extractSelectionContext({ selectedText: 'word', parentText: '' })
+        extractSelectionContext({
+          selectedText: 'x',
+          range: {
+            get commonAncestorContainer(): Node {
+              throw new Error('boom');
+            },
+          } as unknown as Range,
+        }),
       ).toBe('');
     });
 
-    it('returns empty string when both selected and parent are empty', () => {
-      expect(extractSelectionContext({ selectedText: '', parentText: '' })).toBe(
-        ''
-      );
-    });
-
-    it('prefers parentText over range when both are provided', () => {
+    it('prefers parentText over range, else uses range ancestor text', () => {
       const p = document.createElement('p');
       p.textContent = 'Range paragraph text with hello here.';
       document.body.appendChild(p);
@@ -100,105 +86,60 @@ describe('selectionContext', () => {
       range.setStart(textNode, 0);
       range.setEnd(textNode, 5);
 
-      const result = extractSelectionContext({
-        selectedText: 'hello',
-        parentText: 'Explicit parent text with hello.',
-        range,
-      });
-      expect(result).toBe('Explicit parent text with hello.');
-    });
-
-    it('uses range when parentText is absent', () => {
-      const p = document.createElement('p');
-      p.textContent = 'Paragraph contains selected term here.';
-      document.body.appendChild(p);
-      const textNode = p.firstChild as Text;
-      const range = document.createRange();
-      // select "selected"
-      const start = (p.textContent ?? '').indexOf('selected');
-      range.setStart(textNode, start);
-      range.setEnd(textNode, start + 'selected'.length);
-
-      const result = extractSelectionContext({
-        selectedText: 'selected',
-        range,
-      });
-      expect(result).toBe('Paragraph contains selected term here.');
-    });
-
-    it('respects maxChars override', () => {
-      const parentText = 'abcdefghijklmnopqrstuvwxyz';
-      const result = extractSelectionContext({
-        selectedText: 'a',
-        parentText,
-        maxChars: 10,
-      });
-      expect(result).toBe('abcdefghij');
-      expect(result.length).toBe(10);
-    });
-
-    it('never throws on bad input', () => {
       expect(
         extractSelectionContext({
-          selectedText: 'x',
-          // force getSurroundingTextFromRange path with a broken range-like object
-          range: {
-            get commonAncestorContainer(): Node {
-              throw new Error('boom');
-            },
-          } as unknown as Range,
-        })
-      ).toBe('');
+          selectedText: 'hello',
+          parentText: 'Explicit parent text with hello.',
+          range,
+        }),
+      ).toBe('Explicit parent text with hello.');
+
+      const start = (p.textContent ?? '').indexOf('hello');
+      range.setStart(textNode, start);
+      range.setEnd(textNode, start + 'hello'.length);
+      expect(
+        extractSelectionContext({
+          selectedText: 'hello',
+          range,
+        }),
+      ).toBe('Range paragraph text with hello here.');
     });
   });
 
   describe('getSurroundingTextFromRange', () => {
-    it('returns text from nearest paragraph ancestor', () => {
+    it('reads nearest block ancestor and fails open', () => {
       const p = document.createElement('p');
       p.textContent = 'Hello from paragraph.';
       document.body.appendChild(p);
-      const textNode = p.firstChild as Text;
-      const range = document.createRange();
-      range.setStart(textNode, 0);
-      range.setEnd(textNode, 5);
+      const pRange = document.createRange();
+      pRange.setStart(p.firstChild as Text, 0);
+      pRange.setEnd(p.firstChild as Text, 5);
+      expect(getSurroundingTextFromRange(pRange)).toBe('Hello from paragraph.');
 
-      expect(getSurroundingTextFromRange(range)).toBe('Hello from paragraph.');
-    });
-
-    it('walks up from nested span to block ancestor', () => {
       const article = document.createElement('article');
       const span = document.createElement('span');
       span.textContent = 'Nested word content';
       article.appendChild(span);
       document.body.appendChild(article);
+      const nested = document.createRange();
+      nested.setStart(span.firstChild as Text, 0);
+      nested.setEnd(span.firstChild as Text, 6);
+      expect(getSurroundingTextFromRange(nested)).toBe('Nested word content');
 
-      const textNode = span.firstChild as Text;
-      const range = document.createRange();
-      range.setStart(textNode, 0);
-      range.setEnd(textNode, 6);
-
-      expect(getSurroundingTextFromRange(range)).toBe('Nested word content');
-    });
-
-    it('stops at DIV block ancestor', () => {
       const div = document.createElement('div');
       div.textContent = 'Div block text';
       document.body.appendChild(div);
-      const textNode = div.firstChild as Text;
-      const range = document.createRange();
-      range.setStart(textNode, 0);
-      range.setEnd(textNode, 3);
+      const divRange = document.createRange();
+      divRange.setStart(div.firstChild as Text, 0);
+      divRange.setEnd(div.firstChild as Text, 3);
+      expect(getSurroundingTextFromRange(divRange)).toBe('Div block text');
 
-      expect(getSurroundingTextFromRange(range)).toBe('Div block text');
-    });
-
-    it('returns empty string on failure', () => {
       expect(
         getSurroundingTextFromRange({
           get commonAncestorContainer(): Node {
             throw new Error('fail');
           },
-        } as unknown as Range)
+        } as unknown as Range),
       ).toBe('');
     });
   });

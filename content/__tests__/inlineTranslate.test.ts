@@ -168,25 +168,20 @@ describe('replaceElementText', () => {
 /* ── Configuration ────────────────────────────────────────────── */
 
 describe('configuration', () => {
-  it('returns default configuration', () => {
+  it('returns defaults, applies updates, and can disable', () => {
     const config = getInlineTranslateConfig();
-    expect(config.enabled).toBe(true);
-    expect(config.triggerKey).toBe(' ');
-    expect(config.tapCount).toBe(3);
-    expect(config.timeWindowMs).toBe(500);
-  });
+    expect(config).toMatchObject({
+      enabled: true,
+      triggerKey: ' ',
+      tapCount: 3,
+      timeWindowMs: 500,
+    });
 
-  it('updates config via updateInlineTranslateConfig', () => {
     updateInlineTranslateConfig({ tapCount: 4, timeWindowMs: 300 });
-    const config = getInlineTranslateConfig();
-    expect(config.tapCount).toBe(4);
-    expect(config.timeWindowMs).toBe(300);
-  });
+    expect(getInlineTranslateConfig()).toMatchObject({ tapCount: 4, timeWindowMs: 300 });
 
-  it('disables via setInlineTranslateEnabled', () => {
     setInlineTranslateEnabled(false);
-    const config = getInlineTranslateConfig();
-    expect(config.enabled).toBe(false);
+    expect(getInlineTranslateConfig().enabled).toBe(false);
   });
 });
 
@@ -253,35 +248,27 @@ describe('gesture detection', () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('ignores non-editable elements', async () => {
+  it('ignores non-editable, password, code-editor, and empty fields', async () => {
     const div = document.createElement('div');
     document.body.appendChild(div);
     div.focus();
-
     fireKeydown(div, ' ');
     fireKeydown(div, ' ');
     fireKeydown(div, ' ');
     await vi.advanceTimersByTimeAsync(10);
-
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
 
-  it('ignores password fields', async () => {
-    const input = document.createElement('input');
-    input.type = 'password';
-    input.value = 'secret   ';
-    document.body.appendChild(input);
-    input.focus();
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
+    const password = document.createElement('input');
+    password.type = 'password';
+    password.value = 'secret   ';
+    document.body.appendChild(password);
+    password.focus();
+    fireKeydown(password, ' ');
+    fireKeydown(password, ' ');
+    fireKeydown(password, ' ');
     await vi.advanceTimersByTimeAsync(10);
-
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
 
-  it('ignores code editor elements', async () => {
     const editor = document.createElement('div');
     editor.className = 'monaco-editor';
     const textarea = document.createElement('textarea');
@@ -289,23 +276,17 @@ describe('gesture detection', () => {
     editor.appendChild(textarea);
     document.body.appendChild(editor);
     textarea.focus();
-
     fireKeydown(textarea, ' ');
     fireKeydown(textarea, ' ');
     fireKeydown(textarea, ' ');
     await vi.advanceTimersByTimeAsync(10);
-
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
 
-  it('skips empty/whitespace inputs', async () => {
-    const input = createFocusedInput('   ');
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
+    const empty = createFocusedInput('   ');
+    fireKeydown(empty, ' ');
+    fireKeydown(empty, ' ');
+    fireKeydown(empty, ' ');
     await vi.advanceTimersByTimeAsync(10);
-
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 

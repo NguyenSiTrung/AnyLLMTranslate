@@ -1,9 +1,5 @@
 /**
  * Tests: API key encryption at rest
- *
- * Verifies round-trip encrypt/decrypt, backward compatibility with plaintext
- * keys, per-install salt generation/persistence, recoverable decrypt failures,
- * and key rotation when the extension ID changes.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
@@ -41,96 +37,60 @@ describe('crypto — API key encryption', () => {
     vi.restoreAllMocks();
   });
 
-  it('round-trips a plaintext key', async () => {
+  it('round-trips keys, preserves empty/plaintext, uses random IV, fails closed', async () => {
     const plaintext = 'sk-test-12345abcdef';
     const encrypted = await encryptApiKey(plaintext);
     expect(encrypted).not.toBe(plaintext);
     expect(encrypted).toMatch(/^enc:/);
+    expect(await decryptApiKey(encrypted)).toBe(plaintext);
 
-    const decrypted = await decryptApiKey(encrypted);
-    expect(decrypted).toBe(plaintext);
-  });
-
-  it('returns empty string unchanged', async () => {
     expect(await encryptApiKey('')).toBe('');
     expect(await decryptApiKey('')).toBe('');
+    expect(await decryptApiKey('plain-api-key-no-prefix')).toBe('plain-api-key-no-prefix');
+
+    const a = await encryptApiKey('same-key');
+    const b = await encryptApiKey('same-key');
+    expect(a).not.toBe(b);
+
+    // Undecryptable ciphertext must not leak back as a pseudo API key.
+    expect(await decryptApiKey('enc:not-valid-base64!!!')).toBe('');
   });
 
-  it('returns plaintext unchanged (backward compat)', async () => {
-    const plaintext = 'plain-api-key-no-prefix';
-    expect(await decryptApiKey(plaintext)).toBe(plaintext);
+  it('persists per-install salt and reuses it across cache resets', async () => {
+    const store = installStorageMock();
+    __resetSaltCacheForTest();
+    expect(store[STORAGE_KEYS.ENC_SALT]).toBeUndefined();
+
+    const encrypted = await encryptApiKey('sk-persist');
+    const savedSalt = store[STORAGE_KEYS.ENC_SALT];
+    expect(savedSalt).toBeTypeOf('string');
+
+    __resetSaltCacheForTest();
+    expect(store[STORAGE_KEYS.ENC_SALT]).toBe(savedSalt);
+    expect(await decryptApiKey(encrypted)).toBe('sk-persist');
   });
 
-  it('produces different ciphertexts for same plaintext (random IV)', async () => {
-    const plaintext = 'same-key';
-    const encrypted1 = await encryptApiKey(plaintext);
-    const encrypted2 = await encryptApiKey(plaintext);
-    expect(encrypted1).not.toBe(encrypted2);
-  });
-
-  it('P2 security: returns empty string (not ciphertext) on decryption failure', async () => {
-    const corrupted = 'enc:not-valid-base64!!!';
-    // Previously returned the raw ciphertext, which a caller could then send as
-    // the API key. Now returns '' so an undecryptable value can't leak.
-    expect(await decryptApiKey(corrupted)).toBe('');
-  });
-
-  describe('per-install salt', () => {
-    it('generates and persists a random salt on first encryption', async () => {
-      const store = installStorageMock();
-      __resetSaltCacheForTest();
-      expect(store[STORAGE_KEYS.ENC_SALT]).toBeUndefined();
-
-      await encryptApiKey('sk-generate-salt');
-
-      expect(store[STORAGE_KEYS.ENC_SALT]).toBeTypeOf('string');
+  it('decryptApiKeyResult reports plaintext/success/failure and extension-id rotation', async () => {
+    expect(await decryptApiKeyResult('plain-key')).toEqual({
+      value: 'plain-key',
+      ok: true,
+      encrypted: false,
     });
 
-    it('reuses the persisted salt across module cache resets', async () => {
-      const store = installStorageMock();
-      __resetSaltCacheForTest();
-      const encrypted = await encryptApiKey('sk-persist');
-      const savedSalt = store[STORAGE_KEYS.ENC_SALT];
+    const encrypted = await encryptApiKey('sk-success');
+    const ok = await decryptApiKeyResult(encrypted);
+    expect(ok).toEqual({ value: 'sk-success', ok: true, encrypted: true });
 
-      // Simulate a fresh session: drop the cache but keep stored salt.
-      __resetSaltCacheForTest();
-      expect(store[STORAGE_KEYS.ENC_SALT]).toBe(savedSalt);
-      expect(await decryptApiKey(encrypted)).toBe('sk-persist');
-    });
-  });
+    const bad = await decryptApiKeyResult('enc:not-valid-base64!!!');
+    expect(bad).toEqual({ value: '', ok: false, encrypted: true });
 
-  describe('decryptApiKeyResult', () => {
-    it('reports plaintext as not-encrypted and ok', async () => {
-      const result = await decryptApiKeyResult('plain-key');
-      expect(result).toEqual({ value: 'plain-key', ok: true, encrypted: false });
-    });
-
-    it('reports successful decryption of an encrypted value', async () => {
-      const encrypted = await encryptApiKey('sk-success');
-      const result = await decryptApiKeyResult(encrypted);
-      expect(result.ok).toBe(true);
-      expect(result.encrypted).toBe(true);
-      expect(result.value).toBe('sk-success');
-    });
-
-    it('reports an undecryptable encrypted value as a recoverable failure', async () => {
-      const result = await decryptApiKeyResult('enc:not-valid-base64!!!');
-      expect(result.ok).toBe(false);
-      expect(result.encrypted).toBe(true);
-      expect(result.value).toBe('');
-    });
-
-    it('fails to decrypt when the extension ID changes (key rotation)', async () => {
-      installStorageMock();
-      __resetSaltCacheForTest();
-      (chrome.runtime as { id: string }).id = 'original-extension-id';
-      const encrypted = await encryptApiKey('sk-rotated');
-
-      // Same install salt, different runtime id → derived key differs → fails.
-      (chrome.runtime as { id: string }).id = 'different-extension-id';
-      const result = await decryptApiKeyResult(encrypted);
-      expect(result.ok).toBe(false);
-      expect(result.value).toBe('');
-    });
+    installStorageMock();
+    __resetSaltCacheForTest();
+    (chrome.runtime as { id: string }).id = 'original-extension-id';
+    const rotated = await encryptApiKey('sk-rotated');
+    (chrome.runtime as { id: string }).id = 'different-extension-id';
+    const fail = await decryptApiKeyResult(rotated);
+    expect(fail.ok).toBe(false);
+    expect(fail.value).toBe('');
   });
 });

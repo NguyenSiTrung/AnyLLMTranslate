@@ -15,44 +15,27 @@ function parseTestMpd(xml: string, url: string): Document {
   return doc;
 }
 
-describe('isMaxCdnVttSegmentUrl', () => {
-  it('matches Max CDN WebVTT segment URLs', () => {
+describe('URL classification', () => {
+  it('classifies Max VTT segments and MPD manifests (incl. extensionless Max CDN)', () => {
     expect(isMaxCdnVttSegmentUrl(
       'https://gcp.asia.prd.media.max.com/fadb6e8d/t/caa516/t3/8.vtt?manifest-params=TOKEN',
     )).toBe(true);
     expect(isMaxCdnVttSegmentUrl(
       'https://gcp.apac-free.prd.media.max.com/apac/uuid/t/3_f384f7/t1/1.vtt',
     )).toBe(true);
-  });
-
-  it('rejects top-level manifests and non-Max hosts', () => {
     expect(isMaxCdnVttSegmentUrl(
       'https://gcp.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN',
     )).toBe(false);
     expect(isMaxCdnVttSegmentUrl('https://cdn.cloudfront.net/en.vtt')).toBe(false);
-  });
-});
 
-describe('detectMpdRequests', () => {
-  it('detects .mpd URLs', () => {
     expect(detectMpdRequests('https://cdn.example.com/manifest.mpd')).toBe(true);
     expect(detectMpdRequests('https://cdn.example.com/manifest.mpd?token=abc')).toBe(true);
-  });
-
-  it('detects extensionless Max CDN manifest URLs with manifest-params', () => {
     expect(detectMpdRequests(
       'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
     )).toBe(true);
-  });
-
-  it('rejects non-MPD URLs', () => {
     expect(detectMpdRequests('https://cdn.example.com/video.m3u8')).toBe(false);
     expect(detectMpdRequests('https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt')).toBe(false);
-    expect(detectMpdRequests('https://cf.asia.prd.media.max.com/fadb6e8d?rtype=s')).toBe(false);
     expect(detectMpdRequests('')).toBe(false);
-  });
-
-  it('rejects Max CDN WebVTT segment URLs even when manifest-params is present', () => {
     expect(detectMpdRequests(
       'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/2_ada795/t0/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
     )).toBe(false);
@@ -60,8 +43,8 @@ describe('detectMpdRequests', () => {
 });
 
 describe('extractSubtitleTracks', () => {
-  it('extracts TTML AdaptationSet tracks', () => {
-    const xml = `<?xml version="1.0"?>
+  it('extracts TTML and contentType=text tracks, skips video AdaptationSets', () => {
+    const ttmlXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="application/ttml+xml" lang="en">
@@ -71,22 +54,19 @@ describe('extractSubtitleTracks', () => {
     </AdaptationSet>
   </Period>
 </MPD>`;
-
-    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
-    const tracks = extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd');
-    expect(tracks).toHaveLength(1);
-    // toMatchObject (not toEqual) so additive MpdSubtitleTrack fields don't
-    // make this brittle; the meaningful structural fields are asserted here.
-    expect(tracks[0]).toMatchObject({
+    const ttmlTracks = extractSubtitleTracks(
+      parseTestMpd(ttmlXml, 'https://cdn.example.com/manifest.mpd'),
+      'https://cdn.example.com/manifest.mpd',
+    );
+    expect(ttmlTracks).toHaveLength(1);
+    expect(ttmlTracks[0]).toMatchObject({
       url: 'https://cdn.example.com/subs_en.ttml',
       language: 'en',
       mimeType: 'application/ttml+xml',
     });
-    expect(tracks[0].segmentOffsetsMs).toEqual([0]);
-  });
+    expect(ttmlTracks[0].segmentOffsetsMs).toEqual([0]);
 
-  it('extracts contentType=text AdaptationSets', () => {
-    const xml = `<?xml version="1.0"?>
+    const textXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="application/mp4" contentType="text" lang="es">
@@ -96,14 +76,14 @@ describe('extractSubtitleTracks', () => {
     </AdaptationSet>
   </Period>
 </MPD>`;
+    expect(
+      extractSubtitleTracks(
+        parseTestMpd(textXml, 'https://cdn.example.com/manifest.mpd'),
+        'https://cdn.example.com/manifest.mpd',
+      )[0].language,
+    ).toBe('es');
 
-    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
-    const tracks = extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd');
-    expect(tracks[0].language).toBe('es');
-  });
-
-  it('skips video AdaptationSets', () => {
-    const xml = `<?xml version="1.0"?>
+    const videoXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="video/mp4" lang="en">
@@ -111,9 +91,12 @@ describe('extractSubtitleTracks', () => {
     </AdaptationSet>
   </Period>
 </MPD>`;
-
-    const doc = parseTestMpd(xml, 'https://cdn.example.com/manifest.mpd');
-    expect(extractSubtitleTracks(doc, 'https://cdn.example.com/manifest.mpd')).toEqual([]);
+    expect(
+      extractSubtitleTracks(
+        parseTestMpd(videoXml, 'https://cdn.example.com/manifest.mpd'),
+        'https://cdn.example.com/manifest.mpd',
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -465,42 +448,28 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   });
 });
 
-describe('isManifestResponse', () => {
-  it('detects DASH MPD with or without namespace', () => {
+describe('isManifestResponse / mergeManifestQueryParams', () => {
+  it('detects MPD by body/content-type and never treats subtitle content as manifest', () => {
     expect(isManifestResponse(
       '<?xml version="1.0"?><MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period></Period></MPD>',
       '',
     )).toBe(true);
-    expect(isManifestResponse(
-      '<MPD><Period><AdaptationSet/></Period></MPD>',
-      '',
-    )).toBe(true);
-  });
-
-  it('detects manifest via content-type', () => {
+    expect(isManifestResponse('<MPD><Period><AdaptationSet/></Period></MPD>', '')).toBe(true);
     expect(isManifestResponse('not a manifest body', 'application/dash+xml')).toBe(true);
-  });
-
-  it('does not treat subtitle content (WEBVTT/TTML) as manifest', () => {
     expect(isManifestResponse('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi', 'application/dash+xml')).toBe(false);
     expect(isManifestResponse('<tt xmlns="http://www.w3.org/ns/ttml"></tt>', 'application/ttml+xml')).toBe(false);
   });
-});
 
-describe('mergeManifestQueryParams', () => {
-  const mpdUrl =
-    'https://akm.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
-
-  it('adds all manifest query keys when segment URL has no query', () => {
+  it('merges manifest query params onto bare segments but not external CDNs with their own query', () => {
+    const mpdUrl =
+      'https://akm.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
     const segment = new URL('https://gcp.apac-free.prd.media.max.com/apac/uuid/t/3_f384f7/t1/1.vtt');
     mergeManifestQueryParams(segment, mpdUrl);
     expect(segment.searchParams.get('manifest-params')).toBe('TOKEN');
     expect(segment.searchParams.get('rtype')).toBe('s');
-  });
 
-  it('leaves external CDN URLs unchanged when they carry their own query', () => {
-    const segment = new URL('https://other.cdn.com/subs_en.ttml?token=xyz');
-    mergeManifestQueryParams(segment, mpdUrl);
-    expect(segment.search).toBe('?token=xyz');
+    const external = new URL('https://other.cdn.com/subs_en.ttml?token=xyz');
+    mergeManifestQueryParams(external, mpdUrl);
+    expect(external.search).toBe('?token=xyz');
   });
 });

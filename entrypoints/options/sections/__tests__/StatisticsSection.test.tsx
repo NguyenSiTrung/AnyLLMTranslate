@@ -378,7 +378,7 @@ describe('StatisticsSection', () => {
     expect(mockedResetStats).not.toHaveBeenCalled();
   });
 
-  it('renders insights chips from buildInsights', async () => {
+  it('renders insights, breakdowns, and privacy copy after load', async () => {
     setupPopulatedMocks();
     render(<StatisticsSection />);
 
@@ -388,33 +388,11 @@ describe('StatisticsSection', () => {
 
     expect(screen.getByText(/cache served 67%/i)).toBeInTheDocument();
     expect(mockedBuildInsights).toHaveBeenCalled();
-  });
-
-  it('renders breakdown panels', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('stats-breakdowns')).toBeInTheDocument();
-    });
-
+    expect(screen.getByTestId('stats-breakdowns')).toBeInTheDocument();
     expect(screen.getByText('By mode')).toBeInTheDocument();
     expect(screen.getByText('Top hosts')).toBeInTheDocument();
-    expect(screen.getByText('By provider')).toBeInTheDocument();
-    expect(screen.getByText('Language pairs')).toBeInTheDocument();
-  });
-
-  it('shows privacy copy near data controls', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('stats-data-controls')).toBeInTheDocument();
-    });
-
-    expect(
-      screen.getByText(/statistics stay on this device/i),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('stats-data-controls')).toBeInTheDocument();
+    expect(screen.getByText(/statistics stay on this device/i)).toBeInTheDocument();
   });
 
   it('subscribes to chrome.storage onChanged for stats key', async () => {

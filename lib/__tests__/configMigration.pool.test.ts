@@ -394,7 +394,7 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
     };
   }
 
-  it('is stable when only irrelevant fields change (theme, glossary, site rules)', () => {
+  it('is stable for UI-only fields and changes when pool-relevant fields change', () => {
     const a = baseSettings();
     const b: ExtensionSettings = {
       ...baseSettings(),
@@ -404,37 +404,32 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
       globalExcludeSelectors: ['pre', '.code'],
     };
     expect(computePoolSignature(a)).toBe(computePoolSignature(b));
-  });
 
-  /** Clone base settings with the first provider replaced by `patch`. */
-  const withProviderPatch = (patch: Partial<PoolProvider>): ExtensionSettings => ({
-    ...baseSettings(),
-    providers: [{ ...baseSettings().providers[0], ...patch }],
-  });
+    /** Clone base settings with the first provider replaced by `patch`. */
+    const withProviderPatch = (patch: Partial<PoolProvider>): ExtensionSettings => ({
+      ...baseSettings(),
+      providers: [{ ...baseSettings().providers[0], ...patch }],
+    });
 
-  /** Clone base settings with the first key of the first provider patched. */
-  const withKeyPatch = (patch: Partial<{ apiKey: string; maxRpm: number; enabled: boolean }>): ExtensionSettings => {
-    const base = baseSettings();
-    const provider = base.providers[0];
-    const firstKey = provider.keys[0];
-    return {
-      ...base,
-      providers: [
-        { ...provider, keys: [{ ...firstKey, ...patch }, ...provider.keys.slice(1)] },
-      ],
+    /** Clone base settings with the first key of the first provider patched. */
+    const withKeyPatch = (
+      patch: Partial<{ apiKey: string; maxRpm: number; enabled: boolean }>,
+    ): ExtensionSettings => {
+      const base = baseSettings();
+      const provider = base.providers[0];
+      const firstKey = provider.keys[0];
+      return {
+        ...base,
+        providers: [{ ...provider, keys: [{ ...firstKey, ...patch }, ...provider.keys.slice(1)] }],
+      };
     };
-  };
 
-  it('changes when a provider baseUrl or model changes', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withProviderPatch({ baseUrl: 'https://other/v1' })),
     );
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withProviderPatch({ model: 'other-model' })),
     );
-  });
-
-  it('changes when a key apiKey/maxRpm/enabled changes', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ apiKey: 'sk-CHANGED' })),
     );
@@ -444,11 +439,8 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ enabled: false })),
     );
-  });
-
-  it('changes when the top-level maxRpm changes', () => {
-    const a = baseSettings();
-    const b: ExtensionSettings = { ...baseSettings(), maxRpm: 60 };
-    expect(computePoolSignature(a)).not.toBe(computePoolSignature(b));
+    expect(computePoolSignature(a)).not.toBe(
+      computePoolSignature({ ...baseSettings(), maxRpm: 60 }),
+    );
   });
 });

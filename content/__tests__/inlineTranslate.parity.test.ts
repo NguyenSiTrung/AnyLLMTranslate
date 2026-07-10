@@ -76,7 +76,7 @@ afterEach(() => {
 });
 
 describe('editable guards', () => {
-  it('excludes readOnly and disabled inputs', () => {
+  it('excludes readOnly/disabled inputs and resolves deep active element', () => {
     const ro = document.createElement('input');
     ro.type = 'text';
     ro.readOnly = true;
@@ -90,13 +90,10 @@ describe('editable guards', () => {
     const ok = document.createElement('input');
     ok.type = 'text';
     expect(isEditableElement(ok)).toBe(true);
-  });
 
-  it('getDeepActiveElement returns document.activeElement (jsdom baseline)', () => {
-    const input = document.createElement('input');
-    document.body.appendChild(input);
-    input.focus();
-    expect(getDeepActiveElement(document, true)).toBe(input);
+    document.body.appendChild(ok);
+    ok.focus();
+    expect(getDeepActiveElement(document, true)).toBe(ok);
   });
 });
 
@@ -184,8 +181,8 @@ describe('gesture IME / repeat', () => {
   });
 });
 
-describe('write-back pipeline', () => {
-  it('writes and verifies on input', () => {
+describe('write-back, dual mode, blocklist, prefix', () => {
+  it('writes text, joins dual mode, blocks known hosts, parses language prefix', () => {
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'old';
@@ -193,27 +190,15 @@ describe('write-back pipeline', () => {
     const result = writeElementText(input, 'new text');
     expect(result.success).toBe(true);
     expect(input.value).toBe('new text');
-  });
 
-  it('joins dual mode for input vs textarea', () => {
-    const input = document.createElement('input');
     expect(joinDualMode('a', 'b', input)).toBe('a / b');
-    const ta = document.createElement('textarea');
-    expect(joinDualMode('a', 'b', ta)).toBe('a\nb');
-  });
-});
+    expect(joinDualMode('a', 'b', document.createElement('textarea'))).toBe('a\nb');
 
-describe('blocklist', () => {
-  it('matches Notion / Figma style hosts', () => {
     const patterns = resolveBlocklistPatterns(undefined);
     expect(isUrlBlocked('https://www.notion.so/page', patterns)).toBe(true);
     expect(isUrlBlocked('https://www.figma.com/file/xyz', patterns)).toBe(true);
     expect(isUrlBlocked('https://example.com', patterns)).toBe(false);
-  });
-});
 
-describe('prefix parse (via export)', () => {
-  it('parses /en hello', () => {
     const r = parseLanguagePrefix('/en hello');
     expect(r.targetLang).toBe('en');
     expect(r.body).toBe('hello');

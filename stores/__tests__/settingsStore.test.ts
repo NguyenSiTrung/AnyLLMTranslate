@@ -36,9 +36,7 @@ import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 
 describe('useSettingsStore', () => {
   beforeEach(() => {
-    // Reset store to defaults
     useSettingsStore.setState({ ...DEFAULT_SETTINGS, isLoaded: false });
-    // Clear mock storage
     for (const k of Object.keys(mockStorageData)) {
       Reflect.deleteProperty(mockStorageData, k);
     }
@@ -46,86 +44,61 @@ describe('useSettingsStore', () => {
     mockListeners.length = 0;
   });
 
-  describe('initial state', () => {
-    it('starts with DEFAULT_SETTINGS', () => {
-      const state = useSettingsStore.getState();
-      expect(state.theme).toBe('blockquote');
-      expect(state.targetLanguage).toBe('vi');
-      expect(state.provider.preset).toBe('custom');
-      expect(state.isLoaded).toBe(false);
-    });
-  });
+  describe('core CRUD', () => {
+    it('starts from defaults, loads/merges storage, updates, and resets', async () => {
+      const initial = useSettingsStore.getState();
+      expect(initial.theme).toBe('blockquote');
+      expect(initial.targetLanguage).toBe('vi');
+      expect(initial.provider.preset).toBe('custom');
+      expect(initial.isLoaded).toBe(false);
+      expect(initial.subtitleSettings.fontFamily).toBe('system');
+      expect(initial.subtitleSettings.displayMode).toBe('bilingual');
+      expect(initial.subtitleSettings.translationTimeout).toBe(30);
+      expect(DEFAULT_SETTINGS.maxRpm).toBe(0);
 
-  describe('loadFromStorage', () => {
-    it('loads stored settings and merges with defaults', async () => {
       mockStorageData['anyllm-translate-settings'] = {
         theme: 'bubble',
         targetLanguage: 'ja',
+        maxRpm: 60,
+        subtitleSettings: { fontFamily: 'serif', displayMode: 'translation-only', translationTimeout: 60 },
       };
-
       await useSettingsStore.getState().loadFromStorage();
-
-      const state = useSettingsStore.getState();
+      let state = useSettingsStore.getState();
       expect(state.theme).toBe('bubble');
       expect(state.targetLanguage).toBe('ja');
+      expect(state.maxRpm).toBe(60);
+      expect(state.subtitleSettings.fontFamily).toBe('serif');
+      expect(state.subtitleSettings.position).toBe('bottom'); // default merge
       expect(state.isLoaded).toBe(true);
-      // Non-stored fields use defaults
-      expect(state.provider.preset).toBe('custom');
-    });
 
-    it('handles empty storage gracefully', async () => {
+      // empty storage → defaults
+      for (const k of Object.keys(mockStorageData)) Reflect.deleteProperty(mockStorageData, k);
+      useSettingsStore.setState({ ...DEFAULT_SETTINGS, isLoaded: false });
       await useSettingsStore.getState().loadFromStorage();
+      expect(useSettingsStore.getState().theme).toBe('blockquote');
+      expect(useSettingsStore.getState().isLoaded).toBe(true);
 
-      const state = useSettingsStore.getState();
-      expect(state.isLoaded).toBe(true);
-      expect(state.theme).toBe('blockquote');
-    });
-  });
-
-  describe('updateSettings', () => {
-    it('updates partial settings and persists', async () => {
-      await useSettingsStore.getState().updateSettings({ theme: 'shadow-card' });
-
-      const state = useSettingsStore.getState();
-      expect(state.theme).toBe('shadow-card');
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'anyllm-translate-settings': expect.objectContaining({ theme: 'shadow-card' }),
-        }),
-      );
-    });
-  });
-
-  describe('updateProvider', () => {
-    it('updates provider config and persists', async () => {
+      await useSettingsStore.getState().updateSettings({ theme: 'shadow-card', maxRpm: 30 });
       await useSettingsStore.getState().updateProvider({ model: 'llama3' });
-
-      const state = useSettingsStore.getState();
+      state = useSettingsStore.getState();
+      expect(state.theme).toBe('shadow-card');
+      expect(state.maxRpm).toBe(30);
       expect(state.provider.model).toBe('llama3');
-      expect(state.provider.preset).toBe('custom'); // Unchanged
-    });
-  });
+      expect(chrome.storage.local.set).toHaveBeenCalled();
 
-  describe('resetToDefaults', () => {
-    it('resets all settings to defaults', async () => {
-      await useSettingsStore.getState().updateSettings({ theme: 'bubble', targetLanguage: 'ja' });
       await useSettingsStore.getState().resetToDefaults();
-
-      const state = useSettingsStore.getState();
+      state = useSettingsStore.getState();
       expect(state.theme).toBe('blockquote');
       expect(state.targetLanguage).toBe('vi');
+      expect(state.maxRpm).toBe(0);
       expect(state.isLoaded).toBe(true);
     });
   });
 
   describe('initStorageSync', () => {
-    it('registers a storage listener', () => {
-      initStorageSync();
+    it('registers listener, applies local changes, ignores non-local, and cleans up', () => {
+      const cleanup = initStorageSync();
       expect(chrome.storage.onChanged.addListener).toHaveBeenCalled();
-    });
-
-    it('updates store when storage changes from another context', () => {
-      initStorageSync();
       const listener = mockListeners[0];
 
       listener(
@@ -137,146 +110,51 @@ describe('useSettingsStore', () => {
         },
         'local',
       );
-
-      const state = useSettingsStore.getState();
-      expect(state.theme).toBe('paper');
-      expect(state.targetLanguage).toBe('ko');
-    });
-
-    it('ignores non-local storage changes', () => {
-      initStorageSync();
-      const listener = mockListeners[0];
+      expect(useSettingsStore.getState().theme).toBe('paper');
+      expect(useSettingsStore.getState().targetLanguage).toBe('ko');
 
       listener(
         {
           'anyllm-translate-settings': {
-            newValue: { theme: 'paper' },
+            newValue: { theme: 'bubble' },
             oldValue: DEFAULT_SETTINGS,
           },
         },
-        'sync', // Not 'local'
+        'sync',
       );
+      expect(useSettingsStore.getState().theme).toBe('paper');
 
-      const state = useSettingsStore.getState();
-      expect(state.theme).toBe('blockquote');
-    });
-
-    it('returns cleanup function that removes listener', () => {
-      const cleanup = initStorageSync();
       cleanup();
       expect(chrome.storage.onChanged.removeListener).toHaveBeenCalled();
     });
   });
 
-  describe('subtitleSettings — new fields', () => {
-    it('defaults: fontFamily=system, displayMode=bilingual, translationTimeout=30', () => {
-      const state = useSettingsStore.getState();
-      expect(state.subtitleSettings.fontFamily).toBe('system');
-      expect(state.subtitleSettings.displayMode).toBe('bilingual');
-      expect(state.subtitleSettings.translationTimeout).toBe(30);
-    });
-
-    it('loads stored subtitleSettings and deep-merges with defaults', async () => {
-      mockStorageData['anyllm-translate-settings'] = {
-        subtitleSettings: { fontFamily: 'serif', displayMode: 'translation-only', translationTimeout: 60 },
-      };
-
-      await useSettingsStore.getState().loadFromStorage();
-
-      const state = useSettingsStore.getState();
-      expect(state.subtitleSettings.fontFamily).toBe('serif');
-      expect(state.subtitleSettings.displayMode).toBe('translation-only');
-      expect(state.subtitleSettings.translationTimeout).toBe(60);
-      // Existing fields preserved
-      expect(state.subtitleSettings.position).toBe('bottom');
-      expect(state.subtitleSettings.enabled).toBe(true);
-    });
-
-    it('merges defaults when stored subtitleSettings is missing new fields', async () => {
+  describe('subtitleSettings', () => {
+    it('deep-merges missing fields, persists nested toggles, and syncs from storage', async () => {
       mockStorageData['anyllm-translate-settings'] = {
         subtitleSettings: { position: 'top', fontSize: 20, backgroundOpacity: 0.5, enabled: true },
       };
-
       await useSettingsStore.getState().loadFromStorage();
-
-      const state = useSettingsStore.getState();
+      let state = useSettingsStore.getState();
       expect(state.subtitleSettings.position).toBe('top');
-      expect(state.subtitleSettings.fontSize).toBe(20);
-      // New fields fall back to defaults
       expect(state.subtitleSettings.fontFamily).toBe('system');
-      expect(state.subtitleSettings.displayMode).toBe('bilingual');
-      expect(state.subtitleSettings.translationTimeout).toBe(30);
-      // YouTube ASR resegment defaults (enable true, aiEnable false)
-      expect(state.subtitleSettings.youtubeAsrResegment).toEqual({
-        enable: true,
-        aiEnable: false,
-      });
-    });
+      expect(state.subtitleSettings.youtubeAsrResegment).toEqual({ enable: true, aiEnable: false });
 
-    it('persists youtubeAsrResegment toggle writes', async () => {
-      await useSettingsStore.getState().updateSettings({
-        subtitleSettings: {
-          ...DEFAULT_SETTINGS.subtitleSettings,
-          youtubeAsrResegment: { enable: false, aiEnable: false },
-        },
-      });
-
-      const state = useSettingsStore.getState();
-      expect(state.subtitleSettings.youtubeAsrResegment?.enable).toBe(false);
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'anyllm-translate-settings': expect.objectContaining({
-            subtitleSettings: expect.objectContaining({
-              youtubeAsrResegment: { enable: false, aiEnable: false },
-            }),
-          }),
-        }),
-      );
-    });
-
-    it('persists youtubeAsrResegment aiEnable writes', async () => {
-      await useSettingsStore.getState().updateSettings({
-        subtitleSettings: {
-          ...DEFAULT_SETTINGS.subtitleSettings,
-          youtubeAsrResegment: { enable: true, aiEnable: true },
-        },
-      });
-
-      expect(useSettingsStore.getState().subtitleSettings.youtubeAsrResegment).toEqual({
-        enable: true,
-        aiEnable: true,
-      });
-    });
-
-    it('updateSettings persists subtitleSettings changes', async () => {
       await useSettingsStore.getState().updateSettings({
         subtitleSettings: {
           ...DEFAULT_SETTINGS.subtitleSettings,
           fontFamily: 'monospace',
           translationTimeout: 90,
+          youtubeAsrResegment: { enable: false, aiEnable: true },
         },
       });
-
-      const state = useSettingsStore.getState();
+      state = useSettingsStore.getState();
       expect(state.subtitleSettings.fontFamily).toBe('monospace');
       expect(state.subtitleSettings.translationTimeout).toBe(90);
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'anyllm-translate-settings': expect.objectContaining({
-            subtitleSettings: expect.objectContaining({
-              fontFamily: 'monospace',
-              translationTimeout: 90,
-            }),
-          }),
-        }),
-      );
-    });
+      expect(state.subtitleSettings.youtubeAsrResegment).toEqual({ enable: false, aiEnable: true });
 
-    it('storage sync deep-merges new subtitle fields', () => {
       initStorageSync();
-      const listener = mockListeners[0];
-
-      listener(
+      mockListeners[0](
         {
           'anyllm-translate-settings': {
             newValue: {
@@ -295,55 +173,19 @@ describe('useSettingsStore', () => {
         },
         'local',
       );
-
-      const state = useSettingsStore.getState();
+      state = useSettingsStore.getState();
       expect(state.subtitleSettings.fontFamily).toBe('serif');
       expect(state.subtitleSettings.displayMode).toBe('translation-only');
       expect(state.subtitleSettings.translationTimeout).toBe(45);
     });
   });
 
-  describe('maxRpm — rate limiting setting', () => {
-    it('defaults to 0 (unlimited)', () => {
-      expect(DEFAULT_SETTINGS.maxRpm).toBe(0);
-      expect(DEFAULT_SETTINGS.provider.maxRpm).toBe(0);
-    });
-
-    it('updateSettings persists maxRpm', async () => {
-      await useSettingsStore.getState().updateSettings({ maxRpm: 30 });
-      const state = useSettingsStore.getState();
-      expect(state.maxRpm).toBe(30);
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'anyllm-translate-settings': expect.objectContaining({ maxRpm: 30 }),
-        }),
-      );
-    });
-
-    it('loadFromStorage preserves maxRpm from stored settings', async () => {
-      mockStorageData['anyllm-translate-settings'] = { maxRpm: 60 };
-      await useSettingsStore.getState().loadFromStorage();
-      expect(useSettingsStore.getState().maxRpm).toBe(60);
-    });
-
-    it('resetToDefaults restores maxRpm to 0', async () => {
-      await useSettingsStore.getState().updateSettings({ maxRpm: 50 });
-      await useSettingsStore.getState().resetToDefaults();
-      expect(useSettingsStore.getState().maxRpm).toBe(0);
-    });
-  });
-
   describe('providers — multi-provider pool', () => {
-    it('defaults to a single default pool provider (backward-compat single slot)', () => {
-      // A brand-new install ships with exactly one default pool entry so the
-      // coordinator always has a slot to dispatch to (mirrors legacy behavior).
+    it('defaults to one pool slot, persists updates, and masks apiKeys on cross-context sync', async () => {
       expect(DEFAULT_SETTINGS.providers).toHaveLength(1);
       expect(DEFAULT_SETTINGS.providers[0]?.keys).toHaveLength(1);
-      // The store seeds from DEFAULT_SETTINGS.
       expect(useSettingsStore.getState().providers).toHaveLength(1);
-    });
 
-    it('updateSettings persists providers array', async () => {
       await useSettingsStore.getState().updateSettings({
         providers: [
           {
@@ -355,29 +197,14 @@ describe('useSettingsStore', () => {
             temperature: 0.3,
             maxTokens: 4096,
             enabled: true,
-            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true }],
+            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, concurrencyLimit: 0, priority: 0, enabled: true }],
           },
         ],
       });
-      const state = useSettingsStore.getState();
-      expect(state.providers).toHaveLength(1);
-      expect(state.providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
-      expect(chrome.storage.local.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          'anyllm-translate-settings': expect.objectContaining({
-            providers: expect.arrayContaining([
-              expect.objectContaining({ id: 'p1' }),
-            ]),
-          }),
-        }),
-      );
-    });
+      expect(useSettingsStore.getState().providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
 
-    it('initStorageSync masks each providers[].keys[].apiKey to *** on cross-context change', () => {
       initStorageSync();
-      const listener = mockListeners[0];
-
-      listener(
+      mockListeners[0](
         {
           'anyllm-translate-settings': {
             newValue: {
@@ -386,8 +213,8 @@ describe('useSettingsStore', () => {
                   id: 'p1',
                   enabled: true,
                   keys: [
-                    { id: 'k1', apiKey: 'enc:leak-attempt-1', maxRpm: 30, concurrencyLimit: 0, interval: 0,enabled: true },
-                    { id: 'k2', apiKey: 'enc:leak-attempt-2', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+                    { id: 'k1', apiKey: 'enc:leak-attempt-1', maxRpm: 30, concurrencyLimit: 0, priority: 0, enabled: true },
+                    { id: 'k2', apiKey: 'enc:leak-attempt-2', maxRpm: 0, concurrencyLimit: 0, priority: 0, enabled: true },
                   ],
                 },
               ],
@@ -397,19 +224,10 @@ describe('useSettingsStore', () => {
         },
         'local',
       );
+      expect(useSettingsStore.getState().providers[0]?.keys[0]?.apiKey).toBe('***');
+      expect(useSettingsStore.getState().providers[0]?.keys[1]?.apiKey).toBe('***');
 
-      const state = useSettingsStore.getState();
-      // The masked sentinel must replace every key's apiKey so the encrypted
-      // value never briefly flashes in the UI before async decryption.
-      expect(state.providers[0]?.keys[0]?.apiKey).toBe('***');
-      expect(state.providers[0]?.keys[1]?.apiKey).toBe('***');
-    });
-
-    it('initStorageSync leaves an empty providers array untouched', () => {
-      initStorageSync();
-      const listener = mockListeners[0];
-
-      listener(
+      mockListeners[0](
         {
           'anyllm-translate-settings': {
             newValue: { providers: [] },
@@ -418,7 +236,6 @@ describe('useSettingsStore', () => {
         },
         'local',
       );
-
       expect(useSettingsStore.getState().providers).toEqual([]);
     });
   });

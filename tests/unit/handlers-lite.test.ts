@@ -38,35 +38,25 @@ describe('DisneyPlusHandler', () => {
     });
   };
 
-  describe('detect', () => {
-    it('returns true for www.disneyplus.com', () => {
-      setLocation('www.disneyplus.com');
-      expect(handler.detect()).toBe(true);
-    });
-  });
+  it('detects host, matches VTT patterns, and parses asset.captions', () => {
+    setLocation('www.disneyplus.com');
+    expect(handler.detect()).toBe(true);
+    expect(
+      handler.getPatterns()[0].pattern.test('https://cdn.disneyplus.com/sub/en/file.vtt'),
+    ).toBe(true);
 
-  describe('getPatterns', () => {
-    it('matches .vtt subtitle URLs', () => {
-      const patterns = handler.getPatterns();
-      expect(patterns[0].pattern.test('https://cdn.disneyplus.com/sub/en/file.vtt')).toBe(true);
+    const tracks = extractDisneyPlusTracksFromValue({
+      asset: {
+        id: 'entity-1',
+        captions: [
+          { language: 'en', label: 'English', url: 'https://cdn.example/en.vtt' },
+          { lang: 'es', name: 'Spanish', href: 'https://cdn.example/es.vtt' },
+        ],
+      },
     });
-  });
-
-  describe('extractDisneyPlusTracksFromValue', () => {
-    it('parses asset.captions', () => {
-      const tracks = extractDisneyPlusTracksFromValue({
-        asset: {
-          id: 'entity-1',
-          captions: [
-            { language: 'en', label: 'English', url: 'https://cdn.example/en.vtt' },
-            { lang: 'es', name: 'Spanish', href: 'https://cdn.example/es.vtt' },
-          ],
-        },
-      });
-      expect(tracks).toHaveLength(2);
-      expect(tracks[0].videoId).toBe('entity-1');
-      expect(tracks[1].language).toBe('es');
-    });
+    expect(tracks).toHaveLength(2);
+    expect(tracks[0].videoId).toBe('entity-1');
+    expect(tracks[1].language).toBe('es');
   });
 });
 
@@ -80,48 +70,31 @@ describe('WetvHandler', () => {
     handler = new WetvHandler();
   });
 
-  describe('detect', () => {
-    it.each([
-      ['www.iflix.com'],
-      ['wetv.vip'],
-      ['play.wetv.vip'],
-    ])('detects %s', (host) => {
+  it('detects WeTV/iflix hosts, matches VTT, parses cues, and hides native captions', () => {
+    for (const host of ['www.iflix.com', 'wetv.vip', 'play.wetv.vip']) {
       vi.stubGlobal('location', { hostname: host, pathname: '/play/123' });
       expect(handler.detect()).toBe(true);
-    });
-
-    it.each([['www.youtube.com'], ['wetv.evil.com']])('rejects %s', (host) => {
+    }
+    for (const host of ['www.youtube.com', 'wetv.evil.com']) {
       vi.stubGlobal('location', { hostname: host, pathname: '/x' });
       expect(handler.detect()).toBe(false);
-    });
-  });
+    }
 
-  describe('getPatterns', () => {
-    it('matches .vtt URLs (Immersive iflix rule)', () => {
-      const patterns = handler.getPatterns();
-      expect(patterns[0].pattern.test('https://cdn.example/sub_en.vtt')).toBe(true);
-      expect(patterns[0].pattern.test('https://cdn.example/manifest.m3u8')).toBe(false);
-    });
-  });
+    const patterns = handler.getPatterns();
+    expect(patterns[0].pattern.test('https://cdn.example/sub_en.vtt')).toBe(true);
+    expect(patterns[0].pattern.test('https://cdn.example/manifest.m3u8')).toBe(false);
 
-  describe('transformResponse', () => {
-    it('parses WebVTT', () => {
-      const vtt = `WEBVTT
+    const vtt = `WEBVTT
 
 00:00:01.000 --> 00:00:02.000
 Hi`;
-      const cues = handler.transformResponse(vtt, 'text/vtt', 'https://x/a.vtt');
-      expect(cues).toHaveLength(1);
-      expect(cues[0].text).toBe('Hi');
-    });
-  });
+    const cues = handler.transformResponse(vtt, 'text/vtt', 'https://x/a.vtt');
+    expect(cues).toHaveLength(1);
+    expect(cues[0].text).toBe('Hi');
 
-  describe('getNativeCaptionHide', () => {
-    it('hides .text-track per Immersive attachRule', () => {
-      expect(handler.getNativeCaptionHide?.()).toEqual({
-        selector: '.text-track',
-        method: 'display',
-      });
+    expect(handler.getNativeCaptionHide?.()).toEqual({
+      selector: '.text-track',
+      method: 'display',
     });
   });
 });
@@ -165,80 +138,42 @@ describe('LinkedInHandler', () => {
     });
   });
 
-  describe('getPatterns', () => {
-    it('returns licdn and linkedin VTT patterns', () => {
-      const patterns = handler.getPatterns();
-      expect(patterns.length).toBeGreaterThanOrEqual(1);
+  it('matches LinkedIn VTT URLs, extracts language from query/path/filename, parses VTT', () => {
+    const patterns = handler.getPatterns();
+    expect(patterns.length).toBeGreaterThanOrEqual(1);
+    const vttPattern = patterns[0].pattern;
+    const extractor = patterns[0].languageExtractor;
 
-      const vttPattern = patterns[0].pattern;
+    expect(vttPattern.test('https://media.licdn.com/media/cf/subtitles/course-123_en.vtt')).toBe(true);
+    expect(vttPattern.test('https://static.licdn.com/subtitles/en-US.vtt')).toBe(true);
+    expect(vttPattern.test('https://www.linkedin.com/learning/subtitles/course.vtt')).toBe(true);
+    expect(vttPattern.test('https://media.licdn.com/media/image.png')).toBe(false);
+    expect(vttPattern.test('https://example.com/subtitles.vtt')).toBe(false);
 
-      expect(vttPattern.test('https://media.licdn.com/media/cf/subtitles/course-123_en.vtt')).toBe(true);
-      expect(vttPattern.test('https://static.licdn.com/subtitles/en-US.vtt')).toBe(true);
-      expect(vttPattern.test('https://www.linkedin.com/learning/subtitles/course.vtt')).toBe(true);
-      expect(vttPattern.test('https://media.licdn.com/media/image.png')).toBe(false);
-      expect(vttPattern.test('https://example.com/subtitles.vtt')).toBe(false);
-    });
+    expect(extractor).toBeDefined();
+    if (extractor) {
+      expect(extractor(new URL('https://media.licdn.com/subtitles/course.vtt?lang=en'))).toBe('en');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/course.vtt?locale=vi-VN'))).toBe('vi-VN');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/en/course.vtt'))).toBe('en');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/vi-VN/course.vtt'))).toBe('vi-VN');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/fr_FR/course.vtt'))).toBe('fr-FR');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/course_en.vtt'))).toBe('en');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/course_vi-VN.vtt'))).toBe('vi-VN');
+      expect(extractor(new URL('https://media.licdn.com/subtitles/course_fr_FR.vtt'))).toBe('fr-FR');
+    }
 
-    it('extracts language from URL query parameter', () => {
-      const patterns = handler.getPatterns();
-      const extractor = patterns[0].languageExtractor;
-
-      if (extractor) {
-        const url1 = new URL('https://media.licdn.com/subtitles/course.vtt?lang=en');
-        expect(extractor(url1)).toBe('en');
-
-        const url2 = new URL('https://media.licdn.com/subtitles/course.vtt?locale=vi-VN');
-        expect(extractor(url2)).toBe('vi-VN');
-      }
-    });
-
-    it('extracts language from URL path segments', () => {
-      const patterns = handler.getPatterns();
-      const extractor = patterns[0].languageExtractor;
-
-      if (extractor) {
-        const url1 = new URL('https://media.licdn.com/subtitles/en/course.vtt');
-        expect(extractor(url1)).toBe('en');
-
-        const url2 = new URL('https://media.licdn.com/subtitles/vi-VN/course.vtt');
-        expect(extractor(url2)).toBe('vi-VN');
-
-        const url3 = new URL('https://media.licdn.com/subtitles/fr_FR/course.vtt');
-        expect(extractor(url3)).toBe('fr-FR');
-      }
-    });
-
-    it('extracts language from URL filename suffix', () => {
-      const patterns = handler.getPatterns();
-      const extractor = patterns[0].languageExtractor;
-
-      if (extractor) {
-        const url1 = new URL('https://media.licdn.com/subtitles/course_en.vtt');
-        expect(extractor(url1)).toBe('en');
-
-        const url2 = new URL('https://media.licdn.com/subtitles/course_vi-VN.vtt');
-        expect(extractor(url2)).toBe('vi-VN');
-
-        const url3 = new URL('https://media.licdn.com/subtitles/course_fr_FR.vtt');
-        expect(extractor(url3)).toBe('fr-FR');
-      }
-    });
-  });
-
-  describe('transformResponse', () => {
-    it('parses standard WebVTT', () => {
-      const vtt = `WEBVTT
+    const vtt = `WEBVTT
 
 1
 00:00:01.000 --> 00:00:04.000
 LinkedIn subtitle line`;
-
-      const cues = handler.transformResponse(vtt, 'text/vtt', 'https://media.licdn.com/subtitles/course_en.vtt');
-      expect(cues).toHaveLength(1);
-      expect(cues[0].text).toBe('LinkedIn subtitle line');
-      expect(cues[0].startTime).toBe(1);
-      expect(cues[0].endTime).toBe(4);
-    });
+    const cues = handler.transformResponse(
+      vtt,
+      'text/vtt',
+      'https://media.licdn.com/subtitles/course_en.vtt',
+    );
+    expect(cues).toHaveLength(1);
+    expect(cues[0]).toMatchObject({ text: 'LinkedIn subtitle line', startTime: 1, endTime: 4 });
   });
 });
 
@@ -264,58 +199,36 @@ describe('NetflixHandler', () => {
     });
   };
 
-  describe('detect', () => {
-    it('returns true for www.netflix.com', () => {
-      setLocation('www.netflix.com');
-      expect(handler.detect()).toBe(true);
-    });
+  it('detects Netflix host, matches CDN URLs, and extracts timedtext tracks', () => {
+    setLocation('www.netflix.com');
+    expect(handler.detect()).toBe(true);
+    setLocation('notnetflix.com');
+    expect(handler.detect()).toBe(false);
 
-    it('returns false for notnetflix.com', () => {
-      setLocation('notnetflix.com');
-      expect(handler.detect()).toBe(false);
-    });
-  });
+    expect(
+      handler.getPatterns()[0].pattern.test('https://abc123.oca.nflxvideo.net/?o=1&e=2&t=3&v=4'),
+    ).toBe(true);
 
-  describe('getPatterns', () => {
-    it('matches nflxvideo.net subtitle URLs', () => {
-      const patterns = handler.getPatterns();
-      expect(
-        patterns[0].pattern.test(
-          'https://abc123.oca.nflxvideo.net/?o=1&e=2&t=3&v=4',
-        ),
-      ).toBe(true);
+    const tracks = extractNetflixTracksFromValue({
+      result: {
+        movieId: '80057281',
+        timedtexttracks: [
+          {
+            bcp47: 'en',
+            displayName: 'English',
+            href: 'https://x.oca.nflxvideo.net/?o=1',
+          },
+          { isImageBased: true, language: 'en' },
+        ],
+      },
     });
-  });
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]).toMatchObject({ language: 'en', videoId: '80057281', platform: 'netflix' });
 
-  describe('extractNetflixTracksFromValue', () => {
-    it('parses timedtexttracks from result wrapper', () => {
-      const tracks = extractNetflixTracksFromValue({
-        result: {
-          movieId: '80057281',
-          timedtexttracks: [
-            {
-              bcp47: 'en',
-              displayName: 'English',
-              href: 'https://x.oca.nflxvideo.net/?o=1',
-            },
-            { isImageBased: true, language: 'en' },
-          ],
-        },
-      });
-      expect(tracks).toHaveLength(1);
-      expect(tracks[0].language).toBe('en');
-      expect(tracks[0].videoId).toBe('80057281');
-      expect(tracks[0].platform).toBe('netflix');
+    const body = JSON.stringify({
+      tracks: [{ language: 'vi', label: 'Vietnamese', platform: 'netflix', isAutoGenerated: false }],
     });
-  });
-
-  describe('extractAvailableTracks', () => {
-    it('reads pre-wrapped tracks from JSON.parse hook payload', () => {
-      const body = JSON.stringify({
-        tracks: [{ language: 'vi', label: 'Vietnamese', platform: 'netflix', isAutoGenerated: false }],
-      });
-      const tracks = handler.extractAvailableTracks?.(body, 'application/json', '') ?? [];
-      expect(tracks[0].language).toBe('vi');
-    });
+    const fromPayload = handler.extractAvailableTracks?.(body, 'application/json', '') ?? [];
+    expect(fromPayload[0].language).toBe('vi');
   });
 });
