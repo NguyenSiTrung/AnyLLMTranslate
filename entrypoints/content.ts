@@ -69,6 +69,14 @@ import {
   collectNearViewportPieceIds,
   computeTranslationStatus,
 } from '@/lib/webTranslateStatus';
+import {
+  isHeadingElement,
+  sortByReadingStripPriority,
+} from '@/lib/readingStripPriority';
+import {
+  selectLookaheadCandidates,
+  shouldRunLookahead,
+} from '@/lib/lookaheadPrefetch';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -355,10 +363,15 @@ function applyPieceError(
  *  so we don't loop forever when the pool is truly down. */
 async function translatePieces(
   pieces: TranslationPiece[],
-  options: { skipFailureCache?: boolean; autoRetriedOnce?: boolean } = {},
+  options: {
+    skipFailureCache?: boolean;
+    autoRetriedOnce?: boolean;
+    /** Look-ahead flush — do not chain further prefetch. */
+    isLookahead?: boolean;
+  } = {},
 ): Promise<void> {
   if (pieces.length === 0) return;
-  const { skipFailureCache = false, autoRetriedOnce = false } = options;
+  const { skipFailureCache = false, autoRetriedOnce = false, isLookahead = false } = options;
 
   // User retry clears the scroll-pause so further content can translate again.
   if (skipFailureCache) {
@@ -612,7 +625,68 @@ async function translatePieces(
       skipFailureCache: true,
       autoRetriedOnce: true,
     });
+  } else if (
+    !isLookahead &&
+    requestSession === translationSession &&
+    !systemicPause
+  ) {
+    // FR-8: one hop of look-ahead after a primary (viewport) flush.
+    scheduleLookaheadPrefetch();
   }
+}
+
+/** Max concurrent in-flight translatePieces before look-ahead is skipped. */
+const LOOKAHEAD_ACTIVE_THRESHOLD = 1;
+/** Prefetch window below the fold (px), beyond VIEWPORT_MARGIN. */
+const LOOKAHEAD_BELOW_PX = 900;
+/** Cap pieces per look-ahead flush to avoid request storms. */
+const LOOKAHEAD_MAX_PIECES = 4;
+
+/**
+ * Prefetch next-screen pieces at lower priority when the pipeline is quiet.
+ * Skips systemic pause and when activeRequests is already busy.
+ */
+function scheduleLookaheadPrefetch(): void {
+  if (
+    !shouldRunLookahead({
+      systemicPause,
+      pageOff: getPageState() === 'off',
+      activeRequests,
+      activeThreshold: LOOKAHEAD_ACTIVE_THRESHOLD,
+    })
+  ) {
+    return;
+  }
+
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const candidateIds = new Set(
+    selectLookaheadCandidates(
+      allPieces.map((piece) => {
+        let top = Number.POSITIVE_INFINITY;
+        try {
+          top = piece.parentElement.getBoundingClientRect().top;
+        } catch {
+          /* detached */
+        }
+        return {
+          id: piece.id,
+          isTranslated: piece.isTranslated,
+          inFlight: inFlightPieceIds.has(piece.id),
+          top,
+        };
+      }),
+      {
+        viewportHeight,
+        viewportMarginPx: 200,
+        belowPx: LOOKAHEAD_BELOW_PX,
+        maxPieces: LOOKAHEAD_MAX_PIECES,
+      },
+    ),
+  );
+
+  if (candidateIds.size === 0) return;
+  const candidates = allPieces.filter((p) => candidateIds.has(p.id));
+  void translatePieces(candidates, { isLookahead: true });
 }
 
 /**
@@ -826,9 +900,32 @@ export async function startTranslation(): Promise<void> {
   // Set page state based on displayMode setting
   setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
 
-  // Create viewport observer for lazy translation
+  // Create viewport observer for lazy translation.
+  // FR-10: when many pieces become visible at once, prefer top-of-fold + headings.
   viewportObserver = new ViewportObserver(
-    (visiblePieces) => translatePieces(visiblePieces),
+    (visiblePieces) => {
+      const prioritized =
+        visiblePieces.length > 4
+          ? sortByReadingStripPriority(
+              visiblePieces.map((piece, originalIndex) => {
+                let viewportTop = originalIndex * 10;
+                try {
+                  viewportTop = piece.parentElement.getBoundingClientRect().top;
+                } catch {
+                  /* detached node */
+                }
+                return {
+                  piece,
+                  id: piece.id,
+                  viewportTop,
+                  isHeading: isHeadingElement(piece.parentElement),
+                  originalIndex,
+                };
+              }),
+            ).map((row) => row.piece)
+          : visiblePieces;
+      void translatePieces(prioritized);
+    },
     100,
   );
 

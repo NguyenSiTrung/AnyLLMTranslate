@@ -53,3 +53,12 @@ From `conductor/patterns.md` and predecessor web tracks:
   - Context: deepMerge(DEFAULT, stored) migrates missing new defaults for free; explicit false Classic overrides preserved.
 ---
 
+## [2026-07-14] - Phase 2: Throughput
+- **Implemented:** Parallel sub-batches (`runWithConcurrency` cap 3); look-ahead prefetch (one hop, pure candidate select); reading-strip priority sort; opt-in adaptive batching with EMA latency.
+- **Files changed:** `services/background.ts`, `lib/concurrency` usage, `lib/readingStripPriority.ts`, `lib/lookaheadPrefetch.ts`, `lib/adaptiveBatching.ts`, content.ts, config/store/AdvancedSection, tests
+- **Learnings:**
+  - Patterns: Collect per-batch outcomes from concurrent workers then merge — avoid shared mutable arrays during concurrent writes.
+  - Gotchas: Look-ahead must pass `isLookahead: true` to prevent recursive whole-page prefetch storms.
+  - Context: Adaptive batching stays opt-in (default off); records latency only when enabled.
+---
+

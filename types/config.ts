@@ -441,6 +441,11 @@ export interface ExtensionSettings {
    *  Default ON (Balanced). Classic preset turns off. Cap values are constants
    *  (ASIDE_MAX_TEXT_PER_PARAGRAPH/REGION). */
   enableAsideCaps: boolean;
+  /**
+   * When ON, adjust effective max pieces/chars per LLM request from rolling
+   * batch latency (web-translate-v3 FR-9). Default off until calibrated.
+   */
+  enableAdaptiveBatching: boolean;
 }
 
 /** Provider preset definitions */
@@ -640,6 +645,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   maxTextLengthPerRequest: 2000,
   enableBodyTagWhitelist: false,
   enableAsideCaps: true,
+  enableAdaptiveBatching: false,
 };
 
 /** All available provider presets */

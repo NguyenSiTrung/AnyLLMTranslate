@@ -776,6 +776,13 @@ export function AdvancedSection() {
                     label="Aside text caps"
                     description="Limit sidebar/aside work: skip long paragraphs and cap each region at 1000 characters. On by default (Balanced); Classic turns this off."
                   />
+                  <Toggle
+                    id="adaptive-batching-toggle"
+                    checked={settings.enableAdaptiveBatching}
+                    onChange={(checked) => updateSettings({ enableAdaptiveBatching: checked })}
+                    label="Adaptive batch size"
+                    description="Adjust pieces/characters per request from recent latency. Off by default — fixed budgets above still apply when disabled."
+                  />
                 </SettingsGroup>
               </div>
             </div>

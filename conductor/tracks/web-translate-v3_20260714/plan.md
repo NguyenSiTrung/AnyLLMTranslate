@@ -49,28 +49,28 @@ Sequential phases (no parallel execution annotations). TDD for pure libs; integr
 
 ## Phase 2: Throughput
 
-- [ ] Task 2.1: Parallel sub-batches in `handleTranslate`
-  - [ ] Replace serial `for (batch of batches)` with `runWithConcurrency` (cap 2–3)
-  - [ ] Preserve partial success, failure cache, stats, dupe rehydrate
-  - [ ] Tests proving ≥2 concurrent LLM calls when multiple batches exist
+- [x] Task 2.1: Parallel sub-batches in `handleTranslate`
+  - [x] Replace serial `for (batch of batches)` with `runWithConcurrency` (cap 2–3)
+  - [x] Preserve partial success, failure cache, stats, dupe rehydrate
+  - [x] Tests proving ≥2 concurrent LLM calls when multiple batches exist
 
-- [ ] Task 2.2: Look-ahead prefetch
-  - [ ] Prefetch next screen at lower priority when under load threshold
-  - [ ] Must not run under systemic pause
-  - [ ] Tests for priority / no request storm
+- [x] Task 2.2: Look-ahead prefetch
+  - [x] Prefetch next screen at lower priority when under load threshold
+  - [x] Must not run under systemic pause
+  - [x] Tests for priority / no request storm
 
-- [ ] Task 2.3: Reading-strip priority ordering
-  - [ ] Pure sort helper: prefer top-of-fold + headings when flush is large
-  - [ ] Wire into viewport flush path
-  - [ ] Unit tests for ordering
+- [x] Task 2.3: Reading-strip priority ordering
+  - [x] Pure sort helper: prefer top-of-fold + headings when flush is large
+  - [x] Wire into viewport flush path
+  - [x] Unit tests for ordering
 
-- [ ] Task 2.4: Adaptive batch size (opt-in setting)
-  - [ ] New `enableAdaptiveBatching` (default off) + pure adaptive budget helper
-  - [ ] Rolling latency → effective max group/chars when enabled
-  - [ ] AdvancedSection control + tests
+- [x] Task 2.4: Adaptive batch size (opt-in setting)
+  - [x] New `enableAdaptiveBatching` (default off) + pure adaptive budget helper
+  - [x] Rolling latency → effective max group/chars when enabled
+  - [x] AdvancedSection control + tests
 
-- [ ] Task 2.5: Phase 2 verification
-  - [ ] Full suite; manual multi-batch article under moderate concurrency
+- [x] Task 2.5: Phase 2 verification
+  - [x] Full suite; manual multi-batch article under moderate concurrency
 
 ---
 

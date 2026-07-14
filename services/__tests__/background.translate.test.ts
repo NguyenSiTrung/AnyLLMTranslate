@@ -648,3 +648,88 @@ describe('handleTranslate — inArticleContext batch partitioning (FR-3)', () =>
     expect(result.results.length).toBe(2);
   });
 });
+
+// ── Parallel sub-batches (web-translate-v3 FR-7) ────────────────────────────
+describe('handleTranslate — parallel sub-batches', () => {
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+  });
+
+  it('issues ≥2 concurrent LLM calls when multiple batches exist', async () => {
+    // Force many small batches: max 1 piece + low char budget → one piece per request.
+    mockStorage['anyllm-translate-settings'] = {
+      maxTextGroupLengthPerRequest: 1,
+      maxTextLengthPerRequest: 50,
+    };
+
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await new Promise((r) => setTimeout(r, 40));
+        concurrent--;
+
+        // Echo ids from the user message as identity translations.
+        const body = JSON.parse((init?.body as string) ?? '{}') as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        const userMsg = body.messages?.find((m) => m.role === 'user');
+        const content = userMsg?.content ?? '';
+        const jsonStart = content.indexOf('{');
+        const ids =
+          jsonStart >= 0
+            ? Object.keys(JSON.parse(content.slice(jsonStart)) as Record<string, string>)
+            : [];
+        const translations: Record<string, string> = {};
+        for (const id of ids) translations[id] = `T-${id}`;
+
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'test',
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({ translations }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          text: async () => '',
+        };
+      }),
+    );
+
+    const pieces = [
+      { id: 'p1', text: 'Paragraph one unique.' },
+      { id: 'p2', text: 'Paragraph two unique.' },
+      { id: 'p3', text: 'Paragraph three unique.' },
+      { id: 'p4', text: 'Paragraph four unique.' },
+    ];
+
+    const result = (await handleMessage(
+      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
+      fakeSender,
+    )) as { success: boolean; results: Array<{ id: string }> };
+
+    expect(result.success).toBe(true);
+    expect(result.results.length).toBe(4);
+    // With concurrency cap ≥2 and 4 serial-would-be batches, peak in-flight ≥ 2.
+    expect(maxConcurrent).toBeGreaterThanOrEqual(2);
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(4);
+  });
+});

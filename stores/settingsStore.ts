@@ -170,5 +170,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     maxTextLengthPerRequest: state.maxTextLengthPerRequest,
     enableBodyTagWhitelist: state.enableBodyTagWhitelist,
     enableAsideCaps: state.enableAsideCaps,
+    enableAdaptiveBatching: state.enableAdaptiveBatching,
   };
 }

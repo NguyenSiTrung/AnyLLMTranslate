@@ -57,6 +57,16 @@ import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
 import { parallelCacheLookup, partitionCacheOutcomes } from '@/lib/parallelCacheLookup';
+import { runWithConcurrency } from '@/lib/concurrency';
+import {
+  computeAdaptiveBudgets,
+  createAdaptiveBatchState,
+  recordBatchLatency,
+  type AdaptiveBatchState,
+} from '@/lib/adaptiveBatching';
+
+/** Rolling latency for adaptive batch sizing (SW lifetime; opt-in only). */
+let adaptiveBatchState: AdaptiveBatchState = createAdaptiveBatchState();
 import { formatGlossary } from '@/lib/glossary';
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
@@ -646,10 +656,13 @@ async function handleTranslate(
     // FR-3: partition by inArticleContext so article prose and chrome text
     // don't interleave in the same LLM request (coherent context per batch).
     const { deduped, dupes } = dedupPiecesByText(uncachedPieces);
-    const batchOpts = {
+    const baseBatchOpts = {
       maxTextGroupLengthPerRequest: settings.maxTextGroupLengthPerRequest,
       maxTextLengthPerRequest: settings.maxTextLengthPerRequest,
     };
+    const batchOpts = settings.enableAdaptiveBatching
+      ? computeAdaptiveBudgets(baseBatchOpts, adaptiveBatchState)
+      : baseBatchOpts;
     const inArticleDeduped = deduped.filter((p) => p.inArticleContext === true);
     const outOfArticleDeduped = deduped.filter((p) => p.inArticleContext !== true);
     const batches = [
@@ -660,70 +673,100 @@ async function handleTranslate(
     // Translate only uncached pieces
     const service = await initService();
 
-    const freshResults: Array<{ id: string; translatedText: string }> = [];
-    let totalApiCalls = 0;
-    let anyPartial = false;
-    let lastError: string | undefined;
+    // FR-7 (web-translate-v3): run sub-batches with bounded concurrency so a
+    // multi-batch viewport flush is not pure serial. Cap 3 composes with the
+    // existing request semaphore + provider pool rate limits.
+    const SUB_BATCH_CONCURRENCY = 3;
 
-    for (const batch of batches) {
-      const texts = new Map<string, string>();
-      for (const piece of batch) {
-        texts.set(piece.id, piece.text);
-      }
+    type BatchOutcome = {
+      results: Array<{ id: string; translatedText: string }>;
+      failed: Array<{ id: string; error: string }>;
+      partial: boolean;
+      error?: string;
+      apiCalls: number;
+    };
 
-      const result = await service.translate({
-        texts,
-        sourceLanguage: message.sourceLanguage,
-        targetLanguage: message.targetLanguage,
-        glossaryBlock: glossaryBlock || undefined,
-        customSystemPrompt: settings.customSystemPrompt ?? null,
-        pageContext: message.pageContext,
-      });
-      totalApiCalls++;
+    const batchOutcomes = await runWithConcurrency(
+      batches,
+      async (batch): Promise<BatchOutcome> => {
+        const texts = new Map<string, string>();
+        for (const piece of batch) {
+          texts.set(piece.id, piece.text);
+        }
 
-      if (result.success) {
-        if (result.partial) anyPartial = true;
-        for (const [id, translatedText] of result.translations.entries()) {
-          freshResults.push({ id, translatedText });
+        const startedAt = Date.now();
+        const result = await service.translate({
+          texts,
+          sourceLanguage: message.sourceLanguage,
+          targetLanguage: message.targetLanguage,
+          glossaryBlock: glossaryBlock || undefined,
+          customSystemPrompt: settings.customSystemPrompt ?? null,
+          pageContext: message.pageContext,
+        });
+        if (settings.enableAdaptiveBatching) {
+          adaptiveBatchState = recordBatchLatency(
+            adaptiveBatchState,
+            Date.now() - startedAt,
+          );
+        }
 
-          // Write each fresh translation back to cache.
-          const piece = batch.find((p) => p.id === id);
-          if (piece) {
-            // FR-7 (fixes #9): partial-result guard — mirror the subtitle path.
-            // When the LLM omitted this ID, the service back-fills it with the
-            // source text. Never cache that: it would persist source-as-translation
-            // and poison future lookups. (result.partial marks the chunk.)
-            const isBackfilled = result.partial === true && translatedText === piece.text;
-            if (!isBackfilled) {
-              await cacheTranslation(
-                piece.text,
-                translatedText,
-                message.sourceLanguage,
-                message.targetLanguage,
-              );
+        if (result.success) {
+          const results: Array<{ id: string; translatedText: string }> = [];
+          for (const [id, translatedText] of result.translations.entries()) {
+            results.push({ id, translatedText });
+
+            // Write each fresh translation back to cache.
+            const piece = batch.find((p) => p.id === id);
+            if (piece) {
+              // FR-7 (fixes #9): partial-result guard — never cache back-fills.
+              const isBackfilled = result.partial === true && translatedText === piece.text;
+              if (!isBackfilled) {
+                await cacheTranslation(
+                  piece.text,
+                  translatedText,
+                  message.sourceLanguage,
+                  message.targetLanguage,
+                );
+              }
             }
           }
+          return {
+            results,
+            failed: [],
+            partial: result.partial === true,
+            apiCalls: 1,
+          };
         }
-      } else {
-        // Record the first batch failure; continue so partial results still
-        // surface (a later batch may succeed). If ALL batches fail, the final
-        // return reports the error.
-        lastError = result.error ?? 'Translation failed';
-        // Surface per-piece failures for this request. Negative-cache only for
-        // content-scoped permanent errors — never for pool/rate-limit/network
-        // (those caused spinner→fail then instant-OK on manual retry).
+
+        // Record batch failure; sibling batches may still succeed.
+        const error = result.error ?? 'Translation failed';
+        const failed: Array<{ id: string; error: string }> = [];
         for (const piece of batch) {
-          failedResults.push({ id: piece.id, error: lastError });
+          failed.push({ id: piece.id, error });
           if (settings.enableFailureCache) {
             cacheFailure(
               piece.text,
-              lastError,
+              error,
               message.sourceLanguage,
               message.targetLanguage,
             ).catch(() => {});
           }
         }
-      }
+        return { results: [], failed, partial: false, error, apiCalls: 1 };
+      },
+      { concurrency: SUB_BATCH_CONCURRENCY },
+    );
+
+    const freshResults: Array<{ id: string; translatedText: string }> = [];
+    let totalApiCalls = 0;
+    let anyPartial = false;
+    let lastError: string | undefined;
+    for (const outcome of batchOutcomes) {
+      totalApiCalls += outcome.apiCalls;
+      if (outcome.partial) anyPartial = true;
+      if (outcome.error) lastError = outcome.error;
+      freshResults.push(...outcome.results);
+      failedResults.push(...outcome.failed);
     }
 
     // Re-hydrate duplicate ids: each dup adopts its canonical piece's translation.
