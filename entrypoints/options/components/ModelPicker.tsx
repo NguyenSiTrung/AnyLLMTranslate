@@ -1,10 +1,12 @@
 /**
- * Model field with optional Browse models (GET /models) without full connection test.
+ * Model field with optional Browse models (GET /models, paginated) without full connection test.
+ * Shows a searchable scrollable list of all returned model ids (no hard 24-chip cap).
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, List } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, List, Search } from 'lucide-react';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
+import { filterModelIds } from '@/lib/modelListing';
 import { inferCatalogId } from './ProviderCatalogPicker';
 import type { ProviderConfig } from '@/types/config';
 import { listProviderModels } from '@/services/providerTester';
@@ -37,6 +39,7 @@ export function ModelPicker({
   const [browseModels, setBrowseModels] = useState<string[]>([]);
   const [browseError, setBrowseError] = useState<string | null>(null);
   const [isBrowsing, setIsBrowsing] = useState(false);
+  const [query, setQuery] = useState('');
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -46,9 +49,17 @@ export function ModelPicker({
     };
   }, []);
 
+  // Clear browse results when endpoint identity changes so stale lists never show.
+  useEffect(() => {
+    setBrowseModels([]);
+    setBrowseError(null);
+    setQuery('');
+  }, [provider.baseUrl, provider.apiKey]);
+
   const handleBrowse = useCallback(async () => {
     setIsBrowsing(true);
     setBrowseError(null);
+    setQuery('');
     const result = await listProviderModels({
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
@@ -63,8 +74,16 @@ export function ModelPicker({
     setBrowseModels(result.models);
   }, [provider.baseUrl, provider.apiKey]);
 
-  const chipModels = [...new Set([...browseModels, ...testModels])].slice(0, 24);
+  const allModels = useMemo(
+    () => [...new Set([...browseModels, ...testModels])],
+    [browseModels, testModels],
+  );
+  const filteredModels = useMemo(
+    () => filterModelIds(allModels, query),
+    [allModels, query],
+  );
   const browseEnabled = canBrowseModels(provider);
+  const showList = allModels.length > 0;
 
   return (
     <FieldGroup
@@ -97,24 +116,56 @@ export function ModelPicker({
           {browseError}
         </p>
       )}
-      {chipModels.length > 0 && (
-        <div className="mt-2">
-          <p className="text-xs text-zinc-500 mb-1">Available models:</p>
-          <div className="flex flex-wrap gap-1">
-            {chipModels.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => onModelChange(m)}
-                className={`text-xs px-2 py-0.5 rounded font-mono transition-colors cursor-pointer ${
-                  provider.model === m
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+      {showList && (
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-zinc-500">
+              {query.trim()
+                ? `${filteredModels.length} of ${allModels.length} models`
+                : `${allModels.length} model${allModels.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+          {allModels.length > 8 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search models..."
+                className="pl-9 font-mono"
+                aria-label="Search models"
+              />
+            </div>
+          )}
+          <div
+            className="max-h-48 overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800 divide-y divide-zinc-800/80"
+            role="listbox"
+            aria-label="Available models"
+          >
+            {filteredModels.length === 0 ? (
+              <p className="p-3 text-xs text-zinc-500">No models match your search.</p>
+            ) : (
+              filteredModels.map((m) => {
+                const isActive = provider.model === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onClick={() => onModelChange(m)}
+                    className={`w-full text-left px-3 py-2 text-xs font-mono transition-colors cursor-pointer break-all ${
+                      isActive
+                        ? 'bg-blue-500/10 text-blue-300'
+                        : 'bg-zinc-900/50 text-zinc-300 hover:bg-zinc-800/80'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       )}

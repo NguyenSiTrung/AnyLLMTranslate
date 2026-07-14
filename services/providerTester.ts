@@ -6,6 +6,11 @@
  */
 
 import type { ProviderConfig } from '@/types/config';
+import {
+  MAX_MODEL_LIST_PAGES,
+  buildModelsListUrl,
+  parseModelsListResponse,
+} from '@/lib/modelListing';
 
 /** Individual test step result */
 export interface ConnectionTestStep {
@@ -139,7 +144,7 @@ export interface ListProviderModelsResult {
   latencyMs: number;
 }
 
-/** Fetch model IDs from GET {baseUrl}/models without running full connection test. */
+/** Fetch model IDs from GET {baseUrl}/models (follows has_more pages) without full connection test. */
 export async function listProviderModels(
   config: Pick<ProviderConfig, 'baseUrl' | 'apiKey'>,
 ): Promise<ListProviderModelsResult> {
@@ -160,7 +165,7 @@ export async function listProviderModels(
   };
 }
 
-/** Step 2: Call /v1/models to enumerate available models */
+/** Step 2: Call /v1/models (with has_more pagination) to enumerate available models */
 async function testModelListing(config: ProviderConfig): Promise<ConnectionTestStep> {
   const start = performance.now();
   try {
@@ -169,34 +174,55 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const seen = new Set<string>();
+    const modelIds: string[] = [];
+    let after: string | undefined;
+    let pages = 0;
 
-    const response = await fetch(`${config.baseUrl}/models`, {
-      method: 'GET',
-      headers,
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
+    while (pages < MAX_MODEL_LIST_PAGES) {
+      pages += 1;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
 
-    const latencyMs = Math.round(performance.now() - start);
+      const response = await fetch(buildModelsListUrl(config.baseUrl, after), {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
-    if (!response.ok) {
-      return {
-        name: 'models',
-        success: false,
-        latencyMs,
-        error: `HTTP ${response.status}: Failed to list models`,
-      };
+      if (!response.ok) {
+        return {
+          name: 'models',
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          error: `HTTP ${response.status}: Failed to list models`,
+        };
+      }
+
+      const json: unknown = await response.json();
+      const parsed = parseModelsListResponse(json);
+      for (const id of parsed.ids) {
+        if (!seen.has(id)) {
+          seen.add(id);
+          modelIds.push(id);
+        }
+      }
+
+      if (!parsed.hasMore || !parsed.lastId) {
+        break;
+      }
+      // Avoid infinite loop if provider keeps returning the same last_id.
+      if (after === parsed.lastId) {
+        break;
+      }
+      after = parsed.lastId;
     }
-
-    const json = await response.json() as { data?: { id: string }[] };
-    const modelIds = (json.data ?? []).map((m) => m.id);
 
     return {
       name: 'models',
       success: true,
-      latencyMs,
+      latencyMs: Math.round(performance.now() - start),
       data: modelIds,
     };
   } catch (error) {
