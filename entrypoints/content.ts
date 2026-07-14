@@ -10,6 +10,7 @@ import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
+import { loadSettingsCached, invalidateSessionSettingsCache } from '@/lib/sessionSettingsCache';
 import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
 import {
   getAutoDetectedCategory,
@@ -34,6 +35,8 @@ import {
   hideAutoTranslateNotification,
   showTranslationErrorNotification,
   hideTranslationErrorNotification,
+  showSystemicPauseBanner,
+  hideSystemicPauseBanner,
 } from '@/content/autoTranslateNotification';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
@@ -160,16 +163,43 @@ function isSystemicFailureMessage(message: string): boolean {
   );
 }
 
+function openProvidersSettings(): void {
+  try {
+    // Prefer a dedicated providers deep-link when the options page supports it.
+    const url = chrome.runtime.getURL('options.html?section=providers');
+    chrome.runtime.sendMessage({ action: 'OPEN_OPTIONS', url }).catch(() => {
+      // Fallback: open options page directly from the content script context.
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function enterSystemicPause(error: string): void {
   systemicPause = true;
   lastSystemicError = error;
   viewportObserver?.setPaused(true);
+  // Sticky banner: Retry resumes scroll translation; Dismiss only hides chrome
+  // (pause stays so further scroll does not storm a dead pool).
+  showSystemicPauseBanner({
+    message: error || 'Translation paused — all providers unavailable.',
+    onRetry: () => {
+      clearSystemicPause();
+    },
+    onDismiss: () => {
+      // Banner already removed by the button handler; keep systemicPause so
+      // translatePieces short-circuits until the user explicitly retries.
+    },
+    onOpenSettings: openProvidersSettings,
+  });
 }
 
 function clearSystemicPause(): void {
   if (!systemicPause && !viewportObserver?.isPaused) return;
   systemicPause = false;
   lastSystemicError = '';
+  hideSystemicPauseBanner();
   viewportObserver?.setPaused(false);
   // Re-observe unfinished pieces so scrolling/resume can continue after recovery.
   if (viewportObserver) {
@@ -357,7 +387,8 @@ async function translatePieces(
 
   // Load settings before the placeholder loop so the compact-inline flag
   // gates which spinner style each piece gets (short → inline, long → block).
-  const settings = await loadSettings();
+  // FR-5: session-scoped cache avoids repeated chrome.storage reads per batch.
+  const settings = await loadSettingsCached();
   const compactInlineEnabled = settings.enableCompactInlineForShortText;
 
   // Show spinner placeholder for each piece immediately (before async call)
@@ -750,9 +781,11 @@ export async function startTranslation(): Promise<void> {
   systemicPause = false;
   lastSystemicError = '';
   hideTranslationErrorNotification();
+  hideSystemicPauseBanner();
 
-  // Load settings to apply visual settings
-  const settings = await loadSettings();
+  // Load settings to apply visual settings (session-scoped cache for FR-5)
+  invalidateSessionSettingsCache();
+  const settings = await loadSettingsCached();
   // FR-7: capture the target language for the pagehide snapshot writer.
   currentTargetLanguage = settings.targetLanguage;
 
@@ -864,12 +897,14 @@ export function stopTranslation(): void {
   clearHoverCache();
   hideAutoTranslateNotification();
   hideTranslationErrorNotification();
+  hideSystemicPauseBanner();
   allPieces = [];
   activeRequests = 0;
   inFlightPieceIds.clear();
   handledContentKeys.clear();
   systemicPause = false;
   lastSystemicError = '';
+  invalidateSessionSettingsCache();
   // FR-7: write a final snapshot before clearing so the next session can resume,
   // then reset the writer-registration flag.
   writeResumeSnapshot();

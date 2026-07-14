@@ -56,6 +56,7 @@ import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
+import { parallelCacheLookup, partitionCacheOutcomes } from '@/lib/parallelCacheLookup';
 import { formatGlossary } from '@/lib/glossary';
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
@@ -587,53 +588,32 @@ async function handleTranslate(
     const providerId = bestEffortProviderId(settings);
     const host = hostFromSender(sender);
 
-    // FR-1: Split pieces into cached and uncached
-    const cachedResults: Array<{ id: string; translatedText: string }> = [];
-    const uncachedPieces: Array<{ id: string; text: string }> = [];
-    // FR-4: per-piece failures (from negative-cache hits or batch failures).
-    const failedResults: Array<{ id: string; error: string }> = [];
-    let cacheCharacters = 0;
-
-    for (const piece of message.pieces) {
-      const cached = await getCachedTranslation(
-        piece.text,
-        message.sourceLanguage,
-        message.targetLanguage,
-        settings.cacheTTLDays,
-      );
-      if (cached !== null) {
-        cachedResults.push({ id: piece.id, translatedText: cached });
-        cacheCharacters += piece.text.length;
-        continue;
-      }
-      // FR-4: negative cache — if a recent failure is cached for this piece,
-      // short-circuit to an error result (no LLM call) so flaky providers aren't
-      // retried on every scroll-past. The piece surfaces in `failed`, not
-      // `results`, so the content script shows an error state.
-      // Bypassed (and cleared) on a forced retry so the "Click to retry" button
-      // actually re-calls the LLM instead of re-surfacing the cached error.
-      if (settings.enableFailureCache && !message.skipFailureCache) {
-        const failure = await getCachedFailure(
-          piece.text,
-          message.sourceLanguage,
-          message.targetLanguage,
-          settings.failureCacheTtlMinutes,
-        );
-        if (failure !== null) {
-          failedResults.push({ id: piece.id, error: failure });
-          continue;
-        }
-      } else if (message.skipFailureCache) {
-        // Forced retry: drop any stale negative-cache entry for this piece so a
-        // fresh failure isn't shadowed by the previous one (fire-and-forget).
-        deleteCachedFailure(
-          piece.text,
-          message.sourceLanguage,
-          message.targetLanguage,
-        ).catch(() => {});
-      }
-      uncachedPieces.push(piece);
-    }
+    // FR-1 + FR-5 (web-translate-v3): parallel success/failure cache lookups
+    // per piece (Promise.all) — same semantics as serial, lower latency on
+    // multi-piece viewport flushes.
+    const cacheOutcomes = await parallelCacheLookup(
+      {
+        pieces: message.pieces,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        cacheTTLDays: settings.cacheTTLDays,
+        failureCacheTtlMinutes: settings.failureCacheTtlMinutes,
+        enableFailureCache: settings.enableFailureCache,
+        skipFailureCache: message.skipFailureCache,
+      },
+      {
+        getCachedTranslation,
+        getCachedFailure,
+        deleteCachedFailure,
+      },
+    );
+    const originalById = new Map(message.pieces.map((p) => [p.id, p]));
+    const {
+      cachedResults,
+      failedResults,
+      uncachedPieces,
+      cacheCharacters,
+    } = partitionCacheOutcomes(cacheOutcomes, originalById);
 
     // If all pieces were cached or negative-cached, return immediately — no LLM call.
     // FR-4: surface negative-cached failures so the content script shows error states.

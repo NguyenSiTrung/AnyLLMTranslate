@@ -46,6 +46,12 @@ import {
   DEFAULT_SYSTEM_PROMPT_TEMPLATE,
   validatePromptTemplate,
 } from '@/services/base';
+import {
+  applyPageScopePreset,
+  detectPageScopePreset,
+  PAGE_SCOPE_PRESET_OPTIONS,
+  type PageScopePreset,
+} from '@/lib/pageScopePreset';
 
 /**
  * FR-11 — portable-settings allowlist. Only these keys are written to the
@@ -643,8 +649,8 @@ export function AdvancedSection() {
                   checked={settings.enableStreamingTranslation}
                   onChange={(checked) => updateSettings({ enableStreamingTranslation: checked })}
                   label="Streaming translation"
-                  labelExtra={<Badge variant="experimental">Experimental</Badge>}
-                  description="Fill translations as the response streams instead of waiting for the full batch."
+                  labelExtra={<Badge variant="info">Default on</Badge>}
+                  description="Fill translations as the response streams instead of waiting for the full batch. Falls back to non-streaming if the stream fails. Turn off via Classic page-scope preset."
                 />
               </div>
 
@@ -706,6 +712,56 @@ export function AdvancedSection() {
                   title="Page walk tuning"
                   description="What parts of the DOM are eligible for translation."
                 >
+                  <FieldGroup
+                    label="Page scope preset"
+                    description="Quick profiles for walk + streaming. Classic restores pre-v3 defaults."
+                    htmlFor="page-scope-preset"
+                  >
+                    <Select
+                      id="page-scope-preset"
+                      value={(() => {
+                        const detected = detectPageScopePreset({
+                          enableStreamingTranslation: settings.enableStreamingTranslation,
+                          enableAsideCaps: settings.enableAsideCaps,
+                          enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
+                          enableSmartExcludes: settings.enableSmartExcludes,
+                        });
+                        return detected === 'custom' ? 'custom' : detected;
+                      })()}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') return;
+                        updateSettings(applyPageScopePreset(val as PageScopePreset));
+                      }}
+                      options={[
+                        ...PAGE_SCOPE_PRESET_OPTIONS.map((o) => ({
+                          value: o.value,
+                          label: o.label,
+                        })),
+                        {
+                          value: 'custom',
+                          label: 'Custom (mixed)',
+                        },
+                      ]}
+                    />
+                  </FieldGroup>
+                  <p className="text-[11px] text-zinc-500 -mt-2 mb-1 leading-relaxed">
+                    {(() => {
+                      const detected = detectPageScopePreset({
+                        enableStreamingTranslation: settings.enableStreamingTranslation,
+                        enableAsideCaps: settings.enableAsideCaps,
+                        enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
+                        enableSmartExcludes: settings.enableSmartExcludes,
+                      });
+                      if (detected === 'custom') {
+                        return 'Individual toggles below don’t match a named preset.';
+                      }
+                      return (
+                        PAGE_SCOPE_PRESET_OPTIONS.find((o) => o.value === detected)?.description ??
+                        ''
+                      );
+                    })()}
+                  </p>
                   <Toggle
                     id="body-tag-whitelist-toggle"
                     checked={settings.enableBodyTagWhitelist}
@@ -718,7 +774,7 @@ export function AdvancedSection() {
                     checked={settings.enableAsideCaps}
                     onChange={(checked) => updateSettings({ enableAsideCaps: checked })}
                     label="Aside text caps"
-                    description="Limit sidebar/aside work: skip long paragraphs and cap each region at 1000 characters."
+                    description="Limit sidebar/aside work: skip long paragraphs and cap each region at 1000 characters. On by default (Balanced); Classic turns this off."
                   />
                 </SettingsGroup>
               </div>

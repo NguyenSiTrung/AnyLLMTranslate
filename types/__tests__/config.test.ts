@@ -20,7 +20,9 @@ describe('config defaults', () => {
     expect(DEFAULT_SETTINGS.provider.preset).toBe('custom');
     expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
     expect(DEFAULT_SETTINGS.enableBodyTagWhitelist).toBe(false);
-    expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(false);
+    // Balanced defaults (web-translate-v3): streaming + aside caps ON
+    expect(DEFAULT_SETTINGS.enableStreamingTranslation).toBe(true);
+    expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(true);
 
     expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
     expect(DEFAULT_SUBTITLE_SETTINGS.enabled).toBe(true);

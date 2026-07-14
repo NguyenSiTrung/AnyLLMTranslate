@@ -424,7 +424,7 @@ export interface ExtensionSettings {
   enableFailureCache: boolean;
   /** Negative-cache entry TTL in minutes (FR-4, default 120) */
   failureCacheTtlMinutes: number;
-  /** Stream web-page translations incrementally instead of waiting for the full batch (FR-6, opt-in) */
+  /** Stream web-page translations incrementally instead of waiting for the full batch (default ON; non-stream fallback on failure) */
   enableStreamingTranslation: boolean;
   /** Restore translated state on page reload if a snapshot + cache are still present (FR-7 web resume) */
   enableWebResume: boolean;
@@ -438,7 +438,8 @@ export interface ExtensionSettings {
   enableBodyTagWhitelist: boolean;
   /** FR-5: When ON, within aside regions (ASIDE, [role="complementary"], sidebar selectors),
    *  apply per-paragraph and per-region text caps to limit token waste + page clutter.
-   *  Default off. Cap values are constants (ASIDE_MAX_TEXT_PER_PARAGRAPH/REGION). */
+   *  Default ON (Balanced). Classic preset turns off. Cap values are constants
+   *  (ASIDE_MAX_TEXT_PER_PARAGRAPH/REGION). */
   enableAsideCaps: boolean;
 }
 
@@ -633,12 +634,12 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableSourceLanguageDetection: true,
   enableFailureCache: true,
   failureCacheTtlMinutes: 120,
-  enableStreamingTranslation: false,
+  enableStreamingTranslation: true,
   enableWebResume: true,
   maxTextGroupLengthPerRequest: 4,
   maxTextLengthPerRequest: 2000,
   enableBodyTagWhitelist: false,
-  enableAsideCaps: false,
+  enableAsideCaps: true,
 };
 
 /** All available provider presets */

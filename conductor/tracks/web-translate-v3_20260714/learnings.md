@@ -43,3 +43,13 @@ From `conductor/patterns.md` and predecessor web tracks:
   - Context: Prior computeStatus treated any untranslated piece as translating; FR-1 deliberately separates reading-strip idle from whole-page complete.
 ---
 
+## [2026-07-14] - Phase 1 Tasks 1.2–1.7: Defaults, presets, cache, banner
+- **Implemented:** Streaming + aside caps default ON; page-scope presets (Classic/Balanced/Main/Full); session settings cache; parallel cache lookup rehydrating original piece fields; sticky systemic-pause banner with Retry/Dismiss/Settings.
+- **Files changed:** `types/config.ts`, `lib/pageScopePreset.ts`, `lib/sessionSettingsCache.ts`, `lib/parallelCacheLookup.ts`, `services/background.ts`, `content/autoTranslateNotification.ts`, `styles/inject.css`, `entrypoints/content.ts`, `entrypoints/options/sections/AdvancedSection.tsx`, tests
+- **Learnings:**
+  - Patterns: Preset detection via pure equality of owned fields → `'custom'` when mixed; Select shows custom option as read-only.
+  - Gotchas: `partitionCacheOutcomes` MUST rehydrate from original `message.pieces` or `inArticleContext` is lost and FR-3 batch split breaks.
+  - Gotchas: sticky banner Dismiss hides UI but keeps `systemicPause` so scroll does not storm a dead pool; Retry calls `clearSystemicPause`.
+  - Context: deepMerge(DEFAULT, stored) migrates missing new defaults for free; explicit false Classic overrides preserved.
+---
+

@@ -173,3 +173,93 @@ export function hideTranslationErrorNotification(): void {
   lastErrorMessage = '';
   lastErrorShownAt = 0;
 }
+
+// ─── Systemic pause sticky banner (FR-3 web-translate-v3) ───────────────────
+// Non-auto-dismiss bar with Retry / Dismiss / Open settings. Distinct from the
+// one-shot error toast above so scroll thrash does not re-flash while paused.
+
+const SYSTEMIC_PAUSE_ROLE = 'systemic-pause-banner';
+
+let systemicPauseEl: HTMLElement | null = null;
+
+function removeSystemicPauseBanner(): void {
+  if (systemicPauseEl) {
+    systemicPauseEl.remove();
+    systemicPauseEl = null;
+  }
+}
+
+export interface SystemicPauseBannerOptions {
+  message: string;
+  onRetry: () => void;
+  onDismiss: () => void;
+  onOpenSettings?: () => void;
+}
+
+/**
+ * Sticky in-page bar for provider-pool / systemic pause.
+ * No auto-dismiss — stays until Retry, Dismiss, or successful batch clear.
+ */
+export function showSystemicPauseBanner(options: SystemicPauseBannerOptions): void {
+  removeSystemicPauseBanner();
+  // Prefer sticky banner over the ephemeral error toast.
+  removeErrorNotification();
+
+  const bar = document.createElement('div');
+  bar.setAttribute(NOTIFICATION_ATTR, SYSTEMIC_PAUSE_ROLE);
+  bar.setAttribute('role', 'alert');
+  bar.className = 'anyllm-systemic-pause-banner';
+
+  const label = document.createElement('span');
+  label.className = 'anyllm-systemic-pause-message';
+  label.textContent = options.message || 'Translation paused — provider unavailable.';
+  bar.appendChild(label);
+
+  const actions = document.createElement('div');
+  actions.className = 'anyllm-systemic-pause-actions';
+
+  const retryBtn = document.createElement('button');
+  retryBtn.type = 'button';
+  retryBtn.className = 'anyllm-systemic-pause-retry';
+  retryBtn.textContent = 'Retry';
+  retryBtn.addEventListener('click', () => {
+    removeSystemicPauseBanner();
+    options.onRetry();
+  });
+  actions.appendChild(retryBtn);
+
+  if (options.onOpenSettings) {
+    const settingsBtn = document.createElement('button');
+    settingsBtn.type = 'button';
+    settingsBtn.className = 'anyllm-systemic-pause-settings';
+    settingsBtn.textContent = 'Open settings';
+    settingsBtn.addEventListener('click', () => {
+      options.onOpenSettings?.();
+    });
+    actions.appendChild(settingsBtn);
+  }
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'anyllm-systemic-pause-dismiss';
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.setAttribute('aria-label', 'Dismiss');
+  dismissBtn.addEventListener('click', () => {
+    removeSystemicPauseBanner();
+    options.onDismiss();
+  });
+  actions.appendChild(dismissBtn);
+
+  bar.appendChild(actions);
+  document.body.appendChild(bar);
+  systemicPauseEl = bar;
+}
+
+export function hideSystemicPauseBanner(): void {
+  removeSystemicPauseBanner();
+}
+
+/** Whether the sticky systemic-pause banner is currently mounted. */
+export function isSystemicPauseBannerVisible(): boolean {
+  return systemicPauseEl !== null && document.body.contains(systemicPauseEl);
+}
