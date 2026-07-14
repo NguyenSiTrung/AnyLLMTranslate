@@ -247,7 +247,7 @@ export function ProviderKeyRow({
                 onBlur={commitMaxRpm}
               />
             </FieldGroup>
-            <FieldGroup label="Concurrency (0 = global)" htmlFor={`pc-${poolKey.id}`}>
+            <FieldGroup label="Concurrency (0 = global only)" htmlFor={`pc-${poolKey.id}`}>
               <Input
                 id={`pc-${poolKey.id}`}
                 type="number"
@@ -258,7 +258,7 @@ export function ProviderKeyRow({
                 onBlur={commitConcurrency}
               />
             </FieldGroup>
-            <FieldGroup label="Throttle interval ms" htmlFor={`pi-${poolKey.id}`}>
+            <FieldGroup label="Throttle interval ms (0 = off)" htmlFor={`pi-${poolKey.id}`}>
               <Input
                 id={`pi-${poolKey.id}`}
                 type="number"

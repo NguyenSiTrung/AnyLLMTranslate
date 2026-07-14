@@ -54,7 +54,7 @@ describe('useSettingsStore', () => {
       expect(initial.subtitleSettings.fontFamily).toBe('system');
       expect(initial.subtitleSettings.displayMode).toBe('bilingual');
       expect(initial.subtitleSettings.translationTimeout).toBe(30);
-      expect(DEFAULT_SETTINGS.maxRpm).toBe(0);
+      expect(DEFAULT_SETTINGS.maxRpm).toBe(20);
 
       mockStorageData['anyllm-translate-settings'] = {
         theme: 'bubble',
@@ -90,7 +90,7 @@ describe('useSettingsStore', () => {
       state = useSettingsStore.getState();
       expect(state.theme).toBe('blockquote');
       expect(state.targetLanguage).toBe('vi');
-      expect(state.maxRpm).toBe(0);
+      expect(state.maxRpm).toBe(DEFAULT_SETTINGS.maxRpm);
       expect(state.isLoaded).toBe(true);
     });
   });

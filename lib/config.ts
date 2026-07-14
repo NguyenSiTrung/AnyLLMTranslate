@@ -4,7 +4,14 @@
  */
 
 import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey, ProviderConfig } from '@/types/config';
-import { DEFAULT_SETTINGS, CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
+import {
+  DEFAULT_SETTINGS,
+  CRITICAL_GLOBAL_EXCLUDES,
+  DEFAULT_KEY_MAX_RPM,
+  DEFAULT_KEY_CONCURRENCY_LIMIT,
+  DEFAULT_KEY_INTERVAL_MS,
+  defaultPoolKeyThrottle,
+} from '@/types/config';
 import { STORAGE_KEYS } from './constants';
 import { encryptApiKey, decryptApiKeyResult } from './crypto';
 import { deepMerge } from './utils';
@@ -34,9 +41,13 @@ function migrateLegacyProviderIntoPool(merged: ExtensionSettings): void {
   const key: PoolKey = {
     id: generatePoolKeyId(),
     apiKey: legacy.apiKey,
-    maxRpm: merged.maxRpm ?? 0,
-    concurrencyLimit: 0,
-    interval: 0,
+    ...defaultPoolKeyThrottle(),
+    // Legacy unlimited (0 / missing) upgrades to the safe default; a positive
+    // global maxRpm is preserved as the user's intentional limit.
+    maxRpm:
+      typeof merged.maxRpm === 'number' && merged.maxRpm > 0
+        ? merged.maxRpm
+        : DEFAULT_KEY_MAX_RPM,
     enabled: true,
   };
   const poolProvider: PoolProvider = {
@@ -106,6 +117,38 @@ export const poolIdGenerators = {
 };
 
 /**
+ * One-time upgrade: keys still on the pre-safe unlimited triple (all 0) get
+ * {@link defaultPoolKeyThrottle}. Gated by `safeKeyThrottleMigrated` so a user
+ * who later chooses unlimited (0) is not reset on every load.
+ */
+function migrateSafeKeyThrottleDefaults(merged: ExtensionSettings): void {
+  if (merged.safeKeyThrottleMigrated) return;
+
+  for (const provider of merged.providers ?? []) {
+    for (const key of provider.keys ?? []) {
+      const rpm = key.maxRpm ?? 0;
+      const concurrency = key.concurrencyLimit ?? 0;
+      const interval = key.interval ?? 0;
+      // Only the old "everything unlimited" fingerprint — leave any tuned key alone.
+      if (rpm === 0 && concurrency === 0 && interval === 0) {
+        key.maxRpm = DEFAULT_KEY_MAX_RPM;
+        key.concurrencyLimit = DEFAULT_KEY_CONCURRENCY_LIMIT;
+        key.interval = DEFAULT_KEY_INTERVAL_MS;
+      }
+    }
+  }
+
+  if (!merged.maxRpm || merged.maxRpm <= 0) {
+    merged.maxRpm = DEFAULT_KEY_MAX_RPM;
+  }
+  if (merged.provider && (!merged.provider.maxRpm || merged.provider.maxRpm <= 0)) {
+    merged.provider.maxRpm = DEFAULT_KEY_MAX_RPM;
+  }
+
+  merged.safeKeyThrottleMigrated = true;
+}
+
+/**
  * Mirror a legacy {@link ProviderConfig} partial update into providers[0] so
  * the pool stays in sync when the setup wizard or legacy ProviderSection edits
  * the provider fields. If providers[] is empty, seeds a single-provider pool.
@@ -135,9 +178,11 @@ export function syncProviderToPool(
         {
           id: generatePoolKeyId(),
           apiKey: providerPatch.apiKey ?? '',
-          maxRpm: providerPatch.maxRpm ?? 0,
-          concurrencyLimit: 0,
-          interval: 0,
+          ...defaultPoolKeyThrottle(),
+          // Explicit patch (including 0 = unlimited) wins; otherwise safe default.
+          ...(providerPatch.maxRpm !== undefined
+            ? { maxRpm: providerPatch.maxRpm }
+            : {}),
           enabled: true,
           ...keyPatch,
         },
@@ -189,6 +234,8 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     if (!stored) {
       return {
         ...DEFAULT_SETTINGS,
+        // Defaults already use safe key throttle — mark migration done.
+        safeKeyThrottleMigrated: true,
         siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
       };
     }
@@ -239,6 +286,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     migrateLegacyProviderIntoPool(merged);
     await decryptPoolKeys(merged);
 
+    // Upgrade pre-safe unlimited key throttle (0/0/0) once per install.
+    const needsThrottlePersist = !merged.safeKeyThrottleMigrated;
+    migrateSafeKeyThrottleDefaults(merged);
+
     // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
     if ((merged.provider.preset as string) === 'ollama') {
       merged.provider.preset = 'custom';
@@ -249,6 +300,14 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.provider.preset = 'custom';
       merged.provider.displayName = 'Custom';
       merged.provider.connectionStatus = 'unknown';
+    }
+
+    // Persist one-time throttle migration so the flag sticks and later
+    // intentional "unlimited" (0) choices are not re-upgraded on every load.
+    if (needsThrottlePersist) {
+      void saveSettings(merged).catch(() => {
+        /* best-effort; next load will re-attempt migration */
+      });
     }
 
     return merged;
@@ -284,6 +343,8 @@ export function computePoolSignature(settings: ExtensionSettings): string {
       id: k.id,
       apiKey: k.apiKey,
       maxRpm: k.maxRpm,
+      concurrencyLimit: k.concurrencyLimit ?? 0,
+      interval: k.interval ?? 0,
       enabled: k.enabled,
     })),
   }));

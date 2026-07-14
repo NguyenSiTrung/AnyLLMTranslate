@@ -69,8 +69,88 @@ describe('loadSettings — multi-provider pool migration', () => {
     // The single migrated key carries the global maxRpm and is enabled.
     expect(provider.keys[0]?.apiKey).toBe('sk-legacy');
     expect(provider.keys[0]?.maxRpm).toBe(60);
+    // Safe throttle defaults applied for concurrency/interval (not unlimited 0).
+    expect(provider.keys[0]?.concurrencyLimit).toBe(1);
+    expect(provider.keys[0]?.interval).toBe(500);
     expect(provider.keys[0]?.enabled).toBe(true);
     expect(provider.keys[0]?.id).toBeTruthy();
+  });
+
+  it('upgrades unlimited 0/0/0 key throttle to safe defaults once', async () => {
+    const existing: PoolProvider = {
+      id: 'p1',
+      displayName: 'Existing',
+      baseUrl: 'https://existing.example.com/v1',
+      model: 'm',
+      requiresApiKey: false,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [
+        {
+          id: 'k1',
+          apiKey: 'plain-key',
+          maxRpm: 0,
+          concurrencyLimit: 0,
+          interval: 0,
+          enabled: true,
+        },
+      ],
+    };
+    // Simulate a pre-upgrade install: unlimited triple, migration flag unset.
+    const stored = {
+      ...baseSettings({
+        providers: [existing],
+        maxRpm: 0,
+        provider: { ...DEFAULT_SETTINGS.provider, maxRpm: 0 },
+      }),
+      safeKeyThrottleMigrated: false,
+    };
+
+    mockGet.mockResolvedValue({ [STORAGE_KEYS.SETTINGS]: stored });
+
+    const settings = await loadSettings();
+    const key = settings.providers[0]?.keys[0];
+    expect(key?.maxRpm).toBe(20);
+    expect(key?.concurrencyLimit).toBe(1);
+    expect(key?.interval).toBe(500);
+    expect(settings.maxRpm).toBe(20);
+    expect(settings.safeKeyThrottleMigrated).toBe(true);
+  });
+
+  it('does not re-upgrade after safeKeyThrottleMigrated when user chooses unlimited', async () => {
+    const existing: PoolProvider = {
+      id: 'p1',
+      displayName: 'Existing',
+      baseUrl: 'https://existing.example.com/v1',
+      model: 'm',
+      requiresApiKey: false,
+      temperature: 0.3,
+      maxTokens: 4096,
+      enabled: true,
+      keys: [
+        {
+          id: 'k1',
+          apiKey: 'plain-key',
+          maxRpm: 0,
+          concurrencyLimit: 0,
+          interval: 0,
+          enabled: true,
+        },
+      ],
+    };
+    const stored = {
+      ...baseSettings({ providers: [existing], maxRpm: 0 }),
+      safeKeyThrottleMigrated: true,
+    };
+
+    mockGet.mockResolvedValue({ [STORAGE_KEYS.SETTINGS]: stored });
+
+    const settings = await loadSettings();
+    const key = settings.providers[0]?.keys[0];
+    expect(key?.maxRpm).toBe(0);
+    expect(key?.concurrencyLimit).toBe(0);
+    expect(key?.interval).toBe(0);
   });
 
   it('does NOT resynthesize when providers[] is already populated', async () => {
@@ -413,7 +493,13 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
 
     /** Clone base settings with the first key of the first provider patched. */
     const withKeyPatch = (
-      patch: Partial<{ apiKey: string; maxRpm: number; enabled: boolean }>,
+      patch: Partial<{
+        apiKey: string;
+        maxRpm: number;
+        concurrencyLimit: number;
+        interval: number;
+        enabled: boolean;
+      }>,
     ): ExtensionSettings => {
       const base = baseSettings();
       const provider = base.providers[0];
@@ -435,6 +521,12 @@ describe('computePoolSignature (FR-6 dirty tracking)', () => {
     );
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ maxRpm: 99 })),
+    );
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withKeyPatch({ concurrencyLimit: 2 })),
+    );
+    expect(computePoolSignature(baseSettings())).not.toBe(
+      computePoolSignature(withKeyPatch({ interval: 1000 })),
     );
     expect(computePoolSignature(baseSettings())).not.toBe(
       computePoolSignature(withKeyPatch({ enabled: false })),

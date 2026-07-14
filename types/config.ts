@@ -49,6 +49,31 @@ export interface ProviderConfig {
 }
 
 /**
+ * Safe defaults for new pool keys / fresh installs.
+ *
+ * Previous unlimited defaults (all 0) let PDF and page translate fire multiple
+ * requests back-to-back on one key, which often trips provider 429s and the
+ * pool "cooling" UI. Users can still set any field to 0 for unlimited / off.
+ */
+export const DEFAULT_KEY_MAX_RPM = 20;
+/** One in-flight request per key (0 = use only the global semaphore cap). */
+export const DEFAULT_KEY_CONCURRENCY_LIMIT = 1;
+/** Minimum gap between dispatches on one key in ms (0 = off). */
+export const DEFAULT_KEY_INTERVAL_MS = 500;
+
+/** Throttle fields applied when creating a new pool key. */
+export function defaultPoolKeyThrottle(): Pick<
+  PoolKey,
+  'maxRpm' | 'concurrencyLimit' | 'interval'
+> {
+  return {
+    maxRpm: DEFAULT_KEY_MAX_RPM,
+    concurrencyLimit: DEFAULT_KEY_CONCURRENCY_LIMIT,
+    interval: DEFAULT_KEY_INTERVAL_MS,
+  };
+}
+
+/**
  * A single API key within a pool provider. Each key is an independent rotation
  * slot: it has its own rate limiter (maxRpm), circuit-breaker state, and
  * enable flag. The apiKey is AES-GCM encrypted at rest.
@@ -60,14 +85,18 @@ export interface PoolKey {
   apiKey: string;
   /** Optional human-readable label shown in the UI. */
   label?: string;
-  /** Max requests per minute for this key (0 = unlimited). */
+  /** Max requests per minute for this key (0 = unlimited). Default: {@link DEFAULT_KEY_MAX_RPM}. */
   maxRpm: number;
   /**
    * Per-key concurrency limit (0 = use the global semaphore cap only). Caps how
    * many in-flight requests this single key may hold at once (FR-5).
+   * Default: {@link DEFAULT_KEY_CONCURRENCY_LIMIT}.
    */
   concurrencyLimit: number;
-  /** Minimum gap in ms between successive requests on this key (0 = off, FR-5 throttle). */
+  /**
+   * Minimum gap in ms between successive requests on this key (0 = off, FR-5 throttle).
+   * Default: {@link DEFAULT_KEY_INTERVAL_MS}.
+   */
   interval: number;
   /** Whether this key participates in the rotation pool. */
   enabled: boolean;
@@ -405,8 +434,19 @@ export interface ExtensionSettings {
   enableSmartExcludes: boolean;
   /** PDF translator auto-open behavior */
   pdfSettings: PdfSettings;
-  /** Max requests per minute to the provider (0 = unlimited, prevents hitting provider rate limits) */
+  /**
+   * Global max RPM mirror (legacy / Advanced UI). Per-key {@link PoolKey.maxRpm}
+   * is what the pool rate-limits on. 0 = unlimited. Default: {@link DEFAULT_KEY_MAX_RPM}.
+   */
   maxRpm: number;
+  /**
+   * One-time migration flag: keys that still used the pre-safe unlimited
+   * triple (maxRpm/concurrencyLimit/interval all 0) were upgraded to
+   * {@link defaultPoolKeyThrottle}. Once true, loadSettings will not re-apply
+   * that upgrade, so users may set 0 again for unlimited without being reset.
+   * New installs start as true (defaults already safe).
+   */
+  safeKeyThrottleMigrated?: boolean;
   /**
    * Multi-provider pool: multiple active providers, each with one or more API
    * keys, rotated round-robin with circuit-breaker failover. Empty for legacy
@@ -604,7 +644,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     connectionStatus: 'unknown',
     requiresApiKey: false,
     requestTimeoutMs: 60000,
-    maxRpm: 0,
+    maxRpm: DEFAULT_KEY_MAX_RPM,
   },
   onboarding: { ...DEFAULT_ONBOARDING_STATE },
   sourceLanguage: 'auto',
@@ -633,7 +673,13 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   llmCategoryDetectionMode: 'async',
   enableSmartExcludes: true,
   pdfSettings: { ...DEFAULT_PDF_SETTINGS },
-  maxRpm: 0,
+  maxRpm: DEFAULT_KEY_MAX_RPM,
+  /**
+   * False so existing installs (merged from storage without this field) still
+   * run the one-time 0/0/0 → safe throttle upgrade. Fresh installs set true in
+   * loadSettings when no stored settings exist (defaults already safe).
+   */
+  safeKeyThrottleMigrated: false,
   /**
    * A brand-new install ships with exactly one default pool provider (mirroring
    * the legacy single-provider behavior) so the coordinator always has at least
@@ -650,7 +696,14 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       maxTokens: 4096,
       requestTimeoutMs: 60000,
       enabled: true,
-      keys: [{ id: 'k_default', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+      keys: [
+        {
+          id: 'k_default',
+          apiKey: '',
+          ...defaultPoolKeyThrottle(),
+          enabled: true,
+        },
+      ],
     },
   ],
   enableRichTranslate: true,

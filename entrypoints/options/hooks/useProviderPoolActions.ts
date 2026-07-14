@@ -20,7 +20,12 @@ import { buildProviderConfig } from '@/lib/providerPoolHelpers';
 import { runWithConcurrency } from '@/lib/concurrency';
 import { testConnection } from '@/services/providerTester';
 import { useToast } from '@/ui/ToastProvider';
-import type { KeyTestResult, PoolKey, PoolProvider } from '@/types/config';
+import {
+  defaultPoolKeyThrottle,
+  type KeyTestResult,
+  type PoolKey,
+  type PoolProvider,
+} from '@/types/config';
 
 const BULK_TEST_CONCURRENCY = 4;
 
@@ -82,9 +87,7 @@ export function useProviderPoolActions() {
       const newKey: PoolKey = {
         id: newKeyId,
         apiKey: '',
-        maxRpm: 0,
-        concurrencyLimit: 0,
-        interval: 0,
+        ...defaultPoolKeyThrottle(),
         enabled: true,
       };
       commitProviders(
@@ -144,9 +147,7 @@ export function useProviderPoolActions() {
           {
             id: poolIdGenerators.keyId(),
             apiKey,
-            maxRpm: 0,
-            concurrencyLimit: 0,
-            interval: 0,
+            ...defaultPoolKeyThrottle(),
             enabled: true,
           },
         ],
