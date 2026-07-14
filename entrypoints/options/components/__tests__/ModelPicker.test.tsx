@@ -73,6 +73,25 @@ describe('ModelPicker', () => {
     expect(onModelChange).toHaveBeenCalledWith('provider/model-29');
   });
 
+  it('always shows search once any models are listed', async () => {
+    listProviderModelsMock.mockResolvedValue({
+      success: true,
+      models: ['a', 'b', 'c'],
+      latencyMs: 5,
+    });
+
+    render(
+      <ModelPicker provider={baseProvider()} onModelChange={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /browse models/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Search models')).toBeInTheDocument();
+    });
+    expect(screen.getByText('3 models')).toBeInTheDocument();
+  });
+
   it('shows error when browse fails', async () => {
     listProviderModelsMock.mockResolvedValue({
       success: false,

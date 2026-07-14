@@ -125,19 +125,17 @@ export function ModelPicker({
                 : `${allModels.length} model${allModels.length === 1 ? '' : 's'}`}
             </p>
           </div>
-          {allModels.length > 8 && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-              <Input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search models..."
-                className="pl-9 font-mono"
-                aria-label="Search models"
-              />
-            </div>
-          )}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search models..."
+              className="pl-9 font-mono"
+              aria-label="Search models"
+            />
+          </div>
           <div
             className="max-h-48 overflow-y-auto overflow-x-hidden rounded-lg border border-zinc-800 divide-y divide-zinc-800/80"
             role="listbox"
