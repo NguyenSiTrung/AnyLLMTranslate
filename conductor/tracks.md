@@ -78,14 +78,12 @@ This file tracks all major tracks for the project.
 - ✅ **Inline Input Translation — Immersive-Parity Hardening** (`inline-input-parity_20260709`) — Archived 2026-07-09. IME-safe gestures, multi-strategy write-back, race-safe replace, deep focus, language prefix (`/en`), Alt+I command (no 5th suggested_key), site blocklist, full advanced Options panel; fallback undo only when unedited. Default write remains translation-only. Excludes WebView floating-dot. [View](./conductor/archive/inline-input-parity_20260709/)
 - ✅ **YouTube ASR Subtitle Sentence Re-alignment** (`youtube-asr-resegment_20260709`) — Archived 2026-07-09. Pre-translate re-chunk of YouTube auto-generated captions: pure Immersive-style local rules (`lib/youtubeAsrResegment.ts`) + optional AI/BYOK index-range resegment (`RESEGMENT_YOUTUBE_ASR`, fail-open to local). Options → Subtitles → YouTube toggles (local default on, AI opt-in). 5 phases; Toggle `onChange` fix. [View](./conductor/archive/youtube-asr-resegment_20260709/)
 - ✅ **Selection Translate — Dictionary Mode** (`selection-dict-mode_20260709`) — Archived 2026-07-09. Immersive-style dictionary popup for short selections (phonetic, POS, definitions, examples, contextual analysis); plain translation for sentences; opt-in `dictionaryMode` on shared `translateSelection`; `dict:` cache namespace; Options → Advanced toggle (default on). 5 phases, 78 track tests. [View](./conductor/archive/selection-dict-mode_20260709/)
+- ✅ **Web Page Translation — UX, Performance & Quality v3** (`web-translate-v3_20260714`) — Archived 2026-07-14. Balanced defaults (streaming + aside caps ON), page-scope presets (Classic escape hatch), viewport-aware progress, sticky systemic-pause banner, parallel sub-batches + look-ahead, term memory, JSON repair, expanded langDetect, stream/context parity, resume parentPath identity, mini progress. Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. 4 phases. [View](./conductor/archive/web-translate-v3_20260714/)
 
 ---
 
 ## Active Tracks
 
-### [x] Track: Web Page Translation — UX, Performance & Quality v3
-*Link: [./conductor/tracks/web-translate-v3_20260714/](./conductor/tracks/web-translate-v3_20260714/)*
-*Priority: High · Type: Feature · Status: completed*
-*Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. Full UX/perf/quality/reliability roadmap with Balanced defaults.*
+_None — all tracks archived._
 
 ---
