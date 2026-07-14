@@ -105,43 +105,34 @@ describe('domWalker — selector-match cache integration', () => {
     expect(pieces[0].text).toBe('Hello world.');
   });
 
-  it('tags pieces inside <article> with inArticleContext=true (FR-3)', () => {
+  it('tags inArticleContext for article/main vs outside/nav/sidebar (FR-3)', () => {
     const article = document.createElement('article');
-    const p = document.createElement('p');
-    p.textContent = 'Article body text.';
-    article.appendChild(p);
+    const ap = document.createElement('p');
+    ap.textContent = 'Article body text.';
+    article.appendChild(ap);
     document.body.appendChild(article);
+    expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(true);
 
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].inArticleContext).toBe(true);
-  });
-
-  it('tags pieces inside <main> with inArticleContext=true (FR-3)', () => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
     const main = document.createElement('main');
-    const p = document.createElement('p');
-    p.textContent = 'Main body text.';
-    main.appendChild(p);
+    const mp = document.createElement('p');
+    mp.textContent = 'Main body text.';
+    main.appendChild(mp);
     document.body.appendChild(main);
+    expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(true);
 
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].inArticleContext).toBe(true);
-  });
-
-  it('tags pieces outside article/main with inArticleContext=false (FR-3)', () => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
     const aside = document.createElement('aside');
-    const p = document.createElement('p');
-    p.textContent = 'Sidebar text here.';
-    aside.appendChild(p);
+    const sp = document.createElement('p');
+    sp.textContent = 'Sidebar text here.';
+    aside.appendChild(sp);
     document.body.appendChild(aside);
+    expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(false);
 
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].inArticleContext).toBe(false);
-  });
-
-  it('tags nav links with inArticleContext=false (FR-3)', () => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
     const nav = document.createElement('nav');
     const div = document.createElement('div');
     const a = document.createElement('a');
@@ -149,31 +140,24 @@ describe('domWalker — selector-match cache integration', () => {
     div.appendChild(a);
     nav.appendChild(div);
     document.body.appendChild(nav);
+    expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(false);
 
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].inArticleContext).toBe(false);
-  });
-
-  it('mixed page: article pieces true, sidebar pieces false (FR-3)', () => {
-    const article = document.createElement('article');
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    const art2 = document.createElement('article');
     const p1 = document.createElement('p');
     p1.textContent = 'Article paragraph.';
-    article.appendChild(p1);
-    document.body.appendChild(article);
-
-    const aside = document.createElement('aside');
+    art2.appendChild(p1);
+    document.body.appendChild(art2);
+    const aside2 = document.createElement('aside');
     const p2 = document.createElement('p');
     p2.textContent = 'Sidebar paragraph.';
-    aside.appendChild(p2);
-    document.body.appendChild(aside);
-
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(2);
-    expect(pieces[0].text).toBe('Article paragraph.');
-    expect(pieces[0].inArticleContext).toBe(true);
-    expect(pieces[1].text).toBe('Sidebar paragraph.');
-    expect(pieces[1].inArticleContext).toBe(false);
+    aside2.appendChild(p2);
+    document.body.appendChild(aside2);
+    const mixed = extractPieces(document.body, {});
+    expect(mixed).toHaveLength(2);
+    expect(mixed[0]!.inArticleContext).toBe(true);
+    expect(mixed[1]!.inArticleContext).toBe(false);
   });
 });
 

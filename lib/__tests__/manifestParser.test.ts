@@ -49,62 +49,37 @@ describe('parseHlsManifest', () => {
     expect(parseHlsManifest(relBody, 'https://cdn.example.com/playlist/master.m3u8')[0].url).toBe('https://cdn.example.com/playlist/it.m3u8');
   });
 
-  it('handles missing or DEFAULT=NO attribute (defaults to false)', () => {
-    const body = [
+  it('handles defaults, empty/no-track inputs, non-subtitle media, and multi groups', () => {
+    const noDefault = [
       '#EXTM3U',
       '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="Korean",DEFAULT=NO,LANGUAGE="ko",URI="ko.m3u8"',
     ].join('\n');
+    expect(parseHlsManifest(noDefault, 'https://cdn.example.com/master.m3u8')[0]!.isDefault).toBe(
+      false,
+    );
 
-    const result = parseHlsManifest(body, 'https://cdn.example.com/master.m3u8');
-
-    expect(result).toHaveLength(1);
-    expect(result[0].isDefault).toBe(false);
-  });
-
-  it('returns empty array for manifest with no subtitle tracks', () => {
-    const body = [
+    const audioOnly = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
       '#EXT-X-STREAM-INF:BANDWIDTH=5000000',
       'video.m3u8',
       '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",LANGUAGE="en",URI="audio/en.m3u8"',
     ].join('\n');
-
-    const result = parseHlsManifest(body, 'https://cdn.example.com/master.m3u8');
-
-    expect(result).toEqual([]);
-  });
-
-  it('returns empty array for empty body', () => {
+    expect(parseHlsManifest(audioOnly, 'https://cdn.example.com/master.m3u8')).toEqual([]);
     expect(parseHlsManifest('', 'https://cdn.example.com/master.m3u8')).toEqual([]);
-  });
 
-  it('skips non-SUBTITLES EXT-X-MEDIA entries', () => {
-    const body = [
+    const mixed = [
       '#EXTM3U',
       '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="English",LANGUAGE="en",URI="audio/en.m3u8"',
       '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",LANGUAGE="en",URI="subs/en.m3u8"',
       '#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",NAME="English",LANGUAGE="en",URI="cc/en.m3u8"',
-    ].join('\n');
-
-    const result = parseHlsManifest(body, 'https://cdn.example.com/master.m3u8');
-
-    expect(result).toHaveLength(1);
-    expect(result[0].language).toBe('en');
-    expect(result[0].url).toBe('https://cdn.example.com/subs/en.m3u8');
-  });
-
-  it('handles multiple subtitle groups', () => {
-    const body = [
-      '#EXTM3U',
-      '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs1",NAME="English",LANGUAGE="en",URI="en.m3u8"',
       '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs2",NAME="Vietnamese",LANGUAGE="vi",URI="vi.m3u8"',
     ].join('\n');
-
-    const result = parseHlsManifest(body, 'https://cdn.example.com/master.m3u8');
-
+    const result = parseHlsManifest(mixed, 'https://cdn.example.com/master.m3u8');
     expect(result).toHaveLength(2);
-    expect(result[1].language).toBe('vi');
+    expect(result[0]!.language).toBe('en');
+    expect(result[0]!.url).toBe('https://cdn.example.com/subs/en.m3u8');
+    expect(result[1]!.language).toBe('vi');
   });
 });
 

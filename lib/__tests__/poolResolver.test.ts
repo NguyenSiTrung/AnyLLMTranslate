@@ -21,102 +21,71 @@ function provider(overrides: Partial<PoolProvider> = {}): PoolProvider {
 }
 
 describe('resolveSlots', () => {
-  it('returns an empty array for an empty providers list', () => {
+  it('flattens enabled provider×key pairs in insertion order and carries config', () => {
     expect(resolveSlots([])).toEqual([]);
-  });
 
-  it('flattens enabled-provider × enabled-key pairs into ordered PoolSlots', () => {
     const providers = [
       provider({
         id: 'p1',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o',
+        temperature: 0.7,
+        maxTokens: 8192,
         keys: [
-          { id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
-          { id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          {
+            id: 'k1',
+            apiKey: 'sk-x',
+            maxRpm: 60,
+            concurrencyLimit: 0,
+            interval: 0,
+            enabled: true,
+            label: 'prod',
+          },
+          { id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: false },
+          { id: 'k3', apiKey: 'c', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
         ],
       }),
       provider({
         id: 'p2',
-        keys: [{ id: 'k3', apiKey: 'c', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
-      }),
-    ];
-
-    const slots = resolveSlots(providers);
-
-    expect(slots.map((s) => s.keyId)).toEqual(['k1', 'k2', 'k3']);
-    expect(slots.map((s) => s.providerId)).toEqual(['p1', 'p1', 'p2']);
-  });
-
-  it('excludes keys from disabled providers', () => {
-    const providers = [
-      provider({
-        id: 'p1',
         enabled: false,
-        keys: [{ id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
+        keys: [{ id: 'k-disabled-provider', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
       }),
       provider({
-        id: 'p2',
-        enabled: true,
-        keys: [{ id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
+        id: 'p3',
+        keys: [{ id: 'k4', apiKey: 'd', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
       }),
     ];
 
     const slots = resolveSlots(providers);
-    expect(slots.map((s) => s.keyId)).toEqual(['k2']);
-  });
+    expect(slots.map((s) => s.keyId)).toEqual(['k1', 'k3', 'k4']);
+    expect(slots.map((s) => s.providerId)).toEqual(['p1', 'p1', 'p3']);
+    expect(slots[0]).toMatchObject({
+      providerId: 'p1',
+      keyId: 'k1',
+      providerConfig: {
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4o',
+        apiKey: 'sk-x',
+        maxRpm: 60,
+        temperature: 0.7,
+      },
+    });
 
-  it('excludes disabled keys within an enabled provider', () => {
-    const providers = [
-      provider({
-        id: 'p1',
-        keys: [
-          { id: 'k1', apiKey: 'a', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
-          { id: 'k2', apiKey: 'b', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: false },
-          { id: 'k3', apiKey: 'c', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
-        ],
-      }),
-    ];
-
-    const slots = resolveSlots(providers);
-    expect(slots.map((s) => s.keyId)).toEqual(['k1', 'k3']);
-  });
-
-  it('produces stable insertion order (provider, then key)', () => {
-    const providers = [
+    // Insertion order, not id-sorted.
+    const ordered = [
       provider({
         id: 'pB',
         keys: [
-          { id: 'kB2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
-          { id: 'kB1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true },
+          { id: 'kB2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+          { id: 'kB1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
         ],
       }),
       provider({
         id: 'pA',
-        keys: [{ id: 'kA1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0,enabled: true }],
+        keys: [{ id: 'kA1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
       }),
     ];
-
-    // Order is insertion order, NOT sorted by id.
-    expect(resolveSlots(providers).map((s) => s.keyId)).toEqual(['kB2', 'kB1', 'kA1']);
-  });
-
-  it('carries the full provider config + key onto each slot', () => {
-    const p = provider({
-      id: 'p1',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
-      temperature: 0.7,
-      maxTokens: 8192,
-      keys: [{ id: 'k1', apiKey: 'sk-x', maxRpm: 60, concurrencyLimit: 0, interval: 0,enabled: true, label: 'prod' }],
-    });
-
-    const slot = resolveSlots([p])[0];
-    expect(slot?.providerId).toBe('p1');
-    expect(slot.keyId).toBe('k1');
-    expect(slot.providerConfig.baseUrl).toBe('https://api.openai.com/v1');
-    expect(slot.providerConfig.model).toBe('gpt-4o');
-    expect(slot.providerConfig.apiKey).toBe('sk-x');
-    expect(slot.providerConfig.maxRpm).toBe(60);
-    expect(slot.providerConfig.temperature).toBe(0.7);
+    expect(resolveSlots(ordered).map((s) => s.keyId)).toEqual(['kB2', 'kB1', 'kA1']);
   });
 });
 
@@ -141,32 +110,21 @@ describe('healthySlots', () => {
     }));
   }
 
-  it('returns all slots when the breaker has no open slots', () => {
+  it('filters by breaker open state, cooldown expiry, and all-open', () => {
     const s = slots(['k1', 'k2', 'k3']);
     const breaker = createCircuitBreaker({ clock: () => NOW });
     expect(healthySlots(s, breaker, NOW).map((x) => x.keyId)).toEqual(['k1', 'k2', 'k3']);
-  });
 
-  it('excludes slots whose breaker is open', () => {
-    const s = slots(['k1', 'k2', 'k3']);
-    const breaker = createCircuitBreaker({ clock: () => NOW });
     breaker.recordFailure('k2', 'rateLimit', NOW);
     expect(healthySlots(s, breaker, NOW).map((x) => x.keyId)).toEqual(['k1', 'k3']);
-  });
 
-  it('re-includes a slot once its cooldown expires', () => {
-    const s = slots(['k1', 'k2']);
-    const breaker = createCircuitBreaker({ clock: () => NOW });
-    breaker.recordFailure('k1', 'rateLimit', NOW); // open 60s
-    expect(healthySlots(s, breaker, NOW + 59_999).map((x) => x.keyId)).toEqual(['k2']);
-    expect(healthySlots(s, breaker, NOW + 60_000).map((x) => x.keyId)).toEqual(['k1', 'k2']);
-  });
+    const two = slots(['k1', 'k2']);
+    const breaker2 = createCircuitBreaker({ clock: () => NOW });
+    breaker2.recordFailure('k1', 'rateLimit', NOW);
+    expect(healthySlots(two, breaker2, NOW + 59_999).map((x) => x.keyId)).toEqual(['k2']);
+    expect(healthySlots(two, breaker2, NOW + 60_000).map((x) => x.keyId)).toEqual(['k1', 'k2']);
 
-  it('returns an empty array when all slots are open', () => {
-    const s = slots(['k1', 'k2']);
-    const breaker = createCircuitBreaker({ clock: () => NOW });
-    breaker.recordFailure('k1', 'auth', NOW);
-    breaker.recordFailure('k2', 'rateLimit', NOW);
-    expect(healthySlots(s, breaker, NOW)).toEqual([]);
+    breaker2.recordFailure('k2', 'auth', NOW);
+    expect(healthySlots(two, breaker2, NOW)).toEqual([]);
   });
 });

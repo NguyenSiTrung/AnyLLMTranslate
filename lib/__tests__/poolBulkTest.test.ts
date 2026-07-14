@@ -26,59 +26,38 @@ function p(partial: Partial<PoolProvider> & { id: string }): PoolProvider {
 }
 
 describe('collectTestableSlots', () => {
-  it('includes enabled key with credentials', () => {
-    expect(collectTestableSlots([p({ id: 'p1' })])).toEqual([
-      { providerId: 'p1', keyId: 'k1' },
-    ]);
-  });
-
-  it('skips disabled provider', () => {
+  it('includes credentialed keys, skips disabled/empty, allows keyless, filters by provider', () => {
+    expect(collectTestableSlots([p({ id: 'p1' })])).toEqual([{ providerId: 'p1', keyId: 'k1' }]);
     expect(collectTestableSlots([p({ id: 'p1', enabled: false })])).toEqual([]);
-  });
-
-  it('skips empty api key when required', () => {
     expect(
       collectTestableSlots([
         p({
           id: 'p1',
           keys: [
-            {
-              id: 'k1',
-              apiKey: '',
-              maxRpm: 0,
-              concurrencyLimit: 0,
-              interval: 0,
-              enabled: true,
-            },
+            { id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
           ],
         }),
       ]),
     ).toEqual([]);
-  });
-
-  it('allows keyless provider with empty api key', () => {
     expect(
       collectTestableSlots([
         p({
           id: 'p1',
           requiresApiKey: false,
           keys: [
-            {
-              id: 'k1',
-              apiKey: '',
-              maxRpm: 0,
-              concurrencyLimit: 0,
-              interval: 0,
-              enabled: true,
-            },
+            { id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
           ],
         }),
       ]),
     ).toEqual([{ providerId: 'p1', keyId: 'k1' }]);
-  });
 
-  it('filters by provider id', () => {
-    const providers = [p({ id: 'p1' }), p({ id: 'p2', keys: [{ id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }] })];
+    const providers = [
+      p({ id: 'p1' }),
+      p({
+        id: 'p2',
+        keys: [{ id: 'k2', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+      }),
+    ];
     expect(collectTestableSlotsForProvider(providers, 'p2')).toEqual([
       { providerId: 'p2', keyId: 'k2' },
     ]);

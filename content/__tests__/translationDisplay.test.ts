@@ -32,17 +32,11 @@ describe('translationDisplay', () => {
     document.documentElement.classList.remove('anyllm-dark');
   });
 
-  describe('applyTheme', () => {
-    it('sets data-anyllm-theme attribute on <html>', () => {
+  describe('theme / position / dark mode attributes', () => {
+    it('applies theme, custom CSS vars, position, and dark-mode class', () => {
       applyTheme('bubble');
       expect(document.documentElement.getAttribute('data-anyllm-theme')).toBe('bubble');
-    });
 
-
-  });
-
-  describe('applyCustomTheme', () => {
-    it('sets CSS custom properties on <html>', () => {
       applyCustomTheme({
         textColor: '#ff0000',
         backgroundColor: '#00ff00',
@@ -58,41 +52,17 @@ describe('translationDisplay', () => {
       expect(root.style.getPropertyValue('--anyllm-custom-border-color')).toBe('#0000ff');
       expect(root.style.getPropertyValue('--anyllm-custom-font-style')).toBe('italic');
       expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('1.1em');
-    });
-
-
-  });
-
-  describe('clearCustomTheme', () => {
-    it('removes all custom CSS properties', () => {
-      applyCustomTheme({
-        textColor: '#ff0000',
-        backgroundColor: '#00ff00',
-        borderStyle: 'dashed',
-        borderColor: '#0000ff',
-        fontStyle: 'italic',
-        fontSize: 'larger',
-      });
       clearCustomTheme();
-      const root = document.documentElement;
       expect(root.style.getPropertyValue('--anyllm-custom-text-color')).toBe('');
       expect(root.style.getPropertyValue('--anyllm-custom-bg-color')).toBe('');
       expect(root.style.getPropertyValue('--anyllm-custom-border-style')).toBe('');
       expect(root.style.getPropertyValue('--anyllm-custom-border-color')).toBe('');
       expect(root.style.getPropertyValue('--anyllm-custom-font-style')).toBe('');
       expect(root.style.getPropertyValue('--anyllm-custom-font-size')).toBe('');
-    });
-  });
 
-  describe('applyPosition', () => {
-    it('sets data-anyllm-position attribute', () => {
       applyPosition('above');
       expect(document.documentElement.getAttribute('data-anyllm-position')).toBe('above');
-    });
-  });
 
-  describe('applyDarkMode', () => {
-    it('adds anyllm-dark class for dark mode and removes it for light/auto mode', () => {
       applyDarkMode('dark');
       expect(document.documentElement.classList.contains('anyllm-dark')).toBe(true);
 

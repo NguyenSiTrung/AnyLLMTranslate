@@ -3,33 +3,23 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Drawer } from '../Drawer';
 
 describe('Drawer', () => {
-  it('renders title when open', () => {
-    render(
-      <Drawer open title="Edit provider" onClose={vi.fn()}>
+  it('renders when open, hides when closed, and closes on Escape', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <Drawer open title="Edit provider" onClose={onClose}>
         <p>Body</p>
       </Drawer>,
     );
     expect(screen.getByRole('dialog', { name: 'Edit provider' })).toBeInTheDocument();
     expect(screen.getByText('Body')).toBeInTheDocument();
-  });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
 
-  it('does not render when closed', () => {
-    render(
-      <Drawer open={false} title="Edit provider" onClose={vi.fn()}>
+    rerender(
+      <Drawer open={false} title="Edit provider" onClose={onClose}>
         <p>Body</p>
       </Drawer>,
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('calls onClose on Escape', () => {
-    const onClose = vi.fn();
-    render(
-      <Drawer open title="Edit provider" onClose={onClose}>
-        <p>Body</p>
-      </Drawer>,
-    );
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onClose).toHaveBeenCalled();
   });
 });

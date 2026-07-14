@@ -6,37 +6,43 @@ import { describe, it, expect } from 'vitest';
 import { extractProperNouns } from '@/services/subtitleResponse';
 
 describe('extractProperNouns', () => {
-  it('returns the properNouns map when present and well-formed', () => {
-    const response = JSON.stringify({
-      translations: { s1: 'Hola' },
-      properNouns: { John: 'Juan', MIT: 'MIT' },
-    });
-    const result = extractProperNouns(response);
-    expect(result).toEqual({ John: 'Juan', MIT: 'MIT' });
+  it('extracts well-formed maps and ignores invalid/missing properNouns', () => {
+    expect(
+      extractProperNouns(
+        JSON.stringify({
+          translations: { s1: 'Hola' },
+          properNouns: { John: 'Juan', MIT: 'MIT' },
+        }),
+      ),
+    ).toEqual({ John: 'Juan', MIT: 'MIT' });
+
+    const invalid = [
+      JSON.stringify({ translations: { s1: 'Hola' } }),
+      JSON.stringify({ translations: { s1: 'Hola' }, properNouns: 'not an object' }),
+      JSON.stringify({ translations: { s1: 'Hola' }, properNouns: {} }),
+      'not json at all',
+    ];
+    for (const response of invalid) {
+      expect(extractProperNouns(response)).toBeUndefined();
+    }
   });
 
-  it.each([
-    ['absent', JSON.stringify({ translations: { s1: 'Hola' } })],
-    ['not an object', JSON.stringify({ translations: { s1: 'Hola' }, properNouns: 'not an object' })],
-    ['empty object', JSON.stringify({ translations: { s1: 'Hola' }, properNouns: {} })],
-    ['not valid JSON', 'not json at all'],
-  ])('returns undefined when properNouns is %s', (_label, response) => {
-    expect(extractProperNouns(response)).toBeUndefined();
-  });
+  it('strips markdown fences and <think> blocks before parsing', () => {
+    const fenced =
+      '```json\n' +
+      JSON.stringify({
+        translations: { s1: 'Hola' },
+        properNouns: { John: 'Juan' },
+      }) +
+      '\n```';
+    expect(extractProperNouns(fenced)).toEqual({ John: 'Juan' });
 
-  it('extracts properNouns from a response wrapped in markdown code fences', () => {
-    const response = '```json\n' + JSON.stringify({
-      translations: { s1: 'Hola' },
-      properNouns: { John: 'Juan' },
-    }) + '\n```';
-    expect(extractProperNouns(response)).toEqual({ John: 'Juan' });
-  });
-
-  it('strips <think> blocks before parsing', () => {
-    const response = '<think>let me think</think>' + JSON.stringify({
-      translations: { s1: 'Hola' },
-      properNouns: { John: 'Juan' },
-    });
-    expect(extractProperNouns(response)).toEqual({ John: 'Juan' });
+    const think =
+      '<think>let me think</think>' +
+      JSON.stringify({
+        translations: { s1: 'Hola' },
+        properNouns: { John: 'Juan' },
+      });
+    expect(extractProperNouns(think)).toEqual({ John: 'Juan' });
   });
 });

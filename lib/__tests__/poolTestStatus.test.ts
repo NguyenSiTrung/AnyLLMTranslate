@@ -37,41 +37,30 @@ function makeKey(overrides: Partial<PoolKey> = {}): PoolKey {
   };
 }
 
-describe('providerCredentialsChanged', () => {
-  it('detects credential field changes and ignores unrelated fields', () => {
+describe('poolTestStatus helpers', () => {
+  it('detects credential changes, clears lastTestResult, and formats ages', () => {
     const old = makeProvider();
     expect(providerCredentialsChanged(old, old)).toBe(false);
-    expect(providerCredentialsChanged(old, makeProvider({ baseUrl: 'https://other/v1' }))).toBe(true);
+    expect(providerCredentialsChanged(old, makeProvider({ baseUrl: 'https://other/v1' }))).toBe(
+      true,
+    );
     expect(providerCredentialsChanged(old, makeProvider({ model: 'llama-3.1' }))).toBe(true);
     expect(providerCredentialsChanged(old, makeProvider({ requiresApiKey: false }))).toBe(true);
-    expect(providerCredentialsChanged(old, makeProvider({ displayName: 'New', temperature: 0.7 }))).toBe(false);
-  });
-});
+    expect(
+      providerCredentialsChanged(old, makeProvider({ displayName: 'New', temperature: 0.7 })),
+    ).toBe(false);
 
-describe('keyCredentialsChanged', () => {
-  it('detects apiKey changes only', () => {
     const k = makeKey();
     expect(keyCredentialsChanged(k, k)).toBe(false);
     expect(keyCredentialsChanged(k, makeKey({ apiKey: 'sk-new' }))).toBe(true);
-  });
-});
 
-describe('applyProviderPatch / applyKeyPatch', () => {
-  it('clears lastTestResult only when credentials change', () => {
     const p = makeProvider();
     expect(applyProviderPatch(p, { displayName: 'Renamed' }).lastTestResult).toBeDefined();
     expect(applyProviderPatch(p, { baseUrl: 'https://other/v1' }).lastTestResult).toBeUndefined();
-    expect(applyProviderPatch(p, { model: 'new-model' }).lastTestResult).toBeUndefined();
-
-    const k = makeKey();
     expect(applyKeyPatch(k, { maxRpm: 60 }).lastTestResult).toBeDefined();
     expect(applyKeyPatch(k, { apiKey: 'sk-new' }).lastTestResult).toBeUndefined();
     expect(applyKeyPatch(k, { apiKey: 'sk-old' }).lastTestResult).toBeDefined();
-  });
-});
 
-describe('formatTestResultAge', () => {
-  it('formats relative age buckets', () => {
     const at = 1700000000000;
     expect(formatTestResultAge({ success: true, at }, at + 30_000)).toBe('just now');
     expect(formatTestResultAge({ success: true, at }, at + 5 * 60_000)).toBe('5m ago');

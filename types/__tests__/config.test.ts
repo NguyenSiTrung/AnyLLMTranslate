@@ -12,44 +12,32 @@ import {
 } from '@/types/config';
 
 describe('config defaults', () => {
-  it('ships critical language/display defaults', () => {
+  it('ships language/display defaults, feature flags OFF, and nested subtitle/PDF baselines', () => {
     expect(DEFAULT_SETTINGS.sourceLanguage).toBe('auto');
     expect(DEFAULT_SETTINGS.targetLanguage).toBe('vi');
     expect(DEFAULT_SETTINGS.displayMode).toBe('bilingual-below');
     expect(DEFAULT_SETTINGS.theme).toBe('blockquote');
     expect(DEFAULT_SETTINGS.provider.preset).toBe('custom');
-  });
-
-  it('defaults feature flags that change page-walk behaviour to OFF', () => {
     expect(DEFAULT_SETTINGS.enableCompactInlineForShortText).toBe(false);
     expect(DEFAULT_SETTINGS.enableBodyTagWhitelist).toBe(false);
     expect(DEFAULT_SETTINGS.enableAsideCaps).toBe(false);
-  });
 
-  it('embeds subtitle and PDF defaults with safe baselines', () => {
     expect(DEFAULT_SETTINGS.subtitleSettings).toEqual(DEFAULT_SUBTITLE_SETTINGS);
     expect(DEFAULT_SUBTITLE_SETTINGS.enabled).toBe(true);
     expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
     expect(DEFAULT_SETTINGS.pdfSettings).toEqual(DEFAULT_PDF_SETTINGS);
     expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
-  });
 
-  it('defaults YouTube ASR resegment to local-on / AI-off', () => {
     expect(DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS).toEqual({ enable: true, aiEnable: false });
     expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(
       DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
     );
-    expect(DEFAULT_SETTINGS.subtitleSettings.youtubeAsrResegment?.enable).toBe(true);
-    expect(DEFAULT_SETTINGS.subtitleSettings.youtubeAsrResegment?.aiEnable).toBe(false);
   });
 
-  it('exposes a single custom provider preset', () => {
+  it('exposes a single custom preset and untasted default pool key', () => {
     expect(PROVIDER_PRESETS).toHaveLength(1);
-    expect(PROVIDER_PRESETS[0].preset).toBe('custom');
-    expect(PROVIDER_PRESETS[0].requiresApiKey).toBe(false);
-  });
-
-  it('default pool key has no lastTestResult', () => {
+    expect(PROVIDER_PRESETS[0]!.preset).toBe('custom');
+    expect(PROVIDER_PRESETS[0]!.requiresApiKey).toBe(false);
     const defaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
     expect(defaultKey).toBeDefined();
     expect(defaultKey?.lastTestResult).toBeUndefined();

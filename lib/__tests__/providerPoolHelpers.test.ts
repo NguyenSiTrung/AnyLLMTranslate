@@ -26,8 +26,8 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
   };
 }
 
-describe('getCredentialKey / canRunConnectionTest / buildProviderConfig', () => {
-  it('picks the first credentialed key (or first key for keyless)', () => {
+describe('provider pool UI helpers', () => {
+  it('picks credentials, gates connection tests, and builds provider config', () => {
     const keyed = makeProvider({
       keys: [
         { id: 'k1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
@@ -43,30 +43,30 @@ describe('getCredentialKey / canRunConnectionTest / buildProviderConfig', () => 
         }),
       ),
     ).toBeUndefined();
-  });
 
-  it('gates connection tests on url/model/key presence', () => {
     expect(canRunConnectionTest(makeProvider({ baseUrl: '' }))).toBe(false);
     expect(canRunConnectionTest(makeProvider({ model: '' }))).toBe(false);
     expect(canRunConnectionTest(makeProvider({ requiresApiKey: false }))).toBe(true);
     const p = makeProvider();
     expect(canRunConnectionTest(p, p.keys[0])).toBe(true);
     expect(
-      canRunConnectionTest(p, { id: 'k2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }),
+      canRunConnectionTest(p, {
+        id: 'k2',
+        apiKey: '',
+        maxRpm: 0,
+        concurrencyLimit: 0,
+        interval: 0,
+        enabled: true,
+      }),
     ).toBe(false);
-  });
 
-  it('builds ProviderConfig carrying maxRpm from the key', () => {
-    const p = makeProvider();
-    const cfg = buildProviderConfig(p, p.keys[0]);
+    const cfg = buildProviderConfig(p, p.keys[0]!);
     expect(cfg.maxRpm).toBe(60);
     expect(cfg.baseUrl).toBe(p.baseUrl);
     expect(cfg.apiKey).toBe('sk-test');
   });
-});
 
-describe('getProviderTestStatus', () => {
-  it('aggregates key + provider-level results (latest wins; provider success overrides stale key fail)', () => {
+  it('aggregates provider test status (latest key wins; provider pass overrides stale key fail)', () => {
     expect(getProviderTestStatus(makeProvider()).state).toBe('untested');
 
     const healthy = makeProvider({
@@ -93,7 +93,6 @@ describe('getProviderTestStatus', () => {
     });
     expect(getProviderTestStatus(healthy).state).toBe('healthy');
 
-    // Regression: provider-level pass after failing per-key test flips badge green
     const providerLevel = makeProvider({
       keys: [
         {

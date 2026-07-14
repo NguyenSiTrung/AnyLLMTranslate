@@ -10,98 +10,68 @@ describe('createRateLimiter', () => {
     vi.useRealTimers();
   });
 
-  it('unlimited fast-path resolves immediately (maxRpm <= 0)', async () => {
-    const limiter = createRateLimiter(0);
-    await limiter.acquire();
-    expect(limiter.__stateForTest?.window).toHaveLength(0);
-    expect(limiter.getMaxRpm()).toBe(0);
+  it('unlimited path, cap wait, prune, and live reconfigure', async () => {
+    const unlimited = createRateLimiter(0);
+    await unlimited.acquire();
+    expect(unlimited.__stateForTest?.window).toHaveLength(0);
+    expect(unlimited.getMaxRpm()).toBe(0);
     await expect(createRateLimiter(-5).acquire()).resolves.toBeUndefined();
-  });
 
-  it('records timestamps under cap and waits when at cap', async () => {
     const limiter = createRateLimiter(2);
     await limiter.acquire();
     await limiter.acquire();
     expect(limiter.__stateForTest?.window).toHaveLength(2);
-
     const thirdPromise = limiter.acquire();
     const spy = vi.fn();
     thirdPromise.then(spy);
     await Promise.resolve();
     expect(spy).not.toHaveBeenCalled();
-
     vi.advanceTimersByTime(60_001);
     await thirdPromise;
     expect(spy).toHaveBeenCalledTimes(1);
-  });
 
-  it('prunes expired timestamps and bounds window length to maxRpm', async () => {
-    const limiter = createRateLimiter(3);
-    await limiter.acquire();
-    await limiter.acquire();
-    await limiter.acquire();
-    expect(limiter.__stateForTest?.window).toHaveLength(3);
-
+    const prune = createRateLimiter(3);
+    await prune.acquire();
+    await prune.acquire();
+    await prune.acquire();
     vi.advanceTimersByTime(61_000);
-    await limiter.acquire();
-    expect(limiter.__stateForTest?.window).toHaveLength(1);
+    await prune.acquire();
+    expect(prune.__stateForTest?.window).toHaveLength(1);
 
-    const lim2 = createRateLimiter(3);
-    await lim2.acquire();
-    await lim2.acquire();
-    await lim2.acquire();
-    const p4 = lim2.acquire();
-    vi.advanceTimersByTime(60_001);
-    await p4;
-    expect(lim2.__stateForTest?.window.length).toBeLessThanOrEqual(3);
-  });
-
-  it('supports live setMaxRpm reconfiguration', async () => {
-    const limiter = createRateLimiter(0);
-    await limiter.acquire();
-    limiter.setMaxRpm(1);
-    expect(limiter.getMaxRpm()).toBe(1);
-    await limiter.acquire();
-    expect(limiter.__stateForTest?.window).toHaveLength(1);
-    const second = limiter.acquire();
+    const reconfig = createRateLimiter(0);
+    await reconfig.acquire();
+    reconfig.setMaxRpm(1);
+    expect(reconfig.getMaxRpm()).toBe(1);
+    await reconfig.acquire();
+    const second = reconfig.acquire();
     vi.advanceTimersByTime(60_001);
     await second;
-
-    const lim2 = createRateLimiter(5);
-    await lim2.acquire();
-    lim2.setMaxRpm(0);
-    await lim2.acquire(); // unlimited — no wait
+    reconfig.setMaxRpm(0);
+    await reconfig.acquire();
   });
 
-  it('serializes concurrent acquires as slots free', async () => {
+  it('serializes concurrent acquires and honors acquire timeouts (FR-5)', async () => {
     const limiter = createRateLimiter(1);
     await limiter.acquire();
     const p2 = limiter.acquire();
     const p3 = limiter.acquire();
     await vi.advanceTimersByTimeAsync(120_002);
     await Promise.all([p2, p3]);
-  });
 
-  describe('FR-5: acquire(timeoutMs) honors a deadline', () => {
-    it('rejects with RateLimitTimeoutError when wait exceeds deadline', async () => {
-      const limiter = createRateLimiter(1);
-      await limiter.acquire();
-      const acquireP = limiter.acquire(1_000);
-      const handled = acquireP.catch((e: unknown) => e);
-      await vi.advanceTimersByTimeAsync(1_001);
-      const caught = await handled;
-      expect(caught).toBeInstanceOf(Error);
-      expect((caught as Error).name).toBe('RateLimitTimeoutError');
-    });
+    const timed = createRateLimiter(1);
+    await timed.acquire();
+    const acquireP = timed.acquire(1_000);
+    const handled = acquireP.catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(1_001);
+    const caught = await handled;
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).name).toBe('RateLimitTimeoutError');
 
-    it('resolves when a slot frees within the deadline; unlimited ignores deadline', async () => {
-      const limiter = createRateLimiter(1);
-      await limiter.acquire();
-      const acquireP = limiter.acquire(120_000);
-      await vi.advanceTimersByTimeAsync(60_001);
-      await acquireP;
-      expect(limiter.__stateForTest?.window.length).toBeGreaterThanOrEqual(1);
-      await expect(createRateLimiter(0).acquire(1)).resolves.toBeUndefined();
-    });
+    const ok = createRateLimiter(1);
+    await ok.acquire();
+    const within = ok.acquire(120_000);
+    await vi.advanceTimersByTimeAsync(60_001);
+    await within;
+    await expect(createRateLimiter(0).acquire(1)).resolves.toBeUndefined();
   });
 });

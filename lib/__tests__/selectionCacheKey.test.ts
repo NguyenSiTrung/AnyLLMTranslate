@@ -6,27 +6,17 @@ import {
 import { generateCacheKey } from '@/services/cacheManager';
 
 describe('selectionCacheKey', () => {
-  it('prefixes dictionary keys so they differ from plain selection keys', async () => {
+  it('prefixes dictionary keys, is deterministic, and varies by text/lang', async () => {
     const plain = await generateCacheKey('hello', 'en', 'vi');
     const dict = await generateSelectionDictionaryCacheKey('hello', 'en', 'vi');
-
-    expect(dict.startsWith(SELECTION_DICTIONARY_CACHE_PREFIX)).toBe(true);
     expect(dict).toBe(`${SELECTION_DICTIONARY_CACHE_PREFIX}${plain}`);
     expect(dict).not.toBe(plain);
-  });
 
-  it('is deterministic for the same inputs', async () => {
-    const a = await generateSelectionDictionaryCacheKey('word', 'en', 'zh');
-    const b = await generateSelectionDictionaryCacheKey('word', 'en', 'zh');
-    expect(a).toBe(b);
-  });
-
-  it('changes when language pair or text changes', async () => {
+    expect(await generateSelectionDictionaryCacheKey('word', 'en', 'zh')).toBe(
+      await generateSelectionDictionaryCacheKey('word', 'en', 'zh'),
+    );
     const base = await generateSelectionDictionaryCacheKey('hello', 'en', 'vi');
-    const otherLang = await generateSelectionDictionaryCacheKey('hello', 'en', 'zh');
-    const otherText = await generateSelectionDictionaryCacheKey('world', 'en', 'vi');
-
-    expect(otherLang).not.toBe(base);
-    expect(otherText).not.toBe(base);
+    expect(await generateSelectionDictionaryCacheKey('hello', 'en', 'zh')).not.toBe(base);
+    expect(await generateSelectionDictionaryCacheKey('world', 'en', 'vi')).not.toBe(base);
   });
 });

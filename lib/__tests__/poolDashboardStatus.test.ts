@@ -38,11 +38,8 @@ function provider(partial: Partial<PoolProvider> & { id: string; keys: PoolKey[]
 }
 
 describe('formatCooldownRemaining', () => {
-  it('formats minutes and seconds', () => {
+  it('formats remaining cooldown and clamps expired to zero', () => {
     expect(formatCooldownRemaining(65_000, 0)).toMatch(/1:05|65s/);
-  });
-
-  it('clamps expired cooldown to 0:00', () => {
     expect(formatCooldownRemaining(1000, 2000)).toMatch(/0:00|0s/);
   });
 });
@@ -50,36 +47,36 @@ describe('formatCooldownRemaining', () => {
 describe('getKeyChipView', () => {
   const p = provider({ id: 'p1', keys: [] });
 
-  it('marks disabled keys off', () => {
-    const chip = getKeyChipView(p, key({ id: 'k1', enabled: false }), undefined, 0);
-    expect(chip.kind).toBe('off');
-  });
-
-  it('marks provider-disabled keys off', () => {
-    const disabledP = provider({ id: 'p1', enabled: false, keys: [] });
-    const chip = getKeyChipView(disabledP, key({ id: 'k1' }), undefined, 0);
-    expect(chip.kind).toBe('off');
-  });
-
-  it('marks credentialInvalid as invalid over failed test', () => {
-    const chip = getKeyChipView(
-      p,
-      key({ id: 'k1', lastTestResult: { success: false, at: 1 } }),
-      {
-        keyId: 'k1',
-        providerId: 'p1',
-        open: true,
-        openUntil: 99_999,
-        credentialInvalid: true,
-        disabled: false,
-      },
-      0,
+  it('maps key/provider/live state into chip kinds', () => {
+    expect(getKeyChipView(p, key({ id: 'k1', enabled: false }), undefined, 0).kind).toBe(
+      'off',
     );
-    expect(chip.kind).toBe('invalid');
-  });
+    expect(
+      getKeyChipView(
+        provider({ id: 'p1', enabled: false, keys: [] }),
+        key({ id: 'k1' }),
+        undefined,
+        0,
+      ).kind,
+    ).toBe('off');
 
-  it('marks open breaker as cooling when not credentialInvalid', () => {
-    const chip = getKeyChipView(
+    expect(
+      getKeyChipView(
+        p,
+        key({ id: 'k1', lastTestResult: { success: false, at: 1 } }),
+        {
+          keyId: 'k1',
+          providerId: 'p1',
+          open: true,
+          openUntil: 99_999,
+          credentialInvalid: true,
+          disabled: false,
+        },
+        0,
+      ).kind,
+    ).toBe('invalid');
+
+    const cooling = getKeyChipView(
       p,
       key({ id: 'k1', lastTestResult: { success: true, at: 1, latencyMs: 120 } }),
       {
@@ -92,12 +89,10 @@ describe('getKeyChipView', () => {
       },
       0,
     );
-    expect(chip.kind).toBe('cooling');
-    expect(chip.openUntil).toBe(30_000);
-  });
+    expect(cooling.kind).toBe('cooling');
+    expect(cooling.openUntil).toBe(30_000);
 
-  it('marks last test success as healthy when live closed', () => {
-    const chip = getKeyChipView(
+    const healthy = getKeyChipView(
       p,
       key({ id: 'k1', lastTestResult: { success: true, at: 1, latencyMs: 50 } }),
       {
@@ -110,35 +105,29 @@ describe('getKeyChipView', () => {
       },
       0,
     );
-    expect(chip.kind).toBe('healthy');
-    expect(chip.latencyMs).toBe(50);
-  });
+    expect(healthy.kind).toBe('healthy');
+    expect(healthy.latencyMs).toBe(50);
 
-  it('marks untested when no result and not live-open', () => {
-    const chip = getKeyChipView(p, key({ id: 'k1' }), undefined, 0);
-    expect(chip.kind).toBe('untested');
-  });
-
-  it('marks failed when last test failed', () => {
-    const chip = getKeyChipView(
-      p,
-      key({ id: 'k1', lastTestResult: { success: false, at: 1, error: 'nope' } }),
-      undefined,
-      0,
-    );
-    expect(chip.kind).toBe('failed');
+    expect(getKeyChipView(p, key({ id: 'k1' }), undefined, 0).kind).toBe('untested');
+    expect(
+      getKeyChipView(
+        p,
+        key({ id: 'k1', lastTestResult: { success: false, at: 1, error: 'nope' } }),
+        undefined,
+        0,
+      ).kind,
+    ).toBe('failed');
   });
 });
 
 describe('getPoolDashboardView', () => {
-  it('not-ready when no providers', () => {
-    const view = getPoolDashboardView({ ...DEFAULT_SETTINGS, providers: [] }, null, 0);
-    expect(view.state).toBe('not-ready');
-    expect(view.canTranslate).toBe(false);
-  });
+  it('derives not-ready / ready / partial / degraded aggregate states', () => {
+    expect(getPoolDashboardView({ ...DEFAULT_SETTINGS, providers: [] }, null, 0)).toMatchObject({
+      state: 'not-ready',
+      canTranslate: false,
+    });
 
-  it('ready when one healthy enabled key and no live degradation', () => {
-    const settings: ExtensionSettings = {
+    const readySettings: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
       providers: [
         provider({
@@ -147,14 +136,13 @@ describe('getPoolDashboardView', () => {
         }),
       ],
     };
-    const view = getPoolDashboardView(settings, null, 0);
-    expect(view.state).toBe('ready');
-    expect(view.canTranslate).toBe(true);
-    expect(view.healthyKeyCount).toBe(1);
-  });
+    expect(getPoolDashboardView(readySettings, null, 0)).toMatchObject({
+      state: 'ready',
+      canTranslate: true,
+      healthyKeyCount: 1,
+    });
 
-  it('partial when one healthy and one failed among enabled', () => {
-    const settings: ExtensionSettings = {
+    const partialSettings: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
       providers: [
         provider({
@@ -166,13 +154,12 @@ describe('getPoolDashboardView', () => {
         }),
       ],
     };
-    const view = getPoolDashboardView(settings, null, 0);
-    expect(view.state).toBe('partial');
-    expect(view.canTranslate).toBe(true);
-  });
+    expect(getPoolDashboardView(partialSettings, null, 0)).toMatchObject({
+      state: 'partial',
+      canTranslate: true,
+    });
 
-  it('degraded when ≥50% enabled slots are live open and can still translate', () => {
-    const settings: ExtensionSettings = {
+    const degradedSettings: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
       providers: [
         provider({
@@ -194,25 +181,20 @@ describe('getPoolDashboardView', () => {
         disabled: false,
       },
     };
-    const view = getPoolDashboardView(settings, live, 0);
-    expect(view.state).toBe('degraded');
-    expect(view.canTranslate).toBe(true);
-    expect(view.coolingKeyCount).toBe(1);
-  });
+    expect(getPoolDashboardView(degradedSettings, live, 0)).toMatchObject({
+      state: 'degraded',
+      canTranslate: true,
+      coolingKeyCount: 1,
+    });
 
-  it('partial when canTranslate but all keys untested', () => {
-    const settings: ExtensionSettings = {
+    const untested: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
-      providers: [
-        provider({
-          id: 'p1',
-          keys: [key({ id: 'k1' })],
-        }),
-      ],
+      providers: [provider({ id: 'p1', keys: [key({ id: 'k1' })] })],
     };
-    const view = getPoolDashboardView(settings, null, 0);
-    expect(view.canTranslate).toBe(true);
-    expect(view.state).toBe('partial');
-    expect(view.untestedKeyCount).toBe(1);
+    expect(getPoolDashboardView(untested, null, 0)).toMatchObject({
+      canTranslate: true,
+      state: 'partial',
+      untestedKeyCount: 1,
+    });
   });
 });

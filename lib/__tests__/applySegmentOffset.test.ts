@@ -9,13 +9,11 @@ const cue = (start: number, end: number, text: string): SubtitleCue => ({
 });
 
 describe('applySegmentOffset', () => {
-  it('adds offset to start and end times (ms input, seconds output)', () => {
-    const result = applySegmentOffset([cue(1, 2, 'hi')], 30000); // 30s offset
-    expect(result[0].startTime).toBe(31);
-    expect(result[0].endTime).toBe(32);
-  });
+  it('offsets times (ms→s), preserves fields, no-ops zero/empty, and does not mutate', () => {
+    const result = applySegmentOffset([cue(1, 2, 'hi')], 30000);
+    expect(result[0]!.startTime).toBe(31);
+    expect(result[0]!.endTime).toBe(32);
 
-  it('preserves cue text and optional fields', () => {
     const c: SubtitleCue = {
       startTime: 1,
       endTime: 2,
@@ -23,24 +21,14 @@ describe('applySegmentOffset', () => {
       voice: 'Bob',
       position: { line: 1 },
     };
-    const result = applySegmentOffset([c], 1000);
-    expect(result[0].text).toBe('hi');
-    expect(result[0].voice).toBe('Bob');
-    expect(result[0].position).toEqual({ line: 1 });
-  });
+    const preserved = applySegmentOffset([c], 1000);
+    expect(preserved[0]).toMatchObject({ text: 'hi', voice: 'Bob', position: { line: 1 } });
 
-  it('offset 0 is a no-op', () => {
-    const result = applySegmentOffset([cue(5, 7, 'x')], 0);
-    expect(result).toEqual([cue(5, 7, 'x')]);
-  });
+    expect(applySegmentOffset([cue(5, 7, 'x')], 0)).toEqual([cue(5, 7, 'x')]);
+    expect(applySegmentOffset([], 1000)).toEqual([]);
 
-  it('does not mutate the input array or its cues', () => {
     const input = [cue(1, 2, 'hi')];
     applySegmentOffset(input, 5000);
-    expect(input[0].startTime).toBe(1); // unchanged
-  });
-
-  it('handles empty input', () => {
-    expect(applySegmentOffset([], 1000)).toEqual([]);
+    expect(input[0]!.startTime).toBe(1);
   });
 });

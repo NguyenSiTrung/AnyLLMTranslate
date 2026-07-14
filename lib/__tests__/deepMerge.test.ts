@@ -2,16 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { deepMerge } from '@/lib/utils';
 
 describe('deepMerge', () => {
-  it('merges nested objects', () => {
-    const merged = deepMerge(
-      { a: { x: 1, y: 2 }, b: 1 } as Record<string, unknown>,
-      { a: { y: 9, z: 3 } },
-    );
-    expect(merged).toEqual({ a: { x: 1, y: 9, z: 3 }, b: 1 });
-  });
+  it('merges nested objects, replaces empty objects, and overwrites arrays', () => {
+    expect(
+      deepMerge({ a: { x: 1, y: 2 }, b: 1 } as Record<string, unknown>, { a: { y: 9, z: 3 } }),
+    ).toEqual({ a: { x: 1, y: 9, z: 3 }, b: 1 });
 
-  it('replaces with empty object instead of preserving nested keys', () => {
-    const merged = deepMerge(
+    const cleared = deepMerge(
       {
         subtitleSettings: {
           knobOverrides: { register: 'casual', brevity: 'terse' },
@@ -26,15 +22,11 @@ describe('deepMerge', () => {
       },
     );
     expect(
-      (merged.subtitleSettings as { knobOverrides: Record<string, unknown> }).knobOverrides,
+      (cleared.subtitleSettings as { knobOverrides: Record<string, unknown> }).knobOverrides,
     ).toEqual({});
-  });
 
-  it('overwrites arrays', () => {
-    const merged = deepMerge(
-      { list: [1, 2] } as Record<string, unknown>,
-      { list: [3] },
-    );
-    expect(merged.list).toEqual([3]);
+    expect(
+      deepMerge({ list: [1, 2] } as Record<string, unknown>, { list: [3] }).list,
+    ).toEqual([3]);
   });
 });

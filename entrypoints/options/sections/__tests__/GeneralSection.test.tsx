@@ -46,87 +46,67 @@ describe('GeneralSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders four card titles', () => {
+  it('renders four-card IA with updated labels (no legacy Display & Appearance)', () => {
     render(<GeneralSection />);
     expect(screen.getByRole('heading', { name: 'Language', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Layout', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Style', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Advanced display', level: 3 })).toBeInTheDocument();
-  });
-
-  it('does not render the old merged Display & Appearance card title', () => {
-    render(<GeneralSection />);
     expect(screen.queryByRole('heading', { name: 'Display & Appearance' })).not.toBeInTheDocument();
+    expect(screen.getByText('Page contrast')).toBeInTheDocument();
+    expect(screen.queryByText('Host Page Mode')).not.toBeInTheDocument();
   });
 
-  it('swaps source and target languages when source is not auto', async () => {
-    render(<GeneralSection />);
+  it('swaps languages when not auto and disables swap / position when locked', async () => {
+    const { unmount } = render(<GeneralSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Swap languages' }));
     await waitFor(() => {
       const state = useSettingsStore.getState();
       expect(state.sourceLanguage).toBe('vi');
       expect(state.targetLanguage).toBe('en');
     });
-  });
+    unmount();
 
-  it('disables swap when source is auto', () => {
     useSettingsStore.setState({ sourceLanguage: 'auto', targetLanguage: 'vi' });
-    render(<GeneralSection />);
+    const { unmount: unmount2 } = render(<GeneralSection />);
     expect(screen.getByRole('button', { name: 'Swap languages' })).toBeDisabled();
-  });
+    unmount2();
 
-  it('disables translation position control in translation-only mode', () => {
-    useSettingsStore.setState({ displayMode: 'translation-only' });
+    useSettingsStore.setState({ sourceLanguage: 'en', displayMode: 'translation-only' });
     render(<GeneralSection />);
     const positionGroup = document.getElementById('general-translation-position');
-    expect(positionGroup).not.toBeNull();
     expect(positionGroup).toHaveAttribute('aria-disabled', 'true');
-    const radios = within(positionGroup as HTMLElement).getAllByRole('radio');
-    for (const radio of radios) {
+    for (const radio of within(positionGroup as HTMLElement).getAllByRole('radio')) {
       expect(radio).toBeDisabled();
     }
   });
 
-  it('calls onNavigateToThemes when Browse themes is clicked', () => {
+  it('navigates to themes only when callback provided', () => {
     const onNavigate = vi.fn();
-    render(<GeneralSection onNavigateToThemes={onNavigate} />);
+    const { unmount } = render(<GeneralSection onNavigateToThemes={onNavigate} />);
     fireEvent.click(screen.getByRole('button', { name: /Browse themes/i }));
     expect(onNavigate).toHaveBeenCalledTimes(1);
-  });
+    unmount();
 
-  it('hides Browse themes when callback is omitted', () => {
     render(<GeneralSection />);
     expect(screen.queryByRole('button', { name: /Browse themes/i })).not.toBeInTheDocument();
   });
 
-  it('shows Page contrast label (not Host Page Mode)', () => {
+  it('updates theme, page contrast, and compact-inline settings', async () => {
     render(<GeneralSection />);
-    expect(screen.getByText('Page contrast')).toBeInTheDocument();
-    expect(screen.queryByText('Host Page Mode')).not.toBeInTheDocument();
-  });
 
-  it('updates theme via quick select', async () => {
-    render(<GeneralSection />);
     const select = document.getElementById('general-theme') as HTMLSelectElement;
-    expect(select).toBeTruthy();
     fireEvent.change(select, { target: { value: 'bubble' } });
     await waitFor(() => {
       expect(useSettingsStore.getState().theme).toBe('bubble');
     });
-  });
 
-  it('updates darkMode (page contrast) via segmented control', async () => {
-    render(<GeneralSection />);
     const group = document.getElementById('general-host-page-mode') as HTMLElement;
-    const darkBtn = within(group).getByRole('radio', { name: /Dark/i });
-    fireEvent.click(darkBtn);
+    fireEvent.click(within(group).getByRole('radio', { name: /Dark/i }));
     await waitFor(() => {
       expect(useSettingsStore.getState().darkMode).toBe('dark');
     });
-  });
 
-  it('toggles compact inline setting', async () => {
-    render(<GeneralSection />);
     fireEvent.click(screen.getByRole('switch', { name: /Compact inline for short text/i }));
     await waitFor(() => {
       expect(useSettingsStore.getState().enableCompactInlineForShortText).toBe(true);

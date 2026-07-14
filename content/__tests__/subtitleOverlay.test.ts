@@ -53,37 +53,19 @@ beforeEach(() => {
   document.body.innerHTML = '<video src="test.mp4"></video>';
 });
 
-describe('subtitleOverlay — fontFamily wiring', () => {
-  it('sets --anyllm-subtitle-font-family CSS custom property on overlay', () => {
-    initializeOverlay(MOCK_CUES, { fontFamily: 'Georgia, serif' });
-
+describe('subtitleOverlay — fontFamily / displayMode wiring', () => {
+  it('applies and updates font-family CSS var and data-display-mode', () => {
+    initializeOverlay(MOCK_CUES, { fontFamily: 'Georgia, serif', displayMode: 'translation-only' });
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     expect(overlay).not.toBeNull();
     expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('Georgia, serif');
-  });
-
-  it('updateConfig changes --anyllm-subtitle-font-family', () => {
-    initializeOverlay(MOCK_CUES);
-    updateConfig({ fontFamily: 'monospace' });
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('monospace');
-  });
-});
-
-describe('subtitleOverlay — displayMode wiring', () => {
-  it('sets data-display-mode="translation-only" when specified', () => {
-    initializeOverlay(MOCK_CUES, { displayMode: 'translation-only' });
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
-  });
 
-  it('updateConfig changes data-display-mode attribute', () => {
-    initializeOverlay(MOCK_CUES, { displayMode: 'bilingual' });
+    updateConfig({ fontFamily: 'monospace', displayMode: 'bilingual' });
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('monospace');
+    expect(overlay.getAttribute('data-display-mode')).toBe('bilingual');
+
     updateConfig({ displayMode: 'translation-only' });
-
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
     expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
   });
 });
@@ -166,37 +148,26 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     });
   });
 
-  it('uses popover when video itself is fullscreen', () => {
+  it('uses popover while video is fullscreen and reverts on exit', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    
-    // Simulate video fullscreen
+
     Object.defineProperty(document, 'fullscreenElement', {
       value: video,
-      configurable: true
+      configurable: true,
     });
     document.dispatchEvent(new Event('fullscreenchange'));
-
     expect(overlay.parentElement).toBe(document.body);
     expect(overlay.getAttribute('popover')).toBe('manual');
     expect(HTMLElement.prototype.showPopover).toHaveBeenCalled();
-  });
 
-  it('reverts to body on exit fullscreen', () => {
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    
-    // Put it in container first
     container.appendChild(overlay);
     overlay.setAttribute('popover', 'manual');
-
-    // Simulate exit fullscreen
     Object.defineProperty(document, 'fullscreenElement', {
       value: null,
-      configurable: true
+      configurable: true,
     });
     document.dispatchEvent(new Event('fullscreenchange'));
-
     expect(overlay.parentElement).toBe(document.body);
     expect(overlay.hasAttribute('popover')).toBe(false);
     expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
@@ -217,44 +188,30 @@ describe('subtitleOverlay — line wrapping (sub-project 5b)', () => {
     video.dispatchEvent(new Event('timeupdate'));
   }
 
-  it('renders a long translation as at most 2 line divs (not one wrapping block)', () => {
+  it('wraps long translations into ≤2 line divs and keeps short cues single-line', () => {
     document.body.innerHTML = '<video src="test.mp4"></video>';
+    const longText =
+      'This is a rather long translated subtitle line that should wrap into two separate line divs rather than one big block';
+    showCue([{ startTime: 0, endTime: 8, text: longText, originalText: 'orig' }]);
+    const longLines = document
+      .querySelector('.anyllm-translate-subtitle-translated')!
+      .querySelectorAll(':scope > div');
+    expect(longLines.length).toBeGreaterThanOrEqual(1);
+    expect(longLines.length).toBeLessThanOrEqual(2);
+    longLines.forEach((d) => expect((d as HTMLElement).children.length).toBe(0));
 
-    // A cue with a long translation (well over 42 chars) and a generous window
-    // so requiredRead is small relative to duration -> wide CPL, but still 2 lines.
-    const longText = 'This is a rather long translated subtitle line that should wrap into two separate line divs rather than one big block';
-    const cues = [{ startTime: 0, endTime: 8, text: longText, originalText: 'orig' }];
-    showCue(cues);
-
-    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
-    expect(translatedEl).not.toBeNull();
-    const lineDivs = translatedEl.querySelectorAll(':scope > div');
-    // Must render as wrapped line divs, capped at 2.
-    expect(lineDivs.length).toBeGreaterThanOrEqual(1);
-    expect(lineDivs.length).toBeLessThanOrEqual(2);
-    // No innerHTML was used — each line div carries only text.
-    lineDivs.forEach((d) => {
-      expect((d as HTMLElement).children.length).toBe(0);
-    });
-  });
-
-  it('renders a short cue as a single line div (no needless wrapping)', () => {
     document.body.innerHTML = '<video src="test.mp4"></video>';
-
-    const cues = [{ startTime: 0, endTime: 4, text: 'Hi', originalText: 'Hola' }];
-    showCue(cues);
-
-    const translatedEl = document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
-    const lineDivs = translatedEl.querySelectorAll(':scope > div');
-    expect(lineDivs.length).toBe(1);
-    expect(lineDivs[0].textContent).toBe('Hi');
-
-    const originalEl = document.querySelector('.anyllm-translate-subtitle-original') as HTMLElement;
-    const origDivs = originalEl.querySelectorAll(':scope > div');
-    expect(origDivs.length).toBe(1);
-    expect(origDivs[0].textContent).toBe('Hola');
+    showCue([{ startTime: 0, endTime: 4, text: 'Hi', originalText: 'Hola' }]);
+    const shortLines = document
+      .querySelector('.anyllm-translate-subtitle-translated')!
+      .querySelectorAll(':scope > div');
+    expect(shortLines.length).toBe(1);
+    expect(shortLines[0]!.textContent).toBe('Hi');
+    expect(
+      document.querySelector('.anyllm-translate-subtitle-original')!.querySelectorAll(':scope > div')[0]!
+        .textContent,
+    ).toBe('Hola');
   });
-
 });
 
 // ============================================================================
@@ -319,221 +276,95 @@ describe('content/subtitleOverlay — lifecycle', () => {
     document.body.innerHTML = '';
   });
 
-  describe('initializeOverlay', () => {
-    it('creates overlay DOM structure when video element exists', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
+  it('creates/configures overlay with video, skips without video, and cleans up', () => {
+    initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }]);
+    expect(document.querySelector('.anyllm-translate-subtitle-overlay')).toBeFalsy();
 
-      const cues: SubtitleCue[] = [
+    const video = document.createElement('video');
+    video.src = 'test.mp4';
+    document.body.appendChild(video);
+    initializeOverlay(
+      [
         { startTime: 0, endTime: 2, text: 'Hello' },
         { startTime: 3, endTime: 5, text: 'World' },
-      ];
+      ],
+      { fontSize: 24, position: 'top' },
+    );
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
+    expect(overlay?.querySelector('.anyllm-translate-subtitle-original')).toBeTruthy();
+    expect(overlay?.querySelector('.anyllm-translate-subtitle-translated')).toBeTruthy();
+    expect(getConfig()).toMatchObject({ fontSize: 24, position: 'top' });
+    expect(isOverlayActive()).toBe(true);
 
-      initializeOverlay(cues);
+    updateConfig({ fontSize: 28, backgroundOpacity: 0.5 });
+    expect(getConfig()).toMatchObject({ fontSize: 28, backgroundOpacity: 0.5 });
 
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      expect(overlay).toBeTruthy();
-      expect(overlay?.querySelector('.anyllm-translate-subtitle-original')).toBeTruthy();
-      expect(overlay?.querySelector('.anyllm-translate-subtitle-translated')).toBeTruthy();
-    });
+    cleanup();
+    expect(document.querySelector('.anyllm-translate-subtitle-overlay')).toBeFalsy();
+    expect(isOverlayActive()).toBe(false);
 
-    it('does not create overlay when no video element exists', () => {
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      expect(overlay).toBeFalsy();
-    });
-
-    it('applies custom configuration', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues, { fontSize: 24, position: 'top' });
-
-      const config = getConfig();
-      expect(config.fontSize).toBe(24);
-      expect(config.position).toBe('top');
-    });
+    initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }], { fontSize: 30 });
+    resetOverlayState();
+    expect(isOverlayActive()).toBe(false);
+    expect(getConfig().fontSize).toBe(20);
   });
 
-  describe('updateConfig', () => {
-    it('updates overlay configuration', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
+  it('syncs active cue by time, hides between cues, mutates in place, and targets videoNode', () => {
+    const video = document.createElement('video');
+    video.src = 'test.mp4';
+    document.body.appendChild(video);
 
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
+    const cues: SubtitleCue[] = [
+      { startTime: 0, endTime: 2, text: 'First' },
+      { startTime: 3, endTime: 5, text: 'Second' },
+      { startTime: 6, endTime: 8, text: 'Third' },
+    ];
+    initializeOverlay(cues, {}, video);
+    Object.defineProperty(video, 'currentTime', { value: 4, writable: true, configurable: true });
+    video.dispatchEvent(new Event('timeupdate'));
+    expect(
+      document.querySelector('.anyllm-translate-subtitle-translated')?.textContent,
+    ).toBe('Second');
 
-      updateConfig({ fontSize: 28, backgroundOpacity: 0.5 });
+    Object.defineProperty(video, 'currentTime', { value: 2.5, writable: true, configurable: true });
+    video.dispatchEvent(new Event('timeupdate'));
+    expect(
+      document
+        .querySelector('.anyllm-translate-subtitle-overlay')
+        ?.classList.contains('anyllm-translate-subtitle-visible'),
+    ).toBe(false);
 
-      const config = getConfig();
-      expect(config.fontSize).toBe(28);
-      expect(config.backgroundOpacity).toBe(0.5);
-    });
+    cleanup();
+    const mutable: SubtitleCue[] = [
+      { startTime: 0, endTime: 4, text: 'Hello', originalText: 'Hello' },
+    ];
+    initializeOverlay(mutable, {}, video);
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
+    video.dispatchEvent(new Event('timeupdate'));
+    expect(document.querySelector('.anyllm-translate-subtitle-translated')?.textContent).toBe(
+      'Hello',
+    );
+    mutable[0]!.text = 'Xin chào';
+    updateCues(mutable);
+    expect(document.querySelector('.anyllm-translate-subtitle-translated')?.textContent).toBe(
+      'Xin chào',
+    );
 
-  });
-
-  describe('isOverlayActive', () => {
-    it('returns true after initialization', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      expect(isOverlayActive()).toBe(true);
-    });
-
-    it('returns false after cleanup', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-      cleanup();
-
-      expect(isOverlayActive()).toBe(false);
-    });
-  });
-
-  describe('cleanup', () => {
-    it('removes overlay from DOM', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues);
-
-      cleanup();
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      expect(overlay).toBeFalsy();
-    });
-
-  });
-
-  describe('resetOverlayState', () => {
-    it('resets overlay to default state', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues, { fontSize: 30 });
-
-      resetOverlayState();
-
-      expect(isOverlayActive()).toBe(false);
-      const config = getConfig();
-      expect(config.fontSize).toBe(20);
-    });
-  });
-
-  describe('updateCues', () => {
-    it('refreshes displayed text when the same cue array is mutated in place', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [
-        { startTime: 0, endTime: 4, text: 'Hello', originalText: 'Hello' },
-      ];
-      initializeOverlay(cues, {}, video);
-
-      Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
-      video.dispatchEvent(new Event('timeupdate'));
-
-      const translatedEl = () =>
-        document.querySelector('.anyllm-translate-subtitle-translated') as HTMLElement;
-      expect(translatedEl()?.textContent).toBe('Hello');
-
-      cues[0].text = 'Xin chào';
-      updateCues(cues);
-
-      expect(translatedEl()?.textContent).toBe('Xin chào');
-    });
-  });
-
-  describe('cue synchronization logic', () => {
-    it('finds active cue based on video time', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [
-        { startTime: 0, endTime: 2, text: 'First' },
-        { startTime: 3, endTime: 5, text: 'Second' },
-        { startTime: 6, endTime: 8, text: 'Third' },
-      ];
-      initializeOverlay(cues);
-
-      Object.defineProperty(video, 'currentTime', {
-        value: 4,
-        writable: true,
-      });
-
-      video.dispatchEvent(new Event('timeupdate'));
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      const translatedText = overlay?.querySelector('.anyllm-translate-subtitle-translated');
-      expect(translatedText?.textContent).toBe('Second');
-    });
-
-    it('handles no active cue when time is between cues', () => {
-      const video = document.createElement('video');
-      video.src = 'test.mp4';
-      document.body.appendChild(video);
-
-      const cues: SubtitleCue[] = [
-        { startTime: 0, endTime: 2, text: 'First' },
-        { startTime: 5, endTime: 7, text: 'Second' },
-      ];
-      initializeOverlay(cues);
-
-      Object.defineProperty(video, 'currentTime', {
-        value: 3,
-        writable: true,
-      });
-
-      video.dispatchEvent(new Event('timeupdate'));
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      expect(overlay?.classList.contains('anyllm-translate-subtitle-visible')).toBe(false);
-    });
-  });
-
-  describe('video targeting', () => {
-    it('uses provided videoNode instead of querying DOM', () => {
-      const video1 = document.createElement('video');
-      video1.src = 'video1.mp4';
-      video1.id = 'first';
-      document.body.appendChild(video1);
-
-      const video2 = document.createElement('video');
-      video2.src = 'video2.mp4';
-      video2.id = 'second';
-      document.body.appendChild(video2);
-
-      const cues: SubtitleCue[] = [{ startTime: 0, endTime: 2, text: 'Hello' }];
-      initializeOverlay(cues, undefined, video2);
-
-      expect(isOverlayActive()).toBe(true);
-
-      Object.defineProperty(video2, 'currentTime', { value: 1, writable: true });
-      video2.dispatchEvent(new Event('timeupdate'));
-
-      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay');
-      const translatedText = overlay?.querySelector('.anyllm-translate-subtitle-translated');
-      expect(translatedText?.textContent).toBe('Hello');
-    });
-
+    cleanup();
+    document.body.innerHTML = '';
+    const video1 = document.createElement('video');
+    video1.id = 'first';
+    document.body.appendChild(video1);
+    const video2 = document.createElement('video');
+    video2.id = 'second';
+    document.body.appendChild(video2);
+    initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }], undefined, video2);
+    expect(isOverlayActive()).toBe(true);
+    Object.defineProperty(video2, 'currentTime', { value: 1, writable: true });
+    video2.dispatchEvent(new Event('timeupdate'));
+    expect(document.querySelector('.anyllm-translate-subtitle-translated')?.textContent).toBe(
+      'Hello',
+    );
   });
 });
+
