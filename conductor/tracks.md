@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-10 all (67 archived / 0 active; stats+General+wizard via superpowers/Beads, not new Conductor tracks) -->
+<!-- conductor-refresh: 2026-07-14 all (68 archived / 0 active; web-translate-v3 archived; Providers ops + Custom terms + Shortcut Studio via superpowers/direct) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.

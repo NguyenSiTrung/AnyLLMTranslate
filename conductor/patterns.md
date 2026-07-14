@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-10 all (stats v2 + cache size + setup wizard patterns elevated; 1042 TCs / 1 fail; Beads ALT-d41 open; 67 archived) -->
+<!-- conductor-refresh: 2026-07-14 all (web-v3 patterns retained; elevated Providers ops / Shortcut Studio / Custom terms; 782 TCs / 1 fail; Beads zg4 + stale pgv; 68 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -683,13 +683,23 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Blocklist policy = replace when non-empty:** If the user supplies any `blocklistPatterns`, that list fully replaces the seeded defaults; empty/absent → seed defaults (Notion/Figma/Lark-class hosts). (from: inline-input-parity_20260709, archived 2026-07-09)
 
 ## Web Translation v3 (web-translate-v3_20260714, 2026-07-14)
-- Settings triple still required for new fields: interface + DEFAULT_SETTINGS + extractSettings(). deepMerge migrates missing keys to new defaults; explicit user false is preserved.
-- Parallel cache lookups must rehydrate original piece payloads by id (preserve inArticleContext/variables) after Promise.all.
-- Viewport-aware progress: status `done` + viewportComplete with remaining counts means reading-area idle — not whole-page complete; do not leave status as translating for off-screen-only work.
-- Systemic pause sticky banner: Dismiss hides UI but keeps pause; Retry calls clearSystemicPause; never auto-dismiss under pool death.
-- Look-ahead prefetch: one hop only (isLookahead flag) to avoid whole-page storms; skip under systemicPause.
-- Parallel sub-batches: collect per-batch outcomes then merge — avoid concurrent mutation of shared result arrays.
-- Untrusted prompt data (term memory, page context, category label): XML delimiters + strip `<>` + length caps.
-- Vietnamese langDetect unique letters must omit bare ă (Romanian collision); prefer ơ/ư/đ + tone marks; Romanian uses ș/ț fast-path.
-- Stream path must load glossary/settings itself and accept pageContext/termMemory for parity with non-stream.
-- Resume match: parentPath+text identity first, bare text fallback for legacy snapshots.
+- Settings triple still required for new fields: interface + DEFAULT_SETTINGS + extractSettings(). deepMerge migrates missing keys to new defaults; explicit user false is preserved. (from: web-translate-v3_20260714, 2026-07-14)
+- Parallel cache lookups must rehydrate original piece payloads by id (preserve inArticleContext/variables) after Promise.all. (from: web-translate-v3_20260714, 2026-07-14)
+- Viewport-aware progress: status `done` + viewportComplete with remaining counts means reading-area idle — not whole-page complete; do not leave status as translating for off-screen-only work. (from: web-translate-v3_20260714, 2026-07-14)
+- Systemic pause sticky banner: Dismiss hides UI but keeps pause; Retry calls clearSystemicPause; never auto-dismiss under pool death. (from: web-translate-v3_20260714, 2026-07-14)
+- Look-ahead prefetch: one hop only (isLookahead flag) to avoid whole-page storms; skip under systemicPause. (from: web-translate-v3_20260714, 2026-07-14)
+- Parallel sub-batches: collect per-batch outcomes then merge — avoid concurrent mutation of shared result arrays. (from: web-translate-v3_20260714, 2026-07-14)
+- Untrusted prompt data (term memory, page context, category label): XML delimiters + strip `<>` + length caps. (from: web-translate-v3_20260714, 2026-07-14)
+- Vietnamese langDetect unique letters must omit bare ă (Romanian collision); prefer ơ/ư/đ + tone marks; Romanian uses ș/ț fast-path. (from: web-translate-v3_20260714, 2026-07-14)
+- Stream path must load glossary/settings itself and accept pageContext/termMemory for parity with non-stream. (from: web-translate-v3_20260714, 2026-07-14)
+- Resume match: parentPath+text identity first, bare text fallback for legacy snapshots. (from: web-translate-v3_20260714, 2026-07-14)
+- Page-scope presets: pure equality of owned fields → `'custom'` when mixed; Select shows custom as read-only. (from: web-translate-v3_20260714, 2026-07-14)
+
+## Options UX — Providers / Custom terms / Shortcuts (2026-07-14, outside Conductor tracks)
+- **Providers ops shell over monolithic accordion:** Prefer command bar + rotation list + edit drawer + guided add over a single mega-section file; pure status/reorder helpers (`lib/poolDashboardStatus.ts`, `lib/poolReorder.ts`) keep UI dumb. (from: providers ops redesign, 2026-07-14)
+- **Pool key status is derived, not re-stored on every paint:** Load key/test state via hooks (`usePoolKeyStatuses`) and pure chip formatters so the options page stays responsive under multi-key pools. (from: providers ops redesign, 2026-07-14)
+- **Glossary / Custom terms: pure list helpers first:** Filter, duplicate detection, and mismatch sort live in `lib/glossary.ts` (or dedicated pure modules) so the Dictionary section stays presentational. (from: custom terms library, 2026-07-14)
+- **Shortcut Studio: pure display helpers + KeyCap primitives:** Format shortcut chords in `lib/shortcutDisplay.ts`; render with reusable KeyCap sequence components — keep Chrome `commands` suggested_key limit (max 4) in mind when adding shortcuts. (from: shortcut-studio, 2026-07-14)
+
+---
+Last refreshed: 2026-07-14

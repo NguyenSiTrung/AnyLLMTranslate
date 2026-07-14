@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-10 all (post stats analytics + General IA + setup wizard — 1042 TCs / 92 files / 1 fail / 67 archived; tsc 3; lint 23; build ~3.94 MB; Beads 1 open ALT-d41) -->
+<!-- conductor-refresh: 2026-07-14 all (web-translate-v3 + Providers ops + Custom terms + Shortcut Studio; 782 TCs / 133 files / 1 fail / 68 archived; tsc 6; lint 94; build ~4.1 MB; Beads 8 open incl zg4 + stale pgv.1.*) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -35,8 +35,14 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - SPA / dynamic content support (MutationObserver), including **body-swap re-init** (full-document SPA navigations that replace `<body>`)
 - **Selector-match cache** (`matchesCached`) for skip-list checks during extraction
 - **In/out-of-article batch split** — pieces tagged `inArticleContext` ship in separate LLM batches so sidebar chrome does not dilute article context
-- **Page Walk Tuning** (Options → Advanced, defaults off): body-tag whitelist (direct children of `<body>`) + aside region text caps
+- **Page-scope presets** (Classic / Balanced / Main content / Full page) — single control mapping smart excludes, body whitelist, and aside caps; **Balanced is the product default** (streaming + aside caps ON). Classic restores pre-v3 defaults as escape hatch (`lib/pageScopePreset.ts`)
+- **Page Walk Tuning** (Options → Advanced): body-tag whitelist (direct children of `<body>`) + aside region text caps (aside caps default **ON** under Balanced)
+- **Viewport-aware progress** — status distinguishes reading-strip idle vs whole-page complete (`lib/webTranslateStatus.ts`); popup copy like “Reading area ready · N more as you scroll”; in-page **mini progress** (`content/miniProgress.ts`)
+- **Sticky systemic-pause banner** — on pool death / systemic pause: in-page bar with Retry / Dismiss / Settings; Dismiss hides UI but keeps pause so scroll does not storm a dead pool
+- **Throughput v3** — parallel sub-batches (`runWithConcurrency` cap 3), look-ahead prefetch (one hop, `isLookahead`), reading-strip priority sort; session settings cache + parallel cache lookups; opt-in adaptive batching
+- **Quality v3** — document term memory, JSON parse salvage/repair, expanded langDetect, optional model-scoped cache, category prompt snippets, opt-in quality self-check; stream path loads settings/glossary + pageContext/termMemory for parity; resume identity via parentPath+text
 - Translation cache via IndexedDB (success + negative/failure cache with TTL; manual retry bypasses failure cache)
+- **Streaming translation default ON** (`enableStreamingTranslation`; non-stream fallback retained)
 - **Compact inline for short text** toggle (default off) for denser bilingual display on short pieces
 - Restore/undo translation
 
@@ -80,10 +86,14 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 
 ### UI & Settings
 - Popup UI (redesigned dropdown with permanent quick settings)
-- Options page (provider config, theme selection, site rules)
+- Options page IA groups: **Display** (General, Themes), **Translation** (Providers, Custom terms, Site Rules), **Media** (Subtitles), **System** (Statistics, Shortcuts, Inline Translate, Advanced)
 - **Setup wizard** (5-step guided onboarding: welcome → provider → test → language → done) with clearer step flow, popular-language chips, pure entry-step resolution (`lib/setupWizard.ts`), and re-open at provider when already completed
 - **General tab (4-card IA)** — Language, Layout, Style, Advanced display as single-concern cards; shared `GENERAL_THEME_OPTIONS` in `lib/themes.ts`
+- **Themes gallery** — card gallery + mini previews + Theme Studio canvas for custom themes
+- **Providers ops dashboard** — rotation list, live key status chips, command bar, edit drawer, guided add flow (catalog → keys); pure helpers `lib/poolDashboardStatus.ts`, `lib/poolReorder.ts`, `usePoolKeyStatuses`
 - Provider readiness system (`lib/providerReadiness.ts`) — state machine with recovery messages and error classification
+- **Custom terms** (Dictionary tab relabel) — glossary library UX with command bar, empty hero, entry list/row, filter/duplicate/mismatch pure helpers (`lib/glossary.ts`)
+- **Shortcut Studio** — rewritten Shortcuts tab with KeyCap sequences, grouped rows, pure display helpers (`lib/shortcutDisplay.ts`)
 - Shared component library (12+ reusable components: Button, Card, Input, Modal, Select, Slider, Toggle, Toast, Badge, EmptyState, FieldGroup, ToastProvider, Textarea, SettingsGroup, AdvancedDisclosure, DisabledDimmer, DangerZone, …)
 - **Statistics — local analytics dashboard (v2)** — multi-period KPIs (7d/30d/90d/all-time), activity charts, cache efficiency, breakdowns by mode / provider / host / language pair, JSON+CSV export, retention (30/90/180 days), host-tracking privacy toggle; schema v2 summary in `chrome.storage.local` + dimensional dailies in IndexedDB (`anyllm-stats`); single write API `recordUsage` across translation paths. All data on-device; never logs page text or API keys
 - 15 built-in site rules for popular platforms (GitHub, StackOverflow, Reddit, Wikipedia, Medium, X/Twitter, HuggingFace, PyPI, npm, GitLab, Substack, YouTube)
@@ -94,7 +104,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - Mouse hover translation
 - Keyboard shortcuts (10+)
 - Context menu integration
-- **Inline input translation (Immersive-parity)** — triple-space (or configured) gesture + optional `translate-input-box` command (`Alt+I`, no auto `suggested_key` as 5th command); IME/`isComposing`/key-repeat safe; multi-strategy write-back with verify; race-safe snapshot abort; deep active element (shadow/iframe/CE); language prefix (`/en` etc.); site blocklist; dual mode optional (default translation-only); full Options → Inline Translation advanced panel. Module split under `content/inlineTranslate/`.
+- **Inline input translation (Immersive-parity)** — triple-space (or configured) gesture + optional `translate-input-box` command (`Alt+I`, no auto `suggested_key` as 5th command); IME/`isComposing`/key-repeat safe; multi-strategy write-back with verify; race-safe snapshot abort; deep active element (shadow/iframe/CE); language prefix (`/en` etc.); site blocklist; dual mode optional (default translation-only); full Options → **Inline Translate** advanced panel. Module split under `content/inlineTranslate/`.
 - **Accurate translation cache size** — Options → Advanced shows real cache footprint (re-estimated from key+payload, not undercounted `sizeBytes`) with B/KB/MB formatting
 
 ### Translation Engine
@@ -105,7 +115,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - LLM response sanitization — strips `<think>` blocks and extracts JSON from markdown code fences or raw brace extraction
 - **Provider capability self-healing** — when an endpoint rejects `response_format` (e.g. NVIDIA NIM / vLLM on models without a JSON schema), the request is auto-retried without it and the rejection is remembered on the service instance so every subsequent request sends the clean body directly; resets on provider/model switch
 - **User-configurable RPM rate limiting** — sliding-window limiter at the single network chokepoint (`OpenAICompatibleService.fetchWithRetry`) caps requests-per-minute against providers with rate limits; `maxRpm` (0 = unlimited) on `ExtensionSettings` + `ProviderConfig`, configured in Options → Advanced → Rate Limiting
-- **Multi-provider pool with round-robin & circuit-breaker failover** — multiple active providers + multiple API keys per provider; requests distribute round-robin across all enabled, healthy `(provider, key)` slots (per-key RPM, summed throughput ≈ Σ keys' maxRpm). Circuit-breaker failover on 429/5xx/network → escalating cooldown (60s→120s→300s), on 401/403 → long-open (1h) + `credentialInvalid` flag. A `ProviderPoolCoordinator` sits at the single `initService()` seam so all 7 translation paths are covered in one place. Options → Providers tab manages the pool (collapsible per-provider cards, per-key masked inputs + maxRpm + Test + live status badge, "+ Add provider from catalog"). Legacy single-provider users migrate automatically into `providers[0]`.
+- **Multi-provider pool with round-robin & circuit-breaker failover** — multiple active providers + multiple API keys per provider; requests distribute round-robin across all enabled, healthy `(provider, key)` slots (per-key RPM, summed throughput ≈ Σ keys' maxRpm). Circuit-breaker failover on 429/5xx/network → escalating cooldown (60s→120s→300s), on 401/403 → long-open (1h) + `credentialInvalid` flag. A `ProviderPoolCoordinator` sits at the single `initService()` seam so all 7 translation paths are covered in one place. Options → Providers tab is an **ops dashboard** (rotation list, key status chips, edit drawer, guided add from catalog). Legacy single-provider users migrate automatically into `providers[0]`.
 
 ## Success Metrics
 
@@ -200,13 +210,19 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 - **Translation cache size display fix** (2026-07-09, incremental on master, commit `2e0cfa4`): Cache stats no longer stuck at 0.0 MB — re-estimate stored bytes from key+payload, write accurate `sizeBytes` on cache, UI via `formatCacheSize` (B/KB/MB).
 - **Setup wizard UX redesign** (2026-07-09, incremental on master, commit `e8b4776`): Clearer first-run flow and re-configure path; pure helpers in `lib/setupWizard.ts` (entry step resolution, popular target-language chips, provider-patch test invalidation); SetupWizard + options/popup wiring.
 - **General Tab Full Restructure (IA C)** (2026-07-09, shipped via superpowers workflow, epic `ALT-6l9` closed): Options → General restructured into four single-concern cards (Language, Layout, Style, Advanced display). Shared `GENERAL_THEME_OPTIONS` metadata in `lib/themes.ts`. No new settings keys.
-- **Statistics Analytics Platform** (2026-07-09/10, shipped via superpowers workflow, epic `ALT-88u` closed; commits `2c9de19`…`63587dc`): Full local-only analytics dashboard on Options → Statistics. Schema **v2** (`types/stats.ts`): lifetime counters + preferences in `chrome.storage.local`; dimensional daily series in IndexedDB (`services/statsIdb.ts`, DB `anyllm-stats`). Single serialized write API `recordUsage` (`services/statsCollector.ts`) wired across background translation paths; period query/top-N/insights (`statsQuery.ts`); JSON+CSV export (`statsExport.ts`); retention + host-tracking privacy controls; v1→v2 migration on load. Known follow-up: stream path cache pre-split for accurate cache metrics (`ALT-d41` open P3). ~93 stats-related tests.
+- **Statistics Analytics Platform** (2026-07-09/10, shipped via superpowers workflow, epic `ALT-88u` closed; commits `2c9de19`…`63587dc`): Full local-only analytics dashboard on Options → Statistics. Schema **v2** (`types/stats.ts`): lifetime counters + preferences in `chrome.storage.local`; dimensional daily series in IndexedDB (`services/statsIdb.ts`, DB `anyllm-stats`). Single serialized write API `recordUsage` (`services/statsCollector.ts`) wired across background translation paths; period query/top-N/insights (`statsQuery.ts`); JSON+CSV export (`statsExport.ts`); retention + host-tracking privacy controls; v1→v2 migration on load. ~93 stats-related tests.
+- **Providers ops dashboard** (2026-07-1x, superpowers/direct on master): Redesigned Options → Providers as an ops shell — pool command bar, rotation list, guided add, provider edit drawer, live key status via pure `poolDashboardStatus` / `poolReorder` helpers and `usePoolKeyStatuses`. Supersedes the earlier card-accordion extract layout from `providers-ux-refactor_20260704`.
+- **Custom terms library** (2026-07-1x, superpowers/direct): Dictionary tab relabeled **Custom terms**; command bar, empty hero, entry list/row components; pure glossary filter/duplicate/mismatch helpers.
+- **Shortcut Studio** (2026-07-1x, superpowers/direct): Full rewrite of Options → Shortcuts with KeyCap sequences, grouped rows, pure `lib/shortcutDisplay.ts` helpers; content keyboard shortcut reliability fixes.
+- **Web thrashing / reliability polish** (2026-07-1x, incremental): Stop bilingual duplicate translations and pool-error spam; stop scroll thrashing on re-entry; stop false fail that succeeds on instant retry.
+- **Test suite prune** (2026-07-14, commit `3750112`): Prune/merge suite ~934 → ~703 TCs before web-v3 growth; keep core coverage.
+- **Web Page Translation — UX, Performance & Quality v3** (Archived 2026-07-14, conductor track `web-translate-v3_20260714`): Balanced defaults (streaming + aside caps ON), page-scope presets, viewport-aware progress, sticky systemic-pause banner, parallel sub-batches + look-ahead, term memory, JSON repair, expanded langDetect, stream/context parity, resume parentPath identity, mini progress. Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. 4 phases.
 
 ### Current State
-- **1042 tests** across **92 files**: **1041 passing**, **1 failing** (`tests/unit/subtitleCoordinatorManifest.test.ts` — stale chunk after seek still calls `updateCues`; suite not fully green). Build present (`.output/chrome-mv3` ≈ **3.94 MB**). `tsc --noEmit`: **3 errors** — coordinator test mock missing `getDomCueSource`; `EN_BREAK_WORDS` implicit `any[]` in `lib/youtubeAsrResegment.ts` (2 sites). Lint: **23 errors** — prior unused-import / non-null issues plus new stats/selection test noise (`no-dynamic-delete` in stats tests, unused imports, `consistent-type-imports` in StatisticsSection tests).
-- **0 active Conductor tracks**. **67 tracks archived**. Recent major work (stats platform, General IA, setup wizard) shipped via superpowers + Beads, not new Conductor track folders.
-- **Beads:** 1 open (`ALT-d41` P3 stream cache metrics); 0 in progress; 569 closed / 570 total.
-- **Test suite history:** (2026-07-08, `b720491`) 1487 → 999 TCs; `web-pipeline-hardening` restored ~1047 / 68; post `inline-input-parity` + trim `0f1d632` → 788 / 71; post Youku ASS + YouTube ASR resegment → 848 / 73; post `selection-dict-mode` → 926 / 80; post stats analytics + General + wizard → **1042 / 92**.
+- **782 tests** across **133 files**: **781 passing**, **1 failing** (`tests/unit/subtitleCoordinatorManifest.test.ts` — stale chunk after seek still calls `updateCues`; tracked as Beads `AnyLLMTranslate-zg4`). Build present (`.output/chrome-mv3` ≈ **4.1 MB**). `tsc --noEmit`: **6 errors** — coordinator test mock missing `getDomCueSource`; `EN_BREAK_WORDS` implicit `any[]` in `lib/youtubeAsrResegment.ts` (2 sites); pageScopePreset test casts; settingsStore test `priority` on `PoolKey`. Lint: **94 errors** — mostly `@typescript-eslint/no-non-null-assertion` in tests, plus unused vars, dynamic-delete in stats tests, and a few production nits.
+- **0 active Conductor tracks**. **68 tracks archived**. Latest Conductor archive: `web-translate-v3_20260714`. Providers ops / Custom terms / Shortcut Studio shipped outside Conductor track folders.
+- **Beads:** 8 open / 0 in progress / 156 closed / 164 total. Real work: `AnyLLMTranslate-zg4` (stale-chunk seek test). Stale backlog: `AnyLLMTranslate-pgv.1.2`–`1.8` (old Providers extract tasks — superseded by ops dashboard redesign).
+- **Test suite history:** (2026-07-08) 1487 → 999 TCs; pipeline-hardening ~1047; inline-parity trim → 788; selection-dict → 926; stats+General → 1042/92; suite prune `3750112` → ~703; post web-translate-v3 → **782 / 133**.
 
 ## Out of Scope (Initial Release)
 
