@@ -30,6 +30,8 @@ export interface ExtractOptions {
   enableBodyTagWhitelist?: boolean;
   /** FR-5: When true, apply per-paragraph and per-region text caps within aside regions. */
   enableAsideCaps?: boolean;
+  /** FR-23: When true, descend into open shadow roots during extraction. */
+  enableShadowDomWalk?: boolean;
 }
 
 /**
@@ -223,16 +225,14 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
 
     // Rich translate: encode inline markup from the anchor's innerHTML so the
     // LLM receives `<z id="N">…</z>` tokens and the markup can be reconstructed
-    // on decode (FR-1). Only applied to single-piece anchors (no sentence split)
-    // so placeholder ids stay aligned with the piece text. Long pieces that
-    // would split fall back to plain text (no variables) — safe degradation.
+    // on decode (FR-1). FR-19: also keep variables when the encoded text must
+    // be sentence-split — each sub-piece carries the full variable map (decode
+    // only uses z-ids present in that part's text).
     let richText = trimmed;
     let richVariables: TranslationPiece['variables'];
     if (options.enableRichTranslate && anchorElement) {
       const encoded = encodeInlineHtml(anchorElement.innerHTML);
-      // Use the encoded flat text only when it carries placeholders AND the
-      // piece isn't going to be split (keeps id alignment correct).
-      if (encoded.variables.length > 0 && trimmed.length <= MAX_PIECE_CHARS) {
+      if (encoded.variables.length > 0) {
         richText = encoded.flatText.trim();
         richVariables = encoded.variables;
       }
@@ -268,6 +268,8 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
           textNodes: [...currentTextNodes],
           text: part,
           isTranslated: false,
+          // FR-19: attach variables so any <z> tags in this part still decode.
+          ...(richVariables ? { variables: richVariables } : {}),
           inArticleContext,
         });
       }
@@ -350,6 +352,27 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
 
   // Flush remaining
   flushPiece();
+
+  // FR-23: optionally walk open shadow roots (web components).
+  if (options.enableShadowDomWalk && typeof (root as Element).querySelectorAll === 'function') {
+    const hosts = (root as Element).querySelectorAll?.('*') ?? [];
+    for (const host of hosts) {
+      const shadow = (host as Element & { shadowRoot?: ShadowRoot | null }).shadowRoot;
+      if (!shadow) continue;
+      const nested = extractPieces(shadow as unknown as Element, {
+        ...options,
+        // Avoid re-applying body whitelist inside shadow trees.
+        enableBodyTagWhitelist: false,
+        enableShadowDomWalk: true,
+      });
+      pieces.push(...nested);
+    }
+  }
+
+  // FR-17: mark walked root so mutation path can skip clean subtrees.
+  if (root.nodeType === Node.ELEMENT_NODE) {
+    (root as Element).setAttribute('data-anyllm-walked', '1');
+  }
 
   return pieces;
 }

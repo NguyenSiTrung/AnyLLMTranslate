@@ -28,6 +28,8 @@ export interface ResumePiece {
   text: string;
   translatedText?: string;
   status: PieceStatus;
+  /** FR-20: parent path for de-dup when identical texts appear twice. */
+  parentPath?: string;
 }
 
 /** A full per-URL resume snapshot. */

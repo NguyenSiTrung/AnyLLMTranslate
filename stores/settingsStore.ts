@@ -173,5 +173,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableAdaptiveBatching: state.enableAdaptiveBatching,
     cacheKeyIncludesModel: state.cacheKeyIncludesModel,
     enableTranslationQualityCheck: state.enableTranslationQualityCheck,
+    enableLayoutContainment: state.enableLayoutContainment,
+    enableShadowDomWalk: state.enableShadowDomWalk,
   };
 }

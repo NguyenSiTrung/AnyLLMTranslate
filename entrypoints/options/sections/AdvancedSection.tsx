@@ -799,6 +799,20 @@ export function AdvancedSection() {
                     label="Translation quality self-check"
                     description="After a batch, re-prompt once if the model echoes the source or drops rich-translate tags. Off by default."
                   />
+                  <Toggle
+                    id="layout-containment-toggle"
+                    checked={settings.enableLayoutContainment}
+                    onChange={(checked) => updateSettings({ enableLayoutContainment: checked })}
+                    label="Layout containment"
+                    description="Safer insertion for flex/grid cards (may slightly alter host layout). Off by default."
+                  />
+                  <Toggle
+                    id="shadow-dom-walk-toggle"
+                    checked={settings.enableShadowDomWalk}
+                    onChange={(checked) => updateSettings({ enableShadowDomWalk: checked })}
+                    label="Walk open Shadow DOM"
+                    description="Extract text from open shadow roots (web components). Off by default."
+                  />
                 </SettingsGroup>
               </div>
             </div>

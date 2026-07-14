@@ -38,6 +38,7 @@ import {
   showSystemicPauseBanner,
   hideSystemicPauseBanner,
 } from '@/content/autoTranslateNotification';
+import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS } from '@/lib/constants';
@@ -82,6 +83,10 @@ import {
   formatTermMemoryBlock,
   mergeTermMemory,
 } from '@/lib/termMemory';
+import {
+  matchResumeTranslations,
+  parentPathFromElement,
+} from '@/lib/resumeIdentity';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -280,6 +285,10 @@ function streamTranslate(
   sourceLanguage: string,
   targetLanguage: string,
   compactInlineEnabled: boolean,
+  extras?: {
+    pageContext?: import('@/types/config').PageContext;
+    termMemoryBlock?: string;
+  },
 ): Promise<TranslationResultMessage> {
   return new Promise((resolve) => {
     const pieceById = new Map(pieces.map((p) => [p.id, p]));
@@ -287,11 +296,14 @@ function streamTranslate(
     let settled = false;
 
     const port = chrome.runtime.connect({ name: WEB_STREAM_PORT });
+    // FR-21: include pageContext + term memory so streaming matches non-stream.
     port.postMessage({
       type: 'request',
       pieces: pieces.map((p) => ({ id: p.id, text: p.text, inArticleContext: p.inArticleContext })),
       sourceLanguage,
       targetLanguage,
+      pageContext: extras?.pageContext,
+      termMemoryBlock: extras?.termMemoryBlock,
     });
 
     port.onMessage.addListener((msg: {
@@ -507,7 +519,13 @@ async function translatePieces(
     let response: TranslationResultMessage;
     if (settings.enableStreamingTranslation) {
       // FR-6: try streaming first; fall back to non-streaming on failure.
-      const streamed = await streamTranslate(translatablePieces, settings.sourceLanguage, settings.targetLanguage, settings.enableCompactInlineForShortText);
+      const streamed = await streamTranslate(
+        translatablePieces,
+        settings.sourceLanguage,
+        settings.targetLanguage,
+        settings.enableCompactInlineForShortText,
+        { pageContext, termMemoryBlock },
+      );
       response = streamed.success
         ? streamed
         : await chrome.runtime.sendMessage({
@@ -757,13 +775,28 @@ function buildStatusResponse(): StatusResponse {
   };
 }
 
-/** Broadcast current status to popup */
+/** Broadcast current status to popup + update in-page mini progress (FR-25). */
 function sendStatusUpdate(): void {
+  const status = buildStatusResponse();
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
     tabId: 0, // Tab ID is handled implicitly by the popup not filtering, or fallback
-    status: buildStatusResponse(),
+    status,
   }).catch(() => { /* Popup likely closed */ });
+
+  // In-page chrome complements the popup while the user reads.
+  if (status.totalCount > 0 && getPageState() !== 'off') {
+    updateMiniProgress({
+      translated: status.translatedCount,
+      total: status.totalCount,
+      status: status.status === 'error' ? 'error' : status.status,
+      onStop: () => {
+        stopTranslation();
+      },
+    });
+  } else {
+    hideMiniProgress();
+  }
 }
 
 /** FR-7: one-time flag so the pagehide/beforeunload snapshot writer is registered once per session. */
@@ -789,29 +822,27 @@ async function restoreFromSnapshot(
     // Only restore if the target language matches the snapshot's.
     if (snapshot.targetLanguage !== targetLanguage) return;
 
-    // Build a text → translation map from the snapshot for fast lookup.
-    const translatedByText = new Map<string, string>();
-    for (const piece of snapshot.pieces) {
-      if (piece.status === 'translated' && piece.translatedText) {
-        translatedByText.set(piece.text, piece.translatedText);
-      }
-    }
-    if (translatedByText.size === 0) return;
+    // FR-20: match by parent path + text when available; text-only fallback.
+    const live = pieces.map((p) => ({
+      text: p.text,
+      parentPath: parentPathFromElement(p.parentElement),
+    }));
+    const matched = matchResumeTranslations(live, snapshot.pieces);
+    if (matched.size === 0) return;
 
     let restored = 0;
-    for (const piece of pieces) {
-      const cached = translatedByText.get(piece.text);
-      if (cached !== undefined) {
-        piece.isTranslated = true;
-        piece.translatedText = cached;
-        markContentHandled(piece);
-        if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-          applyInlineTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
-        } else {
-          applyTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
-        }
-        restored++;
+    for (const [index, cached] of matched) {
+      const piece = pieces[index];
+      if (!piece || piece.isTranslated) continue;
+      piece.isTranslated = true;
+      piece.translatedText = cached;
+      markContentHandled(piece);
+      if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
+        applyInlineTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
+      } else {
+        applyTranslation(piece.parentElement, piece.id, cached, targetLanguage, piece.variables);
       }
+      restored++;
     }
     if (restored > 0) sendStatusUpdate();
   } catch {
@@ -832,6 +863,7 @@ function writeResumeSnapshot(): void {
         text: p.text,
         ...(p.translatedText !== undefined ? { translatedText: p.translatedText } : {}),
         status: p.isTranslated ? 'translated' : 'pending',
+        parentPath: parentPathFromElement(p.parentElement),
       }));
       await saveSnapshot({
         url,
@@ -920,6 +952,7 @@ export async function startTranslation(): Promise<void> {
     enableRichTranslate: settings.enableRichTranslate,
     enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
     enableAsideCaps: settings.enableAsideCaps,
+    enableShadowDomWalk: settings.enableShadowDomWalk,
   });
 
   // Set page state based on displayMode setting
@@ -1020,6 +1053,7 @@ export function stopTranslation(): void {
   hideAutoTranslateNotification();
   hideTranslationErrorNotification();
   hideSystemicPauseBanner();
+  hideMiniProgress();
   allPieces = [];
   activeRequests = 0;
   inFlightPieceIds.clear();

@@ -681,3 +681,15 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **jsdom KeyboardEvents are never `isTrusted`:** Production must ignore untrusted events for gesture counting; under Vitest allow untrusted so synthetic keydown tests work. (from: inline-input-parity_20260709, archived 2026-07-09)
 - **Dual-mode join separators differ by editable type:** When dual mode is on, plain `input` joins original + translation with ` / `; `textarea` and contentEditable use a newline. Default remains translation-only. (from: inline-input-parity_20260709, archived 2026-07-09)
 - **Blocklist policy = replace when non-empty:** If the user supplies any `blocklistPatterns`, that list fully replaces the seeded defaults; empty/absent → seed defaults (Notion/Figma/Lark-class hosts). (from: inline-input-parity_20260709, archived 2026-07-09)
+
+## Web Translation v3 (web-translate-v3_20260714, 2026-07-14)
+- Settings triple still required for new fields: interface + DEFAULT_SETTINGS + extractSettings(). deepMerge migrates missing keys to new defaults; explicit user false is preserved.
+- Parallel cache lookups must rehydrate original piece payloads by id (preserve inArticleContext/variables) after Promise.all.
+- Viewport-aware progress: status `done` + viewportComplete with remaining counts means reading-area idle — not whole-page complete; do not leave status as translating for off-screen-only work.
+- Systemic pause sticky banner: Dismiss hides UI but keeps pause; Retry calls clearSystemicPause; never auto-dismiss under pool death.
+- Look-ahead prefetch: one hop only (isLookahead flag) to avoid whole-page storms; skip under systemicPause.
+- Parallel sub-batches: collect per-batch outcomes then merge — avoid concurrent mutation of shared result arrays.
+- Untrusted prompt data (term memory, page context, category label): XML delimiters + strip `<>` + length caps.
+- Vietnamese langDetect unique letters must omit bare ă (Romanian collision); prefer ơ/ư/đ + tone marks; Romanian uses ș/ț fast-path.
+- Stream path must load glossary/settings itself and accept pageContext/termMemory for parity with non-stream.
+- Resume match: parentPath+text identity first, bare text fallback for legacy snapshots.

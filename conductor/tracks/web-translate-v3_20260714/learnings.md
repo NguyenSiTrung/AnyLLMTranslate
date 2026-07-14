@@ -62,3 +62,12 @@ From `conductor/patterns.md` and predecessor web tracks:
   - Context: Adaptive batching stays opt-in (default off); records latency only when enabled.
 ---
 
+## [2026-07-14] - Phase 3–4: Quality + reliability
+- **Implemented:** Term memory, JSON salvage/repair, expanded langDetect, model-scoped cache, category snippets, quality self-check; stream parity; resume parentPath identity; rich split variables; shadow DOM walk; mini progress; dirty walked markers.
+- **Learnings:**
+  - Patterns: Untrusted prompt blocks always use XML delimiters + strip `<>` from user/page text.
+  - Gotchas: Vietnamese unique-letter set must NOT include bare `ă` (Romanian collision); use ơ/ư/đ + tone marks.
+  - Gotchas: `cacheTranslation` arity grew (optional modelId) — update test spies with `undefined` 5th arg.
+  - Context: Stream port must load settings + glossary itself (content only sends pageContext/termMemory).
+---
+

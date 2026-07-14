@@ -261,12 +261,21 @@ export function initWebStreamPortListener(): void {
           port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
           return;
         }
+        const settings = await loadSettings();
+        const glossaryBlock = formatGlossary(settings.glossary ?? []);
         const texts = new Map(msg.pieces.map((p) => [p.id, p.text]));
+        // FR-21: stream path carries the same context / glossary / term memory
+        // as non-stream handleTranslate.
         const result = await service.translateStream(
           {
             texts,
             sourceLanguage: msg.sourceLanguage,
             targetLanguage: msg.targetLanguage,
+            glossaryBlock: glossaryBlock || undefined,
+            customSystemPrompt: settings.customSystemPrompt ?? null,
+            pageContext: msg.pageContext,
+            termMemoryBlock: msg.termMemoryBlock,
+            enableQualityCheck: settings.enableTranslationQualityCheck,
           },
           (id, text) => {
             port.postMessage({ type: 'piece', id, text } satisfies PdfStreamPiece);
@@ -278,7 +287,11 @@ export function initWebStreamPortListener(): void {
         // FR-2/FR-7: write fresh translations to the success cache so resume +
         // negative-cache lookups work the same as the non-streaming path.
         if (result.success) {
-          const settings = await loadSettings();
+          const cacheModelId = settings.cacheKeyIncludesModel
+            ? (settings.providers?.find((p) => p.enabled)?.model ||
+                settings.provider?.model ||
+                undefined)
+            : undefined;
           for (const { id, translatedText } of results) {
             const piece = msg.pieces.find((p) => p.id === id);
             if (piece) {
@@ -289,6 +302,7 @@ export function initWebStreamPortListener(): void {
                   translatedText,
                   msg.sourceLanguage,
                   msg.targetLanguage,
+                  cacheModelId,
                 ).catch(() => {});
               }
             }

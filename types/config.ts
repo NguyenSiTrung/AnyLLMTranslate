@@ -456,6 +456,15 @@ export interface ExtensionSettings {
    * one automatic re-prompt (FR-16). Default off.
    */
   enableTranslationQualityCheck: boolean;
+  /**
+   * When ON, apply safer flex/grid/card insertion heuristics for translations (FR-18).
+   * Default off — can alter host layout.
+   */
+  enableLayoutContainment: boolean;
+  /**
+   * When ON, walk open shadow roots during DOM extraction (FR-23). Default off.
+   */
+  enableShadowDomWalk: boolean;
 }
 
 /** Provider preset definitions */
@@ -658,6 +667,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableAdaptiveBatching: false,
   cacheKeyIncludesModel: false,
   enableTranslationQualityCheck: false,
+  enableLayoutContainment: false,
+  enableShadowDomWalk: false,
 };
 
 /** All available provider presets */

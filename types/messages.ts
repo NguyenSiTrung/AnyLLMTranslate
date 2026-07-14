@@ -336,6 +336,10 @@ export interface PdfStreamRequest {
   pieces: TranslationPiecePayload[];
   sourceLanguage: string;
   targetLanguage: string;
+  /** FR-21: same context as non-stream web translate. */
+  pageContext?: PageContext;
+  termMemoryBlock?: string;
+  skipFailureCache?: boolean;
 }
 
 /** A piece delta pushed from background → viewer during streaming. */
