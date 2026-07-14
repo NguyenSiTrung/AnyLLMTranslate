@@ -51,7 +51,7 @@ import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
-import { ProviderPoolCoordinator } from '@/services/providerPool';
+import { ProviderPoolCoordinator, PoolExhaustedError } from '@/services/providerPool';
 import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
@@ -235,7 +235,12 @@ export function initPdfStreamPortListener(): void {
       } catch (err) {
         // Error → viewer falls back to handleTranslate (which records usage).
         const error = err instanceof Error ? err.message : 'Streaming translation failed';
-        port.postMessage({ type: 'error', error } satisfies PdfStreamError);
+        const retryAfter = poolRetryAfter(err);
+        port.postMessage({
+          type: 'error',
+          error,
+          ...(retryAfter !== undefined ? { retryAfter } : {}),
+        } satisfies PdfStreamError);
       }
     });
   });
@@ -844,11 +849,28 @@ async function handleTranslate(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    return { success: false, error: errorMsg };
+    const retryAfter = poolRetryAfter(error);
+    return {
+      success: false,
+      error: errorMsg,
+      ...(retryAfter !== undefined ? { retryAfter } : {}),
+    };
   } finally {
     clearKeepaliveAlarm();
     release();
   }
+}
+
+/**
+ * Extract absolute openUntil from a pool exhaustion error for UI countdown.
+ * Returns undefined when not a pool-cooling failure or when the window already
+ * elapsed (caller should not gate retry).
+ */
+function poolRetryAfter(error: unknown, now: number = Date.now()): number | undefined {
+  if (!(error instanceof PoolExhaustedError)) return undefined;
+  const openUntil = error.openUntil;
+  if (openUntil === undefined || openUntil <= now) return undefined;
+  return openUntil;
 }
 
 /** Handle restore message */

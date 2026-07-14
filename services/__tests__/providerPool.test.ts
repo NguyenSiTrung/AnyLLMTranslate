@@ -514,6 +514,11 @@ describe('ProviderPoolCoordinator', () => {
         // Non-null descriptive Error — callers can safely read .message.
         expect(exhausted.lastError).toBeInstanceOf(Error);
         expect(exhausted.lastError.message.length).toBeGreaterThan(0);
+        // UI countdown: earliest openUntil among cooling slots.
+        expect(exhausted.openUntil).toBeDefined();
+        expect(exhausted.openUntil!).toBeGreaterThan(clockNow);
+        // Both keys open at the same time after first translate; earliest is 60s ladder.
+        expect(exhausted.openUntil).toBe(coord.getKeyStatus('k1').openUntil);
       }
     });
 

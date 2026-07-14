@@ -12,13 +12,14 @@
  *   never collide with the next page.
  */
 
-import { forwardRef, useLayoutEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import { measureBoxHeight } from '../lib/fontMetrics';
 import type { PdfViewMode } from '@/lib/constants';
+import { formatCooldownRemaining } from '@/lib/poolDashboardStatus';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -64,15 +65,44 @@ function LoadingSkeleton({ count }: { count: number }): React.ReactElement {
   );
 }
 
+/**
+ * Live tick while a pool-cooling window is active. Returns remaining label
+ * and whether Retry should be enabled.
+ */
+function useCoolingCountdown(retryAfter?: number): {
+  cooling: boolean;
+  remainingLabel: string;
+} {
+  const [now, setNow] = useState(() => Date.now());
+  const active = retryAfter !== undefined && retryAfter > now;
+
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [active, retryAfter]);
+
+  if (retryAfter === undefined || retryAfter <= now) {
+    return { cooling: false, remainingLabel: '' };
+  }
+  return {
+    cooling: true,
+    remainingLabel: formatCooldownRemaining(retryAfter, now),
+  };
+}
+
 function ErrorState({
   pageNumber,
   error,
+  retryAfter,
   onRetry,
 }: {
   pageNumber: number;
   error?: string;
+  retryAfter?: number;
   onRetry?: (pageNumber: number) => void;
 }): React.ReactElement {
+  const { cooling, remainingLabel } = useCoolingCountdown(retryAfter);
   return (
     <div className="pdf-viewer-page-translation pdf-viewer-page-translation--error">
       <p className="pdf-viewer-translation-paragraph">
@@ -83,13 +113,29 @@ function ErrorState({
           {error}
         </p>
       )}
+      {cooling && (
+        <p
+          className="pdf-viewer-translation-paragraph pdf-viewer-cooling-countdown"
+          style={{ fontSize: '12px' }}
+          role="status"
+          aria-live="polite"
+        >
+          Providers cooling · retry in <strong>{remainingLabel}</strong>
+        </p>
+      )}
       {onRetry && (
         <button
           type="button"
           onClick={() => onRetry(pageNumber)}
           className="pdf-viewer-retry-button"
+          disabled={cooling}
+          title={
+            cooling
+              ? `Wait ${remainingLabel} for provider cooldown to end`
+              : 'Retry translation'
+          }
         >
-          Retry translation
+          {cooling ? `Retry in ${remainingLabel}` : 'Retry translation'}
         </button>
       )}
     </div>
@@ -434,13 +480,18 @@ function LayoutStatusOverlay({
   pageNumber,
   state,
   error,
+  retryAfter,
   onRetry,
 }: {
   pageNumber: number;
   state: 'idle' | 'translating' | 'error' | 'empty';
   error?: string;
+  retryAfter?: number;
   onRetry?: (pageNumber: number) => void;
 }): React.ReactElement {
+  const { cooling, remainingLabel } = useCoolingCountdown(
+    state === 'error' ? retryAfter : undefined,
+  );
   return (
     <div className="pdf-viewer-layout-status">
       <div className="pdf-viewer-layout-status-card">
@@ -458,13 +509,24 @@ function LayoutStatusOverlay({
           <div>
             <p className="pdf-viewer-layout-status-error">Translation failed</p>
             {error && <p className="pdf-viewer-layout-status-detail">{error}</p>}
+            {cooling && (
+              <p className="pdf-viewer-layout-status-detail" role="status" aria-live="polite">
+                Providers cooling · retry in <strong>{remainingLabel}</strong>
+              </p>
+            )}
             {onRetry && (
               <button
                 type="button"
                 onClick={() => onRetry(pageNumber)}
                 className="pdf-viewer-retry-button"
+                disabled={cooling}
+                title={
+                  cooling
+                    ? `Wait ${remainingLabel} for provider cooldown to end`
+                    : 'Retry translation'
+                }
               >
-                Retry
+                {cooling ? `Retry in ${remainingLabel}` : 'Retry'}
               </button>
             )}
           </div>
@@ -508,7 +570,14 @@ export function PdfTranslationPane({
       return <LoadingSkeleton count={paragraphCount} />;
     }
     if (page.state === 'error') {
-      return <ErrorState pageNumber={pageNumber} error={page.error} onRetry={onRetry} />;
+      return (
+        <ErrorState
+          pageNumber={pageNumber}
+          error={page.error}
+          retryAfter={page.retryAfter}
+          onRetry={onRetry}
+        />
+      );
     }
     if (page.state === 'translated' && page.paragraphs.size === 0) {
       return <EmptyState pageNumber={pageNumber} />;
@@ -551,6 +620,7 @@ export function PdfTranslationPane({
             pageNumber={pageNumber}
             state={status}
             error={page.error}
+            retryAfter={page.retryAfter}
             onRetry={onRetry}
           />
         )}
@@ -582,7 +652,14 @@ export function PdfTranslationPane({
     return <LoadingSkeleton count={paragraphCount} />;
   }
   if (page.state === 'error') {
-    return <ErrorState pageNumber={pageNumber} error={page.error} onRetry={onRetry} />;
+    return (
+      <ErrorState
+        pageNumber={pageNumber}
+        error={page.error}
+        retryAfter={page.retryAfter}
+        onRetry={onRetry}
+      />
+    );
   }
   if (page.state === 'translated' && page.paragraphs.size === 0) {
     return <EmptyState pageNumber={pageNumber} />;

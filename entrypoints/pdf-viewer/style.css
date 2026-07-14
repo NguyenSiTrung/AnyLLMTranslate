@@ -266,6 +266,16 @@ html, body, #root {
   flex-shrink: 0;
 }
 
+.pdf-viewer-retry-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.pdf-viewer-cooling-countdown {
+  color: var(--pdf-viewer-muted, #a1a1aa);
+}
+
 .pdf-viewer-retry-button {
   margin-top: 6px;
   padding: 5px 10px;
@@ -279,8 +289,17 @@ html, body, #root {
   transition: background 150ms ease;
 }
 
-.pdf-viewer-retry-button:hover {
+.pdf-viewer-retry-button:hover:not(:disabled) {
   background: rgba(220, 38, 38, 0.3);
+}
+
+.pdf-viewer-retry-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pdf-viewer-cooling-countdown {
+  color: #a1a1aa;
 }
 
 .pdf-viewer-empty-state {

@@ -361,6 +361,8 @@ export interface PdfStreamDone {
 export interface PdfStreamError {
   type: 'error';
   error: string;
+  /** Absolute wall-clock ms when pool cooling ends (pool-level failures only). */
+  retryAfter?: number;
 }
 
 /** Union of messages flowing through the PDF streaming port. */
@@ -435,6 +437,12 @@ export interface TranslationResultMessage {
   /** Per-piece failures (from negative-cache hits or batch failures) so the content
    *  script can show error states per piece without a batch-level failure (FR-4). */
   failed?: Array<{ id: string; error: string }>;
+  /**
+   * Absolute wall-clock ms when the provider pool is expected to accept traffic
+   * again after a cooling / rate-limit exhaustion. Present only for pool-level
+   * failures (all slots open). PDF viewer uses this for a retry countdown.
+   */
+  retryAfter?: number;
 }
 
 /** Single translation result item */

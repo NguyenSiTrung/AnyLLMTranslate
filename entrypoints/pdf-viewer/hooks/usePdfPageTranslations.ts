@@ -16,6 +16,7 @@ import type { PDFPageProxy } from 'pdfjs-dist';
 import {
   type PageTranslations,
   type ParagraphTranslationStatus,
+  PdfTranslationError,
   translateParagraphs,
   getMemoryCachedPage,
   setMemoryCachedPage,
@@ -152,6 +153,8 @@ async function translatePage(
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Translation failed';
+    const retryAfter =
+      err instanceof PdfTranslationError ? err.retryAfter : undefined;
     setPages((prev) => {
       const next = new Map(prev);
       // Mark any in-flight paragraphs as 'error' (page-level error).
@@ -167,6 +170,7 @@ async function translatePage(
         paragraphStatus: statusMap,
         state: 'error',
         error: message,
+        ...(retryAfter !== undefined ? { retryAfter } : {}),
       });
       return next;
     });

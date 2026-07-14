@@ -27,6 +27,22 @@ export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'erro
  *  per-paragraph spinners/success/error indicators and incremental fill. */
 export type ParagraphTranslationStatus = 'translating' | 'success' | 'error';
 
+/**
+ * Thrown when a PDF translation request fails. Optionally carries `retryAfter`
+ * (absolute wall-clock ms) when the failure is provider-pool cooling so the
+ * viewer can show a countdown and gate Retry.
+ */
+export class PdfTranslationError extends Error {
+  readonly retryAfter?: number;
+  constructor(message: string, retryAfter?: number) {
+    super(message);
+    this.name = 'PdfTranslationError';
+    if (retryAfter !== undefined && retryAfter > 0) {
+      this.retryAfter = retryAfter;
+    }
+  }
+}
+
 export interface PageTranslations {
   /** Map of paragraph id → translated text. */
   paragraphs: Map<string, string>;
@@ -36,6 +52,11 @@ export interface PageTranslations {
   state: PageTranslationState;
   /** Error message if state === 'error'. */
   error?: string;
+  /**
+   * Absolute wall-clock ms when pool cooling ends (if the error was
+   * pool-exhausted). UI shows a countdown and disables Retry until then.
+   */
+  retryAfter?: number;
   /** Per-paragraph status (Phase 2). Present once translation begins; each
    *  paragraph transitions translating → success/error independently.
    *  Combined with streaming, paragraphs finalize one-by-one. */
@@ -105,9 +126,14 @@ async function sendTranslationBatch(
   if (!response || typeof response !== 'object') {
     throw new Error('No response from background service worker');
   }
-  const result = response as { success: boolean; results?: TranslationResultItem[]; error?: string };
+  const result = response as {
+    success: boolean;
+    results?: TranslationResultItem[];
+    error?: string;
+    retryAfter?: number;
+  };
   if (!result.success) {
-    throw new Error(result.error ?? 'Translation failed');
+    throw new PdfTranslationError(result.error ?? 'Translation failed', result.retryAfter);
   }
 
   return result.results ?? [];
@@ -153,7 +179,7 @@ async function sendTranslationBatchStreamed(
       } else if (msg.type === 'error') {
         settled = true;
         cleanup();
-        reject(new Error(msg.error));
+        reject(new PdfTranslationError(msg.error, msg.retryAfter));
       }
     });
 

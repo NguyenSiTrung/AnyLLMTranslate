@@ -15,6 +15,7 @@ import {
   setMemoryCachedPage,
   clearMemoryCache,
   translateParagraphs,
+  PdfTranslationError,
 } from '../pdfTranslation';
 import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';
@@ -154,6 +155,48 @@ describe('pdfTranslation memory cache', () => {
     expect(results.find((r) => r.id === '1-0')?.translatedText).toBe('f(x) = x²');
     // Prose: translated despite classification failure (fail-open)
     expect(results.find((r) => r.id === '1-1')?.translatedText).toBe('translated-1-1');
+  });
+
+  it('throws PdfTranslationError with retryAfter when pool is cooling', async () => {
+    const retryAfter = Date.now() + 60_000;
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        const pieces = (message as { paragraphs: Array<{ id: string }> }).paragraphs;
+        return {
+          success: true,
+          labels: Object.fromEntries(pieces.map(({ id }) => [id, 'prose'])),
+        };
+      }
+      return {
+        success: false,
+        error: 'All providers are cooling down or rate-limited. Wait for cooldown, then retry.',
+        retryAfter,
+      };
+    });
+
+    const err = await translateParagraphs(
+      [
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-0',
+            text: 'Normal prose that needs translation.',
+            fontSize: 12,
+            isHeading: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+          },
+        },
+      ],
+      'https://example.com/cool.pdf',
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PdfTranslationError);
+    expect((err as PdfTranslationError).retryAfter).toBe(retryAfter);
+    expect((err as PdfTranslationError).message).toMatch(/cooling/i);
   });
 
 });

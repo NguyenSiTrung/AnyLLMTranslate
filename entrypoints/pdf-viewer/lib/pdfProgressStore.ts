@@ -67,6 +67,8 @@ interface SerializedPage {
   originalParagraphs?: unknown;
   /** Error message (error state only). */
   error?: string;
+  /** Absolute openUntil when pool was cooling (error state only). */
+  retryAfter?: number;
 }
 
 /** Validate that a parsed value looks like a serialized page-state map. */
@@ -97,6 +99,7 @@ function deserializePages(
         ? (page.originalParagraphs as PageTranslations['originalParagraphs'])
         : undefined,
       error: page.error,
+      ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),
     });
   }
   return pages;
@@ -117,6 +120,7 @@ function serializePages(
       paragraphs: Array.from(page.paragraphs.entries()),
       originalParagraphs: page.originalParagraphs,
       error: page.error,
+      ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),
     };
   }
   return record;

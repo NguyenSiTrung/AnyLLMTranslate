@@ -86,13 +86,21 @@ export interface KeyStatus {
  * before dispatch" path (no failure was observed this request), it carries a
  * descriptive Error so callers reading `.lastError.message` never throw on
  * null. Callers may safely do `err.lastError.message`.
+ *
+ * `openUntil` is the earliest wall-clock ms when any cooling slot is expected
+ * to rejoin (when known). UI uses this for a retry countdown.
  */
 export class PoolExhaustedError extends Error {
   readonly lastError: Error;
-  constructor(message: string, lastError: Error) {
+  /** Absolute wall-clock ms when the earliest open slot auto-rejoins. */
+  readonly openUntil?: number;
+  constructor(message: string, lastError: Error, openUntil?: number) {
     super(message);
     this.name = 'PoolExhaustedError';
     this.lastError = lastError;
+    if (openUntil !== undefined && openUntil > 0) {
+      this.openUntil = openUntil;
+    }
   }
 }
 
@@ -404,6 +412,22 @@ export class ProviderPoolCoordinator implements TranslationService {
     this.lastDispatchAt.set(slot.keyId, this.clock());
   }
 
+  /**
+   * Earliest absolute openUntil among currently-open slots, or undefined when
+   * no slot is open / pool is empty. Used to surface a retry countdown.
+   */
+  private earliestOpenUntil(now: number): number | undefined {
+    let earliest: number | undefined;
+    for (const slot of this.slots) {
+      const st = this.breaker.getState(slot.keyId);
+      if (!st.open || st.openUntil <= now) continue;
+      if (earliest === undefined || st.openUntil < earliest) {
+        earliest = st.openUntil;
+      }
+    }
+    return earliest;
+  }
+
   private async dispatchWithFailover<T>(
     call: (service: TranslationService) => Promise<T>,
   ): Promise<T> {
@@ -416,12 +440,14 @@ export class ProviderPoolCoordinator implements TranslationService {
           new Error('No providers are configured in the pool.'),
         );
       }
+      const openUntil = this.earliestOpenUntil(now);
       throw new PoolExhaustedError(
-        'All provider pool slots are currently open (rate-limited or errored).',
+        'All providers are cooling down or rate-limited. Wait for cooldown, then retry.',
         new Error(
           `All ${this.slots.length} pool slot(s) are open (rate-limited or errored); ` +
             'none are eligible for dispatch right now.',
         ),
+        openUntil,
       );
     }
 
@@ -480,11 +506,13 @@ export class ProviderPoolCoordinator implements TranslationService {
           // Eligible failure: open the breaker and fail over to the next slot.
           this.breaker.recordFailure(slot.keyId, kind, this.clock());
           // If no healthy slots remain (recomputed), surface the last error.
-          const remaining = healthySlots(this.slots, this.breaker, this.clock());
+          const failNow = this.clock();
+          const remaining = healthySlots(this.slots, this.breaker, failNow);
           if (remaining.length === 0) {
             throw new PoolExhaustedError(
-              'All provider pool slots failed during this request.',
+              'All providers are cooling down or rate-limited. Wait for cooldown, then retry.',
               lastError,
+              this.earliestOpenUntil(failNow),
             );
           }
           continue;
@@ -497,9 +525,11 @@ export class ProviderPoolCoordinator implements TranslationService {
       }
     }
 
+    const exhaustNow = this.clock();
     throw new PoolExhaustedError(
-      'Provider pool dispatch exhausted all attempts.',
+      'All providers are cooling down or rate-limited. Wait for cooldown, then retry.',
       lastError,
+      this.earliestOpenUntil(exhaustNow),
     );
   }
 

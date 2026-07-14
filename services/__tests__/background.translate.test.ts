@@ -330,10 +330,61 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     const result = (await handleMessage(
       buildMsg([{ id: 'p1', text: 'Hello' }]),
       fakeSender,
-    )) as { success: boolean; error?: string };
+    )) as { success: boolean; error?: string; retryAfter?: number };
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
+    // Auth opens for 1h — surface absolute openUntil so UI can countdown.
+    expect(result.retryAfter).toBeTypeOf('number');
+    expect(result.retryAfter!).toBeGreaterThan(Date.now());
+  });
+
+  it('surfaces retryAfter when all slots are rate-limited (429 cooling)', async () => {
+    const { OpenAICompatibleService } = await import('@/services/openaiCompatible');
+    OpenAICompatibleService.__set429DelaysForTest(true);
+    try {
+      mockStorage['anyllm-translate-settings'] = {
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://a/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [
+              { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+            ],
+          },
+        ],
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ error: { message: 'Rate limited' } })),
+        }),
+      );
+
+      const result = (await handleMessage(
+        buildMsg([{ id: 'p1', text: 'Hello' }]),
+        fakeSender,
+      )) as { success: boolean; error?: string; retryAfter?: number };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/cooling|rate-limit/i);
+      expect(result.retryAfter).toBeTypeOf('number');
+      expect(result.retryAfter!).toBeGreaterThan(Date.now());
+      // First rate-limit cooldown ladder is 60s.
+      expect(result.retryAfter! - Date.now()).toBeLessThanOrEqual(60_000 + 5_000);
+    } finally {
+      OpenAICompatibleService.__set429DelaysForTest(false);
+    }
   });
 });
 
