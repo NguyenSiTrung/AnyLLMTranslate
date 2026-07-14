@@ -61,7 +61,11 @@ import {
   type ResumePiece,
 } from '@/lib/webResume';
 import { WEB_STREAM_PORT } from '@/types/messages';
-import type { TranslationResultMessage, TranslationResultItem } from '@/types/messages';
+import type { StatusResponse, TranslationResultMessage, TranslationResultItem } from '@/types/messages';
+import {
+  collectNearViewportPieceIds,
+  computeTranslationStatus,
+} from '@/lib/webTranslateStatus';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -580,25 +584,48 @@ async function translatePieces(
   }
 }
 
-/** Compute current popup-facing status. Treats lazy/off-screen
- *  pending pieces as "still translating" so progress never reports
- *  100% complete while observed pieces remain untranslated. */
-function computeStatus(): 'idle' | 'translating' | 'done' | 'error' {
+/**
+ * Build viewport-aware status for the popup (FR-1).
+ * Reading-area idle + off-screen remaining → status `done` with
+ * `viewportComplete` true and counts so the popup can say "more as you scroll"
+ * instead of forever "Translating..." or a false whole-page complete.
+ */
+function buildStatusResponse(): StatusResponse {
   const pageState = getPageState();
-  if (pageState === 'off') return 'idle';
+  const viewportHeight =
+    typeof window !== 'undefined' ? window.innerHeight : 800;
 
-  const translatedCount = allPieces.filter((p) => p.isTranslated).length;
-  const hasUntranslated = translatedCount < allPieces.length;
+  const visiblePieceIds = collectNearViewportPieceIds(
+    allPieces.map((p) => ({
+      id: p.id,
+      isTranslated: p.isTranslated,
+      getRect: () => {
+        try {
+          const rect = p.parentElement.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom };
+        } catch {
+          return { top: Number.POSITIVE_INFINITY, bottom: Number.POSITIVE_INFINITY };
+        }
+      },
+    })),
+    { marginPx: 200, viewportHeight },
+  );
 
-  // Active in-flight LLM call always means translating.
-  if (activeRequests > 0) return 'translating';
+  const result = computeTranslationStatus({
+    pageState,
+    pieces: allPieces.map((p) => ({ id: p.id, isTranslated: p.isTranslated })),
+    activeRequests,
+    visiblePieceIds,
+    inFlightPieceIds,
+  });
 
-  // No in-flight requests, but lazy pieces still pending observation/translation.
-  // The viewport observer (or mutation watcher for SPA pages) will pick them up
-  // as the user scrolls or new content arrives — surface this as "translating".
-  if (hasUntranslated) return 'translating';
-
-  return 'done';
+  return {
+    status: result.status,
+    translatedCount: result.translatedCount,
+    totalCount: result.totalCount,
+    visiblePending: result.visiblePending,
+    viewportComplete: result.viewportComplete,
+  };
 }
 
 /** Broadcast current status to popup */
@@ -606,11 +633,7 @@ function sendStatusUpdate(): void {
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
     tabId: 0, // Tab ID is handled implicitly by the popup not filtering, or fallback
-    status: {
-      status: computeStatus(),
-      translatedCount: allPieces.filter((p) => p.isTranslated).length,
-      totalCount: allPieces.length,
-    },
+    status: buildStatusResponse(),
   }).catch(() => { /* Popup likely closed */ });
 }
 
@@ -1005,11 +1028,7 @@ export function setupMessageListener(): void {
         void manualActivateSubtitles();
       });
     } else if (message.action === 'getStatus') {
-      sendResponse({
-        status: computeStatus(),
-        translatedCount: allPieces.filter((p) => p.isTranslated).length,
-        totalCount: allPieces.length,
-      });
+      sendResponse(buildStatusResponse());
       return false; // synchronous
     } else if (message.action === 'getPageContentType') {
       // Popup asks whether the active document is a PDF so its "Open current PDF"

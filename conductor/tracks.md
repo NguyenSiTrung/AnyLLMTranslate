@@ -83,4 +83,9 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
+### [~] Track: Web Page Translation — UX, Performance & Quality v3
+*Link: [./conductor/tracks/web-translate-v3_20260714/](./conductor/tracks/web-translate-v3_20260714/)*
+*Priority: High · Type: Feature · Status: in_progress*
+*Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. Full UX/perf/quality/reliability roadmap with Balanced defaults.*
+
 ---

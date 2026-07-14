@@ -445,6 +445,16 @@ export interface StatusResponse {
   status: TabTranslationStatus;
   translatedCount: number;
   totalCount: number;
+  /**
+   * Untranslated pieces currently in/near the reading viewport or in-flight.
+   * Optional for backward compatibility with older content scripts mid-upgrade.
+   */
+  visiblePending?: number;
+  /**
+   * True when the reading strip is idle (no visible pending / in-flight work).
+   * When true with `translatedCount < totalCount`, more content remains as you scroll.
+   */
+  viewportComplete?: boolean;
   error?: string;
 }
 

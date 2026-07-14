@@ -27,6 +27,11 @@ import { STORAGE_KEYS } from '@/lib/constants';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
+import {
+  formatProgressDetail,
+  formatProgressLabel,
+  isReadingAreaReady,
+} from '@/lib/webTranslateStatus';
 import type { CategoryInfo } from '@/types/messages';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 import { Toggle as SharedToggle } from '@/ui/Toggle';
@@ -606,6 +611,8 @@ export default function App() {
     status: 'idle',
     translatedCount: 0,
     totalCount: 0,
+    visiblePending: 0,
+    viewportComplete: true,
   });
   const [isTranslating, setIsTranslating] = useState(false);
   const [activeHostname, setActiveHostname] = useState<string | null>(null);
@@ -773,7 +780,13 @@ export default function App() {
       const unsupported = getUnsupportedPageInfo(tab);
       setUnsupportedPage(unsupported);
       if (unsupported) {
-        setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+        setStatus({
+          status: 'idle',
+          translatedCount: 0,
+          totalCount: 0,
+          visiblePending: 0,
+          viewportComplete: true,
+        });
         setIsTranslating(false);
         return;
       }
@@ -788,7 +801,13 @@ export default function App() {
           }
         } catch {
           // Content script not loaded yet -> defaults to idle on otherwise supported pages
-          setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+          setStatus({
+            status: 'idle',
+            translatedCount: 0,
+            totalCount: 0,
+            visiblePending: 0,
+            viewportComplete: true,
+          });
           setIsTranslating(false);
         }
       }
@@ -969,7 +988,13 @@ export default function App() {
       if (isTranslating || status.status === 'done') {
         await chrome.tabs.sendMessage(tab.id, { action: 'stopTranslation' });
         setIsTranslating(false);
-        setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+        setStatus({
+          status: 'idle',
+          translatedCount: 0,
+          totalCount: 0,
+          visiblePending: 0,
+          viewportComplete: true,
+        });
       } else {
         await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
         setIsTranslating(true);
@@ -978,7 +1003,13 @@ export default function App() {
     } catch (error) {
       console.error('[AnyLLMTranslate] Toggle error:', error);
       setIsTranslating(false);
-      setStatus({ status: 'idle', translatedCount: 0, totalCount: 0 });
+      setStatus({
+        status: 'idle',
+        translatedCount: 0,
+        totalCount: 0,
+        visiblePending: 0,
+        viewportComplete: true,
+      });
       setUnsupportedPage({
         title: "This page can't be translated",
         description:
@@ -1016,7 +1047,31 @@ export default function App() {
   const statusConfig = STATUS_CONFIG[status.status];
   const connectionStatus = settings.provider.connectionStatus ?? 'unknown';
   const connectionStatusConfig = CONNECTION_STATUS_CONFIG[connectionStatus];
-  const StatusIcon = statusConfig.icon;
+  const readingAreaReady = isReadingAreaReady({
+    status: status.status,
+    translatedCount: status.translatedCount,
+    totalCount: status.totalCount,
+    visiblePending: status.visiblePending ?? 0,
+    viewportComplete: status.viewportComplete ?? status.status === 'done',
+  });
+  const progressLabel = formatProgressLabel(
+    {
+      status: status.status,
+      translatedCount: status.translatedCount,
+      totalCount: status.totalCount,
+      viewportComplete: status.viewportComplete ?? status.status === 'done',
+    },
+    status.error,
+  );
+  const progressDetail = formatProgressDetail({
+    status: status.status,
+    translatedCount: status.translatedCount,
+    totalCount: status.totalCount,
+    visiblePending: status.visiblePending ?? 0,
+    viewportComplete: status.viewportComplete ?? status.status === 'done',
+  });
+  // Prefer CheckCircle for reading-area-ready (idle strip, more to scroll).
+  const StatusIcon = readingAreaReady ? CheckCircle2 : statusConfig.icon;
   const providerPreset = PROVIDER_PRESETS.find((p) => p.preset === settings.provider.preset);
   // The pool (settings.providers) is the source of truth for the active model —
   // the legacy settings.provider mirror is only written by the setup wizard and
@@ -1182,16 +1237,14 @@ export default function App() {
               <StatusIcon className={`w-5 h-5 ${isTranslating ? 'animate-spin' : ''}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-semibold text-zinc-200">{statusConfig.label}</h4>
+              <h4 className="text-xs font-semibold text-zinc-200">{progressLabel}</h4>
               {status.error ? (
                 <p className="text-[11px] text-red-400/80 leading-relaxed mt-1">{status.error}</p>
               ) : (
                 <div className="mt-2">
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
-                    <span>
-                      {status.translatedCount} of {status.totalCount} completed
-                    </span>
-                    <span className="font-mono font-semibold">{progressPercent}%</span>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5 gap-2">
+                    <span className="min-w-0 leading-snug">{progressDetail}</span>
+                    <span className="font-mono font-semibold shrink-0">{progressPercent}%</span>
                   </div>
                   <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                     <div
