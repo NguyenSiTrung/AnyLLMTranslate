@@ -76,37 +76,37 @@ Sequential phases (no parallel execution annotations). TDD for pure libs; integr
 
 ## Phase 3: Quality / results
 
-- [ ] Task 3.1: Document term memory
-  - [ ] New pure `lib/termMemory.ts` (extract/cap/format)
-  - [ ] Inject capped untrusted block into subsequent batch prompts
-  - [ ] Unit tests for cap + format + delimiter safety
+- [x] Task 3.1: Document term memory
+  - [x] New pure `lib/termMemory.ts` (extract/cap/format)
+  - [x] Inject capped untrusted block into subsequent batch prompts
+  - [x] Unit tests for cap + format + delimiter safety
 
-- [ ] Task 3.2: JSON parse repair + missing-id re-request
-  - [ ] Salvage partial maps in parse path
-  - [ ] Optional one repair call for missing ids before error UI
-  - [ ] Tests for malformed + partial responses
+- [x] Task 3.2: JSON parse repair + missing-id re-request
+  - [x] Salvage partial maps in parse path
+  - [x] Optional one repair call for missing ids before error UI
+  - [x] Tests for malformed + partial responses
 
-- [ ] Task 3.3: Expand `langDetect` Latin set
-  - [ ] Add it / id / nl / ro (or agreed set) with unique signals + stopwords
-  - [ ] Confidence threshold regression tests
+- [x] Task 3.3: Expand `langDetect` Latin set
+  - [x] Add it / id / nl / ro (or agreed set) with unique signals + stopwords
+  - [x] Confidence threshold regression tests
 
-- [ ] Task 3.4: Optional model-scoped cache key
-  - [ ] `cacheKeyIncludesModel` default false
-  - [ ] Key generation includes model when on; background passes model id
-  - [ ] Advanced UI + unit tests on/off
+- [x] Task 3.4: Optional model-scoped cache key
+  - [x] `cacheKeyIncludesModel` default false
+  - [x] Key generation includes model when on; background passes model id
+  - [x] Advanced UI + unit tests on/off
 
-- [ ] Task 3.5: Category prompt snippets
-  - [ ] New `lib/categoryPromptSnippets.ts` static map
-  - [ ] Wire into `buildSystemPrompt` when category known
-  - [ ] Prompt injection safety (data delimiters) + tests
+- [x] Task 3.5: Category prompt snippets
+  - [x] New `lib/categoryPromptSnippets.ts` static map
+  - [x] Wire into `buildSystemPrompt` when category known
+  - [x] Prompt injection safety (data delimiters) + tests
 
-- [ ] Task 3.6: Quality self-check (opt-in)
-  - [ ] Pure heuristics: source-echo / dropped `<z>` tags
-  - [ ] One re-prompt when `enableTranslationQualityCheck` on
-  - [ ] Default off; tests
+- [x] Task 3.6: Quality self-check (opt-in)
+  - [x] Pure heuristics: source-echo / dropped `<z>` tags
+  - [x] One re-prompt when `enableTranslationQualityCheck` on
+  - [x] Default off; tests
 
-- [ ] Task 3.7: Phase 3 verification
-  - [ ] Suite + manual term-consistency sample page
+- [x] Task 3.7: Phase 3 verification
+  - [x] Suite + manual term-consistency sample page
 
 ---
 

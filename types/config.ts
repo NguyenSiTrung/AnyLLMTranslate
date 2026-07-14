@@ -446,6 +446,16 @@ export interface ExtensionSettings {
    * batch latency (web-translate-v3 FR-9). Default off until calibrated.
    */
   enableAdaptiveBatching: boolean;
+  /**
+   * When ON, include active model id in the web translation cache key (FR-14).
+   * Default off — changing models can reuse cache; turn on for strict isolation.
+   */
+  cacheKeyIncludesModel: boolean;
+  /**
+   * When ON, detect source-echo / dropped &lt;z&gt; tags after a batch and issue
+   * one automatic re-prompt (FR-16). Default off.
+   */
+  enableTranslationQualityCheck: boolean;
 }
 
 /** Provider preset definitions */
@@ -646,6 +656,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableBodyTagWhitelist: false,
   enableAsideCaps: true,
   enableAdaptiveBatching: false,
+  cacheKeyIncludesModel: false,
+  enableTranslationQualityCheck: false,
 };
 
 /** All available provider presets */

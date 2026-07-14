@@ -12,6 +12,11 @@ import type {
 } from '@/types/translation';
 import type { TranslationService } from './base';
 import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
+import { missingTranslationIds } from '@/lib/jsonParseRepair';
+import {
+  detectBatchQualityIssues,
+  QUALITY_REPAIR_INSTRUCTION,
+} from '@/lib/translationQualityCheck';
 import { buildSubtitleSystemPrompt } from './subtitlePrompt';
 import { extractProperNouns } from './subtitleResponse';
 import type {
@@ -111,6 +116,10 @@ export class OpenAICompatibleService implements TranslationService {
     //  1. preScanSystemPrompt → use verbatim (per-film name-extraction call).
     //  2. subtitleKnobs       → profile-driven subtitle prompt (customSystemPrompt ignored).
     //  3. (neither)           → web-page prompt, honoring customSystemPrompt.
+    // FR-11: append document term memory after user glossary in the web path.
+    const glossaryWithTerms =
+      (request.glossaryBlock ?? '') + (request.termMemoryBlock ?? '');
+
     const systemPrompt = request.preScanSystemPrompt
       ? request.preScanSystemPrompt
       : request.subtitleKnobs
@@ -123,7 +132,7 @@ export class OpenAICompatibleService implements TranslationService {
         : buildSystemPrompt(
             request.targetLanguage,
             request.customSystemPrompt,
-            request.glossaryBlock,
+            glossaryWithTerms || undefined,
             request.pageContext,
           );
     const userPrompt =
@@ -147,7 +156,7 @@ export class OpenAICompatibleService implements TranslationService {
     // We deliberately do NOT wrap it in try/catch — those errors must propagate
     // to the pool's failover layer (FR-1).
     const response = await this.fetchCompletion(completionRequest);
-    const responseText = response.choices[0]?.message?.content ?? '';
+    let responseText = response.choices[0]?.message?.content ?? '';
 
     if (isDebugLoggingEnabled()) {
       console.log('AnyLLMTranslate: LLM Response', { responseText });
@@ -190,6 +199,84 @@ export class OpenAICompatibleService implements TranslationService {
         translations: new Map(),
         error: message,
       };
+    }
+
+    // FR-12: one repair request for still-missing ids before source back-fill.
+    let missing = missingTranslationIds(translations, expectedIds);
+    if (missing.length > 0 && missing.length < expectedIds.length) {
+      try {
+        const repairTexts = new Map<string, string>();
+        for (const id of missing) {
+          repairTexts.set(id, request.texts.get(id) ?? '');
+        }
+        const repairUser = buildUserPrompt(repairTexts, request.sourceLanguage);
+        const repairReq = this.buildCompletionRequest({
+          model: this.config.model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                systemPrompt +
+                '\n\nRepair pass: return JSON translations ONLY for the ids listed. Do not omit any id.',
+            },
+            { role: 'user', content: repairUser },
+          ],
+          temperature: this.config.temperature,
+          max_tokens: this.config.maxTokens,
+        });
+        const repairResponse = await this.fetchCompletion(repairReq);
+        const repairText = repairResponse.choices[0]?.message?.content ?? '';
+        if (repairText.trim()) {
+          const repaired = parseTranslationResponse(repairText, missing);
+          for (const [id, text] of repaired) {
+            if (!translations.has(id)) translations.set(id, text);
+          }
+          responseText = repairText;
+        }
+      } catch {
+        // Repair is best-effort; fall through to partial back-fill.
+      }
+      missing = missingTranslationIds(translations, expectedIds);
+    }
+
+    // FR-16: opt-in quality self-check — one re-prompt on source-echo / dropped <z>.
+    if (request.enableQualityCheck && translations.size > 0) {
+      const issues = detectBatchQualityIssues(request.texts, translations, {
+        sourceLanguage: request.sourceLanguage,
+        targetLanguage: request.targetLanguage,
+      });
+      if (issues.length > 0) {
+        try {
+          const repairIds = [...new Set(issues.map((i) => i.id))];
+          const repairTexts = new Map<string, string>();
+          for (const id of repairIds) {
+            repairTexts.set(id, request.texts.get(id) ?? '');
+          }
+          const repairUser = buildUserPrompt(repairTexts, request.sourceLanguage);
+          const repairReq = this.buildCompletionRequest({
+            model: this.config.model,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt + '\n\n' + QUALITY_REPAIR_INSTRUCTION,
+              },
+              { role: 'user', content: repairUser },
+            ],
+            temperature: this.config.temperature,
+            max_tokens: this.config.maxTokens,
+          });
+          const repairResponse = await this.fetchCompletion(repairReq);
+          const repairText = repairResponse.choices[0]?.message?.content ?? '';
+          if (repairText.trim()) {
+            const repaired = parseTranslationResponse(repairText, repairIds);
+            for (const [id, text] of repaired) {
+              translations.set(id, text);
+            }
+          }
+        } catch {
+          // Quality re-prompt is best-effort.
+        }
+      }
     }
 
     // P2 correctness: when the LLM omits some IDs, fall back to the original

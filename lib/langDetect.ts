@@ -54,13 +54,21 @@ const LATIN_STOPWORDS: Record<string, Set<string>> = {
   fr: new Set(['le', 'la', 'les', 'de', 'et', 'est', 'en', 'un', 'une', 'que', 'avec', 'pour', 'par', 'pas', 'ne', 'ce', 'se', 'qui', 'dans', 'sur', 'au', 'des', 'son', 'mais', 'vous', 'nous']),
   de: new Set(['der', 'die', 'das', 'und', 'ist', 'ein', 'eine', 'von', 'mit', 'zu', 'den', 'dem', 'nicht', 'auf', 'für', 'im', 'sich', 'auch', 'als', 'wie', 'wir', 'sie', 'ich', 'es', 'dir', 'mich', 'dich', 'war', 'hat', 'haben', 'heute', 'morgen', 'welt', 'geht', 'gefallen', 'noch', 'schon', 'wenn', 'dann', 'nur', 'wieder']),
   pt: new Set(['o', 'a', 'os', 'as', 'de', 'e', 'é', 'em', 'um', 'uma', 'que', 'com', 'por', 'para', 'não', 'se', 'como', 'mais', 'seu', 'ao', 'dos', 'das', 'está', 'mas', 'muito']),
+  // Expanded Latin set (web-translate-v3 FR-13)
+  it: new Set(['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'e', 'è', 'un', 'una', 'che', 'per', 'con', 'non', 'sono', 'del', 'della', 'dei', 'nelle', 'questo', 'questa', 'come', 'anche', 'più', 'ma', 'se', 'da', 'nel']),
+  id: new Set(['yang', 'dan', 'di', 'ke', 'dari', 'ini', 'itu', 'untuk', 'dengan', 'tidak', 'adalah', 'pada', 'akan', 'juga', 'atau', 'sebagai', 'dalam', 'ada', 'oleh', 'karena', 'sudah', 'bisa', 'saya', 'kami', 'mereka']),
+  nl: new Set(['de', 'het', 'een', 'van', 'en', 'in', 'is', 'op', 'te', 'dat', 'die', 'voor', 'niet', 'met', 'zijn', 'er', 'aan', 'als', 'maar', 'om', 'ook', 'bij', 'nog', 'naar', 'uit', 'worden', 'heeft', 'was', 'kan']),
+  ro: new Set(['și', 'în', 'un', 'o', 'de', 'la', 'cu', 'pe', 'este', 'sunt', 'nu', 'că', 'din', 'pentru', 'mai', 'sau', 'care', 'acest', 'aceasta', 'fi', 'ca', 'se', 'lui', 'ei', 'lor', 'când', 'cum']),
 };
 
-// Vietnamese-specific letters that Spanish/Portuguese/French do NOT use:
-// ă/Ă, ơ/Ơ, ư/Ư, đ/Đ, and the hook/horn + tone-marked vowels (ả ẵ ỗ ứ ự …).
-// These are strong differentiators; shared diacritics (á é í ó ú â ê ô) are
-// intentionally excluded since they appear in es/pt/fr too.
-const VI_UNIQUE_LETTER_RE = /[ăĂơƠưƯđĐảẢẵẴỗỖứỨựỰẳẲẳẴẫẴặẶẳẲẩẨẫẪấẤậẬềỂểỄếẾệỆỉỈĩĨịỊỏỎỗỖốỐộỘờỜởỞỡỠớỚợỢủỦũŨụỤừỪửỬữỮứỨựỰỷỶỹỸýÝỵỴặẶẩẨẫẪấẤậẬ]/;
+// Vietnamese-specific letters that Spanish/Portuguese/French/Romanian do NOT use:
+// ơ/Ơ, ư/Ư, đ/Đ, and the hook/horn + tone-marked vowels (ả ẵ ỗ ứ ự …).
+// Note: ă/Ă alone is NOT unique (Romanian uses ă too) — omit bare ă/Ă.
+// Shared diacritics (á é í ó ú â ê ô) are intentionally excluded.
+const VI_UNIQUE_LETTER_RE = /[ơƠưƯđĐảẢẵẴỗỖứỨựỰẳẲẩẨẫẪấẤậẬềỂểỄếẾệỆỉỈĩĨịỊỏỎốỐộỘờỜởỞỡỠớỚợỢủỦũŨụỤừỪửỬữỮỷỶỹỸỵỴ]/;
+
+// Romanian-unique: ș/ț (comma-below). Prefer before stopword scoring.
+const RO_UNIQUE_LETTER_RE = /[șțȘȚ]/;
 
 function countScriptChars(text: string): { lang: string; ratio: number; total: number } | null {
   let total = 0;
@@ -96,11 +104,16 @@ function detectLatin(text: string): DetectionResult {
   const tokens = text.toLowerCase().match(/[a-zà-ÿ]+/g) ?? [];
   if (tokens.length === 0) return { lang: null, confidence: 0 };
 
-  // Vietnamese fast-path: if uniquely-Vietnamese letters (ă/ơ/ư/đ + hook/horn
-  // tone marks) appear, classify as vi — these don't occur in es/pt/fr/de.
+  // Vietnamese fast-path: uniquely-Vietnamese letters (ơ/ư/đ + hook/horn tones).
   const viHits = (text.match(new RegExp(VI_UNIQUE_LETTER_RE, 'g')) ?? []).length;
   if (viHits >= 1) {
     return { lang: 'vi', confidence: Math.min(0.9, 0.5 + viHits / Math.max(1, tokens.length)) };
+  }
+
+  // Romanian ș/ț fast-path (before stopword scoring).
+  const roHits = (text.match(RO_UNIQUE_LETTER_RE) ?? []).length;
+  if (roHits >= 1) {
+    return { lang: 'ro', confidence: Math.min(0.9, 0.5 + roHits / Math.max(1, tokens.length)) };
   }
 
   // Portuguese tilde (ã/õ) fast-path — ã/õ are unique to Portuguese among the

@@ -149,8 +149,8 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       ]),
     );
     // Write-back should happen for each uncached piece
-    expect(cacheTranslation).toHaveBeenCalledWith('Hello', 'Xin chào', 'en', 'vi');
-    expect(cacheTranslation).toHaveBeenCalledWith('World', 'Thế giới', 'en', 'vi');
+    expect(cacheTranslation).toHaveBeenCalledWith('Hello', 'Xin chào', 'en', 'vi', undefined);
+    expect(cacheTranslation).toHaveBeenCalledWith('World', 'Thế giới', 'en', 'vi', undefined);
   });
 
   it('sends only uncached pieces to LLM when some are cached (mixed)', async () => {

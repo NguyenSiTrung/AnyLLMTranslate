@@ -171,5 +171,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableBodyTagWhitelist: state.enableBodyTagWhitelist,
     enableAsideCaps: state.enableAsideCaps,
     enableAdaptiveBatching: state.enableAdaptiveBatching,
+    cacheKeyIncludesModel: state.cacheKeyIncludesModel,
+    enableTranslationQualityCheck: state.enableTranslationQualityCheck,
   };
 }

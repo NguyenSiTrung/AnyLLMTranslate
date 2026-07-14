@@ -21,13 +21,16 @@ function getStore(): ReturnType<typeof createStore> {
   return store;
 }
 
-/** Generate SHA-256 cache key from source text + language pair */
+/** Generate SHA-256 cache key from source text + language pair (+ optional model). */
 export async function generateCacheKey(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
+  modelId?: string,
 ): Promise<string> {
-  const input = `${sourceLanguage}:${targetLanguage}:${text}`;
+  // FR-14: when model is provided, scope the key so model switches miss cache.
+  const modelPart = modelId ? `:${modelId}` : '';
+  const input = `${sourceLanguage}:${targetLanguage}${modelPart}:${text}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
 
@@ -48,8 +51,9 @@ export async function generateNegativeCacheKey(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
+  modelId?: string,
 ): Promise<string> {
-  const base = await generateCacheKey(text, sourceLanguage, targetLanguage);
+  const base = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
   return `${NEGATIVE_CACHE_PREFIX}${base}`;
 }
 
@@ -95,9 +99,10 @@ export async function getCachedTranslation(
   sourceLanguage: string,
   targetLanguage: string,
   ttlDays = 30,
+  modelId?: string,
 ): Promise<string | null> {
   try {
-    const key = await generateCacheKey(text, sourceLanguage, targetLanguage);
+    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
     const entry = await get<CacheEntry>(key, getStore());
 
     if (!entry) return null;
@@ -135,9 +140,10 @@ export async function cacheTranslation(
   translatedText: string,
   sourceLanguage: string,
   targetLanguage: string,
+  modelId?: string,
 ): Promise<void> {
   try {
-    const key = await generateCacheKey(text, sourceLanguage, targetLanguage);
+    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
     const entry = buildCacheEntry(key, translatedText, sourceLanguage, targetLanguage);
     await set(key, entry, getStore());
   } catch {

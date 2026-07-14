@@ -783,6 +783,22 @@ export function AdvancedSection() {
                     label="Adaptive batch size"
                     description="Adjust pieces/characters per request from recent latency. Off by default — fixed budgets above still apply when disabled."
                   />
+                  <Toggle
+                    id="cache-key-model-toggle"
+                    checked={settings.cacheKeyIncludesModel}
+                    onChange={(checked) => updateSettings({ cacheKeyIncludesModel: checked })}
+                    label="Model-scoped cache keys"
+                    description="Include the active model in the cache key so switching models does not reuse prior translations. Off by default."
+                  />
+                  <Toggle
+                    id="quality-check-toggle"
+                    checked={settings.enableTranslationQualityCheck}
+                    onChange={(checked) =>
+                      updateSettings({ enableTranslationQualityCheck: checked })
+                    }
+                    label="Translation quality self-check"
+                    description="After a batch, re-prompt once if the model echoes the source or drops rich-translate tags. Off by default."
+                  />
                 </SettingsGroup>
               </div>
             </div>

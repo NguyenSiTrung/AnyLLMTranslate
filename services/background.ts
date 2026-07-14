@@ -597,6 +597,12 @@ async function handleTranslate(
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
     const providerId = bestEffortProviderId(settings);
     const host = hostFromSender(sender);
+    // FR-14: optional model-scoped cache key.
+    const cacheModelId = settings.cacheKeyIncludesModel
+      ? (settings.providers?.find((p) => p.enabled)?.model ||
+          settings.provider?.model ||
+          undefined)
+      : undefined;
 
     // FR-1 + FR-5 (web-translate-v3): parallel success/failure cache lookups
     // per piece (Promise.all) — same semantics as serial, lower latency on
@@ -612,7 +618,8 @@ async function handleTranslate(
         skipFailureCache: message.skipFailureCache,
       },
       {
-        getCachedTranslation,
+        getCachedTranslation: (text, src, tgt, ttl) =>
+          getCachedTranslation(text, src, tgt, ttl, cacheModelId),
         getCachedFailure,
         deleteCachedFailure,
       },
@@ -702,6 +709,8 @@ async function handleTranslate(
           glossaryBlock: glossaryBlock || undefined,
           customSystemPrompt: settings.customSystemPrompt ?? null,
           pageContext: message.pageContext,
+          termMemoryBlock: message.termMemoryBlock,
+          enableQualityCheck: settings.enableTranslationQualityCheck,
         });
         if (settings.enableAdaptiveBatching) {
           adaptiveBatchState = recordBatchLatency(
@@ -726,6 +735,7 @@ async function handleTranslate(
                   translatedText,
                   message.sourceLanguage,
                   message.targetLanguage,
+                  cacheModelId,
                 );
               }
             }

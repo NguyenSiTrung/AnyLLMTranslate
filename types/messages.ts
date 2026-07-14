@@ -67,6 +67,8 @@ export interface TranslateMessage {
    *  "Click to retry" error state) so the retry actually re-calls the LLM instead
    *  of re-surfacing the cached error. */
   skipFailureCache?: boolean;
+  /** Pre-formatted document term-memory block (FR-11) for subsequent batches. */
+  termMemoryBlock?: string;
 }
 
 /** Payload sent for translation (serializable subset of TranslationPiece) */

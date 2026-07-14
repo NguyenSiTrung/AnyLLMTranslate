@@ -66,6 +66,10 @@ export interface TranslationRequest {
   returnRawResponse?: boolean;
   /** Optional verbatim user prompt (overrides buildUserPrompt). */
   customUserPrompt?: string;
+  /** Document term-memory block to append after glossary (FR-11). */
+  termMemoryBlock?: string;
+  /** When true, run one quality self-check re-prompt on obvious failures (FR-16). */
+  enableQualityCheck?: boolean;
 }
 
 /** Result from the translation service */

@@ -77,6 +77,11 @@ import {
   selectLookaheadCandidates,
   shouldRunLookahead,
 } from '@/lib/lookaheadPrefetch';
+import {
+  extractTerms,
+  formatTermMemoryBlock,
+  mergeTermMemory,
+} from '@/lib/termMemory';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -104,6 +109,8 @@ const handledContentKeys = new Set<string>();
  */
 let systemicPause = false;
 let lastSystemicError = '';
+/** FR-11: per-session document terms for subsequent batch prompts. */
+let sessionTermMemory: string[] = [];
 /** Monotonically increasing translation session id.
  *  Bumped on startTranslation and stopTranslation so that in-flight
  *  responses from previous sessions are recognized as stale and
@@ -491,6 +498,12 @@ async function translatePieces(
       }
     }
 
+    // FR-11: seed term memory from page title once, pass capped block on later batches.
+    if (sessionTermMemory.length === 0 && typeof document !== 'undefined') {
+      sessionTermMemory = mergeTermMemory(sessionTermMemory, extractTerms(document.title ?? ''));
+    }
+    const termMemoryBlock = formatTermMemoryBlock(sessionTermMemory) || undefined;
+
     let response: TranslationResultMessage;
     if (settings.enableStreamingTranslation) {
       // FR-6: try streaming first; fall back to non-streaming on failure.
@@ -504,6 +517,7 @@ async function translatePieces(
             targetLanguage: settings.targetLanguage,
             pageContext,
             skipFailureCache,
+            termMemoryBlock,
           });
     } else {
       response = await chrome.runtime.sendMessage({
@@ -513,6 +527,7 @@ async function translatePieces(
         targetLanguage: settings.targetLanguage,
         pageContext,
         skipFailureCache,
+        termMemoryBlock,
       });
     }
 
@@ -525,6 +540,15 @@ async function translatePieces(
     }
 
     if (response.success && response.results) {
+      // FR-11: accumulate terms from successful translations for later batches.
+      for (const result of response.results) {
+        if (result.translatedText) {
+          sessionTermMemory = mergeTermMemory(
+            sessionTermMemory,
+            extractTerms(result.translatedText),
+          );
+        }
+      }
       for (const result of response.results) {
         const piece = workPieces.find((p) => p.id === result.id);
         if (!piece) continue;
@@ -854,6 +878,7 @@ export async function startTranslation(): Promise<void> {
   handledContentKeys.clear();
   systemicPause = false;
   lastSystemicError = '';
+  sessionTermMemory = [];
   hideTranslationErrorNotification();
   hideSystemicPauseBanner();
 
@@ -1001,6 +1026,7 @@ export function stopTranslation(): void {
   handledContentKeys.clear();
   systemicPause = false;
   lastSystemicError = '';
+  sessionTermMemory = [];
   invalidateSessionSettingsCache();
   // FR-7: write a final snapshot before clearing so the next session can resume,
   // then reset the writer-registration flag.
