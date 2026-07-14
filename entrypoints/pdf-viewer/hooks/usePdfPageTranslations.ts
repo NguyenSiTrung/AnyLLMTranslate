@@ -21,6 +21,7 @@ import {
   getMemoryCachedPage,
   setMemoryCachedPage,
 } from '../lib/pdfTranslation';
+import type { ContentKind } from '../lib/pdfContentDetect';
 import { extractPageText, type PdfParagraph } from '../lib/pdfTextExtraction';
 import { loadSettings } from '@/lib/config';
 import {
@@ -129,15 +130,18 @@ async function translatePage(
       onPiece,
     );
     const paragraphMap = new Map<string, string>();
-    for (const { id, translatedText } of results) {
+    const kindMap = new Map<string, ContentKind>();
+    for (const { id, translatedText, kind } of results) {
       paragraphMap.set(id, translatedText);
       statusMap.set(id, 'success');
+      if (kind) kindMap.set(id, kind);
     }
     setPages((prev) => {
       const next = new Map(prev);
       next.set(pageNumber, {
         paragraphs: paragraphMap,
         originalParagraphs: paragraphs,
+        paragraphKinds: kindMap.size > 0 ? kindMap : undefined,
         paragraphStatus: new Map(statusMap),
         state: 'translated',
       });

@@ -81,6 +81,120 @@ describe('pdfTranslation memory cache', () => {
     expect(getMemoryCachedPage('https://example.com/b.pdf', 1, 'en', 'es')).not.toBeNull();
   });
 
+  it('tags math results with kind math', async () => {
+    const results = await translateParagraphs(
+      [
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-0',
+            text: 'f(x) = x² + 2x + 1',
+            fontSize: 12,
+            isHeading: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-1',
+            text: 'This is a normal sentence about the model.',
+            fontSize: 12,
+            isHeading: false,
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+          },
+        },
+      ],
+      'https://example.com/a.pdf',
+    );
+    expect(results.find((r) => r.id === '1-0')?.kind).toBe('math');
+    expect(results.find((r) => r.id === '1-1')?.kind).toBe('prose');
+  });
+
+  it('skips rule-based table cells without LLM translate and tags kind figure', async () => {
+    const results = await translateParagraphs(
+      [
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-0',
+            text: 'Model',
+            fontSize: 10,
+            isHeading: false,
+            x: 50,
+            y: 700,
+            width: 40,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-1',
+            text: 'Acc',
+            fontSize: 10,
+            isHeading: false,
+            x: 120,
+            y: 700,
+            width: 30,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-2',
+            text: 'F1',
+            fontSize: 10,
+            isHeading: false,
+            x: 180,
+            y: 700,
+            width: 30,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-3',
+            text: 'We evaluate three models on the benchmark suite carefully.',
+            fontSize: 12,
+            isHeading: false,
+            x: 50,
+            y: 650,
+            width: 400,
+            height: 12,
+          },
+        },
+      ],
+      'https://example.com/table.pdf',
+    );
+
+    expect(results.find((r) => r.id === '1-0')?.translatedText).toBe('Model');
+    expect(results.find((r) => r.id === '1-0')?.kind).toBe('figure');
+    expect(results.find((r) => r.id === '1-1')?.kind).toBe('figure');
+    expect(results.find((r) => r.id === '1-2')?.kind).toBe('figure');
+    expect(results.find((r) => r.id === '1-3')?.kind).toBe('prose');
+
+    const calls = vi.mocked(chrome.runtime.sendMessage).mock.calls;
+    const translateCalls = calls.filter(
+      ([msg]) => (msg as unknown as { action: string }).action === 'translate',
+    );
+    const translatedIds = translateCalls.flatMap(([msg]) =>
+      (msg as unknown as { pieces: Array<{ id: string }> }).pieces.map((p) => p.id),
+    );
+    expect(translatedIds).not.toContain('1-0');
+    expect(translatedIds).not.toContain('1-1');
+    expect(translatedIds).not.toContain('1-2');
+    expect(translatedIds).toContain('1-3');
+  });
+
   it('keeps math paragraphs verbatim and does not send them to the translator', async () => {
     vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
       const action = (message as { action: string }).action;
@@ -351,19 +465,34 @@ describe('provider-configurable batch size resolution', () => {
   }
 
   it('uses the provider maxBatchChars override instead of the global default', async () => {
-    // Global budget is huge (5000); provider override is tiny (8). If the
-    // override wins, batches cap at 8 chars (2 paragraphs of 4). If the global
-    // won, all 4 (16 chars) would fit in a single batch.
+    // Global budget is huge (5000); provider override is tiny (20). If the
+    // override wins, batches cap at 20 chars (2 paragraphs of 10). If the global
+    // won, all 4 (40 chars) would fit in a single batch.
+    // Use distinct Y positions + non-cell-like text so table-row heuristics
+    // do not skip these paragraphs as figure cells.
     vi.mocked(loadSettings).mockResolvedValue(
-      settingsWithProviderOverride({ maxBatchChars: 8, globalMaxBatchChars: 5000 }),
+      settingsWithProviderOverride({ maxBatchChars: 20, globalMaxBatchChars: 5000 }),
     );
+
+    function prosePara(id: string, text: string, y: number) {
+      return {
+        id,
+        text,
+        fontSize: 12,
+        isHeading: false,
+        x: 50,
+        y,
+        width: 400,
+        height: 12,
+      };
+    }
 
     await translateParagraphs(
       [
-        { pageNumber: 1, paragraph: para('1-0', 'aaaa') },
-        { pageNumber: 1, paragraph: para('1-1', 'bbbb') },
-        { pageNumber: 1, paragraph: para('1-2', 'cccc') },
-        { pageNumber: 1, paragraph: para('1-3', 'dddd') },
+        { pageNumber: 1, paragraph: prosePara('1-0', 'abcdefghij', 700) },
+        { pageNumber: 1, paragraph: prosePara('1-1', 'klmnopqrst', 680) },
+        { pageNumber: 1, paragraph: prosePara('1-2', 'uvwxyzabcd', 660) },
+        { pageNumber: 1, paragraph: prosePara('1-3', 'efghijklmn', 640) },
       ],
       'https://example.com/a.pdf',
     );
@@ -376,7 +505,7 @@ describe('provider-configurable batch size resolution', () => {
     ]);
     for (const pieces of calls) {
       const chars = pieces.reduce((sum, p) => sum + p.text.length, 0);
-      expect(chars).toBeLessThanOrEqual(8);
+      expect(chars).toBeLessThanOrEqual(20);
     }
   });
 });

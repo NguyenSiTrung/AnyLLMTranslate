@@ -2,10 +2,11 @@
  * Pure, synchronous content detection for PDF paragraphs.
  *
  * Used by `translateParagraphs()` to decide which paragraphs to skip
- * translation for. Only math detection lives here — figure/table detection
- * is an LLM classification call (see `pdfTranslation.ts`) because it
- * requires understanding the paragraph's role on the page, not just its
- * text.
+ * translation for:
+ * - **Math** — rule-based on text alone (`classifyMathParagraph`)
+ * - **Table/figure cells** — rule-based spatial + numeric heuristics
+ *   (`classifyTableLikeParagraphs`); remaining ambiguous labels still go
+ *   through the LLM classifier in `pdfTranslation.ts`
  *
  * Why pure/synchronous? It is deterministic, free (no API call), trivially
  * unit-testable, and immune to network failure. The math rules are
@@ -14,15 +15,29 @@
  * `'prose'` and relies on the translation prompt to preserve the inline math.
  */
 
-/** Result of classifying a paragraph's content kind. */
+import type { PdfParagraph } from './pdfTextExtraction';
+
+/** Result of classifying a paragraph's content kind (math path). */
 export type ParagraphKind = 'prose' | 'math';
+
+/** Full content kind used end-to-end in the PDF pipeline. */
+export type ContentKind = 'prose' | 'math' | 'figure';
 
 /**
  * Tunable: maximum number of whitespace-separated words a paragraph may have
  * to be eligible for the "short math fragment" paths (inline-only LaTeX,
- * strong math marker). Long paragraphs are never classified as pure math here.
+ * strong math marker).
  */
 const SHORT_MATH_MAX_WORDS = 12;
+
+/**
+ * Tunable: longer formulas (PDF-extracted multi-term equations) may use the
+ * density path up to this word count.
+ */
+const DENSITY_MATH_MAX_WORDS = 40;
+
+/** Minimum math-symbol density for the longer-formula path. */
+const DENSITY_MATH_MIN_RATIO = 0.18;
 
 /**
  * Tunable: for standalone inline LaTeX (`\(…\)` / `$…$`), the paragraph is
@@ -115,16 +130,64 @@ function isSuperSubscriptCode(code: number): boolean {
 }
 
 /**
- * Does the string contain at least one decisive math marker (strong symbol
- * or Unicode super/subscript)?
+ * Mathematical Alphanumeric Symbols block (U+1D400–U+1D7FF) — italic/bold
+ * variables common in PDF-extracted research papers.
+ */
+function isMathAlphanumericCode(code: number): boolean {
+  return code >= 0x1d400 && code <= 0x1d7ff;
+}
+
+/**
+ * Does the string contain at least one decisive math marker (strong symbol,
+ * Unicode super/subscript, or math alphanumeric)?
  */
 function hasStrongMathMarker(text: string): boolean {
   for (const ch of text) {
     if (STRONG_MATH_MARKERS.has(ch)) return true;
     const code = ch.codePointAt(0) ?? 0;
     if (isSuperSubscriptCode(code)) return true;
+    if (isMathAlphanumericCode(code)) return true;
   }
   return false;
+}
+
+/**
+ * ASCII equation helpers common in PDF text extraction: caret superscripts
+ * (`x^2`) and underscore subscripts (`a_i`). Alone they are weak; combined
+ * with `=` they strongly suggest a formula.
+ */
+function hasAsciiEquationShape(text: string): boolean {
+  const hasEquals = text.includes('=');
+  const hasCaret = /\w\^\w/.test(text) || /\w\^\{/.test(text);
+  const hasUnderscore = /\w_\w/.test(text) || /\w_\{/.test(text);
+  return hasEquals && (hasCaret || hasUnderscore);
+}
+
+/**
+ * Fraction of non-space characters that look mathematical (operators, Greek,
+ * super/subscripts, math alphanumeric, parentheses around short symbols).
+ */
+function mathSymbolDensity(text: string): number {
+  let total = 0;
+  let mathish = 0;
+  for (const ch of text) {
+    if (/\s/.test(ch)) continue;
+    total++;
+    if (isMathSymbolChar(ch) || STRONG_MATH_MARKERS.has(ch)) {
+      mathish++;
+      continue;
+    }
+    const code = ch.codePointAt(0) ?? 0;
+    if (isSuperSubscriptCode(code) || isMathAlphanumericCode(code)) {
+      mathish++;
+      continue;
+    }
+    // ASCII operators that appear densely in formulas (weaker alone).
+    if ('=+-*/<>|()[]{}'.includes(ch)) {
+      mathish++;
+    }
+  }
+  return total === 0 ? 0 : mathish / total;
 }
 
 /**
@@ -133,7 +196,8 @@ function hasStrongMathMarker(text: string): boolean {
  * Conservative by design: mixed prose-with-inline-math returns `'prose'` and
  * relies on the translation prompt to preserve the math. Only paragraphs
  * clearly dominated by math (block delimiters, standalone inline formulas,
- * or a short string with a decisive math marker) are flagged `'math'`.
+ * short marker-bearing fragments, density-heavy longer formulas, or ASCII
+ * equation shapes) are flagged `'math'`.
  */
 export function classifyMathParagraph(text: string): ParagraphKind {
   if (text.trim() === '') return 'prose';
@@ -155,16 +219,144 @@ export function classifyMathParagraph(text: string): ParagraphKind {
     }
   }
 
+  const words = countWords(text);
+
   // 3. Short string with a decisive math marker (Greek letter, =, ∑, ∫,
-  //    super/subscript, etc.) — Unicode math without LaTeX delimiters.
-  //    Using marker presence instead of a symbol ratio is more robust: a
-  //    formula like `f(x) = x² + 2x + 1` has only a handful of math chars
-  //    diluted by variable letters, yet its `=`/`²` markers are unambiguous.
-  if (countWords(text) <= SHORT_MATH_MAX_WORDS && hasStrongMathMarker(text)) {
+  //    super/subscript, math alphanumeric, etc.) — Unicode math without LaTeX.
+  if (words <= SHORT_MATH_MAX_WORDS && hasStrongMathMarker(text)) {
+    return 'math';
+  }
+
+  // 4. ASCII caret/underscore equation shapes (PDF-extracted TeX-ish text).
+  if (words <= SHORT_MATH_MAX_WORDS && hasAsciiEquationShape(text)) {
+    return 'math';
+  }
+
+  // 5. Longer density-dominated formulas (multi-term PDF equations).
+  //    Requires at least one strong marker so prose with occasional punctuation
+  //    never trips the density path.
+  if (
+    words <= DENSITY_MATH_MAX_WORDS &&
+    hasStrongMathMarker(text) &&
+    mathSymbolDensity(text) >= DENSITY_MATH_MIN_RATIO
+  ) {
     return 'math';
   }
 
   return 'prose';
+}
+
+// ── Table / figure cell heuristics ──────────────────────────────────────────
+
+/** Max words for a spatial "table cell" candidate. */
+const CELL_MAX_WORDS = 6;
+/** Max characters for a spatial "table cell" candidate. */
+const CELL_MAX_CHARS = 48;
+/** Y tolerance for grouping paragraphs into the same table row (PDF units). */
+const ROW_Y_TOLERANCE = 4;
+/** Minimum cells in one row to treat that row as a table header/row. */
+const MIN_CELLS_SINGLE_ROW = 3;
+/** Minimum multi-cell rows on a page to treat a 2-column grid as a table. */
+const MIN_MULTI_CELL_ROWS = 2;
+/** Minimum cells per row for the multi-row grid path. */
+const MIN_CELLS_MULTI_ROW = 2;
+
+/**
+ * Pure numeric / percent / currency / short metric fragments that almost never
+ * need translation (table body cells, axis ticks).
+ */
+const NUMERICISH_PATTERN =
+  /^[$€£¥]?\s*[\d]+(?:[.,]\d+)?\s*(?:[%‰]|x|×)?$/i;
+const NUMERICISH_LOOSE =
+  /^[\d\s.,%+\-–—$€£¥/()×x:]+$/;
+
+function isNumericishFragment(text: string): boolean {
+  const t = text.trim();
+  if (t.length === 0) return false;
+  if (t.length > CELL_MAX_CHARS) return false;
+  if (NUMERICISH_PATTERN.test(t)) return true;
+  // Multi-token numeric rows like "12.5  0.3  98%"
+  if (NUMERICISH_LOOSE.test(t) && /\d/.test(t) && countWords(t) <= CELL_MAX_WORDS) {
+    return true;
+  }
+  return false;
+}
+
+function isCellLikeText(text: string): boolean {
+  const t = text.trim();
+  if (t.length === 0) return false;
+  if (t.length > CELL_MAX_CHARS) return false;
+  if (countWords(t) > CELL_MAX_WORDS) return false;
+  if (isNumericishFragment(t)) return true;
+  // Short labels (Model, Acc, F1, Train) — only safe when spatial context
+  // confirms a table row; this helper is used inside row clustering.
+  return countWords(t) <= 3;
+}
+
+/**
+ * Group paragraphs into horizontal rows by Y coordinate (PDF space, top-down).
+ */
+function groupIntoRows(paragraphs: PdfParagraph[]): PdfParagraph[][] {
+  const sorted = [...paragraphs].sort((a, b) => {
+    if (Math.abs(a.y - b.y) > ROW_Y_TOLERANCE) return b.y - a.y;
+    return a.x - b.x;
+  });
+  const rows: PdfParagraph[][] = [];
+  for (const p of sorted) {
+    const last = rows[rows.length - 1];
+    if (last && Math.abs(last[0].y - p.y) <= ROW_Y_TOLERANCE) {
+      last.push(p);
+    } else {
+      rows.push([p]);
+    }
+  }
+  return rows;
+}
+
+/**
+ * Rule-based table/figure cell detection from page-level paragraph geometry.
+ *
+ * Returns paragraph ids that should be treated as `figure` (kept verbatim,
+ * never masked in Layout mode). Deterministic and free — complements the LLM
+ * classifier for ambiguous non-cell labels.
+ *
+ * Signals:
+ * 1. Pure numeric / percent / currency fragments (any position)
+ * 2. A single row with ≥3 short cell-like labels
+ * 3. ≥2 rows that each have ≥2 short cell-like labels (2-column+ grids)
+ *
+ * Headings (`isHeading`) and long prose are never flagged.
+ */
+export function classifyTableLikeParagraphs(paragraphs: PdfParagraph[]): Set<string> {
+  const figureIds = new Set<string>();
+
+  for (const p of paragraphs) {
+    if (p.isHeading) continue;
+    if (isNumericishFragment(p.text)) {
+      figureIds.add(p.id);
+    }
+  }
+
+  const rows = groupIntoRows(paragraphs);
+  const multiCellRows: PdfParagraph[][] = [];
+
+  for (const row of rows) {
+    const cells = row.filter((p) => !p.isHeading && isCellLikeText(p.text));
+    if (cells.length >= MIN_CELLS_SINGLE_ROW) {
+      for (const c of cells) figureIds.add(c.id);
+    }
+    if (cells.length >= MIN_CELLS_MULTI_ROW) {
+      multiCellRows.push(cells);
+    }
+  }
+
+  if (multiCellRows.length >= MIN_MULTI_CELL_ROWS) {
+    for (const cells of multiCellRows) {
+      for (const c of cells) figureIds.add(c.id);
+    }
+  }
+
+  return figureIds;
 }
 
 // ── Prose short-circuit heuristic ───────────────────────────────────────────

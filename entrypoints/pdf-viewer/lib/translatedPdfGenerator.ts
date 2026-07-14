@@ -149,7 +149,9 @@ export async function generateTranslatedPdf(
         const translatedText = translations.paragraphs.get(para.id);
         if (translatedText === undefined) continue;
 
-        // Skip verbatim paragraphs (math/figures kept as-is).
+        // Skip math/figure (explicit kind) and any verbatim keep-as-is text.
+        const kind = translations.paragraphKinds?.get(para.id);
+        if (kind === 'math' || kind === 'figure') continue;
         if (translatedText.trim() === para.text.trim()) continue;
 
         // Convert paragraph coordinates to PDF coordinate system.

@@ -449,6 +449,11 @@ export interface TranslationResultMessage {
 export interface TranslationResultItem {
   id: string;
   translatedText: string;
+  /**
+   * PDF pipeline content kind (optional elsewhere).
+   * `math` / `figure` are kept verbatim and never masked in Layout mode.
+   */
+  kind?: 'prose' | 'math' | 'figure';
 }
 
 /** Tab translation status */

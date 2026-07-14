@@ -35,6 +35,7 @@ import {
   translateParagraphs,
   setMemoryCachedPage,
 } from './pdfTranslation';
+import type { ContentKind } from './pdfContentDetect';
 import { extractPageText } from './pdfTextExtraction';
 import { loadSettings } from '@/lib/config';
 
@@ -96,6 +97,9 @@ export async function translateAllPages(
       paragraphs: new Map(pageTranslation.paragraphs),
       originalParagraphs: pageTranslation.originalParagraphs
         ? [...pageTranslation.originalParagraphs]
+        : undefined,
+      paragraphKinds: pageTranslation.paragraphKinds
+        ? new Map(pageTranslation.paragraphKinds)
         : undefined,
     });
   }
@@ -162,16 +166,19 @@ export async function translateAllPages(
 
         if (signal?.aborted) return;
 
-        // 4. Build the paragraph map from results
+        // 4. Build the paragraph map + kinds from results
         const paragraphMap = new Map<string, string>();
-        for (const { id, translatedText } of results) {
+        const kindMap = new Map<string, ContentKind>();
+        for (const { id, translatedText, kind } of results) {
           paragraphMap.set(id, translatedText);
+          if (kind) kindMap.set(id, kind);
         }
 
         // 5. Store in result translations
         translations.set(pageNumber, {
           paragraphs: paragraphMap,
           originalParagraphs: paragraphs,
+          paragraphKinds: kindMap.size > 0 ? kindMap : undefined,
           state: 'translated',
         });
 

@@ -359,10 +359,14 @@ function LayoutOverlayInner({
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
-      // Skip overlay rendering if the text is kept verbatim/untranslated
-      // (e.g. math formulas, figures, or hidden OCR metadata). Since it is
-      // already in the background canvas, rendering it again causes redundant
-      // white boxes and text overlaps.
+      // Primary: explicit content kind from the translation pipeline. Math and
+      // figure/table cells must never be masked — the original canvas (and its
+      // rendered formulas/table grid) stays visible underneath.
+      const kind = page.paragraphKinds?.get(para.id);
+      if (kind === 'math' || kind === 'figure') return null;
+      // Fallback for older cached pages without kinds: skip when text is kept
+      // verbatim (math/figure kept as-is). Overlaying identical text causes
+      // white boxes and double-drawn glyphs.
       if (translatedText.trim() === para.text.trim()) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = para.height * viewport.scale;

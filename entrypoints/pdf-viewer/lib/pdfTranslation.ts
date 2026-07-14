@@ -18,7 +18,12 @@ import { PDF_STREAM_PORT } from '@/types/messages';
 import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
-import { classifyMathParagraph } from './pdfContentDetect';
+import {
+  classifyMathParagraph,
+  classifyTableLikeParagraphs,
+  isObviouslyProse,
+  type ContentKind,
+} from './pdfContentDetect';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
 
@@ -26,6 +31,8 @@ export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'erro
  *  Each paragraph tracks its own lifecycle independent of siblings, enabling
  *  per-paragraph spinners/success/error indicators and incremental fill. */
 export type ParagraphTranslationStatus = 'translating' | 'success' | 'error';
+
+export type { ContentKind };
 
 /**
  * Thrown when a PDF translation request fails. Optionally carries `retryAfter`
@@ -48,6 +55,11 @@ export interface PageTranslations {
   paragraphs: Map<string, string>;
   /** Original extracted paragraphs with their coordinate positions. */
   originalParagraphs?: PdfParagraph[];
+  /**
+   * Map of paragraph id → content kind. Layout mode uses this to never
+   * mask/replace math or figure paragraphs (primary over text-equality).
+   */
+  paragraphKinds?: Map<string, ContentKind>;
   /** Aggregate state of the page translation. */
   state: PageTranslationState;
   /** Error message if state === 'error'. */
@@ -242,25 +254,45 @@ export async function translateParagraphs(
 
   // 1. Rule-based math split (deterministic, free, immune to network failure).
   const mathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
-  const restItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
+  const nonMathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
   for (const item of paragraphs) {
     if (classifyMathParagraph(item.paragraph.text) === 'math') {
       mathItems.push(item);
     } else {
-      restItems.push(item);
+      nonMathItems.push(item);
     }
   }
 
-  // 2. LLM classification of the remaining paragraphs into prose vs figure.
+  // 2. Rule-based table/figure cells (spatial + numeric), page-scoped.
+  const ruleFigureIds = new Set<string>();
+  const byPage = new Map<number, PdfParagraph[]>();
+  for (const item of nonMathItems) {
+    const list = byPage.get(item.pageNumber) ?? [];
+    list.push(item.paragraph);
+    byPage.set(item.pageNumber, list);
+  }
+  for (const pageParas of byPage.values()) {
+    for (const id of classifyTableLikeParagraphs(pageParas)) {
+      ruleFigureIds.add(id);
+    }
+  }
+
+  const ruleFigureItems = nonMathItems.filter((item) => ruleFigureIds.has(item.paragraph.id));
+  const restItems = nonMathItems.filter((item) => !ruleFigureIds.has(item.paragraph.id));
+
+  // 3. Obviously-prose short-circuit (skip LLM classify) + LLM for the rest.
   //    Failure → null → fail-open: translate everything in `restItems`.
+  const obviousProseItems = restItems.filter((item) => isObviouslyProse(item.paragraph.text));
+  const ambiguousItems = restItems.filter((item) => !isObviouslyProse(item.paragraph.text));
+
   const labels = await classifyParagraphs(
-    restItems.map((item) => ({ id: item.paragraph.id, text: item.paragraph.text })),
+    ambiguousItems.map((item) => ({ id: item.paragraph.id, text: item.paragraph.text })),
   );
 
   // Warn (but still fail-open to prose) when the classifier omits some ids —
   // matches the project's existing pattern in parseTranslationResponse.
   if (labels) {
-    const missingIds = restItems
+    const missingIds = ambiguousItems
       .map((item) => item.paragraph.id)
       .filter((id) => labels[id] === undefined);
     if (missingIds.length > 0) {
@@ -268,9 +300,13 @@ export async function translateParagraphs(
     }
   }
 
-  const proseItems = restItems.filter((item) => labels?.[item.paragraph.id] !== 'figure');
+  const llmFigureItems = ambiguousItems.filter((item) => labels?.[item.paragraph.id] === 'figure');
+  const proseItems = [
+    ...obviousProseItems,
+    ...ambiguousItems.filter((item) => labels?.[item.paragraph.id] !== 'figure'),
+  ];
 
-  // 3. Translate only the prose subset. When streaming is requested (onPiece
+  // 4. Translate only the prose subset. When streaming is requested (onPiece
   //    provided), try the streaming port first for incremental fill; fall back
   //    to the non-streaming batch path on any stream error. Correctness is
   //    guaranteed by the fallback — streaming only improves perceived speed.
@@ -295,26 +331,31 @@ export async function translateParagraphs(
       return sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage);
     }),
   );
-  const translatedResults = batchResults.flat();
+  const translatedResults = batchResults.flat().map((r) => ({
+    ...r,
+    kind: 'prose' as const,
+  }));
 
-  // 4. Merge: prose → LLM output; figure & math → original source text.
+  // 5. Merge: prose → LLM output; figure & math → original source text + kind.
   const results: TranslationResultItem[] = [...translatedResults];
   const sourceById = new Map<string, string>();
   for (const { paragraph } of proseItems) {
     sourceById.set(paragraph.id, paragraph.text);
   }
-  for (const { paragraph } of restItems) {
-    if (labels?.[paragraph.id] === 'figure') {
-      results.push({ id: paragraph.id, translatedText: paragraph.text });
-      sourceById.set(paragraph.id, paragraph.text);
-    }
+  for (const { paragraph } of ruleFigureItems) {
+    results.push({ id: paragraph.id, translatedText: paragraph.text, kind: 'figure' });
+    sourceById.set(paragraph.id, paragraph.text);
+  }
+  for (const { paragraph } of llmFigureItems) {
+    results.push({ id: paragraph.id, translatedText: paragraph.text, kind: 'figure' });
+    sourceById.set(paragraph.id, paragraph.text);
   }
   for (const { paragraph } of mathItems) {
-    results.push({ id: paragraph.id, translatedText: paragraph.text });
+    results.push({ id: paragraph.id, translatedText: paragraph.text, kind: 'math' });
     sourceById.set(paragraph.id, paragraph.text);
   }
 
-  // 5. Write-through cache for every result (including the source→source ones).
+  // 6. Write-through cache for every result (including the source→source ones).
   for (const { id, translatedText } of results) {
     const source = sourceById.get(id);
     if (source) {

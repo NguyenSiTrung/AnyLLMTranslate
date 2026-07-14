@@ -65,6 +65,8 @@ interface SerializedPage {
   paragraphs: Array<[string, string]>;
   /** Original paragraphs (optional, for bilingual/layout rendering). */
   originalParagraphs?: unknown;
+  /** Paragraph id → content kind (math/figure/prose). */
+  paragraphKinds?: Array<[string, string]>;
   /** Error message (error state only). */
   error?: string;
   /** Absolute openUntil when pool was cooling (error state only). */
@@ -92,12 +94,25 @@ function deserializePages(
   for (const [key, page] of Object.entries(record)) {
     const pageNumber = Number(key);
     if (!Number.isFinite(pageNumber)) continue;
+    const kinds =
+      Array.isArray(page.paragraphKinds) && page.paragraphKinds.length > 0
+        ? new Map(
+            page.paragraphKinds.filter(
+              (entry): entry is [string, 'prose' | 'math' | 'figure'] =>
+                Array.isArray(entry) &&
+                entry.length === 2 &&
+                typeof entry[0] === 'string' &&
+                (entry[1] === 'prose' || entry[1] === 'math' || entry[1] === 'figure'),
+            ),
+          )
+        : undefined;
     pages.set(pageNumber, {
       state: page.state,
       paragraphs: new Map(page.paragraphs),
       originalParagraphs: Array.isArray(page.originalParagraphs)
         ? (page.originalParagraphs as PageTranslations['originalParagraphs'])
         : undefined,
+      paragraphKinds: kinds && kinds.size > 0 ? kinds : undefined,
       error: page.error,
       ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),
     });
@@ -119,6 +134,9 @@ function serializePages(
       state: page.state,
       paragraphs: Array.from(page.paragraphs.entries()),
       originalParagraphs: page.originalParagraphs,
+      paragraphKinds: page.paragraphKinds
+        ? Array.from(page.paragraphKinds.entries())
+        : undefined,
       error: page.error,
       ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),
     };
