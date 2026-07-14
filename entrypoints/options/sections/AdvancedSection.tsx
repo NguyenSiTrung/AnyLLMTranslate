@@ -566,7 +566,7 @@ export function AdvancedSection() {
                 </FieldGroup>
                 <FieldGroup
                   label="Max requests per minute"
-                  description="Cap provider calls to avoid rate limits. Use 0 for unlimited (local LLMs)."
+                  description="Cap provider calls to avoid rate limits. Enter a number of requests per minute (req/min). Use 0 for unlimited (local LLMs)."
                   htmlFor="max-rpm-input"
                 >
                   <Input
@@ -578,7 +578,9 @@ export function AdvancedSection() {
                     min={0}
                     max={600}
                     error={maxRpmError}
-                    hint="0–600 rpm"
+                    suffix="req/min"
+                    placeholder="20"
+                    hint="Unit: requests per minute · 0 = unlimited · range 0–600"
                   />
                   {maxRpmField.value === 0 && !maxRpmError && (
                     <div className="mt-2">

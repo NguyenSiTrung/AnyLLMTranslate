@@ -235,8 +235,16 @@ export function ProviderKeyRow({
 
       {(showAdvanced || false) && (
         <AdvancedDisclosure label="Concurrency & throttle" defaultExpanded>
+          <p className="text-xs text-zinc-500 leading-relaxed mb-3">
+            Limits how fast this key talks to the API. Enter numbers only — units are shown in each
+            field. Use <span className="text-zinc-400">0</span> for unlimited / off.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FieldGroup label="Max RPM (0 = unlimited)" htmlFor={`pr-${poolKey.id}`}>
+            <FieldGroup
+              label="Max rate"
+              description="How many API requests this key may start each minute."
+              htmlFor={`pr-${poolKey.id}`}
+            >
               <Input
                 id={`pr-${poolKey.id}`}
                 type="number"
@@ -245,9 +253,16 @@ export function ProviderKeyRow({
                 value={maxRpmDraft}
                 onChange={(e) => setMaxRpmDraft(e.target.value)}
                 onBlur={commitMaxRpm}
+                suffix="req/min"
+                placeholder="20"
+                hint="Unit: requests per minute · 0 = unlimited · range 0–600"
               />
             </FieldGroup>
-            <FieldGroup label="Concurrency (0 = global only)" htmlFor={`pc-${poolKey.id}`}>
+            <FieldGroup
+              label="Max concurrent"
+              description="How many requests may run at the same time on this key."
+              htmlFor={`pc-${poolKey.id}`}
+            >
               <Input
                 id={`pc-${poolKey.id}`}
                 type="number"
@@ -256,9 +271,16 @@ export function ProviderKeyRow({
                 value={concurrencyDraft}
                 onChange={(e) => setConcurrencyDraft(e.target.value)}
                 onBlur={commitConcurrency}
+                suffix="at once"
+                placeholder="1"
+                hint="Unit: parallel requests · 0 = use global cap only · range 0–20"
               />
             </FieldGroup>
-            <FieldGroup label="Throttle interval ms (0 = off)" htmlFor={`pi-${poolKey.id}`}>
+            <FieldGroup
+              label="Min gap between requests"
+              description="Wait at least this long after one request before starting the next."
+              htmlFor={`pi-${poolKey.id}`}
+            >
               <Input
                 id={`pi-${poolKey.id}`}
                 type="number"
@@ -267,6 +289,9 @@ export function ProviderKeyRow({
                 value={intervalDraft}
                 onChange={(e) => setIntervalDraft(e.target.value)}
                 onBlur={commitInterval}
+                suffix="ms"
+                placeholder="500"
+                hint="Unit: milliseconds (1000 ms = 1 s) · 0 = no gap · range 0–60000"
               />
             </FieldGroup>
           </div>

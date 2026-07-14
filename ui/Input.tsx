@@ -8,6 +8,8 @@ import { Eye, EyeOff } from 'lucide-react';
 interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   type?: 'text' | 'url' | 'password' | 'number' | 'email' | 'search';
   icon?: ReactNode;
+  /** Trailing unit/label inside the field (e.g. "req/min", "ms"). */
+  suffix?: string;
   error?: string;
   hint?: string;
 }
@@ -15,6 +17,7 @@ interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>
 export function Input({
   type = 'text',
   icon,
+  suffix,
   error,
   hint,
   className = '',
@@ -23,6 +26,8 @@ export function Input({
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   const resolvedType = isPassword && showPassword ? 'text' : type;
+  // Right padding: password toggle > unit suffix > default.
+  const rightPad = isPassword ? 'pr-10' : suffix ? 'pr-[4.5rem]' : '';
 
   return (
     <div>
@@ -36,11 +41,19 @@ export function Input({
           type={resolvedType}
           className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors ${
             icon ? 'pl-9' : ''
-          } ${isPassword ? 'pr-10' : ''} ${
+          } ${rightPad} ${
             error ? 'border-red-500/50' : 'border-zinc-700'
           } ${className}`}
           {...props}
         />
+        {suffix && !isPassword && (
+          <span
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-zinc-500 pointer-events-none select-none"
+            aria-hidden="true"
+          >
+            {suffix}
+          </span>
+        )}
         {isPassword && (
           <button
             type="button"
