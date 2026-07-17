@@ -3,6 +3,13 @@
 
 Reusable patterns discovered during development. Read this before starting new work.
 
+## Scientific PDF bridge (from: scientific-pdf-backend_20260717, 2026-07-17)
+- Scientific mode is optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
+- Credentials always from active provider pool at job time — `scientificPdf` settings hold only serverUrl/enabled/preferScientific/setupCompletedAt.
+- Default bridge port `17890` (shared `DEFAULT_SCIENTIFIC_PDF_PORT`); loopback host_permissions + non-loopback soft-warn.
+- Fail-open to Fast browser PDF path when bridge offline; preferScientific only pre-selects when health Ready.
+- chrome.runtime messaging for PDF bytes uses base64; bridge jobs: health → create → poll → mono/dual download.
+
 ## PDF BabelDOC-parity (from: pdf-babeldoc-parity_20260717, 2026-07-17)
 - Typesetting ladder is pure (`fitTextToBox`) with a pluggable metrics hook so Layout overlay (canvas) and mono download (pdf-lib) share fit/scale/expand behavior.
 - Dual export always assembles from mono translated bytes + original — never re-typeset dual pages separately.
