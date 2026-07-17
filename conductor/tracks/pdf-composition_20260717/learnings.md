@@ -73,3 +73,19 @@ Patterns, gotchas, and context discovered during implementation.
   - Context: Columns left→right, within column top→bottom (PDF y descending).
 ---
 
+## [2026-07-17] - Phase 6 Tasks 6.1–6.5: Selective mask
+- **Implemented:** `getProseMaskRects`; Layout + download use prose-only masks; compositions on PageTranslations + progress store.
+- **Learnings:**
+  - Patterns: Mask helper returns `null` to skip; selective run masks when formula runs present; full-para otherwise.
+  - Gotchas: Run.y is baseline — convert to top-edge (`y + height`) for para.y-compatible mask API.
+---
+
+## [2026-07-17] - Phase 7 Tasks 7.1–7.4: Power-user PDF card
+- **Implemented:** Three PdfSettings toggles in Options → Advanced → PDF Translator; wired into pipeline + Text mode debug.
+- **Manual smoke checklist:**
+  - [ ] arXiv two-column PDF: reading order + math unmasked
+  - [ ] Table-heavy page: protect default / opt-in translate labels
+  - [ ] Layout overlay + download selective mask on mixed formula
+  - [ ] Pool cooling path still shows countdown
+---
+

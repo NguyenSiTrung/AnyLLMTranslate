@@ -67,6 +67,10 @@ interface SerializedPage {
   originalParagraphs?: unknown;
   /** Paragraph id → content kind (math/figure/prose). */
   paragraphKinds?: Array<[string, string]>;
+  /** Paragraph id → composition segments (optional). */
+  paragraphCompositions?: Array<
+    [string, Array<{ kind: string; text: string }>]
+  >;
   /** Error message (error state only). */
   error?: string;
   /** Absolute openUntil when pool was cooling (error state only). */
@@ -113,6 +117,18 @@ function deserializePages(
         ? (page.originalParagraphs as PageTranslations['originalParagraphs'])
         : undefined,
       paragraphKinds: kinds && kinds.size > 0 ? kinds : undefined,
+      paragraphCompositions:
+        Array.isArray(page.paragraphCompositions) && page.paragraphCompositions.length > 0
+          ? new Map(
+              page.paragraphCompositions.filter(
+                (entry): entry is [string, Array<{ kind: 'prose' | 'formula'; text: string }>] =>
+                  Array.isArray(entry) &&
+                  entry.length === 2 &&
+                  typeof entry[0] === 'string' &&
+                  Array.isArray(entry[1]),
+              ) as Array<[string, Array<{ kind: 'prose' | 'formula'; text: string }>]>,
+            )
+          : undefined,
       error: page.error,
       ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),
     });
@@ -136,6 +152,9 @@ function serializePages(
       originalParagraphs: page.originalParagraphs,
       paragraphKinds: page.paragraphKinds
         ? Array.from(page.paragraphKinds.entries())
+        : undefined,
+      paragraphCompositions: page.paragraphCompositions
+        ? Array.from(page.paragraphCompositions.entries())
         : undefined,
       error: page.error,
       ...(typeof page.retryAfter === 'number' ? { retryAfter: page.retryAfter } : {}),

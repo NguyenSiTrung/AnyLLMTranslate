@@ -67,6 +67,14 @@ export interface PageTranslations {
    * mask/replace math or figure paragraphs (primary over text-equality).
    */
   paragraphKinds?: Map<string, ContentKind>;
+  /**
+   * Optional composition segments (prose/formula) after placeholder reassembly.
+   * Used for Text-mode placeholder debug and selective-mask hints.
+   */
+  paragraphCompositions?: Map<
+    string,
+    Array<{ kind: 'prose' | 'formula'; text: string }>
+  >;
   /** Aggregate state of the page translation. */
   state: PageTranslationState;
   /** Error message if state === 'error'. */

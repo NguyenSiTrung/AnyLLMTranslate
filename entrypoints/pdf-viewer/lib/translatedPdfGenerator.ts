@@ -13,6 +13,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PageTranslations } from './pdfTranslation';
+import { getProseMaskRects } from './pdfComposition';
 
 /** Options for generating a translated PDF. */
 export interface GenerateTranslatedPdfOptions {
@@ -149,27 +150,21 @@ export async function generateTranslatedPdf(
         const translatedText = translations.paragraphs.get(para.id);
         if (translatedText === undefined) continue;
 
-        // Skip math/figure (explicit kind) and any verbatim keep-as-is text.
+        // Selective mask: skip math/figure; for mixed runs mask only prose boxes.
         const kind = translations.paragraphKinds?.get(para.id);
-        if (kind === 'math' || kind === 'figure') continue;
-        if (translatedText.trim() === para.text.trim()) continue;
+        const maskRects = getProseMaskRects(para, kind, translatedText);
+        if (!maskRects || maskRects.length === 0) continue;
 
-        // Convert paragraph coordinates to PDF coordinate system.
-        // PDF y-axis goes upward from bottom. The paragraph's y is the top
-        // in PDF space (as extracted by pdfTextExtraction).
-        const rectX = para.x;
-        const rectY = para.y - para.height; // bottom of the rectangle in PDF coords
-        const rectWidth = para.width;
-        const rectHeight = para.height;
-
-        // Draw white masking rectangle over original text.
-        newPage.drawRectangle({
-          x: rectX,
-          y: rectY,
-          width: rectWidth,
-          height: rectHeight,
-          color: rgb(1, 1, 1), // opaque white
-        });
+        // Convert top-edge y to PDF bottom-edge for drawRectangle.
+        for (const rect of maskRects) {
+          newPage.drawRectangle({
+            x: rect.x,
+            y: rect.y - rect.height,
+            width: rect.width,
+            height: rect.height,
+            color: rgb(1, 1, 1), // opaque white
+          });
+        }
 
         // Determine drawing parameters.
         const fontSize = clampFontSize(para.fontSize);

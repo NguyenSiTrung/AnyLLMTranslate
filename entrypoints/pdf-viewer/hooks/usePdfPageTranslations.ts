@@ -131,10 +131,17 @@ async function translatePage(
     );
     const paragraphMap = new Map<string, string>();
     const kindMap = new Map<string, ContentKind>();
-    for (const { id, translatedText, kind } of results) {
+    const compositionMap = new Map<
+      string,
+      Array<{ kind: 'prose' | 'formula'; text: string }>
+    >();
+    for (const { id, translatedText, kind, compositions } of results) {
       paragraphMap.set(id, translatedText);
       statusMap.set(id, 'success');
       if (kind) kindMap.set(id, kind);
+      if (compositions && compositions.length > 0) {
+        compositionMap.set(id, compositions);
+      }
     }
     setPages((prev) => {
       const next = new Map(prev);
@@ -142,6 +149,7 @@ async function translatePage(
         paragraphs: paragraphMap,
         originalParagraphs: paragraphs,
         paragraphKinds: kindMap.size > 0 ? kindMap : undefined,
+        paragraphCompositions: compositionMap.size > 0 ? compositionMap : undefined,
         paragraphStatus: new Map(statusMap),
         state: 'translated',
       });

@@ -154,29 +154,29 @@
 <!-- execution: sequential -->
 <!-- depends: phase3, phase4 -->
 
-- [ ] **Task 6.1: TDD — generator skips formula/figure compositions**
+- [x] **Task 6.1: TDD — generator skips formula/figure compositions**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/ (generator tests if present; else new) -->
-  - [ ] Prose masked; math/figure not masked
-  - [ ] Mixed paragraph: only prose sub-rects if available; else conservative full-para policy documented
+  - [x] Prose masked; math/figure not masked
+  - [x] Mixed paragraph: only prose sub-rects if available; else conservative full-para policy documented
 
-- [ ] **Task 6.2: Update `translatedPdfGenerator`**
+- [x] **Task 6.2: Update `translatedPdfGenerator`**
   <!-- files: entrypoints/pdf-viewer/lib/translatedPdfGenerator.ts -->
-  - [ ] Prefer `paragraphKinds` + composition/run metadata
-  - [ ] Keep legacy `translated === original` fallback
+  - [x] Prefer `paragraphKinds` + composition/run metadata
+  - [x] Keep legacy `translated === original` fallback
 
-- [ ] **Task 6.3: Update Layout overlay (`PdfTranslationPane`)**
+- [x] **Task 6.3: Update Layout overlay (`PdfTranslationPane`)**
   <!-- files: entrypoints/pdf-viewer/components/PdfTranslationPane.tsx -->
-  - [ ] Never white-mask math/figure kinds
-  - [ ] Mixed: show translated prose; leave formula runs unmasked (transparent / skip box)
-  - [ ] Text mode: optional show placeholders when setting on (Phase 7 can finish wiring)
+  - [x] Never white-mask math/figure kinds
+  - [x] Mixed: show translated prose; leave formula runs unmasked (transparent / skip box)
+  - [x] Text mode: optional show placeholders when setting on (Phase 7 can finish wiring)
 
-- [ ] **Task 6.4: Progress store / session kinds persistence**
+- [x] **Task 6.4: Progress store / session kinds persistence**
   <!-- files: entrypoints/pdf-viewer/lib/pdfProgressStore.ts -->
-  - [ ] Ensure kinds (and any composition fields needed for remount) survive restore
+  - [x] Ensure kinds (and any composition fields needed for remount) survive restore
 
-- [ ] **Task 6.5: Phase 6 verification**
-  - [ ] Generator + contentDetect + translation tests
-  - [ ] Capture learnings
+- [x] **Task 6.5: Phase 6 verification**
+  - [x] Generator + contentDetect + translation tests
+  - [x] Capture learnings
 
 ---
 
@@ -184,28 +184,28 @@
 <!-- execution: sequential -->
 <!-- depends: phase4 -->
 
-- [ ] **Task 7.1: Settings types + defaults**
+- [x] **Task 7.1: Settings types + defaults**
   <!-- files: types/config.ts, lib/config.ts, stores if needed -->
-  - [ ] `translateTableText: boolean` (default false)
-  - [ ] `showFormulaPlaceholders: boolean` (default false)
-  - [ ] `strictMathSkip: boolean` (default false)
-  - [ ] Migration: missing keys → defaults
+  - [x] `translateTableText: boolean` (default false)
+  - [x] `showFormulaPlaceholders: boolean` (default false)
+  - [x] `strictMathSkip: boolean` (default false)
+  - [x] Migration: missing keys → defaults
 
-- [ ] **Task 7.2: Options UI — PDF Translator power card**
+- [x] **Task 7.2: Options UI — PDF Translator power card**
   <!-- files: entrypoints/options/sections/ (Advanced PDF section components) -->
-  - [ ] Three toggles with short helper text
-  - [ ] Group under Advanced → PDF Translator
-  - [ ] Persist via existing settings store
+  - [x] Three toggles with short helper text
+  - [x] Group under Advanced → PDF Translator
+  - [x] Persist via existing settings store
 
-- [ ] **Task 7.3: Wire settings into viewer pipeline**
+- [x] **Task 7.3: Wire settings into viewer pipeline**
   <!-- files: entrypoints/pdf-viewer/lib/pdfTranslation.ts, pdfContentDetect.ts, PdfTranslationPane.tsx -->
-  - [ ] `strictMathSkip` → detect options
-  - [ ] `translateTableText` → table path
-  - [ ] `showFormulaPlaceholders` → Text mode display of raw placeholder strings when useful for debug
+  - [x] `strictMathSkip` → detect options
+  - [x] `translateTableText` → table path
+  - [x] `showFormulaPlaceholders` → Text mode display of raw placeholder strings when useful for debug
 
-- [ ] **Task 7.4: Phase 7 verification**
-  - [ ] Settings/config tests if present; manual smoke checklist in learnings
-  - [ ] Capture learnings
+- [x] **Task 7.4: Phase 7 verification**
+  - [x] Settings/config tests if present; manual smoke checklist in learnings
+  - [x] Capture learnings
 
 ---
 

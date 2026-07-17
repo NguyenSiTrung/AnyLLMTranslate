@@ -268,10 +268,16 @@ export function AdvancedSection() {
   const pdfAutoOpen = settings.pdfSettings?.autoOpen ?? 'off';
   const pdfOpenMode = settings.pdfSettings?.openMode ?? 'new-tab';
   const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
+  const translateTableText = settings.pdfSettings?.translateTableText ?? false;
+  const showFormulaPlaceholders = settings.pdfSettings?.showFormulaPlaceholders ?? false;
+  const strictMathSkip = settings.pdfSettings?.strictMathSkip ?? false;
   const defaultPdfSettings = {
     autoOpen: 'off' as const,
     openMode: 'new-tab' as const,
     neverAutoOpenSites: [] as string[],
+    translateTableText: false,
+    showFormulaPlaceholders: false,
+    strictMathSkip: false,
   };
   const isPromptCustom = settings.customSystemPrompt !== null;
   const promptWarnings =
@@ -991,6 +997,53 @@ export function AdvancedSection() {
                 </FieldGroup>
               </div>
             )}
+
+            <div className="mt-6 border-t border-zinc-800/80 pt-5">
+              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                Power-user composition
+              </p>
+              <div className="grid gap-4">
+                <Toggle
+                  checked={translateTableText}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        translateTableText: checked,
+                      },
+                    })
+                  }
+                  label="Translate table text"
+                  description="Off by default: table grids stay on the canvas. When on, non-numeric labels may translate; numbers stay protected."
+                />
+                <Toggle
+                  checked={showFormulaPlaceholders}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        showFormulaPlaceholders: checked,
+                      },
+                    })
+                  }
+                  label="Show formula placeholders in Text mode"
+                  description="Debug-oriented: show composition segments (prose vs formula) under each paragraph in Text mode."
+                />
+                <Toggle
+                  checked={strictMathSkip}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        strictMathSkip: checked,
+                      },
+                    })
+                  }
+                  label="Strict math skip"
+                  description="More aggressive formula classification (size ratio and density). Off by default to avoid under-translating."
+                />
+              </div>
+            </div>
           </Card>
         </div>
 

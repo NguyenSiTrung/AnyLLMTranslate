@@ -15,11 +15,13 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
+import { getProseMaskRects } from '../lib/pdfComposition';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import { measureBoxHeight } from '../lib/fontMetrics';
 import type { PdfViewMode } from '@/lib/constants';
 import { formatCooldownRemaining } from '@/lib/poolDashboardStatus';
+import { loadSettings } from '@/lib/config';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
@@ -152,17 +154,36 @@ function EmptyState({ pageNumber }: { pageNumber: number }): React.ReactElement 
   );
 }
 
-function TranslatedParagraphs({ page }: { page: PageTranslations }): React.ReactElement {
+function TranslatedParagraphs({
+  page,
+  showFormulaPlaceholders = false,
+}: {
+  page: PageTranslations;
+  showFormulaPlaceholders?: boolean;
+}): React.ReactElement {
   if (page.paragraphs.size === 0) {
     return <></>;
   }
   return (
     <>
-      {Array.from(page.paragraphs.entries()).map(([id, text]) => (
-        <p key={id} className="pdf-viewer-translation-paragraph">
-          {text}
-        </p>
-      ))}
+      {Array.from(page.paragraphs.entries()).map(([id, text]) => {
+        const compositions = page.paragraphCompositions?.get(id);
+        return (
+          <div key={id} className="pdf-viewer-translation-paragraph">
+            <p>{text}</p>
+            {showFormulaPlaceholders && compositions && compositions.length > 0 && (
+              <p
+                className="pdf-viewer-composition-debug"
+                style={{ fontSize: '10px', opacity: 0.65, marginTop: '2px' }}
+              >
+                {compositions
+                  .map((c) => (c.kind === 'formula' ? `[ƒ ${c.text}]` : c.text))
+                  .join(' · ')}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -359,21 +380,28 @@ function LayoutOverlayInner({
     .map((para) => {
       const translatedText = page.paragraphs.get(para.id);
       if (!translatedText) return null;
-      // Primary: explicit content kind from the translation pipeline. Math and
-      // figure/table cells must never be masked — the original canvas (and its
-      // rendered formulas/table grid) stays visible underneath.
+      // Primary: explicit content kind + selective run masks. Math/figure and
+      // pure-formula never get a white mask (canvas stays visible).
       const kind = page.paragraphKinds?.get(para.id);
-      if (kind === 'math' || kind === 'figure') return null;
-      // Fallback for older cached pages without kinds: skip when text is kept
-      // verbatim (math/figure kept as-is). Overlaying identical text causes
-      // white boxes and double-drawn glyphs.
-      if (translatedText.trim() === para.text.trim()) return null;
+      const maskRects = getProseMaskRects(para, kind, translatedText);
+      if (!maskRects || maskRects.length === 0) return null;
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = para.height * viewport.scale;
       // Conservative floor: only used when the live measurement is unavailable
       // (e.g. jsdom has no layout). In a real browser the measured height wins.
       const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
-      return { para, translatedText, origHeight, estHeight, ...geom };
+      // Convert PDF-space mask rects (top-edge y) to viewport pixels.
+      const viewportMasks = maskRects.map((r) => {
+        const [left, top] = viewport.convertToViewportPoint(r.x, r.y);
+        const [, bottom] = viewport.convertToViewportPoint(r.x, r.y - r.height);
+        return {
+          left,
+          top,
+          width: Math.max(r.width * viewport.scale, 2),
+          height: Math.max(Math.abs(bottom - top), 2),
+        };
+      });
+      return { para, translatedText, origHeight, estHeight, viewportMasks, ...geom };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -442,21 +470,22 @@ function LayoutOverlayInner({
 
   return (
     <>
-      {/* Render opaque white masks at the original paragraph coordinates to completely
-          cover and hide the original English text on the canvas background. */}
-      {boxes.map((b) => (
-        <div
-          key={`mask-${b.para.id}`}
-          className="pdf-viewer-layout-para-mask"
-          style={{
-            position: 'absolute',
-            left: `${b.left - 1}px`,
-            top: `${b.top - 1}px`,
-            width: `${b.width + 2}px`,
-            height: `${b.origHeight + 2}px`,
-          }}
-        />
-      ))}
+      {/* Selective white masks: prose-only boxes for mixed formula paragraphs. */}
+      {boxes.flatMap((b) =>
+        b.viewportMasks.map((m, mi) => (
+          <div
+            key={`mask-${b.para.id}-${mi}`}
+            className="pdf-viewer-layout-para-mask"
+            style={{
+              position: 'absolute',
+              left: `${m.left - 1}px`,
+              top: `${m.top - 1}px`,
+              width: `${m.width + 2}px`,
+              height: `${m.height + 2}px`,
+            }}
+          />
+        )),
+      )}
       {/* Render the translated boxes at the (measure-corrected) tops. */}
       {boxes.map((b, i) => (
         <LayoutOverlayBox
@@ -551,6 +580,19 @@ export function PdfTranslationPane({
   dims,
   viewMode,
 }: PdfTranslationPaneProps): React.ReactElement {
+  const [showFormulaPlaceholders, setShowFormulaPlaceholders] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void loadSettings().then((s) => {
+      if (!cancelled) {
+        setShowFormulaPlaceholders(s.pdfSettings?.showFormulaPlaceholders === true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Bilingual view mode: original + translation stacked, no canvas overlay.
   // Takes precedence over layoutMode (which only applies to the split/translation
   // single-pane rendering paths).
@@ -646,7 +688,7 @@ export function PdfTranslationPane({
     if (page.paragraphs.size > 0) {
       return (
         <div className="pdf-viewer-page-translation">
-          <TranslatedParagraphs page={page} />
+          <TranslatedParagraphs page={page} showFormulaPlaceholders={showFormulaPlaceholders} />
           <div className="pdf-viewer-streaming-tail" aria-live="polite">
             <span className="pdf-viewer-spinner" aria-hidden="true" />
           </div>
@@ -670,7 +712,7 @@ export function PdfTranslationPane({
   }
   return (
     <div className="pdf-viewer-page-translation">
-      <TranslatedParagraphs page={page} />
+      <TranslatedParagraphs page={page} showFormulaPlaceholders={showFormulaPlaceholders} />
     </div>
   );
 }

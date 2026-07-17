@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildTranslatePayload,
+  getProseMaskRects,
   reassembleTranslation,
   stripHallucinatedPlaceholders,
   placeholderToken,
@@ -133,5 +134,38 @@ describe('stripHallucinatedPlaceholders + reassembleTranslation', () => {
     );
     expect(displayText).toContain('L(θ)');
     expect(compositions.some((c) => c.kind === 'formula')).toBe(true);
+  });
+});
+
+describe('getProseMaskRects — selective mask', () => {
+  it('returns null for math/figure kinds', () => {
+    const p = para('f(x)=1', [run('f(x)=1', { fontName: 'CMMI10' })]);
+    expect(getProseMaskRects(p, 'math', 'f(x)=1')).toBeNull();
+    expect(getProseMaskRects(p, 'figure', 'f(x)=1')).toBeNull();
+  });
+
+  it('masks only prose runs in mixed paragraphs', () => {
+    const p = para('The loss is L(theta) end.', [
+      run('The loss is ', { fontName: 'Times-Roman', x: 10, y: 100, width: 60, height: 12 }),
+      run('L(theta)', { fontName: 'CMMI10', x: 70, y: 100, width: 40, height: 12 }),
+      run(' end.', { fontName: 'Times-Roman', x: 110, y: 100, width: 30, height: 12 }),
+    ]);
+    const rects = getProseMaskRects(p, 'prose', 'Mat mat la L(theta) end.');
+    expect(rects).not.toBeNull();
+    expect(rects!.length).toBe(2);
+    expect(rects!.every((r) => r.x !== 70)).toBe(true); // formula run at x=70 not masked
+  });
+
+  it('masks full paragraph for pure prose without formula runs', () => {
+    const p = para('Hello world only.', [
+      run('Hello world only.', { fontName: 'Times-Roman', x: 0, y: 50, width: 100, height: 12 }),
+    ]);
+    p.x = 0;
+    p.y = 62;
+    p.width = 100;
+    p.height = 12;
+    const rects = getProseMaskRects(p, 'prose', 'Xin chao.');
+    expect(rects).toHaveLength(1);
+    expect(rects![0]).toMatchObject({ x: 0, y: 62, width: 100, height: 12 });
   });
 });

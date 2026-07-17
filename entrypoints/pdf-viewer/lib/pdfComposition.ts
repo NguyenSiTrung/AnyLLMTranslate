@@ -16,9 +16,62 @@
 import type { PdfParagraph, PdfTextRun } from './pdfTextExtraction';
 import {
   classifyRuns,
+  type ContentKind,
   type MathDetectOptions,
   type RunKind,
 } from './pdfContentDetect';
+
+/** Axis-aligned rect in PDF space (y = top edge, matching PdfParagraph.y). */
+export interface MaskRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Compute white-mask rectangles for Layout overlay / download.
+ *
+ * - `math` / `figure` / verbatim: returns `null` (do not mask).
+ * - Mixed runs: only **prose** run boxes (formula runs stay unmasked).
+ * - Pure prose or no runs: single full-paragraph rect (legacy).
+ */
+export function getProseMaskRects(
+  para: PdfParagraph,
+  kind: ContentKind | undefined,
+  translatedText: string,
+  options?: MathDetectOptions,
+): MaskRect[] | null {
+  if (kind === 'math' || kind === 'figure') return null;
+  if (translatedText.trim() === para.text.trim()) return null;
+
+  const runs = para.runs;
+  if (runs && runs.length > 0) {
+    const runKinds = classifyRuns(runs, options);
+    const proseRuns = runs.filter((_, i) => runKinds[i] === 'prose' && runs[i].text.trim());
+    const formulaRuns = runs.filter((_, i) => runKinds[i] === 'formula');
+    if (proseRuns.length === 0) return null;
+    if (formulaRuns.length > 0) {
+      // Selective mask: each prose run box. Run.y is baseline (≈ bottom);
+      // convert to top-edge y = baseline + height for consistency with para.y.
+      return proseRuns.map((r) => ({
+        x: r.x,
+        y: r.y + r.height,
+        width: Math.max(r.width, 1),
+        height: Math.max(r.height, 1),
+      }));
+    }
+  }
+
+  return [
+    {
+      x: para.x,
+      y: para.y,
+      width: para.width,
+      height: para.height,
+    },
+  ];
+}
 
 /** Stable placeholder token: `{v0}`, `{v1}`, … */
 export function placeholderToken(index: number): string {
