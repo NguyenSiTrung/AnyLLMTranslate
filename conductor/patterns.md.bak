@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (pdf-composition patterns already elevated; 872 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 69 archived) -->
+<!-- conductor-refresh: 2026-07-17 all (elevated PDF cooling/kind + ModelPicker pagination + safe key throttle + rate-limit presets; 837 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 68 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -720,4 +720,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-17 (post pdf-composition archive)
+Last refreshed: 2026-07-17

@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (no dep/script drift; build ~4.1 MB; post pdf-composition archive) -->
+<!-- conductor-refresh: 2026-07-17 all (no dep/script drift; build ~4.1 MB; PDF cooling/kind + ModelPicker + safe key throttle + rate-limit presets) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
