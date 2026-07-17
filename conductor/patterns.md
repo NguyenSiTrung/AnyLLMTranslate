@@ -16,6 +16,8 @@ Reusable patterns discovered during development. Read this before starting new w
 - Honor pool **maxRpm / concurrency / interval** on bridge jobs (same throttle story as page translate).
 - Docker lifecycle helper scripts (`scripts/scientific-pdf-docker.sh` up/down/logs) for wizard “new user” path; default compose port 17890.
 - Job completion modal: pure format helpers (`scientificJobModalFormats`) separate from React shell; formats mono | dual | side-by-side.
+- Options shared `Modal` is **confirm-only** — multi-step setup wizards need a custom dialog shell (from: scientific-pdf-backend_20260717, archived 2026-07-17)
+- HTTP bridge client: `Response.ok` is true for 202/204 (create/cancel); treat non-ok via bridge error JSON body when present (from: scientific-pdf-backend_20260717, archived 2026-07-17)
 
 ## PDF BabelDOC-parity (from: pdf-babeldoc-parity_20260717, 2026-07-17)
 - Typesetting ladder is pure (`fitTextToBox`) with a pluggable metrics hook so Layout overlay (canvas) and mono download (pdf-lib) share fit/scale/expand behavior.

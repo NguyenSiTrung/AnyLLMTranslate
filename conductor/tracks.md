@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (70 archived / 1 complete active ready-to-archive: scientific-pdf-backend_20260717; 995 TCs / 3 fail; Beads zg4 + 7uk) -->
+<!-- conductor-archive: 2026-07-17 scientific-pdf-backend_20260717 archived (71 archived / 0 active) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -81,16 +81,12 @@ This file tracks all major tracks for the project.
 - ✅ **Web Page Translation — UX, Performance & Quality v3** (`web-translate-v3_20260714`) — Archived 2026-07-14. Balanced defaults (streaming + aside caps ON), page-scope presets (Classic escape hatch), viewport-aware progress, sticky systemic-pause banner, parallel sub-batches + look-ahead, term memory, JSON repair, expanded langDetect, stream/context parity, resume parentPath identity, mini progress. Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. 4 phases. [View](./conductor/archive/web-translate-v3_20260714/)
 - ✅ **PDF Composition Pipeline (BabelDOC-inspired)** (`pdf-composition_20260717`) — Archived 2026-07-17. Run-level extraction, multi-signal formula detection, `{vN}` placeholders + reassembly, table regions protect-by-default + `translateTableText`, multi-column reading order, selective Layout/download mask, power-user PDF card (3 toggles). 8 phases. [View](./conductor/archive/pdf-composition_20260717/)
 - ✅ **BabelDOC-parity PDF pipeline (scientific translation + bilingual dual export)** (`pdf-babeldoc-parity_20260717`) — Archived 2026-07-17. Dual export (mono / side-by-side / alternating), shared typesetting ladder, document term extraction, scanned detect + OCR workaround, PdfSettings toggles. Predecessor: `pdf-composition_20260717`. 6 phases. [View](./conductor/archive/pdf-babeldoc-parity_20260717/)
+- ✅ **Scientific PDF Backend (layout-preserving local bridge)** (`scientific-pdf-backend_20260717`) — Archived 2026-07-17. Optional Scientific / PDF Translate mode via Docker pdf2zh bridge; same provider pool credentials per-job; setup wizard + Docker helper scripts; bridge-only viewer path; mono/dual/side-by-side job modal. 6 phases; Beads epic `AnyLLMTranslate-17v`. [View](./conductor/archive/scientific-pdf-backend_20260717/)
 
 ---
 
 ## Active Tracks
 
----
-
-## [x] Track: Scientific PDF Backend (layout-preserving local bridge)
-*Link: [./tracks/scientific-pdf-backend_20260717/](./tracks/scientific-pdf-backend_20260717/)*
-*Priority: high · **Complete** (all 6 phases `[x]`; Beads epic `AnyLLMTranslate-17v` closed). Layout-preserving PDF via Docker pdf2zh bridge; same provider pool per-job; setup wizard; bridge-only viewer translate; dual+mono + job modal UX. **Ready to archive** — run `/conductor-archive` when convenient.*
-*Note: metadata.json still says `status: new` (stale); plan/learnings/epic are source of truth for completion.*
+_None — all tracks archived as of 2026-07-17._
 
 ---
