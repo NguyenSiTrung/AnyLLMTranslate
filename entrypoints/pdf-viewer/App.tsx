@@ -418,7 +418,10 @@ export default function App(): ReactElement {
             setShowScientificModal(true);
             void scientific.startJob();
           }}
-          onOpenResult={() => scientific.openResultInViewer()}
+          onOpenResult={(prefer) => scientific.openResultInViewer(prefer)}
+          onDownloadMono={() => scientific.downloadMono()}
+          onDownloadDual={() => scientific.downloadDual()}
+          onDownloadSideBySide={() => void scientific.downloadSideBySide()}
           onOpenSetup={() => {
             setShowScientificModal(false);
             try {
