@@ -129,7 +129,9 @@ function computeBoxGeometry(
   return { left, top, width, fontSize };
 }
 
-/** One translated box positioned over the original canvas. Grows to natural height. */
+/** One translated box positioned over the original canvas.
+ *  Height is hard-capped (`maxHeight`) so a long Vietnamese translation cannot
+ *  paint its white background over the next display equation on the canvas. */
 const LayoutOverlayBox = forwardRef<
   HTMLDivElement,
   {
@@ -140,9 +142,11 @@ const LayoutOverlayBox = forwardRef<
     width: number;
     fontSize: number;
     lineHeight: number;
+    /** Hard max height in CSS px; overflow is clipped. */
+    maxHeight: number;
   }
 >(function LayoutOverlayBox(
-  { para, translatedText, left, top, width, fontSize, lineHeight },
+  { para, translatedText, left, top, width, fontSize, lineHeight, maxHeight },
   ref,
 ) {
   return (
@@ -156,6 +160,8 @@ const LayoutOverlayBox = forwardRef<
         width: `${width}px`,
         fontSize: `${fontSize}px`,
         lineHeight: String(lineHeight),
+        maxHeight: `${Math.max(12, maxHeight)}px`,
+        overflow: 'hidden',
       }}
     >
       {translatedText}
@@ -208,31 +214,48 @@ function LayoutOverlayInner({
   const scale = RENDER_WIDTH_PX / baseViewport.width;
   const viewport = pdfPage.getViewport({ scale });
   const originalParagraphs = page.originalParagraphs ?? [];
+  const BOX_GAP = 4;
+
+  // Viewport Y bands for EVERY original paragraph (overlay + skipped math).
+  // Hard-cap overlay height so long translations cannot white-paint over the
+  // next display equation left on the canvas.
+  const allBands = originalParagraphs
+    .map((para) => {
+      const [, top] = viewport.convertToViewportPoint(para.x, para.y);
+      const height = Math.max(para.height * viewport.scale, 12);
+      return { id: para.id, top, bottom: top + height };
+    })
+    .sort((a, b) => a.top - b.top || a.id.localeCompare(b.id));
+
+  /** Max CSS px height for a box starting at `top` before the next band. */
+  const maxHeightFromTop = (top: number, paraId: string): number => {
+    let nextTop = dims.height;
+    for (const band of allBands) {
+      if (band.id === paraId) continue;
+      if (band.top > top + 1) {
+        nextTop = Math.min(nextTop, band.top);
+        break;
+      }
+    }
+    return Math.max(12, nextTop - top - BOX_GAP);
+  };
 
   // Pre-compute static geometry. `top` is the ORIGINAL position here; the
   // effect below may override it after measuring the rendered boxes.
-  // Masks are stored at original tops and shifted by the same deltaY as the
-  // text box during render (see reflow) so they never desync and whitewash
-  // canvas content that the translation box has moved away from.
+  // Masks shift by the same deltaY as the text box during reflow.
   const boxes = originalParagraphs
     .map((para) => {
       const fullTranslated = page.paragraphs.get(para.id);
       if (!fullTranslated) return null;
-      // Primary: explicit content kind + selective run masks. Math/figure and
-      // pure-formula never get a white mask (canvas stays visible).
       const kind = page.paragraphKinds?.get(para.id);
-      // Failsafe at the Layout gate (display equations, tofu, pure math).
+      // Failsafe: display equations / pure math / tofu → keep canvas only.
       if (shouldSkipLayoutOverlay(para, kind, fullTranslated)) return null;
       const compositions = page.paragraphCompositions?.get(para.id);
-      // Layout paints prose only — formula glyphs stay on the canvas under
-      // selective unmasked regions (avoids □ tofu from web fonts).
       const overlayText = proseOnlyOverlayText(fullTranslated, compositions, para);
       if (!overlayText) return null;
 
       let maskRects = getProseMaskRects(para, kind, fullTranslated);
       if (!maskRects || maskRects.length === 0) return null;
-      // OCR workaround: full-paragraph white underlay for pure prose only.
-      // Never expand underlay over formula runs (would cover display math).
       if (
         isOcrWorkaroundActive() &&
         kind !== 'math' &&
@@ -250,28 +273,27 @@ function LayoutOverlayInner({
       }
       const geom = computeBoxGeometry(para, viewport, dims.width);
       const origHeight = Math.max(para.height * viewport.scale, 12);
-      // Typesetting ladder: compact line spacing / scale font / expand width
-      // before relying on page-slot growth for residual overflow.
-      // Measure against prose-only overlay text (not formula-stuffed string).
+      // Never paint past the next original paragraph band (skipped math lives there).
+      const maxHeight = maxHeightFromTop(geom.top, para.id);
+      const fitHeight = Math.min(origHeight, maxHeight);
+      const freeDown = Math.max(0, maxHeight - origHeight);
       const freeRight = Math.max(0, dims.width - geom.left - geom.width - 4);
       const fit = fitTextToBox({
         box: {
           x: geom.left,
           y: geom.top,
           width: geom.width,
-          height: origHeight,
+          height: fitHeight,
         },
         text: overlayText,
         naturalFontSize: geom.fontSize,
         metrics: layoutMetricsHook,
-        freeSpace: { right: freeRight, down: 0 },
+        freeSpace: { right: freeRight, down: freeDown },
       });
       const fittedFontSize = fit.fontSize;
-      const fittedWidth = fit.box.width;
+      const fittedWidth = Math.min(fit.box.width, geom.width + freeRight);
       const fittedLineHeight = fit.lineHeight;
-      // Conservative floor: only used when the live measurement is unavailable
-      // (e.g. jsdom has no layout). Prefer ladder height when it fits.
-      const estHeight = fit.overflow
+      const rawEst = fit.overflow
         ? estimateBoxHeight(overlayText, fittedWidth, fittedFontSize)
         : Math.max(
             fit.box.height,
@@ -282,15 +304,17 @@ function LayoutOverlayInner({
               width: fittedWidth,
             }).height,
           );
-      // Convert PDF-space mask rects (top-edge y) to viewport pixels.
+      const estHeight = Math.min(rawEst, maxHeight);
       const viewportMasks = maskRects.map((r) => {
         const [left, top] = viewport.convertToViewportPoint(r.x, r.y);
         const [, bottom] = viewport.convertToViewportPoint(r.x, r.y - r.height);
+        const rawH = Math.max(Math.abs(bottom - top), 2);
+        const capH = Math.min(rawH, maxHeightFromTop(top, para.id));
         return {
           left,
           top,
           width: Math.max(r.width * viewport.scale, 2),
-          height: Math.max(Math.abs(bottom - top), 2),
+          height: capH,
         };
       });
       return {
@@ -298,6 +322,7 @@ function LayoutOverlayInner({
         translatedText: overlayText,
         origHeight,
         estHeight,
+        maxHeight,
         viewportMasks,
         left: geom.left,
         top: geom.top,
@@ -308,25 +333,21 @@ function LayoutOverlayInner({
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
-  // Ensure reflow follows visual reading order even if the input order drifts.
   boxes.sort((a, b) => {
     const dy = a.top - b.top;
     if (Math.abs(dy) > 2) return dy;
     return a.left - b.left;
   });
 
-  // tops[i] = the `top` CSS px for boxes[i]. Initialized to the original `top`,
-  // then corrected after measuring real DOM heights.
+  // Canvas bands with no overlay (display math) — reflow must jump over these.
+  const overlayIds = new Set(boxes.map((b) => b.para.id));
+  const protectedBands = allBands.filter((b) => !overlayIds.has(b.id));
+
   const [tops, setTops] = useState<number[]>(() => boxes.map((b) => b.top));
   const boxRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [containerHeight, setContainerHeight] = useState<number>(dims.height);
-  // Last containerHeight we committed; tracked in a ref so the effect can diff
-  // against it without depending on the state value (which would re-trigger it).
   const lastContainerHeightRef = useRef<number>(dims.height);
 
-  // Re-run the reflow only when the set of translated texts or the page height
-  // changes. Using a derived key (instead of the `boxes` array, which is a new
-  // reference every render) avoids an infinite measure → setTops → measure loop.
   const translationsKey = boxes.map((b) => b.translatedText).join('\u0001');
 
   useLayoutEffect(() => {
@@ -338,23 +359,29 @@ function LayoutOverlayInner({
       return;
     }
 
-    // First pass: place each box at the larger of its original `top` or the
-    // bottom of the previous box (so we measure against the final position).
     const nextTops: number[] = new Array(boxes.length);
-    const BOX_GAP = 4;
     let cursorBottom = 0;
     let maxBottom = dims.height;
 
     for (let i = 0; i < boxes.length; i++) {
-      const desiredTop = Math.max(boxes[i].top, cursorBottom + BOX_GAP);
+      let desiredTop = Math.max(boxes[i].top, cursorBottom + BOX_GAP);
+
+      // Jump below protected math bands so a tall prose box is not placed on them.
+      for (const band of protectedBands) {
+        if (desiredTop < band.bottom - 1 && desiredTop + 8 > band.top) {
+          desiredTop = Math.max(desiredTop, band.bottom + BOX_GAP);
+        }
+      }
+
       nextTops[i] = desiredTop;
 
-      // Prefer the real, measured height of the rendered box. Fall back to the
-      // conservative estimate when layout is unavailable (e.g. jsdom) — never go
-      // below the estimate, since under-estimating is what causes overlaps.
+      const heightCap = Math.min(
+        boxes[i].maxHeight,
+        maxHeightFromTop(desiredTop, boxes[i].para.id),
+      );
       const el = boxRefs.current[i];
       const measured = el ? el.getBoundingClientRect().height : 0;
-      const h = Math.max(measured, boxes[i].estHeight);
+      const h = Math.min(Math.max(measured, boxes[i].estHeight), heightCap);
       cursorBottom = desiredTop + h;
       if (cursorBottom > maxBottom) maxBottom = cursorBottom;
     }
@@ -363,7 +390,6 @@ function LayoutOverlayInner({
     const topsChanged = nextTops.some((t, i) => Math.abs(t - (prevTops[i] ?? t)) > 0.5);
     if (topsChanged) setTops(nextTops);
 
-    // Reserve a small buffer so box borders/descenders never kiss the next page.
     const nextContainerHeight = maxBottom + 16;
     if (Math.abs(nextContainerHeight - lastContainerHeightRef.current) > 0.5) {
       lastContainerHeightRef.current = nextContainerHeight;
@@ -373,12 +399,10 @@ function LayoutOverlayInner({
 
   return (
     <>
-      {/* Selective white masks: prose-only boxes for mixed formula paragraphs.
-          Shift by the same deltaY as the reflowed text box so masks never stay
-          behind at the original y while text is pushed down (that desync was
-          whitewashing canvas math / neighboring lines). */}
       {boxes.flatMap((b, i) => {
-        const deltaY = (tops[i] ?? b.top) - b.top;
+        const placedTop = tops[i] ?? b.top;
+        const deltaY = placedTop - b.top;
+        const heightCap = Math.min(b.maxHeight, maxHeightFromTop(placedTop, b.para.id));
         return b.viewportMasks.map((m, mi) => (
           <div
             key={`mask-${b.para.id}-${mi}`}
@@ -388,30 +412,41 @@ function LayoutOverlayInner({
               left: `${m.left - 1}px`,
               top: `${m.top + deltaY - 1}px`,
               width: `${m.width + 2}px`,
-              height: `${m.height + 2}px`,
+              height: `${Math.min(m.height + 2, heightCap + 2)}px`,
             }}
           />
         ));
       })}
-      {/* Render the translated boxes at the (measure-corrected) tops. */}
-      {boxes.map((b, i) => (
-        <LayoutOverlayBox
-          key={b.para.id}
-          ref={(el) => {
-            boxRefs.current[i] = el;
-          }}
-          para={b.para}
-          translatedText={b.translatedText}
-          left={b.left}
-          top={tops[i] ?? b.top}
-          width={b.width}
-          fontSize={b.fontSize}
-          lineHeight={b.lineHeight}
-        />
-      ))}
-      {/* Spacer reserves vertical space so the auto-height absolute boxes that
-          extend beyond the canvas push the next page down instead of colliding. */}
-      <div style={{ position: 'relative', width: '100%', height: `${Math.max(0, containerHeight - dims.height)}px` }} aria-hidden="true" />
+      {boxes.map((b, i) => {
+        const placedTop = tops[i] ?? b.top;
+        const heightCap = Math.min(b.maxHeight, maxHeightFromTop(placedTop, b.para.id));
+        return (
+          <LayoutOverlayBox
+            key={b.para.id}
+            ref={(el) => {
+              boxRefs.current[i] = el;
+            }}
+            para={b.para}
+            translatedText={b.translatedText}
+            left={b.left}
+            top={placedTop}
+            width={b.width}
+            fontSize={b.fontSize}
+            lineHeight={b.lineHeight}
+            maxHeight={heightCap}
+          />
+        );
+      })}
+      {/* Spacer reserves vertical space so absolute boxes that still extend past
+          the canvas push the next page down instead of colliding. */}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: `${Math.max(0, containerHeight - dims.height)}px`,
+        }}
+        aria-hidden="true"
+      />
     </>
   );
 }
