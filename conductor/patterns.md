@@ -3,6 +3,13 @@
 
 Reusable patterns discovered during development. Read this before starting new work.
 
+## PDF BabelDOC-parity (from: pdf-babeldoc-parity_20260717, 2026-07-17)
+- Typesetting ladder is pure (`fitTextToBox`) with a pluggable metrics hook so Layout overlay (canvas) and mono download (pdf-lib) share fit/scale/expand behavior.
+- Dual export always assembles from mono translated bytes + original — never re-typeset dual pages separately.
+- PDF term extraction: session-cache by URL+lang; inject via existing `termMemoryBlock`; user glossary wins; fail-open.
+- Scanned detect is pure density heuristics; pure-scan (no text) shows a banner and skips LLM; OCR workaround only when heavily scanned with some text (full-paragraph white underlay).
+- New PDF power-user toggles live on `PdfSettings` with defaults ON for autoExtractTerms / detectScanned / autoOcrWorkaround; Options shallow-merges via `...(settings.pdfSettings ?? defaultPdfSettings)`.
+
 ## Code Conventions
 - ESLint 9+ uses flat config (eslint.config.mjs), no `--ext` flag needed. (from: phase1-foundation_20260409, archived 2026-04-09)
 - `promise.finally().catch()` needed to suppress unhandled rejections when storing promises in Maps for dedup. (from: phase1-foundation_20260409, archived 2026-04-09)

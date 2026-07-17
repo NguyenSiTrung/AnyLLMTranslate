@@ -86,3 +86,9 @@ This file tracks all major tracks for the project.
 ## Active Tracks
 
 ---
+
+## [x] Track: BabelDOC-parity PDF pipeline (scientific translation + bilingual dual export)
+*Link: [./conductor/tracks/pdf-babeldoc-parity_20260717/](./conductor/tracks/pdf-babeldoc-parity_20260717/)*
+*Priority: medium · Status: completed · Predecessor: pdf-composition_20260717*
+
+---

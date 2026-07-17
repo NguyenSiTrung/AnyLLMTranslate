@@ -21,8 +21,11 @@ import { FilePermissionGuide } from './components/FilePermissionGuide';
 import { usePdfDocument } from './hooks/usePdfDocument';
 import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
 import { useVisiblePages } from './hooks/useVisiblePages';
-import { usePdfDownload } from './hooks/usePdfDownload';
-import { DownloadProgressModal } from './components/DownloadProgressModal';
+import { usePdfDownload, type DualExportMode } from './hooks/usePdfDownload';
+import {
+  DownloadFormatPicker,
+  DownloadProgressModal,
+} from './components/DownloadProgressModal';
 
 /** Stable sentinel for untranslated pages — avoids creating a new
  *  { paragraphs: new Map(), state: 'idle' } object on every render. */
@@ -111,7 +114,13 @@ export default function App(): ReactElement {
     [pages],
   );
 
-  const { pages: translations, translatedCount, totalCount, retryPage } = usePdfPageTranslations({
+  const {
+    pages: translations,
+    translatedCount,
+    totalCount,
+    retryPage,
+    scanSession,
+  } = usePdfPageTranslations({
     pages: loadedPages,
     numPages,
     pdfUrl: pdfUrl ?? '',
@@ -126,11 +135,15 @@ export default function App(): ReactElement {
     message: downloadMessage,
     error: downloadError,
     isDownloading,
+    exportMode,
   } = usePdfDownload({
     pdfUrl: pdfUrl ?? '',
     pages: loadedPages,
     translations,
   });
+
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
+  const [pendingExportMode, setPendingExportMode] = useState<DualExportMode>('mono');
 
 
   const isFile = pdfUrl ? isFileScheme(pdfUrl) : false;
@@ -221,7 +234,21 @@ export default function App(): ReactElement {
         title="PDF Translator"
         subtitle={fileName}
         viewMode={viewMode}
-        banner={<FilePermissionGuide visible={isFile} />}
+        banner={
+          <>
+            <FilePermissionGuide visible={isFile} />
+            {scanSession.message && (
+              <div className="pdf-viewer-scan-banner" role="status">
+                {scanSession.message}
+              </div>
+            )}
+            {scanSession.ocrWorkaround && !scanSession.pureScanBlocked && (
+              <div className="pdf-viewer-scan-banner pdf-viewer-scan-banner--info" role="status">
+                Scanned PDF detected — OCR workaround enabled (white underlay + forced text overlay).
+              </div>
+            )}
+          </>
+        }
         left={leftPane}
         leftPaneRef={leftContainerRef}
         right={
@@ -257,9 +284,9 @@ export default function App(): ReactElement {
             <button
               type="button"
               className="pdf-download-btn-header"
-              onClick={startDownload}
+              onClick={() => setShowFormatPicker(true)}
               disabled={translatedCount === 0 || isDownloading}
-              title="Download Translated PDF"
+              title="Download translated or dual bilingual PDF"
             >
               <Download size={14} />
               Download
@@ -267,14 +294,26 @@ export default function App(): ReactElement {
           </div>
         }
       />
+      {showFormatPicker && !isDownloading && (
+        <DownloadFormatPicker
+          value={pendingExportMode}
+          onChange={setPendingExportMode}
+          onCancel={() => setShowFormatPicker(false)}
+          onConfirm={() => {
+            setShowFormatPicker(false);
+            startDownload(pendingExportMode);
+          }}
+        />
+      )}
       {isDownloading && (
         <DownloadProgressModal
           stage={downloadStage}
           progress={downloadProgress}
           message={downloadMessage}
           error={downloadError}
+          exportMode={exportMode}
           onCancel={cancelDownload}
-          onRetry={startDownload}
+          onRetry={() => startDownload(exportMode)}
         />
       )}
     </>);

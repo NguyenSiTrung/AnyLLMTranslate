@@ -270,12 +270,18 @@ export function AdvancedSection() {
   const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
   const translateTableText = settings.pdfSettings?.translateTableText ?? false;
   const strictMathSkip = settings.pdfSettings?.strictMathSkip ?? false;
+  const autoExtractTerms = settings.pdfSettings?.autoExtractTerms ?? true;
+  const detectScanned = settings.pdfSettings?.detectScanned ?? true;
+  const autoOcrWorkaround = settings.pdfSettings?.autoOcrWorkaround ?? true;
   const defaultPdfSettings = {
     autoOpen: 'off' as const,
     openMode: 'new-tab' as const,
     neverAutoOpenSites: [] as string[],
     translateTableText: false,
     strictMathSkip: false,
+    autoExtractTerms: true,
+    detectScanned: true,
+    autoOcrWorkaround: true,
   };
   const isPromptCustom = settings.customSystemPrompt !== null;
   const promptWarnings =
@@ -1026,6 +1032,45 @@ export function AdvancedSection() {
                   }
                   label="Strict math skip"
                   description="More aggressive formula classification (size ratio and density). Off by default to avoid under-translating."
+                />
+                <Toggle
+                  checked={autoExtractTerms}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        autoExtractTerms: checked,
+                      },
+                    })
+                  }
+                  label="Auto extract terms"
+                  description="Before multi-page translation, sample prose and extract a technical term list for consistent terminology. On by default; fails open if extraction fails."
+                />
+                <Toggle
+                  checked={detectScanned}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        detectScanned: checked,
+                      },
+                    })
+                  }
+                  label="Detect scanned PDFs"
+                  description="Score pages with little/no extractable text vs page area. On by default."
+                />
+                <Toggle
+                  checked={autoOcrWorkaround}
+                  onChange={(checked) =>
+                    updateSettings({
+                      pdfSettings: {
+                        ...(settings.pdfSettings ?? defaultPdfSettings),
+                        autoOcrWorkaround: checked,
+                      },
+                    })
+                  }
+                  label="Auto OCR workaround"
+                  description="When a heavily scanned document is detected, force white underlays and text overlay assumptions. On by default; pure-scan no-text docs show a message instead."
                 />
               </div>
             </div>

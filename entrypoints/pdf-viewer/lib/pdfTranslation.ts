@@ -31,6 +31,11 @@ import {
   reassembleTranslation,
   type FormulaPlaceholder,
 } from './pdfComposition';
+import {
+  ensureDocumentTerms,
+  sampleProseForExtraction,
+  termPairsToMemoryBlock,
+} from './pdfTermExtract';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
 
@@ -134,6 +139,7 @@ async function sendTranslationBatch(
   pdfUrl: string,
   sourceLanguage: string,
   targetLanguage: string,
+  termMemoryBlock?: string,
 ): Promise<TranslationResultItem[]> {
   const pieces = batch.map(({ paragraph }) => ({ id: paragraph.id, text: paragraph.text }));
   const message: ExtensionMessage = {
@@ -147,6 +153,7 @@ async function sendTranslationBatch(
       domain: 'pdf',
       category: 'document',
     },
+    ...(termMemoryBlock ? { termMemoryBlock } : {}),
   };
 
   const response = await chrome.runtime.sendMessage(message);
@@ -181,6 +188,7 @@ async function sendTranslationBatchStreamed(
   sourceLanguage: string,
   targetLanguage: string,
   onPiece: (id: string, text: string) => void,
+  termMemoryBlock?: string,
 ): Promise<TranslationResultItem[]> {
   const pieces = batch.map(({ paragraph }) => ({ id: paragraph.id, text: paragraph.text }));
   return new Promise<TranslationResultItem[]>((resolve, reject) => {
@@ -223,6 +231,7 @@ async function sendTranslationBatchStreamed(
       pieces,
       sourceLanguage,
       targetLanguage,
+      ...(termMemoryBlock ? { termMemoryBlock } : {}),
     } satisfies PdfStreamPortMessage);
   });
 }
@@ -266,6 +275,17 @@ export async function translateParagraphs(
   const settings = await loadSettings();
   const sourceLanguage = settings.sourceLanguage;
   const targetLanguage = settings.targetLanguage;
+
+  // 0. Document term extraction pre-pass (fail-open; session-cached).
+  let termMemoryBlock: string | undefined;
+  try {
+    const sample = sampleProseForExtraction(paragraphs);
+    const pairs = await ensureDocumentTerms(pdfUrl, sample);
+    const block = termPairsToMemoryBlock(pairs);
+    if (block) termMemoryBlock = block;
+  } catch {
+    // Never block translation on term extraction.
+  }
 
   const mathOpts: MathDetectOptions | undefined = settings.pdfSettings?.strictMathSkip
     ? { strictMath: true }
@@ -416,6 +436,7 @@ export async function translateParagraphs(
             sourceLanguage,
             targetLanguage,
             streamOnPiece,
+            termMemoryBlock,
           );
         } catch (streamErr) {
           // Streaming failed — fall back to non-streaming. The pieces emitted
@@ -423,7 +444,7 @@ export async function translateParagraphs(
           console.warn('AnyLLMTranslate: PDF streaming failed, falling back to batch', streamErr);
         }
       }
-      return sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage);
+      return sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage, termMemoryBlock);
     }),
   );
   const translatedResults: TranslationResultItem[] = batchResults.flat().map((r) => {

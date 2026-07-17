@@ -13,6 +13,8 @@ import type {
   DetectPageCategoryLlmMessage,
   ClassifyPdfParagraphsMessage,
   ClassifyPdfParagraphsResult,
+  ExtractPdfTermsMessage,
+  ExtractPdfTermsResult,
   ResegmentYoutubeAsrMessage,
   ResegmentYoutubeAsrResult,
   PdfDetectedMessage,
@@ -1789,6 +1791,50 @@ async function handleClassifyPdfParagraphs(
   }
 }
 
+/** Handle EXTRACT_PDF_TERMS — one-shot technical term list for PDF documents. */
+async function handleExtractPdfTerms(
+  message: ExtractPdfTermsMessage,
+): Promise<ExtractPdfTermsResult> {
+  try {
+    const sample = (message.sampleText ?? '').trim();
+    if (sample.length < 20) {
+      return { success: true, terms: [], raw: '' };
+    }
+    const service = await initService();
+    const fromLabel =
+      message.sourceLanguage === 'auto'
+        ? 'auto-detected source language'
+        : getLanguageName(message.sourceLanguage);
+    const toLabel = getLanguageName(message.targetLanguage);
+    const systemPrompt =
+      `You extract technical terms from scientific PDF prose for consistent translation.\n` +
+      `Source language: ${fromLabel}. Target language: ${toLabel}.\n` +
+      `Return ONLY a JSON array of objects: [{"source":"...","target":"..."}].\n` +
+      `Include domain terms, acronyms, and proper technical phrases (max 40).\n` +
+      `Do not translate full sentences. No markdown, no commentary.`;
+    const userPrompt =
+      `Extract term pairs from this PDF sample:\n\n${sample.slice(0, 8000)}`;
+    const texts = new Map<string, string>();
+    texts.set('terms', sample.slice(0, 200));
+    const result = await service.translate({
+      texts,
+      sourceLanguage: message.sourceLanguage,
+      targetLanguage: message.targetLanguage,
+      preScanSystemPrompt: systemPrompt,
+      customUserPrompt: userPrompt,
+      returnRawResponse: true,
+    });
+    if (!result.success) {
+      return { success: false, error: result.error ?? 'Term extraction failed' };
+    }
+    const raw = result.translations.get('terms') ?? '';
+    return { success: true, raw };
+  } catch (error) {
+    // Fail-open at the message boundary so the viewer never blocks translation.
+    return { success: false, error: String(error) };
+  }
+}
+
 /** Handle RESEGMENT_YOUTUBE_ASR — AI/BYOK sentence re-alignment before translate. */
 async function handleResegmentYoutubeAsr(
   message: ResegmentYoutubeAsrMessage,
@@ -1971,6 +2017,8 @@ export function handleMessage(
       return handleDetectPageCategoryLLM(message);
     case 'CLASSIFY_PDF_PARAGRAPHS':
       return handleClassifyPdfParagraphs(message);
+    case 'EXTRACT_PDF_TERMS':
+      return handleExtractPdfTerms(message as ExtractPdfTermsMessage);
     case 'RESEGMENT_YOUTUBE_ASR':
       return handleResegmentYoutubeAsr(message);
     case 'CLEAR_CACHE':

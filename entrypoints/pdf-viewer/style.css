@@ -666,3 +666,64 @@ html, body, #root {
   background: rgba(39, 39, 42, 0.9);
   color: #e4e4e7;
 }
+
+.pdf-download-format-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.pdf-download-format-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.6);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.pdf-download-format-option input {
+  grid-row: 1 / span 2;
+  margin: 0;
+  accent-color: #3b82f6;
+}
+
+.pdf-download-format-option--active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.pdf-download-format-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.pdf-download-format-hint {
+  font-size: 11px;
+  color: #a1a1aa;
+}
+
+.pdf-viewer-scan-banner {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.pdf-viewer-scan-banner--info {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+}

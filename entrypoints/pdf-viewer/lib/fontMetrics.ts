@@ -226,6 +226,29 @@ export function measureBoxHeight(
 }
 
 /**
+ * Build a typesetting-ladder metrics hook backed by canvas (or heuristic)
+ * word widths. Line height is a variable multiplier so the ladder can compact
+ * spacing before scaling the font.
+ */
+export function createCanvasMetricsHook(fontFamily: string): {
+  measure(opts: {
+    text: string;
+    fontSize: number;
+    lineHeight: number;
+    width: number;
+  }): { lines: string[]; height: number };
+} {
+  return {
+    measure({ text, fontSize, lineHeight, width }) {
+      const lines = wrapTextIntoLines(text, width, { fontFamily, fontSize });
+      const lineCount = Math.max(1, lines.length);
+      const height = lineCount * fontSize * lineHeight + BOX_PADDING_PX;
+      return { lines, height };
+    },
+  };
+}
+
+/**
  * Clear the entire word-width cache AND reset the cached canvas context.
  *
  * The word cache is the hot-path optimization (persist across calls); the

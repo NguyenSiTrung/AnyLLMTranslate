@@ -45,6 +45,7 @@ export type MessageAction =
   | 'pageCategoryUpdate'
   | 'DETECT_PAGE_CATEGORY_LLM'
   | 'CLASSIFY_PDF_PARAGRAPHS'
+  | 'EXTRACT_PDF_TERMS'
   | 'RESEGMENT_YOUTUBE_ASR'
   | 'CLEAR_CACHE'
   | 'OPEN_PDF_VIEWER'
@@ -266,6 +267,24 @@ export interface ClassifyPdfParagraphsResult {
   error?: string;
 }
 
+/** Extract technical term pairs from sampled PDF prose (Viewer → Background). */
+export interface ExtractPdfTermsMessage {
+  action: 'EXTRACT_PDF_TERMS';
+  sampleText: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
+/** Response shape for EXTRACT_PDF_TERMS. */
+export interface ExtractPdfTermsResult {
+  success: boolean;
+  /** Parsed term pairs when available. */
+  terms?: Array<{ source: string; target: string }>;
+  /** Raw LLM text for client-side parse fallback. */
+  raw?: string;
+  error?: string;
+}
+
 /**
  * AI/BYOK YouTube ASR sentence re-alignment (Content → Background).
  * Units are timed words (preferred) or coarse cues; background batches LLM calls.
@@ -419,6 +438,7 @@ export type ExtensionMessage =
   | PageCategoryUpdateMessage
   | DetectPageCategoryLlmMessage
   | ClassifyPdfParagraphsMessage
+  | ExtractPdfTermsMessage
   | ResegmentYoutubeAsrMessage
   | ClearCacheMessage
   | OpenPdfViewerMessage

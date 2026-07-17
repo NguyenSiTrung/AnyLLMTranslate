@@ -30,6 +30,19 @@ import {
   savePdfProgress,
   type PdfProgressContext,
 } from '../lib/pdfProgressStore';
+import {
+  assessDocumentScan,
+  scannedOnlyMessage,
+  shouldEnableOcrWorkaround,
+  type PageScanMetrics,
+} from '../lib/pdfScannedDetect';
+import {
+  getPdfScanSession,
+  hasAssessedPdfUrl,
+  resetPdfScanSession,
+  setPdfScanSession,
+  type PdfScanSessionState,
+} from '../lib/pdfScanSession';
 
 export interface UsePdfPageTranslationsOptions {
   /** Loaded PDF pages, in page order. May contain fewer entries than
@@ -57,6 +70,8 @@ export interface UsePdfPageTranslationsResult {
   totalCount: number;
   /** Force a re-translation of a specific page. */
   retryPage: (pageNumber: number) => void;
+  /** Scanned-PDF assessment for banners / OCR workaround. */
+  scanSession: PdfScanSessionState;
 }
 
 /** Extract text and translate a single page. Updates `setPages` as it progresses.
@@ -68,6 +83,22 @@ async function translatePage(
   pdfUrl: string,
   setPages: React.Dispatch<React.SetStateAction<Map<number, PageTranslations>>>,
 ): Promise<void> {
+  // Pure-scan documents: skip LLM entirely and surface the scan message.
+  const scan = getPdfScanSession();
+  if (scan.pureScanBlocked) {
+    setPages((prev) => {
+      const next = new Map(prev);
+      next.set(pageNumber, {
+        paragraphs: new Map(),
+        originalParagraphs: [],
+        state: 'error',
+        error: scan.message ?? scannedOnlyMessage(),
+      });
+      return next;
+    });
+    return;
+  }
+
   setPages((prev) => {
     const next = new Map(prev);
     next.set(pageNumber, { paragraphs: new Map(), state: 'translating' });
@@ -189,6 +220,63 @@ async function translatePage(
   }
 }
 
+/** Sample the first few loaded pages to detect heavily scanned PDFs. */
+async function runScanAssessment(
+  pdfUrl: string,
+  pdfPages: PDFPageProxy[],
+): Promise<PdfScanSessionState> {
+  const settings = await loadSettings();
+  const detectScanned = settings.pdfSettings?.detectScanned !== false;
+  const autoOcrWorkaround = settings.pdfSettings?.autoOcrWorkaround !== false;
+
+  if (!detectScanned) {
+    return {
+      assessment: null,
+      ocrWorkaround: false,
+      pureScanBlocked: false,
+      message: null,
+    };
+  }
+
+  const sampleCount = Math.min(3, pdfPages.length);
+  const metrics: PageScanMetrics[] = [];
+  for (let i = 0; i < sampleCount; i++) {
+    const page = pdfPages[i];
+    if (!page) continue;
+    try {
+      const viewport = page.getViewport({ scale: 1 });
+      const { paragraphs } = await extractPageText(page, i + 1);
+      const textCharCount = paragraphs.reduce((n, p) => n + (p.text?.length ?? 0), 0);
+      metrics.push({
+        pageWidth: viewport.width,
+        pageHeight: viewport.height,
+        textCharCount,
+        textItemCount: paragraphs.length,
+      });
+    } catch {
+      metrics.push({
+        pageWidth: 612,
+        pageHeight: 792,
+        textCharCount: 0,
+      });
+    }
+  }
+
+  const assessment = assessDocumentScan(metrics);
+  const pureScanBlocked = assessment.pureScanNoText && assessment.heavilyScanned;
+  const ocrWorkaround = shouldEnableOcrWorkaround(assessment, {
+    detectScanned,
+    autoOcrWorkaround,
+  });
+
+  return {
+    assessment,
+    ocrWorkaround,
+    pureScanBlocked,
+    message: pureScanBlocked ? scannedOnlyMessage() : null,
+  };
+}
+
 export function usePdfPageTranslations({
   pages: pdfPages,
   numPages,
@@ -285,10 +373,32 @@ export function usePdfPageTranslations({
     void savePdfProgress(hash, terminalPages);
   }, [pages]);
 
+  const [scanSession, setScanSession] = useState<PdfScanSessionState>(() => getPdfScanSession());
+
   // Reset state when the document changes
   useEffect(() => {
     setPages(new Map());
     inFlightRef.current = new Set();
+    resetPdfScanSession();
+    setScanSession(getPdfScanSession());
+  }, [pdfUrl]);
+
+  // Scanned-PDF detection on first available pages (once per document).
+  useEffect(() => {
+    if (!pdfUrl || pdfPages.length === 0) return;
+    if (hasAssessedPdfUrl(pdfUrl)) {
+      setScanSession(getPdfScanSession());
+      return;
+    }
+    let cancelled = false;
+    void runScanAssessment(pdfUrl, pdfPages).then((next) => {
+      if (cancelled) return;
+      setPdfScanSession(pdfUrl, next);
+      setScanSession(next);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [pdfUrl, pdfPages.length]);
 
   useEffect(() => {
@@ -394,5 +504,5 @@ export function usePdfPageTranslations({
     });
   };
 
-  return { pages, translatedCount, totalCount: numPages, retryPage };
+  return { pages, translatedCount, totalCount: numPages, retryPage, scanSession };
 }

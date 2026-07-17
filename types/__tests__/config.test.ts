@@ -33,6 +33,12 @@ describe('config defaults', () => {
     expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
     expect(DEFAULT_SETTINGS.pdfSettings).toEqual(DEFAULT_PDF_SETTINGS);
     expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
+    expect(DEFAULT_PDF_SETTINGS.translateTableText).toBe(false);
+    expect(DEFAULT_PDF_SETTINGS.strictMathSkip).toBe(false);
+    // BabelDOC-parity defaults (pdf-babeldoc-parity): term extract + scan detect ON
+    expect(DEFAULT_PDF_SETTINGS.autoExtractTerms).toBe(true);
+    expect(DEFAULT_PDF_SETTINGS.detectScanned).toBe(true);
+    expect(DEFAULT_PDF_SETTINGS.autoOcrWorkaround).toBe(true);
 
     expect(DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS).toEqual({ enable: true, aiEnable: false });
     expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(

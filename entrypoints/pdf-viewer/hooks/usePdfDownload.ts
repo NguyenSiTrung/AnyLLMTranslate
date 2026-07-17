@@ -1,16 +1,11 @@
 /**
- * usePdfDownload — Orchestration hook for the 3-stage PDF download pipeline:
+ * usePdfDownload — Orchestration hook for the PDF download pipeline:
  *
- * 1. **Concurrent translation** — translate all remaining pages (if any are
- *    untranslated) via `translateAllPages`, which processes pages in parallel
- *    bounded by a concurrency limit. The `AbortSignal` stops dispatching new
- *    pages and winds down in-flight work.
+ * 1. **Concurrent translation** — translate all remaining pages (if any).
  * 2. Fetch/cache a Unicode font (Noto Sans from Google Fonts CDN).
- * 3. **Serial PDF generation** — generate a translated PDF via pdf-lib (which
- *    is not thread-safe, so generation runs one page at a time) and trigger
- *    the browser download. This phase only starts AFTER stage 1 has fully
- *    resolved, so all text is pre-translated concurrently before any pdf-lib
- *    work begins.
+ * 3. **Serial mono PDF generation** — generateTranslatedPdf via pdf-lib.
+ * 4. **Optional dual assembly** — side-by-side or alternating from mono + original.
+ * 5. Trigger browser download with mode-specific filename.
  *
  * Returns reactive state so the UI can render a progress modal.
  */
@@ -22,7 +17,15 @@ import type { DownloadStage } from '../components/DownloadProgressModal';
 import { translateAllPages } from '../lib/translateAllPages';
 import { getFont } from '../lib/pdfFontManager';
 import { generateTranslatedPdf } from '../lib/translatedPdfGenerator';
+import {
+  buildAlternatingDualPdf,
+  buildSideBySideDualPdf,
+  dualExportFilename,
+  type DualExportMode,
+} from '../lib/pdfDualExport';
 import { loadSettings } from '@/lib/config';
+
+export type { DualExportMode };
 
 export interface UsePdfDownloadOptions {
   /** PDF source URL — used for cache keys and filename derivation. */
@@ -34,8 +37,8 @@ export interface UsePdfDownloadOptions {
 }
 
 export interface UsePdfDownloadResult {
-  /** Kick off the download pipeline. */
-  startDownload: () => void;
+  /** Kick off the download pipeline for the given export mode. */
+  startDownload: (mode?: DualExportMode) => void;
   /** Cancel an in-progress download. */
   cancel: () => void;
   /** Current download stage. */
@@ -48,6 +51,8 @@ export interface UsePdfDownloadResult {
   error: string | undefined;
   /** Whether the download pipeline is active. */
   isDownloading: boolean;
+  /** Export mode for the active/last run. */
+  exportMode: DualExportMode;
 }
 
 /** Derive a clean base name from the PDF URL. */
@@ -55,7 +60,6 @@ function deriveBaseName(pdfUrl: string): string {
   try {
     const url = new URL(pdfUrl);
     const last = url.pathname.split('/').pop() || 'document';
-    // Strip .pdf extension if present
     return last.replace(/\.pdf$/i, '');
   } catch {
     return 'document';
@@ -70,7 +74,6 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  // Cleanup after a tick to allow the browser to start the download.
   setTimeout(() => {
     if (a.parentNode) document.body.removeChild(a);
     URL.revokeObjectURL(url);
@@ -87,7 +90,9 @@ export function usePdfDownload({
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [exportMode, setExportMode] = useState<DualExportMode>('mono');
   const abortRef = useRef<AbortController | null>(null);
+  const modeRef = useRef<DualExportMode>('mono');
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -99,9 +104,11 @@ export function usePdfDownload({
     setError(undefined);
   }, []);
 
-  const runPipeline = useCallback(async () => {
+  const runPipeline = useCallback(async (mode: DualExportMode) => {
     const controller = new AbortController();
     abortRef.current = controller;
+    modeRef.current = mode;
+    setExportMode(mode);
 
     try {
       // ── Stage 1: Translate all remaining pages (concurrent) ──
@@ -109,7 +116,6 @@ export function usePdfDownload({
       setProgress(0);
 
       const totalPages = pages.length;
-      // Count how many pages still need translation
       const untranslatedCount = pages.filter((_, i) => {
         const pageNum = i + 1;
         return translations.get(pageNum)?.state !== 'translated';
@@ -117,10 +123,6 @@ export function usePdfDownload({
       const alreadyTranslated = totalPages - untranslatedCount;
 
       if (untranslatedCount > 0) {
-        // Surface the real total page count (already-translated + to-translate)
-        // so the user sees progress relative to the whole document, not just
-        // the remaining slice. The (completed/total) reflects the translation
-        // queue (untranslated pages) since that's the work in flight.
         setMessage(
           `Translating ${alreadyTranslated}/${totalPages} pages done — translating remaining ${untranslatedCount}… (0/${untranslatedCount})`,
         );
@@ -148,7 +150,6 @@ export function usePdfDownload({
 
       if (controller.signal.aborted) return;
 
-      // Check for failures
       if (translateResult.failedPages.length > 0) {
         const failedList = translateResult.failedPages.join(', ');
         setStage('error');
@@ -168,12 +169,11 @@ export function usePdfDownload({
 
       if (controller.signal.aborted) return;
 
-      // ── Stage 3: Generate translated PDF (serial, pdf-lib) ──
+      // ── Stage 3: Generate mono translated PDF (serial, pdf-lib) ──
       setStage('generating');
       setProgress(0);
-      setMessage('Generating PDF…');
+      setMessage('Generating translated PDF…');
 
-      // Fetch original PDF bytes
       const pdfResponse = await fetch(pdfUrl);
       if (!pdfResponse.ok) {
         throw new Error(`Failed to fetch original PDF: ${pdfResponse.status}`);
@@ -182,29 +182,55 @@ export function usePdfDownload({
 
       if (controller.signal.aborted) return;
 
-      const outputBytes = await generateTranslatedPdf({
+      const monoBytes = await generateTranslatedPdf({
         originalPdfBytes,
         pageTranslations: translateResult.translations,
         fontBytes,
-        // Do NOT pass the abort signal to generation. pdf-lib generation is
-        // not safely interruptible mid-page (partial writes corrupt the
-        // output), so a queue-cancel during this stage lets the in-flight
-        // generation complete gracefully. The post-generation `aborted`
-        // check below ensures a cancelled job never triggers a download or
-        // shows a spurious "done" state.
         signal: undefined,
         onProgress: (completed, total) => {
           setProgress(total > 0 ? completed / total : 1);
-          setMessage(`Generating PDF… (${completed}/${total} pages)`);
+          setMessage(`Generating translated PDF… (${completed}/${total} pages)`);
         },
       });
+
+      if (controller.signal.aborted) return;
+
+      // ── Stage 4: Optional dual assembly ─────────────────────
+      let outputBytes: Uint8Array = monoBytes;
+      if (mode === 'dual-side-by-side' || mode === 'dual-alternating') {
+        setStage('assembling');
+        setProgress(0);
+        setMessage(
+          mode === 'dual-side-by-side'
+            ? 'Assembling side-by-side dual PDF…'
+            : 'Assembling alternating dual PDF…',
+        );
+
+        const dualOpts = {
+          monoBytes,
+          originalBytes: originalPdfBytes,
+          onProgress: (p: { completed: number; total: number }) => {
+            setProgress(p.total > 0 ? p.completed / p.total : 1);
+            setMessage(
+              mode === 'dual-side-by-side'
+                ? `Assembling side-by-side… (${p.completed}/${p.total} pages)`
+                : `Assembling alternating… (${p.completed}/${p.total} pages)`,
+            );
+          },
+        };
+
+        outputBytes =
+          mode === 'dual-side-by-side'
+            ? await buildSideBySideDualPdf(dualOpts)
+            : await buildAlternatingDualPdf(dualOpts);
+      }
 
       if (controller.signal.aborted) return;
 
       // ── Trigger download ────────────────────────────────────
       const settings = await loadSettings();
       const baseName = deriveBaseName(pdfUrl);
-      const filename = `${baseName}_translated_${settings.targetLanguage}.pdf`;
+      const filename = dualExportFilename(baseName, settings.targetLanguage, mode);
 
       const blob = new Blob([outputBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       triggerDownload(blob, filename);
@@ -213,7 +239,6 @@ export function usePdfDownload({
       setProgress(1);
       setMessage('Download complete!');
 
-      // Auto-close after 2 seconds
       setTimeout(() => {
         if (!controller.signal.aborted) {
           setIsDownloading(false);
@@ -221,7 +246,6 @@ export function usePdfDownload({
       }, 2000);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        // User cancelled — already handled by cancel()
         return;
       }
       setStage('error');
@@ -230,11 +254,14 @@ export function usePdfDownload({
     }
   }, [pages, pdfUrl, translations]);
 
-  const startDownload = useCallback(() => {
-    setIsDownloading(true);
-    setError(undefined);
-    void runPipeline();
-  }, [runPipeline]);
+  const startDownload = useCallback(
+    (mode: DualExportMode = 'mono') => {
+      setIsDownloading(true);
+      setError(undefined);
+      void runPipeline(mode);
+    },
+    [runPipeline],
+  );
 
   return {
     startDownload,
@@ -244,5 +271,6 @@ export function usePdfDownload({
     message,
     error,
     isDownloading,
+    exportMode,
   };
 }

@@ -323,6 +323,23 @@ export interface PdfSettings {
    * math skip). Default false.
    */
   strictMathSkip: boolean;
+  /**
+   * When true, run an LLM term-extraction pre-pass over sampled prose before
+   * multi-page translation and inject consistent technical terms into context.
+   * Default true. Fail-open: extraction failure never blocks translation.
+   */
+  autoExtractTerms: boolean;
+  /**
+   * When true, score pages for little/no extractable text vs page area to
+   * detect heavily scanned PDFs. Default true.
+   */
+  detectScanned: boolean;
+  /**
+   * When true, automatically enable the OCR workaround path (white underlay +
+   * forced text overlay assumptions) for pages/docs flagged as heavily scanned.
+   * Default true. Only applies when detectScanned finds a heavy scan.
+   */
+  autoOcrWorkaround: boolean;
 }
 
 /** Page context extracted for context-aware translation */
@@ -592,6 +609,9 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
   neverAutoOpenSites: [],
   translateTableText: false,
   strictMathSkip: false,
+  autoExtractTerms: true,
+  detectScanned: true,
+  autoOcrWorkaround: true,
 };
 
 /** Default custom theme configuration */

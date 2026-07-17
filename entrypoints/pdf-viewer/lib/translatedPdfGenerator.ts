@@ -8,12 +8,17 @@
  *    original text, then draw the translated text at the same position.
  * 3. Skip math/figure paragraphs (where translated === original) so they
  *    remain visible from the background layer.
- * 4. Implement manual text wrapping for paragraphs that exceed their width.
+ * 4. Fit translated prose via the shared typesetting ladder (scale / compact
+ *    line spacing / expand width) before wrapping and drawing.
+ *
+ * Inspired by BabelDOC public design; methodology only — no AGPL paste.
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PageTranslations } from './pdfTranslation';
 import { getProseMaskRects } from './pdfComposition';
+import { fitTextToBox, type FontMetricsHook } from './pdfTypesetting';
+import { isOcrWorkaroundActive } from './pdfScanSession';
 
 /** Options for generating a translated PDF. */
 export interface GenerateTranslatedPdfOptions {
@@ -152,8 +157,21 @@ export async function generateTranslatedPdf(
 
         // Selective mask: skip math/figure; for mixed runs mask only prose boxes.
         const kind = translations.paragraphKinds?.get(para.id);
-        const maskRects = getProseMaskRects(para, kind, translatedText);
+        let maskRects = getProseMaskRects(para, kind, translatedText);
         if (!maskRects || maskRects.length === 0) continue;
+
+        // OCR workaround (BabelDOC spirit): force full-paragraph white underlay
+        // for prose when the document is heavily scanned with a noisy text layer.
+        if (isOcrWorkaroundActive() && kind !== 'math' && kind !== 'figure') {
+          maskRects = [
+            {
+              x: para.x,
+              y: para.y,
+              width: Math.max(para.width, 1),
+              height: Math.max(para.height, para.fontSize || 12),
+            },
+          ];
+        }
 
         // Convert top-edge y to PDF bottom-edge for drawRectangle.
         for (const rect of maskRects) {
@@ -166,20 +184,50 @@ export async function generateTranslatedPdf(
           });
         }
 
-        // Determine drawing parameters.
-        const fontSize = clampFontSize(para.fontSize);
+        // Determine drawing parameters via shared typesetting ladder.
+        const naturalFontSize = clampFontSize(para.fontSize);
 
         // For headings, use full available width.
-        const textWidth = para.isHeading
+        const baseWidth = para.isHeading
           ? pageWidth - para.x - HEADING_RIGHT_MARGIN
           : para.width;
+        const freeRight = para.isHeading
+          ? 0
+          : Math.max(0, pageWidth - para.x - baseWidth - HEADING_RIGHT_MARGIN);
 
-        // Wrap text into lines that fit within the available width.
-        const lines = wrapText(translatedText, textWidth, fontSize, customFont);
+        const metrics: FontMetricsHook = {
+          measure({ text, fontSize: fs, lineHeight: lh, width }) {
+            const lines = wrapText(text, width, fs, customFont);
+            return {
+              lines,
+              height: Math.max(1, lines.length) * fs * lh,
+            };
+          },
+        };
+
+        const fit = fitTextToBox({
+          box: {
+            x: para.x,
+            y: para.y,
+            width: Math.max(baseWidth, 1),
+            height: Math.max(para.height, naturalFontSize * 1.2),
+          },
+          text: translatedText,
+          naturalFontSize,
+          metrics,
+          freeSpace: { right: freeRight, down: 0 },
+        });
+
+        const fontSize = fit.fontSize;
+        const textWidth = fit.box.width;
+        const lines =
+          fit.lines.length > 0
+            ? fit.lines
+            : wrapText(translatedText, textWidth, fontSize, customFont);
 
         // Draw each line, starting from the top of the paragraph.
         // In PDF coords, we start at para.y (top) and move downward.
-        const lineHeight = fontSize * 1.2;
+        const lineHeight = fontSize * fit.lineHeight;
         let currentY = para.y - fontSize; // baseline of first line
 
         for (const line of lines) {

@@ -14,7 +14,9 @@ import type { PdfParagraph } from '../lib/pdfTextExtraction';
 import { getProseMaskRects } from '../lib/pdfComposition';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
-import { measureBoxHeight } from '../lib/fontMetrics';
+import { createCanvasMetricsHook, measureBoxHeight } from '../lib/fontMetrics';
+import { fitTextToBox } from '../lib/pdfTypesetting';
+import { isOcrWorkaroundActive } from '../lib/pdfScanSession';
 import { formatCooldownRemaining } from '@/lib/poolDashboardStatus';
 
 export interface PdfTranslationPaneProps {
@@ -94,6 +96,9 @@ function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): n
   }).height;
 }
 
+/** Shared canvas metrics for the typesetting ladder (Layout overlay). */
+const layoutMetricsHook = createCanvasMetricsHook(LAYOUT_BOX_FONT_FAMILY);
+
 type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 
 /** Compute the absolute placement + sizing for one overlay box. */
@@ -129,8 +134,12 @@ const LayoutOverlayBox = forwardRef<
     top: number;
     width: number;
     fontSize: number;
+    lineHeight: number;
   }
->(function LayoutOverlayBox({ para, translatedText, left, top, width, fontSize }, ref) {
+>(function LayoutOverlayBox(
+  { para, translatedText, left, top, width, fontSize, lineHeight },
+  ref,
+) {
   return (
     <div
       ref={ref}
@@ -141,6 +150,7 @@ const LayoutOverlayBox = forwardRef<
         top: `${top}px`,
         width: `${width}px`,
         fontSize: `${fontSize}px`,
+        lineHeight: String(lineHeight),
       }}
     >
       {translatedText}
@@ -203,13 +213,52 @@ function LayoutOverlayInner({
       // Primary: explicit content kind + selective run masks. Math/figure and
       // pure-formula never get a white mask (canvas stays visible).
       const kind = page.paragraphKinds?.get(para.id);
-      const maskRects = getProseMaskRects(para, kind, translatedText);
+      let maskRects = getProseMaskRects(para, kind, translatedText);
       if (!maskRects || maskRects.length === 0) return null;
+      // OCR workaround: full-paragraph white underlay for prose on scanned PDFs.
+      if (isOcrWorkaroundActive() && kind !== 'math' && kind !== 'figure') {
+        maskRects = [
+          {
+            x: para.x,
+            y: para.y,
+            width: Math.max(para.width, 1),
+            height: Math.max(para.height, 1),
+          },
+        ];
+      }
       const geom = computeBoxGeometry(para, viewport, dims.width);
-      const origHeight = para.height * viewport.scale;
+      const origHeight = Math.max(para.height * viewport.scale, 12);
+      // Typesetting ladder: compact line spacing / scale font / expand width
+      // before relying on page-slot growth for residual overflow.
+      const freeRight = Math.max(0, dims.width - geom.left - geom.width - 4);
+      const fit = fitTextToBox({
+        box: {
+          x: geom.left,
+          y: geom.top,
+          width: geom.width,
+          height: origHeight,
+        },
+        text: translatedText,
+        naturalFontSize: geom.fontSize,
+        metrics: layoutMetricsHook,
+        freeSpace: { right: freeRight, down: 0 },
+      });
+      const fittedFontSize = fit.fontSize;
+      const fittedWidth = fit.box.width;
+      const fittedLineHeight = fit.lineHeight;
       // Conservative floor: only used when the live measurement is unavailable
-      // (e.g. jsdom has no layout). In a real browser the measured height wins.
-      const estHeight = estimateBoxHeight(translatedText, geom.width, geom.fontSize);
+      // (e.g. jsdom has no layout). Prefer ladder height when it fits.
+      const estHeight = fit.overflow
+        ? estimateBoxHeight(translatedText, fittedWidth, fittedFontSize)
+        : Math.max(
+            fit.box.height,
+            layoutMetricsHook.measure({
+              text: translatedText,
+              fontSize: fittedFontSize,
+              lineHeight: fittedLineHeight,
+              width: fittedWidth,
+            }).height,
+          );
       // Convert PDF-space mask rects (top-edge y) to viewport pixels.
       const viewportMasks = maskRects.map((r) => {
         const [left, top] = viewport.convertToViewportPoint(r.x, r.y);
@@ -221,7 +270,18 @@ function LayoutOverlayInner({
           height: Math.max(Math.abs(bottom - top), 2),
         };
       });
-      return { para, translatedText, origHeight, estHeight, viewportMasks, ...geom };
+      return {
+        para,
+        translatedText,
+        origHeight,
+        estHeight,
+        viewportMasks,
+        left: geom.left,
+        top: geom.top,
+        width: fittedWidth,
+        fontSize: fittedFontSize,
+        lineHeight: fittedLineHeight,
+      };
     })
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
@@ -319,6 +379,7 @@ function LayoutOverlayInner({
           top={tops[i] ?? b.top}
           width={b.width}
           fontSize={b.fontSize}
+          lineHeight={b.lineHeight}
         />
       ))}
       {/* Spacer reserves vertical space so the auto-height absolute boxes that
