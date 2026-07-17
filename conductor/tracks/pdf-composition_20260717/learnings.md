@@ -41,3 +41,12 @@ Patterns, gotchas, and context discovered during implementation.
   - Context: Rotated-text filter unchanged; `fontName` defaults to `''` when sparse.
 ---
 
+## [2026-07-17] - Phase 2 Tasks 2.1–2.4: Multi-signal formula detection
+- **Implemented:** `isFormulaFontName`, `classifyRuns`, `isFormulaDominated`, `classifyMathParagraphFromParagraph`, `strictMath` thresholds.
+- **Files changed:** `pdfContentDetect.ts`, `pdfContentDetect.test.ts`
+- **Learnings:**
+  - Patterns: Font patterns must not use leading `\b` — PDF.js names use underscores (`g_d0_CMMI10`) and JS `\b` treats `_` as word char.
+  - Gotchas: Greek letters in "prose" runs trip strong-marker path when word count ≤ 4; fixtures should avoid Greek in body runs.
+  - Context: Formula-dominated uses char-weight ratio (0.55 default / 0.4 strict); mixed stays prose for placeholder path.
+---
+

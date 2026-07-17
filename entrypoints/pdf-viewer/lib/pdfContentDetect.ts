@@ -3,7 +3,8 @@
  *
  * Used by `translateParagraphs()` to decide which paragraphs to skip
  * translation for:
- * - **Math** — rule-based on text alone (`classifyMathParagraph`)
+ * - **Math** — rule-based on text alone (`classifyMathParagraph`) and
+ *   multi-signal run-level detection (`classifyRuns`, font name, size ratio)
  * - **Table/figure cells** — rule-based spatial + numeric heuristics
  *   (`classifyTableLikeParagraphs`); remaining ambiguous labels still go
  *   through the LLM classifier in `pdfTranslation.ts`
@@ -12,16 +13,47 @@
  * unit-testable, and immune to network failure. The math rules are
  * conservative: a paragraph is only flagged `'math'` when it is clearly
  * dominated by mathematical content. Mixed prose-with-inline-math stays
- * `'prose'` and relies on the translation prompt to preserve the inline math.
+ * `'prose'` at paragraph level (unless formula-dominated via runs) and uses
+ * placeholders for formula runs in the composition pipeline.
+ *
+ * Font/size heuristics are reimplemented from public methodology (not AGPL
+ * source copy of BabelDOC / PDFMathTranslate).
  */
 
-import type { PdfParagraph } from './pdfTextExtraction';
+import type { PdfParagraph, PdfTextRun } from './pdfTextExtraction';
 
 /** Result of classifying a paragraph's content kind (math path). */
 export type ParagraphKind = 'prose' | 'math';
 
 /** Full content kind used end-to-end in the PDF pipeline. */
 export type ContentKind = 'prose' | 'math' | 'figure';
+
+/** Per-run classification used by composition placeholders. */
+export type RunKind = 'prose' | 'formula';
+
+/** Options for run-level / stricter math detection. */
+export interface MathDetectOptions {
+  /**
+   * When true, tighten font/size/density thresholds so more borderline
+   * runs/paragraphs are treated as formula/math.
+   */
+  strictMath?: boolean;
+}
+
+/**
+ * Size ratio vs line median below which a run is treated as sub/superscript
+ * formula (PDFMathTranslate-style vflag). Default ~0.79.
+ */
+const FORMULA_SIZE_RATIO = 0.79;
+/** Stricter size ratio when `strictMath` is on. */
+const FORMULA_SIZE_RATIO_STRICT = 0.85;
+
+/**
+ * Minimum fraction of formula runs (by character length) for a paragraph with
+ * runs to be classified as pure `math` rather than mixed prose.
+ */
+const FORMULA_DOMINATED_RATIO = 0.55;
+const FORMULA_DOMINATED_RATIO_STRICT = 0.4;
 
 /**
  * Tunable: maximum number of whitespace-separated words a paragraph may have
@@ -190,17 +222,160 @@ function mathSymbolDensity(text: string): number {
   return total === 0 ? 0 : mathish / total;
 }
 
+// ── Font-name formula signals (reimplemented heuristics) ───────────────────
+
 /**
- * Classify a paragraph as prose or pure-math.
+ * Substrings / patterns typical of TeX, Computer Modern Math, AMS, STIX, and
+ * Symbol-family fonts as exposed by PDF.js `fontName`. Case-insensitive.
+ * Intentionally does **not** flag generic body fonts (Times, Helvetica, etc.).
+ */
+// Note: PDF.js names often use underscores (`g_d0_CMMI10`). JS `\b` treats `_`
+// as a word char, so patterns avoid leading `\b` and match the family token.
+const FORMULA_FONT_PATTERNS: RegExp[] = [
+  /cmmi\d*/i, // Computer Modern Math Italic
+  /cmsy\d*/i, // Computer Modern Symbol
+  /cmex\d*/i, // Computer Modern Extension
+  /msbm\d*/i, // AMS blackboard
+  /msam\d*/i, // AMS symbols
+  /eufm\d*/i, // Euler Fraktur
+  /eurm\d*/i, // Euler Roman
+  /rsfs\d*/i, // Ralph Smith's Formal Script
+  /stix/i,
+  /asana.?math/i,
+  /latin.?modern.?math/i,
+  /cambria.?math/i,
+  /xits.?math/i,
+  /fira.?math/i,
+  /gfs.?neohellenic.?math/i,
+  /tex.?math/i,
+  /math(?:italic|symbol|extension|operators)?/i,
+  /equation/i,
+  /(?:^|[^a-z])symbol(?:$|[^a-z])/i, // Adobe Symbol (avoid "symbolic")
+  /zapfdingbats/i,
+  /MT(?:MI|SY|EX)/i, // MathTime
+  /Euclid/i,
+];
+
+/**
+ * True when `fontName` looks like a TeX/math/symbol family.
+ * Sparse/empty names return false (never require font alone for decisions).
+ * Plain Computer Modern Roman (`cmr`) is body text — not flagged.
+ */
+export function isFormulaFontName(fontName: string): boolean {
+  const name = fontName.trim();
+  if (name.length === 0) return false;
+  for (const re of FORMULA_FONT_PATTERNS) {
+    if (re.test(name)) return true;
+  }
+  return false;
+}
+
+/**
+ * Classify each run as `prose` or `formula` using font name, size ratio vs
+ * line median, and Unicode/LaTeX text signals.
+ *
+ * Order of signals (any match → formula, unless empty):
+ * 1. Formula font name
+ * 2. Run height < ratio × median height of runs on the same y-band
+ * 3. Text would be math under `classifyMathParagraphText` for the run alone
+ */
+export function classifyRuns(
+  runs: PdfTextRun[],
+  options?: MathDetectOptions,
+): RunKind[] {
+  if (runs.length === 0) return [];
+
+  const strict = options?.strictMath === true;
+  const sizeRatio = strict ? FORMULA_SIZE_RATIO_STRICT : FORMULA_SIZE_RATIO;
+
+  // Median font size across all runs (line-level proxy when runs share a line).
+  const sizes = runs.map((r) => r.fontSize || r.height || 0).filter((s) => s > 0);
+  const sorted = [...sizes].sort((a, b) => a - b);
+  const median =
+    sorted.length === 0 ? 10 : sorted[Math.floor(sorted.length / 2)] || 10;
+
+  return runs.map((run) => {
+    const text = run.text.trim();
+    if (text.length === 0) return 'prose';
+
+    if (isFormulaFontName(run.fontName)) return 'formula';
+
+    const size = run.fontSize || run.height || 0;
+    if (size > 0 && size < median * sizeRatio) return 'formula';
+
+    // Text-only signals on the run alone (short fragments).
+    if (classifyMathParagraphText(run.text, options) === 'math') return 'formula';
+
+    // Strong markers on tiny runs (single symbols) even if word path misses.
+    if (hasStrongMathMarker(run.text) && countWords(run.text) <= 4) return 'formula';
+
+    return 'prose';
+  });
+}
+
+/**
+ * True when formula runs dominate the paragraph by character weight.
+ */
+export function isFormulaDominated(
+  runs: PdfTextRun[],
+  options?: MathDetectOptions,
+): boolean {
+  if (!runs || runs.length === 0) return false;
+  const kinds = classifyRuns(runs, options);
+  let formulaChars = 0;
+  let totalChars = 0;
+  for (let i = 0; i < runs.length; i++) {
+    const n = runs[i].text.replace(/\s+/g, '').length;
+    totalChars += n;
+    if (kinds[i] === 'formula') formulaChars += n;
+  }
+  if (totalChars === 0) return false;
+  const threshold = options?.strictMath
+    ? FORMULA_DOMINATED_RATIO_STRICT
+    : FORMULA_DOMINATED_RATIO;
+  return formulaChars / totalChars >= threshold;
+}
+
+/**
+ * Classify a paragraph as prose or pure-math (text-only entry point).
  *
  * Conservative by design: mixed prose-with-inline-math returns `'prose'` and
- * relies on the translation prompt to preserve the math. Only paragraphs
- * clearly dominated by math (block delimiters, standalone inline formulas,
- * short marker-bearing fragments, density-heavy longer formulas, or ASCII
- * equation shapes) are flagged `'math'`.
+ * relies on placeholders / prompt for math preservation. Only paragraphs
+ * clearly dominated by math are flagged `'math'`.
+ *
+ * When `paragraph.runs` is provided (or via overload helpers), run-level
+ * formula domination can upgrade the result to `'math'`.
  */
-export function classifyMathParagraph(text: string): ParagraphKind {
+export function classifyMathParagraph(
+  text: string,
+  options?: MathDetectOptions,
+): ParagraphKind {
+  return classifyMathParagraphText(text, options);
+}
+
+/**
+ * Classify a `PdfParagraph`, optionally using run-level multi-signal detection
+ * when `runs` are present.
+ */
+export function classifyMathParagraphFromParagraph(
+  paragraph: PdfParagraph,
+  options?: MathDetectOptions,
+): ParagraphKind {
+  if (paragraph.runs && paragraph.runs.length > 0) {
+    if (isFormulaDominated(paragraph.runs, options)) return 'math';
+  }
+  return classifyMathParagraphText(paragraph.text, options);
+}
+
+function classifyMathParagraphText(
+  text: string,
+  options?: MathDetectOptions,
+): ParagraphKind {
   if (text.trim() === '') return 'prose';
+
+  const strict = options?.strictMath === true;
+  const densityMin = strict ? DENSITY_MATH_MIN_RATIO * 0.75 : DENSITY_MATH_MIN_RATIO;
+  const shortMax = strict ? SHORT_MATH_MAX_WORDS + 4 : SHORT_MATH_MAX_WORDS;
 
   // 1. Block-level LaTeX — always math, regardless of length.
   for (const pattern of LATEX_BLOCK_PATTERNS) {
@@ -223,12 +398,12 @@ export function classifyMathParagraph(text: string): ParagraphKind {
 
   // 3. Short string with a decisive math marker (Greek letter, =, ∑, ∫,
   //    super/subscript, math alphanumeric, etc.) — Unicode math without LaTeX.
-  if (words <= SHORT_MATH_MAX_WORDS && hasStrongMathMarker(text)) {
+  if (words <= shortMax && hasStrongMathMarker(text)) {
     return 'math';
   }
 
   // 4. ASCII caret/underscore equation shapes (PDF-extracted TeX-ish text).
-  if (words <= SHORT_MATH_MAX_WORDS && hasAsciiEquationShape(text)) {
+  if (words <= shortMax && hasAsciiEquationShape(text)) {
     return 'math';
   }
 
@@ -238,7 +413,7 @@ export function classifyMathParagraph(text: string): ParagraphKind {
   if (
     words <= DENSITY_MATH_MAX_WORDS &&
     hasStrongMathMarker(text) &&
-    mathSymbolDensity(text) >= DENSITY_MATH_MIN_RATIO
+    mathSymbolDensity(text) >= densityMin
   ) {
     return 'math';
   }

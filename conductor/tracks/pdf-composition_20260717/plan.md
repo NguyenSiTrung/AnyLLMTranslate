@@ -38,28 +38,28 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] **Task 2.1: TDD — font-name and size-ratio formula signals**
+- [x] **Task 2.1: TDD — font-name and size-ratio formula signals**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/pdfContentDetect.test.ts -->
-  - [ ] Cases: TeX/CM/Symbol-like fontName → formula run
-  - [ ] Cases: body font + normal size → prose
-  - [ ] Cases: run height &lt; ~0.79× line median → formula (sub/sup)
-  - [ ] Cases: existing Unicode/LaTeX paths still pass
+  - [x] Cases: TeX/CM/Symbol-like fontName → formula run
+  - [x] Cases: body font + normal size → prose
+  - [x] Cases: run height &lt; ~0.79× line median → formula (sub/sup)
+  - [x] Cases: existing Unicode/LaTeX paths still pass
 
-- [ ] **Task 2.2: Implement run-level classification APIs**
+- [x] **Task 2.2: Implement run-level classification APIs**
   <!-- files: entrypoints/pdf-viewer/lib/pdfContentDetect.ts -->
-  - [ ] `isFormulaFontName(fontName: string): boolean` (reimplemented heuristics; no AGPL paste)
-  - [ ] `classifyRuns(runs, options?: { strictMath?: boolean }): Array<'prose'|'formula'>`
-  - [ ] `classifyMathParagraph` remains for text-only callers; optionally reuses run path when runs present
-  - [ ] `strictMath` tightens density/font thresholds
+  - [x] `isFormulaFontName(fontName: string): boolean` (reimplemented heuristics; no AGPL paste)
+  - [x] `classifyRuns(runs, options?: { strictMath?: boolean }): Array<'prose'|'formula'>`
+  - [x] `classifyMathParagraph` remains for text-only callers; optionally reuses run path when runs present
+  - [x] `strictMath` tightens density/font thresholds
 
-- [ ] **Task 2.3: Wire extraction output into detectors (unit integration)**
+- [x] **Task 2.3: Wire extraction output into detectors (unit integration)**
   <!-- files: entrypoints/pdf-viewer/lib/pdfContentDetect.ts, entrypoints/pdf-viewer/lib/__tests__/pdfContentDetect.test.ts -->
-  - [ ] Helper: paragraph with runs → formula-dominated `math` vs mixed compositions
-  - [ ] Tests green
+  - [x] Helper: paragraph with runs → formula-dominated `math` vs mixed compositions
+  - [x] Tests green
 
-- [ ] **Task 2.4: Phase 2 verification**
-  - [ ] Run detect + extraction tests
-  - [ ] Capture learnings
+- [x] **Task 2.4: Phase 2 verification**
+  - [x] Run detect + extraction tests
+  - [x] Capture learnings
 
 ---
 
