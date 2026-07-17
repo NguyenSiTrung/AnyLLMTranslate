@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-14 all (web-v3 patterns retained; elevated Providers ops / Shortcut Studio / Custom terms; 782 TCs / 1 fail; Beads zg4 + stale pgv; 68 archived) -->
+<!-- conductor-refresh: 2026-07-17 all (elevated PDF cooling/kind + ModelPicker pagination + safe key throttle + rate-limit presets; 837 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 68 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -701,5 +701,15 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Glossary / Custom terms: pure list helpers first:** Filter, duplicate detection, and mismatch sort live in `lib/glossary.ts` (or dedicated pure modules) so the Dictionary section stays presentational. (from: custom terms library, 2026-07-14)
 - **Shortcut Studio: pure display helpers + KeyCap primitives:** Format shortcut chords in `lib/shortcutDisplay.ts`; render with reusable KeyCap sequence components — keep Chrome `commands` suggested_key limit (max 4) in mind when adding shortcuts. (from: shortcut-studio, 2026-07-14)
 
+## Providers rate limits & model listing (2026-07-14…17, outside Conductor tracks)
+- **Safe defaults beat unlimited for multi-key pools:** Ship new keys at conservative throttle (`maxRpm=20`, `concurrencyLimit=1`, `interval=500ms`) instead of 0/0/0 unlimited — reduces circuit-breaker flapping and 429 storms. One-shot migrate legacy all-zero triples behind a boolean gate (`safeKeyThrottleMigrated`); never re-upgrade after the user explicitly sets unlimited. Include concurrency/interval in the pool signature so throttle edits trigger rebuild. (from: safe default key throttle / AnyLLMTranslate-3vj, 2026-07)
+- **Rate-limit UX = pure presets + collapsed summary:** Keep preset values and human-readable summary text in a pure lib (`lib/keyRateLimits.ts`: Safe/Balanced/Aggressive/Unlimited); UI only maps clicks → values. Collapsed strip shows the active preset/summary; expand for fine-tune fields. (from: key rate limits UX / AnyLLMTranslate-apl, 2026-07-17)
+- **Input unit suffixes outside the field:** For narrow numeric columns (req/min, concurrent, ms), put unit labels *outside* the input and hide number spinners so digits are never covered. Prefer a reusable `unit`/`suffix` prop on `ui/Input` over absolute-positioned overlays inside the control. (from: Input unit-suffix fix, 2026-07-17)
+- **Model list: pure parse + paginated fetch, always-searchable UI:** Normalize OpenAI-compatible `/models` shapes (array or `{data, has_more, …}`) in pure helpers (`lib/modelListing.ts`, `MAX_MODEL_LIST_PAGES` safety cap); service follows `has_more`/`after`. ModelPicker shows a scrollable full list and **always** shows the search field after browse (do not gate search on list length). (from: ModelPicker pagination / AnyLLMTranslate-csp, 2026-07-14)
+
+## PDF cooling & layout kind (2026-07-14, outside Conductor tracks)
+- **Surface pool `openUntil` as UI `retryAfter`:** On `PoolExhaustedError`, extract absolute `openUntil` once in background (`poolRetryAfter`) and attach `retryAfter` to translate/stream error envelopes. Viewers (PDF) show a live countdown and disable Retry until the window ends — prevents thrashing a cooling pool. (from: PDF cooling / AnyLLMTranslate-823, 2026-07-14)
+- **Propagate paragraph `kind` end-to-end for Layout skip:** Rule-based math/table detection plus optional LLM labels must carry `prose` | `math` | `figure` through translate results → overlay → download generator. Layout mode must never white-mask cells that should remain on the original canvas; broaden Unicode-math and table-like heuristics so skip does not depend only on the LLM. (from: PDF layout math/table kind, 2026-07-14)
+
 ---
-Last refreshed: 2026-07-14
+Last refreshed: 2026-07-17

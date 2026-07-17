@@ -1,41 +1,44 @@
 {
-  "lastRefresh": "2026-07-14T14:36:00+07:00",
+  "lastRefresh": "2026-07-17T10:56:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 2026-07-10: web-translate-v3_20260714 (Conductor archive); Providers ops dashboard; Custom terms library; Shortcut Studio; Themes gallery bits; Subtitles section card split; web thrashing/false-fail fixes; test suite prune 3750112; beads DB now 164 total / 8 open.",
-    "product.md: refresh marker; Page Translation Key Features (presets, viewport progress, systemic pause, throughput/quality v3, streaming default ON); UI & Settings (tab IA, Providers ops, Custom terms, Shortcut Studio, Themes gallery); Translation Engine Providers wording; Completed bullets for ops/custom-terms/shortcuts/thrashing/prune/web-v3; Current State → 782 TCs / 133 files / 781 pass + 1 fail / tsc 6 / lint 94 / build ~4.1 MB / 68 archived / Beads 8 open (zg4 + stale pgv.1.*).",
-    "tech-stack.md: marker + build size ~4.1 MB — package.json deps/scripts unchanged.",
-    "patterns.md: refresh marker + footer; attributed web-v3 bullets; elevated Providers ops / Custom terms / Shortcut Studio patterns.",
-    "tracks.md: refresh marker 68 archived / 0 active (web-translate-v3 already listed).",
+    "Scope: full refresh. Intervening work since 2026-07-14: PDF cooling countdown + Retry gate (AnyLLMTranslate-823); PDF Layout math/table kind hardening; ModelPicker full list + has_more pagination (csp); safe default key throttle (3vj); key rate limits summary + presets (apl); Input unit-suffix visibility fix. All outside Conductor tracks.",
+    "product.md: refresh marker; PDF Key Features (kind end-to-end + cooling countdown); UI (ModelPicker pagination, per-key rate limits UX); Translation Engine (safe defaults + openUntil); Completed bullets for 823/kind/csp/3vj/apl; Current State → 837 TCs / 141 files / 834 pass + 3 fail / tsc 6 / lint 99 / build ~4.1 MB / 68 archived / Beads 9 open (zg4 + 7uk + stale pgv.1.*).",
+    "tech-stack.md: marker only — package.json deps/scripts unchanged; build ~4.1 MB.",
+    "patterns.md: refresh marker + footer; elevated safe throttle migrate, keyRateLimits presets, Input unit suffix, modelListing pagination, pool retryAfter cooling UI, PDF kind layout skip.",
+    "tracks.md: refresh marker 68 archived / 0 active (no new tracks).",
     "workflow.md: no content drift (not rewritten).",
-    "learnings consolidation: web-v3 learnings already elevated at archive; +4 options-UX patterns from non-track work; no active-track learnings.md.",
-    "beads DRIFT: ALT-d41 gone; open AnyLLMTranslate-zg4 (real suite fail); open pgv.1.2–1.8 stale vs ops redesign (left open — user chose not to auto-close); 0 in_progress; 164 total / 156 closed / 8 open.",
+    "learnings consolidation: no active-track learnings.md; +6 non-track patterns elevated to patterns.md.",
+    "beads DRIFT: open 9 (zg4 real suite fail; 7uk PDF OCR backlog; pgv.1.2–1.8 stale vs ops redesign — left open per user); closed apl/3vj/823/csp; 0 in_progress; 204 total / 195 closed. Suite also fails parallel-batch concurrency + bidirectional chunk context (not filed to Beads).",
     "backups: product.md.bak, tech-stack.md.bak, tracks.md.bak, patterns.md.bak, refresh_state.json.bak.",
-    "verification: vitest 781/782 pass (1 fail: subtitleCoordinatorManifest stale seek); tsc 6 errors; eslint 94 errors; build output ~4.1 MB."
+    "verification: vitest 834/837 pass (3 fail); tsc 6 errors; eslint 99 errors; build output ~4.1 MB."
   ],
   "codebaseHealth": {
-    "tests": 782,
-    "testsPassing": 781,
-    "testsFailing": 1,
-    "testFiles": 133,
+    "tests": 837,
+    "testsPassing": 834,
+    "testsFailing": 3,
+    "testFiles": 141,
     "buildSize": "~4.1 MB",
-    "lintErrors": 94,
+    "lintErrors": 99,
     "lintErrorsDetail": "Mostly no-non-null-assertion in tests; unused vars; no-dynamic-delete in stats tests; no-useless-assignment in openaiCompatible.ts; poolStatusQuery unused vi/any.",
     "tscErrors": 6,
     "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority.",
     "archivedTracks": 68,
     "activeTracks": 0,
     "failingTests": [
-      "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session"
+      "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session",
+      "services/__tests__/background.translate.test.ts > handleTranslate — parallel sub-batches > issues ≥2 concurrent LLM calls when multiple batches exist",
+      "services/__tests__/background.test.ts > handleMessage — translateSubtitle > provides bidirectional context for chunks 1+ (preceding + following)"
     ],
     "flakyTests": "none reproduced this run",
     "shippedOutsideConductorTracks": [
-      "Providers ops dashboard (command bar, drawer, guided add)",
-      "Custom terms library (Dictionary tab redesign)",
-      "Shortcut Studio rewrite",
-      "Web thrashing / false-fail reliability fixes",
-      "Test suite prune (3750112)"
+      "PDF cooling countdown + Retry gate",
+      "PDF Layout math/table kind hardening",
+      "ModelPicker full list + pagination + always-show search",
+      "Safe default key throttle (maxRpm/concurrency/interval)",
+      "Key rate limits summary strip + presets",
+      "Input unit suffix outside field"
     ]
   },
-  "beadsDrift": "8 open: zg4 real (stale seek test); pgv.1.2–1.8 stale Providers extract tasks superseded by ops redesign; 0 in_progress; ALT-d41 no longer present"
+  "beadsDrift": "9 open: zg4 real (stale seek test); 7uk PDF OCR P3; pgv.1.2–1.8 stale Providers extract tasks superseded by ops redesign (left open — user chose not to auto-close); 0 in_progress; 204 total / 195 closed / 9 open. New suite fails (parallel batches, bidirectional context) not filed."
 }

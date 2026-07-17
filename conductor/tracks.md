@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-14 all (68 archived / 0 active; web-translate-v3 archived; Providers ops + Custom terms + Shortcut Studio via superpowers/direct) -->
+<!-- conductor-refresh: 2026-07-17 all (68 archived / 0 active; post-archive: PDF cooling/kind, ModelPicker pagination, safe key throttle, rate-limit presets) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
