@@ -59,7 +59,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 
 ### 📄 PDF Translation
 
-- **Bilingual PDF viewer** — opens PDFs in a bundled React app that renders each page on canvas and shows translations side-by-side; download a translated PDF with embedded text via `pdf-lib` + `@pdf-lib/fontkit`
+- **PDF viewer** — opens PDFs in a bundled React app that renders each page on canvas with translated text overlaid at original positions (split or translation-only); download a translated PDF with embedded text via `pdf-lib` + `@pdf-lib/fontkit`
 - **PDF auto-detection** — detects when a tab is rendering a PDF via `document.contentType === 'application/pdf'`, which catches extensionless URLs (e.g. `https://arxiv.org/pdf/2606.20543`) that URL-only heuristics miss
 - **Auto-open translator** — optional setting (`Options → Advanced → PDF Translator`) to open the translator automatically when a PDF tab loads. Off by default; supports per-site opt-out and new-tab vs same-tab open modes
 - **Math/figure-aware extraction** — LLM classifies paragraphs as prose vs figure/table so equations and captions are preserved untranslated

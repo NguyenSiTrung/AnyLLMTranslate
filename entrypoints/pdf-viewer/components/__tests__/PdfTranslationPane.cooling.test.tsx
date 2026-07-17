@@ -33,9 +33,7 @@ describe('PdfTranslationPane cooling countdown', () => {
       <PdfTranslationPane
         pageNumber={3}
         page={errorPage({ retryAfter })}
-        paragraphCount={2}
         onRetry={onRetry}
-        layoutMode="text"
       />,
     );
 
@@ -53,9 +51,7 @@ describe('PdfTranslationPane cooling countdown', () => {
       <PdfTranslationPane
         pageNumber={1}
         page={errorPage({ retryAfter })}
-        paragraphCount={1}
         onRetry={onRetry}
-        layoutMode="text"
       />,
     );
 
@@ -65,7 +61,7 @@ describe('PdfTranslationPane cooling countdown', () => {
       vi.advanceTimersByTime(2_100);
     });
 
-    const btn = screen.getByRole('button', { name: /Retry translation/i });
+    const btn = screen.getByRole('button', { name: /^Retry$/i });
     expect(btn).not.toBeDisabled();
   });
 
@@ -74,13 +70,11 @@ describe('PdfTranslationPane cooling countdown', () => {
       <PdfTranslationPane
         pageNumber={2}
         page={errorPage({ error: 'network failed' })}
-        paragraphCount={1}
         onRetry={vi.fn()}
-        layoutMode="text"
       />,
     );
 
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.getByRole('button', { name: /Retry translation/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Retry$/i })).not.toBeDisabled();
   });
 });

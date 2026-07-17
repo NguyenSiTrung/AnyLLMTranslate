@@ -8,7 +8,7 @@
 
 import { STORAGE_KEYS, type PdfViewMode } from '@/lib/constants';
 
-const VALID: readonly PdfViewMode[] = ['split', 'translation-only', 'bilingual'];
+const VALID: readonly PdfViewMode[] = ['split', 'translation-only'];
 
 /** Load the saved view mode, defaulting to 'split' for any abnormal state. */
 export async function loadPdfViewMode(): Promise<PdfViewMode> {

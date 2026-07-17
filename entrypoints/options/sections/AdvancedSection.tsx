@@ -269,14 +269,12 @@ export function AdvancedSection() {
   const pdfOpenMode = settings.pdfSettings?.openMode ?? 'new-tab';
   const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
   const translateTableText = settings.pdfSettings?.translateTableText ?? false;
-  const showFormulaPlaceholders = settings.pdfSettings?.showFormulaPlaceholders ?? false;
   const strictMathSkip = settings.pdfSettings?.strictMathSkip ?? false;
   const defaultPdfSettings = {
     autoOpen: 'off' as const,
     openMode: 'new-tab' as const,
     neverAutoOpenSites: [] as string[],
     translateTableText: false,
-    showFormulaPlaceholders: false,
     strictMathSkip: false,
   };
   const isPromptCustom = settings.customSystemPrompt !== null;
@@ -1015,19 +1013,6 @@ export function AdvancedSection() {
                   }
                   label="Translate table text"
                   description="Off by default: table grids stay on the canvas. When on, non-numeric labels may translate; numbers stay protected."
-                />
-                <Toggle
-                  checked={showFormulaPlaceholders}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        showFormulaPlaceholders: checked,
-                      },
-                    })
-                  }
-                  label="Show formula placeholders in Text mode"
-                  description="Debug-oriented: show composition segments (prose vs formula) under each paragraph in Text mode."
                 />
                 <Toggle
                   checked={strictMathSkip}

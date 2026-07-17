@@ -1,12 +1,12 @@
 /**
- * PDF Viewer — Side-by-side bilingual translation UI.
+ * PDF Viewer — Side-by-side translation UI with layout overlay.
  *
  * Architecture:
  * 1. `usePdfDocument` — loads the PDF via the bundled worker.
  * 2. `useVisiblePages` — tracks which pages are in the viewport (+buffer).
  * 3. `PdfCanvasRenderer` — left pane: renders only visible pages to canvas.
  * 4. `usePdfPageTranslations` — extracts + translates text on viewport visibility.
- * 5. `PdfTranslationPane` — right pane: shows loading / error / translated text.
+ * 5. `PdfTranslationPane` — right pane: layout overlay with translated text boxes.
  * 6. `useSynchronizedScroll` — mirrors the left pane's scroll on the right.
  */
 
@@ -53,7 +53,6 @@ function isFileScheme(url: string): boolean {
 
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'original' | 'text'>('original');
   const [viewMode, setViewMode] = useState<PdfViewMode>('split');
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
@@ -92,7 +91,7 @@ export default function App(): ReactElement {
   // eviction is a no-op until real page slots are observed. After usePdfDocument
   // runs, the ref is updated for the next render.
   const visibilityContainerRef =
-    viewMode === 'translation-only' || viewMode === 'bilingual' ? rightContainerRef : leftContainerRef;
+    viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
   const numPagesRef = useRef(0);
   const { visiblePages } = useVisiblePages({
     totalPages: numPagesRef.current,
@@ -144,14 +143,11 @@ export default function App(): ReactElement {
     }
   })() : 'document.pdf';
 
-  // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport
+  // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport.
   // In translation-only mode there is no left pane; observe the right pane so
-  // overlay canvases (Layout sub-mode) still mount/unmount near the viewport.
-  // This works because useVisiblePages selects [data-page-number], and
-  // PdfCanvasRenderer tags its container with that attribute in BOTH panes
-  // (left originals and right overlay backgrounds). In translation-only +
-  // Text mode there are no such elements; useVisiblePages returns early and
-  // lazy translation is driven by usePdfPageTranslations' own observer.
+  // overlay canvases still mount/unmount near the viewport. useVisiblePages
+  // selects [data-page-number]; PdfCanvasRenderer tags both panes with that
+  // attribute (left originals and right overlay backgrounds).
 
   // Pre-compute page dimensions for placeholder sizing (cheap — no text extraction)
   const pageDimensions = useMemo(() => {
@@ -170,9 +166,9 @@ export default function App(): ReactElement {
     return dims;
   }, [pages]);
 
-  // Fully-loaded state: render the bilingual viewer directly
+  // Fully-loaded state: render the split / translation-only viewer
   if (loadState === 'loaded' && pdfUrl) {
-    const leftPane = viewMode === 'translation-only' || viewMode === 'bilingual' ? null : (
+    const leftPane = viewMode === 'translation-only' ? null : (
       <>
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
@@ -210,13 +206,10 @@ export default function App(): ReactElement {
               <PdfTranslationPane
                 pageNumber={pageNumber}
                 page={translation}
-                paragraphCount={translation.originalParagraphs?.length ?? 0}
                 onRetry={retryPage}
-                layoutMode={layoutMode}
                 pdfPage={page}
                 visible={isVisible}
                 dims={dims}
-                viewMode={viewMode}
               />
             </div>
           );
@@ -238,7 +231,7 @@ export default function App(): ReactElement {
         }
         headerExtra={
           <div className="pdf-viewer-header-controls">
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split, translation only, bilingual)">
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split, translation only)">
               <button
                 type="button"
                 className={`pdf-viewer-toggle-btn ${viewMode === 'split' ? 'pdf-viewer-toggle-btn--active' : ''}`}
@@ -256,35 +249,6 @@ export default function App(): ReactElement {
                 title="Translation only: hide the original PDF pane and show the translation full-width."
               >
                 Translation
-              </button>
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${viewMode === 'bilingual' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => handleViewModeChange('bilingual')}
-                aria-pressed={viewMode === 'bilingual'}
-                title="Bilingual: show each paragraph's original text above its translation in a single reading flow (no canvas)."
-              >
-                Bilingual
-              </button>
-            </div>
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation layout mode">
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${layoutMode === 'original' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => setLayoutMode('original')}
-                aria-pressed={layoutMode === 'original'}
-                title="Layout (visual reference): translated text keeps the original page's horizontal structure and reading order, reflowing vertically. Best for matching translated text to the original layout."
-              >
-                Layout
-              </button>
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${layoutMode === 'text' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => setLayoutMode('text')}
-                aria-pressed={layoutMode === 'text'}
-                title="Text (recommended): translated text flows as plain paragraphs. Best for reading."
-              >
-                Text
               </button>
             </div>
             <div className="pdf-viewer-progress-pill">

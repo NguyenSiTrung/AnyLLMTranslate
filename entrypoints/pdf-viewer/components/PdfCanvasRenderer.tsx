@@ -1,9 +1,8 @@
 /**
  * PdfCanvasRenderer — Renders a single PDF page to an HTMLCanvasElement.
  *
- * Designed for use inside the left pane of the bilingual PDF viewer. Each
- * `<canvas>` is sized to the device pixel ratio so the rendered text stays
- * sharp on high-DPI displays.
+ * Designed for use inside the PDF viewer panes. Each `<canvas>` is sized to
+ * the device pixel ratio so the rendered text stays sharp on high-DPI displays.
  */
 
 import { useEffect, useRef, useState } from 'react';

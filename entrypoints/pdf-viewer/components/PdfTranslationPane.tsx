@@ -1,15 +1,11 @@
 /**
- * PdfTranslationPane — Renders the right pane (translated text) for a single
- * page, including loading skeletons, error states, and a retry button.
+ * PdfTranslationPane — Renders the right pane for a single page: the original
+ * page canvas with translated text boxes overlaid at their original positions.
  *
- * Layout modes:
- * - 'text' (default): translated paragraphs in a simple vertical reading flow.
- * - 'original' (layout reference): the original page canvas (images, tables,
- *   blocks) is rendered with translated text boxes overlaid at their original
- *   positions. Boxes use natural height (no clipping/micro-fonts/popovers) and
- *   mask only the original text via an opaque white background; images/tables
- *   in uncovered areas stay visible. The page slot grows so long translations
- *   never collide with the next page.
+ * Boxes use natural height (no clipping/micro-fonts/popovers) and mask only the
+ * original text via an opaque white background; images/tables in uncovered
+ * areas stay visible. The page slot grows so long translations never collide
+ * with the next page.
  */
 
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -19,29 +15,21 @@ import { getProseMaskRects } from '../lib/pdfComposition';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import { measureBoxHeight } from '../lib/fontMetrics';
-import type { PdfViewMode } from '@/lib/constants';
 import { formatCooldownRemaining } from '@/lib/poolDashboardStatus';
-import { loadSettings } from '@/lib/config';
 
 export interface PdfTranslationPaneProps {
   /** 1-indexed page number this slot corresponds to. */
   pageNumber: number;
   /** Translation state for this page. */
   page: PageTranslations;
-  /** Total paragraphs on the page (for skeleton count). */
-  paragraphCount: number;
   /** Fired when the user clicks "Retry translation" on an error. */
   onRetry?: (pageNumber: number) => void;
-  /** Current layout mode: 'original' overlay (default, visual reference) or 'text' flow (plain reading). */
-  layoutMode?: 'original' | 'text';
   /** PDF page proxy for rendering the canvas background + box geometry. */
   pdfPage?: PDFPageProxy | null;
   /** Whether the page is currently visible near the viewport. */
   visible?: boolean;
   /** Pre-computed dimensions for layout overlay. */
   dims?: { width: number; height: number };
-  /** Viewer view mode. When 'bilingual', renders original + translated stacked. */
-  viewMode?: PdfViewMode;
 }
 
 /** Minimum readable font size (px) for overlay text. */
@@ -50,22 +38,6 @@ const MIN_FONT_SIZE_PX = 12;
 const MAX_FONT_SIZE_PX = 32;
 /** Default render width (px) used by PdfCanvasRenderer. */
 const RENDER_WIDTH_PX = 720;
-
-function LoadingSkeleton({ count }: { count: number }): React.ReactElement {
-  // Clamp to 1-6 lines so the skeleton never looks empty or absurd
-  const lines = Math.max(1, Math.min(count || 3, 6));
-  return (
-    <div className="pdf-viewer-page-translation pdf-viewer-page-translation--loading">
-      <p className="pdf-viewer-translation-paragraph">
-        <span className="pdf-viewer-spinner" aria-hidden="true" />
-        Translating...
-      </p>
-      {Array.from({ length: lines }).map((_, i) => (
-        <div key={i} className="pdf-viewer-skeleton" style={{ width: `${85 - i * 8}%` }} />
-      ))}
-    </div>
-  );
-}
 
 /**
  * Live tick while a pool-cooling window is active. Returns remaining label
@@ -92,160 +64,6 @@ function useCoolingCountdown(retryAfter?: number): {
     remainingLabel: formatCooldownRemaining(retryAfter, now),
   };
 }
-
-function ErrorState({
-  pageNumber,
-  error,
-  retryAfter,
-  onRetry,
-}: {
-  pageNumber: number;
-  error?: string;
-  retryAfter?: number;
-  onRetry?: (pageNumber: number) => void;
-}): React.ReactElement {
-  const { cooling, remainingLabel } = useCoolingCountdown(retryAfter);
-  return (
-    <div className="pdf-viewer-page-translation pdf-viewer-page-translation--error">
-      <p className="pdf-viewer-translation-paragraph">
-        <strong>Translation failed for page {pageNumber}</strong>
-      </p>
-      {error && (
-        <p className="pdf-viewer-translation-paragraph" style={{ fontSize: '11px' }}>
-          {error}
-        </p>
-      )}
-      {cooling && (
-        <p
-          className="pdf-viewer-translation-paragraph pdf-viewer-cooling-countdown"
-          style={{ fontSize: '12px' }}
-          role="status"
-          aria-live="polite"
-        >
-          Providers cooling · retry in <strong>{remainingLabel}</strong>
-        </p>
-      )}
-      {onRetry && (
-        <button
-          type="button"
-          onClick={() => onRetry(pageNumber)}
-          className="pdf-viewer-retry-button"
-          disabled={cooling}
-          title={
-            cooling
-              ? `Wait ${remainingLabel} for provider cooldown to end`
-              : 'Retry translation'
-          }
-        >
-          {cooling ? `Retry in ${remainingLabel}` : 'Retry translation'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EmptyState({ pageNumber }: { pageNumber: number }): React.ReactElement {
-  return (
-    <div className="pdf-viewer-page-translation pdf-viewer-page-translation--loading">
-      <p className="pdf-viewer-translation-paragraph">
-        No extractable text on page {pageNumber} (may be a scanned image).
-      </p>
-    </div>
-  );
-}
-
-function TranslatedParagraphs({
-  page,
-  showFormulaPlaceholders = false,
-}: {
-  page: PageTranslations;
-  showFormulaPlaceholders?: boolean;
-}): React.ReactElement {
-  if (page.paragraphs.size === 0) {
-    return <></>;
-  }
-  return (
-    <>
-      {Array.from(page.paragraphs.entries()).map(([id, text]) => {
-        const compositions = page.paragraphCompositions?.get(id);
-        return (
-          <div key={id} className="pdf-viewer-translation-paragraph">
-            <p>{text}</p>
-            {showFormulaPlaceholders && compositions && compositions.length > 0 && (
-              <p
-                className="pdf-viewer-composition-debug"
-                style={{ fontSize: '10px', opacity: 0.65, marginTop: '2px' }}
-              >
-                {compositions
-                  .map((c) => (c.kind === 'formula' ? `[ƒ ${c.text}]` : c.text))
-                  .join(' · ')}
-              </p>
-            )}
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function IdleState({ pageNumber }: { pageNumber: number }): React.ReactElement {
-  return (
-    <div className="pdf-viewer-page-translation pdf-viewer-page-translation--idle">
-      <p className="pdf-viewer-translation-paragraph">
-        Page {pageNumber} — Scroll to translate
-      </p>
-    </div>
-  );
-}
-
-/**
- * BilingualView — renders each paragraph's original text directly above its
- * translation in a single vertical reading flow (no canvas).
- *
- * Mirrors the web-page translator's "bilingual-below" theme: the original is
- * shown first (muted/smaller), the translation directly beneath it. This is
- * the focused-reading mode for users who want both languages without the
- * visual noise of the original page canvas.
- *
- * Paragraphs without an `originalParagraphs` entry (e.g. older cached state)
- * fall back to showing only the translation. Paragraphs whose translation is
- * missing render only the original.
- */
-function BilingualView({ page }: { page: PageTranslations }): React.ReactElement {
-  const originals = page.originalParagraphs ?? [];
-  // Build a stable insertion order: originals in reading order, then any
-  // translated paragraphs that have no matching original (defensive — keeps
-  // orphan translations visible rather than dropping them).
-  const seenIds = new Set<string>();
-  const rows: React.ReactElement[] = originals.map((para) => {
-    seenIds.add(para.id);
-    const translated = page.paragraphs.get(para.id);
-    return (
-      <div key={para.id} className="pdf-viewer-bilingual-group">
-        <p
-          className={`pdf-viewer-bilingual-original${para.isHeading ? ' pdf-viewer-bilingual-original--heading' : ''}`}
-        >
-          {para.text}
-        </p>
-        {translated !== undefined && translated.trim() !== para.text.trim() && (
-          <p className="pdf-viewer-bilingual-translation">{translated}</p>
-        )}
-      </div>
-    );
-  });
-  for (const [id, translated] of page.paragraphs) {
-    if (!seenIds.has(id)) {
-      rows.push(
-        <div key={id} className="pdf-viewer-bilingual-group">
-          <p className="pdf-viewer-bilingual-translation">{translated}</p>
-        </div>,
-      );
-    }
-  }
-  return <div className="pdf-viewer-bilingual">{rows}</div>;
-}
-
-type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 
 /**
  * Font stack used by the layout boxes — must match the CSS inherited font on
@@ -275,6 +93,8 @@ function estimateBoxHeight(text: string, widthPx: number, fontSizePx: number): n
     fontSize: fontSizePx,
   }).height;
 }
+
+type Viewport = ReturnType<PDFPageProxy['getViewport']>;
 
 /** Compute the absolute placement + sizing for one overlay box. */
 function computeBoxGeometry(
@@ -572,147 +392,48 @@ function LayoutStatusOverlay({
 export function PdfTranslationPane({
   pageNumber,
   page,
-  paragraphCount,
   onRetry,
-  layoutMode = 'text',
   pdfPage,
   visible,
   dims,
-  viewMode,
 }: PdfTranslationPaneProps): React.ReactElement {
-  const [showFormulaPlaceholders, setShowFormulaPlaceholders] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    void loadSettings().then((s) => {
-      if (!cancelled) {
-        setShowFormulaPlaceholders(s.pdfSettings?.showFormulaPlaceholders === true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const isTranslated = page.state === 'translated';
+  const isEmpty = isTranslated && page.paragraphs.size === 0;
 
-  // Bilingual view mode: original + translation stacked, no canvas overlay.
-  // Takes precedence over layoutMode (which only applies to the split/translation
-  // single-pane rendering paths).
-  if (viewMode === 'bilingual') {
-    if (page.state === 'idle') {
-      return <IdleState pageNumber={pageNumber} />;
-    }
-    if (page.state === 'translating') {
-      // If streaming has delivered some paragraphs, show them bilingually with
-      // a tail spinner; otherwise the skeleton.
-      if (page.paragraphs.size > 0) {
-        return (
-          <div className="pdf-viewer-page-translation">
-            <BilingualView page={page} />
-            <div className="pdf-viewer-streaming-tail" aria-live="polite">
-              <span className="pdf-viewer-spinner" aria-hidden="true" />
-            </div>
-          </div>
-        );
-      }
-      return <LoadingSkeleton count={paragraphCount} />;
-    }
-    if (page.state === 'error') {
-      return (
-        <ErrorState
+  const status: 'idle' | 'translating' | 'error' | 'empty' | null = !isTranslated
+    ? page.state === 'error'
+      ? 'error'
+      : page.state === 'translating'
+        ? 'translating'
+        : 'idle'
+    : isEmpty
+      ? 'empty'
+      : null;
+
+  return (
+    <div
+      className="pdf-viewer-layout-pane"
+      style={{ position: 'relative', width: '100%', minHeight: dims ? `${dims.height}px` : undefined }}
+    >
+      <PdfCanvasRenderer
+        page={pdfPage ?? null}
+        pageNumber={pageNumber}
+        visible={visible ?? false}
+        dims={dims}
+        enableTextLayer={false}
+      />
+      {status && (
+        <LayoutStatusOverlay
           pageNumber={pageNumber}
+          state={status}
           error={page.error}
           retryAfter={page.retryAfter}
           onRetry={onRetry}
         />
-      );
-    }
-    if (page.state === 'translated' && page.paragraphs.size === 0) {
-      return <EmptyState pageNumber={pageNumber} />;
-    }
-    return (
-      <div className="pdf-viewer-page-translation">
-        <BilingualView page={page} />
-      </div>
-    );
-  }
-
-  if (layoutMode === 'original') {
-    const isTranslated = page.state === 'translated';
-    const isEmpty = isTranslated && page.paragraphs.size === 0;
-
-    const status: 'idle' | 'translating' | 'error' | 'empty' | null = !isTranslated
-      ? page.state === 'error'
-        ? 'error'
-        : page.state === 'translating'
-          ? 'translating'
-          : 'idle'
-      : isEmpty
-        ? 'empty'
-        : null;
-
-    return (
-      <div
-        className="pdf-viewer-layout-pane"
-        style={{ position: 'relative', width: '100%', minHeight: dims ? `${dims.height}px` : undefined }}
-      >
-        <PdfCanvasRenderer
-          page={pdfPage ?? null}
-          pageNumber={pageNumber}
-          visible={visible ?? false}
-          dims={dims}
-          enableTextLayer={false}
-        />
-        {status && (
-          <LayoutStatusOverlay
-            pageNumber={pageNumber}
-            state={status}
-            error={page.error}
-            retryAfter={page.retryAfter}
-            onRetry={onRetry}
-          />
-        )}
-        {isTranslated && !isEmpty && (
-          <LayoutOverlay page={page} pdfPage={pdfPage ?? null} dims={dims} />
-        )}
-      </div>
-    );
-  }
-
-  // Fallback to text mode
-  if (page.state === 'idle') {
-    return <IdleState pageNumber={pageNumber} />;
-  }
-  if (page.state === 'translating') {
-    // Phase 2 incremental fill: if streaming has already delivered some
-    // paragraphs, show them with a trailing spinner for the rest instead of
-    // a bare skeleton. Falls back to the skeleton when nothing has arrived.
-    if (page.paragraphs.size > 0) {
-      return (
-        <div className="pdf-viewer-page-translation">
-          <TranslatedParagraphs page={page} showFormulaPlaceholders={showFormulaPlaceholders} />
-          <div className="pdf-viewer-streaming-tail" aria-live="polite">
-            <span className="pdf-viewer-spinner" aria-hidden="true" />
-          </div>
-        </div>
-      );
-    }
-    return <LoadingSkeleton count={paragraphCount} />;
-  }
-  if (page.state === 'error') {
-    return (
-      <ErrorState
-        pageNumber={pageNumber}
-        error={page.error}
-        retryAfter={page.retryAfter}
-        onRetry={onRetry}
-      />
-    );
-  }
-  if (page.state === 'translated' && page.paragraphs.size === 0) {
-    return <EmptyState pageNumber={pageNumber} />;
-  }
-  return (
-    <div className="pdf-viewer-page-translation">
-      <TranslatedParagraphs page={page} showFormulaPlaceholders={showFormulaPlaceholders} />
+      )}
+      {isTranslated && !isEmpty && (
+        <LayoutOverlay page={page} pdfPage={pdfPage ?? null} dims={dims} />
+      )}
     </div>
   );
 }

@@ -69,7 +69,7 @@ export interface PageTranslations {
   paragraphKinds?: Map<string, ContentKind>;
   /**
    * Optional composition segments (prose/formula) after placeholder reassembly.
-   * Used for Text-mode placeholder debug and selective-mask hints.
+   * Used for selective-mask geometry on mixed prose/formula paragraphs.
    */
   paragraphCompositions?: Map<
     string,

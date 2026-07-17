@@ -92,7 +92,7 @@ export interface FormulaPlaceholder {
   runs: PdfTextRun[];
 }
 
-/** Ordered segment after reassembly (for selective mask / Text mode debug). */
+/** Ordered segment after reassembly (for selective mask geometry). */
 export interface CompositionSegment {
   kind: 'prose' | 'formula';
   text: string;

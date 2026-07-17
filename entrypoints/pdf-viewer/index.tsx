@@ -1,6 +1,6 @@
 /**
  * PDF Viewer — Unlisted page entrypoint.
- * Mounts the React-based bilingual PDF translator.
+ * Mounts the React-based PDF translator.
  */
 
 import React from 'react';

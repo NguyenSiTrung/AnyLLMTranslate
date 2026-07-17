@@ -319,11 +319,6 @@ export interface PdfSettings {
    */
   translateTableText: boolean;
   /**
-   * When true, Text mode may surface raw formula placeholder strings for
-   * debugging. Default false.
-   */
-  showFormulaPlaceholders: boolean;
-  /**
    * When true, use stricter formula classification thresholds (more aggressive
    * math skip). Default false.
    */
@@ -596,7 +591,6 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
   openMode: 'new-tab',
   neverAutoOpenSites: [],
   translateTableText: false,
-  showFormulaPlaceholders: false,
   strictMathSkip: false,
 };
 

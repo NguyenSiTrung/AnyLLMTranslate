@@ -63,7 +63,7 @@ interface SerializedPage {
   state: 'translated' | 'error';
   /** Paragraph id → translated text. */
   paragraphs: Array<[string, string]>;
-  /** Original paragraphs (optional, for bilingual/layout rendering). */
+  /** Original paragraphs (optional, for layout overlay rendering). */
   originalParagraphs?: unknown;
   /** Paragraph id → content kind (math/figure/prose). */
   paragraphKinds?: Array<[string, string]>;
