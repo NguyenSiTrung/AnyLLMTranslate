@@ -53,7 +53,12 @@ export type MessageAction =
   | 'REGISTER_PDF_SESSION'
   | 'UNREGISTER_PDF_SESSION'
   | 'TRANSLATE_PDF_STREAM'
-  | 'GET_POOL_KEY_STATUSES';
+  | 'GET_POOL_KEY_STATUSES'
+  | 'SCIENTIFIC_PDF_HEALTH'
+  | 'SCIENTIFIC_PDF_CREATE_JOB'
+  | 'SCIENTIFIC_PDF_GET_JOB'
+  | 'SCIENTIFIC_PDF_DOWNLOAD'
+  | 'SCIENTIFIC_PDF_CANCEL';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -413,6 +418,107 @@ export interface GetPoolKeyStatusesResponse {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Scientific PDF bridge (local pdf2zh) — Phase 3
+// Credentials always come from the provider pool at job time; never stored
+// on scientificPdf settings. PDF bytes travel as base64 over runtime messaging.
+// ---------------------------------------------------------------------------
+
+/** Probe bridge GET /health (Popup/Options/Viewer → Background). */
+export interface ScientificPdfHealthMessage {
+  action: 'SCIENTIFIC_PDF_HEALTH';
+  /** Optional override; default = settings.scientificPdf.serverUrl. */
+  serverUrl?: string;
+}
+
+export interface ScientificPdfHealthResult {
+  success: boolean;
+  status?: string;
+  version?: string;
+  pdf2zh?: string;
+  /** Normalized server URL used for the probe. */
+  serverUrl?: string;
+  error?: string;
+  /** Client error code: offline | timeout | parse | … */
+  code?: string;
+}
+
+/**
+ * Create a scientific translation job (Viewer → Background).
+ * Background injects pool baseUrl/apiKey/model + languages.
+ */
+export interface ScientificPdfCreateJobMessage {
+  action: 'SCIENTIFIC_PDF_CREATE_JOB';
+  /** Source PDF as base64 (preferred for chrome.runtime messaging). */
+  fileBase64: string;
+  fileName?: string;
+  /** Override settings.sourceLanguage when set. */
+  sourceLanguage?: string;
+  /** Override settings.targetLanguage when set. */
+  targetLanguage?: string;
+  /** Optional bridge URL override. */
+  serverUrl?: string;
+}
+
+export interface ScientificPdfCreateJobResult {
+  success: boolean;
+  jobId?: string;
+  state?: string;
+  error?: string;
+  code?: string;
+}
+
+/** Poll job state (Viewer → Background). */
+export interface ScientificPdfGetJobMessage {
+  action: 'SCIENTIFIC_PDF_GET_JOB';
+  jobId: string;
+  serverUrl?: string;
+}
+
+export interface ScientificPdfGetJobResult {
+  success: boolean;
+  job?: {
+    id: string;
+    state: string;
+    progress?: number;
+    message?: string;
+    error?: { code: string; message: string };
+    artifacts?: { mono?: boolean; dual?: boolean };
+  };
+  error?: string;
+  code?: string;
+}
+
+/** Download mono or dual artifact as base64 PDF (Viewer → Background). */
+export interface ScientificPdfDownloadMessage {
+  action: 'SCIENTIFIC_PDF_DOWNLOAD';
+  jobId: string;
+  artifact: 'mono' | 'dual';
+  serverUrl?: string;
+}
+
+export interface ScientificPdfDownloadResult {
+  success: boolean;
+  /** PDF bytes as base64. */
+  fileBase64?: string;
+  artifact?: 'mono' | 'dual';
+  error?: string;
+  code?: string;
+}
+
+/** Optional cancel / cleanup (Viewer → Background). */
+export interface ScientificPdfCancelMessage {
+  action: 'SCIENTIFIC_PDF_CANCEL';
+  jobId: string;
+  serverUrl?: string;
+}
+
+export interface ScientificPdfCancelResult {
+  success: boolean;
+  error?: string;
+  code?: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -445,7 +551,12 @@ export type ExtensionMessage =
   | PdfDetectedMessage
   | RegisterPdfSessionMessage
   | UnregisterPdfSessionMessage
-  | GetPoolKeyStatusesMessage;
+  | GetPoolKeyStatusesMessage
+  | ScientificPdfHealthMessage
+  | ScientificPdfCreateJobMessage
+  | ScientificPdfGetJobMessage
+  | ScientificPdfDownloadMessage
+  | ScientificPdfCancelMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

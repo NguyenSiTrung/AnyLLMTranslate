@@ -16,6 +16,11 @@ export default defineConfig({
       '*://*.media.max.com/*',
       '*://*.hbomax.com/*',
       '*://*.max.com/*',
+      // Scientific PDF bridge default (loopback). Custom non-loopback serverUrl
+      // may need the user to grant host access later; avoid broad <all_urls>.
+      // CSP already allows connect-src http: https: for extension pages.
+      'http://127.0.0.1/*',
+      'http://localhost/*',
     ],
     // PDF.js worker + standard fonts/cmaps are bundled under assets/ via Vite ?url imports.
     // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.

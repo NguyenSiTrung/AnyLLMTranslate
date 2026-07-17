@@ -23,6 +23,16 @@ import type {
   PdfStreamPiece,
   PdfStreamDone,
   PdfStreamError,
+  ScientificPdfHealthMessage,
+  ScientificPdfHealthResult,
+  ScientificPdfCreateJobMessage,
+  ScientificPdfCreateJobResult,
+  ScientificPdfGetJobMessage,
+  ScientificPdfGetJobResult,
+  ScientificPdfDownloadMessage,
+  ScientificPdfDownloadResult,
+  ScientificPdfCancelMessage,
+  ScientificPdfCancelResult,
 } from '@/types/messages';
 import {
   parseSelectionDictionary,
@@ -82,6 +92,21 @@ import { recordUsage } from '@/services/statsCollector';
 import { normalizeHost } from '@/services/statsCounters';
 import { invalidateDebugCache } from '@/services/debugLog';
 import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
+import { mergeScientificPdfSettings, normalizeScientificPdfServerUrl } from '@/lib/scientificPdf';
+import {
+  health as scientificPdfHealth,
+  createJob as scientificPdfCreateJob,
+  getJob as scientificPdfGetJob,
+  downloadMono as scientificPdfDownloadMono,
+  downloadDual as scientificPdfDownloadDual,
+  cancelJob as scientificPdfCancelJob,
+  ScientificPdfClientError,
+} from '@/lib/scientificPdfClient';
+import { resolveSlots } from '@/lib/poolResolver';
+import {
+  getPoolReadinessStatus,
+  getPoolRecoveryMessage,
+} from '@/lib/providerReadiness';
 
 const MAX_PROGRESSIVE_DASH_SEGMENTS = 500;
 
@@ -2056,8 +2081,247 @@ export function handleMessage(
       if (tabId !== undefined) unregisterPdfSession(tabId);
       return Promise.resolve({ success: true });
     }
+    case 'SCIENTIFIC_PDF_HEALTH':
+      return handleScientificPdfHealth(message as ScientificPdfHealthMessage);
+    case 'SCIENTIFIC_PDF_CREATE_JOB':
+      return handleScientificPdfCreateJob(message as ScientificPdfCreateJobMessage);
+    case 'SCIENTIFIC_PDF_GET_JOB':
+      return handleScientificPdfGetJob(message as ScientificPdfGetJobMessage);
+    case 'SCIENTIFIC_PDF_DOWNLOAD':
+      return handleScientificPdfDownload(message as ScientificPdfDownloadMessage);
+    case 'SCIENTIFIC_PDF_CANCEL':
+      return handleScientificPdfCancel(message as ScientificPdfCancelMessage);
     default:
       return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scientific PDF bridge handlers
+// Credentials are resolved from the provider pool at job time only — never
+// stored on scientificPdf settings or persisted beyond the existing pool.
+// ---------------------------------------------------------------------------
+
+/** Resolve bridge server URL from message override or settings. */
+async function resolveScientificPdfServerUrl(override?: string): Promise<string> {
+  if (typeof override === 'string' && override.trim().length > 0) {
+    return normalizeScientificPdfServerUrl(override);
+  }
+  const settings = await loadSettings();
+  const sci = mergeScientificPdfSettings(settings.scientificPdf);
+  return sci.serverUrl;
+}
+
+/**
+ * Pick the first enabled pool slot's credentials for a scientific job.
+ * Mirrors translate readiness: refuse when the pool cannot translate.
+ */
+function resolveScientificJobCredentials(settings: ExtensionSettings):
+  | { ok: true; baseUrl: string; apiKey?: string; model: string }
+  | { ok: false; error: string; code: string } {
+  const readiness = getPoolReadinessStatus(settings);
+  if (!readiness.canTranslate) {
+    const recovery = getPoolRecoveryMessage(readiness);
+    return {
+      ok: false,
+      error: recovery.description,
+      code: readiness.reason,
+    };
+  }
+
+  const slots = resolveSlots(settings.providers ?? []);
+  const slot = slots[0];
+  if (!slot) {
+    return {
+      ok: false,
+      error: 'No provider credentials available in the pool',
+      code: 'pool-empty',
+    };
+  }
+
+  const { baseUrl, apiKey, model } = slot.providerConfig;
+  if (!baseUrl.trim() || !model.trim()) {
+    return {
+      ok: false,
+      error: 'Active provider is missing base URL or model',
+      code: 'not-configured',
+    };
+  }
+
+  return {
+    ok: true,
+    baseUrl: baseUrl.trim(),
+    apiKey: apiKey?.trim() ? apiKey.trim() : undefined,
+    model: model.trim(),
+  };
+}
+
+function scientificPdfErrorResult(err: unknown): { error: string; code: string } {
+  if (err instanceof ScientificPdfClientError) {
+    return { error: err.message, code: err.code };
+  }
+  if (err instanceof Error) {
+    return { error: err.message, code: 'unknown' };
+  }
+  return { error: String(err), code: 'unknown' };
+}
+
+/** Decode base64 PDF payload from runtime messages. */
+function base64ToUint8Array(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/** Encode PDF ArrayBuffer for runtime messaging. */
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function handleScientificPdfHealth(
+  message: ScientificPdfHealthMessage,
+): Promise<ScientificPdfHealthResult> {
+  try {
+    const serverUrl = await resolveScientificPdfServerUrl(message.serverUrl);
+    const result = await scientificPdfHealth(serverUrl);
+    const ok = result.status === 'ok';
+    return {
+      success: ok,
+      status: result.status,
+      version: result.version,
+      pdf2zh: result.pdf2zh,
+      serverUrl,
+      ...(ok ? {} : { error: `Bridge status: ${result.status}`, code: 'offline' }),
+    };
+  } catch (err) {
+    const { error, code } = scientificPdfErrorResult(err);
+    return { success: false, error, code };
+  }
+}
+
+async function handleScientificPdfCreateJob(
+  message: ScientificPdfCreateJobMessage,
+): Promise<ScientificPdfCreateJobResult> {
+  try {
+    if (!message.fileBase64 || typeof message.fileBase64 !== 'string') {
+      return { success: false, error: 'Missing PDF file (fileBase64)', code: 'invalid_request' };
+    }
+
+    const settings = await loadSettings();
+    const creds = resolveScientificJobCredentials(settings);
+    if (!creds.ok) {
+      return { success: false, error: creds.error, code: creds.code };
+    }
+
+    const serverUrl = await resolveScientificPdfServerUrl(message.serverUrl);
+    const langIn = (message.sourceLanguage ?? settings.sourceLanguage ?? 'auto').trim() || 'auto';
+    const langOut = (message.targetLanguage ?? settings.targetLanguage ?? 'en').trim() || 'en';
+
+    let fileBytes: Uint8Array;
+    try {
+      fileBytes = base64ToUint8Array(message.fileBase64);
+    } catch {
+      return { success: false, error: 'Invalid base64 PDF payload', code: 'invalid_request' };
+    }
+
+    if (fileBytes.byteLength === 0) {
+      return { success: false, error: 'Empty PDF payload', code: 'invalid_request' };
+    }
+
+    // Keep SW alive for large uploads / long bridge setup.
+    ensureKeepaliveAlarm();
+
+    const job = await scientificPdfCreateJob(serverUrl, {
+      file: fileBytes,
+      fileName: message.fileName ?? 'document.pdf',
+      config: {
+        baseUrl: creds.baseUrl,
+        apiKey: creds.apiKey,
+        model: creds.model,
+        lang_in: langIn,
+        lang_out: langOut,
+      },
+    });
+
+    return {
+      success: true,
+      jobId: job.id,
+      state: job.state,
+    };
+  } catch (err) {
+    const { error, code } = scientificPdfErrorResult(err);
+    return { success: false, error, code };
+  }
+}
+
+async function handleScientificPdfGetJob(
+  message: ScientificPdfGetJobMessage,
+): Promise<ScientificPdfGetJobResult> {
+  try {
+    if (!message.jobId?.trim()) {
+      return { success: false, error: 'Missing jobId', code: 'invalid_request' };
+    }
+    const serverUrl = await resolveScientificPdfServerUrl(message.serverUrl);
+    const job = await scientificPdfGetJob(serverUrl, message.jobId);
+    return { success: true, job };
+  } catch (err) {
+    const { error, code } = scientificPdfErrorResult(err);
+    return { success: false, error, code };
+  }
+}
+
+async function handleScientificPdfDownload(
+  message: ScientificPdfDownloadMessage,
+): Promise<ScientificPdfDownloadResult> {
+  try {
+    if (!message.jobId?.trim()) {
+      return { success: false, error: 'Missing jobId', code: 'invalid_request' };
+    }
+    if (message.artifact !== 'mono' && message.artifact !== 'dual') {
+      return { success: false, error: 'artifact must be mono or dual', code: 'invalid_request' };
+    }
+
+    const serverUrl = await resolveScientificPdfServerUrl(message.serverUrl);
+    ensureKeepaliveAlarm();
+
+    const buf =
+      message.artifact === 'mono'
+        ? await scientificPdfDownloadMono(serverUrl, message.jobId)
+        : await scientificPdfDownloadDual(serverUrl, message.jobId);
+
+    return {
+      success: true,
+      artifact: message.artifact,
+      fileBase64: arrayBufferToBase64(buf),
+    };
+  } catch (err) {
+    const { error, code } = scientificPdfErrorResult(err);
+    return { success: false, error, code };
+  }
+}
+
+async function handleScientificPdfCancel(
+  message: ScientificPdfCancelMessage,
+): Promise<ScientificPdfCancelResult> {
+  try {
+    if (!message.jobId?.trim()) {
+      return { success: false, error: 'Missing jobId', code: 'invalid_request' };
+    }
+    const serverUrl = await resolveScientificPdfServerUrl(message.serverUrl);
+    await scientificPdfCancelJob(serverUrl, message.jobId);
+    return { success: true };
+  } catch (err) {
+    const { error, code } = scientificPdfErrorResult(err);
+    return { success: false, error, code };
   }
 }
 
