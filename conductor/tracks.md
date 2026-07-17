@@ -86,8 +86,9 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [~] Track: PDF Composition Pipeline (BabelDOC-inspired)
+## [x] Track: PDF Composition Pipeline (BabelDOC-inspired)
 *Link: [./conductor/tracks/pdf-composition_20260717/](./conductor/tracks/pdf-composition_20260717/)*
 *Priority: 🟠 High — run-level extract, formula placeholders, table regions, multi-column, selective mask, power-user PDF card*
+*Completed: 2026-07-17 — 8 phases; FR-1–FR-8 delivered*
 
 ---

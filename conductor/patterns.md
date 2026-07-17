@@ -711,5 +711,13 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Surface pool `openUntil` as UI `retryAfter`:** On `PoolExhaustedError`, extract absolute `openUntil` once in background (`poolRetryAfter`) and attach `retryAfter` to translate/stream error envelopes. Viewers (PDF) show a live countdown and disable Retry until the window ends — prevents thrashing a cooling pool. (from: PDF cooling / AnyLLMTranslate-823, 2026-07-14)
 - **Propagate paragraph `kind` end-to-end for Layout skip:** Rule-based math/table detection plus optional LLM labels must carry `prose` | `math` | `figure` through translate results → overlay → download generator. Layout mode must never white-mask cells that should remain on the original canvas; broaden Unicode-math and table-like heuristics so skip does not depend only on the LLM. (from: PDF layout math/table kind, 2026-07-14)
 
+## PDF composition pipeline (from: pdf-composition_20260717, 2026-07-17)
+- **Run-level extraction + pure test helpers:** Export `PdfTextRun` / optional `runs` on `PdfParagraph` and pure `paragraphsFromTextItems` so unit tests avoid PDFPageProxy mocks; join spaces live only on aggregated `text`. (from: pdf-composition_20260717)
+- **Formula font patterns must not use leading `\b`:** PDF.js names use underscores (`g_d0_CMMI10`); JS `\b` treats `_` as a word char — match family tokens as substrings. (from: pdf-composition_20260717)
+- **Formula placeholders `{vN}`:** Mixed prose/math → build LLM payload with placeholders; reassemble after translate; strip hallucinated indices; cache keys use original source text never the placeholder payload. Consecutive formula runs collapse to one slot. (from: pdf-composition_20260717)
+- **Table regions protect-by-default:** `classifyTableRegions` + `pdfSettings.translateTableText` (default off); numeric cells always protected even when opt-in translate is on. (from: pdf-composition_20260717)
+- **Multi-column reading order:** Cluster by x-gap; columns L→R, within column top→bottom; spanning width ≥0.55× page keeps titles out of side columns. (from: pdf-composition_20260717)
+- **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
+
 ---
 Last refreshed: 2026-07-17

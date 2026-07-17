@@ -213,26 +213,26 @@
 <!-- execution: sequential -->
 <!-- depends: phase5, phase6, phase7 -->
 
-- [ ] **Task 8.1: Full PDF unit suite**
-  - [ ] `pnpm exec vitest run entrypoints/pdf-viewer`
-  - [ ] Fix regressions (streaming, cooling, kinds)
+- [x] **Task 8.1: Full PDF unit suite**
+  - [x] `pnpm exec vitest run entrypoints/pdf-viewer`
+  - [x] Fix regressions (streaming, cooling, kinds)
 
-- [ ] **Task 8.2: Lint + typecheck on touched surface**
-  - [ ] `pnpm lint` (or project equivalent) for changed files
-  - [ ] Fix introduced issues only
+- [x] **Task 8.2: Lint + typecheck on touched surface**
+  - [x] `pnpm lint` (or project equivalent) for changed files
+  - [x] Fix introduced issues only
 
-- [ ] **Task 8.3: Manual verification checklist (document in learnings)**
-  - [ ] arXiv-style two-column PDF: order + math
-  - [ ] Table-heavy page: protect default / opt-in translate
-  - [ ] Layout overlay + download selective mask
-  - [ ] Pool cooling path still shows countdown
+- [x] **Task 8.3: Manual verification checklist (document in learnings)**
+  - [x] arXiv-style two-column PDF: order + math
+  - [x] Table-heavy page: protect default / opt-in translate
+  - [x] Layout overlay + download selective mask
+  - [x] Pool cooling path still shows countdown
 
-- [ ] **Task 8.4: Elevate reusable patterns to `conductor/patterns.md`**
-  - [ ] Composition/placeholder patterns, table-region default, multi-column sort notes
+- [x] **Task 8.4: Elevate reusable patterns to `conductor/patterns.md`**
+  - [x] Composition/placeholder patterns, table-region default, multi-column sort notes
 
-- [ ] **Task 8.5: Track closeout**
-  - [ ] All plan tasks checked
-  - [ ] Ready for `/conductor-archive` when user confirms
+- [x] **Task 8.5: Track closeout**
+  - [x] All plan tasks checked
+  - [x] Ready for `/conductor-archive` when user confirms
 
 ---
 
