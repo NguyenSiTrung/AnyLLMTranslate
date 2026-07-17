@@ -117,6 +117,93 @@ describe('pdfTranslation memory cache', () => {
     expect(results.find((r) => r.id === '1-1')?.kind).toBe('prose');
   });
 
+  it('sends formula placeholders to LLM for mixed runs and reassembles formulas', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(async (message: unknown) => {
+      const action = (message as { action: string }).action;
+      if (action === 'CLASSIFY_PDF_PARAGRAPHS') {
+        const pieces = (message as { paragraphs: Array<{ id: string }> }).paragraphs;
+        return {
+          success: true,
+          labels: Object.fromEntries(pieces.map(({ id }) => [id, 'prose'])),
+        };
+      }
+      const pieces = (message as { pieces: Array<{ id: string; text: string }> }).pieces;
+      // Assert LLM never sees raw formula body; returns translated prose with {v0}.
+      for (const p of pieces) {
+        expect(p.text).toContain('{v0}');
+        expect(p.text).not.toContain('L(theta)');
+      }
+      return {
+        success: true,
+        results: pieces.map(({ id }) => ({
+          id,
+          translatedText: 'Mat mat la {v0} trong do.',
+        })),
+      };
+    });
+
+    const results = await translateParagraphs(
+      [
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-0',
+            text: 'The loss is L(theta) where rate.',
+            fontSize: 12,
+            isHeading: false,
+            x: 0,
+            y: 0,
+            width: 200,
+            height: 12,
+            runs: [
+              {
+                text: 'The loss is ',
+                fontName: 'Times-Roman',
+                fontSize: 12,
+                x: 0,
+                y: 0,
+                width: 60,
+                height: 12,
+              },
+              {
+                text: 'L(theta)',
+                fontName: 'CMMI10',
+                fontSize: 12,
+                x: 60,
+                y: 0,
+                width: 40,
+                height: 12,
+              },
+              {
+                text: ' where rate.',
+                fontName: 'Times-Roman',
+                fontSize: 12,
+                x: 100,
+                y: 0,
+                width: 80,
+                height: 12,
+              },
+            ],
+          },
+        },
+      ],
+      'https://example.com/mixed.pdf',
+    );
+
+    const r = results.find((x) => x.id === '1-0');
+    expect(r?.kind).toBe('prose');
+    expect(r?.translatedText).toBe('Mat mat la L(theta) trong do.');
+    expect(r?.compositions?.some((c) => c.kind === 'formula' && c.text === 'L(theta)')).toBe(true);
+
+    // Cache key policy: original source text, not placeholder payload.
+    expect(cacheTranslation).toHaveBeenCalledWith(
+      'The loss is L(theta) where rate.',
+      'Mat mat la L(theta) trong do.',
+      'en',
+      'vi',
+    );
+  });
+
   it('skips rule-based table cells without LLM translate and tags kind figure', async () => {
     const results = await translateParagraphs(
       [

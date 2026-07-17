@@ -454,6 +454,14 @@ export interface TranslationResultItem {
    * `math` / `figure` are kept verbatim and never masked in Layout mode.
    */
   kind?: 'prose' | 'math' | 'figure';
+  /**
+   * PDF composition segments (prose vs formula) after placeholder reassembly.
+   * Used by Layout overlay / download for selective masking of mixed paragraphs.
+   */
+  compositions?: Array<{
+    kind: 'prose' | 'formula';
+    text: string;
+  }>;
 }
 
 /** Tab translation status */

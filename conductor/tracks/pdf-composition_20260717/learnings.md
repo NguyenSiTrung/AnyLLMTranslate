@@ -50,3 +50,12 @@ Patterns, gotchas, and context discovered during implementation.
   - Context: Formula-dominated uses char-weight ratio (0.55 default / 0.4 strict); mixed stays prose for placeholder path.
 ---
 
+## [2026-07-17] - Phase 3 Tasks 3.1–3.5: Placeholders + pipeline
+- **Implemented:** `pdfComposition.ts` (build/reassemble/strip); wired into `translateParagraphs`; prompt rule for `{vN}`; `compositions` on `TranslationResultItem`.
+- **Files changed:** `pdfComposition.ts`, `pdfComposition.test.ts`, `pdfTranslation.ts`, `pdfTranslation.test.ts`, `types/messages.ts`, `services/base.ts`
+- **Learnings:**
+  - Patterns: Cache keys always use original paragraph text, never placeholder payload.
+  - Gotchas: Streaming `onPiece` must reassemble before UI update; consecutive formula runs collapse to one `{vN}`.
+  - Context: Fail-open appends original formulas if model drops all placeholders.
+---
+

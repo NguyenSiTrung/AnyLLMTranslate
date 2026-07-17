@@ -19,11 +19,16 @@ import { loadSettings } from '@/lib/config';
 import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
 import {
-  classifyMathParagraph,
+  classifyMathParagraphFromParagraph,
   classifyTableLikeParagraphs,
   isObviouslyProse,
   type ContentKind,
 } from './pdfContentDetect';
+import {
+  buildTranslatePayload,
+  reassembleTranslation,
+  type FormulaPlaceholder,
+} from './pdfComposition';
 
 export type PageTranslationState = 'idle' | 'translating' | 'translated' | 'error';
 
@@ -253,10 +258,13 @@ export async function translateParagraphs(
   const targetLanguage = settings.targetLanguage;
 
   // 1. Rule-based math split (deterministic, free, immune to network failure).
+  //    Uses run-level multi-signal detection when runs are present; pure-formula
+  //    compositions (formulaOnly) never go to the LLM.
   const mathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
   const nonMathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
   for (const item of paragraphs) {
-    if (classifyMathParagraph(item.paragraph.text) === 'math') {
+    const payload = buildTranslatePayload(item.paragraph);
+    if (payload.formulaOnly || classifyMathParagraphFromParagraph(item.paragraph) === 'math') {
       mathItems.push(item);
     } else {
       nonMathItems.push(item);
@@ -306,7 +314,28 @@ export async function translateParagraphs(
     ...ambiguousItems.filter((item) => labels?.[item.paragraph.id] !== 'figure'),
   ];
 
-  // 4. Translate only the prose subset. When streaming is requested (onPiece
+  // 4. Build formula-placeholder payloads for mixed prose paragraphs so the
+  //    LLM never sees raw formula body text. Cache keys always use original
+  //    source text (not the placeholder-bearing string).
+  const placeholderById = new Map<string, FormulaPlaceholder[]>();
+  const originalTextById = new Map<string, string>();
+  const llmProseItems = proseItems.map((item) => {
+    const payload = buildTranslatePayload(item.paragraph);
+    originalTextById.set(item.paragraph.id, item.paragraph.text);
+    if (payload.hasPlaceholders) {
+      placeholderById.set(item.paragraph.id, payload.placeholders);
+    }
+    return {
+      pageNumber: item.pageNumber,
+      paragraph: {
+        ...item.paragraph,
+        // Send placeholder text to the LLM when mixed; otherwise original.
+        text: payload.hasPlaceholders ? payload.text : item.paragraph.text,
+      },
+    };
+  });
+
+  // 5. Translate only the prose subset. When streaming is requested (onPiece
   //    provided), try the streaming port first for incremental fill; fall back
   //    to the non-streaming batch path on any stream error. Correctness is
   //    guaranteed by the fallback — streaming only improves perceived speed.
@@ -316,12 +345,41 @@ export async function translateParagraphs(
   const activeProvider = settings.providers?.[0];
   const maxBatchChars = activeProvider?.maxBatchChars || settings.maxBatchChars;
   const maxTextGroupCount = activeProvider?.maxTextGroupCount || 0;
-  const batches = splitIntoBatches(proseItems, maxBatchChars, maxTextGroupCount);
+  const batches = splitIntoBatches(llmProseItems, maxBatchChars, maxTextGroupCount);
+
+  /** Reassemble a piece if it had placeholders; pass through otherwise. */
+  const finalizePiece = (
+    id: string,
+    text: string,
+  ): { translatedText: string; compositions?: TranslationResultItem['compositions'] } => {
+    const ph = placeholderById.get(id);
+    if (!ph || ph.length === 0) {
+      return { translatedText: text };
+    }
+    const { displayText, compositions } = reassembleTranslation(text, ph);
+    return {
+      translatedText: displayText,
+      compositions: compositions.map((c) => ({ kind: c.kind, text: c.text })),
+    };
+  };
+
+  const streamOnPiece =
+    onPiece &&
+    ((id: string, text: string) => {
+      const { translatedText } = finalizePiece(id, text);
+      onPiece(id, translatedText);
+    });
+
   const batchResults = await Promise.all(
     batches.map(async (batch) => {
-      if (onPiece) {
+      if (streamOnPiece) {
         try {
-          return await sendTranslationBatchStreamed(batch, sourceLanguage, targetLanguage, onPiece);
+          return await sendTranslationBatchStreamed(
+            batch,
+            sourceLanguage,
+            targetLanguage,
+            streamOnPiece,
+          );
         } catch (streamErr) {
           // Streaming failed — fall back to non-streaming. The pieces emitted
           // so far are discarded (the caller overwrites with the final result).
@@ -331,12 +389,17 @@ export async function translateParagraphs(
       return sendTranslationBatch(batch, pdfUrl, sourceLanguage, targetLanguage);
     }),
   );
-  const translatedResults = batchResults.flat().map((r) => ({
-    ...r,
-    kind: 'prose' as const,
-  }));
+  const translatedResults: TranslationResultItem[] = batchResults.flat().map((r) => {
+    const finalized = finalizePiece(r.id, r.translatedText);
+    return {
+      id: r.id,
+      translatedText: finalized.translatedText,
+      kind: 'prose' as const,
+      compositions: finalized.compositions,
+    };
+  });
 
-  // 5. Merge: prose → LLM output; figure & math → original source text + kind.
+  // 6. Merge: prose → LLM output (reassembled); figure & math → original + kind.
   const results: TranslationResultItem[] = [...translatedResults];
   const sourceById = new Map<string, string>();
   for (const { paragraph } of proseItems) {
@@ -355,9 +418,10 @@ export async function translateParagraphs(
     sourceById.set(paragraph.id, paragraph.text);
   }
 
-  // 6. Write-through cache for every result (including the source→source ones).
+  // 7. Write-through cache for every result. Keys use original source text
+  //    (never the placeholder-bearing LLM payload) so cache hits stay correct.
   for (const { id, translatedText } of results) {
-    const source = sourceById.get(id);
+    const source = sourceById.get(id) ?? originalTextById.get(id);
     if (source) {
       await cacheTranslation(source, translatedText, sourceLanguage, targetLanguage);
     }

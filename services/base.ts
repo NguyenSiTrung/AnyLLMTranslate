@@ -71,6 +71,7 @@ Rules:
 - Do NOT translate code, URLs, email addresses, or proper nouns unless appropriate.
 - If the text is already in the target language, return it unchanged.
 - If the text contains mathematical formulas, equations, or notation (LaTeX like \\(x^2\\), Unicode like x², or symbol expressions), translate only the surrounding prose and preserve the mathematical content EXACTLY as written. Do NOT translate variable names, operators, or symbols.
+- If the text contains formula placeholder tokens like {v0}, {v1}, keep every {vN} token EXACTLY as written (same indices, same braces). Translate only the prose around them. Never invent, renumber, merge, drop, or translate the contents of {vN} tokens.
 - Respond ONLY with valid JSON in this exact format: {"translations": {"id1": "translated text 1", "id2": "translated text 2"}}
 - The keys in "translations" must exactly match the input keys.
 {{glossary}}`;

@@ -67,36 +67,36 @@
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] **Task 3.1: TDD — placeholder build / reinsert / hallucination strip**
+- [x] **Task 3.1: TDD — placeholder build / reinsert / hallucination strip**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/pdfComposition.test.ts (new) -->
-  - [ ] Build `"prose {v0} prose"` from mixed runs
-  - [ ] Reinsert after translation preserves formula run boxes/text
-  - [ ] Strip invented `{v9}` not in map
-  - [ ] Pure-formula paragraph → no LLM string (or identity)
+  - [x] Build `"prose {v0} prose"` from mixed runs
+  - [x] Reinsert after translation preserves formula run boxes/text
+  - [x] Strip invented `{v9}` not in map
+  - [x] Pure-formula paragraph → no LLM string (or identity)
 
-- [ ] **Task 3.2: Implement composition helpers**
+- [x] **Task 3.2: Implement composition helpers**
   <!-- files: entrypoints/pdf-viewer/lib/pdfComposition.ts (new) -->
-  - [ ] `buildTranslatePayload(paragraph): { text, placeholders, formulaRuns }`
-  - [ ] `reassembleTranslation(translated, placeholders): { displayText, compositions }`
-  - [ ] Stable `{vN}` format; document in module header
+  - [x] `buildTranslatePayload(paragraph): { text, placeholders, formulaRuns }`
+  - [x] `reassembleTranslation(translated, placeholders): { displayText, compositions }`
+  - [x] Stable `{vN}` format; document in module header
 
-- [ ] **Task 3.3: Integrate into `translateParagraphs`**
+- [x] **Task 3.3: Integrate into `translateParagraphs`**
   <!-- files: entrypoints/pdf-viewer/lib/pdfTranslation.ts, services/base.ts (prompt only if needed) -->
-  - [ ] After math/table/prose split: for mixed paragraphs send placeholder text only
-  - [ ] Preserve formula segments in results (`kind: math` segments or composition metadata)
-  - [ ] Prompt: do not alter placeholders (extend PDF system prompt if needed)
-  - [ ] Streaming path: piece ids still map to paragraph ids; final reassembly after piece complete
-  - [ ] Cache write-through uses original source text (or documented key policy)
+  - [x] After math/table/prose split: for mixed paragraphs send placeholder text only
+  - [x] Preserve formula segments in results (`kind: math` segments or composition metadata)
+  - [x] Prompt: do not alter placeholders (extend PDF system prompt if needed)
+  - [x] Streaming path: piece ids still map to paragraph ids; final reassembly after piece complete
+  - [x] Cache write-through uses original source text (or documented key policy)
 
-- [ ] **Task 3.4: Extend `pdfTranslation` tests + mocks**
+- [x] **Task 3.4: Extend `pdfTranslation` tests + mocks**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/pdfTranslation.test.ts -->
-  - [ ] Mixed paragraph: LLM sees `{v0}`, not formula body
-  - [ ] Result kind/composition correct
-  - [ ] Fail-open paths unchanged for classify
+  - [x] Mixed paragraph: LLM sees `{v0}`, not formula body
+  - [x] Result kind/composition correct
+  - [x] Fail-open paths unchanged for classify
 
-- [ ] **Task 3.5: Phase 3 verification**
-  - [ ] Run pdfTranslation + pdfComposition tests
-  - [ ] Capture learnings
+- [x] **Task 3.5: Phase 3 verification**
+  - [x] Run pdfTranslation + pdfComposition tests
+  - [x] Capture learnings
 
 ---
 
