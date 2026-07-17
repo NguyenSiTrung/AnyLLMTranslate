@@ -16,7 +16,12 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PageTranslations } from './pdfTranslation';
-import { getProseMaskRects, paragraphHasFormulaRuns, proseOnlyOverlayText } from './pdfComposition';
+import {
+  getProseMaskRects,
+  paragraphHasFormulaRuns,
+  proseOnlyOverlayText,
+  shouldSkipLayoutOverlay,
+} from './pdfComposition';
 import { fitTextToBox, type FontMetricsHook } from './pdfTypesetting';
 import { isOcrWorkaroundActive } from './pdfScanSession';
 
@@ -157,11 +162,12 @@ export async function generateTranslatedPdf(
 
         // Selective mask: skip math/figure; for mixed runs mask only prose boxes.
         const kind = translations.paragraphKinds?.get(para.id);
+        if (shouldSkipLayoutOverlay(para, kind, translatedText)) continue;
         const compositions = translations.paragraphCompositions?.get(para.id);
         // Draw prose-only for mixed formula paragraphs so PDF math glyphs are
         // not forced through Helvetica/Noto (□ tofu). Formula stays on the
         // embedded original page under unmasked regions.
-        const drawText = proseOnlyOverlayText(translatedText, compositions);
+        const drawText = proseOnlyOverlayText(translatedText, compositions, para);
         if (!drawText) continue;
 
         let maskRects = getProseMaskRects(para, kind, translatedText);

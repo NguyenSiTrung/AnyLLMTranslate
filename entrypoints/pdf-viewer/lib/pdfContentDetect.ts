@@ -418,7 +418,86 @@ function classifyMathParagraphText(
     return 'math';
   }
 
+  // 6. Display equations from scientific PDFs (often end with "(1)" and have
+  //    dense operators; PDF.js may not expose TeX font names).
+  if (looksLikeDisplayEquation(text)) {
+    return 'math';
+  }
+
   return 'prose';
+}
+
+/**
+ * True when text looks like a standalone display equation line from a paper
+ * (high operator density, trailing equation number, etc.). Used as a failsafe
+ * when font names are hashed and LaTeX delimiters are absent.
+ */
+export function looksLikeDisplayEquation(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length < 4) return false;
+
+  const words = countWords(t);
+  const density = mathSymbolDensity(t);
+  const hasEquals = t.includes('=');
+  // Trailing equation number: ... (1)  or  ...(12)
+  const hasEqNum = /\(\s*\d{1,3}\s*\)\s*$/.test(t);
+
+  if (hasEqNum && (hasEquals || density >= 0.12 || hasStrongMathMarker(t))) {
+    return true;
+  }
+
+  // Short/medium equation line: dense math symbols + equals, not a long prose sentence.
+  if (hasEquals && density >= 0.2 && words <= 40) {
+    // Reject obvious prose that happens to contain "=" (e.g. "x = the number of…").
+    const letterRatio = (() => {
+      let letters = 0;
+      let total = 0;
+      for (const ch of t) {
+        if (/\s/.test(ch)) continue;
+        total++;
+        if (/[A-Za-z\u00C0-\u024F]/.test(ch)) letters++;
+      }
+      return total === 0 ? 0 : letters / total;
+    })();
+    // Equations have fewer plain Latin letters relative to operators/symbols.
+    if (letterRatio <= 0.72) return true;
+  }
+
+  // Very dense math fragment without many words (inline-extracted glyph soup).
+  if (density >= 0.35 && words <= 20 && (hasEquals || hasStrongMathMarker(t))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * True when overlay text contains glyphs that web/pdf-lib fonts cannot paint
+ * (□ tofu, replacement char, private-use). Such text must never cover the
+ * original canvas formula layer.
+ */
+export function hasUnsafeOverlayGlyphs(text: string): boolean {
+  if (!text) return false;
+  let bad = 0;
+  let total = 0;
+  for (const ch of text) {
+    if (/\s/.test(ch)) continue;
+    total++;
+    const code = ch.codePointAt(0) ?? 0;
+    if (
+      ch === '\uFFFD' ||
+      ch === '□' ||
+      ch === '■' ||
+      ch === '▫' ||
+      ch === '▪' ||
+      (code >= 0xe000 && code <= 0xf8ff) // BMP private use
+    ) {
+      bad++;
+    }
+  }
+  if (total === 0) return false;
+  // Any tofu in a short string, or ≥5% in longer strings.
+  return bad >= 1 && (total <= 24 || bad / total >= 0.05);
 }
 
 // ── Table / figure cell heuristics ──────────────────────────────────────────

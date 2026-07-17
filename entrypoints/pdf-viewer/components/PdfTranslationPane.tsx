@@ -15,6 +15,7 @@ import {
   getProseMaskRects,
   paragraphHasFormulaRuns,
   proseOnlyOverlayText,
+  shouldSkipLayoutOverlay,
 } from '../lib/pdfComposition';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
@@ -220,10 +221,12 @@ function LayoutOverlayInner({
       // Primary: explicit content kind + selective run masks. Math/figure and
       // pure-formula never get a white mask (canvas stays visible).
       const kind = page.paragraphKinds?.get(para.id);
+      // Failsafe at the Layout gate (display equations, tofu, pure math).
+      if (shouldSkipLayoutOverlay(para, kind, fullTranslated)) return null;
       const compositions = page.paragraphCompositions?.get(para.id);
       // Layout paints prose only — formula glyphs stay on the canvas under
       // selective unmasked regions (avoids □ tofu from web fonts).
-      const overlayText = proseOnlyOverlayText(fullTranslated, compositions);
+      const overlayText = proseOnlyOverlayText(fullTranslated, compositions, para);
       if (!overlayText) return null;
 
       let maskRects = getProseMaskRects(para, kind, fullTranslated);

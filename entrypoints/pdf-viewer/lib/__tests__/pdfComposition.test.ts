@@ -7,9 +7,11 @@ import {
   getProseMaskRects,
   proseOnlyOverlayText,
   reassembleTranslation,
+  shouldSkipLayoutOverlay,
   stripHallucinatedPlaceholders,
   placeholderToken,
 } from '../pdfComposition';
+import { looksLikeDisplayEquation, hasUnsafeOverlayGlyphs } from '../pdfContentDetect';
 import type { PdfParagraph, PdfTextRun } from '../pdfTextExtraction';
 
 function run(
@@ -200,5 +202,37 @@ describe('proseOnlyOverlayText', () => {
     expect(
       proseOnlyOverlayText('E=mc2', [{ kind: 'formula', text: 'E=mc2' }]),
     ).toBe('');
+  });
+
+  it('without compositions, strips formula-run substrings from original para', () => {
+    const p = para('The loss is L(theta) end.', [
+      run('The loss is ', { fontName: 'Times-Roman' }),
+      run('L(theta)', { fontName: 'CMMI10' }),
+      run(' end.', { fontName: 'Times-Roman' }),
+    ]);
+    const text = proseOnlyOverlayText('Mat mat la L(theta) ket thuc', undefined, p);
+    expect(text).not.toContain('L(theta)');
+    expect(text.toLowerCase()).toContain('mat');
+  });
+});
+
+describe('display equation + tofu failsafes', () => {
+  it('looksLikeDisplayEquation catches numbered paper equations', () => {
+    const eq =
+      'JPPO(θ) = E min(wi(θ)Âi, clip(wi(θ), 1−ε, 1+ε)Âi) , (1)';
+    expect(looksLikeDisplayEquation(eq)).toBe(true);
+  });
+
+  it('hasUnsafeOverlayGlyphs detects tofu boxes', () => {
+    expect(hasUnsafeOverlayGlyphs('Mất mát □□□ clip')).toBe(true);
+    expect(hasUnsafeOverlayGlyphs('Chỉ có chữ Việt bình thường')).toBe(false);
+  });
+
+  it('shouldSkipLayoutOverlay for display equations even when kind is prose', () => {
+    const eqText =
+      'J(θ)=E[min(wÂ,clip(w,1-ε,1+ε)Â)], (1)';
+    const p = para(eqText, [run(eqText, { fontName: 'Times-Roman', x: 40, width: 400 })]);
+    expect(shouldSkipLayoutOverlay(p, 'prose', 'bản dịch rác □□ clip (1)')).toBe(true);
+    expect(getProseMaskRects(p, 'prose', 'bản dịch rác □□ clip (1)')).toBeNull();
   });
 });

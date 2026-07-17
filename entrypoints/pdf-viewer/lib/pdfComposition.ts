@@ -18,6 +18,8 @@ import {
   classifyMathParagraph,
   classifyMathParagraphFromParagraph,
   classifyRuns,
+  hasUnsafeOverlayGlyphs,
+  looksLikeDisplayEquation,
   type ContentKind,
   type MathDetectOptions,
   type RunKind,
@@ -40,19 +42,46 @@ export interface MaskRect {
  * - Failsafe: pure-math text (even without `kind`) never masked so the
  *   original canvas formula stays visible (avoids tofu/□ overlay glyphs).
  */
+/**
+ * True when Layout/download must leave the original canvas alone for this
+ * paragraph (no white mask, no text overlay). Covers explicit kinds, rule
+ * math, display-equation heuristics, and tofu-laden translations of math.
+ */
+export function shouldSkipLayoutOverlay(
+  para: PdfParagraph,
+  kind: ContentKind | undefined,
+  translatedText: string,
+  options?: MathDetectOptions,
+): boolean {
+  if (kind === 'math' || kind === 'figure') return true;
+  if (translatedText.trim() === para.text.trim()) return true;
+  if (classifyMathParagraphFromParagraph(para, options) === 'math') return true;
+  if (classifyMathParagraph(translatedText, options) === 'math') return true;
+  if (looksLikeDisplayEquation(para.text)) return true;
+  // Translation is unrenderable garbage over a math-ish original → keep canvas.
+  if (
+    hasUnsafeOverlayGlyphs(translatedText) &&
+    (looksLikeDisplayEquation(para.text) ||
+      classifyMathParagraphFromParagraph(para, options) === 'math' ||
+      paragraphHasFormulaRuns(para, options))
+  ) {
+    return true;
+  }
+  // Entire translation is tofu soup — never cover the page with □ boxes.
+  if (hasUnsafeOverlayGlyphs(translatedText)) {
+    const stripped = stripUnsafeOverlayGlyphs(translatedText);
+    if (stripped.length < 8) return true;
+  }
+  return false;
+}
+
 export function getProseMaskRects(
   para: PdfParagraph,
   kind: ContentKind | undefined,
   translatedText: string,
   options?: MathDetectOptions,
 ): MaskRect[] | null {
-  if (kind === 'math' || kind === 'figure') return null;
-  if (translatedText.trim() === para.text.trim()) return null;
-
-  // Failsafe: rule-based pure math must never receive a white underlay + text
-  // overlay (web fonts cannot render PDF math glyphs → □ tofu).
-  if (classifyMathParagraphFromParagraph(para, options) === 'math') return null;
-  if (classifyMathParagraph(translatedText, options) === 'math') return null;
+  if (shouldSkipLayoutOverlay(para, kind, translatedText, options)) return null;
 
   const runs = para.runs;
   if (runs && runs.length > 0) {
@@ -82,11 +111,19 @@ export function getProseMaskRects(
   ];
 }
 
+/** Strip tofu / private-use glyphs that cannot be painted by extension fonts. */
+export function stripUnsafeOverlayGlyphs(text: string): string {
+  return text
+    .replace(/[\uFFFD□■▫▪\uE000-\uF8FF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * Layout overlay must paint **prose only** when a mixed paragraph has formula
- * compositions. Reassembled formula characters are PDF math glyphs that the
- * extension web font cannot render (□ tofu) and would cover the unmasked
- * original canvas formula. Formulas stay visible from the page canvas.
+ * compositions or formula runs. Reassembled formula characters are PDF math
+ * glyphs that the extension web font cannot render (□ tofu) and would cover
+ * the unmasked original canvas formula.
  *
  * Returns empty string when there is no prose to show (caller should skip the
  * overlay box entirely).
@@ -94,18 +131,41 @@ export function getProseMaskRects(
 export function proseOnlyOverlayText(
   translatedText: string,
   compositions?: Array<{ kind: 'prose' | 'formula'; text: string }> | null,
+  para?: PdfParagraph,
+  options?: MathDetectOptions,
 ): string {
-  if (!compositions || compositions.length === 0) {
-    return translatedText;
+  if (compositions && compositions.length > 0) {
+    const hasFormula = compositions.some((c) => c.kind === 'formula');
+    if (hasFormula) {
+      return compositions
+        .filter((c) => c.kind === 'prose')
+        .map((c) => c.text)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
   }
-  const hasFormula = compositions.some((c) => c.kind === 'formula');
-  if (!hasFormula) return translatedText;
-  return compositions
-    .filter((c) => c.kind === 'prose')
-    .map((c) => c.text)
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim();
+
+  // No compositions (e.g. cache hit): strip original formula-run substrings
+  // and unsafe glyphs so we never paint PDF math soup over the canvas.
+  let text = translatedText;
+  if (para?.runs && para.runs.length > 0) {
+    const kinds = classifyRuns(para.runs, options);
+    const formulaTexts = para.runs
+      .filter((_, i) => kinds[i] === 'formula')
+      .map((r) => r.text.trim())
+      .filter((t) => t.length >= 1)
+      // Longer first so we don't partially wipe shorter nested fragments.
+      .sort((a, b) => b.length - a.length);
+    for (const ft of formulaTexts) {
+      if (text.includes(ft)) {
+        text = text.split(ft).join(' ');
+      }
+    }
+  }
+
+  text = stripUnsafeOverlayGlyphs(text);
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** True when paragraph has at least one classified formula run. */

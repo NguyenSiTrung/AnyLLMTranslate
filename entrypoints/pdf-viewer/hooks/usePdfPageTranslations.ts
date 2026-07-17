@@ -21,7 +21,10 @@ import {
   getMemoryCachedPage,
   setMemoryCachedPage,
 } from '../lib/pdfTranslation';
-import type { ContentKind } from '../lib/pdfContentDetect';
+import {
+  classifyMathParagraphFromParagraph,
+  type ContentKind,
+} from '../lib/pdfContentDetect';
 import { extractPageText, type PdfParagraph } from '../lib/pdfTextExtraction';
 import { loadSettings } from '@/lib/config';
 import {
@@ -447,6 +450,14 @@ export function usePdfPageTranslations({
                   // Fallback when extraction fails
                 }
               }
+              // Memory cache only stores text maps — re-derive kinds so Layout
+              // can skip math/display equations (avoids □ tofu on scroll-back).
+              const kindMap = new Map<string, ContentKind>();
+              for (const p of originalParagraphs) {
+                if (classifyMathParagraphFromParagraph(p) === 'math') {
+                  kindMap.set(p.id, 'math');
+                }
+              }
               setPages((prev) => {
                 const next = new Map(prev);
                 // Cache hit: all cached paragraphs are 'success'.
@@ -456,6 +467,7 @@ export function usePdfPageTranslations({
                 next.set(pageNumber, {
                   paragraphs: cached,
                   originalParagraphs,
+                  paragraphKinds: kindMap.size > 0 ? kindMap : undefined,
                   paragraphStatus: statusMap,
                   state: 'translated',
                 });
