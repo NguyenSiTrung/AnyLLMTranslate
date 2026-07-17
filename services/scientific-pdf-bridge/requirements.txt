@@ -1,0 +1,9 @@
+# Scientific PDF Bridge — runtime dependencies
+# pdf2zh is optional for CI/dev; install for real translation:
+#   pip install pdf2zh
+# or use the Docker image (installs pdf2zh).
+
+fastapi>=0.110,<1
+uvicorn[standard]>=0.27,<1
+python-multipart>=0.0.9
+pydantic>=2,<3

@@ -11,29 +11,63 @@ Full API contract: [`docs/scientific-pdf-bridge-api.md`](../../docs/scientific-p
 Default port **17890** (matches extension `DEFAULT_SCIENTIFIC_PDF_PORT`):
 
 ```bash
+# From repo root
+docker compose -f docker-compose.scientific-pdf.yml up -d --build
+```
+
+One-liner after the image exists:
+
+```bash
 docker run --rm -d \
   --name anyllm-scientific-pdf \
   -p 17890:17890 \
+  -v anyllm-scientific-pdf-data:/data \
   anyllm-scientific-pdf-bridge:latest
-```
-
-Or from this directory after building the image (see Dockerfile when present):
-
-```bash
-docker compose -f ../../docker-compose.scientific-pdf.yml up -d
 ```
 
 ### Health check
 
 ```bash
 curl -sS http://127.0.0.1:17890/health
+# {"status":"ok","version":"1.0.0","pdf2zh":"available"}
 ```
 
 ### First-run model download
 
 pdf2zh may download layout/OCR models on the **first** job. Expect a longer
-initial run and larger disk usage; subsequent jobs reuse the cache volume when
-you mount one.
+initial run and larger disk usage; subsequent jobs reuse the cache when the
+`scientific-pdf-models` volume (compose) or `~/.cache` is persisted.
+
+## Local development (no models)
+
+```bash
+cd services/scientific-pdf-bridge
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+export MOCK_TRANSLATE=1
+uvicorn app.main:app --host 127.0.0.1 --port 17890
+```
+
+`MOCK_TRANSLATE=1` writes minimal valid mono/dual PDFs without calling pdf2zh
+(useful for CI and extension client development).
+
+### Tests
+
+```bash
+cd services/scientific-pdf-bridge
+MOCK_TRANSLATE=1 pytest -q
+```
+
+### Real translation (optional)
+
+```bash
+pip install pdf2zh
+# Do NOT set MOCK_TRANSLATE
+uvicorn app.main:app --host 127.0.0.1 --port 17890
+```
+
+Per-job credentials are mapped to `OPENAI_BASE_URL` / `OPENAI_API_KEY` /
+`OPENAI_MODEL` for the pdf2zh subprocess. Full API keys are never logged.
 
 ## API (summary)
 
@@ -44,7 +78,7 @@ you mount one.
 | `GET` | `/v1/jobs/:id` | State + progress |
 | `GET` | `/v1/jobs/:id/mono` | Monolingual PDF |
 | `GET` | `/v1/jobs/:id/dual` | Bilingual dual PDF |
-| `DELETE` | `/v1/jobs/:id` | Cancel / cleanup (optional) |
+| `DELETE` | `/v1/jobs/:id` | Cancel / cleanup |
 
 ### Job config (from extension active pool)
 
@@ -54,6 +88,21 @@ you mount one.
 - `lang_in`, `lang_out`
 
 No second credential store: keys are **per-job** and must not appear in full in logs.
+
+### Job states
+
+`queued` → `running` → `succeeded` | `failed` | `cancelled`
+
+Progress is coarse when pdf2zh does not expose fine-grained updates: `0` / `0.5` / `1`.
+
+## Environment
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MOCK_TRANSLATE` | off | `1`/`true` → skip pdf2zh, write mock PDFs |
+| `JOB_TTL_SECONDS` | `3600` | Artifact retention |
+| `SCIENTIFIC_PDF_DATA_DIR` | system temp | Job workspace root |
+| `TRANSLATE_TIMEOUT_SECONDS` | `0` (none) | Subprocess timeout |
 
 ## AGPL boundary
 
@@ -65,8 +114,3 @@ No second credential store: keys are **per-job** and must not appear in full in 
 
 Scientific mode sends the PDF and short-lived LLM credentials to the configured
 `serverUrl` (default loopback). Prefer `http://127.0.0.1:17890` only.
-
-## Development status
-
-Scaffolded by track `scientific-pdf-backend_20260717`. Implementation lands in
-Phase 2 of that track.
