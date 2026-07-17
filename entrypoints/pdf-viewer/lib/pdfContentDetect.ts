@@ -503,7 +503,41 @@ function groupIntoRows(paragraphs: PdfParagraph[]): PdfParagraph[][] {
  * Headings (`isHeading`) and long prose are never flagged.
  */
 export function classifyTableLikeParagraphs(paragraphs: PdfParagraph[]): Set<string> {
+  return classifyTableRegions(paragraphs).figureIds;
+}
+
+/** Axis-aligned table region built from short cell clusters. */
+export interface TableRegion {
+  /** Left edge in PDF space. */
+  x: number;
+  /** Top edge in PDF space (max y of cells). */
+  y: number;
+  width: number;
+  height: number;
+  /** Paragraph ids that form the cell grid (not captions outside). */
+  paragraphIds: string[];
+}
+
+export interface TableRegionResult {
+  regions: TableRegion[];
+  /** Default figure ids: cells in regions + standalone numeric fragments. */
+  figureIds: Set<string>;
+  /** Ids of paragraphs inside a table region (superset of region cells that
+   *  fall inside the expanded bounding box — still excludes long captions). */
+  regionParagraphIds: Set<string>;
+}
+
+/**
+ * Detect table **regions** (grids of short cells / multi-row clusters) and
+ * return region geometry + figure ids.
+ *
+ * Captions outside the grid (long sentence-like text near the table) are not
+ * included. Numeric cells are always figure candidates.
+ */
+export function classifyTableRegions(paragraphs: PdfParagraph[]): TableRegionResult {
   const figureIds = new Set<string>();
+  const regionParagraphIds = new Set<string>();
+  const regions: TableRegion[] = [];
 
   for (const p of paragraphs) {
     if (p.isHeading) continue;
@@ -514,24 +548,89 @@ export function classifyTableLikeParagraphs(paragraphs: PdfParagraph[]): Set<str
 
   const rows = groupIntoRows(paragraphs);
   const multiCellRows: PdfParagraph[][] = [];
+  const singleRowClusters: PdfParagraph[][] = [];
 
   for (const row of rows) {
     const cells = row.filter((p) => !p.isHeading && isCellLikeText(p.text));
     if (cells.length >= MIN_CELLS_SINGLE_ROW) {
       for (const c of cells) figureIds.add(c.id);
+      singleRowClusters.push(cells);
     }
     if (cells.length >= MIN_CELLS_MULTI_ROW) {
       multiCellRows.push(cells);
     }
   }
 
+  const regionCellSets: PdfParagraph[][] = [];
   if (multiCellRows.length >= MIN_MULTI_CELL_ROWS) {
     for (const cells of multiCellRows) {
       for (const c of cells) figureIds.add(c.id);
     }
+    // One region spanning all multi-cell rows when they share similar x-span.
+    regionCellSets.push(multiCellRows.flat());
+  }
+  for (const cells of singleRowClusters) {
+    // Already flagged as figure; only form a region if not already covered.
+    if (multiCellRows.length < MIN_MULTI_CELL_ROWS) {
+      regionCellSets.push(cells);
+    }
   }
 
-  return figureIds;
+  for (const cells of regionCellSets) {
+    if (cells.length === 0) continue;
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    let yMin = Infinity;
+    let yMax = -Infinity;
+    const ids: string[] = [];
+    for (const c of cells) {
+      xMin = Math.min(xMin, c.x);
+      xMax = Math.max(xMax, c.x + c.width);
+      yMin = Math.min(yMin, c.y - c.height);
+      yMax = Math.max(yMax, c.y);
+      ids.push(c.id);
+      regionParagraphIds.add(c.id);
+    }
+    // Small padding so nearby short labels inside the grid are covered.
+    const pad = 4;
+    const region: TableRegion = {
+      x: xMin - pad,
+      y: yMax + pad,
+      width: xMax - xMin + pad * 2,
+      height: yMax - yMin + pad * 2,
+      paragraphIds: ids,
+    };
+    regions.push(region);
+
+    // Mark other short cell-like paragraphs fully contained in the region.
+    for (const p of paragraphs) {
+      if (p.isHeading || regionParagraphIds.has(p.id)) continue;
+      if (!isCellLikeText(p.text)) continue;
+      // Long sentence-like captions stay out (isCellLikeText already caps words).
+      const cx = p.x + p.width / 2;
+      const cy = p.y;
+      const inside =
+        cx >= region.x &&
+        cx <= region.x + region.width &&
+        cy <= region.y &&
+        cy >= region.y - region.height;
+      if (inside) {
+        figureIds.add(p.id);
+        regionParagraphIds.add(p.id);
+        region.paragraphIds.push(p.id);
+      }
+    }
+  }
+
+  return { regions, figureIds, regionParagraphIds };
+}
+
+/**
+ * Whether a paragraph inside a table region should stay verbatim when
+ * `translateTableText` is enabled. Numeric cells always protected.
+ */
+export function isProtectedTableCell(text: string): boolean {
+  return isNumericishFragment(text);
 }
 
 // ── Prose short-circuit heuristic ───────────────────────────────────────────

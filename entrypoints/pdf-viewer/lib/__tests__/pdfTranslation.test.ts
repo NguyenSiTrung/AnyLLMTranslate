@@ -204,6 +204,83 @@ describe('pdfTranslation memory cache', () => {
     );
   });
 
+  it('with translateTableText, non-numeric table labels may translate while numbers stay figure', async () => {
+    vi.mocked(loadSettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+      maxBatchChars: 500,
+      pdfSettings: {
+        ...DEFAULT_SETTINGS.pdfSettings,
+        translateTableText: true,
+      },
+    } as ExtensionSettings);
+
+    const results = await translateParagraphs(
+      [
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-0',
+            text: 'Train',
+            fontSize: 10,
+            isHeading: false,
+            x: 50,
+            y: 700,
+            width: 40,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-1',
+            text: '0.91',
+            fontSize: 10,
+            isHeading: false,
+            x: 150,
+            y: 700,
+            width: 40,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-2',
+            text: 'Test',
+            fontSize: 10,
+            isHeading: false,
+            x: 50,
+            y: 680,
+            width: 40,
+            height: 10,
+          },
+        },
+        {
+          pageNumber: 1,
+          paragraph: {
+            id: '1-3',
+            text: '0.88',
+            fontSize: 10,
+            isHeading: false,
+            x: 150,
+            y: 680,
+            width: 40,
+            height: 10,
+          },
+        },
+      ],
+      'https://example.com/table-optin.pdf',
+    );
+
+    expect(results.find((r) => r.id === '1-1')?.kind).toBe('figure');
+    expect(results.find((r) => r.id === '1-3')?.kind).toBe('figure');
+    // Non-numeric labels should be eligible for translate (prose)
+    expect(results.find((r) => r.id === '1-0')?.kind).toBe('prose');
+    expect(results.find((r) => r.id === '1-2')?.kind).toBe('prose');
+  });
+
   it('skips rule-based table cells without LLM translate and tags kind figure', async () => {
     const results = await translateParagraphs(
       [

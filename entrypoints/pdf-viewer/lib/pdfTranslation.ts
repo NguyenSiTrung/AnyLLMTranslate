@@ -20,9 +20,11 @@ import { cacheTranslation } from '@/services/cacheManager';
 import type { PdfParagraph } from './pdfTextExtraction';
 import {
   classifyMathParagraphFromParagraph,
-  classifyTableLikeParagraphs,
+  classifyTableRegions,
   isObviouslyProse,
+  isProtectedTableCell,
   type ContentKind,
+  type MathDetectOptions,
 } from './pdfContentDetect';
 import {
   buildTranslatePayload,
@@ -257,21 +259,31 @@ export async function translateParagraphs(
   const sourceLanguage = settings.sourceLanguage;
   const targetLanguage = settings.targetLanguage;
 
+  const mathOpts: MathDetectOptions | undefined = settings.pdfSettings?.strictMathSkip
+    ? { strictMath: true }
+    : undefined;
+  const translateTableText = settings.pdfSettings?.translateTableText === true;
+
   // 1. Rule-based math split (deterministic, free, immune to network failure).
   //    Uses run-level multi-signal detection when runs are present; pure-formula
   //    compositions (formulaOnly) never go to the LLM.
   const mathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
   const nonMathItems: Array<{ pageNumber: number; paragraph: PdfParagraph }> = [];
   for (const item of paragraphs) {
-    const payload = buildTranslatePayload(item.paragraph);
-    if (payload.formulaOnly || classifyMathParagraphFromParagraph(item.paragraph) === 'math') {
+    const payload = buildTranslatePayload(item.paragraph, mathOpts);
+    if (
+      payload.formulaOnly ||
+      classifyMathParagraphFromParagraph(item.paragraph, mathOpts) === 'math'
+    ) {
       mathItems.push(item);
     } else {
       nonMathItems.push(item);
     }
   }
 
-  // 2. Rule-based table/figure cells (spatial + numeric), page-scoped.
+  // 2. Rule-based table regions (spatial + numeric), page-scoped.
+  //    Default: all region cells are figure. When translateTableText is on,
+  //    non-numeric table text may translate; numbers stay protected.
   const ruleFigureIds = new Set<string>();
   const byPage = new Map<number, PdfParagraph[]>();
   for (const item of nonMathItems) {
@@ -280,8 +292,25 @@ export async function translateParagraphs(
     byPage.set(item.pageNumber, list);
   }
   for (const pageParas of byPage.values()) {
-    for (const id of classifyTableLikeParagraphs(pageParas)) {
-      ruleFigureIds.add(id);
+    const { figureIds, regionParagraphIds } = classifyTableRegions(pageParas);
+    if (!translateTableText) {
+      for (const id of figureIds) ruleFigureIds.add(id);
+      continue;
+    }
+    // Opt-in: translate non-numeric table-region text; numbers always protected.
+    for (const id of figureIds) {
+      const para = pageParas.find((p) => p.id === id);
+      if (!para) continue;
+      if (isProtectedTableCell(para.text)) {
+        ruleFigureIds.add(id);
+      } else if (!regionParagraphIds.has(id)) {
+        // Non-region figure candidates (shouldn't be many) stay protected.
+        ruleFigureIds.add(id);
+      }
+      // else: non-numeric cell inside a table region → eligible for translation
+    }
+    for (const p of pageParas) {
+      if (isProtectedTableCell(p.text)) ruleFigureIds.add(p.id);
     }
   }
 
@@ -320,7 +349,7 @@ export async function translateParagraphs(
   const placeholderById = new Map<string, FormulaPlaceholder[]>();
   const originalTextById = new Map<string, string>();
   const llmProseItems = proseItems.map((item) => {
-    const payload = buildTranslatePayload(item.paragraph);
+    const payload = buildTranslatePayload(item.paragraph, mathOpts);
     originalTextById.set(item.paragraph.id, item.paragraph.text);
     if (payload.hasPlaceholders) {
       placeholderById.set(item.paragraph.id, payload.placeholders);

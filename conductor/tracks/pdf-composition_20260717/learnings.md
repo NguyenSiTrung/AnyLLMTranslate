@@ -59,3 +59,17 @@ Patterns, gotchas, and context discovered during implementation.
   - Context: Fail-open appends original formulas if model drops all placeholders.
 ---
 
+## [2026-07-17] - Phase 4 Tasks 4.1–4.4: Table regions + setting
+- **Implemented:** `classifyTableRegions`, `isProtectedTableCell`, `translateTableText` on PdfSettings, pipeline branch.
+- **Learnings:**
+  - Patterns: `classifyTableLikeParagraphs` delegates to regions for backward compat.
+  - Gotchas: When translateTableText is on, still force-protect all numeric fragments page-wide.
+---
+
+## [2026-07-17] - Phase 5 Tasks 5.1–5.3: Multi-column reading order
+- **Implemented:** `pdfReadingOrder.ts` + applied in `paragraphsFromTextItems`.
+- **Learnings:**
+  - Patterns: Spanning width ratio 0.55 keeps full-width titles out of side columns.
+  - Context: Columns left→right, within column top→bottom (PDF y descending).
+---
+

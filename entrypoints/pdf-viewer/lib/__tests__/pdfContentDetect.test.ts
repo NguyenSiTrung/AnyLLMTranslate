@@ -7,9 +7,11 @@ import {
   classifyMathParagraphFromParagraph,
   classifyRuns,
   classifyTableLikeParagraphs,
+  classifyTableRegions,
   isFormulaDominated,
   isFormulaFontName,
   isObviouslyProse,
+  isProtectedTableCell,
 } from '../pdfContentDetect';
 import type { PdfParagraph, PdfTextRun } from '../pdfTextExtraction';
 
@@ -151,6 +153,61 @@ describe('classifyTableLikeParagraphs', () => {
     const ids = classifyTableLikeParagraphs(paragraphs);
     expect(ids.has('1-0')).toBe(false);
     expect(ids.has('1-1')).toBe(false);
+  });
+});
+
+describe('classifyTableRegions', () => {
+  it('assigns region ids for multi-row multi-column short cells', () => {
+    const paragraphs = [
+      para('1-0', 'Train', { x: 50, y: 700, width: 40 }),
+      para('1-1', '0.91', { x: 150, y: 700, width: 40 }),
+      para('1-2', 'Test', { x: 50, y: 680, width: 40 }),
+      para('1-3', '0.88', { x: 150, y: 680, width: 40 }),
+    ];
+    const { regions, figureIds, regionParagraphIds } = classifyTableRegions(paragraphs);
+    expect(regions.length).toBeGreaterThanOrEqual(1);
+    expect(regionParagraphIds.has('1-0')).toBe(true);
+    expect(regionParagraphIds.has('1-1')).toBe(true);
+    expect(figureIds.has('1-0')).toBe(true);
+    expect(figureIds.has('1-3')).toBe(true);
+  });
+
+  it('does not include long prose outside the grid', () => {
+    const paragraphs = [
+      para('1-0', 'Train', { x: 50, y: 700, width: 40 }),
+      para('1-1', '0.91', { x: 150, y: 700, width: 40 }),
+      para('1-2', 'Test', { x: 50, y: 680, width: 40 }),
+      para('1-3', '0.88', { x: 150, y: 680, width: 40 }),
+      para('1-4', 'The table above reports mean accuracy across three seeds carefully.', {
+        x: 50,
+        y: 620,
+        width: 400,
+      }),
+    ];
+    const { regionParagraphIds, figureIds } = classifyTableRegions(paragraphs);
+    expect(regionParagraphIds.has('1-4')).toBe(false);
+    expect(figureIds.has('1-4')).toBe(false);
+  });
+
+  it('keeps caption-like sentences near the table eligible for prose', () => {
+    const paragraphs = [
+      para('1-0', 'A', { x: 50, y: 700, width: 20 }),
+      para('1-1', 'B', { x: 100, y: 700, width: 20 }),
+      para('1-2', 'C', { x: 150, y: 700, width: 20 }),
+      para('1-3', 'Table 1: Results of the main experiment on the test split.', {
+        x: 50,
+        y: 660,
+        width: 350,
+      }),
+    ];
+    const { figureIds } = classifyTableRegions(paragraphs);
+    expect(figureIds.has('1-0')).toBe(true);
+    expect(figureIds.has('1-3')).toBe(false);
+  });
+
+  it('marks numeric cells as protected', () => {
+    expect(isProtectedTableCell('98.5%')).toBe(true);
+    expect(isProtectedTableCell('Model')).toBe(false);
   });
 });
 

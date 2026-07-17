@@ -21,6 +21,7 @@ import type { PDFPageProxy } from 'pdfjs-dist';
 // from the package root. Importing via the deep path is the only stable way to
 // reach it in pdfjs-dist v4+.
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+import { sortParagraphsReadingOrder } from './pdfReadingOrder';
 
 /** A single text run with font/geometry (one PDF.js text item after filter). */
 export interface PdfTextRun {
@@ -282,13 +283,17 @@ function groupLinesIntoParagraphs(lines: LineWithRuns[], pageNumber: number): Pd
 /**
  * Pure paragraph grouping from PDF.js-like text items (no page proxy).
  * Used by unit tests and by `extractPageText` after filtering.
+ * Applies multi-column reading-order sort after paragraph flush.
  */
 export function paragraphsFromTextItems(
   items: PdfTextItemLike[],
   pageNumber: number,
+  options?: { pageWidth?: number; skipReadingOrder?: boolean },
 ): PdfParagraph[] {
   const lines = groupIntoLines(items);
-  return groupLinesIntoParagraphs(lines, pageNumber);
+  const paragraphs = groupLinesIntoParagraphs(lines, pageNumber);
+  if (options?.skipReadingOrder) return paragraphs;
+  return sortParagraphsReadingOrder(paragraphs, { pageWidth: options?.pageWidth });
 }
 
 /**

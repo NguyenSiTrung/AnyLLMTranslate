@@ -104,27 +104,27 @@
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] **Task 4.1: TDD — table region clustering**
+- [x] **Task 4.1: TDD — table region clustering**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/pdfContentDetect.test.ts -->
-  - [ ] Multi-row multi-column short cells → region ids
-  - [ ] Long prose outside grid not included
-  - [ ] Caption-like sentences near table remain eligible for prose
+  - [x] Multi-row multi-column short cells → region ids
+  - [x] Long prose outside grid not included
+  - [x] Caption-like sentences near table remain eligible for prose
 
-- [ ] **Task 4.2: Implement `classifyTableRegions`**
+- [x] **Task 4.2: Implement `classifyTableRegions`**
   <!-- files: entrypoints/pdf-viewer/lib/pdfContentDetect.ts -->
-  - [ ] Bounding region from cell clusters (extend beyond `classifyTableLikeParagraphs`)
-  - [ ] Mark contained paragraphs as `figure` by default
-  - [ ] Numeric cells always protected
+  - [x] Bounding region from cell clusters (extend beyond `classifyTableLikeParagraphs`)
+  - [x] Mark contained paragraphs as `figure` by default
+  - [x] Numeric cells always protected
 
-- [ ] **Task 4.3: Setting `pdfSettings.translateTableText`**
+- [x] **Task 4.3: Setting `pdfSettings.translateTableText`**
   <!-- files: types/config.ts, lib/config.ts (migration/defaults), entrypoints/pdf-viewer/lib/pdfTranslation.ts -->
-  - [ ] Default `false` in `DEFAULT_SETTINGS` / types
-  - [ ] When true: non-numeric table-region text may translate; numbers stay figure
-  - [ ] Pipeline reads setting in `translateParagraphs`
+  - [x] Default `false` in `DEFAULT_SETTINGS` / types
+  - [x] When true: non-numeric table-region text may translate; numbers stay figure
+  - [x] Pipeline reads setting in `translateParagraphs`
 
-- [ ] **Task 4.4: Phase 4 verification**
-  - [ ] Unit tests for regions + setting branch
-  - [ ] Capture learnings
+- [x] **Task 4.4: Phase 4 verification**
+  - [x] Unit tests for regions + setting branch
+  - [x] Capture learnings
 
 ---
 
@@ -132,21 +132,21 @@
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] **Task 5.1: TDD — column clustering**
+- [x] **Task 5.1: TDD — column clustering**
   <!-- files: entrypoints/pdf-viewer/lib/__tests__/pdfReadingOrder.test.ts (new) -->
-  - [ ] Synthetic two-column layout: left column fully before right
-  - [ ] Single column unchanged
-  - [ ] Wide centered title not forced into wrong column (heuristic guard)
+  - [x] Synthetic two-column layout: left column fully before right
+  - [x] Single column unchanged
+  - [x] Wide centered title not forced into wrong column (heuristic guard)
 
-- [ ] **Task 5.2: Implement reading-order sort**
+- [x] **Task 5.2: Implement reading-order sort**
   <!-- files: entrypoints/pdf-viewer/lib/pdfReadingOrder.ts (new), entrypoints/pdf-viewer/lib/pdfTextExtraction.ts -->
-  - [ ] Cluster by x-gap / midpoints
-  - [ ] Sort within column top→bottom, columns left→right
-  - [ ] Apply after paragraph flush (or as final reorder)
+  - [x] Cluster by x-gap / midpoints
+  - [x] Sort within column top→bottom, columns left→right
+  - [x] Apply after paragraph flush (or as final reorder)
 
-- [ ] **Task 5.3: Phase 5 verification**
-  - [ ] Reading-order + extraction tests green
-  - [ ] Capture learnings
+- [x] **Task 5.3: Phase 5 verification**
+  - [x] Reading-order + extraction tests green
+  - [x] Capture learnings
 
 ---
 

@@ -312,6 +312,22 @@ export interface PdfSettings {
   openMode: PdfOpenMode;
   /** Hostnames for which auto-open is suppressed even when autoOpen !== 'off'. */
   neverAutoOpenSites: string[];
+  /**
+   * When true, non-numeric text inside detected table regions may be
+   * translated. Default false: entire table region is protected (figure).
+   * Numeric/currency cells always stay verbatim.
+   */
+  translateTableText: boolean;
+  /**
+   * When true, Text mode may surface raw formula placeholder strings for
+   * debugging. Default false.
+   */
+  showFormulaPlaceholders: boolean;
+  /**
+   * When true, use stricter formula classification thresholds (more aggressive
+   * math skip). Default false.
+   */
+  strictMathSkip: boolean;
 }
 
 /** Page context extracted for context-aware translation */
@@ -579,6 +595,9 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
   autoOpen: 'off',
   openMode: 'new-tab',
   neverAutoOpenSites: [],
+  translateTableText: false,
+  showFormulaPlaceholders: false,
+  strictMathSkip: false,
 };
 
 /** Default custom theme configuration */
