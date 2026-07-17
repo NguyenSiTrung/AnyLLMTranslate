@@ -223,6 +223,12 @@ describe('display equation + tofu failsafes', () => {
     expect(looksLikeDisplayEquation(eq)).toBe(true);
   });
 
+  it('looksLikeDisplayEquation catches ASCII min/clip objectives without low letter-ratio', () => {
+    const eq =
+      'JGSPO(θ)=E[1/G sum min(si(θ)Ai,clip(si(θ),1-e,1+e)Ai)], (5)';
+    expect(looksLikeDisplayEquation(eq)).toBe(true);
+  });
+
   it('hasUnsafeOverlayGlyphs detects tofu boxes', () => {
     expect(hasUnsafeOverlayGlyphs('Mất mát □□□ clip')).toBe(true);
     expect(hasUnsafeOverlayGlyphs('Chỉ có chữ Việt bình thường')).toBe(false);
@@ -234,5 +240,16 @@ describe('display equation + tofu failsafes', () => {
     const p = para(eqText, [run(eqText, { fontName: 'Times-Roman', x: 40, width: 400 })]);
     expect(shouldSkipLayoutOverlay(p, 'prose', 'bản dịch rác □□ clip (1)')).toBe(true);
     expect(getProseMaskRects(p, 'prose', 'bản dịch rác □□ clip (1)')).toBeNull();
+  });
+
+  it('strips trailing equation from merged prose+formula overlay text', () => {
+    const merged =
+      'GSPO employs the following sequence-level optimization objective: JGSPO(θ)=E[min(siAi,clip)], (5)';
+    const p = para(merged, [run(merged, { fontName: 'Times-Roman' })]);
+    // Should not skip whole para (has prose), but overlay text must drop equation.
+    expect(shouldSkipLayoutOverlay(p, 'prose', 'Viet intro: □□□ rác (5)')).toBe(false);
+    const overlay = proseOnlyOverlayText('Viet intro objective: □□□ rác công thức (5)', undefined, p);
+    expect(overlay.toLowerCase()).toMatch(/viet|objective/);
+    expect(overlay).not.toMatch(/□□□/);
   });
 });

@@ -396,6 +396,13 @@ function classifyMathParagraphText(
 
   const words = countWords(text);
 
+  // Prose that merely *introduces* a formula (…objective: J=…) is not pure math.
+  // Those paragraphs are split at extraction; classification must stay prose so
+  // Layout can still paint the translated intro.
+  if (hasProseIntroducingFormula(text)) {
+    return 'prose';
+  }
+
   // 3. Short string with a decisive math marker (Greek letter, =, ∑, ∫,
   //    super/subscript, math alphanumeric, etc.) — Unicode math without LaTeX.
   if (words <= shortMax && hasStrongMathMarker(text)) {
@@ -429,46 +436,153 @@ function classifyMathParagraphText(
 
 /**
  * True when text looks like a standalone display equation line from a paper
- * (high operator density, trailing equation number, etc.). Used as a failsafe
- * when font names are hashed and LaTeX delimiters are absent.
+ * (high operator density, trailing equation number, nested parens, etc.).
+ * Used as a failsafe when font names are hashed and LaTeX delimiters are absent.
+ *
+ * Note: ASCII math (`min`, `clip`, `exp`) still has a high Latin-letter ratio,
+ * so we do **not** require a low letter ratio when other equation signals fire.
  */
 export function looksLikeDisplayEquation(text: string): boolean {
   const t = text.replace(/\s+/g, ' ').trim();
   if (t.length < 4) return false;
 
+  // Long multi-sentence prose — never a display equation alone.
+  // (Merged prose+equation is handled by splitting lines at extraction.)
+  if (countWords(t) > 55) return false;
+  // Multiple sentence terminators strongly suggest prose paragraphs.
+  const sentenceEnds = (t.match(/[.!?]["']?\s+[A-Z]/g) ?? []).length;
+  if (sentenceEnds >= 2) return false;
+
   const words = countWords(t);
   const density = mathSymbolDensity(t);
   const hasEquals = t.includes('=');
-  // Trailing equation number: ... (1)  or  ...(12)
+  // Trailing or near-end equation number: ... (1)  or  ...(12)
   const hasEqNum = /\(\s*\d{1,3}\s*\)\s*$/.test(t);
+  // Nested parentheses / brackets common in multi-term objectives.
+  const openParens = (t.match(/[([{]/g) ?? []).length;
+  const closeParens = (t.match(/[)\]}]/g) ?? []).length;
+  const nestedMath =
+    openParens >= 2 &&
+    closeParens >= 2 &&
+    hasEquals &&
+    density >= 0.12;
 
-  if (hasEqNum && (hasEquals || density >= 0.12 || hasStrongMathMarker(t))) {
+  // Prose introducing a formula (colon / long English head before '=') —
+  // not a pure display equation line (split at extraction instead).
+  const proseHead = hasProseIntroducingFormula(t);
+
+  // Numbered display equation (classic paper layout).
+  // Require a real formula signal beyond a trailing "(n)" alone (tofu
+  // translations like "Viet intro: □□□ (5)" must NOT match).
+  if (
+    hasEqNum &&
+    hasEquals &&
+    (density >= 0.1 || hasStrongMathMarker(t) || openParens >= 2)
+  ) {
+    if (proseHead) return false;
     return true;
   }
 
-  // Short/medium equation line: dense math symbols + equals, not a long prose sentence.
-  if (hasEquals && density >= 0.2 && words <= 40) {
-    // Reject obvious prose that happens to contain "=" (e.g. "x = the number of…").
-    const letterRatio = (() => {
-      let letters = 0;
-      let total = 0;
-      for (const ch of t) {
-        if (/\s/.test(ch)) continue;
-        total++;
-        if (/[A-Za-z\u00C0-\u024F]/.test(ch)) letters++;
-      }
-      return total === 0 ? 0 : letters / total;
-    })();
-    // Equations have fewer plain Latin letters relative to operators/symbols.
-    if (letterRatio <= 0.72) return true;
+  // Unnumbered but formula-shaped: equals + operator density + not a long English clause.
+  if (hasEquals && density >= 0.18 && words <= 45) {
+    if (proseHead) return false;
+    // Reject "X = the number of cats in the house" style prose definitions:
+    // many consecutive English words after '=' with almost no operators.
+    const afterEq = t.split('=').slice(1).join('=');
+    const afterWords = countWords(afterEq);
+    const afterDensity = mathSymbolDensity(afterEq);
+    if (afterWords >= 8 && afterDensity < 0.12 && !hasStrongMathMarker(afterEq)) {
+      return false;
+    }
+    return true;
   }
 
-  // Very dense math fragment without many words (inline-extracted glyph soup).
-  if (density >= 0.35 && words <= 20 && (hasEquals || hasStrongMathMarker(t))) {
+  // Nested multi-term objectives without a clean trailing number (number may
+  // be a separate PDF text item on the right margin).
+  if (nestedMath && words <= 45) {
+    return true;
+  }
+
+  // Very dense math fragment / glyph soup.
+  if (density >= 0.3 && words <= 25 && (hasEquals || hasStrongMathMarker(t))) {
+    return true;
+  }
+
+  // Lone equation number on the right margin — treat as non-overlay chrome
+  // (no translation value; keep canvas).
+  if (/^\(\s*\d{1,3}\s*\)$/.test(t)) {
     return true;
   }
 
   return false;
+}
+
+/**
+ * True when text is English/prose that *introduces* a formula (typically
+ * "…objective: J(θ)=…") rather than being a pure display equation.
+ */
+export function hasProseIntroducingFormula(text: string): boolean {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length < 12) return false;
+
+  // Colon-introduced equation: "… objective: <formula>"
+  // (Do not call looksLikeDisplayEquation here — it uses this helper.)
+  const colon = t.lastIndexOf(':');
+  if (colon >= 8) {
+    const head = t.slice(0, colon).trim();
+    const tail = t.slice(colon + 1).trim();
+    const tailLooksEq =
+      (tail.includes('=') && mathSymbolDensity(tail) >= 0.12) ||
+      (/\(\s*\d{1,3}\s*\)\s*$/.test(tail) &&
+        (tail.includes('=') || mathSymbolDensity(tail) >= 0.15));
+    if (countWords(head) >= 4 && mathSymbolDensity(head) < 0.12 && tailLooksEq) {
+      return true;
+    }
+  }
+
+  // Long English span before first '='.
+  if (t.includes('=')) {
+    const beforeEq = t.split('=')[0] ?? '';
+    if (countWords(beforeEq) >= 8 && mathSymbolDensity(beforeEq) < 0.12) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * If `text` is prose introducing a trailing display equation (common after
+ * line-merge: "…objective: J(θ)=…(5)"), return the prose prefix only.
+ * Otherwise return the original string unchanged.
+ */
+export function stripTrailingDisplayEquation(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length < 8) return text;
+
+  // Prefer split on the last colon (… objective: <equation>).
+  const colon = t.lastIndexOf(':');
+  if (colon >= 0 && colon < t.length - 4) {
+    const after = t.slice(colon + 1).trim();
+    if (
+      looksLikeDisplayEquation(after) ||
+      (hasUnsafeOverlayGlyphs(after) && after.includes('='))
+    ) {
+      return t.slice(0, colon + 1).trim();
+    }
+  }
+
+  // Trailing numbered equation without a colon: drop from the last "=" cluster
+  // that ends with (n), but only when the suffix itself is equation-shaped.
+  const eqNumMatch = t.match(/^(.*?)(\S[^=]{0,20}=.{4,200}\(\s*\d{1,3}\s*\))\s*$/);
+  if (eqNumMatch?.[1] && eqNumMatch[2]) {
+    const head = eqNumMatch[1].trim();
+    const tail = eqNumMatch[2].trim();
+    if (head.length >= 12 && looksLikeDisplayEquation(tail)) {
+      return head;
+    }
+  }
+
+  return text;
 }
 
 /**

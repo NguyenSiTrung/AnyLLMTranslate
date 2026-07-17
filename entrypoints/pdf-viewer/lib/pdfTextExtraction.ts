@@ -21,6 +21,7 @@ import type { PDFPageProxy } from 'pdfjs-dist';
 // from the package root. Importing via the deep path is the only stable way to
 // reach it in pdfjs-dist v4+.
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+import { looksLikeDisplayEquation } from './pdfContentDetect';
 import { sortParagraphsReadingOrder } from './pdfReadingOrder';
 
 /** A single text run with font/geometry (one PDF.js text item after filter). */
@@ -240,7 +241,15 @@ function groupLinesIntoParagraphs(lines: LineWithRuns[], pageNumber: number): Pd
     const sameLineGap = verticalGap <= 0;
     const paraBreakGap = verticalGap > (LINE_GAP_FACTOR * current.totalHeight) / current.samples;
 
-    if (paraBreakGap) {
+    // Keep display equations as their own paragraphs. Scientific PDFs place
+    // them close under intro lines; merging them into prose causes Layout to
+    // white-mask the formula and paint □ tofu over the canvas.
+    const currentIsEq = looksLikeDisplayEquation(current.text);
+    const lineIsEq = looksLikeDisplayEquation(lineText);
+    const equationBoundary =
+      !sameLineGap && ((currentIsEq && !lineIsEq) || (!currentIsEq && lineIsEq));
+
+    if (paraBreakGap || equationBoundary) {
       flush();
       current = {
         text: lineText,

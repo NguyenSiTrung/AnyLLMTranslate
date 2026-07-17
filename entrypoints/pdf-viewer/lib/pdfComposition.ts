@@ -20,6 +20,7 @@ import {
   classifyRuns,
   hasUnsafeOverlayGlyphs,
   looksLikeDisplayEquation,
+  stripTrailingDisplayEquation,
   type ContentKind,
   type MathDetectOptions,
   type RunKind,
@@ -58,6 +59,18 @@ export function shouldSkipLayoutOverlay(
   if (classifyMathParagraphFromParagraph(para, options) === 'math') return true;
   if (classifyMathParagraph(translatedText, options) === 'math') return true;
   if (looksLikeDisplayEquation(para.text)) return true;
+  // After stripping a trailing display equation, nothing left → pure math block.
+  if (stripTrailingDisplayEquation(para.text).trim().length === 0) return true;
+  const proseOnlyOriginal = stripTrailingDisplayEquation(para.text);
+  if (
+    proseOnlyOriginal !== para.text.trim() &&
+    looksLikeDisplayEquation(para.text.slice(proseOnlyOriginal.length))
+  ) {
+    // Has trailing equation but also prose — do NOT skip entirely; overlay
+    // path will paint prose only. Fall through.
+  } else if (looksLikeDisplayEquation(translatedText)) {
+    return true;
+  }
   // Translation is unrenderable garbage over a math-ish original → keep canvas.
   if (
     hasUnsafeOverlayGlyphs(translatedText) &&
@@ -69,7 +82,9 @@ export function shouldSkipLayoutOverlay(
   }
   // Entire translation is tofu soup — never cover the page with □ boxes.
   if (hasUnsafeOverlayGlyphs(translatedText)) {
-    const stripped = stripUnsafeOverlayGlyphs(translatedText);
+    const stripped = stripUnsafeOverlayGlyphs(
+      stripTrailingDisplayEquation(translatedText),
+    );
     if (stripped.length < 8) return true;
   }
   return false;
@@ -101,12 +116,21 @@ export function getProseMaskRects(
     }
   }
 
+  // When a trailing display equation was glued onto prose, only mask the
+  // upper prose fraction so the equation canvas below stays visible.
+  let height = para.height;
+  const origProse = stripTrailingDisplayEquation(para.text);
+  if (origProse !== para.text.trim() && para.text.length > 0) {
+    const ratio = Math.min(1, Math.max(0.15, origProse.length / para.text.length));
+    height = Math.max(para.fontSize || 12, para.height * ratio);
+  }
+
   return [
     {
       x: para.x,
       y: para.y,
       width: para.width,
-      height: para.height,
+      height,
     },
   ];
 }
@@ -146,16 +170,33 @@ export function proseOnlyOverlayText(
     }
   }
 
-  // No compositions (e.g. cache hit): strip original formula-run substrings
-  // and unsafe glyphs so we never paint PDF math soup over the canvas.
-  let text = translatedText;
+  // No compositions (e.g. cache hit): strip trailing display equations,
+  // original formula-run substrings (length≥2 only — single glyphs are too
+  // destructive), and unsafe glyphs so we never paint PDF math soup.
+  let text = stripTrailingDisplayEquation(translatedText);
+  if (para) {
+    text = stripTrailingDisplayEquation(
+      // Prefer original-boundary strip when translation glued equation after ":"
+      text.length >= stripTrailingDisplayEquation(para.text).length
+        ? text
+        : text,
+    );
+    // If original had a trailing equation, keep only a proportional prose prefix
+    // of the translation when we can detect the same colon split.
+    const origProse = stripTrailingDisplayEquation(para.text);
+    if (origProse !== para.text.trim() && origProse.endsWith(':')) {
+      const tColon = text.lastIndexOf(':');
+      if (tColon >= 0) {
+        text = text.slice(0, tColon + 1).trim();
+      }
+    }
+  }
   if (para?.runs && para.runs.length > 0) {
     const kinds = classifyRuns(para.runs, options);
     const formulaTexts = para.runs
       .filter((_, i) => kinds[i] === 'formula')
       .map((r) => r.text.trim())
-      .filter((t) => t.length >= 1)
-      // Longer first so we don't partially wipe shorter nested fragments.
+      .filter((t) => t.length >= 2)
       .sort((a, b) => b.length - a.length);
     for (const ft of formulaTexts) {
       if (text.includes(ft)) {

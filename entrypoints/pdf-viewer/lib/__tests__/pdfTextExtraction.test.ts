@@ -36,6 +36,41 @@ function item(
   };
 }
 
+describe('paragraphsFromTextItems — display equation split', () => {
+  it('keeps a numbered display equation as its own paragraph (not merged into intro)', () => {
+    // Intro line above, equation line just below (tight gap would normally merge).
+    const items = [
+      item('GSPO employs the following sequence-level optimization objective:', {
+        x: 50,
+        y: 400,
+        width: 400,
+        height: 12,
+        fontName: 'Times-Roman',
+      }),
+      item('JGSPO(θ)=E[min(si(θ)Ai,clip(si(θ),1-ε,1+ε)Ai)], (5)', {
+        x: 80,
+        y: 380,
+        width: 350,
+        height: 12,
+        fontName: 'Times-Roman',
+      }),
+      item('where we adopt the group-based advantage estimation:', {
+        x: 50,
+        y: 360,
+        width: 380,
+        height: 12,
+        fontName: 'Times-Roman',
+      }),
+    ];
+    const paragraphs = paragraphsFromTextItems(items, 1, { skipReadingOrder: true });
+    expect(paragraphs.length).toBeGreaterThanOrEqual(3);
+    const eq = paragraphs.find((p) => p.text.includes('(5)'));
+    expect(eq).toBeDefined();
+    expect(eq!.text).not.toMatch(/employs the following/i);
+    expect(eq!.text).not.toMatch(/where we adopt/i);
+  });
+});
+
 describe('paragraphsFromTextItems — run grouping', () => {
   it('preserves separate runs for same-line items with different fonts/sizes', () => {
     const items = [
