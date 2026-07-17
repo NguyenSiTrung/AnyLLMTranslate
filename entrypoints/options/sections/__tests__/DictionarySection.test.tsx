@@ -39,15 +39,12 @@ describe('DictionarySection', () => {
     vi.clearAllMocks();
   });
 
-  it('shows empty hero and custom terms header', () => {
-    renderSection();
+  it('empty hero, add/prepend term, and duplicate block', async () => {
+    const { unmount } = renderSection();
     expect(screen.getByRole('heading', { name: 'Custom terms' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'No custom terms yet' })).toBeInTheDocument();
     expect(screen.queryByText('Verify terms')).not.toBeInTheDocument();
-  });
 
-  it('opens add form from empty hero and prepends a term', async () => {
-    renderSection();
     fireEvent.click(screen.getByRole('button', { name: 'Add first term' }));
     fireEvent.change(screen.getByLabelText('Source term'), { target: { value: 'Foo' } });
     fireEvent.change(screen.getByLabelText('Preferred translation'), {
@@ -61,9 +58,8 @@ describe('DictionarySection', () => {
       expect(g[0].target).toBe('Bar');
     });
     expect(screen.getByText('Verify terms')).toBeInTheDocument();
-  });
+    unmount();
 
-  it('blocks duplicate source terms', async () => {
     useSettingsStore.setState({
       glossary: [{ id: '1', source: 'Foo', target: 'Bar' }],
     });

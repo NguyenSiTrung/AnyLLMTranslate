@@ -66,7 +66,7 @@ describe('content/subtitleControls', () => {
     mockStorage.clear();
   });
 
-  it('loads defaults, saved prefs, partial merge, and storage errors', async () => {
+  it('loads/saves prefs with merge, defaults, and storage error resilience', async () => {
     let prefs = await loadPreferences();
     expect(prefs).toMatchObject({
       fontSize: 16,
@@ -95,9 +95,30 @@ describe('content/subtitleControls', () => {
     vi.mocked(chrome.storage.local.get).mockRejectedValue(new Error('Storage error'));
     prefs = await loadPreferences();
     expect(prefs.fontSize).toBe(16);
-  });
 
-  it('saves preferences and swallows storage errors', async () => {
+    // Restore working storage mocks after rejection path
+    mockStorage.clear();
+    vi.mocked(chrome.storage.local.get).mockImplementation((...args: unknown[]) => {
+      const [keys, callback] = args as [
+        string | string[] | undefined | ((items: Record<string, unknown>) => void),
+        ((items: Record<string, unknown>) => void) | undefined,
+      ];
+      const result: Record<string, unknown> = {};
+      if (typeof keys === 'string') {
+        const value = mockStorage.get(keys);
+        if (value !== undefined) result[keys] = value;
+      } else if (Array.isArray(keys)) {
+        for (const key of keys) {
+          const value = mockStorage.get(key);
+          if (value !== undefined) result[key] = value;
+        }
+      } else {
+        for (const [key, value] of mockStorage.entries()) result[key] = value;
+      }
+      if (callback) callback(result);
+      return Promise.resolve(result);
+    });
+
     const config = {
       fontSize: 24,
       fontSizeMode: 'fixed' as const,
@@ -115,7 +136,7 @@ describe('content/subtitleControls', () => {
     await expect(savePreferences(config)).resolves.not.toThrow();
   });
 
-  it('mutators and reset do not throw; reset restores defaults', async () => {
+  it('mutators, reset, drag reposition, and initializeControls', async () => {
     expect(() => setFontSize(24)).not.toThrow();
     expect(() => setFontSize(5)).not.toThrow();
     expect(() => togglePosition()).not.toThrow();
@@ -129,9 +150,7 @@ describe('content/subtitleControls', () => {
     const prefs = await loadPreferences();
     expect(prefs.fontSize).toBe(16);
     expect(prefs.position).toBe('bottom');
-  });
 
-  it('enableDragReposition sets cursor and cleans up; initializeControls loads prefs', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
     const cleanup = enableDragReposition(element);

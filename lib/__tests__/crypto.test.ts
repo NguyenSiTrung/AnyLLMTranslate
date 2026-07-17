@@ -37,7 +37,7 @@ describe('crypto — API key encryption', () => {
     vi.restoreAllMocks();
   });
 
-  it('round-trips keys, preserves empty/plaintext, uses random IV, fails closed', async () => {
+  it('round-trips keys, preserves empty/plaintext, random IV, salt reuse, fails closed', async () => {
     const plaintext = 'sk-test-12345abcdef';
     const encrypted = await encryptApiKey(plaintext);
     expect(encrypted).not.toBe(plaintext);
@@ -54,20 +54,18 @@ describe('crypto — API key encryption', () => {
 
     // Undecryptable ciphertext must not leak back as a pseudo API key.
     expect(await decryptApiKey('enc:not-valid-base64!!!')).toBe('');
-  });
 
-  it('persists per-install salt and reuses it across cache resets', async () => {
     const store = installStorageMock();
     __resetSaltCacheForTest();
     expect(store[STORAGE_KEYS.ENC_SALT]).toBeUndefined();
 
-    const encrypted = await encryptApiKey('sk-persist');
+    const persisted = await encryptApiKey('sk-persist');
     const savedSalt = store[STORAGE_KEYS.ENC_SALT];
     expect(savedSalt).toBeTypeOf('string');
 
     __resetSaltCacheForTest();
     expect(store[STORAGE_KEYS.ENC_SALT]).toBe(savedSalt);
-    expect(await decryptApiKey(encrypted)).toBe('sk-persist');
+    expect(await decryptApiKey(persisted)).toBe('sk-persist');
   });
 
   it('decryptApiKeyResult reports plaintext/success/failure and extension-id rotation', async () => {

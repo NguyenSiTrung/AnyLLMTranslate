@@ -77,23 +77,18 @@ describe('ProvidersSection', () => {
     vi.clearAllMocks();
   });
 
-  it('shows empty hero when no providers', () => {
-    renderSection();
+  it('empty hero, configured list, and Edit opens drawer', () => {
+    const { unmount } = renderSection();
     expect(screen.getByText(/Connect your first LLM/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add provider/i })).toBeInTheDocument();
-  });
+    unmount();
 
-  it('shows provider name in list when configured', () => {
     useSettingsStore.setState({ providers: [sampleProvider()] });
     renderSection();
     expect(screen.getByText('OpenRouter')).toBeInTheDocument();
     expect(screen.getByText(/preferred in rotation/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Test all keys/i })).toBeInTheDocument();
-  });
 
-  it('opens drawer on Edit', () => {
-    useSettingsStore.setState({ providers: [sampleProvider()] });
-    renderSection();
     fireEvent.click(screen.getByRole('button', { name: /Edit/i }));
     expect(screen.getByRole('dialog', { name: 'OpenRouter' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Connection' })).toBeInTheDocument();

@@ -6,17 +6,14 @@ describe('findPrimaryVideo', () => {
     document.body.innerHTML = '';
   });
 
-  it('returns null when no video elements exist', () => {
+  it('returns null, single video, or largest by layout area', () => {
     expect(findPrimaryVideo()).toBeNull();
-  });
 
-  it('returns the only video when one is present', () => {
     const video = document.createElement('video');
     document.body.appendChild(video);
     expect(findPrimaryVideo()).toBe(video);
-  });
 
-  it('returns the largest video by layout area', () => {
+    document.body.innerHTML = '';
     const small = document.createElement('video');
     const large = document.createElement('video');
     document.body.appendChild(small);

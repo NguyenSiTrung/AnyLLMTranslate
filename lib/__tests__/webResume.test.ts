@@ -13,15 +13,13 @@ import {
 } from '../webResume';
 
 describe('webResume', () => {
-  it('computeResumeKey is stable, namespaced, and hash/url sensitive', () => {
+  it('key stability, serialize round-trip, freshness/TTL constants', () => {
     const a = computeResumeKey('https://x.test/page', 'abc123');
     expect(a).toBe(computeResumeKey('https://x.test/page', 'abc123'));
     expect(a).toMatch(/^webResume:/);
     expect(computeResumeKey('https://x.test/other', 'abc123')).not.toBe(a);
     expect(computeResumeKey('https://x.test/page', 'different')).not.toBe(a);
-  });
 
-  it('serialize/deserialize round-trips and rejects malformed input', () => {
     const snapshot: WebResumeSnapshot = {
       url: 'https://x.test/page',
       contentHash: 'abc123',
@@ -35,9 +33,7 @@ describe('webResume', () => {
     expect(deserializeSnapshot(serializeSnapshot(snapshot))).toEqual(snapshot);
     expect(deserializeSnapshot('not json')).toBeNull();
     expect(deserializeSnapshot(JSON.stringify({ url: 'x' }))).toBeNull();
-  });
 
-  it('isSnapshotFresh respects RESUME_TTL_DAYS; constants are stable', () => {
     const now = Date.now();
     expect(
       isSnapshotFresh(

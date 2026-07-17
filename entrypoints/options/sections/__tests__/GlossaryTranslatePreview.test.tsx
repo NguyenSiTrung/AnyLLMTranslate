@@ -34,16 +34,13 @@ describe('GlossaryTranslatePreview', () => {
     vi.clearAllMocks();
   });
 
-  it('is expanded by default and uses Verify copy', () => {
-    render(<GlossaryTranslatePreview onMismatchUpdate={vi.fn()} />);
+  it('expanded by default with Verify copy; calls onMismatchUpdate after verify', async () => {
+    const onMismatchUpdate = vi.fn();
+    render(<GlossaryTranslatePreview onMismatchUpdate={onMismatchUpdate} />);
     expect(screen.getByText('Verify terms')).toBeInTheDocument();
     expect(screen.getByLabelText('Preview input text')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument();
-  });
 
-  it('calls onMismatchUpdate after successful verify', async () => {
-    const onMismatchUpdate = vi.fn();
-    render(<GlossaryTranslatePreview onMismatchUpdate={onMismatchUpdate} />);
     fireEvent.change(screen.getByLabelText('Preview input text'), {
       target: { value: 'I love React' },
     });

@@ -34,9 +34,6 @@ function makeMockHandler({ platform, detects, patterns = [] }: MockHandlerOpts):
 
 // ---------------------------------------------------------------------------
 // Phase 1 + 3: pure-behaviour tests (no registry coupling for most).
-// `transformResponse` / `getPatterns` / `getNativeCaptionHide` /
-// `getDomCueSource` / `extractAvailableTracks` are stateless on a fresh
-// instance, so they don't need module isolation.
 // ---------------------------------------------------------------------------
 
 describe('GenericSubtitleHandler — static behaviour', () => {
@@ -46,148 +43,130 @@ describe('GenericSubtitleHandler — static behaviour', () => {
     handler = new GenericSubtitleHandler();
   });
 
-  describe('getPatterns — URL matching', () => {
+  it('URL patterns match subtitle shapes, reject non-subtitles, extract language', () => {
     const pattern = () => handler.getPatterns();
+    const matchUrls = [
+      'https://cdn.example.com/subs/movie_en.vtt',
+      'https://cdn.example.com/subs/movie_en.webvtt',
+      'https://cdn.example.com/subs/movie.vtt?token=abc',
+      'https://cdn.example.com/subs/movie.vtt#frag',
+      'https://cdn.example.com/subs/movie.srt',
+      'https://cdn.example.com/subs/movie.srt?lang=fr',
+      'https://cdn.example.com/subs/movie.ttml',
+      'https://cdn.example.com/subs/movie.ttml2',
+      'https://cdn.example.com/subs/movie.dfxp',
+      'https://cdn.example.com/subtitle/en/001',
+      'https://cdn.example.com/captions/en/main',
+      'https://cdn.example.com/texttrack/primary',
+      'https://cdn.example.com/subtitles/segment-1.vtt',
+    ];
+    for (const url of matchUrls) {
+      const matched = pattern().some((p) => p.pattern.test(url));
+      expect(matched, `expected patterns to match ${url}`).toBe(true);
+    }
 
-    it('matches common subtitle URL shapes (extensions, path tokens, query/hash)', () => {
-      const urls = [
-        'https://cdn.example.com/subs/movie_en.vtt',
-        'https://cdn.example.com/subs/movie_en.webvtt',
-        'https://cdn.example.com/subs/movie.vtt?token=abc',
-        'https://cdn.example.com/subs/movie.vtt#frag',
-        'https://cdn.example.com/subs/movie.srt',
-        'https://cdn.example.com/subs/movie.srt?lang=fr',
-        'https://cdn.example.com/subs/movie.ttml',
-        'https://cdn.example.com/subs/movie.ttml2',
-        'https://cdn.example.com/subs/movie.dfxp',
-        'https://cdn.example.com/subtitle/en/001',
-        'https://cdn.example.com/captions/en/main',
-        'https://cdn.example.com/texttrack/primary',
-        'https://cdn.example.com/subtitles/segment-1.vtt',
-      ];
-      for (const url of urls) {
-        const matched = pattern().some((p) => p.pattern.test(url));
-        expect(matched, `expected patterns to match ${url}`).toBe(true);
-      }
-    });
+    const rejectUrls = [
+      'https://cdn.example.com/manifest.m3u8',
+      'https://cdn.example.com/video/main.mp4',
+      'https://cdn.example.com/api/metadata.json',
+      'https://cdn.example.com/chapters/en.xml',
+      'https://cdn.example.com/app/manifest.webmanifest',
+      'https://cdn.example.com/srtthing.png',
+      'https://cdn.example.com/movie.vttx',
+    ];
+    for (const url of rejectUrls) {
+      const matched = pattern().some((p) => p.pattern.test(url));
+      expect(matched, `expected patterns to NOT match ${url}`).toBe(false);
+    }
 
-    it('rejects non-subtitle URLs (media, metadata, false-extension boundaries)', () => {
-      const urls = [
-        'https://cdn.example.com/manifest.m3u8',
-        'https://cdn.example.com/video/main.mp4',
-        'https://cdn.example.com/api/metadata.json',
-        'https://cdn.example.com/chapters/en.xml',
-        'https://cdn.example.com/app/manifest.webmanifest',
-        'https://cdn.example.com/srtthing.png',
-        'https://cdn.example.com/movie.vttx',
-      ];
-      for (const url of urls) {
-        const matched = pattern().some((p) => p.pattern.test(url));
-        expect(matched, `expected patterns to NOT match ${url}`).toBe(false);
-      }
-    });
-
-    it('languageExtractor derives code from query params and filename', () => {
-      const vttPattern = handler.getPatterns()[0]; // .vtt pattern
-      const extractor = vttPattern.languageExtractor;
-      expect(extractor).toBeDefined();
-      if (!extractor) return; // narrow for TS — asserted above at runtime
-      expect(extractor(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
-      expect(extractor(new URL('https://x/sub.vtt?language=fr'))).toBe('fr');
-      expect(extractor(new URL('https://x/sub.vtt?locale=ja_JP'))).toBe('ja-jp');
-      expect(extractor(new URL('https://x/movie_en.vtt'))).toBe('en');
-      expect(extractor(new URL('https://x/movie.fr.srt'))).toBe('fr');
-      // BCP-47 script subtag preserves case (zh-Hans is canonical, zh-hans is not).
-      expect(extractor(new URL('https://x/subtitle_zh-Hans.vtt'))).toBe('zh-Hans');
-      expect(extractor(new URL('https://x/sub.vtt'))).toBe('');
-    });
+    const vttPattern = handler.getPatterns()[0]; // .vtt pattern
+    const extractor = vttPattern.languageExtractor;
+    expect(extractor).toBeDefined();
+    if (!extractor) return;
+    expect(extractor(new URL('https://x/sub.vtt?lang=en-US'))).toBe('en-us');
+    expect(extractor(new URL('https://x/sub.vtt?language=fr'))).toBe('fr');
+    expect(extractor(new URL('https://x/sub.vtt?locale=ja_JP'))).toBe('ja-jp');
+    expect(extractor(new URL('https://x/movie_en.vtt'))).toBe('en');
+    expect(extractor(new URL('https://x/movie.fr.srt'))).toBe('fr');
+    // BCP-47 script subtag preserves case (zh-Hans is canonical, zh-hans is not).
+    expect(extractor(new URL('https://x/subtitle_zh-Hans.vtt'))).toBe('zh-Hans');
+    expect(extractor(new URL('https://x/sub.vtt'))).toBe('');
   });
 
-  describe('transformResponse — content validation gate', () => {
-    it('parses valid VTT / SRT / TTML bodies', () => {
-      const vtt = `WEBVTT
+  it('transformResponse, extractAvailableTracks, caption-hide/DOM/content-types', () => {
+    const vtt = `WEBVTT
 
 00:00:01.000 --> 00:00:02.000
 Hello world`;
-      expect(handler.transformResponse(vtt, 'text/vtt', 'https://x/a.vtt')).toEqual(
-        expect.arrayContaining([expect.objectContaining({ text: 'Hello world' })]),
-      );
+    expect(handler.transformResponse(vtt, 'text/vtt', 'https://x/a.vtt')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'Hello world' })]),
+    );
 
-      const srt = `1
+    const srt = `1
 00:00:01,000 --> 00:00:02,000
 Bonjour`;
-      expect(handler.transformResponse(srt, 'application/octet-stream', 'https://x/a.srt')).toEqual(
-        expect.arrayContaining([expect.objectContaining({ text: 'Bonjour' })]),
-      );
+    expect(handler.transformResponse(srt, 'application/octet-stream', 'https://x/a.srt')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'Bonjour' })]),
+    );
 
-      const ttml = `<?xml version="1.0"?>
+    const ttml = `<?xml version="1.0"?>
 <tt xmlns="http://www.w3.org/ns/ttml">
   <body><div><p begin="1s" end="2s">Hi</p></div></body>
 </tt>`;
-      expect(
-        handler.transformResponse(ttml, 'application/ttml+xml', 'https://x/a.ttml').length,
-      ).toBeGreaterThanOrEqual(1);
-    });
+    expect(
+      handler.transformResponse(ttml, 'application/ttml+xml', 'https://x/a.ttml').length,
+    ).toBeGreaterThanOrEqual(1);
 
-    it('rejects non-subtitle / empty payloads; accepts chapter-marker VTT', () => {
-      expect(
-        handler.transformResponse('Some random text\nwithout timing lines', 'text/plain', 'https://x/a.vtt'),
-      ).toEqual([]);
-      expect(handler.transformResponse('', 'text/vtt', 'https://x/a.vtt')).toEqual([]);
-      expect(handler.transformResponse('{"a":1}', 'application/json', 'https://x/a.vtt')).toEqual([]);
-      expect(
-        handler.transformResponse('<config><key>val</key></config>', 'application/xml', 'https://x/a.xml'),
-      ).toEqual([]);
+    expect(
+      handler.transformResponse('Some random text\nwithout timing lines', 'text/plain', 'https://x/a.vtt'),
+    ).toEqual([]);
+    expect(handler.transformResponse('', 'text/vtt', 'https://x/a.vtt')).toEqual([]);
+    expect(handler.transformResponse('{"a":1}', 'application/json', 'https://x/a.vtt')).toEqual([]);
+    expect(
+      handler.transformResponse('<config><key>val</key></config>', 'application/xml', 'https://x/a.xml'),
+    ).toEqual([]);
 
-      const chapters = `WEBVTT
+    const chapters = `WEBVTT
 
 CHAPTER
 00:00:00.000 --> 00:01:00.000
 Intro`;
-      expect(
-        handler.transformResponse(chapters, 'text/vtt', 'https://x/a.vtt').length,
-      ).toBeGreaterThanOrEqual(1);
-    });
-  });
+    expect(
+      handler.transformResponse(chapters, 'text/vtt', 'https://x/a.vtt').length,
+    ).toBeGreaterThanOrEqual(1);
 
-  describe('extractAvailableTracks / DOM helpers / content-types', () => {
-    it('extracts track language when present and empty when not', () => {
-      const withLang = handler.extractAvailableTracks('', '', 'https://x/sub_en.vtt');
-      expect(withLang).toHaveLength(1);
-      expect(withLang[0]).toMatchObject({ platform: 'generic', url: 'https://x/sub_en.vtt', language: 'en' });
+    const withLang = handler.extractAvailableTracks('', '', 'https://x/sub_en.vtt');
+    expect(withLang).toHaveLength(1);
+    expect(withLang[0]).toMatchObject({ platform: 'generic', url: 'https://x/sub_en.vtt', language: 'en' });
 
-      const noLang = handler.extractAvailableTracks('', '', 'https://x/subtitle/segment-1');
-      expect(noLang).toHaveLength(1);
-      expect(noLang[0].language).toBe('');
-    });
+    const noLang = handler.extractAvailableTracks('', '', 'https://x/subtitle/segment-1');
+    expect(noLang).toHaveLength(1);
+    expect(noLang[0].language).toBe('');
 
-    it('exposes caption-hide, DOM cue source, and subtitle content-types', () => {
-      const hide = handler.getNativeCaptionHide();
-      expect(hide.method).toBe('display');
-      expect(hide.selector).toContain('.vjs-text-track-display');
-      expect(hide.selector).toContain('.shaka-text-container');
-      expect(hide.selector).toContain('[data-testid*="caption"]');
+    const hide = handler.getNativeCaptionHide();
+    expect(hide.method).toBe('display');
+    expect(hide.selector).toContain('.vjs-text-track-display');
+    expect(hide.selector).toContain('.shaka-text-container');
+    expect(hide.selector).toContain('[data-testid*="caption"]');
 
-      const src = handler.getDomCueSource();
-      expect(src.cueSelector).toContain('.vjs-text-track-display');
-      expect(src.captionWindowSelector).toBeTruthy();
-      expect(src.observeRootSelector).toBe('body');
-      expect(src.captionHideMethod).toBe('display');
-      expect(src.readActiveLanguage()).toBe('');
-      expect(src.trackSwitchSelector).toBeUndefined();
+    const src = handler.getDomCueSource();
+    expect(src.cueSelector).toContain('.vjs-text-track-display');
+    expect(src.captionWindowSelector).toBeTruthy();
+    expect(src.observeRootSelector).toBe('body');
+    expect(src.captionHideMethod).toBe('display');
+    expect(src.readActiveLanguage()).toBe('');
+    expect(src.trackSwitchSelector).toBeUndefined();
 
-      const cts = handler.getContentTypePatterns();
-      expect(cts).toEqual(expect.arrayContaining(['text/vtt', 'application/x-subtitle', 'application/ttml+xml']));
-    });
+    const cts = handler.getContentTypePatterns();
+    expect(cts).toEqual(expect.arrayContaining(['text/vtt', 'application/x-subtitle', 'application/ttml+xml']));
   });
 });
 
 // ---------------------------------------------------------------------------
-// Phase 4: detect() priority — generic yields to specific handlers.
-// Uses resetModules + dynamic import for a clean registry each test.
+// Phase 4 + 5: detect() priority and settings toggle.
 // ---------------------------------------------------------------------------
 
-describe('GenericSubtitleHandler — detect() priority (specific > generic)', () => {
+describe('GenericSubtitleHandler — detect() priority and settings', () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -199,7 +178,7 @@ describe('GenericSubtitleHandler — detect() priority (specific > generic)', ()
     return { ...mod, GenericSubtitleHandler: genericMod.GenericSubtitleHandler };
   }
 
-  it('generic yields to specific handlers and falls back when none detect', async () => {
+  it('yields to specific handlers, falls back to generic; default toggle true', async () => {
     {
       const { registerSubtitleHandlers, GenericSubtitleHandler } = await importFresh();
       const generic = new GenericSubtitleHandler();
@@ -235,23 +214,12 @@ describe('GenericSubtitleHandler — detect() priority (specific > generic)', ()
       expect(platforms.every((p) => p === 'generic')).toBe(true);
       expect(platforms.length).toBeGreaterThan(0);
     }
-  });
-});
 
-// ---------------------------------------------------------------------------
-// Phase 5: settings toggle — handler is gated on enableGenericSubtitleHandler.
-// The gating itself lives in registration (content.ts); here we assert the
-// setting field exists and defaults to true.
-// ---------------------------------------------------------------------------
-
-describe('GenericSubtitleHandler — settings toggle contract', () => {
-  it('DEFAULT_SUBTITLE_SETTINGS.enableGenericSubtitleHandler defaults to true', async () => {
     const { DEFAULT_SUBTITLE_SETTINGS } = await import('@/types/config');
     expect(DEFAULT_SUBTITLE_SETTINGS.enableGenericSubtitleHandler).toBe(true);
   });
 });
 
-// Allow afterEach cleanup hooks to be added without a describe if needed later.
 afterEach(() => {
   vi.restoreAllMocks();
 });

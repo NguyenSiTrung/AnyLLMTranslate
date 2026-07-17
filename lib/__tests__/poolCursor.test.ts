@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createPoolCursor } from '../poolCursor';
 
 describe('createPoolCursor', () => {
-  it('returns null for empty pools (next/peek/reset) and always 0 for a single slot', () => {
+  it('empty/single, round-robin, resize fairness, and peek', () => {
     const empty = createPoolCursor(0);
     expect(empty.next()).toBeNull();
     empty.reset();
@@ -12,13 +12,9 @@ describe('createPoolCursor', () => {
     const single = createPoolCursor(1);
     expect(single.next()).toBe(0);
     expect(single.next()).toBe(0);
-  });
 
-  it('round-robins, wraps, and resets to 0', () => {
     const cursor = createPoolCursor(3);
-    expect([cursor.next(), cursor.next(), cursor.next(), cursor.next()]).toEqual([
-      0, 1, 2, 0,
-    ]);
+    expect([cursor.next(), cursor.next(), cursor.next(), cursor.next()]).toEqual([0, 1, 2, 0]);
     cursor.reset();
     expect(cursor.next()).toBe(0);
 
@@ -29,19 +25,17 @@ describe('createPoolCursor', () => {
       if (idx !== null) sequence.push(idx);
     }
     expect(sequence).toEqual([0, 1, 2, 3, 0, 1, 2, 3, 0, 1]);
-  });
 
-  it('resizes live (shrink/grow/zero) and keeps full-cycle fairness (FR-8 #10)', () => {
     const shrink = createPoolCursor(4);
-    shrink.next(); // 0
-    shrink.next(); // 1
+    shrink.next();
+    shrink.next();
     shrink.setSlotCount(2);
     expect(shrink.next()).toBe(0);
     expect(shrink.next()).toBe(1);
 
     const grow = createPoolCursor(2);
-    grow.next(); // 0
-    grow.next(); // 1
+    grow.next();
+    grow.next();
     grow.setSlotCount(4);
     expect(grow.next()).toBe(2);
 
@@ -63,13 +57,11 @@ describe('createPoolCursor', () => {
     const seenGrow: number[] = [];
     for (let i = 0; i < 4; i++) seenGrow.push(fairGrow.next() as number);
     expect(seenGrow.sort()).toEqual([0, 1, 2, 3]);
-  });
 
-  it('peek returns next index without advancing', () => {
-    const cursor = createPoolCursor(3);
-    expect(cursor.peek()).toBe(0);
-    expect(cursor.peek()).toBe(0);
-    expect(cursor.next()).toBe(0);
-    expect(cursor.peek()).toBe(1);
+    const peek = createPoolCursor(3);
+    expect(peek.peek()).toBe(0);
+    expect(peek.peek()).toBe(0);
+    expect(peek.next()).toBe(0);
+    expect(peek.peek()).toBe(1);
   });
 });

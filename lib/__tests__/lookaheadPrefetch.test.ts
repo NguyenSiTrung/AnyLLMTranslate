@@ -1,17 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { selectLookaheadCandidates, shouldRunLookahead } from '@/lib/lookaheadPrefetch';
 
-describe('shouldRunLookahead', () => {
-  it('skips under systemic pause or page off', () => {
+describe('lookaheadPrefetch', () => {
+  it('shouldRunLookahead skips on pause/page-off/over-threshold', () => {
     expect(
       shouldRunLookahead({ systemicPause: true, pageOff: false, activeRequests: 0 }),
     ).toBe(false);
     expect(
       shouldRunLookahead({ systemicPause: false, pageOff: true, activeRequests: 0 }),
     ).toBe(false);
-  });
-
-  it('skips when active requests exceed threshold', () => {
     expect(
       shouldRunLookahead({
         systemicPause: false,
@@ -29,10 +26,8 @@ describe('shouldRunLookahead', () => {
       }),
     ).toBe(true);
   });
-});
 
-describe('selectLookaheadCandidates', () => {
-  it('picks pieces just below the fold and caps count', () => {
+  it('selectLookaheadCandidates picks below-fold pieces, caps count, empty when none', () => {
     const ids = selectLookaheadCandidates(
       [
         { id: 'vis', isTranslated: false, inFlight: false, top: 100 },
@@ -48,9 +43,7 @@ describe('selectLookaheadCandidates', () => {
     );
     // next1/next2 are in (1000, 1700); far is outside; margin is inside IO margin
     expect(ids).toEqual(['next1', 'next2']);
-  });
 
-  it('returns empty when nothing is in the look-ahead band', () => {
     expect(
       selectLookaheadCandidates(
         [{ id: 'a', isTranslated: false, inFlight: false, top: 50 }],

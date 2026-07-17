@@ -13,8 +13,8 @@ import {
   GLOBAL_COMMAND_ORDER,
 } from '@/lib/shortcutDisplay';
 
-describe('parseShortcutKeys / gestures', () => {
-  it('parses chords, blanks, and single-token gestures/media keys', () => {
+describe('shortcutDisplay', () => {
+  it('parses chords/gestures and maps global/page rows without Alt+T/O', () => {
     expect(parseShortcutKeys('Alt+A')).toEqual(['Alt', 'A']);
     expect(parseShortcutKeys('Ctrl+Shift+Y')).toEqual(['Ctrl', 'Shift', 'Y']);
     expect(parseShortcutKeys('')).toEqual([]);
@@ -25,11 +25,7 @@ describe('parseShortcutKeys / gestures', () => {
     const row = buildGestureRow(3, 800);
     expect(row).toMatchObject({ scope: 'gesture', shortcut: 'Space × 3', keyLabel: 'Space × 3' });
     expect(row.description).toMatch(/800/);
-  });
-});
 
-describe('buildGlobalRows / PAGE_SHORTCUT_ROWS', () => {
-  it('maps API shortcuts, fills defaults, and never uses Alt+T/O', () => {
     const rows = buildGlobalRows([
       { name: 'translate-page', shortcut: 'Alt+B', description: 'ignored if meta exists' },
       { name: 'translate-input-box', shortcut: '' },
@@ -54,12 +50,10 @@ describe('buildGlobalRows / PAGE_SHORTCUT_ROWS', () => {
     expect(labels).toEqual(expect.arrayContaining(['Alt+H', 'Alt+D', 'Alt+Q', 'Escape']));
     expect(PAGE_SHORTCUT_ROWS.every((r) => r.scope === 'page')).toBe(true);
   });
-});
 
-describe('count / filter / cheatsheet', () => {
-  const sample = [...buildGlobalRows([]), ...PAGE_SHORTCUT_ROWS, buildGestureRow(3, 800)];
+  it('counts bound globals, filters, groups scopes, and formats cheatsheet', () => {
+    const sample = [...buildGlobalRows([]), ...PAGE_SHORTCUT_ROWS, buildGestureRow(3, 800)];
 
-  it('counts bound globals and filters by scope/query', () => {
     const rows = buildGlobalRows([
       { name: 'translate-page', shortcut: 'Alt+A' },
       { name: 'translate-input-box', shortcut: '' },
@@ -70,19 +64,17 @@ describe('count / filter / cheatsheet', () => {
     expect(bound).toBeLessThan(total);
 
     expect(filterShortcutRows(sample, '', 'page').every((r) => r.scope === 'page')).toBe(true);
-    expect(filterShortcutRows(sample, 'hover', 'all').some((r) => r.label.toLowerCase().includes('hover'))).toBe(
-      true,
-    );
+    expect(
+      filterShortcutRows(sample, 'hover', 'all').some((r) => r.label.toLowerCase().includes('hover')),
+    ).toBe(true);
     expect(
       filterShortcutRows(sample, 'alt+h', 'all').some(
         (r) => r.id.includes('hover') || r.shortcut.toLowerCase() === 'alt+h',
       ),
     ).toBe(true);
-  });
 
-  it('groups scopes and formats a cheatsheet', () => {
-    const rows = filterShortcutRows(sample, '', 'all');
-    const text = formatCheatsheet(rows);
+    const allRows = filterShortcutRows(sample, '', 'all');
+    const text = formatCheatsheet(allRows);
     expect(text).toContain('AnyLLMTranslate shortcuts');
     expect(text).toContain('Global');
     expect(text).toContain('Translate page:');

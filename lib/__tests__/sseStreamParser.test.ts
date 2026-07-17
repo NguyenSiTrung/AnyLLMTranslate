@@ -5,8 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { parseSSEBuffer, extractDeltaContent, extractCompletedPieces } from '../sseStreamParser';
 
-describe('parseSSEBuffer', () => {
-  it('parses complete events, [DONE], remainder, and ignores noise lines', () => {
+describe('sseStreamParser', () => {
+  it('parseSSEBuffer and extractDeltaContent cover events, [DONE], remainder, noise, and deltas', () => {
     const multi =
       'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
       'data: {"choices":[{"delta":{"content":" world"}}]}\n\n';
@@ -25,11 +25,7 @@ describe('parseSSEBuffer', () => {
     const withNoise = parseSSEBuffer(': comment\nevent: test\ndata: {"x":1}\n\n');
     expect(withNoise.events[0]).toEqual({ type: 'data', json: '{"x":1}' });
     expect(parseSSEBuffer('').events).toHaveLength(0);
-  });
-});
 
-describe('extractDeltaContent', () => {
-  it('extracts content deltas and tolerates role-only/usage/malformed chunks', () => {
     expect(extractDeltaContent('{"choices":[{"delta":{"content":"Hello"}}]}')).toBe('Hello');
     expect(extractDeltaContent('{"choices":[{"delta":{"role":"assistant"}}]}')).toBe('');
     expect(extractDeltaContent('{"choices":[],"usage":{"prompt_tokens":10}}')).toBe('');
@@ -38,10 +34,8 @@ describe('extractDeltaContent', () => {
       extractDeltaContent('{"choices":[{"delta":{"content":"héllo \\"wörld\\" 日本語"}}]}'),
     ).toBe('héllo "wörld" 日本語');
   });
-});
 
-describe('extractCompletedPieces', () => {
-  it('extracts complete pairs from full/partial buffers with escaping', () => {
+  it('extractCompletedPieces handles full/partial buffers, escaping, knownIds, and empty', () => {
     const full = extractCompletedPieces('{"p1":"Hello","p2":"World"}', ['p1', 'p2']);
     expect(full.get('p1')).toBe('Hello');
     expect(full.get('p2')).toBe('World');
@@ -57,9 +51,7 @@ describe('extractCompletedPieces', () => {
     expect(
       extractCompletedPieces('{"p1":"val}ue,with{symbols","p2":"ok"}', ['p1', 'p2']).get('p1'),
     ).toBe('val}ue,with{symbols');
-  });
 
-  it('filters knownIds, handles empty buffer, and keeps completed values stable', () => {
     const pieces = extractCompletedPieces('{"p1":"A","unknown":"B","p2":"C"}', ['p1', 'p2']);
     expect(pieces.size).toBe(2);
     expect(pieces.has('unknown')).toBe(false);

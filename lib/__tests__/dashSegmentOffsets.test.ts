@@ -23,29 +23,24 @@ const MPD_RELATIVE = `<?xml version="1.0" encoding="UTF-8"?>
 const BASE_URL = 'https://prd.media.max.com/asset/123/manifest-params=x';
 
 describe('buildSegmentOffsetMap', () => {
-  it('maps each segment URL to its cumulative presentation-time offset in ms', () => {
+  it('maps offsets, timescale, S.t jumps, and empty edge cases', () => {
     const map = buildSegmentOffsetMap(MPD_RELATIVE, BASE_URL);
-    // First <S t=0 d=1000 r=1>: 2 segments at t=0, t=1000 (timescale 1000 → 0ms, 1000ms)
-    // Second <S d=1000> (no t): 1 segment at t=2000 → 2000ms
     const entries = [...map.entries()];
     expect(entries).toHaveLength(3);
-    expect(entries[0][1]).toBe(0); // t=0 → 0ms
-    expect(entries[1][1]).toBe(1000); // t=1000 → 1000ms
-    expect(entries[2][1]).toBe(2000); // t=2000 → 2000ms
-  });
-
-  it('returns absolute offsets that scale with timescale', () => {
-    const mpdTimescale90k = MPD_RELATIVE.replace('timescale="1000"', 'timescale="90000"')
-      .replace('d="1000"', 'd="90000"');
-    const map = buildSegmentOffsetMap(mpdTimescale90k, BASE_URL);
-    const entries = [...map.entries()];
     expect(entries[0][1]).toBe(0);
-    expect(entries[1][1]).toBe(1000); // 90000/90000 * 1000 = 1000ms
+    expect(entries[1][1]).toBe(1000);
     expect(entries[2][1]).toBe(2000);
-  });
 
-  it('uses the S.t attribute when present mid-timeline', () => {
-    const mpd = `<?xml version="1.0"?>
+    const mpdTimescale90k = MPD_RELATIVE.replace('timescale="1000"', 'timescale="90000"').replace(
+      'd="1000"',
+      'd="90000"',
+    );
+    const scaled = [...buildSegmentOffsetMap(mpdTimescale90k, BASE_URL).entries()];
+    expect(scaled[0][1]).toBe(0);
+    expect(scaled[1][1]).toBe(1000);
+    expect(scaled[2][1]).toBe(2000);
+
+    const midT = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period>
   <AdaptationSet contentType="text"><Representation id="t1" mimeType="text/vtt">
     <SegmentTemplate timescale="1000" media="$Number$.vtt"><SegmentTimeline>
@@ -54,20 +49,13 @@ describe('buildSegmentOffsetMap', () => {
     </SegmentTimeline></SegmentTemplate>
   </Representation></AdaptationSet>
 </Period></MPD>`;
-    const map = buildSegmentOffsetMap(mpd, 'https://x.com/m.mpd');
-    const offsets = [...map.values()];
-    expect(offsets).toEqual([0, 50000]);
-  });
+    expect([...buildSegmentOffsetMap(midT, 'https://x.com/m.mpd').values()]).toEqual([0, 50000]);
 
-  it('returns an empty map when no subtitle AdaptationSets exist', () => {
-    const mpd = `<?xml version="1.0"?>
+    const videoOnly = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period>
   <AdaptationSet mimeType="video/mp4"><Representation id="v1"/></AdaptationSet>
 </Period></MPD>`;
-    expect(buildSegmentOffsetMap(mpd, 'https://x.com/m.mpd').size).toBe(0);
-  });
-
-  it('returns an empty map for unparseable input', () => {
+    expect(buildSegmentOffsetMap(videoOnly, 'https://x.com/m.mpd').size).toBe(0);
     expect(buildSegmentOffsetMap('not xml', 'https://x.com/m.mpd').size).toBe(0);
     expect(buildSegmentOffsetMap('', 'https://x.com/m.mpd').size).toBe(0);
   });

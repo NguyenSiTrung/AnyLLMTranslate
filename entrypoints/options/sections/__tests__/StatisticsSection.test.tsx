@@ -147,7 +147,7 @@ describe('StatisticsSection', () => {
     mockedBuildCsv.mockReturnValue('date,characters\n');
   });
 
-  it('shows loading skeleton then KPIs after load', async () => {
+  it('loading skeleton → KPIs; empty guidance; error + retry', async () => {
     let resolveStats!: (value: TranslationStatsV2) => void;
     let resolveDays!: (value: DailyStatRecord[]) => void;
 
@@ -178,7 +178,7 @@ describe('StatisticsSection', () => {
     mockedSumLifetimeOrDays.mockReturnValue(totals);
     mockedPercentDelta.mockReturnValue(10);
 
-    render(<StatisticsSection />);
+    const { unmount } = render(<StatisticsSection />);
 
     expect(screen.getByTestId('stats-loading-skeleton')).toBeInTheDocument();
     expect(screen.queryByText('LLM Characters')).not.toBeInTheDocument();
@@ -196,9 +196,9 @@ describe('StatisticsSection', () => {
     expect(screen.getByText('Page Sessions')).toBeInTheDocument();
     expect(screen.getByText('Subtitle Cues')).toBeInTheDocument();
     expect(screen.getByText('Selection Events')).toBeInTheDocument();
-  });
+    unmount();
 
-  it('shows empty guidance when lifetime zero and no days', async () => {
+    // Empty
     mockedGetStatsV2.mockResolvedValue(
       makeSummary({
         lifetime: { ...ZERO_COUNTERS },
@@ -209,183 +209,74 @@ describe('StatisticsSection', () => {
     mockedSumLifetimeOrDays.mockReturnValue({ ...ZERO_COUNTERS });
     mockedPercentDelta.mockReturnValue(null);
 
-    render(<StatisticsSection />);
-
+    const { unmount: unmount2 } = render(<StatisticsSection />);
     await waitFor(() => {
       expect(screen.getByTestId('stats-empty-state')).toBeInTheDocument();
     });
-
     expect(screen.getByText(/start translating/i)).toBeInTheDocument();
     expect(screen.queryByText('LLM Characters')).not.toBeInTheDocument();
-  });
+    unmount2();
 
-  it('shows error and retry', async () => {
+    // Error + retry
+    const callsBeforeError = mockedGetStatsV2.mock.calls.length;
     mockedGetStatsV2.mockRejectedValue(new Error('storage failed'));
     mockedLoadDays.mockResolvedValue([]);
-
     render(<StatisticsSection />);
-
     await waitFor(() => {
       expect(screen.getByText(/unable to load statistics/i)).toBeInTheDocument();
     });
-
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
 
     setupPopulatedMocks();
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
-
     await waitFor(() => {
       expect(screen.getByText('LLM Characters')).toBeInTheDocument();
     });
-    expect(mockedGetStatsV2).toHaveBeenCalledTimes(2);
+    // Initial failed load + retry
+    expect(mockedGetStatsV2.mock.calls.length).toBe(callsBeforeError + 2);
   });
 
-  it('renders period radiogroup', async () => {
-    setupPopulatedMocks();
-
-    render(<StatisticsSection />);
+  it('period/export/host-off/retention/reset/insights interactions', async () => {
+    const { summary, days } = setupPopulatedMocks();
+    const { unmount } = render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByRole('radiogroup', { name: /period/i })).toBeInTheDocument();
     });
-
     for (const label of ['7d', '30d', '90d', 'All']) {
       expect(screen.getByRole('radio', { name: label })).toBeInTheDocument();
     }
-
     expect(screen.getByRole('radio', { name: '30d' })).toHaveAttribute('aria-checked', 'true');
-
     fireEvent.click(screen.getByRole('radio', { name: '7d' }));
-
     await waitFor(() => {
       expect(mockedLoadDays).toHaveBeenCalledWith('7d');
     });
-  });
-
-  it('enables export menu after load and downloads JSON/CSV', async () => {
-    const { summary, days } = setupPopulatedMocks();
-    render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /export/i })).toBeEnabled();
     });
-
     fireEvent.click(screen.getByRole('button', { name: /export/i }));
-
     const jsonItem = await screen.findByRole('menuitem', { name: /export json/i });
     fireEvent.click(jsonItem);
-
     expect(mockedBuildJson).toHaveBeenCalledWith({ summary, daily: days });
     expect(mockedTriggerDownload).toHaveBeenCalledWith(
       expect.stringMatching(/^anyllm-stats-\d{4}-\d{2}-\d{2}\.json$/),
       '{"lifetime":{}}',
       'application/json',
     );
-
     fireEvent.click(screen.getByRole('button', { name: /export/i }));
     const csvItem = await screen.findByRole('menuitem', { name: /export csv/i });
     fireEvent.click(csvItem);
-
     expect(mockedBuildCsv).toHaveBeenCalledWith(days);
     expect(mockedTriggerDownload).toHaveBeenCalledWith(
       expect.stringMatching(/^anyllm-stats-daily-\d{4}-\d{2}-\d{2}\.csv$/),
       'date,characters\n',
       'text/csv',
     );
-  });
-
-  it('shows host-off CTA when host tracking is disabled', async () => {
-    setupPopulatedMocks({
-      preferences: { hostTrackingEnabled: false, retentionDays: 90 },
-    });
-
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('stats-host-off-cta')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText(/host tracking is off/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /enable host tracking/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /enable host tracking/i }));
-
-    await waitFor(() => {
-      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ hostTrackingEnabled: true });
-    });
-  });
-
-  it('updates retention preference when select changes', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/daily detail retention/i)).toBeInTheDocument();
-    });
-
-    const select = screen.getByLabelText(/daily detail retention/i);
-    fireEvent.change(select, { target: { value: '30' } });
-
-    await waitFor(() => {
-      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ retentionDays: 30 });
-    });
-  });
-
-  it('opens reset modal and confirms wipe', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /reset statistics/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/reset usage statistics\?/i)).toBeInTheDocument();
-    });
-
-    expect(screen.getByText(/translation cache is not affected/i)).toBeInTheDocument();
-
-    // Confirm is the danger action inside the modal (same label as opener).
-    const dialog = screen.getByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: /reset statistics/i }));
-
-    await waitFor(() => {
-      expect(mockedResetStats).toHaveBeenCalled();
-    });
-  });
-
-  it('cancels reset modal without calling resetStats', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /reset statistics/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /keep statistics/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /keep statistics/i }));
-
-    await waitFor(() => {
-      expect(screen.queryByText(/reset usage statistics\?/i)).not.toBeInTheDocument();
-    });
-    expect(mockedResetStats).not.toHaveBeenCalled();
-  });
-
-  it('renders insights, breakdowns, and privacy copy after load', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByTestId('stats-insights')).toBeInTheDocument();
     });
-
     expect(screen.getByText(/cache served 67%/i)).toBeInTheDocument();
     expect(mockedBuildInsights).toHaveBeenCalled();
     expect(screen.getByTestId('stats-breakdowns')).toBeInTheDocument();
@@ -393,16 +284,58 @@ describe('StatisticsSection', () => {
     expect(screen.getByText('Top hosts')).toBeInTheDocument();
     expect(screen.getByTestId('stats-data-controls')).toBeInTheDocument();
     expect(screen.getByText(/statistics stay on this device/i)).toBeInTheDocument();
+
+    const select = screen.getByLabelText(/daily detail retention/i);
+    fireEvent.change(select, { target: { value: '30' } });
+    await waitFor(() => {
+      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ retentionDays: 30 });
+    });
+
+    // Reset confirm
+    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/reset usage statistics\?/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/translation cache is not affected/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /keep statistics/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/reset usage statistics\?/i)).not.toBeInTheDocument();
+    });
+    expect(mockedResetStats).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/reset usage statistics\?/i)).toBeInTheDocument();
+    });
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /reset statistics/i }));
+    await waitFor(() => {
+      expect(mockedResetStats).toHaveBeenCalled();
+    });
+    unmount();
+
+    // Host-off CTA
+    setupPopulatedMocks({
+      preferences: { hostTrackingEnabled: false, retentionDays: 90 },
+    });
+    render(<StatisticsSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId('stats-host-off-cta')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/host tracking is off/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /enable host tracking/i }));
+    await waitFor(() => {
+      expect(mockedUpdatePrefs).toHaveBeenCalledWith({ hostTrackingEnabled: true });
+    });
   });
 
-  it('subscribes to chrome.storage onChanged for stats key', async () => {
+  it('storage onChanged soft-reloads without skeleton flash', async () => {
     setupPopulatedMocks();
     render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByText('LLM Characters')).toBeInTheDocument();
     });
-
     expect(chrome.storage.onChanged.addListener).toHaveBeenCalled();
     const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0][0];
 
@@ -430,18 +363,6 @@ describe('StatisticsSection', () => {
     await waitFor(() => {
       expect(mockedLoadDays.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
-  });
-
-  it('soft-reloads without skeleton when summary already loaded (storage change)', async () => {
-    setupPopulatedMocks();
-    render(<StatisticsSection />);
-
-    await waitFor(() => {
-      expect(screen.getByText('LLM Characters')).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId('stats-loading-skeleton')).not.toBeInTheDocument();
-
-    const listener = vi.mocked(chrome.storage.onChanged.addListener).mock.calls[0][0];
 
     let resolveStats!: (value: TranslationStatsV2) => void;
     mockedGetStatsV2.mockReturnValue(
@@ -458,11 +379,8 @@ describe('StatisticsSection', () => {
       );
     });
 
-    // Soft reload: keep current dashboard visible; no skeleton flash.
     expect(screen.queryByTestId('stats-loading-skeleton')).not.toBeInTheDocument();
     expect(screen.getByText('LLM Characters')).toBeInTheDocument();
-
-    // Unblock pending promise so act/waiters can settle.
     resolveStats(makeSummary());
   });
 });

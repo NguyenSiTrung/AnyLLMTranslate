@@ -49,8 +49,12 @@ function makeDay(
 
 describe('statsExport', () => {
   describe('buildStatsJsonExport', () => {
-    it('JSON includes lifetime and daily dimensions, no apiKey field', () => {
-      const summary = makeSummary();
+    it('includes lifetime/daily dims, omits version/recentDailySummary, and never leaks apiKey', () => {
+      const summary = makeSummary({
+        recentDailySummary: [
+          { date: '2026-07-09', totals: { ...ZERO_COUNTERS, characters: 5 } },
+        ],
+      });
       const dayWithHost = makeDay(
         '2026-07-09',
         { characters: 100, apiCalls: 2 },
@@ -74,39 +78,27 @@ describe('statsExport', () => {
         characters: 100,
         apiCalls: 2,
       });
-      expect(json).not.toMatch(/apiKey/);
-    });
-
-    it('omits version and recentDailySummary from export payload', () => {
-      const summary = makeSummary({
-        recentDailySummary: [
-          { date: '2026-07-09', totals: { ...ZERO_COUNTERS, characters: 5 } },
-        ],
-      });
-      const json = buildStatsJsonExport({ summary, daily: [] });
-      const parsed = JSON.parse(json);
-
       expect(parsed.version).toBeUndefined();
       expect(parsed.recentDailySummary).toBeUndefined();
       expect(Object.keys(parsed).sort()).toEqual(
         ['daily', 'lastActiveAt', 'lifetime', 'preferences', 'trackingSince'].sort(),
       );
-    });
+      expect(json).not.toMatch(/apiKey/);
 
-    it('does not leak extraneous sensitive-looking fields from summary', () => {
       const dirty = {
         ...makeSummary(),
         apiKey: 'sk-secret',
       } as TranslationStatsV2 & { apiKey: string };
-
-      const json = buildStatsJsonExport({ summary: dirty, daily: [] });
-      expect(json).not.toMatch(/apiKey/);
-      expect(json).not.toMatch(/sk-secret/);
+      const dirtyJson = buildStatsJsonExport({ summary: dirty, daily: [] });
+      expect(dirtyJson).not.toMatch(/apiKey/);
+      expect(dirtyJson).not.toMatch(/sk-secret/);
     });
   });
 
   describe('buildStatsCsvExport', () => {
-    it('CSV has header and one row per day totals only', () => {
+    it('emits header-only for empty, one totals row per day in order, without byHost', () => {
+      expect(buildStatsCsvExport([]).trim()).toBe(CSV_HEADER);
+
       const day = makeDay('2026-07-08', {
         characters: 50,
         apiCalls: 3,
@@ -121,31 +113,23 @@ describe('statsExport', () => {
       });
       day.byHost = { 'youtube.com': { characters: 50 } };
 
-      const csv = buildStatsCsvExport([day]);
-      const lines = csv.trim().split('\n');
+      const single = buildStatsCsvExport([day]);
+      const singleLines = single.trim().split('\n');
+      expect(singleLines[0]).toContain('date,characters,apiCalls');
+      expect(singleLines[0]).toBe(CSV_HEADER);
+      expect(singleLines).toHaveLength(2);
+      expect(single).not.toContain('byHost');
+      expect(single).not.toContain('youtube.com');
+      expect(singleLines[1]).toBe('2026-07-08,50,3,1,2,20,1,4,0,1,0');
 
-      expect(lines[0]).toContain('date,characters,apiCalls');
-      expect(lines[0]).toBe(CSV_HEADER);
-      expect(lines).toHaveLength(2);
-      expect(csv).not.toContain('byHost');
-      expect(csv).not.toContain('youtube.com');
-      expect(lines[1]).toBe('2026-07-08,50,3,1,2,20,1,4,0,1,0');
-    });
-
-    it('emits header only when daily is empty', () => {
-      const csv = buildStatsCsvExport([]);
-      expect(csv.trim()).toBe(CSV_HEADER);
-    });
-
-    it('emits one data row per day in order', () => {
       const days = [
         makeDay('2026-07-01', { characters: 1 }),
         makeDay('2026-07-02', { characters: 2, apiCalls: 1 }),
       ];
-      const lines = buildStatsCsvExport(days).trim().split('\n');
-      expect(lines).toHaveLength(3);
-      expect(lines[1]).toBe('2026-07-01,1,0,0,0,0,0,0,0,0,0');
-      expect(lines[2]).toBe('2026-07-02,2,1,0,0,0,0,0,0,0,0');
+      const multi = buildStatsCsvExport(days).trim().split('\n');
+      expect(multi).toHaveLength(3);
+      expect(multi[1]).toBe('2026-07-01,1,0,0,0,0,0,0,0,0,0');
+      expect(multi[2]).toBe('2026-07-02,2,1,0,0,0,0,0,0,0,0');
     });
   });
 
@@ -172,9 +156,7 @@ describe('statsExport', () => {
         click,
       } as unknown as HTMLAnchorElement;
 
-      const createElement = vi
-        .spyOn(document, 'createElement')
-        .mockReturnValue(anchor);
+      const createElement = vi.spyOn(document, 'createElement').mockReturnValue(anchor);
 
       triggerDownload('anyllm-stats-2026-07-09.json', '{"ok":true}', 'application/json');
 

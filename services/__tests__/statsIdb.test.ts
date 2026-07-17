@@ -43,35 +43,31 @@ describe('statsIdb', () => {
     vi.clearAllMocks();
   });
 
-  it('round-trips a daily record', async () => {
+  it('round-trips daily records and returns all stored days', async () => {
     const day = emptyDay('2026-07-01');
     day.totals.characters = 42;
     await setDailyRecord(day);
     await expect(getDailyRecord('2026-07-01')).resolves.toEqual(day);
+
+    const a = emptyDay('2026-06-01');
+    const b = emptyDay('2026-07-01');
+    b.totals.characters = 42;
+    await setDailyRecord(a);
+    await setDailyRecord(b);
+    const all = await getAllDailyRecords();
+    expect(all).toHaveLength(2);
+    expect(all).toEqual(expect.arrayContaining([a, b]));
   });
 
-  it('deletes records before cutoff', async () => {
+  it('deletes records before cutoff and clearAllDailyRecords empties store', async () => {
     await setDailyRecord(emptyDay('2026-06-01'));
     await setDailyRecord(emptyDay('2026-07-01'));
     const n = await deleteDailyRecordsBefore('2026-06-15');
     expect(n).toBe(1);
     await expect(getDailyRecord('2026-06-01')).resolves.toBeUndefined();
     await expect(getDailyRecord('2026-07-01')).resolves.toBeDefined();
-  });
 
-  it('clearAllDailyRecords empties store', async () => {
-    await setDailyRecord(emptyDay('2026-07-01'));
     await clearAllDailyRecords();
     await expect(getDailyRecord('2026-07-01')).resolves.toBeUndefined();
-  });
-
-  it('getAllDailyRecords returns all stored days', async () => {
-    const a = emptyDay('2026-06-01');
-    const b = emptyDay('2026-07-01');
-    await setDailyRecord(a);
-    await setDailyRecord(b);
-    const all = await getAllDailyRecords();
-    expect(all).toHaveLength(2);
-    expect(all).toEqual(expect.arrayContaining([a, b]));
   });
 });

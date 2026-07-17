@@ -16,56 +16,49 @@ describe('withRetry', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('returns the value on first success (no retries)', async () => {
-    const fn = vi.fn().mockResolvedValue('ok');
-    const result = await withRetry(fn, { maxRetries: 3, baseDelayMs: 10, shouldRetry: alwaysRetry });
-    expect(result).toBe('ok');
-    expect(fn).toHaveBeenCalledTimes(1);
-  });
+  it('success, maxRetries rethrow, 4xx fail-fast, 5xx recover, exponential backoff', async () => {
+    const ok = vi.fn().mockResolvedValue('ok');
+    expect(
+      await withRetry(ok, { maxRetries: 3, baseDelayMs: 10, shouldRetry: alwaysRetry }),
+    ).toBe('ok');
+    expect(ok).toHaveBeenCalledTimes(1);
 
-  it('retries up to maxRetries then rethrows when shouldRetry is true', async () => {
-    const fn = vi.fn().mockRejectedValue(new TransientError('boom'));
-    const p = withRetry(fn, { maxRetries: 2, baseDelayMs: 10, shouldRetry: alwaysRetry });
-    // Attach the handler synchronously to avoid an unhandled-rejection window
-    // between fn() rejecting and our assertion running.
-    const assertion = expect(p).rejects.toThrow('boom');
-    // Advance through the backoff delays (10, 20) as they fire.
+    const fail = vi.fn().mockRejectedValue(new TransientError('boom'));
+    const failP = withRetry(fail, { maxRetries: 2, baseDelayMs: 10, shouldRetry: alwaysRetry });
+    const failAssert = expect(failP).rejects.toThrow('boom');
     await vi.runAllTimersAsync();
-    await assertion;
-    // 1 initial + 2 retries = 3 attempts.
-    expect(fn).toHaveBeenCalledTimes(3);
-  });
+    await failAssert;
+    expect(fail).toHaveBeenCalledTimes(3);
 
-  it('does NOT retry when shouldRetry returns false (4xx fail-fast)', async () => {
-    const err = new ApiError('Bad Request', 400);
-    const fn = vi.fn().mockRejectedValue(err);
+    const badReq = vi.fn().mockRejectedValue(new ApiError('Bad Request', 400));
     await expect(
-      withRetry(fn, { maxRetries: 5, baseDelayMs: 10, shouldRetry: noRetryOn4xx }),
+      withRetry(badReq, { maxRetries: 5, baseDelayMs: 10, shouldRetry: noRetryOn4xx }),
     ).rejects.toThrow('Bad Request');
-    expect(fn).toHaveBeenCalledTimes(1); // no retry
-  });
+    expect(badReq).toHaveBeenCalledTimes(1);
 
-  it('retries on 5xx (shouldRetry returns true) and recovers', async () => {
-    const err = new ApiError('Server Error', 503);
-    const fn = vi.fn()
-      .mockRejectedValueOnce(err)
+    const recover = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError('Server Error', 503))
       .mockResolvedValueOnce('recovered');
-    const p = withRetry(fn, { maxRetries: 3, baseDelayMs: 10, shouldRetry: noRetryOn4xx });
-    // Flush the backoff timer; the promise then settles to 'recovered'.
+    const recoverP = withRetry(recover, {
+      maxRetries: 3,
+      baseDelayMs: 10,
+      shouldRetry: noRetryOn4xx,
+    });
     await vi.advanceTimersByTimeAsync(10);
-    await expect(p).resolves.toBe('recovered');
-    expect(fn).toHaveBeenCalledTimes(2);
-  });
+    await expect(recoverP).resolves.toBe('recovered');
+    expect(recover).toHaveBeenCalledTimes(2);
 
-  it('uses exponential backoff: baseDelayMs * 2^(attempt-1)', async () => {
-    const fn = vi.fn().mockRejectedValue(new TransientError('x'));
+    const backoff = vi.fn().mockRejectedValue(new TransientError('x'));
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-    const p = withRetry(fn, { maxRetries: 2, baseDelayMs: 100, shouldRetry: alwaysRetry });
-    // Attach the handler synchronously to avoid an unhandled-rejection window.
-    const assertion = expect(p).rejects.toThrow('x');
+    const backoffP = withRetry(backoff, {
+      maxRetries: 2,
+      baseDelayMs: 100,
+      shouldRetry: alwaysRetry,
+    });
+    const backoffAssert = expect(backoffP).rejects.toThrow('x');
     await vi.runAllTimersAsync();
-    await assertion;
-    // Two backoff delays scheduled: 100 (attempt 1 -> retry 1), 200 (attempt 2 -> retry 2).
+    await backoffAssert;
     const delays = setTimeoutSpy.mock.calls
       .map((c) => c[1])
       .filter((d): d is number => typeof d === 'number' && d >= 100);

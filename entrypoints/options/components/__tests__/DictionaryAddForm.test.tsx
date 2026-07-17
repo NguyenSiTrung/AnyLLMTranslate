@@ -7,7 +7,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { DictionaryAddForm } from '../DictionaryAddForm';
 
 describe('DictionaryAddForm', () => {
-  it('submits on Enter when both fields filled; shows error; cancel fires', () => {
+  it('submits on Enter, shows error, cancel, and disables empty Add', () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
     const onSourceChange = vi.fn();
@@ -39,17 +39,15 @@ describe('DictionaryAddForm', () => {
       />,
     );
     expect(screen.getByText('This source term already exists')).toBeInTheDocument();
-  });
 
-  it('disables Add when a field is empty', () => {
-    render(
+    rerender(
       <DictionaryAddForm
         source="foo"
         target="  "
-        onSourceChange={vi.fn()}
-        onTargetChange={vi.fn()}
-        onSubmit={vi.fn()}
-        onCancel={vi.fn()}
+        onSourceChange={onSourceChange}
+        onTargetChange={onTargetChange}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
       />,
     );
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();

@@ -32,7 +32,7 @@ describe('usePoolKeyStatuses', () => {
     vi.useRealTimers();
   });
 
-  it('loads statuses when enabled', async () => {
+  it('loads when enabled, skips when disabled, marks unavailable on failure', async () => {
     const { result } = renderHook(() => usePoolKeyStatuses(true));
     await flushMicrotasks();
     expect(result.current.statuses?.k1).toBeDefined();
@@ -40,25 +40,22 @@ describe('usePoolKeyStatuses', () => {
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
       action: 'GET_POOL_KEY_STATUSES',
     });
-  });
 
-  it('does not poll when disabled', async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockClear();
     vi.useFakeTimers();
     renderHook(() => usePoolKeyStatuses(false));
     await act(async () => {
       vi.advanceTimersByTime(10000);
     });
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
-  });
+    vi.useRealTimers();
 
-  it('marks live unavailable on failure response', async () => {
     vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({
       success: false,
       error: 'nope',
     });
-
-    const { result } = renderHook(() => usePoolKeyStatuses(true));
+    const { result: failed } = renderHook(() => usePoolKeyStatuses(true));
     await flushMicrotasks();
-    expect(result.current.liveAvailable).toBe(false);
+    expect(failed.current.liveAvailable).toBe(false);
   });
 });

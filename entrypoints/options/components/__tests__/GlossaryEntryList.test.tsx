@@ -26,8 +26,8 @@ const noopHandlers = {
 };
 
 describe('GlossaryEntryList', () => {
-  it('shows footer count and mismatch chip; sorts mismatches first', () => {
-    render(
+  it('footer/mismatch sort and search-miss empty state', () => {
+    const { rerender } = render(
       <GlossaryEntryList
         entries={entries}
         searchQuery=""
@@ -40,11 +40,9 @@ describe('GlossaryEntryList', () => {
     expect(screen.getByText('Not honoured')).toBeInTheDocument();
     const items = screen.getAllByRole('listitem');
     expect(items[0]).toHaveAttribute('aria-label', expect.stringContaining('Gamma'));
-  });
 
-  it('shows search miss empty state', () => {
     const onClearSearch = vi.fn();
-    render(
+    rerender(
       <GlossaryEntryList
         entries={entries}
         searchQuery="zzz"

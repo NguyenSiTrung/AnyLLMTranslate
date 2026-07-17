@@ -38,7 +38,7 @@ describe('messageBridge', () => {
     }
   }
 
-  it('sendMessage posts channel payload with unique requestIds', () => {
+  it('sendMessage uniqueness/payload and onMessage filtering, once, cleanup', () => {
     const id1 = sendMessage('SUBTITLE_INTERCEPTED', { test: true });
     const id2 = sendMessage('SUBTITLE_INTERCEPTED', {});
     expect(id1).not.toBe(id2);
@@ -50,9 +50,7 @@ describe('messageBridge', () => {
         payload: { test: true },
       }),
     );
-  });
 
-  it('onMessage matches channel+type, rejects foreign origins/mismatches, supports once+cleanup', () => {
     const handler = vi.fn();
     const cleanup = onMessage('SUBTITLE_TRANSLATED', handler);
 

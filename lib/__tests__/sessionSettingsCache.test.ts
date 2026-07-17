@@ -27,16 +27,16 @@ describe('sessionSettingsCache', () => {
     _resetSessionSettingsCacheForTests();
   });
 
-  it('loads from storage on first call and reuses cache on second', async () => {
+  it('loads once, reuses cache, and coalesces concurrent first loads', async () => {
     const a = await loadSettingsCached();
     const b = await loadSettingsCached();
     expect(a.targetLanguage).toBe('vi');
     expect(b).toBe(a);
     expect(loadSettingsMock).toHaveBeenCalledTimes(1);
     expect(hasSessionSettingsCache()).toBe(true);
-  });
 
-  it('coalesces concurrent first loads into one storage read', async () => {
+    _resetSessionSettingsCacheForTests();
+    loadSettingsMock.mockReset();
     let resolveLoad!: (v: typeof DEFAULT_SETTINGS) => void;
     loadSettingsMock.mockReturnValue(
       new Promise((resolve) => {
@@ -47,13 +47,13 @@ describe('sessionSettingsCache', () => {
     const p1 = loadSettingsCached();
     const p2 = loadSettingsCached();
     resolveLoad({ ...DEFAULT_SETTINGS, targetLanguage: 'en' });
-    const [a, b] = await Promise.all([p1, p2]);
-    expect(a.targetLanguage).toBe('en');
-    expect(b).toBe(a);
+    const [c, d] = await Promise.all([p1, p2]);
+    expect(c.targetLanguage).toBe('en');
+    expect(d).toBe(c);
     expect(loadSettingsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('reloads after invalidateSessionSettingsCache', async () => {
+  it('reloads after invalidate and clears hasSessionSettingsCache', async () => {
     await loadSettingsCached();
     invalidateSessionSettingsCache();
     expect(hasSessionSettingsCache()).toBe(false);
@@ -61,34 +61,10 @@ describe('sessionSettingsCache', () => {
     const next = await loadSettingsCached();
     expect(next.targetLanguage).toBe('fr');
     expect(loadSettingsMock).toHaveBeenCalledTimes(2);
-  });
 
-  it('invalidates when chrome.storage SETTINGS changes', async () => {
-    // Install listener via first load
-    await loadSettingsCached();
-    expect(hasSessionSettingsCache()).toBe(true);
-
-    // Simulate storage change if chrome mock provides listeners
-    const chromeApi = globalThis.chrome as
-      | {
-          storage?: {
-            onChanged?: {
-              addListener: (cb: (changes: unknown, area: string) => void) => void;
-            };
-          };
-        }
-      | undefined;
-
-    // Manually invalidate to prove the public path; full chrome listener is
-    // covered when the extension runtime fires onChanged after Options save.
-    if (!chromeApi?.storage?.onChanged) {
-      invalidateSessionSettingsCache();
-    } else {
-      // Fire any registered listeners if the test env captured them
-      invalidateSessionSettingsCache();
-    }
-    expect(hasSessionSettingsCache()).toBe(false);
-    // STORAGE_KEYS.SETTINGS is the key we watch
+    // SETTINGS key is the storage key we watch for chrome.storage onChanged.
     expect(STORAGE_KEYS.SETTINGS).toBeTruthy();
+    invalidateSessionSettingsCache();
+    expect(hasSessionSettingsCache()).toBe(false);
   });
 });

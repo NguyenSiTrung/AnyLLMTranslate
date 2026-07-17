@@ -74,7 +74,7 @@ describe('ShortcutsSection', () => {
     });
   });
 
-  it('renders studio header and live global + page + gesture shortcuts', async () => {
+  it('renders studio, live shortcuts, Not set unbound, and search filter', async () => {
     render(<ShortcutsSection />);
     expect(screen.getByText('Shortcut Studio')).toBeInTheDocument();
     await waitFor(() => {
@@ -86,19 +86,10 @@ describe('ShortcutsSection', () => {
     expect(screen.getByText('Space × 3')).toBeInTheDocument();
     expect(screen.queryByText('Alt+T')).not.toBeInTheDocument();
     expect(screen.queryByText('Alt+O')).not.toBeInTheDocument();
-  });
 
-  it('shows Not set for unbound global command', async () => {
-    render(<ShortcutsSection />);
-    await waitFor(() => {
-      expect(screen.getByText('Inline translate')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Inline translate')).toBeInTheDocument();
     expect(screen.getAllByText('Not set').length).toBeGreaterThanOrEqual(1);
-  });
 
-  it('filters by search query', async () => {
-    render(<ShortcutsSection />);
-    await waitFor(() => expect(screen.getByText('Translate page')).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/search shortcuts/i), {
       target: { value: 'hover' },
     });
@@ -106,11 +97,12 @@ describe('ShortcutsSection', () => {
     expect(screen.queryByText('Translate page')).not.toBeInTheDocument();
   });
 
-  it('copies cheatsheet and opens manage URL', async () => {
+  it('copies cheatsheet, opens manage URL, navigates to Inline', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.assign(navigator, { clipboard: { writeText } });
+    const onNav = vi.fn();
 
-    render(<ShortcutsSection />);
+    render(<ShortcutsSection onNavigateToInline={onNav} />);
     await waitFor(() => expect(screen.getByText('Translate page')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: /copy all/i }));
@@ -123,12 +115,7 @@ describe('ShortcutsSection', () => {
     expect(mockTabsCreate).toHaveBeenCalledWith({
       url: 'chrome://extensions/shortcuts',
     });
-  });
 
-  it('navigates to Inline from gesture action', async () => {
-    const onNav = vi.fn();
-    render(<ShortcutsSection onNavigateToInline={onNav} />);
-    await waitFor(() => expect(screen.getByText('Space × 3')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /configure on inline/i }));
     expect(onNav).toHaveBeenCalled();
   });

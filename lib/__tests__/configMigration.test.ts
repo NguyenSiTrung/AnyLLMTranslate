@@ -24,40 +24,10 @@ describe('loadSettings migration', () => {
     vi.clearAllMocks();
   });
 
-  it('force merges CRITICAL_GLOBAL_EXCLUDES with user excludes', async () => {
+  it('merges CRITICAL_GLOBAL_EXCLUDES and strips deprecated/bare inline excludes', async () => {
     mockGet.mockResolvedValue({
       [STORAGE_KEYS.SETTINGS]: {
-        globalExcludeSelectors: ['.my-custom-rule', 'pre'],
-        provider: { apiKey: 'test' } // decryptApiKeyResult is mocked above
-      }
-    });
-
-    const settings = await loadSettings();
-    expect(settings.globalExcludeSelectors).toContain('.my-custom-rule');
-    CRITICAL_GLOBAL_EXCLUDES.forEach(selector => {
-      expect(settings.globalExcludeSelectors).toContain(selector);
-    });
-  });
-
-  it('removes deprecated inline selectors during migration', async () => {
-    mockGet.mockResolvedValue({
-      [STORAGE_KEYS.SETTINGS]: {
-        globalExcludeSelectors: ['code', '.my-custom-rule', 'kbd', '.mathjax', '.katex'],
-        provider: { apiKey: 'test' }
-      }
-    });
-
-    const settings = await loadSettings();
-    expect(settings.globalExcludeSelectors).toContain('.my-custom-rule');
-    expect(settings.globalExcludeSelectors).not.toContain('code');
-    expect(settings.globalExcludeSelectors).not.toContain('kbd');
-    expect(settings.globalExcludeSelectors).not.toContain('.mathjax');
-    expect(settings.globalExcludeSelectors).not.toContain('.katex');
-  });
-
-  it('strips bare inline excludes from stored site rules', async () => {
-    mockGet.mockResolvedValue({
-      [STORAGE_KEYS.SETTINGS]: {
+        globalExcludeSelectors: ['.my-custom-rule', 'pre', 'code', 'kbd', '.mathjax', '.katex'],
         siteRules: [
           {
             id: 'builtin-github-root',
@@ -74,6 +44,15 @@ describe('loadSettings migration', () => {
     });
 
     const settings = await loadSettings();
+    expect(settings.globalExcludeSelectors).toContain('.my-custom-rule');
+    CRITICAL_GLOBAL_EXCLUDES.forEach((selector) => {
+      expect(settings.globalExcludeSelectors).toContain(selector);
+    });
+    expect(settings.globalExcludeSelectors).not.toContain('code');
+    expect(settings.globalExcludeSelectors).not.toContain('kbd');
+    expect(settings.globalExcludeSelectors).not.toContain('.mathjax');
+    expect(settings.globalExcludeSelectors).not.toContain('.katex');
+
     const github = settings.siteRules.find((r) => r.hostname === 'github.com');
     expect(github?.excludeSelectors).toEqual(['.highlight', 'pre']);
     expect(github?.excludeSelectors).not.toContain('code');

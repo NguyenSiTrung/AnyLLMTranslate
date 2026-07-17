@@ -7,8 +7,8 @@ import {
   parseTimestamp,
 } from '@/lib/subtitleParser';
 
-describe('parseWebVTT', () => {
-  it('parses basic cues, multi-line text, HTML, voice tags, and positioning', () => {
+describe('subtitleParser', () => {
+  it('parses WebVTT cues, metadata, BOM/blocks, and empty input', () => {
     const vtt = `WEBVTT
 
 1
@@ -30,9 +30,7 @@ Short format cue`;
     expect(cues[1].voice).toBe('John');
     expect(cues[1].text).toBe('Hello world');
     expect(cues[2].startTime).toBe(5);
-  });
 
-  it('strips BOM, skips NOTE/STYLE/REGION/malformed blocks, handles empty input', () => {
     expect(parseWebVTT('')).toEqual([]);
     const bom = parseWebVTT('\uFEFFWEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest');
     expect(bom[0].text).toBe('Test');
@@ -56,10 +54,8 @@ Actual cue`;
     expect(parseWebVTT(withBlocks)).toHaveLength(1);
     expect(parseWebVTT(withBlocks)[0].text).toBe('Actual cue');
   });
-});
 
-describe('parseSRT', () => {
-  it('parses SRT with comma ms and CRLF; no voice tags', () => {
+  it('parses SRT and auto-detects formats/timestamps', () => {
     const srt = `1
 00:00:01,500 --> 00:00:04,750
 Hello world
@@ -76,11 +72,7 @@ Second cue`;
       '1\r\n00:00:01,000 --> 00:00:04,000\r\nTest\r\n\r\n2\r\n00:00:05,000 --> 00:00:08,000\r\nSecond',
     );
     expect(crlf).toHaveLength(2);
-  });
-});
 
-describe('parseSubtitles / detectFormat / parseTimestamp', () => {
-  it('auto-detects formats and parses timestamps', () => {
     expect(parseSubtitles('WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nTest')[0].text).toBe('Test');
     expect(parseSubtitles('random content')).toEqual([]);
 

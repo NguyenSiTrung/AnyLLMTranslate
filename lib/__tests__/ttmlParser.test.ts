@@ -1,23 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { parseTTML, parseTtmlTime } from '@/lib/ttmlParser';
 
-describe('parseTtmlTime', () => {
-  it('parses clock time with milliseconds', () => {
+describe('ttmlParser', () => {
+  it('parses clock/tick/seconds times and TTML cues with edge cases', () => {
     expect(parseTtmlTime('00:00:12.340')).toBeCloseTo(12.34, 3);
     expect(parseTtmlTime('01:02:03.500')).toBeCloseTo(3723.5, 3);
-  });
-
-  it('parses tick times', () => {
     expect(parseTtmlTime('123400000t', 10_000_000)).toBeCloseTo(12.34, 3);
-  });
-
-  it('parses fractional seconds', () => {
     expect(parseTtmlTime('12.34s')).toBeCloseTo(12.34, 3);
-  });
-});
 
-describe('parseTTML', () => {
-  it('extracts cues from TTML paragraphs', () => {
     const ttml = `<?xml version="1.0" encoding="UTF-8"?>
 <tt xmlns="http://www.w3.org/ns/ttml">
   <body>
@@ -27,9 +17,7 @@ describe('parseTTML', () => {
     </div>
   </body>
 </tt>`;
-
     const cues = parseTTML(ttml);
-
     expect(cues).toHaveLength(2);
     expect(cues[0]).toMatchObject({
       startTime: expect.closeTo(12.34, 3),
@@ -37,15 +25,11 @@ describe('parseTTML', () => {
       text: 'Hello there',
     });
     expect(cues[1].text).toBe('General Kenobi');
-  });
 
-  it('returns empty array for invalid XML', () => {
     expect(parseTTML('<broken')).toEqual([]);
     expect(parseTTML('')).toEqual([]);
-  });
 
-  it('handles line breaks inside cues', () => {
-    const ttml = `<?xml version="1.0"?>
+    const br = `<?xml version="1.0"?>
 <tt xmlns="http://www.w3.org/ns/ttml">
   <body>
     <div>
@@ -53,8 +37,6 @@ describe('parseTTML', () => {
     </div>
   </body>
 </tt>`;
-
-    const cues = parseTTML(ttml);
-    expect(cues[0].text).toBe('Line one Line two');
+    expect(parseTTML(br)[0].text).toBe('Line one Line two');
   });
 });

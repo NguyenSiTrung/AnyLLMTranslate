@@ -39,203 +39,136 @@ describe('FetchInterceptor', () => {
     window.fetch = realFetch;
   });
 
-  describe('HTTP error guard', () => {
-    it('returns original response unmodified for 404 status', async () => {
-      const errorResponse = new Response('Not Found', { status: 404, statusText: 'Not Found' });
-      mockFetch.mockResolvedValue(errorResponse);
+  it('HTTP error guard vs 200 interception; non-match passthrough; custom timeout', async () => {
+    const errorResponse = new Response('Not Found', { status: 404, statusText: 'Not Found' });
+    mockFetch.mockResolvedValue(errorResponse);
 
-      interceptor.enable();
+    interceptor.enable();
 
-      const result = await window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+    const result = await window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+    expect(result.status).toBe(404);
+    expect(bridge.send).not.toHaveBeenCalled();
 
-      expect(result.status).toBe(404);
-      expect(bridge.send).not.toHaveBeenCalled();
+    const okResponse = new Response('WEBVTT\n\ntest', {
+      status: 200,
+      headers: { 'Content-Type': 'text/vtt' },
     });
+    mockFetch.mockResolvedValue(okResponse);
 
-    it('proceeds with interception for 200 status', async () => {
-      const okResponse = new Response('WEBVTT\n\ntest', {
-        status: 200,
-        headers: { 'Content-Type': 'text/vtt' },
-      });
-      mockFetch.mockResolvedValue(okResponse);
-
-      interceptor.enable();
-
-      // Start the fetch — it will block waiting for translation
-      const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
-
-      // Give microtasks time to settle
-      await vi.waitFor(() => {
-        expect(bridge.send).toHaveBeenCalledWith(
-          'SUBTITLE_INTERCEPTED',
-          expect.objectContaining({ platform: 'udemy' }),
-        );
-      });
-
-      // The fetch is still pending (waiting for translation message)
-      // Clean up — let it timeout naturally
-      fetchPromise.catch(() => {});
-    });
-  });
-
-  describe('lifecycle robustness', () => {
-    it('restores a passthrough fetch on disable', async () => {
-      interceptor.enable();
-      const patched = window.fetch;
-      expect(patched).not.toBe(mockFetch);
-
-      interceptor.disable();
-
-      // Restored fetch is the (bound) original — distinct from the patch and
-      // delegates straight to the underlying mock.
-      expect(window.fetch).not.toBe(patched);
-      mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
-      await window.fetch('https://example.com/x');
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('is idempotent across repeated enable/disable cycles', async () => {
-      interceptor.enable();
-      interceptor.disable();
-      interceptor.enable();
-
-      const normalResponse = new Response('OK', { status: 200 });
-      mockFetch.mockResolvedValue(normalResponse);
-
-      await window.fetch('https://example.com/api/data');
-
-      // A single layer of patching → exactly one underlying fetch call.
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not clobber a foreign fetch patch on disable', () => {
-      interceptor.enable();
-      const foreignFetch = vi.fn() as unknown as typeof window.fetch;
-      window.fetch = foreignFetch;
-
-      interceptor.disable();
-
-      expect(window.fetch).toBe(foreignFetch);
-      // Restore for afterAll teardown
-      window.fetch = mockFetch as unknown as typeof window.fetch;
-    });
-  });
-
-  describe('non-matching requests', () => {
-    it('passes through non-subtitle requests without interception', async () => {
-      const normalResponse = new Response('OK', { status: 200 });
-      mockFetch.mockResolvedValue(normalResponse);
-
-      interceptor.enable();
-
-      const result = await window.fetch('https://example.com/api/data');
-
-      expect(result.status).toBe(200);
-      expect(bridge.send).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('origin validation (Phase 1.4)', () => {
-    it('ignores translated messages from foreign origins', async () => {
-      const okResponse = new Response('WEBVTT\n\ntest', {
-        status: 200,
-        headers: { 'Content-Type': 'text/vtt' },
-      });
-      mockFetch.mockResolvedValue(okResponse);
-
-      // Capture the message handler the interceptor registers
-      const messageHandlers: ((event: MessageEvent) => void)[] = [];
-      const originalAdd = window.addEventListener;
-      const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation(
-        (type: string, handler: EventListenerOrEventListenerObject) => {
-          if (type === 'message' && typeof handler === 'function') {
-            messageHandlers.push(handler);
-          }
-        },
+    const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+    await vi.waitFor(() => {
+      expect(bridge.send).toHaveBeenCalledWith(
+        'SUBTITLE_INTERCEPTED',
+        expect.objectContaining({ platform: 'udemy' }),
       );
-      const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(
-        (_type: string, handler: EventListenerOrEventListenerObject) => {
-          if (typeof handler === 'function') {
-            const idx = messageHandlers.indexOf(handler);
-            if (idx !== -1) messageHandlers.splice(idx, 1);
-          }
-        },
+    });
+    fetchPromise.catch(() => {});
+
+    mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
+    bridge.send.mockClear();
+    const passthrough = await window.fetch('https://example.com/api/data');
+    expect(passthrough.status).toBe(200);
+    expect(bridge.send).not.toHaveBeenCalled();
+
+    interceptor.setTimeout(5000);
+    mockFetch.mockResolvedValue(
+      new Response('WEBVTT\n\ntest', { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
+    );
+    expect(() => window.fetch('https://cdna.udemycdn.com/subs/course.vtt')).not.toThrow();
+  });
+
+  it('lifecycle: restore on disable, idempotent re-enable, foreign patch preserved', async () => {
+    interceptor.enable();
+    const patched = window.fetch;
+    expect(patched).not.toBe(mockFetch);
+
+    interceptor.disable();
+    expect(window.fetch).not.toBe(patched);
+    mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
+    await window.fetch('https://example.com/x');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    interceptor.enable();
+    interceptor.disable();
+    interceptor.enable();
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue(new Response('OK', { status: 200 }));
+    await window.fetch('https://example.com/api/data');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const foreignFetch = vi.fn() as unknown as typeof window.fetch;
+    window.fetch = foreignFetch;
+    interceptor.disable();
+    expect(window.fetch).toBe(foreignFetch);
+    window.fetch = mockFetch as unknown as typeof window.fetch;
+  });
+
+  it('ignores translated messages from foreign origins', async () => {
+    const okResponse = new Response('WEBVTT\n\ntest', {
+      status: 200,
+      headers: { 'Content-Type': 'text/vtt' },
+    });
+    mockFetch.mockResolvedValue(okResponse);
+
+    const messageHandlers: ((event: MessageEvent) => void)[] = [];
+    const originalAdd = window.addEventListener;
+    const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation(
+      (type: string, handler: EventListenerOrEventListenerObject) => {
+        if (type === 'message' && typeof handler === 'function') {
+          messageHandlers.push(handler);
+        }
+      },
+    );
+    const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(
+      (_type: string, handler: EventListenerOrEventListenerObject) => {
+        if (typeof handler === 'function') {
+          const idx = messageHandlers.indexOf(handler);
+          if (idx !== -1) messageHandlers.splice(idx, 1);
+        }
+      },
+    );
+
+    interceptor.enable();
+
+    const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
+    fetchPromise.catch(() => {});
+
+    await vi.waitFor(() => {
+      expect(bridge.send).toHaveBeenCalledWith(
+        'SUBTITLE_INTERCEPTED',
+        expect.objectContaining({ platform: 'udemy' }),
       );
-
-      interceptor.enable();
-
-      // Trigger interception but don't await (it blocks on translation)
-      const fetchPromise = window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
-      fetchPromise.catch(() => {});
-
-      // Wait for SUBTITLE_INTERCEPTED to be sent
-      await vi.waitFor(() => {
-        expect(bridge.send).toHaveBeenCalledWith(
-          'SUBTITLE_INTERCEPTED',
-          expect.objectContaining({ platform: 'udemy' }),
-        );
-      });
-
-      // Forge a translated message from a foreign origin with the correct requestId
-      const forgedEvent = {
-        data: {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'req-456',
-          payload: { vttContent: 'WEBVTT\nforged' },
-        },
-        origin: 'https://evil.example.com',
-      } as MessageEvent;
-      for (const handler of [...messageHandlers]) {
-        handler(forgedEvent);
-      }
-
-      // The forged message should have been ignored — the handler is still registered
-      expect(messageHandlers.length).toBeGreaterThan(0);
-
-      addSpy.mockRestore();
-      removeSpy.mockRestore();
-      // Restore the original addEventListener so interceptor.disable() works
-      // (it captures the real one in the spy above).
-      // Use the captured reference to ensure a clean teardown.
-      // Suppress unused warning for the original reference.
-      void originalAdd;
     });
+
+    const forgedEvent = {
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_TRANSLATED',
+        requestId: 'req-456',
+        payload: { vttContent: 'WEBVTT\nforged' },
+      },
+      origin: 'https://evil.example.com',
+    } as MessageEvent;
+    for (const handler of [...messageHandlers]) {
+      handler(forgedEvent);
+    }
+
+    expect(messageHandlers.length).toBeGreaterThan(0);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+    void originalAdd;
   });
 
-  describe('configurable timeout', () => {
-    it('accepts custom timeout via setTimeout()', () => {
-      interceptor.setTimeout(5000);
-      interceptor.enable();
-      const okResponse = new Response('WEBVTT\n\ntest', { status: 200, headers: { 'Content-Type': 'text/vtt' } });
-      mockFetch.mockResolvedValue(okResponse);
+  it('Content-Type secondary detection and URL pattern precedence', async () => {
+    const ctRegistry = new InterceptorRegistry();
+    ctRegistry.registerContentTypePatterns([
+      { platform: 'generic', contentTypes: ['text/vtt', 'application/x-subtitle'] },
+    ]);
+    const ctInterceptor = new FetchInterceptor(ctRegistry, bridge);
+    mockFetch.mockReset();
 
-      // Just verify it doesn't throw with custom timeout
-      expect(() => window.fetch('https://cdna.udemycdn.com/subs/course.vtt')).not.toThrow();
-    });
-  });
-
-  describe('Content-Type secondary detection (Phase 2)', () => {
-    // Use a registry with NO URL patterns but a content-type pattern, so the
-    // generic content-type path is the only way to detect the subtitle.
-    let ctRegistry: InstanceType<typeof InterceptorRegistry>;
-    let ctInterceptor: InstanceType<typeof FetchInterceptor>;
-
-    beforeEach(() => {
-      ctRegistry = new InterceptorRegistry();
-      ctRegistry.registerContentTypePatterns([
-        { platform: 'generic', contentTypes: ['text/vtt', 'application/x-subtitle'] },
-      ]);
-      ctInterceptor = new FetchInterceptor(ctRegistry, bridge);
-      mockFetch.mockReset();
-    });
-
-    afterEach(() => {
-      ctInterceptor.disable();
-    });
-
-    it('intercepts a subtitle response whose URL did not match but Content-Type did', async () => {
-      // Extensionless URL — no URL pattern would catch it.
+    try {
       const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi';
       const okResponse = new Response(vtt, {
         status: 200,
@@ -246,31 +179,28 @@ describe('FetchInterceptor', () => {
       ctInterceptor.enable();
       const fetchPromise = window.fetch('https://cdn.example.com/stream/subtitles-track');
 
-      // The content-type path should fire SUBTITLE_INTERCEPTED with the generic platform.
       await vi.waitFor(() => {
         expect(bridge.send).toHaveBeenCalledWith(
           'SUBTITLE_INTERCEPTED',
           expect.objectContaining({ platform: 'generic' }),
         );
       });
-      // fetchPromise is still pending (waiting for translation) — let it settle.
       fetchPromise.catch(() => {});
-    });
 
-    it('URL pattern matching takes precedence over Content-Type', async () => {
-      // Register BOTH a URL pattern (youtube) and a content-type pattern (generic).
+      ctInterceptor.disable();
+      bridge.send.mockClear();
+
       ctRegistry.registerPattern({ platform: 'youtube', pattern: /\/api\/timedtext/ });
       ctRegistry.registerContentTypePatterns([
         { platform: 'generic', contentTypes: ['text/vtt'] },
       ]);
 
-      const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi';
       mockFetch.mockResolvedValue(
         new Response(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt' } }),
       );
 
       ctInterceptor.enable();
-      const fetchPromise = window.fetch('https://youtube.com/api/timedtext?lang=en');
+      const fetchPromise2 = window.fetch('https://youtube.com/api/timedtext?lang=en');
 
       await vi.waitFor(() => {
         expect(bridge.send).toHaveBeenCalledWith(
@@ -278,7 +208,9 @@ describe('FetchInterceptor', () => {
           expect.objectContaining({ platform: 'youtube' }),
         );
       });
-      fetchPromise.catch(() => {});
-    });
+      fetchPromise2.catch(() => {});
+    } finally {
+      ctInterceptor.disable();
+    }
   });
 });

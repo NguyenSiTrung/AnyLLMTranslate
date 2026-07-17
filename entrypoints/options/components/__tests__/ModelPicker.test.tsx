@@ -39,7 +39,7 @@ describe('ModelPicker', () => {
     vi.clearAllMocks();
   });
 
-  it('shows all browsed models without truncating to 24 and filters by search', async () => {
+  it('browses full model list, filters by search, selects model', async () => {
     const models = Array.from({ length: 30 }, (_, i) => `provider/model-${i}`);
     listProviderModelsMock.mockResolvedValue({
       success: true,
@@ -48,7 +48,7 @@ describe('ModelPicker', () => {
     });
 
     const onModelChange = vi.fn();
-    render(
+    const { unmount } = render(
       <ModelPicker provider={baseProvider()} onModelChange={onModelChange} />,
     );
 
@@ -58,9 +58,9 @@ describe('ModelPicker', () => {
       expect(screen.getByText('30 models')).toBeInTheDocument();
     });
 
-    // Full list present (including past the old 24 cap)
     expect(screen.getByRole('option', { name: 'provider/model-0' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'provider/model-29' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search models')).toBeInTheDocument();
 
     const search = screen.getByLabelText('Search models');
     fireEvent.change(search, { target: { value: 'model-29' } });
@@ -71,16 +71,17 @@ describe('ModelPicker', () => {
 
     fireEvent.click(screen.getByRole('option', { name: 'provider/model-29' }));
     expect(onModelChange).toHaveBeenCalledWith('provider/model-29');
+    unmount();
   });
 
-  it('always shows search once any models are listed', async () => {
+  it('shows search for small lists and error when browse fails', async () => {
     listProviderModelsMock.mockResolvedValue({
       success: true,
       models: ['a', 'b', 'c'],
       latencyMs: 5,
     });
 
-    render(
+    const { unmount } = render(
       <ModelPicker provider={baseProvider()} onModelChange={vi.fn()} />,
     );
 
@@ -90,9 +91,8 @@ describe('ModelPicker', () => {
       expect(screen.getByLabelText('Search models')).toBeInTheDocument();
     });
     expect(screen.getByText('3 models')).toBeInTheDocument();
-  });
+    unmount();
 
-  it('shows error when browse fails', async () => {
     listProviderModelsMock.mockResolvedValue({
       success: false,
       models: [],

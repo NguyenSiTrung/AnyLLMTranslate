@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ToastProvider } from '@/ui/ToastProvider';
 import { ProviderKeyRow } from '../ProviderKeyRow';
 import type { PoolKey, PoolProvider } from '@/types/config';
@@ -81,65 +81,55 @@ function renderRow(
 describe('ProviderKeyRow rate limits UX', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    cleanup();
   });
 
-  it('shows collapsed rate limits summary for Safe defaults', () => {
-    renderRow();
+  it('collapsed summary expands; Balanced/Custom/Reset presets; overflow menu', () => {
+    const { onUpdate } = renderRow({ onMove: vi.fn() });
+
     expect(
       screen.getByRole('button', {
         name: /Rate limits.*20\/min · 1 at once · 500 ms gap/i,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/Max rate/i)).not.toBeInTheDocument();
-  });
 
-  it('expands fine-tune fields and presets on summary click', () => {
-    renderRow();
     fireEvent.click(screen.getByRole('button', { name: /Rate limits/i }));
     expect(screen.getByLabelText(/Max rate/i)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^Safe$/i })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^Balanced$/i })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^Aggressive$/i })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /^Unlimited$/i })).toBeInTheDocument();
-  });
 
-  it('applies Balanced preset via onUpdate', () => {
-    const { onUpdate } = renderRow();
-    fireEvent.click(screen.getByRole('button', { name: /Rate limits/i }));
     fireEvent.click(screen.getByRole('radio', { name: /^Balanced$/i }));
     expect(onUpdate).toHaveBeenCalledWith({
       maxRpm: 40,
       concurrencyLimit: 2,
       interval: 250,
     });
-  });
 
-  it('shows Custom when values match no preset', () => {
+    expect(screen.queryByText(/Advanced limits/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hide limits/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Move up/i)).toBeInTheDocument();
+    expect(screen.getByText(/Remove/i)).toBeInTheDocument();
+
+    cleanup();
     renderRow({
       poolKey: sampleKey({ maxRpm: 15, concurrencyLimit: 1, interval: 500 }),
     });
     fireEvent.click(screen.getByRole('button', { name: /Rate limits/i }));
     expect(screen.getByText(/^Custom$/i)).toBeInTheDocument();
-  });
 
-  it('Reset to Safe commits Safe values', () => {
-    const { onUpdate } = renderRow({
+    cleanup();
+    const { onUpdate: onUpdateReset } = renderRow({
       poolKey: sampleKey({ maxRpm: 0, concurrencyLimit: 0, interval: 0 }),
     });
     fireEvent.click(screen.getByRole('button', { name: /Rate limits/i }));
     fireEvent.click(screen.getByRole('button', { name: /Reset to Safe/i }));
-    expect(onUpdate).toHaveBeenCalledWith({
+    expect(onUpdateReset).toHaveBeenCalledWith({
       maxRpm: 20,
       concurrencyLimit: 1,
       interval: 500,
     });
-  });
-
-  it('overflow menu has Move/Remove but not Advanced limits', () => {
-    renderRow({ onMove: vi.fn() });
-    expect(screen.queryByText(/Advanced limits/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Hide limits/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Move up/i)).toBeInTheDocument();
-    expect(screen.getByText(/Remove/i)).toBeInTheDocument();
   });
 });

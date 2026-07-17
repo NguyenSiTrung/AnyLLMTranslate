@@ -40,14 +40,17 @@ describe('stats migration', () => {
     vi.clearAllMocks();
   });
 
-  it('returns defaults when empty', async () => {
-    const stats = await getStatsV2();
-    expect(stats.version).toBe(2);
-    expect(stats.lifetime.characters).toBe(0);
-    expect(stats.preferences.retentionDays).toBe(90);
-  });
+  it('returns defaults when empty and migrates v1 lifetime/daily into v2 + IDB', async () => {
+    const empty = await getStatsV2();
+    expect(empty.version).toBe(2);
+    expect(empty.lifetime.characters).toBe(0);
+    expect(empty.preferences.retentionDays).toBe(90);
 
-  it('migrates v1 lifetime and daily rows into v2 + IDB', async () => {
+    // Clear defaults written by the empty path so migration sees raw v1.
+    memoryIdb.clear();
+    for (const k of Object.keys(chromeLocal)) delete chromeLocal[k];
+    vi.clearAllMocks();
+
     chromeLocal[STATS_STORAGE_KEY] = {
       totalCharactersTranslated: 100,
       totalApiCalls: 3,

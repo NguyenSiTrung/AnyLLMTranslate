@@ -9,7 +9,7 @@ describe('InterceptorRegistry', () => {
     registry = new InterceptorRegistry();
   });
 
-  it('matches URL patterns, extracts language, clears, and returns copies', () => {
+  it('matches URL patterns and content-types; clear/copy semantics', () => {
     expect(registry.matchUrl('https://example.com/api/data')).toBeNull();
 
     const pattern: SubtitleUrlPattern = {
@@ -41,17 +41,7 @@ describe('InterceptorRegistry', () => {
 
     registry.clearPatterns();
     expect(registry.matchUrl('https://www.youtube.com/api/timedtext')).toBeNull();
-  });
-});
 
-describe('InterceptorRegistry — Content-Type matching', () => {
-  let registry: InterceptorRegistry;
-
-  beforeEach(() => {
-    registry = new InterceptorRegistry();
-  });
-
-  it('matches content-types (case/params), first-writer wins, and clears with URL patterns', () => {
     registry.registerContentTypePatterns([
       { platform: 'generic', contentTypes: ['text/vtt', 'application/x-subtitle', 'application/ttml+xml'] },
     ]);

@@ -39,7 +39,7 @@ describe('InlineTranslateSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders hero enable and primary card titles', () => {
+  it('renders cards/preview, dual mode, toggle, blocklist badge, collapsed timing', async () => {
     render(<InlineTranslateSection />);
     expect(
       screen.getByRole('switch', { name: /Enable Inline Translation/i }),
@@ -50,12 +50,24 @@ describe('InlineTranslateSection', () => {
     expect(screen.getByRole('heading', { name: 'Site blocklist', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Advanced', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'How it works', level: 3 })).toBeInTheDocument();
-  });
-
-  it('shows reactive preview after text when enabled', () => {
-    render(<InlineTranslateSection />);
     expect(screen.getByTestId('inline-translate-preview')).toBeInTheDocument();
     expect(screen.getByText(/After gesture/i)).toBeInTheDocument();
+
+    const n = DEFAULT_INLINE_TRANSLATE_SETTINGS.blocklistPatterns.length;
+    expect(screen.getByText(new RegExp(`${n}\\s+patterns?`, 'i'))).toBeInTheDocument();
+
+    const btn = screen.getByRole('button', { name: /Gesture timing/i });
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(screen.getByRole('radio', { name: /Original \+ translation/i }));
+    await waitFor(() => {
+      expect(useSettingsStore.getState().inlineTranslate.dualMode).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole('switch', { name: /Enable Inline Translation/i }));
+    await waitFor(() => {
+      expect(useSettingsStore.getState().inlineTranslate.enabled).toBe(false);
+    });
   });
 
   it('shows enable-to-preview message when disabled', () => {
@@ -64,34 +76,5 @@ describe('InlineTranslateSection', () => {
     });
     render(<InlineTranslateSection />);
     expect(screen.getByText(/Enable inline translation to preview/i)).toBeInTheDocument();
-  });
-
-  it('dual mode segment updates store', async () => {
-    render(<InlineTranslateSection />);
-    fireEvent.click(screen.getByRole('radio', { name: /Original \+ translation/i }));
-    await waitFor(() => {
-      expect(useSettingsStore.getState().inlineTranslate.dualMode).toBe(true);
-    });
-  });
-
-  it('toggles enabled via hero control', async () => {
-    render(<InlineTranslateSection />);
-    const toggle = screen.getByRole('switch', { name: /Enable Inline Translation/i });
-    fireEvent.click(toggle);
-    await waitFor(() => {
-      expect(useSettingsStore.getState().inlineTranslate.enabled).toBe(false);
-    });
-  });
-
-  it('shows blocklist pattern count badge', () => {
-    render(<InlineTranslateSection />);
-    const n = DEFAULT_INLINE_TRANSLATE_SETTINGS.blocklistPatterns.length;
-    expect(screen.getByText(new RegExp(`${n}\\s+patterns?`, 'i'))).toBeInTheDocument();
-  });
-
-  it('Gesture timing disclosure starts collapsed', () => {
-    render(<InlineTranslateSection />);
-    const btn = screen.getByRole('button', { name: /Gesture timing/i });
-    expect(btn).toHaveAttribute('aria-expanded', 'false');
   });
 });

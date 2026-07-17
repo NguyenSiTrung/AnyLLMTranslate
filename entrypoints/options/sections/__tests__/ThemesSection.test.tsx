@@ -42,51 +42,36 @@ describe('ThemesSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Theme Studio header', () => {
+  it('header, commit on click, soft-preview hover, category filter', async () => {
     render(<ThemesSection />);
     expect(screen.getByRole('heading', { name: /Theme Studio/i })).toBeInTheDocument();
-  });
 
-  it('commits theme on card click', async () => {
-    render(<ThemesSection />);
-    fireEvent.click(screen.getByRole('radio', { name: /Speech Bubble/i }));
-    await waitFor(() => {
-      expect(useSettingsStore.getState().theme).toBe('bubble');
-    });
-  });
-
-  it('soft-preview on hover does not commit', () => {
-    render(<ThemesSection />);
     const card = screen.getByRole('radio', { name: /Speech Bubble/i });
     fireEvent.mouseEnter(card);
     expect(useSettingsStore.getState().theme).toBe('blockquote');
     expect(screen.getByText(/Previewing/i)).toBeInTheDocument();
-  });
 
-  it('filters by category Classic', () => {
-    render(<ThemesSection />);
+    fireEvent.click(card);
+    await waitFor(() => {
+      expect(useSettingsStore.getState().theme).toBe('bubble');
+    });
+
     fireEvent.click(screen.getByRole('tab', { name: /^Classic$/i }));
     expect(screen.getByRole('radio', { name: /Blockquote/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /Speech Bubble/i })).not.toBeInTheDocument();
   });
 
-  it('shows custom editor when custom selected', () => {
+  it('custom editor, sample states, and navigate to General', () => {
     useSettingsStore.setState({ theme: 'custom' });
-    render(<ThemesSection />);
+    const nav = vi.fn();
+    render(<ThemesSection onNavigateToGeneral={nav} />);
     expect(screen.getByText(/Start from preset/i)).toBeInTheDocument();
     expect(screen.getByText(/Translation Text Color/i)).toBeInTheDocument();
-  });
 
-  it('sample states hidden by default', () => {
-    render(<ThemesSection />);
     expect(screen.queryByText(/Translation failed/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Show sample states/i }));
     expect(screen.getByText(/Translation failed/i)).toBeInTheDocument();
-  });
 
-  it('calls onNavigateToGeneral from footer', () => {
-    const nav = vi.fn();
-    render(<ThemesSection onNavigateToGeneral={nav} />);
     fireEvent.click(screen.getByRole('button', { name: /Open General/i }));
     expect(nav).toHaveBeenCalled();
   });

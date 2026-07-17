@@ -46,8 +46,8 @@ describe('GeneralSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders four-card IA with updated labels (no legacy Display & Appearance)', () => {
-    render(<GeneralSection />);
+  it('renders four-card IA and handles language swap / locked position', async () => {
+    const { unmount } = render(<GeneralSection />);
     expect(screen.getByRole('heading', { name: 'Language', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Layout', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Style', level: 3 })).toBeInTheDocument();
@@ -55,10 +55,7 @@ describe('GeneralSection', () => {
     expect(screen.queryByRole('heading', { name: 'Display & Appearance' })).not.toBeInTheDocument();
     expect(screen.getByText('Page contrast')).toBeInTheDocument();
     expect(screen.queryByText('Host Page Mode')).not.toBeInTheDocument();
-  });
 
-  it('swaps languages when not auto and disables swap / position when locked', async () => {
-    const { unmount } = render(<GeneralSection />);
     fireEvent.click(screen.getByRole('button', { name: 'Swap languages' }));
     await waitFor(() => {
       const state = useSettingsStore.getState();
@@ -81,7 +78,7 @@ describe('GeneralSection', () => {
     }
   });
 
-  it('navigates to themes only when callback provided', () => {
+  it('themes navigation gate and updates theme/contrast/compact-inline', async () => {
     const onNavigate = vi.fn();
     const { unmount } = render(<GeneralSection onNavigateToThemes={onNavigate} />);
     fireEvent.click(screen.getByRole('button', { name: /Browse themes/i }));
@@ -90,10 +87,6 @@ describe('GeneralSection', () => {
 
     render(<GeneralSection />);
     expect(screen.queryByRole('button', { name: /Browse themes/i })).not.toBeInTheDocument();
-  });
-
-  it('updates theme, page contrast, and compact-inline settings', async () => {
-    render(<GeneralSection />);
 
     const select = document.getElementById('general-theme') as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'bubble' } });

@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { runWithConcurrency } from '../concurrency';
 
 describe('runWithConcurrency', () => {
-  it('preserves order, caps concurrency, and handles empty/oversize caps', async () => {
+  it('preserves order, caps concurrency, handles empty/oversize caps, and injected delay', async () => {
     const delayed = await runWithConcurrency(
       [0, 1, 2, 3],
       async (item) => {
@@ -40,6 +40,20 @@ describe('runWithConcurrency', () => {
     const worker = vi.fn();
     expect(await runWithConcurrency([], worker, { concurrency: 4 })).toEqual([]);
     expect(worker).not.toHaveBeenCalled();
+
+    vi.useFakeTimers();
+    try {
+      const delay = vi.fn(async (_ms: number) => {});
+      const delayWorker = vi.fn(async (n: number) => n * 2);
+      const results = await runWithConcurrency([1, 2, 3], delayWorker, {
+        concurrency: 2,
+        delay,
+      });
+      expect(results).toEqual([2, 4, 6]);
+      expect(delayWorker).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('passes indexes, rejects concurrency < 1, and surfaces worker rejections', async () => {
@@ -66,18 +80,5 @@ describe('runWithConcurrency', () => {
         { concurrency: 2 },
       ),
     ).rejects.toThrow('boom');
-  });
-
-  it('is fake-timer friendly via the injected delay', async () => {
-    vi.useFakeTimers();
-    try {
-      const delay = vi.fn(async (_ms: number) => {});
-      const worker = vi.fn(async (n: number) => n * 2);
-      const results = await runWithConcurrency([1, 2, 3], worker, { concurrency: 2, delay });
-      expect(results).toEqual([2, 4, 6]);
-      expect(worker).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

@@ -5,15 +5,12 @@ import { InterceptorRegistry } from '@/inject/interceptorRegistry';
 /**
  * XHR Interceptor tests use a manual event dispatch mechanism because
  * jsdom's XMLHttpRequest does not fire real readystatechange/load events.
- * We capture the handler registered via the original addEventListener
- * and invoke it manually to simulate the browser lifecycle.
  */
 describe('XhrInterceptor', () => {
   let registry: InterceptorRegistry;
   let bridge: { send: ReturnType<typeof vi.fn> };
   let interceptor: XhrInterceptor;
   let messageListeners: ((event: MessageEvent) => void)[];
-  /** Handlers registered via the *original* addEventListener (readystatechange on XHR) */
   let xhrInternalHandlers: Map<EventTarget, ((e: Event) => void)[]>;
 
   beforeEach(() => {
@@ -27,7 +24,6 @@ describe('XhrInterceptor', () => {
     messageListeners = [];
     xhrInternalHandlers = new Map();
 
-    // Capture window message listeners
     vi.spyOn(window, 'addEventListener').mockImplementation(
       (type: string, handler: EventListenerOrEventListenerObject) => {
         if (type === 'message' && typeof handler === 'function') {
@@ -41,8 +37,6 @@ describe('XhrInterceptor', () => {
       },
     );
 
-    // Capture XHR internal addEventListener calls (the original one used by handleResponse)
-    // We do NOT call the real addEventListener to avoid jsdom auto-firing events
     vi.spyOn(XMLHttpRequest.prototype, 'addEventListener').mockImplementation(function (
       this: XMLHttpRequest,
       type: string,
@@ -72,7 +66,6 @@ describe('XhrInterceptor', () => {
         requestId,
         payload: { vttContent },
       },
-      // Phase 1.4: origin validation — tests must simulate same-origin
       origin: window.location.origin,
     } as MessageEvent;
     for (const listener of [...messageListeners]) {
@@ -80,256 +73,161 @@ describe('XhrInterceptor', () => {
     }
   }
 
-  /** Simulate browser firing readyState 4 / status 200 on an XHR instance */
   function simulateXhrComplete(xhr: XMLHttpRequest) {
     Object.defineProperty(xhr, 'readyState', { value: 4, writable: true, configurable: true });
     Object.defineProperty(xhr, 'status', { value: 200, writable: true, configurable: true });
     Object.defineProperty(xhr, 'responseText', { value: 'original-subtitle', writable: true, configurable: true });
     (xhr as XMLHttpRequest & { getResponseHeader: (h: string) => string }).getResponseHeader = () => 'text/vtt';
 
-    // Fire all internally registered readystatechange handlers
     const handlers = xhrInternalHandlers.get(xhr) || [];
     for (const h of handlers) {
       h(new Event('readystatechange'));
     }
   }
 
-  describe('block-and-wait behavior', () => {
-    it('does NOT call original handlers before SUBTITLE_TRANSLATED arrives', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const onloadHandler = vi.fn();
-      const onReadyStateHandler = vi.fn();
+  it('block-and-wait: suppress until translated, timeout fallback, listener cleanup', () => {
+    interceptor.enable();
+    const xhr = new XMLHttpRequest();
+    const onloadHandler = vi.fn();
+    const onReadyStateHandler = vi.fn();
 
-      xhr.onload = onloadHandler;
-      xhr.onreadystatechange = onReadyStateHandler;
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
+    xhr.onload = onloadHandler;
+    xhr.onreadystatechange = onReadyStateHandler;
+    xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+    xhr.send();
 
-      // At this point the patched send() has suppressed onreadystatechange/onload
-      // and registered handleResponse via originalAddEventListener.
-      // But jsdom's XHR fires readystatechange events for states 1-2 etc.
-      // The key assertion: after the XHR completes (readyState 4) and before
-      // translation, the original handlers should NOT be called.
-      onReadyStateHandler.mockClear();
-      onloadHandler.mockClear();
+    onReadyStateHandler.mockClear();
+    onloadHandler.mockClear();
+    simulateXhrComplete(xhr);
 
-      // Simulate browser completing the XHR
-      simulateXhrComplete(xhr);
+    expect(onloadHandler).not.toHaveBeenCalled();
+    expect(onReadyStateHandler).not.toHaveBeenCalled();
 
-      // Original handlers should NOT be called — blocked waiting for translation
-      expect(onloadHandler).not.toHaveBeenCalled();
-      expect(onReadyStateHandler).not.toHaveBeenCalled();
-    });
+    fireTranslatedMessage('req-123', 'WEBVTT\ntranslated');
+    expect(onReadyStateHandler).toHaveBeenCalled();
+    expect(onloadHandler).toHaveBeenCalled();
 
-    it('calls original handlers AFTER SUBTITLE_TRANSLATED message', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const onloadHandler = vi.fn();
-      const onReadyStateHandler = vi.fn();
+    // Timeout path
+    const xhr2 = new XMLHttpRequest();
+    const onload2 = vi.fn();
+    xhr2.onload = onload2;
+    xhr2.open('GET', 'https://www.youtube.com/api/timedtext?v=def');
+    xhr2.send();
+    simulateXhrComplete(xhr2);
 
-      xhr.onload = onloadHandler;
-      xhr.onreadystatechange = onReadyStateHandler;
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-
-      // Fire translated message
-      fireTranslatedMessage('req-123', 'WEBVTT\ntranslated');
-
-      expect(onReadyStateHandler).toHaveBeenCalled();
-      expect(onloadHandler).toHaveBeenCalled();
-    });
-
-    it('calls handlers with original content after 30s timeout', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const onloadHandler = vi.fn();
-
-      xhr.onload = onloadHandler;
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-
-      // Advance past 30s timeout (extended for local LLM support)
-      vi.advanceTimersByTime(30100);
-
-      expect(onloadHandler).toHaveBeenCalled();
-    });
-
-    it('removes window listener on timeout (no lingering handlers)', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      xhr.onload = vi.fn();
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-
-      const listenerCountBefore = messageListeners.length;
-      expect(listenerCountBefore).toBeGreaterThan(0);
-
-      // Advance past 30s timeout (extended for local LLM support)
-      vi.advanceTimersByTime(30100);
-
-      expect(messageListeners.length).toBeLessThan(listenerCountBefore);
-    });
+    const listenerCountBefore = messageListeners.length;
+    expect(listenerCountBefore).toBeGreaterThan(0);
+    vi.advanceTimersByTime(30100);
+    expect(onload2).toHaveBeenCalled();
+    expect(messageListeners.length).toBeLessThan(listenerCountBefore);
   });
 
-  describe('addEventListener coverage', () => {
-    it('captures load handlers registered via addEventListener', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const addEventHandler = vi.fn();
+  it('captures load/readystatechange addEventListener handlers and overrides response', () => {
+    interceptor.enable();
+    const xhr = new XMLHttpRequest();
+    const addEventHandler = vi.fn();
+    const rscHandler = vi.fn();
 
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.addEventListener('load', addEventHandler);
-      xhr.send();
+    xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+    xhr.addEventListener('load', addEventHandler);
+    xhr.addEventListener('readystatechange', rscHandler);
+    xhr.send();
 
-      simulateXhrComplete(xhr);
-      fireTranslatedMessage('req-123', 'WEBVTT\ntranslated');
+    simulateXhrComplete(xhr);
+    fireTranslatedMessage('req-123', 'WEBVTT\ntranslated');
 
-      expect(addEventHandler).toHaveBeenCalled();
-    });
-
-    it('captures readystatechange handlers registered via addEventListener', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const rscHandler = vi.fn();
-
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.addEventListener('readystatechange', rscHandler);
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-      fireTranslatedMessage('req-123', 'WEBVTT\ntranslated');
-
-      expect(rscHandler).toHaveBeenCalled();
-    });
+    expect(addEventHandler).toHaveBeenCalled();
+    expect(rscHandler).toHaveBeenCalled();
+    expect(xhr.responseText).toBe('WEBVTT\ntranslated');
+    expect(xhr.response).toBe('WEBVTT\ntranslated');
   });
 
-  describe('lifecycle robustness', () => {
-    it('does not double-patch across enable/disable/enable cycles', () => {
-      // Re-enabling after disable must not wrap the prototype methods twice,
-      // which would fire interception (and bridge.send) multiple times.
-      interceptor.enable();
-      interceptor.disable();
-      interceptor.enable();
+  it('lifecycle: no double-patch, restore send, non-match passthrough, timeout/abort', () => {
+    interceptor.enable();
+    interceptor.disable();
+    interceptor.enable();
 
-      const xhr = new XMLHttpRequest();
-      xhr.onload = vi.fn();
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
+    const xhr = new XMLHttpRequest();
+    xhr.onload = vi.fn();
+    xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+    xhr.send();
+    simulateXhrComplete(xhr);
+    expect(bridge.send).toHaveBeenCalledTimes(1);
 
-      simulateXhrComplete(xhr);
+    const patchedSend = XMLHttpRequest.prototype.send;
+    interceptor.disable();
+    expect(XMLHttpRequest.prototype.send).not.toBe(patchedSend);
 
-      expect(bridge.send).toHaveBeenCalledTimes(1);
-    });
+    interceptor.enable();
+    const xhr2 = new XMLHttpRequest();
+    xhr2.open('GET', 'https://example.com/api/users');
+    expect(() => xhr2.send()).not.toThrow();
+    expect(bridge.send).toHaveBeenCalledTimes(1);
 
-    it('restores prototype.send to a non-intercepting function after disable', () => {
-      interceptor.enable();
-      const patchedSend = XMLHttpRequest.prototype.send;
-      interceptor.disable();
+    interceptor.setTimeout(5000);
+    const xhr3 = new XMLHttpRequest();
+    xhr3.open('GET', 'https://www.youtube.com/api/timedtext?v=timeout');
+    expect(() => xhr3.send()).not.toThrow();
 
-      // After disable the prototype.send must no longer be the patched version.
-      expect(XMLHttpRequest.prototype.send).not.toBe(patchedSend);
-    });
+    const xhr4 = new XMLHttpRequest();
+    xhr4.open('GET', 'https://www.youtube.com/api/timedtext?v=abort');
+    expect(() => xhr4.send()).not.toThrow();
+    simulateXhrComplete(xhr4);
+    expect(messageListeners.length).toBeGreaterThanOrEqual(1);
   });
 
-  describe('non-subtitle requests', () => {
-    it('passes through non-matching requests without interception', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', 'https://example.com/api/users');
-      expect(() => xhr.send()).not.toThrow();
-      expect(bridge.send).not.toHaveBeenCalled();
-    });
+  it('ignores translated messages from foreign origins', () => {
+    interceptor.enable();
+    const xhr = new XMLHttpRequest();
+    const onloadHandler = vi.fn();
+    xhr.onload = onloadHandler;
+    xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+    xhr.send();
+
+    simulateXhrComplete(xhr);
+
+    const listenersBefore = messageListeners.length;
+    expect(listenersBefore).toBeGreaterThan(0);
+
+    const forgedEvent = {
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_TRANSLATED',
+        requestId: 'req-123',
+        payload: { vttContent: 'WEBVTT\nforged' },
+      },
+      origin: 'https://evil.example.com',
+    } as MessageEvent;
+    for (const listener of [...messageListeners]) {
+      listener(forgedEvent);
+    }
+
+    expect(messageListeners.length).toBe(listenersBefore);
+    expect(onloadHandler).not.toHaveBeenCalled();
   });
 
-  describe('origin validation (Phase 1.4)', () => {
-    it('ignores translated messages from foreign origins', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      const onloadHandler = vi.fn();
-      xhr.onload = onloadHandler;
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
+  // Keep a 5th consolidated case for response override isolation under concurrent path
+  it('overrides responseText/response after same-origin SUBTITLE_TRANSLATED', () => {
+    interceptor.enable();
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
+    xhr.send();
+    simulateXhrComplete(xhr);
 
-      simulateXhrComplete(xhr);
+    const translatedEvent = {
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_TRANSLATED',
+        requestId: 'req-123',
+        payload: { vttContent: 'WEBVTT\ntranslated' },
+      },
+      origin: window.location.origin,
+    } as MessageEvent;
+    for (const listener of [...messageListeners]) {
+      listener(translatedEvent);
+    }
 
-      const listenersBefore = messageListeners.length;
-      expect(listenersBefore).toBeGreaterThan(0);
-
-      const forgedEvent = {
-        data: {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'req-123',
-          payload: { vttContent: 'WEBVTT\nforged' },
-        },
-        origin: 'https://evil.example.com',
-      } as MessageEvent;
-      for (const listener of [...messageListeners]) {
-        listener(forgedEvent);
-      }
-
-      // Foreign-origin message must be ignored — handler is still registered
-      // and the user-supplied onload was not fired.
-      expect(messageListeners.length).toBe(listenersBefore);
-      expect(onloadHandler).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('response property override', () => {
-    it('overrides both responseText and response with translated VTT', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      xhr.send();
-
-      simulateXhrComplete(xhr);
-
-      const translatedEvent = {
-        data: {
-          channel: 'anyllm-translate',
-          type: 'SUBTITLE_TRANSLATED',
-          requestId: 'req-123',
-          payload: { vttContent: 'WEBVTT\ntranslated' },
-        },
-        origin: window.location.origin,
-      } as MessageEvent;
-      for (const listener of [...messageListeners]) {
-        listener(translatedEvent);
-      }
-
-      expect(xhr.responseText).toBe('WEBVTT\ntranslated');
-      expect(xhr.response).toBe('WEBVTT\ntranslated');
-    });
-  });
-
-  describe('configurable timeout', () => {
-    it('accepts custom timeout via setTimeout()', () => {
-      interceptor.setTimeout(5000);
-      interceptor.enable();
-      // Just verify it doesn't throw — actual timeout behavior is hard to test in jsdom
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      expect(() => xhr.send()).not.toThrow();
-    });
-  });
-
-  describe('abort handling', () => {
-    it('registers abort listener without throwing', () => {
-      interceptor.enable();
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', 'https://www.youtube.com/api/timedtext?v=abc');
-      // send triggers handleResponse which registers abort handler
-      expect(() => xhr.send()).not.toThrow();
-      simulateXhrComplete(xhr);
-      // If abort handler registration failed, send/simulateXhrComplete would throw
-      expect(messageListeners.length).toBeGreaterThanOrEqual(1);
-    });
+    expect(xhr.responseText).toBe('WEBVTT\ntranslated');
+    expect(xhr.response).toBe('WEBVTT\ntranslated');
   });
 });

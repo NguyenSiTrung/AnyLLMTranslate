@@ -20,17 +20,15 @@ const base = {
 };
 
 describe('DictionaryCommandBar', () => {
-  it('hides search when showSearch is false; disables export when empty', () => {
+  it('hides search / disables export; fires add and import', () => {
     const { rerender } = render(<DictionaryCommandBar {...base} showSearch={false} />);
     expect(screen.queryByLabelText('Search terms')).not.toBeInTheDocument();
     rerender(<DictionaryCommandBar {...base} exportDisabled />);
     expect(screen.getByRole('button', { name: /Export/i })).toBeDisabled();
-  });
 
-  it('fires add and import', () => {
     const onAddClick = vi.fn();
     const onImportClick = vi.fn();
-    render(
+    rerender(
       <DictionaryCommandBar {...base} onAddClick={onAddClick} onImportClick={onImportClick} />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add term' }));

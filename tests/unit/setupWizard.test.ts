@@ -8,7 +8,7 @@ import {
 } from '@/lib/setupWizard';
 
 describe('setupWizard helpers', () => {
-  it('resolves entry step for completed, skipped, incomplete, and invalid done', () => {
+  it('entry steps, credential invalidation, and http(s) page URLs', () => {
     expect(
       resolveWizardEntryStep({ completed: true, skipped: false, lastStep: 'done' }),
     ).toBe('provider');
@@ -21,17 +21,13 @@ describe('setupWizard helpers', () => {
     ).toBe('welcome');
     expect(wizardStepIndex('welcome')).toBe(1);
     expect(wizardStepIndex('done')).toBe(WIZARD_STEPS.length);
-  });
 
-  it('invalidates tests only on credential-relevant provider patches', () => {
     expect(providerPatchInvalidatesTest({ baseUrl: 'https://x' })).toBe(true);
     expect(providerPatchInvalidatesTest({ apiKey: 'k' })).toBe(true);
     expect(providerPatchInvalidatesTest({ model: 'm' })).toBe(true);
     expect(providerPatchInvalidatesTest({ connectionStatus: 'unknown' })).toBe(true);
     expect(providerPatchInvalidatesTest({ connectionStatus: 'success' })).toBe(false);
-  });
 
-  it('accepts only http(s) page URLs', () => {
     expect(isTranslatablePageUrl('https://example.com')).toBe(true);
     expect(isTranslatablePageUrl('http://localhost:3000')).toBe(true);
     expect(isTranslatablePageUrl('chrome-extension://abc/options.html')).toBe(false);

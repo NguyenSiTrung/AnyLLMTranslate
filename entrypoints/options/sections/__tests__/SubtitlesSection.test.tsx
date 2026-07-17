@@ -40,7 +40,7 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders studio header, hero, and primary card titles', () => {
+  it('renders studio cards/preview and toggles enable + display mode', async () => {
     render(<SubtitlesSection />);
     expect(screen.getByRole('heading', { name: 'Subtitle Studio', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Enable Subtitles/i })).toBeInTheDocument();
@@ -50,36 +50,27 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     expect(screen.getByRole('heading', { name: 'Platforms', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Caption quality', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Translation style', level: 3 })).toBeInTheDocument();
-  });
-
-  it('shows preview summary chips when enabled', () => {
-    render(<SubtitlesSection />);
     expect(screen.getByTestId('subtitle-preview')).toBeInTheDocument();
     expect(screen.getByTestId('subtitle-preview-summary')).toBeInTheDocument();
-  });
 
-  it('toggles enabled via hero control', async () => {
-    render(<SubtitlesSection />);
+    fireEvent.click(screen.getByRole('radio', { name: /Translated/i }));
+    await waitFor(() => {
+      expect(useSettingsStore.getState().subtitleSettings.displayMode).toBe('translation-only');
+    });
+
     fireEvent.click(screen.getByRole('switch', { name: /Enable Subtitles/i }));
     await waitFor(() => {
       expect(useSettingsStore.getState().subtitleSettings.enabled).toBe(false);
     });
   });
 
-  it('updates display mode via Appearance segment', async () => {
-    render(<SubtitlesSection />);
-    fireEvent.click(screen.getByRole('radio', { name: /Translated/i }));
-    await waitFor(() => {
-      expect(useSettingsStore.getState().subtitleSettings.displayMode).toBe('translation-only');
-    });
-  });
-
-  it('clears aiEnable when ASR master turns off', async () => {
+  it('clears ASR aiEnable when master off and resets knobs', async () => {
     useSettingsStore.setState({
       subtitleSettings: {
         ...DEFAULT_SUBTITLE_SETTINGS,
         enabled: true,
         youtubeAsrResegment: { enable: true, aiEnable: true },
+        knobOverrides: { register: 'casual', brevity: 'terse' },
       },
     });
     render(<SubtitlesSection />);
@@ -89,17 +80,7 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
       expect(asr?.enable).toBe(false);
       expect(asr?.aiEnable).toBe(false);
     });
-  });
 
-  it('resets knobs overrides', async () => {
-    useSettingsStore.setState({
-      subtitleSettings: {
-        ...DEFAULT_SUBTITLE_SETTINGS,
-        enabled: true,
-        knobOverrides: { register: 'casual', brevity: 'terse' },
-      },
-    });
-    render(<SubtitlesSection />);
     fireEvent.click(screen.getByRole('button', { name: /Reset to profile defaults/i }));
     await waitFor(() => {
       expect(useSettingsStore.getState().subtitleSettings.knobOverrides).toEqual({});

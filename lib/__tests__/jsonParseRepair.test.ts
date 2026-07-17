@@ -5,27 +5,20 @@ import {
   isUsefulSalvage,
 } from '@/lib/jsonParseRepair';
 
-describe('salvageTranslationPairs', () => {
-  it('extracts pairs from truncated JSON', () => {
+describe('jsonParseRepair', () => {
+  it('salvages pairs from truncated/escaped JSON and reports missing/usefulness', () => {
     const raw = `{"translations": {"a": "Xin chào", "b": "thế giới", "c": "incomple`;
     const map = salvageTranslationPairs(raw, ['a', 'b', 'c']);
     expect(map.get('a')).toBe('Xin chào');
     expect(map.get('b')).toBe('thế giới');
     expect(map.has('c')).toBe(false);
-  });
 
-  it('handles escaped quotes inside values', () => {
-    const raw = `{"translations":{"x":"He said \\"hi\\""}}`;
-    const map = salvageTranslationPairs(raw, ['x']);
-    expect(map.get('x')).toBe('He said "hi"');
-  });
-});
+    const escaped = salvageTranslationPairs(`{"translations":{"x":"He said \\"hi\\""}}`, ['x']);
+    expect(escaped.get('x')).toBe('He said "hi"');
 
-describe('missingTranslationIds / isUsefulSalvage', () => {
-  it('lists missing ids and reports usefulness', () => {
-    const map = new Map([['a', '1']]);
-    expect(missingTranslationIds(map, ['a', 'b'])).toEqual(['b']);
-    expect(isUsefulSalvage(map)).toBe(true);
+    const partial = new Map([['a', '1']]);
+    expect(missingTranslationIds(partial, ['a', 'b'])).toEqual(['b']);
+    expect(isUsefulSalvage(partial)).toBe(true);
     expect(isUsefulSalvage(new Map())).toBe(false);
   });
 });

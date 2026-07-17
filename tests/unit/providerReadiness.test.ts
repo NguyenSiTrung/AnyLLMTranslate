@@ -16,8 +16,8 @@ function provider(partial: Partial<ProviderConfig>): ProviderConfig {
   };
 }
 
-describe('getProviderReadiness', () => {
-  it('classifies not-configured reasons (baseUrl/model/apiKey)', () => {
+describe('provider readiness', () => {
+  it('classifies provider readiness and recovery/error messages', () => {
     expect(getProviderReadiness(provider({ baseUrl: '', model: 'm' })).reason).toBe('missing-base-url');
     expect(getProviderReadiness(provider({ baseUrl: 'https://x/v1', model: '' })).reason).toBe(
       'missing-model',
@@ -27,9 +27,7 @@ describe('getProviderReadiness', () => {
         provider({ baseUrl: 'https://x/v1', model: 'm', requiresApiKey: true, apiKey: '' }),
       ).reason,
     ).toBe('missing-api-key');
-  });
 
-  it('classifies untested / connected / failed from connectionStatus', () => {
     const base = { baseUrl: 'http://localhost:11434/v1', model: 'gemma3:4b' };
     expect(getProviderReadiness(provider({ ...base, connectionStatus: 'unknown' })).status).toBe(
       'untested',
@@ -40,11 +38,7 @@ describe('getProviderReadiness', () => {
     const failed = getProviderReadiness(provider({ ...base, connectionStatus: 'error' }));
     expect(failed.status).toBe('failed');
     expect(failed.canTest).toBe(true);
-  });
-});
 
-describe('recovery / connection error messages', () => {
-  it('surfaces actionable recovery and maps common connection errors', () => {
     const readiness = getProviderReadiness(
       provider({ baseUrl: 'https://x/v1', model: 'm', requiresApiKey: true, apiKey: '' }),
     );
@@ -54,14 +48,12 @@ describe('recovery / connection error messages', () => {
     );
     expect(getConnectionErrorMessage('HTTP 404: model not found').title).toBe('Model not found');
   });
-});
 
-describe('getPoolReadinessStatus', () => {
-  function settings(overrides: Partial<ExtensionSettings> = {}): ExtensionSettings {
-    return { ...DEFAULT_SETTINGS, providers: [], ...overrides };
-  }
+  it('aggregates pool empty/needs-key/ready and recovery messages', () => {
+    function settings(overrides: Partial<ExtensionSettings> = {}): ExtensionSettings {
+      return { ...DEFAULT_SETTINGS, providers: [], ...overrides };
+    }
 
-  it('aggregates pool empty / needs-key / ready states', () => {
     expect(getPoolReadinessStatus(settings({ providers: [] })).reason).toBe('pool-empty');
 
     expect(
@@ -105,9 +97,7 @@ describe('getPoolReadinessStatus', () => {
     );
     expect(ready.reason).toBe('pool-ready');
     expect(ready.canTranslate).toBe(true);
-  });
 
-  it('skips disabled providers and accepts keyless local providers', () => {
     expect(
       getPoolReadinessStatus(
         settings({
@@ -149,11 +139,7 @@ describe('getPoolReadinessStatus', () => {
         }),
       ).reason,
     ).toBe('pool-ready');
-  });
-});
 
-describe('getPoolRecoveryMessage', () => {
-  it('returns messages for empty and ready pools', () => {
     expect(
       getPoolRecoveryMessage({
         status: 'not-configured',

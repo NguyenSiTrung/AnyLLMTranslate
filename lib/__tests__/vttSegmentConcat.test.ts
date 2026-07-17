@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 
 describe('concatVttSegments', () => {
-  it('concatenates segments with a single WEBVTT header and preserves tags', () => {
+  it('concatenates with single WEBVTT header, offsets restarts, handles empty/NOTE/BOM', () => {
     const result = concatVttSegments([
       'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n<b>Bold</b>\n\n00:00:02.000 --> 00:00:04.000\nGoodbye',
       'WEBVTT\n\n00:00:04.000 --> 00:00:06.000\n<v Speaker>Hello</v>',
@@ -12,9 +12,7 @@ describe('concatVttSegments', () => {
     expect(result).toContain('<b>Bold</b>');
     expect(result).toContain('<v Speaker>Hello</v>');
     expect(result).toContain('C');
-  });
 
-  it('offsets restarting timestamps (with and without X-TIMESTAMP-MAP)', () => {
     const withMap = concatVttSegments([
       [
         'WEBVTT',
@@ -45,9 +43,7 @@ describe('concatVttSegments', () => {
       'WEBVTT\n\n00:00:05.000 --> 00:00:10.000\nSecond',
     ]);
     expect(continuous).toContain('00:00:05.000 --> 00:00:10.000\nSecond');
-  });
 
-  it('handles empty/single/blank segments and NOTE/BOM', () => {
     expect(concatVttSegments([])).toBe('');
     expect(concatVttSegments(['WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello'])).toContain(
       'Hello',

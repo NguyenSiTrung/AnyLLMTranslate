@@ -5,16 +5,12 @@ import {
   matchResumeTranslations,
 } from '@/lib/resumeIdentity';
 
-describe('resumeIdentityKey', () => {
-  it('normalizes whitespace in text', () => {
+describe('resumeIdentity', () => {
+  it('normalizes keys/paths and matches by parentPath or text-only fallback', () => {
     expect(
       resumeIdentityKey({ text: '  Hello   world  ', parentPath: 'body>p' }),
     ).toBe('body>p::Hello world');
-  });
-});
 
-describe('parentPathFromElement', () => {
-  it('builds a tag chain', () => {
     const p = {
       tagName: 'P',
       parentElement: {
@@ -23,11 +19,7 @@ describe('parentPathFromElement', () => {
       },
     };
     expect(parentPathFromElement(p)).toBe('body>article>p');
-  });
-});
 
-describe('matchResumeTranslations', () => {
-  it('matches duplicate texts by parent path when available', () => {
     const live = [
       { text: 'Same', parentPath: 'body>main>p' },
       { text: 'Same', parentPath: 'body>aside>p' },
@@ -49,18 +41,16 @@ describe('matchResumeTranslations', () => {
     const map = matchResumeTranslations(live, snap);
     expect(map.get(0)).toBe('Main-T');
     expect(map.get(1)).toBe('Aside-T');
-  });
 
-  it('falls back to text-only for legacy snapshots without parentPath', () => {
-    const live = [
+    const legacyLive = [
       { text: 'Hello', parentPath: 'body>p' },
       { text: 'World', parentPath: 'body>p' },
     ];
-    const snap = [
+    const legacySnap = [
       { text: 'Hello', translatedText: 'Xin chào', status: 'translated' },
     ];
-    const map = matchResumeTranslations(live, snap);
-    expect(map.get(0)).toBe('Xin chào');
-    expect(map.has(1)).toBe(false);
+    const legacyMap = matchResumeTranslations(legacyLive, legacySnap);
+    expect(legacyMap.get(0)).toBe('Xin chào');
+    expect(legacyMap.has(1)).toBe(false);
   });
 });

@@ -30,7 +30,7 @@ const ALL_THEME_NAMES: ThemeName[] = [
 ];
 
 describe('themes catalog', () => {
-  it('covers every ThemeName with unique labels, categories, and tips', () => {
+  it('covers ThemeName catalog, General-tab options, Select shapes, and category filters', () => {
     const ids = THEME_DEFINITIONS.map((t) => t.id);
     expect(ids.sort()).toEqual([...ALL_THEME_NAMES].sort());
     expect(new Set(ids).size).toBe(ALL_THEME_NAMES.length);
@@ -48,11 +48,9 @@ describe('themes catalog', () => {
 
     const labels = GENERAL_THEME_OPTIONS.map((t) => t.label);
     expect(new Set(labels).size).toBe(labels.length);
-  });
 
-  it('exposes General-tab options and Select-compatible shapes without custom', () => {
-    const ids = GENERAL_THEME_OPTIONS.map((t) => t.id);
-    expect(ids).toEqual([
+    const generalIds = GENERAL_THEME_OPTIONS.map((t) => t.id);
+    expect(generalIds).toEqual([
       'dividing-line',
       'blockquote',
       'paper',
@@ -70,7 +68,7 @@ describe('themes catalog', () => {
       'mask',
       'fade-in',
     ]);
-    expect(ids).not.toContain('custom');
+    expect(generalIds).not.toContain('custom');
     expect(getThemeOptionMeta('bubble')).toEqual(
       expect.objectContaining({ id: 'bubble', label: 'Speech Bubble' }),
     );
@@ -78,9 +76,7 @@ describe('themes catalog', () => {
     expect(opts[0]).toEqual({ value: 'dividing-line', label: 'Dividing Line' });
     expect(opts).toHaveLength(16);
     expect(opts.some((o) => o.value === 'custom')).toBe(false);
-  });
 
-  it('filters by category', () => {
     expect(themesByCategory('all')).toHaveLength(17);
     const classic = themesByCategory('classic').map((t) => t.id);
     expect(classic).toEqual(

@@ -53,7 +53,7 @@ describe('MseInterceptor', () => {
     SourceBuffer.prototype.appendBuffer = originalAppendBuffer;
   });
 
-  it('patches on enable, restores on disable, and does not double-patch', () => {
+  it('patches/restores, emits WebVTT cues, ignores non-subtitle, re-enable works', () => {
     interceptor.enable();
     expect(MediaSource.prototype.addSourceBuffer).not.toBe(originalAddSourceBuffer);
     const firstPatch = MediaSource.prototype.addSourceBuffer;
@@ -62,9 +62,7 @@ describe('MseInterceptor', () => {
     interceptor.disable();
     expect(MediaSource.prototype.addSourceBuffer).toBe(originalAddSourceBuffer);
     expect(SourceBuffer.prototype.appendBuffer).toBe(originalAppendBuffer);
-  });
 
-  it('emits SUBTITLE_MSE_CUES for WebVTT text/vtt buffers (including ArrayBuffer)', () => {
     interceptor.enable();
     const ms = new MediaSource();
     const sb = ms.addSourceBuffer('text/vtt');
@@ -94,11 +92,8 @@ describe('MseInterceptor', () => {
         cues: expect.arrayContaining([expect.objectContaining({ text: 'Buffer test' })]),
       }),
     );
-  });
 
-  it('does not emit for video buffers or non-WebVTT binary; re-enable works', () => {
-    interceptor.enable();
-    const ms = new MediaSource();
+    mockSend.mockClear();
     const videoSb = ms.addSourceBuffer('video/mp4');
     videoSb.appendBuffer(new TextEncoder().encode('video'));
     expect(mockSend).not.toHaveBeenCalledWith('SUBTITLE_MSE_CUES', expect.anything());
