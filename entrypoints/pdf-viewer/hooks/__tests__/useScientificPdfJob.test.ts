@@ -11,7 +11,6 @@ vi.mock('@/lib/config', () => ({
     scientificPdf: {
       enabled: true,
       serverUrl: 'http://127.0.0.1:17890',
-      preferScientific: false,
       setupCompletedAt: '2026-07-17T00:00:00Z',
     },
     sourceLanguage: 'en',

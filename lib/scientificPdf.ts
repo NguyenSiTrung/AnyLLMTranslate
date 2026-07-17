@@ -118,8 +118,6 @@ export function mergeScientificPdfSettings(
     serverUrl: normalizeScientificPdfServerUrl(
       partial.serverUrl ?? DEFAULT_SCIENTIFIC_PDF_SETTINGS.serverUrl,
     ),
-    preferScientific:
-      partial.preferScientific ?? DEFAULT_SCIENTIFIC_PDF_SETTINGS.preferScientific,
   };
   if (typeof partial.setupCompletedAt === 'string' && partial.setupCompletedAt.length > 0) {
     merged.setupCompletedAt = partial.setupCompletedAt;

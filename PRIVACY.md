@@ -24,15 +24,15 @@ When you translate text, the selected text is sent to the API endpoint **you con
 
 **AnyLLMTranslate never contacts any server owned by the extension developers.**
 
-### Optional: Scientific PDF mode (local bridge)
+### PDF Translate (local Docker bridge)
 
-When you enable **Scientific layout** PDF translation and start a job:
+PDF translation runs **only** via a local Scientific PDF bridge you run yourself:
 
-1. The **full PDF file** and **short-lived provider credentials** (base URL, API key if any, model) plus language settings are sent to the **bridge server URL you configure**.
+1. When you enable the bridge and start a job, the **full PDF file** and **short-lived provider credentials** (base URL, API key if any, model) plus language settings are sent to the **bridge server URL you configure**.
 2. The default and recommended URL is **loopback only** (`http://127.0.0.1:17890`). The Options UI warns if you set a non-loopback host.
 3. The bridge (Docker process you start) may forward text to **your** LLM provider for translation; it does not send data to AnyLLMTranslate operators.
-4. Scientific mode is **opt-in**. The in-browser **Fast** PDF path never requires the bridge and remains available when the bridge is offline.
-5. Scientific settings store only `serverUrl` / enablement flags — **not** a second API key store.
+4. PDF Translate is **opt-in** and requires the bridge. If the bridge is offline or not configured, PDF Translate is unavailable (there is no in-browser fallback that bypasses the bridge).
+5. Bridge settings store only `serverUrl` / enablement flags — **not** a second API key store.
 
 ## Bring Your Own Key (BYOK)
 

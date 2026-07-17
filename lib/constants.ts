@@ -77,9 +77,8 @@ export const DATA_ATTRS = {
 export type PageState = 'dual' | 'translation-only' | 'off';
 
 /**
- * PDF viewer view-mode preference:
- * - 'split' (default): original PDF canvas left, translation right (side-by-side).
- * - 'translation-only': full-width layout overlay, left pane hidden.
+ * PDF viewer layout mode (split is the only live mode; translation-only was
+ * for the removed in-browser Fast overlay path).
  */
 export type PdfViewMode = 'split' | 'translation-only';
 
@@ -91,10 +90,6 @@ export const STORAGE_KEYS = {
   CONNECTION_STATUS: 'anyllm-connection-status',
   /** Per-install random salt for API key encryption key derivation */
   ENC_SALT: 'anyllm-translate-enc-salt',
-  /** PDF viewer view-mode preference: 'split' (default) | 'translation-only' */
-  PDF_VIEW_MODE: 'anyllm-pdf-view-mode',
-  /** PDF viewer translation-progress snapshots, keyed by context hash (url+lang+provider+model). */
-  PDF_PROGRESS: 'anyllm-pdf-progress',
   /** Stats v2 daily dimensional records (IndexedDB) */
   STATS_DB: 'anyllm-stats',
   STATS_STORE: 'daily',

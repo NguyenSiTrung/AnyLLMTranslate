@@ -26,7 +26,11 @@ import {
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { DEFAULT_SETTINGS, DEFAULT_SCIENTIFIC_PDF_SETTINGS } from '@/types/config';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_PDF_SETTINGS,
+  DEFAULT_SCIENTIFIC_PDF_SETTINGS,
+} from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
@@ -292,11 +296,6 @@ export function AdvancedSection() {
   const pdfAutoOpen = settings.pdfSettings?.autoOpen ?? 'off';
   const pdfOpenMode = settings.pdfSettings?.openMode ?? 'new-tab';
   const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
-  const translateTableText = settings.pdfSettings?.translateTableText ?? false;
-  const strictMathSkip = settings.pdfSettings?.strictMathSkip ?? false;
-  const autoExtractTerms = settings.pdfSettings?.autoExtractTerms ?? true;
-  const detectScanned = settings.pdfSettings?.detectScanned ?? true;
-  const autoOcrWorkaround = settings.pdfSettings?.autoOcrWorkaround ?? true;
   const scientificPdf = mergeScientificPdfSettings(settings.scientificPdf);
   const scientificStatus = resolveScientificPdfStatus({
     settings: scientificPdf,
@@ -304,16 +303,7 @@ export function AdvancedSection() {
   });
   const scientificBadge = scientificStatusBadge(scientificStatus);
   const scientificNonLoopback = shouldWarnNonLoopbackServerUrl(scientificPdf.serverUrl);
-  const defaultPdfSettings = {
-    autoOpen: 'off' as const,
-    openMode: 'new-tab' as const,
-    neverAutoOpenSites: [] as string[],
-    translateTableText: false,
-    strictMathSkip: false,
-    autoExtractTerms: true,
-    detectScanned: true,
-    autoOcrWorkaround: true,
-  };
+  const defaultPdfSettings = { ...DEFAULT_PDF_SETTINGS };
 
   const refreshScientificHealth = useCallback(async () => {
     try {
@@ -948,13 +938,13 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* PDF Translator */}
+        {/* PDF Translator — open behavior + Docker bridge */}
         <div className="animate-stagger" style={stagger(4)}>
           <Card
             variant="bordered"
             accent="amber"
             title="PDF Translator"
-            description="Detect PDF tabs and open the built-in translator. Works with extensionless URLs like arXiv."
+            description="Detect PDF tabs and open the built-in viewer. Translation runs only via the local Docker bridge (pdf2zh)."
             icon={<FileText className="w-3.5 h-3.5" />}
             headerExtra={
               <Badge variant={pdfAutoOpen === 'off' ? 'info' : 'warning'}>
@@ -1051,79 +1041,6 @@ export function AdvancedSection() {
                 </FieldGroup>
               </div>
             )}
-
-            <div className="mt-6 border-t border-zinc-800/80 pt-5">
-              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-                Power-user composition
-              </p>
-              <div className="grid gap-4">
-                <Toggle
-                  checked={translateTableText}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        translateTableText: checked,
-                      },
-                    })
-                  }
-                  label="Translate table text"
-                  description="Off by default: table grids stay on the canvas. When on, non-numeric labels may translate; numbers stay protected."
-                />
-                <Toggle
-                  checked={strictMathSkip}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        strictMathSkip: checked,
-                      },
-                    })
-                  }
-                  label="Strict math skip"
-                  description="More aggressive formula classification (size ratio and density). Off by default to avoid under-translating."
-                />
-                <Toggle
-                  checked={autoExtractTerms}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        autoExtractTerms: checked,
-                      },
-                    })
-                  }
-                  label="Auto extract terms"
-                  description="Before multi-page translation, sample prose and extract a technical term list for consistent terminology. On by default; fails open if extraction fails."
-                />
-                <Toggle
-                  checked={detectScanned}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        detectScanned: checked,
-                      },
-                    })
-                  }
-                  label="Detect scanned PDFs"
-                  description="Score pages with little/no extractable text vs page area. On by default."
-                />
-                <Toggle
-                  checked={autoOcrWorkaround}
-                  onChange={(checked) =>
-                    updateSettings({
-                      pdfSettings: {
-                        ...(settings.pdfSettings ?? defaultPdfSettings),
-                        autoOcrWorkaround: checked,
-                      },
-                    })
-                  }
-                  label="Auto OCR workaround"
-                  description="When a heavily scanned document is detected, force white underlays and text overlay assumptions. On by default; pure-scan no-text docs show a message instead."
-                />
-              </div>
-            </div>
           </Card>
         </div>
 

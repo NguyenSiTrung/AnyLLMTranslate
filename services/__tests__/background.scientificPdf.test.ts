@@ -85,7 +85,6 @@ function seedSettings(partial: Partial<ExtensionSettings> = {}): void {
     scientificPdf: {
       enabled: true,
       serverUrl: 'http://127.0.0.1:17890',
-      preferScientific: false,
       setupCompletedAt: '2026-07-17T00:00:00.000Z',
       ...(partial.scientificPdf ?? {}),
     },

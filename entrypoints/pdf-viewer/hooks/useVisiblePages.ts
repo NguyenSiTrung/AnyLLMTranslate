@@ -4,12 +4,6 @@
  * Uses IntersectionObserver on lightweight placeholder elements in the left
  * pane to determine which pages should render their canvas. Pages outside the
  * visible window (+buffer) can be unmounted to free GPU/memory resources.
- *
- * Why a separate hook?
- * - The existing `usePdfPageTranslations` uses its own IntersectionObserver
- *   for the right pane's translation slots. Canvas virtualization requires
- *   observing the left pane's page placeholders independently.
- * - This keeps the canvas lifecycle decoupled from translation lifecycle.
  */
 
 import { useEffect, useRef, useState } from 'react';

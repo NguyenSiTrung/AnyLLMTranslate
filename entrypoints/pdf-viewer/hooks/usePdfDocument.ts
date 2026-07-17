@@ -46,9 +46,9 @@ export interface UsePdfDocumentOptions {
    * window are evicted from memory (`.cleanup()`) and re-fetched via
    * `getPage()` when they re-enter the window.
    *
-   * Extracted text + translations are cached upstream (pdfTranslation.ts
-   * memoryCache + IndexedDB), so re-entering an evicted page does NOT
-   * re-translate — only the pdf.js proxy object is re-fetched (cheap).
+   * Re-entering an evicted page only re-fetches the pdf.js proxy (cheap);
+   * bridge translation results are separate mono/dual PDFs, not per-page
+   * overlays on these proxies.
    */
   visiblePages?: Set<number>;
   /**
@@ -167,10 +167,9 @@ export function usePdfDocument(
   // that should be resident but are currently `null` (e.g. re-entering a
   // previously-evicted page) are re-fetched via `getPage()`.
   //
-  // IMPORTANT: this evicts ONLY pdf.js proxy objects. Extracted text and
-  // translations live in the upstream cache (pdfTranslation.ts memoryCache +
-  // IndexedDB), which is independent of these proxies — so scrolling back to
-  // an evicted page re-renders from cache without a new LLM call.
+  // IMPORTANT: this evicts ONLY pdf.js proxy objects for canvas rendering.
+  // Bridge jobs produce separate mono/dual PDF blobs and do not depend on
+  // these proxies for translation results.
   //
   // The decision (evict vs keep vs re-fetch) is computed INSIDE the
   // setPages(prev => ...) updater so it always reads the freshest array

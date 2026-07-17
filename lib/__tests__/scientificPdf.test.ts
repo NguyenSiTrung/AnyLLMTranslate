@@ -66,9 +66,9 @@ describe('scientificPdf helpers', () => {
     });
     expect(merged.enabled).toBe(true);
     expect(merged.serverUrl).toBe('http://127.0.0.1:9999');
-    expect(merged.preferScientific).toBe(false);
     expect(merged.setupCompletedAt).toBe('2026-07-17T12:00:00Z');
     expect(merged).not.toHaveProperty('apiKey');
+    expect(merged).not.toHaveProperty('preferScientific');
   });
 
   it('docker run and setup commands point at helper script', () => {

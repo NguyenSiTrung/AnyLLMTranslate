@@ -35,17 +35,12 @@ describe('config defaults', () => {
     expect(DEFAULT_SUBTITLE_SETTINGS.position).toBe('bottom');
     expect(DEFAULT_SETTINGS.pdfSettings).toEqual(DEFAULT_PDF_SETTINGS);
     expect(DEFAULT_PDF_SETTINGS.autoOpen).toBe('off');
-    expect(DEFAULT_PDF_SETTINGS.translateTableText).toBe(false);
-    expect(DEFAULT_PDF_SETTINGS.strictMathSkip).toBe(false);
-    // BabelDOC-parity defaults (pdf-babeldoc-parity): term extract + scan detect ON
-    expect(DEFAULT_PDF_SETTINGS.autoExtractTerms).toBe(true);
-    expect(DEFAULT_PDF_SETTINGS.detectScanned).toBe(true);
-    expect(DEFAULT_PDF_SETTINGS.autoOcrWorkaround).toBe(true);
+    expect(DEFAULT_PDF_SETTINGS.openMode).toBe('new-tab');
+    expect(DEFAULT_PDF_SETTINGS.neverAutoOpenSites).toEqual([]);
 
-    // Scientific PDF bridge (scientific-pdf-backend): opt-in, loopback, no credentials
+    // Scientific PDF bridge: opt-in, loopback, no credentials (bridge-only PDF Translate)
     expect(DEFAULT_SETTINGS.scientificPdf).toEqual(DEFAULT_SCIENTIFIC_PDF_SETTINGS);
     expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.enabled).toBe(false);
-    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.preferScientific).toBe(false);
     expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.serverUrl).toBe(
       `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`,
     );
@@ -53,6 +48,7 @@ describe('config defaults', () => {
     expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('apiKey');
     expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('baseUrl');
     expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('model');
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('preferScientific');
 
     expect(DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS).toEqual({ enable: true, aiEnable: false });
     expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(
@@ -66,7 +62,6 @@ describe('config defaults', () => {
     const merged = { ...DEFAULT_SCIENTIFIC_PDF_SETTINGS, ...partial };
     expect(merged.enabled).toBe(true);
     expect(merged.serverUrl).toBe('http://127.0.0.1:9999');
-    expect(merged.preferScientific).toBe(false);
     expect(merged.setupCompletedAt).toBeUndefined();
     expect(merged).not.toHaveProperty('apiKey');
   });

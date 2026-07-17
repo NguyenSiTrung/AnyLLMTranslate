@@ -299,7 +299,7 @@ export type PdfAutoOpenMode = 'off' | 'prompt' | 'auto';
 /** How the PDF viewer opens relative to the source tab */
 export type PdfOpenMode = 'new-tab' | 'same-tab';
 
-/** PDF translator settings */
+/** PDF translator settings (viewer open behavior only; translation is bridge-only). */
 export interface PdfSettings {
   /** When to auto-open the bundled viewer after detecting a PDF tab.
    *  - 'off':    never auto-open (default; user must click popup/context menu)
@@ -312,40 +312,11 @@ export interface PdfSettings {
   openMode: PdfOpenMode;
   /** Hostnames for which auto-open is suppressed even when autoOpen !== 'off'. */
   neverAutoOpenSites: string[];
-  /**
-   * When true, non-numeric text inside detected table regions may be
-   * translated. Default false: entire table region is protected (figure).
-   * Numeric/currency cells always stay verbatim.
-   */
-  translateTableText: boolean;
-  /**
-   * When true, use stricter formula classification thresholds (more aggressive
-   * math skip). Default false.
-   */
-  strictMathSkip: boolean;
-  /**
-   * When true, run an LLM term-extraction pre-pass over sampled prose before
-   * multi-page translation and inject consistent technical terms into context.
-   * Default true. Fail-open: extraction failure never blocks translation.
-   */
-  autoExtractTerms: boolean;
-  /**
-   * When true, score pages for little/no extractable text vs page area to
-   * detect heavily scanned PDFs. Default true.
-   */
-  detectScanned: boolean;
-  /**
-   * When true, automatically enable the OCR workaround path (white underlay +
-   * forced text overlay assumptions) for pages/docs flagged as heavily scanned.
-   * Default true. Only applies when detectScanned finds a heavy scan.
-   */
-  autoOcrWorkaround: boolean;
 }
 
 /**
- * Optional Scientific PDF mode — layout-preserving path via a local
- * PDFMathTranslate/pdf2zh Docker bridge. Credentials always come from the
- * active provider pool at job time; never stored here.
+ * Scientific PDF bridge settings — required for PDF Translate (Docker pdf2zh).
+ * Credentials always come from the active provider pool at job time; never stored here.
  */
 export interface ScientificPdfSettings {
   /** Master toggle for PDF Docker bridge (required for PDF Translate). */
@@ -355,11 +326,6 @@ export interface ScientificPdfSettings {
    * `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`.
    */
   serverUrl: string;
-  /**
-   * @deprecated PDF Translate is bridge-only; this flag is ignored by the viewer.
-   * Kept for settings migration / backward compatibility.
-   */
-  preferScientific: boolean;
   /** ISO timestamp when the setup wizard completed successfully (optional). */
   setupCompletedAt?: string;
 }
@@ -634,11 +600,6 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
   autoOpen: 'off',
   openMode: 'new-tab',
   neverAutoOpenSites: [],
-  translateTableText: false,
-  strictMathSkip: false,
-  autoExtractTerms: true,
-  detectScanned: true,
-  autoOcrWorkaround: true,
 };
 
 /**
@@ -647,11 +608,10 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
  */
 export const DEFAULT_SCIENTIFIC_PDF_PORT = 17890;
 
-/** Default Scientific PDF settings (bridge optional; Fast path always available). */
+/** Default Scientific PDF settings (bridge required for PDF Translate). */
 export const DEFAULT_SCIENTIFIC_PDF_SETTINGS: ScientificPdfSettings = {
   enabled: false,
   serverUrl: `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`,
-  preferScientific: false,
 };
 
 /** Default custom theme configuration */
