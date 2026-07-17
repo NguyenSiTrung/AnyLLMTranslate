@@ -127,7 +127,44 @@ export function mergeScientificPdfSettings(
   return merged;
 }
 
-/** Docker one-liner shown in the setup wizard (image name may lag first publish). */
+/**
+ * Primary install command for new users: build image + start container.
+ * Run from the AnyLLMTranslate **repo root**.
+ */
+export function scientificPdfDockerComposeUpCommand(): string {
+  return 'docker compose -f docker-compose.scientific-pdf.yml up -d --build';
+}
+
+/** Stop / remove the bridge container (compose). */
+export function scientificPdfDockerComposeDownCommand(): string {
+  return 'docker compose -f docker-compose.scientific-pdf.yml down';
+}
+
+/** Rebuild image from scratch (after Dockerfile/bridge code changes). */
+export function scientificPdfDockerComposeRebuildCommand(): string {
+  return [
+    'docker compose -f docker-compose.scientific-pdf.yml down',
+    'docker compose -f docker-compose.scientific-pdf.yml build --no-cache',
+    'docker compose -f docker-compose.scientific-pdf.yml up -d',
+  ].join('\n');
+}
+
+/** Health check once the container is up. */
+export function scientificPdfHealthCurlCommand(
+  port: number = DEFAULT_SCIENTIFIC_PDF_PORT,
+): string {
+  return `curl -sS http://127.0.0.1:${port}/health`;
+}
+
+/** Follow live bridge logs (useful while a Scientific job runs). */
+export function scientificPdfDockerLogsCommand(): string {
+  return 'docker logs -f -t anyllm-scientific-pdf';
+}
+
+/**
+ * Fallback one-liner after the image already exists (compose build is preferred).
+ * @deprecated Prefer {@link scientificPdfDockerComposeUpCommand} for first-time setup.
+ */
 export function scientificPdfDockerRunCommand(
   port: number = DEFAULT_SCIENTIFIC_PDF_PORT,
 ): string {
@@ -135,6 +172,32 @@ export function scientificPdfDockerRunCommand(
     'docker run --rm -d',
     `--name anyllm-scientific-pdf`,
     `-p ${port}:${port}`,
+    '-v anyllm-scientific-pdf-data:/data',
     'anyllm-scientific-pdf-bridge:latest',
   ].join(' ');
+}
+
+/** Ordered setup commands shown in the Options wizard Install step. */
+export function scientificPdfSetupCommands(port: number = DEFAULT_SCIENTIFIC_PDF_PORT): Array<{
+  title: string;
+  command: string;
+  hint: string;
+}> {
+  return [
+    {
+      title: '1. Build & start (from repo root)',
+      command: scientificPdfDockerComposeUpCommand(),
+      hint: 'First build can take several minutes (downloads pdf2zh). Needs Docker Desktop running.',
+    },
+    {
+      title: '2. Check health',
+      command: scientificPdfHealthCurlCommand(port),
+      hint: 'Expect JSON with "status":"ok". Then click “Check health” in the wizard.',
+    },
+    {
+      title: '3. View logs (optional)',
+      command: scientificPdfDockerLogsCommand(),
+      hint: 'Leave this running in a second terminal while you translate a PDF.',
+    },
+  ];
 }

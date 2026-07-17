@@ -15,7 +15,7 @@ import {
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   mergeScientificPdfSettings,
-  scientificPdfDockerRunCommand,
+  scientificPdfSetupCommands,
   shouldWarnNonLoopbackServerUrl,
   DEFAULT_SCIENTIFIC_PDF_PORT,
 } from '@/lib/scientificPdf';
@@ -53,7 +53,7 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
   const [testing, setTesting] = useState(false);
   const sci = mergeScientificPdfSettings(settings.scientificPdf);
   const [serverUrlDraft, setServerUrlDraft] = useState(sci.serverUrl);
-  const dockerCmd = scientificPdfDockerRunCommand(DEFAULT_SCIENTIFIC_PDF_PORT);
+  const setupCommands = scientificPdfSetupCommands(DEFAULT_SCIENTIFIC_PDF_PORT);
   const nonLoopback = shouldWarnNonLoopbackServerUrl(serverUrlDraft);
 
   // Reset entry step when dialog opens
@@ -165,14 +165,17 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
     showError,
   ]);
 
-  const copyDocker = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(dockerCmd);
-      showSuccess('Docker command copied');
-    } catch {
-      showError('Could not copy — select the command manually');
-    }
-  }, [dockerCmd, showSuccess, showError]);
+  const copyText = useCallback(
+    async (text: string, label = 'Command') => {
+      try {
+        await navigator.clipboard.writeText(text);
+        showSuccess(`${label} copied`);
+      } catch {
+        showError('Could not copy — select the command manually');
+      }
+    },
+    [showSuccess, showError],
+  );
 
   const finish = useCallback(() => {
     if (wizard.completed || wizard.step === 'done') {
@@ -280,21 +283,29 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
           {wizard.step === 'install' && (
             <div className="space-y-4">
               <p className="text-xs text-zinc-400">
-                Run this once in a terminal. First job may download layout models (slow).
+                Install <strong className="text-zinc-200">Docker Desktop</strong> (or Docker Engine),
+                then open a terminal in the <strong className="text-zinc-200">AnyLLMTranslate
+                repo root</strong> and run the commands below in order.
               </p>
-              <div className="relative rounded-lg border border-zinc-700 bg-zinc-900 p-3 font-mono text-[11px] text-zinc-200">
-                <pre className="whitespace-pre-wrap break-all pr-10">{dockerCmd}</pre>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-2 top-2"
-                  onClick={() => void copyDocker()}
-                  aria-label="Copy Docker command"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              {setupCommands.map((item) => (
+                <div key={item.title} className="space-y-1.5">
+                  <p className="text-xs font-medium text-zinc-200">{item.title}</p>
+                  <p className="text-[11px] text-zinc-500">{item.hint}</p>
+                  <div className="relative rounded-lg border border-zinc-700 bg-zinc-900 p-3 font-mono text-[11px] text-zinc-200">
+                    <pre className="whitespace-pre-wrap break-all pr-10">{item.command}</pre>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-2"
+                      onClick={() => void copyText(item.command, item.title)}
+                      aria-label={`Copy ${item.title}`}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
               <FieldGroup
                 label="Bridge server URL"
                 description="Default is loopback. Non-loopback hosts receive your PDF and API keys."
@@ -314,9 +325,13 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
                   Scientific mode.
                 </p>
               )}
-              <p className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                <Terminal className="h-3.5 w-3.5" aria-hidden />
-                Build image first if needed: see services/scientific-pdf-bridge/README.md
+              <p className="flex items-start gap-1.5 text-[11px] text-zinc-500">
+                <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>
+                  Full guide: <code className="rounded bg-zinc-800 px-1">docs/scientific-pdf-setup.md</code>
+                  . Rebuild only when bridge code/Dockerfile changes (see guide). Progress UI in the
+                  PDF viewer does <strong className="text-zinc-400">not</strong> require a Docker rebuild.
+                </span>
               </p>
             </div>
           )}

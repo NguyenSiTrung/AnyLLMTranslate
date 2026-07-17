@@ -382,18 +382,22 @@ Safeguards:
 
 ### Scientific layout (optional local bridge)
 
-For layout-preserving scientific papers, enable **Options → Advanced → Scientific PDF** and complete the in-extension wizard (Docker one-liner + health check). Default bridge: `http://127.0.0.1:17890`.
+For layout-preserving scientific papers, enable **Options → Advanced → Scientific PDF** and complete the in-extension setup wizard. Default bridge: `http://127.0.0.1:17890`.
+
+**New users — full guide:** [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)
 
 ```bash
-# After building the image (see services/scientific-pdf-bridge/README.md):
-docker run --rm -d --name anyllm-scientific-pdf -p 17890:17890 anyllm-scientific-pdf-bridge:latest
-# or: docker compose -f docker-compose.scientific-pdf.yml up -d
+# From repo root (Docker Desktop must be running)
+docker compose -f docker-compose.scientific-pdf.yml up -d --build
 curl -sS http://127.0.0.1:17890/health
+# Then: Options → Advanced → Scientific PDF → Set up… → Check health
 ```
 
-In the PDF viewer, choose **Scientific** (when Ready) and run **Translate (Scientific)**. Jobs use your **active provider pool** credentials per request; downloads include mono + dual PDFs. If the bridge is stopped, **Fast** mode is unchanged.
+In the PDF viewer, choose **Scientific** (when Ready) and **Translate (Scientific)**. Progress + logs appear in a modal; downloads are manual (mono / dual / side-by-side). Jobs use the **active provider pool** (including maxRpm / concurrency / interval). If the bridge is stopped, **Fast** mode is unchanged.
 
-API contract: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md). Privacy: [PRIVACY.md](PRIVACY.md) (PDF + short-lived keys only to your `serverUrl`).
+- Setup guide: [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)  
+- API: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)  
+- Privacy: [PRIVACY.md](PRIVACY.md)
 
 ---
 

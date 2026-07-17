@@ -8,6 +8,8 @@ import {
   resolveScientificPdfStatus,
   mergeScientificPdfSettings,
   scientificPdfDockerRunCommand,
+  scientificPdfDockerComposeUpCommand,
+  scientificPdfSetupCommands,
 } from '@/lib/scientificPdf';
 import { DEFAULT_SCIENTIFIC_PDF_SETTINGS } from '@/types/config';
 
@@ -122,6 +124,23 @@ describe('scientificPdf helpers', () => {
       expect(cmd).toContain(`-p ${DEFAULT_SCIENTIFIC_PDF_PORT}:${DEFAULT_SCIENTIFIC_PDF_PORT}`);
       expect(cmd).toContain('anyllm-scientific-pdf-bridge:latest');
       expect(cmd).toContain('docker run');
+    });
+  });
+
+  describe('setup commands for new users', () => {
+    it('compose up is the primary install path', () => {
+      const up = scientificPdfDockerComposeUpCommand();
+      expect(up).toContain('docker compose');
+      expect(up).toContain('docker-compose.scientific-pdf.yml');
+      expect(up).toContain('--build');
+    });
+
+    it('setupCommands lists build, health, and logs', () => {
+      const cmds = scientificPdfSetupCommands();
+      expect(cmds).toHaveLength(3);
+      expect(cmds[0]!.command).toContain('up -d --build');
+      expect(cmds[1]!.command).toContain('/health');
+      expect(cmds[2]!.command).toContain('docker logs');
     });
   });
 });
