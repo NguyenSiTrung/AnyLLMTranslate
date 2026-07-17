@@ -11,7 +11,11 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PageTranslations } from '../lib/pdfTranslation';
 import type { PdfParagraph } from '../lib/pdfTextExtraction';
-import { getProseMaskRects } from '../lib/pdfComposition';
+import {
+  getProseMaskRects,
+  paragraphHasFormulaRuns,
+  proseOnlyOverlayText,
+} from '../lib/pdfComposition';
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
 import { createCanvasMetricsHook, measureBoxHeight } from '../lib/fontMetrics';
@@ -206,17 +210,32 @@ function LayoutOverlayInner({
 
   // Pre-compute static geometry. `top` is the ORIGINAL position here; the
   // effect below may override it after measuring the rendered boxes.
+  // Masks are stored at original tops and shifted by the same deltaY as the
+  // text box during render (see reflow) so they never desync and whitewash
+  // canvas content that the translation box has moved away from.
   const boxes = originalParagraphs
     .map((para) => {
-      const translatedText = page.paragraphs.get(para.id);
-      if (!translatedText) return null;
+      const fullTranslated = page.paragraphs.get(para.id);
+      if (!fullTranslated) return null;
       // Primary: explicit content kind + selective run masks. Math/figure and
       // pure-formula never get a white mask (canvas stays visible).
       const kind = page.paragraphKinds?.get(para.id);
-      let maskRects = getProseMaskRects(para, kind, translatedText);
+      const compositions = page.paragraphCompositions?.get(para.id);
+      // Layout paints prose only — formula glyphs stay on the canvas under
+      // selective unmasked regions (avoids □ tofu from web fonts).
+      const overlayText = proseOnlyOverlayText(fullTranslated, compositions);
+      if (!overlayText) return null;
+
+      let maskRects = getProseMaskRects(para, kind, fullTranslated);
       if (!maskRects || maskRects.length === 0) return null;
-      // OCR workaround: full-paragraph white underlay for prose on scanned PDFs.
-      if (isOcrWorkaroundActive() && kind !== 'math' && kind !== 'figure') {
+      // OCR workaround: full-paragraph white underlay for pure prose only.
+      // Never expand underlay over formula runs (would cover display math).
+      if (
+        isOcrWorkaroundActive() &&
+        kind !== 'math' &&
+        kind !== 'figure' &&
+        !paragraphHasFormulaRuns(para)
+      ) {
         maskRects = [
           {
             x: para.x,
@@ -230,6 +249,7 @@ function LayoutOverlayInner({
       const origHeight = Math.max(para.height * viewport.scale, 12);
       // Typesetting ladder: compact line spacing / scale font / expand width
       // before relying on page-slot growth for residual overflow.
+      // Measure against prose-only overlay text (not formula-stuffed string).
       const freeRight = Math.max(0, dims.width - geom.left - geom.width - 4);
       const fit = fitTextToBox({
         box: {
@@ -238,7 +258,7 @@ function LayoutOverlayInner({
           width: geom.width,
           height: origHeight,
         },
-        text: translatedText,
+        text: overlayText,
         naturalFontSize: geom.fontSize,
         metrics: layoutMetricsHook,
         freeSpace: { right: freeRight, down: 0 },
@@ -249,11 +269,11 @@ function LayoutOverlayInner({
       // Conservative floor: only used when the live measurement is unavailable
       // (e.g. jsdom has no layout). Prefer ladder height when it fits.
       const estHeight = fit.overflow
-        ? estimateBoxHeight(translatedText, fittedWidth, fittedFontSize)
+        ? estimateBoxHeight(overlayText, fittedWidth, fittedFontSize)
         : Math.max(
             fit.box.height,
             layoutMetricsHook.measure({
-              text: translatedText,
+              text: overlayText,
               fontSize: fittedFontSize,
               lineHeight: fittedLineHeight,
               width: fittedWidth,
@@ -272,7 +292,7 @@ function LayoutOverlayInner({
       });
       return {
         para,
-        translatedText,
+        translatedText: overlayText,
         origHeight,
         estHeight,
         viewportMasks,
@@ -350,22 +370,26 @@ function LayoutOverlayInner({
 
   return (
     <>
-      {/* Selective white masks: prose-only boxes for mixed formula paragraphs. */}
-      {boxes.flatMap((b) =>
-        b.viewportMasks.map((m, mi) => (
+      {/* Selective white masks: prose-only boxes for mixed formula paragraphs.
+          Shift by the same deltaY as the reflowed text box so masks never stay
+          behind at the original y while text is pushed down (that desync was
+          whitewashing canvas math / neighboring lines). */}
+      {boxes.flatMap((b, i) => {
+        const deltaY = (tops[i] ?? b.top) - b.top;
+        return b.viewportMasks.map((m, mi) => (
           <div
             key={`mask-${b.para.id}-${mi}`}
             className="pdf-viewer-layout-para-mask"
             style={{
               position: 'absolute',
               left: `${m.left - 1}px`,
-              top: `${m.top - 1}px`,
+              top: `${m.top + deltaY - 1}px`,
               width: `${m.width + 2}px`,
               height: `${m.height + 2}px`,
             }}
           />
-        )),
-      )}
+        ));
+      })}
       {/* Render the translated boxes at the (measure-corrected) tops. */}
       {boxes.map((b, i) => (
         <LayoutOverlayBox

@@ -15,6 +15,8 @@
 
 import type { PdfParagraph, PdfTextRun } from './pdfTextExtraction';
 import {
+  classifyMathParagraph,
+  classifyMathParagraphFromParagraph,
   classifyRuns,
   type ContentKind,
   type MathDetectOptions,
@@ -35,6 +37,8 @@ export interface MaskRect {
  * - `math` / `figure` / verbatim: returns `null` (do not mask).
  * - Mixed runs: only **prose** run boxes (formula runs stay unmasked).
  * - Pure prose or no runs: single full-paragraph rect (legacy).
+ * - Failsafe: pure-math text (even without `kind`) never masked so the
+ *   original canvas formula stays visible (avoids tofu/□ overlay glyphs).
  */
 export function getProseMaskRects(
   para: PdfParagraph,
@@ -44,6 +48,11 @@ export function getProseMaskRects(
 ): MaskRect[] | null {
   if (kind === 'math' || kind === 'figure') return null;
   if (translatedText.trim() === para.text.trim()) return null;
+
+  // Failsafe: rule-based pure math must never receive a white underlay + text
+  // overlay (web fonts cannot render PDF math glyphs → □ tofu).
+  if (classifyMathParagraphFromParagraph(para, options) === 'math') return null;
+  if (classifyMathParagraph(translatedText, options) === 'math') return null;
 
   const runs = para.runs;
   if (runs && runs.length > 0) {
@@ -71,6 +80,42 @@ export function getProseMaskRects(
       height: para.height,
     },
   ];
+}
+
+/**
+ * Layout overlay must paint **prose only** when a mixed paragraph has formula
+ * compositions. Reassembled formula characters are PDF math glyphs that the
+ * extension web font cannot render (□ tofu) and would cover the unmasked
+ * original canvas formula. Formulas stay visible from the page canvas.
+ *
+ * Returns empty string when there is no prose to show (caller should skip the
+ * overlay box entirely).
+ */
+export function proseOnlyOverlayText(
+  translatedText: string,
+  compositions?: Array<{ kind: 'prose' | 'formula'; text: string }> | null,
+): string {
+  if (!compositions || compositions.length === 0) {
+    return translatedText;
+  }
+  const hasFormula = compositions.some((c) => c.kind === 'formula');
+  if (!hasFormula) return translatedText;
+  return compositions
+    .filter((c) => c.kind === 'prose')
+    .map((c) => c.text)
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** True when paragraph has at least one classified formula run. */
+export function paragraphHasFormulaRuns(
+  para: PdfParagraph,
+  options?: MathDetectOptions,
+): boolean {
+  const runs = para.runs;
+  if (!runs || runs.length === 0) return false;
+  return classifyRuns(runs, options).some((k) => k === 'formula');
 }
 
 /** Stable placeholder token: `{v0}`, `{v1}`, … */

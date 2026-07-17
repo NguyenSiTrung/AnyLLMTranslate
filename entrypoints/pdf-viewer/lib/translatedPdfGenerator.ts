@@ -16,7 +16,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PageTranslations } from './pdfTranslation';
-import { getProseMaskRects } from './pdfComposition';
+import { getProseMaskRects, paragraphHasFormulaRuns, proseOnlyOverlayText } from './pdfComposition';
 import { fitTextToBox, type FontMetricsHook } from './pdfTypesetting';
 import { isOcrWorkaroundActive } from './pdfScanSession';
 
@@ -157,12 +157,23 @@ export async function generateTranslatedPdf(
 
         // Selective mask: skip math/figure; for mixed runs mask only prose boxes.
         const kind = translations.paragraphKinds?.get(para.id);
+        const compositions = translations.paragraphCompositions?.get(para.id);
+        // Draw prose-only for mixed formula paragraphs so PDF math glyphs are
+        // not forced through Helvetica/Noto (□ tofu). Formula stays on the
+        // embedded original page under unmasked regions.
+        const drawText = proseOnlyOverlayText(translatedText, compositions);
+        if (!drawText) continue;
+
         let maskRects = getProseMaskRects(para, kind, translatedText);
         if (!maskRects || maskRects.length === 0) continue;
 
-        // OCR workaround (BabelDOC spirit): force full-paragraph white underlay
-        // for prose when the document is heavily scanned with a noisy text layer.
-        if (isOcrWorkaroundActive() && kind !== 'math' && kind !== 'figure') {
+        // OCR workaround: full-paragraph white underlay for pure prose only.
+        if (
+          isOcrWorkaroundActive() &&
+          kind !== 'math' &&
+          kind !== 'figure' &&
+          !paragraphHasFormulaRuns(para)
+        ) {
           maskRects = [
             {
               x: para.x,
@@ -212,7 +223,7 @@ export async function generateTranslatedPdf(
             width: Math.max(baseWidth, 1),
             height: Math.max(para.height, naturalFontSize * 1.2),
           },
-          text: translatedText,
+          text: drawText,
           naturalFontSize,
           metrics,
           freeSpace: { right: freeRight, down: 0 },
@@ -223,7 +234,7 @@ export async function generateTranslatedPdf(
         const lines =
           fit.lines.length > 0
             ? fit.lines
-            : wrapText(translatedText, textWidth, fontSize, customFont);
+            : wrapText(drawText, textWidth, fontSize, customFont);
 
         // Draw each line, starting from the top of the paragraph.
         // In PDF coords, we start at para.y (top) and move downward.

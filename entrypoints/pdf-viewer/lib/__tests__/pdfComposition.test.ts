@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildTranslatePayload,
   getProseMaskRects,
+  proseOnlyOverlayText,
   reassembleTranslation,
   stripHallucinatedPlaceholders,
   placeholderToken,
@@ -167,5 +168,37 @@ describe('getProseMaskRects — selective mask', () => {
     const rects = getProseMaskRects(p, 'prose', 'Xin chao.');
     expect(rects).toHaveLength(1);
     expect(rects![0]).toMatchObject({ x: 0, y: 62, width: 100, height: 12 });
+  });
+
+  it('failsafe: pure formula-font paragraph is never masked even without kind', () => {
+    const p = para('L(theta)=sum x_i', [
+      run('L(theta)=sum x_i', { fontName: 'CMMI10', x: 40, y: 200, width: 180, height: 14 }),
+    ]);
+    // kind omitted / prose — still must not white-mask (canvas math must show).
+    expect(getProseMaskRects(p, undefined, 'L(theta)=sum x_i')).toBeNull();
+    expect(getProseMaskRects(p, 'prose', 'translated garbage □□□')).toBeNull();
+  });
+});
+
+describe('proseOnlyOverlayText', () => {
+  it('returns full text when no compositions', () => {
+    expect(proseOnlyOverlayText('Hello world', undefined)).toBe('Hello world');
+    expect(proseOnlyOverlayText('Hello world', [])).toBe('Hello world');
+  });
+
+  it('strips formula segments so Layout can leave math on canvas', () => {
+    const text = proseOnlyOverlayText('Mất mát là L(θ) trong đó', [
+      { kind: 'prose', text: 'Mất mát là ' },
+      { kind: 'formula', text: 'L(θ)' },
+      { kind: 'prose', text: ' trong đó' },
+    ]);
+    expect(text).toBe('Mất mát là trong đó');
+    expect(text).not.toContain('L(θ)');
+  });
+
+  it('returns empty when only formula segments (skip overlay box)', () => {
+    expect(
+      proseOnlyOverlayText('E=mc2', [{ kind: 'formula', text: 'E=mc2' }]),
+    ).toBe('');
   });
 });
