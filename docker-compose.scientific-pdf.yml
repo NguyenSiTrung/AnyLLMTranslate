@@ -19,9 +19,12 @@ services:
       MOCK_TRANSLATE: "${MOCK_TRANSLATE:-0}"
       JOB_TTL_SECONDS: "${JOB_TTL_SECONDS:-3600}"
       SCIENTIFIC_PDF_DATA_DIR: /data
+      # Optional HF mirror if model download fails: HF_ENDPOINT=https://hf-mirror.com
+      HF_ENDPOINT: "${HF_ENDPOINT:-}"
+      HF_HOME: /root/.cache/huggingface
     volumes:
       - scientific-pdf-data:/data
-      # Optional: persist HuggingFace / model cache across restarts
+      # Persist HuggingFace / onnx model cache across restarts (first job is slow)
       - scientific-pdf-models:/root/.cache
     restart: unless-stopped
 

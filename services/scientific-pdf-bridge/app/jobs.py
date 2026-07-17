@@ -34,6 +34,16 @@ class JobError:
         return {"code": self.code, "message": self.message}
 
 
+def _nonneg_int(data: dict[str, Any], *keys: str, default: int = 0) -> int:
+    for k in keys:
+        if k in data and data[k] is not None:
+            try:
+                return max(0, int(data[k]))
+            except (TypeError, ValueError):
+                return default
+    return default
+
+
 @dataclass
 class JobConfig:
     base_url: str
@@ -41,6 +51,10 @@ class JobConfig:
     lang_in: str
     lang_out: str
     api_key: str | None = None
+    # Same semantics as extension PoolKey throttle (0 = unlimited / off)
+    max_rpm: int = 0
+    concurrency_limit: int = 0
+    interval_ms: int = 0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "JobConfig":
@@ -53,6 +67,10 @@ class JobConfig:
             api_key = str(api_key)
             if not api_key:
                 api_key = None
+
+        max_rpm = _nonneg_int(data, "maxRpm", "max_rpm")
+        concurrency_limit = _nonneg_int(data, "concurrencyLimit", "concurrency_limit")
+        interval_ms = _nonneg_int(data, "interval", "intervalMs", "interval_ms")
 
         missing = [
             name
@@ -73,6 +91,9 @@ class JobConfig:
             lang_in=lang_in,
             lang_out=lang_out,
             api_key=api_key,
+            max_rpm=max_rpm,
+            concurrency_limit=concurrency_limit,
+            interval_ms=interval_ms,
         )
 
     def redacted_summary(self) -> str:
@@ -81,7 +102,9 @@ class JobConfig:
             key_hint = f"***{self.api_key[-4:]}" if len(self.api_key) >= 4 else "***"
         return (
             f"baseUrl={self.base_url!r} model={self.model!r} "
-            f"lang={self.lang_in}->{self.lang_out} apiKey={key_hint}"
+            f"lang={self.lang_in}->{self.lang_out} apiKey={key_hint} "
+            f"maxRpm={self.max_rpm} concurrency={self.concurrency_limit} "
+            f"intervalMs={self.interval_ms}"
         )
 
 
@@ -180,8 +203,27 @@ class JobStore:
                 job.touch()
                 return
             job.state = JobState.running
-            job.progress = 0.5
+            job.progress = 0.1
             job.message = "translating"
+            job.touch()
+
+    def update_progress(
+        self,
+        job: Job,
+        *,
+        progress: float | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Update coarse progress/message while a job is running (thread-safe)."""
+        with self._lock:
+            if job.state not in (JobState.running, JobState.queued):
+                return
+            if progress is not None:
+                # Keep monotonic-ish progress in [0, 0.95] until success marks 1.0
+                job.progress = max(job.progress, min(0.95, max(0.0, progress)))
+            if message is not None and message.strip():
+                # Cap length for API clients
+                job.message = message.strip()[:200]
             job.touch()
 
     def mark_succeeded(self, job: Job, mono: Path, dual: Path) -> None:

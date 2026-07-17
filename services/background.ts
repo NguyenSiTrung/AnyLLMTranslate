@@ -2113,11 +2113,20 @@ async function resolveScientificPdfServerUrl(override?: string): Promise<string>
 }
 
 /**
- * Pick the first enabled pool slot's credentials for a scientific job.
+ * Pick the first enabled pool slot's credentials + throttle for a scientific job.
  * Mirrors translate readiness: refuse when the pool cannot translate.
+ * Throttle fields match pool key semantics (same as page/PDF Fast path).
  */
 function resolveScientificJobCredentials(settings: ExtensionSettings):
-  | { ok: true; baseUrl: string; apiKey?: string; model: string }
+  | {
+      ok: true;
+      baseUrl: string;
+      apiKey?: string;
+      model: string;
+      maxRpm: number;
+      concurrencyLimit: number;
+      interval: number;
+    }
   | { ok: false; error: string; code: string } {
   const readiness = getPoolReadinessStatus(settings);
   if (!readiness.canTranslate) {
@@ -2139,7 +2148,7 @@ function resolveScientificJobCredentials(settings: ExtensionSettings):
     };
   }
 
-  const { baseUrl, apiKey, model } = slot.providerConfig;
+  const { baseUrl, apiKey, model, maxRpm } = slot.providerConfig;
   if (!baseUrl.trim() || !model.trim()) {
     return {
       ok: false,
@@ -2153,6 +2162,12 @@ function resolveScientificJobCredentials(settings: ExtensionSettings):
     baseUrl: baseUrl.trim(),
     apiKey: apiKey?.trim() ? apiKey.trim() : undefined,
     model: model.trim(),
+    maxRpm: typeof maxRpm === 'number' && maxRpm >= 0 ? maxRpm : 0,
+    concurrencyLimit:
+      typeof slot.concurrencyLimit === 'number' && slot.concurrencyLimit >= 0
+        ? slot.concurrencyLimit
+        : 0,
+    interval: typeof slot.interval === 'number' && slot.interval >= 0 ? slot.interval : 0,
   };
 }
 
@@ -2249,6 +2264,10 @@ async function handleScientificPdfCreateJob(
         model: creds.model,
         lang_in: langIn,
         lang_out: langOut,
+        // Same pool-key throttle as Fast path (bridge enforces for pdf2zh LLM calls)
+        maxRpm: creds.maxRpm,
+        concurrencyLimit: creds.concurrencyLimit,
+        interval: creds.interval,
       },
     });
 

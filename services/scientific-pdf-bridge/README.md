@@ -38,6 +38,55 @@ pdf2zh may download layout/OCR models on the **first** job. Expect a longer
 initial run and larger disk usage; subsequent jobs reuse the cache when the
 `scientific-pdf-models` volume (compose) or `~/.cache` is persisted.
 
+If model download fails (network/HF):
+
+```bash
+# rebuild with HF mirror (China / restricted networks)
+docker compose -f docker-compose.scientific-pdf.yml build \
+  --build-arg HF_ENDPOINT=https://hf-mirror.com
+# or at runtime:
+docker compose -f docker-compose.scientific-pdf.yml run -e HF_ENDPOINT=https://hf-mirror.com ...
+```
+
+### Troubleshooting: `Traceback ... from pdf2zh.converter`
+
+That stack means **pdf2zh failed while importing** (not your LLM key yet).
+
+**Most common cause (confirmed):** incompatible Tencent Cloud SDK:
+
+```text
+ImportError: cannot import name 'TextTranslateRequest'
+  from 'tencentcloud.tmt.v20180321.models'
+```
+
+`pdf2zh` 1.9.x imports Tencent TMT models at import time. `tencentcloud-sdk-python-tmt` **3.1.x** removed `TextTranslateRequest`. The Dockerfile pins **3.0.1270**.
+
+Rebuild:
+
+```bash
+docker compose -f docker-compose.scientific-pdf.yml down
+docker compose -f docker-compose.scientific-pdf.yml build --no-cache
+docker compose -f docker-compose.scientific-pdf.yml up -d
+```
+
+Build log must include `pdf2zh import ok`.
+
+Other causes:
+
+1. **Missing OS libs** on slim images (onnxruntime/OpenCV) — Dockerfile installs `libgomp1`, `libgl1`, …
+2. **See full error:**
+
+   ```bash
+   docker logs anyllm-scientific-pdf --tail 100
+   docker exec -it anyllm-scientific-pdf python -c "from pdf2zh.high_level import translate"
+   ```
+
+3. **Temporary workaround** (fake PDFs, no real layout):
+
+   ```bash
+   MOCK_TRANSLATE=1 docker compose -f docker-compose.scientific-pdf.yml up -d --build
+   ```
+
 ## Local development (no models)
 
 ```bash
@@ -68,6 +117,18 @@ uvicorn app.main:app --host 127.0.0.1 --port 17890
 
 Per-job credentials are mapped to `OPENAI_BASE_URL` / `OPENAI_API_KEY` /
 `OPENAI_MODEL` for the pdf2zh subprocess. Full API keys are never logged.
+
+### Rate limits (same as extension pool key)
+
+The extension injects the **active pool key** throttle on each job:
+
+| Field | Extension setting | Bridge behavior |
+|-------|-------------------|-----------------|
+| `maxRpm` | Providers → key Max RPM | Sliding 60s window on LLM calls (0 = unlimited) |
+| `concurrencyLimit` | Key concurrency | pdf2zh `-t` workers + semaphore (0 = unlimited, capped) |
+| `interval` | Min interval (ms) | Min gap between LLM request starts (0 = off) |
+
+Implemented via `app.pdf2zh_runner` (monkey-patches OpenAI client inside the pdf2zh process).
 
 ## API (summary)
 

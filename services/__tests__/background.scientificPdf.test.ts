@@ -187,6 +187,9 @@ describe('background — scientific PDF handlers', () => {
         model: 'test-model',
         lang_in: 'en',
         lang_out: 'vi',
+        maxRpm: 20,
+        concurrencyLimit: 1,
+        interval: 0,
       });
     });
 

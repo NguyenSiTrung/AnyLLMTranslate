@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -212,19 +213,48 @@ def _build_env(config: JobConfig) -> dict[str, str]:
     elif "OPENAI_API_KEY" not in env:
         # Some OpenAI-compatible servers ignore the key; set empty rather than crash.
         env["OPENAI_API_KEY"] = "no-key"
+    # Throttle for pdf2zh_runner subprocess (same pool key as extension)
+    env["ANYLLM_MAX_RPM"] = str(max(0, config.max_rpm))
+    env["ANYLLM_CONCURRENCY_LIMIT"] = str(max(0, config.concurrency_limit))
+    env["ANYLLM_INTERVAL_MS"] = str(max(0, config.interval_ms))
     return env
 
 
+def _parse_progress_fraction(line: str) -> float | None:
+    """Extract 0–1 progress from tqdm-like lines, e.g. '14%|█…' or '3/10'."""
+    m = re.search(r"(\d{1,3})\s*%", line)
+    if m:
+        pct = int(m.group(1))
+        if 0 <= pct <= 100:
+            return pct / 100.0
+    m2 = re.search(r"(\d+)\s*/\s*(\d+)", line)
+    if m2:
+        a, b = int(m2.group(1)), int(m2.group(2))
+        if b > 0:
+            return min(1.0, a / b)
+    return None
+
+
 def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run pdf2zh CLI with **live** stdout/stderr → docker logs + job.message."""
+    from .throttle import resolve_pdf2zh_threads
+
     out_dir = job.work_dir / "out"
     out_dir.mkdir(exist_ok=True)
 
-    # Prefer module invocation so venv installs work without PATH.
-    base_cmd = [sys.executable, "-m", "pdf2zh"]
-    if shutil.which("pdf2zh"):
-        base_cmd = ["pdf2zh"]
+    threads = resolve_pdf2zh_threads(
+        job.config.concurrency_limit,
+        job.config.max_rpm,
+    )
+    # Runner installs OpenAI throttle inside the child process (pool RPM/interval).
+    # Prefer app package on PYTHONPATH (WORKDIR=/app in Docker).
+    base_cmd = [sys.executable, "-m", "app.pdf2zh_runner"]
 
-    # Common pdf2zh CLI: pdf2zh file.pdf -li en -lo vi -s openai -o outdir
+    # Common pdf2zh CLI: file.pdf -li en -lo vi -s openai -o outdir -t N
+    service = "openai"
+    if job.config.model:
+        service = f"openai:{job.config.model}"
+
     cmd = [
         *base_cmd,
         str(job.source_path),
@@ -233,40 +263,110 @@ def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProces
         "-lo",
         job.config.lang_out,
         "-s",
-        "openai",
+        service,
         "-o",
         str(out_dir),
+        "-t",
+        str(threads),
     ]
-    # Also try service:model form used by some versions (second attempt on failure).
     timeout = TRANSLATE_TIMEOUT_SECONDS or None
     logger.info(
-        "Running pdf2zh for %s: %s",
+        "Running pdf2zh for %s: threads=%s maxRpm=%s intervalMs=%s concurrency=%s (timeout=%s)",
         job.id,
-        " ".join(cmd[:1] + ["…"] + cmd[2:]),  # skip full path noise
+        threads,
+        job.config.max_rpm,
+        job.config.interval_ms,
+        job.config.concurrency_limit,
+        timeout if timeout else "none",
     )
+    logger.info(
+        "pdf2zh cmd for %s: %s",
+        job.id,
+        " ".join([cmd[0], cmd[1], "…", *cmd[3:]]),
+    )
+
+    # Force line-buffered-ish child output when possible.
+    env = {**env, "PYTHONUNBUFFERED": "1"}
+
+    def _start(argv: list[str]) -> subprocess.Popen[str]:
+        return subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # merge: pdf2zh progress often on stderr
+            text=True,
+            env=env,
+            cwd=str(job.work_dir),
+            bufsize=1,  # line buffered when possible
+        )
+
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=timeout,
-            check=False,
-            cwd=str(job.work_dir),
-        )
+        proc = _start(cmd)
     except FileNotFoundError:
-        # Fall back to python -m if bare pdf2zh missing
-        cmd[0:1] = [sys.executable, "-m", "pdf2zh"]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=timeout,
-            check=False,
-            cwd=str(job.work_dir),
-        )
-    return result
+        # Last resort: bare pdf2zh without in-process throttle
+        fallback = ["pdf2zh"] if shutil.which("pdf2zh") else [sys.executable, "-m", "pdf2zh"]
+        cmd = [*fallback, *cmd[len(base_cmd) :]]
+        logger.warning("[%s] pdf2zh_runner missing; falling back to %s", job.id, fallback)
+        proc = _start(cmd)
+
+    job.process = proc
+    collected: list[str] = []
+    start = time.time()
+    last_heartbeat = 0.0
+
+    try:
+        assert proc.stdout is not None
+        while True:
+            if job.cancel_requested:
+                proc.terminate()
+                break
+            line = proc.stdout.readline()
+            if line == "" and proc.poll() is not None:
+                break
+            if not line:
+                # No output this tick — still alive; heartbeat every 15s
+                now = time.time()
+                if now - last_heartbeat >= 15:
+                    last_heartbeat = now
+                    elapsed = int(now - start)
+                    msg = f"pdf2zh running… {elapsed}s (waiting for output)"
+                    logger.info("[%s] %s", job.id, msg)
+                    job.message = msg
+                    job.touch()
+                time.sleep(0.2)
+                continue
+
+            text = line.rstrip("\n")
+            if not text.strip():
+                continue
+            collected.append(text)
+            # Live docker logs — this is what users watch with `docker logs -f`
+            logger.info("[%s] pdf2zh | %s", job.id, text[:500])
+
+            frac = _parse_progress_fraction(text)
+            if frac is not None:
+                # Map 0–100% of pdf2zh into 0.15–0.9 of overall job
+                job.progress = max(job.progress, min(0.95, 0.15 + frac * 0.75))
+            job.message = text[:200]
+            job.touch()
+
+            if timeout and (time.time() - start) > timeout:
+                proc.kill()
+                raise subprocess.TimeoutExpired(cmd, timeout)
+
+        returncode = proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        raise
+    finally:
+        job.process = None
+
+    combined = "\n".join(collected)
+    return subprocess.CompletedProcess(
+        args=cmd,
+        returncode=returncode if returncode is not None else -1,
+        stdout=combined,
+        stderr="",
+    )
 
 
 def run_pdf2zh_translate(job: Job) -> tuple[Path, Path]:
@@ -283,13 +383,32 @@ def run_pdf2zh_translate(job: Job) -> tuple[Path, Path]:
 
     env = _build_env(job.config)
 
+    # Install throttle in this process for Python API path
+    try:
+        from .throttle import install_openai_throttle, resolve_pdf2zh_threads
+
+        install_openai_throttle(
+            max_rpm=job.config.max_rpm,
+            interval_ms=job.config.interval_ms,
+            concurrency_limit=job.config.concurrency_limit,
+        )
+        _ = resolve_pdf2zh_threads  # used in CLI path
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not install throttle in parent: %s", exc)
+
     # Try Python API first when importable (avoids CLI flag drift).
     try:
         mono, dual = _try_python_api(job, env)
         if mono and dual:
             return mono, dual
     except Exception as exc:  # noqa: BLE001
-        logger.info("pdf2zh Python API path failed, trying CLI: %s", type(exc).__name__)
+        # Log the real reason so operators can see it in `docker logs`
+        logger.info(
+            "pdf2zh Python API path failed for %s, trying CLI: %s: %s",
+            job.id,
+            type(exc).__name__,
+            str(exc)[:300],
+        )
 
     try:
         result = _run_pdf2zh_cli(job, env)
@@ -341,19 +460,27 @@ def _try_python_api(job: Job, env: dict[str, str]) -> tuple[Path | None, Path | 
             return None, None
 
         files = [str(job.source_path)]
+        from .throttle import resolve_pdf2zh_threads
+
+        threads = resolve_pdf2zh_threads(
+            job.config.concurrency_limit,
+            job.config.max_rpm,
+        )
+        service = f"openai:{job.config.model}" if job.config.model else "openai"
         kwargs_variants = [
+            {
+                "lang_in": job.config.lang_in,
+                "lang_out": job.config.lang_out,
+                "service": service,
+                "output": str(job.work_dir / "out"),
+                "thread": threads,
+            },
             {
                 "lang_in": job.config.lang_in,
                 "lang_out": job.config.lang_out,
                 "service": "openai",
                 "output": str(job.work_dir / "out"),
-                "thread": 1,
-            },
-            {
-                "lang_in": job.config.lang_in,
-                "lang_out": job.config.lang_out,
-                "service": f"openai:{job.config.model}",
-                "output": str(job.work_dir / "out"),
+                "thread": threads,
             },
         ]
         last_err: Exception | None = None

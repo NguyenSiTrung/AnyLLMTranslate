@@ -1,7 +1,9 @@
 # Scientific PDF Bridge — runtime dependencies
 # pdf2zh is optional for CI/dev; install for real translation:
-#   pip install pdf2zh
-# or use the Docker image (installs pdf2zh).
+#   pip install "pdf2zh>=1.9.6,<2"
+#   pip install "tencentcloud-sdk-python-tmt==3.0.1270" "tencentcloud-sdk-python-common==3.0.1270"
+# (tencentcloud 3.1.x breaks pdf2zh import: missing TextTranslateRequest)
+# or use the Docker image (installs + pins pdf2zh).
 
 fastapi>=0.110,<1
 uvicorn[standard]>=0.27,<1

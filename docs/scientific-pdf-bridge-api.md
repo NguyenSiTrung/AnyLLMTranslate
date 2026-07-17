@@ -50,7 +50,10 @@ Create a translation job. Multipart form:
   "apiKey": "sk-…",
   "model": "gpt-4o-mini",
   "lang_in": "en",
-  "lang_out": "vi"
+  "lang_out": "vi",
+  "maxRpm": 20,
+  "concurrencyLimit": 1,
+  "interval": 500
 }
 ```
 
@@ -61,8 +64,11 @@ Create a translation job. Multipart form:
 | `model` | yes | Model id for that provider |
 | `lang_in` | yes | Source language (from extension General settings; may be `auto` — bridge may map to pdf2zh’s auto) |
 | `lang_out` | yes | Target language (ISO 639-1 from extension) |
+| `maxRpm` | no | From active pool key (0 = unlimited). Enforced on LLM calls inside the bridge. |
+| `concurrencyLimit` | no | From pool key (0 = unlimited → bridge caps workers). Maps to pdf2zh `-t` + semaphore. |
+| `interval` | no | Min ms between LLM request starts (0 = off). Same as extension pool key `interval`. |
 
-Credentials are **per-job only**. The bridge maps them to pdf2zh OpenAI / openailiked service env for that process and **must not** require a global `config.json` for keys.
+Credentials and throttle are **per-job only** (from the extension active pool key). The bridge maps them to pdf2zh OpenAI env + an in-process throttle and **must not** require a global `config.json` for keys.
 
 **Response `202`**
 

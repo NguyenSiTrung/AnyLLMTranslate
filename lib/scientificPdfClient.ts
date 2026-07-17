@@ -49,6 +49,13 @@ export interface ScientificPdfJobConfig {
   model: string;
   lang_in: string;
   lang_out: string;
+  /**
+   * From active pool key — same semantics as extension throttle:
+   * maxRpm 0 = unlimited; concurrencyLimit 0 = unlimited; interval ms between requests (0 = off).
+   */
+  maxRpm?: number;
+  concurrencyLimit?: number;
+  interval?: number;
 }
 
 export type ScientificPdfJobState =
