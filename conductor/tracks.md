@@ -88,7 +88,7 @@ This file tracks all major tracks for the project.
 
 ---
 
-## [~] Track: Scientific PDF Backend (layout-preserving local bridge)
+## [x] Track: Scientific PDF Backend (layout-preserving local bridge)
 *Link: [./tracks/scientific-pdf-backend_20260717/](./tracks/scientific-pdf-backend_20260717/)*
 *Priority: high · Optional Scientific layout via Docker pdf2zh bridge; same provider pool per-job; setup wizard; Fast vs Scientific toggle; dual+mono*
 

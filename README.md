@@ -63,6 +63,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 - **PDF auto-detection** — detects when a tab is rendering a PDF via `document.contentType === 'application/pdf'`, which catches extensionless URLs (e.g. `https://arxiv.org/pdf/2606.20543`) that URL-only heuristics miss
 - **Auto-open translator** — optional setting (`Options → Advanced → PDF Translator`) to open the translator automatically when a PDF tab loads. Off by default; supports per-site opt-out and new-tab vs same-tab open modes
 - **Math/figure-aware extraction** — LLM classifies paragraphs as prose vs figure/table so equations and captions are preserved untranslated
+- **Scientific layout (optional)** — layout-preserving path via a local Docker bridge wrapping [pdf2zh](https://github.com/PDFMathTranslate/PDFMathTranslate) (`services/scientific-pdf-bridge/`). Uses the **same provider pool** per job (no second API key). In-extension setup wizard + **Fast vs Scientific** toggle in the PDF viewer. Offline bridge → Fast still works. See [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)
 
 ### ⚙️ Settings & Advanced
 
@@ -378,6 +379,21 @@ Safeguards:
 
 - `file://` PDFs require **Allow access to file URLs** toggled on in `chrome://extensions` (content scripts cannot run on `file://` otherwise).
 - Embedded PDFs (`<embed type="application/pdf">` inside an HTML host page) are not detected — only standalone PDF tabs.
+
+### Scientific layout (optional local bridge)
+
+For layout-preserving scientific papers, enable **Options → Advanced → Scientific PDF** and complete the in-extension wizard (Docker one-liner + health check). Default bridge: `http://127.0.0.1:17890`.
+
+```bash
+# After building the image (see services/scientific-pdf-bridge/README.md):
+docker run --rm -d --name anyllm-scientific-pdf -p 17890:17890 anyllm-scientific-pdf-bridge:latest
+# or: docker compose -f docker-compose.scientific-pdf.yml up -d
+curl -sS http://127.0.0.1:17890/health
+```
+
+In the PDF viewer, choose **Scientific** (when Ready) and run **Translate (Scientific)**. Jobs use your **active provider pool** credentials per request; downloads include mono + dual PDFs. If the bridge is stopped, **Fast** mode is unchanged.
+
+API contract: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md). Privacy: [PRIVACY.md](PRIVACY.md) (PDF + short-lived keys only to your `serverUrl`).
 
 ---
 

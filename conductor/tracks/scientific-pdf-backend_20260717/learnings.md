@@ -36,6 +36,32 @@ Similar archived tracks (reference only, not auto-seeded full learnings):
   - Context: Spec FR-6 top-level `scientificPdf` (not nested under `pdfSettings`).
 ---
 
+## [2026-07-17] - Phase 2: Docker bridge
+- **Implemented:** FastAPI orchestrator, MOCK_TRANSLATE path, Dockerfile + compose, smoke tests.
+- **Commit:** `c70b416`
+- **Learnings:**
+  - AGPL: call pdf2zh at runtime only — no monorepo submodule.
+  - MOCK_TRANSLATE=1 required for CI without onnx models.
+  - Artifact name variance (`-mono`/`-dual`); bridge normalizes paths.
+---
+
+## [2026-07-17] - Phase 3: Client + background
+- **Implemented:** scientificPdfClient, SCIENTIFIC_PDF_* messages, pool credential inject, loopback host_permissions.
+- **Commit:** `ee825bb`
+- **Learnings:**
+  - Prefer base64 for PDF over chrome.runtime messaging.
+  - Do not `vi.unstubAllGlobals()` if chrome is module-scoped in the same file.
+  - CSP already allows `connect-src http:`; host_permissions still needed for loopback fetch.
+---
+
+## [2026-07-17] - Phase 4–5: Wizard + viewer
+- **Implemented:** wizard state machine, Options card, ScientificPdfWizard, Fast/Scientific toggle, useScientificPdfJob + modal.
+- **Commits:** `f606572`, `e3db59d`
+- **Learnings:**
+  - preferScientific only pre-selects when health Ready (fail-open Fast).
+  - Modal component in options is confirm-only; custom dialog shell needed for multi-step wizards.
+---
+
 ## [2026-07-17] - Phase 3 Task 3.1–3.4: HTTP client + background orchestration
 - **Implemented:** `scientificPdfClient` (health/createJob/getJob/downloadMono|Dual/cancelJob), message actions, background handlers that inject pool credentials, loopback `host_permissions`.
 - **Files changed:** `lib/scientificPdfClient.ts`, `lib/__tests__/scientificPdfClient.test.ts`, `types/messages.ts`, `services/background.ts`, `services/__tests__/background.scientificPdf.test.ts`, `wxt.config.ts`

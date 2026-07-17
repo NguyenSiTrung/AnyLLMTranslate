@@ -99,25 +99,26 @@
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] **Task 4.1: TDD — wizard state machine**
+- [x] **Task 4.1: TDD — wizard state machine**
   <!-- files: lib/scientificPdfWizard.ts, lib/__tests__/scientificPdfWizard.test.ts -->
-  - [ ] Steps: intro → install → poll → test → done
-  - [ ] Transitions on health success/fail; reset
+  - [x] Steps: intro → install → poll → test → done
+  - [x] Transitions on health success/fail; reset
+  - Commit: `f606572`
 
-- [ ] **Task 4.2: Options — Scientific PDF card**
+- [x] **Task 4.2: Options — Scientific PDF card**
   <!-- files: entrypoints/options/sections/AdvancedSection.tsx -->
-  - [ ] Status badge, enable toggle, serverUrl, “Set up…” opens wizard
-  - [ ] Non-loopback warning; copy Docker one-liner
-  - [ ] Privacy note (PDF + credentials to serverUrl)
+  - [x] Status badge, enable toggle, serverUrl, “Set up…” opens wizard
+  - [x] Non-loopback warning; copy Docker one-liner
+  - [x] Privacy note (PDF + credentials to serverUrl)
 
-- [ ] **Task 4.3: Wizard UI component**
+- [x] **Task 4.3: Wizard UI component**
   <!-- files: entrypoints/options/ (wizard modal/components) -->
-  - [ ] Poll /health; Test connection; mark setupCompletedAt
-  - [ ] Accessible, consistent with setup wizard patterns
+  - [x] Poll /health; Test connection; mark setupCompletedAt
+  - [x] Accessible, consistent with setup wizard patterns
 
-- [ ] **Task 4.4: Phase 4 verification**
-  - [ ] Component + pure wizard tests
-  - [ ] Capture learnings
+- [x] **Task 4.4: Phase 4 verification**
+  - [x] Component + pure wizard tests
+  - [x] Capture learnings
 
 ---
 
@@ -125,24 +126,24 @@
 <!-- execution: sequential -->
 <!-- depends: phase3, phase4 -->
 
-- [ ] **Task 5.1: Mode toggle Fast vs Scientific**
+- [x] **Task 5.1: Mode toggle Fast vs Scientific**
   <!-- files: entrypoints/pdf-viewer/App.tsx -->
-  - [ ] Explicit control; Scientific disabled when offline with CTA to wizard/setup
-  - [ ] preferScientific only pre-selects when Ready
+  - [x] Explicit control; Scientific disabled when offline with CTA to wizard/setup
+  - [x] preferScientific only pre-selects when Ready
 
-- [ ] **Task 5.2: Job progress UX + downloads**
+- [x] **Task 5.2: Job progress UX + downloads**
   <!-- files: entrypoints/pdf-viewer/hooks/useScientificPdfJob.ts, entrypoints/pdf-viewer/components/ -->
-  - [ ] Progress modal; cancel if supported
-  - [ ] Download mono + dual; open dual in viewer (mono fallback)
+  - [x] Progress modal; cancel if supported
+  - [x] Download mono + dual; open dual in viewer (mono fallback)
 
-- [ ] **Task 5.3: Wire current PDF bytes + languages + pool via background**
+- [x] **Task 5.3: Wire current PDF bytes + languages + pool via background**
   <!-- files: entrypoints/pdf-viewer/, entrypoints/background.ts -->
-  - [ ] End-to-end path with mocked client in unit tests
-  - [ ] Fail-open messaging if job fails
+  - [x] End-to-end path with mocked client in unit tests
+  - [x] Fail-open messaging if job fails
 
-- [ ] **Task 5.4: Phase 5 verification**
-  - [ ] Viewer-related unit tests
-  - [ ] Capture learnings
+- [x] **Task 5.4: Phase 5 verification**
+  - [x] Viewer-related unit tests
+  - [x] Capture learnings
 
 ---
 
@@ -150,20 +151,20 @@
 <!-- execution: sequential -->
 <!-- depends: phase2, phase5 -->
 
-- [ ] **Task 6.1: Privacy + README user docs**
+- [x] **Task 6.1: Privacy + README user docs**
   <!-- files: PRIVACY.md, README.md, services/scientific-pdf-bridge/README.md -->
-  - [ ] Scientific mode data flow; loopback recommendation
-  - [ ] One-liner install; troubleshooting offline / first model download
+  - [x] Scientific mode data flow; loopback recommendation
+  - [x] One-liner install; troubleshooting offline / first model download
 
-- [ ] **Task 6.2: Hardening**
-  - [ ] No API keys in bridge logs; job TTL cleanup
-  - [ ] Soft-block/confirm non-loopback serverUrl
-  - [ ] Ensure Fast path untouched when bridge absent
+- [x] **Task 6.2: Hardening**
+  - [x] No API keys in bridge logs; job TTL cleanup
+  - [x] Soft-block/confirm non-loopback serverUrl
+  - [x] Ensure Fast path untouched when bridge absent
 
-- [ ] **Task 6.3: Full quality gate**
-  - [ ] `pnpm test` / `pnpm lint` / compile for extension
-  - [ ] Bridge smoke as documented
-  - [ ] Elevate learnings to patterns.md if reusable
+- [x] **Task 6.3: Full quality gate**
+  - [x] `pnpm test` / `pnpm lint` / compile for extension
+  - [x] Bridge smoke as documented
+  - [x] Elevate learnings to patterns.md if reusable
 
-- [ ] **Task 6.4: Track completion checklist**
-  - [ ] All acceptance criteria checked against spec
+- [x] **Task 6.4: Track completion checklist**
+  - [x] All acceptance criteria checked against spec

@@ -1,10 +1,10 @@
 # Privacy Policy — AnyLLMTranslate
 
-**Last updated:** April 10, 2026
+**Last updated:** July 17, 2026
 
 ## Summary
 
-AnyLLMTranslate does **not** collect, store, or transmit any personal data. All translation processing happens through your own configured API provider.
+AnyLLMTranslate does **not** collect, store, or transmit any personal data to servers operated by the extension developers. Translation processing goes to **your** configured LLM API provider (BYOK). Optional **Scientific PDF** mode may also send a PDF and short-lived credentials to a **user-controlled** local bridge you run (default: loopback only).
 
 ## Data Handling
 
@@ -15,14 +15,24 @@ AnyLLMTranslate does **not** collect, store, or transmit any personal data. All 
 - ❌ Cookies or fingerprinting data
 
 ### What stays on your device
-- ✅ **API credentials** — stored locally in `chrome.storage.local`, never transmitted to any server except your chosen API provider
+- ✅ **API credentials** — stored locally in `chrome.storage.local` (encrypted at rest), never transmitted to any server except your chosen API provider (and, only if you opt in, your Scientific PDF bridge)
 - ✅ **Extension settings** — language preferences, theme, shortcuts — all stored locally
 - ✅ **Translation cache** — cached translations stored in IndexedDB for performance, never uploaded
 
 ### What is sent to your API provider
-When you translate text, the selected text is sent to the API endpoint **you configure**. This is the only external network request the extension makes. AnyLLMTranslate connects only to the URL you provide (e.g., `https://api.openai.com/v1`).
+When you translate text, the selected text is sent to the API endpoint **you configure**. AnyLLMTranslate connects only to the URL you provide (e.g., `https://api.openai.com/v1`).
 
 **AnyLLMTranslate never contacts any server owned by the extension developers.**
+
+### Optional: Scientific PDF mode (local bridge)
+
+When you enable **Scientific layout** PDF translation and start a job:
+
+1. The **full PDF file** and **short-lived provider credentials** (base URL, API key if any, model) plus language settings are sent to the **bridge server URL you configure**.
+2. The default and recommended URL is **loopback only** (`http://127.0.0.1:17890`). The Options UI warns if you set a non-loopback host.
+3. The bridge (Docker process you start) may forward text to **your** LLM provider for translation; it does not send data to AnyLLMTranslate operators.
+4. Scientific mode is **opt-in**. The in-browser **Fast** PDF path never requires the bridge and remains available when the bridge is offline.
+5. Scientific settings store only `serverUrl` / enablement flags — **not** a second API key store.
 
 ## Bring Your Own Key (BYOK)
 
