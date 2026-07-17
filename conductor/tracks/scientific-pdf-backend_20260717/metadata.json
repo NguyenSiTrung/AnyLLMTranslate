@@ -1,13 +1,13 @@
 {
   "track_id": "scientific-pdf-backend_20260717",
   "type": "feature",
-  "status": "new",
+  "status": "completed",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": null,
   "created_at": "2026-07-17T10:08:21Z",
-  "updated_at": "2026-07-17T10:10:09Z",
-  "description": "Optional Scientific PDF mode: local PDFMathTranslate bridge, same provider pool per-job, Docker one-liner setup wizard, Fast vs Scientific toggle, dual+mono download",
+  "updated_at": "2026-07-17T11:42:00Z",
+  "description": "Optional Scientific PDF mode: local PDFMathTranslate bridge, same provider pool per-job, Docker one-liner setup wizard, bridge-only viewer translate, dual+mono download",
   "beads_epic": "AnyLLMTranslate-17v",
   "beads_tasks": {
     "phase1": "AnyLLMTranslate-17v.1",

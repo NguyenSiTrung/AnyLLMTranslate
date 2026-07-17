@@ -1,7 +1,21 @@
-<!-- conductor-refresh: 2026-07-17 all (elevated PDF cooling/kind + ModelPicker pagination + safe key throttle + rate-limit presets; 837 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 68 archived) -->
+<!-- conductor-refresh: 2026-07-17 all (pdf-composition patterns already elevated; 872 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 69 archived) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Scientific PDF bridge (from: scientific-pdf-backend_20260717, 2026-07-17)
+- Scientific mode is optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
+- Credentials always from active provider pool at job time — `scientificPdf` settings hold only serverUrl/enabled/setupCompletedAt (`preferScientific` is deprecated/ignored).
+- Default bridge port `17890` (shared `DEFAULT_SCIENTIFIC_PDF_PORT`); loopback host_permissions + non-loopback soft-warn.
+- PDF Translate is bridge-only: offline/not configured → show unavailable + setup CTA (no in-browser Fast path).
+- chrome.runtime messaging for PDF bytes uses base64; bridge jobs: health → create → poll → mono/dual download.
+
+## PDF BabelDOC-parity (from: pdf-babeldoc-parity_20260717, 2026-07-17)
+- Typesetting ladder is pure (`fitTextToBox`) with a pluggable metrics hook so Layout overlay (canvas) and mono download (pdf-lib) share fit/scale/expand behavior.
+- Dual export always assembles from mono translated bytes + original — never re-typeset dual pages separately.
+- PDF term extraction: session-cache by URL+lang; inject via existing `termMemoryBlock`; user glossary wins; fail-open.
+- Scanned detect is pure density heuristics; pure-scan (no text) shows a banner and skips LLM; OCR workaround only when heavily scanned with some text (full-paragraph white underlay).
+- New PDF power-user toggles live on `PdfSettings` with defaults ON for autoExtractTerms / detectScanned / autoOcrWorkaround; Options shallow-merges via `...(settings.pdfSettings ?? defaultPdfSettings)`.
 
 ## Code Conventions
 - ESLint 9+ uses flat config (eslint.config.mjs), no `--ext` flag needed. (from: phase1-foundation_20260409, archived 2026-04-09)
@@ -720,4 +734,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-17
+Last refreshed: 2026-07-17 (post pdf-composition archive)

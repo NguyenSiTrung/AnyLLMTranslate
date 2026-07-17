@@ -1,29 +1,29 @@
 {
-  "lastRefresh": "2026-07-17T10:56:00+07:00",
+  "lastRefresh": "2026-07-17T11:45:46+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 2026-07-14: PDF cooling countdown + Retry gate (AnyLLMTranslate-823); PDF Layout math/table kind hardening; ModelPicker full list + has_more pagination (csp); safe default key throttle (3vj); key rate limits summary + presets (apl); Input unit-suffix visibility fix. All outside Conductor tracks.",
-    "product.md: refresh marker; PDF Key Features (kind end-to-end + cooling countdown); UI (ModelPicker pagination, per-key rate limits UX); Translation Engine (safe defaults + openUntil); Completed bullets for 823/kind/csp/3vj/apl; Current State → 837 TCs / 141 files / 834 pass + 3 fail / tsc 6 / lint 99 / build ~4.1 MB / 68 archived / Beads 9 open (zg4 + 7uk + stale pgv.1.*).",
+    "Scope: full refresh. Intervening work since 10:56 refresh: PDF Composition Pipeline track (pdf-composition_20260717) implemented and archived (commits 881470d…1b9da7f).",
+    "product.md: refresh marker; PDF Key Features (composition pipeline + power-user PDF card); Completed pdf-composition_20260717; Current State → 872 TCs / 144 files / 869 pass + 3 fail / tsc 6 / lint 113 / build ~4.1 MB / 69 archived / Beads 9 open (zg4 + 7uk + stale pgv.1.*).",
     "tech-stack.md: marker only — package.json deps/scripts unchanged; build ~4.1 MB.",
-    "patterns.md: refresh marker + footer; elevated safe throttle migrate, keyRateLimits presets, Input unit suffix, modelListing pagination, pool retryAfter cooling UI, PDF kind layout skip.",
-    "tracks.md: refresh marker 68 archived / 0 active (no new tracks).",
+    "patterns.md: refresh marker + footer; composition patterns already elevated at archive (no new multi-track candidates).",
+    "tracks.md: refresh marker 69 archived / 0 active (pdf-composition already listed).",
     "workflow.md: no content drift (not rewritten).",
-    "learnings consolidation: no active-track learnings.md; +6 non-track patterns elevated to patterns.md.",
-    "beads DRIFT: open 9 (zg4 real suite fail; 7uk PDF OCR backlog; pgv.1.2–1.8 stale vs ops redesign — left open per user); closed apl/3vj/823/csp; 0 in_progress; 204 total / 195 closed. Suite also fails parallel-batch concurrency + bidirectional chunk context (not filed to Beads).",
+    "learnings consolidation: active tracks empty; pdf-composition learnings already in patterns.md section.",
+    "beads DRIFT: open 2 after sync B (zg4 real suite fail; 7uk PDF OCR backlog); closed pgv.1.2–1.8 as superseded by Providers ops redesign; 0 in_progress; 221 total / 219 closed. Suite also fails parallel-batch concurrency + bidirectional chunk context (not filed to Beads).",
     "backups: product.md.bak, tech-stack.md.bak, tracks.md.bak, patterns.md.bak, refresh_state.json.bak.",
-    "verification: vitest 834/837 pass (3 fail); tsc 6 errors; eslint 99 errors; build output ~4.1 MB."
+    "verification: vitest 869/872 pass (3 fail); tsc 6 errors; eslint 113 errors; build output ~4.1 MB."
   ],
   "codebaseHealth": {
-    "tests": 837,
-    "testsPassing": 834,
+    "tests": 872,
+    "testsPassing": 869,
     "testsFailing": 3,
-    "testFiles": 141,
+    "testFiles": 144,
     "buildSize": "~4.1 MB",
-    "lintErrors": 99,
+    "lintErrors": 113,
     "lintErrorsDetail": "Mostly no-non-null-assertion in tests; unused vars; no-dynamic-delete in stats tests; no-useless-assignment in openaiCompatible.ts; poolStatusQuery unused vi/any.",
     "tscErrors": 6,
     "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority.",
-    "archivedTracks": 68,
+    "archivedTracks": 69,
     "activeTracks": 0,
     "failingTests": [
       "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session",
@@ -31,14 +31,9 @@
       "services/__tests__/background.test.ts > handleMessage — translateSubtitle > provides bidirectional context for chunks 1+ (preceding + following)"
     ],
     "flakyTests": "none reproduced this run",
-    "shippedOutsideConductorTracks": [
-      "PDF cooling countdown + Retry gate",
-      "PDF Layout math/table kind hardening",
-      "ModelPicker full list + pagination + always-show search",
-      "Safe default key throttle (maxRpm/concurrency/interval)",
-      "Key rate limits summary strip + presets",
-      "Input unit suffix outside field"
+    "shippedSinceLastRefresh": [
+      "PDF Composition Pipeline (BabelDOC-inspired) — full 8-phase track archived"
     ]
   },
-  "beadsDrift": "9 open: zg4 real (stale seek test); 7uk PDF OCR P3; pgv.1.2–1.8 stale Providers extract tasks superseded by ops redesign (left open — user chose not to auto-close); 0 in_progress; 204 total / 195 closed / 9 open. New suite fails (parallel batches, bidirectional context) not filed."
+  "beadsDrift": "2 open after user chose sync B: zg4 (stale seek test); 7uk (PDF OCR P3). Closed pgv.1.2–1.8 as superseded by Providers ops dashboard redesign. 0 in_progress; 221 total / 219 closed / 2 open. Unfiled suite fails: parallel batches + bidirectional context. No active plan.md tasks to sync."
 }

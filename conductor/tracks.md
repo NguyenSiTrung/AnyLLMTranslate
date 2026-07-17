@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (70 archived / 1 active: scientific-pdf-backend_20260717) -->
+<!-- conductor-refresh: 2026-07-17 all (70 archived / 1 complete active ready-to-archive: scientific-pdf-backend_20260717; 995 TCs / 3 fail; Beads zg4 + 7uk) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -90,6 +90,7 @@ This file tracks all major tracks for the project.
 
 ## [x] Track: Scientific PDF Backend (layout-preserving local bridge)
 *Link: [./tracks/scientific-pdf-backend_20260717/](./tracks/scientific-pdf-backend_20260717/)*
-*Priority: high · Optional Scientific layout via Docker pdf2zh bridge; same provider pool per-job; setup wizard; Fast vs Scientific toggle; dual+mono*
+*Priority: high · **Complete** (all 6 phases `[x]`; Beads epic `AnyLLMTranslate-17v` closed). Layout-preserving PDF via Docker pdf2zh bridge; same provider pool per-job; setup wizard; bridge-only viewer translate; dual+mono + job modal UX. **Ready to archive** — run `/conductor-archive` when convenient.*
+*Note: metadata.json still says `status: new` (stale); plan/learnings/epic are source of truth for completion.*
 
 ---

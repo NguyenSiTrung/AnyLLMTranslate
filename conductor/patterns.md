@@ -1,14 +1,21 @@
-<!-- conductor-refresh: 2026-07-17 all (pdf-composition patterns already elevated; 872 TCs / 3 fail; Beads zg4 + 7uk + stale pgv; 69 archived) -->
+<!-- conductor-refresh: 2026-07-17 all (scientific-pdf patterns extended; 995 TCs / 3 fail; Beads zg4 + 7uk; s3t closed; 70 archived + 1 complete active) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
 
 ## Scientific PDF bridge (from: scientific-pdf-backend_20260717, 2026-07-17)
-- Scientific mode is optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
-- Credentials always from active provider pool at job time — `scientificPdf` settings hold only serverUrl/enabled/preferScientific/setupCompletedAt.
-- Default bridge port `17890` (shared `DEFAULT_SCIENTIFIC_PDF_PORT`); loopback host_permissions + non-loopback soft-warn.
-- Fail-open to Fast browser PDF path when bridge offline; preferScientific only pre-selects when health Ready.
-- chrome.runtime messaging for PDF bytes uses base64; bridge jobs: health → create → poll → mono/dual download.
+- Scientific / PDF Translate is an optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
+- Credentials always from active provider pool at job time — `scientificPdf` settings hold only serverUrl/enabled/setupCompletedAt (`preferScientific` is deprecated/ignored).
+- Default bridge port `17890` (shared `DEFAULT_SCIENTIFIC_PDF_PORT`); loopback host_permissions (`http://127.0.0.1/*`, `http://localhost/*`) + non-loopback soft-warn; CSP already allows `connect-src http:`.
+- PDF Translate is **bridge-only** in the viewer: offline/not configured → show unavailable + setup CTA (no in-browser Fast path).
+- Prefer **base64** for PDF bytes across chrome.runtime messaging (ArrayBuffer structured-clone is fragile); bridge job lifecycle: health → create → poll → mono/dual download / cancel.
+- Map client/network failures to stable codes (`offline`, `timeout`, `parse`, `llm_auth`, …) via typed errors — UI CTAs must not parse English strings.
+- `settingsStore` `toSettings` snapshot **must list every new top-level key** or export/persist paths silently drop them.
+- Background handler tests: do **not** `vi.unstubAllGlobals()` if `chrome` was stubbed at module scope — it drops the chrome mock and `loadSettings` falls back to empty-pool defaults.
+- Bridge CI: `MOCK_TRANSLATE=1` for smoke without ONNX models; normalize pdf2zh artifact name variance (`-mono`/`-dual`).
+- Honor pool **maxRpm / concurrency / interval** on bridge jobs (same throttle story as page translate).
+- Docker lifecycle helper scripts (`scripts/scientific-pdf-docker.sh` up/down/logs) for wizard “new user” path; default compose port 17890.
+- Job completion modal: pure format helpers (`scientificJobModalFormats`) separate from React shell; formats mono | dual | side-by-side.
 
 ## PDF BabelDOC-parity (from: pdf-babeldoc-parity_20260717, 2026-07-17)
 - Typesetting ladder is pure (`fitTextToBox`) with a pluggable metrics hook so Layout overlay (canvas) and mono download (pdf-lib) share fit/scale/expand behavior.
@@ -734,4 +741,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-17 (post pdf-composition archive)
+Last refreshed: 2026-07-17 (post scientific-pdf complete; bridge-only PDF; 995 TCs)
