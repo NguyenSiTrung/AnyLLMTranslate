@@ -342,6 +342,28 @@ export interface PdfSettings {
   autoOcrWorkaround: boolean;
 }
 
+/**
+ * Optional Scientific PDF mode — layout-preserving path via a local
+ * PDFMathTranslate/pdf2zh Docker bridge. Credentials always come from the
+ * active provider pool at job time; never stored here.
+ */
+export interface ScientificPdfSettings {
+  /** Master toggle for Scientific mode UI/entry points (default false). */
+  enabled: boolean;
+  /**
+   * Bridge base URL (no trailing path). Default loopback:
+   * `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`.
+   */
+  serverUrl: string;
+  /**
+   * UI preference only: pre-select Scientific when Ready. Never forces
+   * Scientific when the bridge is offline (fail-open to Fast).
+   */
+  preferScientific: boolean;
+  /** ISO timestamp when the setup wizard completed successfully (optional). */
+  setupCompletedAt?: string;
+}
+
 /** Page context extracted for context-aware translation */
 export interface PageContext {
   title: string;
@@ -462,6 +484,11 @@ export interface ExtensionSettings {
   enableSmartExcludes: boolean;
   /** PDF translator auto-open behavior */
   pdfSettings: PdfSettings;
+  /**
+   * Optional Scientific PDF bridge settings (layout-preserving local Docker).
+   * No API keys / baseUrl / model here — always from the active provider pool.
+   */
+  scientificPdf: ScientificPdfSettings;
   /**
    * Global max RPM mirror (legacy / Advanced UI). Per-key {@link PoolKey.maxRpm}
    * is what the pool rate-limits on. 0 = unlimited. Default: {@link DEFAULT_KEY_MAX_RPM}.
@@ -614,6 +641,19 @@ export const DEFAULT_PDF_SETTINGS: PdfSettings = {
   autoOcrWorkaround: true,
 };
 
+/**
+ * Default port for the Scientific PDF bridge (shared with Docker one-liner
+ * and `lib/scientificPdf.ts`). Distinct from Gradio’s 7860 to avoid clashes.
+ */
+export const DEFAULT_SCIENTIFIC_PDF_PORT = 17890;
+
+/** Default Scientific PDF settings (bridge optional; Fast path always available). */
+export const DEFAULT_SCIENTIFIC_PDF_SETTINGS: ScientificPdfSettings = {
+  enabled: false,
+  serverUrl: `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`,
+  preferScientific: false,
+};
+
 /** Default custom theme configuration */
 export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   textColor: '#555555',
@@ -706,6 +746,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   llmCategoryDetectionMode: 'async',
   enableSmartExcludes: true,
   pdfSettings: { ...DEFAULT_PDF_SETTINGS },
+  scientificPdf: { ...DEFAULT_SCIENTIFIC_PDF_SETTINGS },
   maxRpm: DEFAULT_KEY_MAX_RPM,
   /**
    * False so existing installs (merged from storage without this field) still

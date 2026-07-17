@@ -7,6 +7,8 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SUBTITLE_SETTINGS,
   DEFAULT_PDF_SETTINGS,
+  DEFAULT_SCIENTIFIC_PDF_SETTINGS,
+  DEFAULT_SCIENTIFIC_PDF_PORT,
   DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
   DEFAULT_KEY_MAX_RPM,
   DEFAULT_KEY_CONCURRENCY_LIMIT,
@@ -40,10 +42,33 @@ describe('config defaults', () => {
     expect(DEFAULT_PDF_SETTINGS.detectScanned).toBe(true);
     expect(DEFAULT_PDF_SETTINGS.autoOcrWorkaround).toBe(true);
 
+    // Scientific PDF bridge (scientific-pdf-backend): opt-in, loopback, no credentials
+    expect(DEFAULT_SETTINGS.scientificPdf).toEqual(DEFAULT_SCIENTIFIC_PDF_SETTINGS);
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.enabled).toBe(false);
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.preferScientific).toBe(false);
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.serverUrl).toBe(
+      `http://127.0.0.1:${DEFAULT_SCIENTIFIC_PDF_PORT}`,
+    );
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS.setupCompletedAt).toBeUndefined();
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('apiKey');
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('baseUrl');
+    expect(DEFAULT_SCIENTIFIC_PDF_SETTINGS).not.toHaveProperty('model');
+
     expect(DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS).toEqual({ enable: true, aiEnable: false });
     expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(
       DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
     );
+  });
+
+  it('merges partial scientificPdf onto defaults without inventing credentials', () => {
+    // Simulates loadSettings deepMerge of a partial stored object
+    const partial = { enabled: true, serverUrl: 'http://127.0.0.1:9999' };
+    const merged = { ...DEFAULT_SCIENTIFIC_PDF_SETTINGS, ...partial };
+    expect(merged.enabled).toBe(true);
+    expect(merged.serverUrl).toBe('http://127.0.0.1:9999');
+    expect(merged.preferScientific).toBe(false);
+    expect(merged.setupCompletedAt).toBeUndefined();
+    expect(merged).not.toHaveProperty('apiKey');
   });
 
   it('exposes a single custom preset and untasted default pool key', () => {

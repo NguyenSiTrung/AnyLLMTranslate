@@ -157,6 +157,7 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     llmCategoryDetectionMode: state.llmCategoryDetectionMode,
     enableSmartExcludes: state.enableSmartExcludes,
     pdfSettings: state.pdfSettings,
+    scientificPdf: state.scientificPdf,
     maxRpm: state.maxRpm,
     providers: state.providers,
     enableRichTranslate: state.enableRichTranslate,

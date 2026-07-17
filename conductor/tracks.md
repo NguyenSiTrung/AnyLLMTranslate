@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (70 archived / 0 active; latest: pdf-babeldoc-parity_20260717) -->
+<!-- conductor-refresh: 2026-07-17 all (70 archived / 1 active: scientific-pdf-backend_20260717) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -85,5 +85,11 @@ This file tracks all major tracks for the project.
 ---
 
 ## Active Tracks
+
+---
+
+## [~] Track: Scientific PDF Backend (layout-preserving local bridge)
+*Link: [./tracks/scientific-pdf-backend_20260717/](./tracks/scientific-pdf-backend_20260717/)*
+*Priority: high · Optional Scientific layout via Docker pdf2zh bridge; same provider pool per-job; setup wizard; Fast vs Scientific toggle; dual+mono*
 
 ---
