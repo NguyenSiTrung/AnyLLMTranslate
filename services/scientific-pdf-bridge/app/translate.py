@@ -204,6 +204,12 @@ def run_mock_translate(job: Job) -> tuple[Path, Path]:
     return mono, dual
 
 
+def _bridge_package_root() -> Path:
+    """Directory that contains the ``app`` package (Docker WORKDIR=/app)."""
+    # …/app/translate.py → parent=app package dir → parent=package root
+    return Path(__file__).resolve().parent.parent
+
+
 def _build_env(config: JobConfig) -> dict[str, str]:
     env = os.environ.copy()
     env["OPENAI_BASE_URL"] = config.base_url
@@ -217,6 +223,10 @@ def _build_env(config: JobConfig) -> dict[str, str]:
     env["ANYLLM_MAX_RPM"] = str(max(0, config.max_rpm))
     env["ANYLLM_CONCURRENCY_LIMIT"] = str(max(0, config.concurrency_limit))
     env["ANYLLM_INTERVAL_MS"] = str(max(0, config.interval_ms))
+    # Subprocess uses cwd=job work dir; ensure `python -m app.pdf2zh_runner` resolves.
+    root = str(_bridge_package_root())
+    existing = env.get("PYTHONPATH", "").strip()
+    env["PYTHONPATH"] = root if not existing else f"{root}{os.pathsep}{existing}"
     return env
 
 
@@ -287,6 +297,8 @@ def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProces
 
     # Force line-buffered-ish child output when possible.
     env = {**env, "PYTHONUNBUFFERED": "1"}
+    # cwd = package root so relative imports stay stable; paths above are absolute.
+    run_cwd = str(_bridge_package_root())
 
     def _start(argv: list[str]) -> subprocess.Popen[str]:
         return subprocess.Popen(
@@ -295,7 +307,7 @@ def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProces
             stderr=subprocess.STDOUT,  # merge: pdf2zh progress often on stderr
             text=True,
             env=env,
-            cwd=str(job.work_dir),
+            cwd=run_cwd,
             bufsize=1,  # line buffered when possible
         )
 
