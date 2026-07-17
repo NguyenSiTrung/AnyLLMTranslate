@@ -21,11 +21,12 @@ import {
   Gauge,
   Zap,
   CheckCircle2,
+  FlaskConical,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { DEFAULT_SETTINGS } from '@/types/config';
+import { DEFAULT_SETTINGS, DEFAULT_SCIENTIFIC_PDF_SETTINGS } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
@@ -52,6 +53,13 @@ import {
   PAGE_SCOPE_PRESET_OPTIONS,
   type PageScopePreset,
 } from '@/lib/pageScopePreset';
+import {
+  mergeScientificPdfSettings,
+  resolveScientificPdfStatus,
+  shouldWarnNonLoopbackServerUrl,
+  type ScientificPdfStatus,
+} from '@/lib/scientificPdf';
+import { ScientificPdfWizard } from '@/entrypoints/options/components/ScientificPdfWizard';
 
 /**
  * FR-11 — portable-settings allowlist. Only these keys are written to the
@@ -70,6 +78,20 @@ const PORTABLE_KEYS = [
   'enableCompactInlineForShortText',
 ] as const;
 
+function scientificStatusBadge(status: ScientificPdfStatus): {
+  variant: 'info' | 'success' | 'warning' | 'danger';
+  label: string;
+} {
+  switch (status) {
+    case 'ready':
+      return { variant: 'success', label: 'Ready' };
+    case 'offline':
+      return { variant: 'warning', label: 'Offline' };
+    default:
+      return { variant: 'info', label: 'Not installed' };
+  }
+}
+
 export function AdvancedSection() {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -77,6 +99,8 @@ export function AdvancedSection() {
   const [clearStatus, setClearStatus] = useState<'idle' | 'clearing' | 'done'>('idle');
   const [showResetModal, setShowResetModal] = useState(false);
   const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [showScientificWizard, setShowScientificWizard] = useState(false);
+  const [scientificHealthOk, setScientificHealthOk] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
   const cacheStats = useCacheStats();
@@ -273,6 +297,13 @@ export function AdvancedSection() {
   const autoExtractTerms = settings.pdfSettings?.autoExtractTerms ?? true;
   const detectScanned = settings.pdfSettings?.detectScanned ?? true;
   const autoOcrWorkaround = settings.pdfSettings?.autoOcrWorkaround ?? true;
+  const scientificPdf = mergeScientificPdfSettings(settings.scientificPdf);
+  const scientificStatus = resolveScientificPdfStatus({
+    settings: scientificPdf,
+    healthOk: scientificHealthOk,
+  });
+  const scientificBadge = scientificStatusBadge(scientificStatus);
+  const scientificNonLoopback = shouldWarnNonLoopbackServerUrl(scientificPdf.serverUrl);
   const defaultPdfSettings = {
     autoOpen: 'off' as const,
     openMode: 'new-tab' as const,
@@ -283,6 +314,25 @@ export function AdvancedSection() {
     detectScanned: true,
     autoOcrWorkaround: true,
   };
+
+  const refreshScientificHealth = useCallback(async () => {
+    try {
+      const res = (await chrome.runtime.sendMessage({
+        action: 'SCIENTIFIC_PDF_HEALTH',
+      })) as { success?: boolean; status?: string };
+      setScientificHealthOk(Boolean(res?.success && res.status === 'ok'));
+    } catch {
+      setScientificHealthOk(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!scientificPdf.enabled && !scientificPdf.setupCompletedAt) {
+      setScientificHealthOk(null);
+      return;
+    }
+    void refreshScientificHealth();
+  }, [scientificPdf.enabled, scientificPdf.setupCompletedAt, scientificPdf.serverUrl, refreshScientificHealth]);
   const isPromptCustom = settings.customSystemPrompt !== null;
   const promptWarnings =
     promptValidation && !promptValidation.valid ? promptValidation.warnings : [];
@@ -1077,8 +1127,101 @@ export function AdvancedSection() {
           </Card>
         </div>
 
-        {/* Data Portability */}
+        {/* Scientific PDF (layout-preserving bridge) */}
         <div className="animate-stagger" style={stagger(5)}>
+          <Card
+            variant="bordered"
+            accent="amber"
+            title="Scientific PDF"
+            description="Optional layout-preserving path via a local Docker bridge (pdf2zh). Uses the same provider pool as normal translation."
+            icon={<FlaskConical className="w-3.5 h-3.5" />}
+            headerExtra={<Badge variant={scientificBadge.variant}>{scientificBadge.label}</Badge>}
+          >
+            <div className="grid gap-4">
+              <Toggle
+                checked={scientificPdf.enabled}
+                onChange={(checked) =>
+                  updateSettings({
+                    scientificPdf: {
+                      ...scientificPdf,
+                      enabled: checked,
+                    },
+                  })
+                }
+                label="Enable Scientific mode UI"
+                description="Shows Scientific controls in the PDF viewer when the bridge is reachable. Fast (browser) mode always remains available."
+              />
+              <Toggle
+                checked={scientificPdf.preferScientific}
+                onChange={(checked) =>
+                  updateSettings({
+                    scientificPdf: {
+                      ...scientificPdf,
+                      preferScientific: checked,
+                    },
+                  })
+                }
+                label="Prefer Scientific when Ready"
+                description="Pre-selects Scientific in the viewer only when the bridge health check succeeds. Never forces offline Scientific."
+              />
+              <FieldGroup
+                label="Bridge server URL"
+                description="Default is loopback. Credentials and the full PDF are sent here only for Scientific jobs."
+                htmlFor="scientific-pdf-server-url"
+              >
+                <Input
+                  id="scientific-pdf-server-url"
+                  type="text"
+                  value={scientificPdf.serverUrl}
+                  onChange={(e) =>
+                    updateSettings({
+                      scientificPdf: {
+                        ...scientificPdf,
+                        serverUrl: e.target.value,
+                      },
+                    })
+                  }
+                  placeholder={DEFAULT_SCIENTIFIC_PDF_SETTINGS.serverUrl}
+                />
+              </FieldGroup>
+              {scientificNonLoopback && (
+                <p className="text-xs text-rose-300" role="status">
+                  Warning: server URL is not loopback. You may send PDFs and API keys to a remote
+                  host — only continue if you trust it.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" onClick={() => setShowScientificWizard(true)}>
+                  Set up…
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void refreshScientificHealth()}
+                >
+                  Refresh status
+                </Button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-zinc-500">
+                Privacy: Scientific mode sends the full PDF plus short-lived provider credentials to
+                the configured server URL. Prefer{' '}
+                <code className="rounded bg-zinc-800 px-1">http://127.0.0.1</code> only. No second
+                API key store — the active pool is used per job.
+              </p>
+            </div>
+          </Card>
+        </div>
+
+        <ScientificPdfWizard
+          open={showScientificWizard}
+          onClose={() => {
+            setShowScientificWizard(false);
+            void refreshScientificHealth();
+          }}
+        />
+
+        {/* Data Portability */}
+        <div className="animate-stagger" style={stagger(6)}>
           <Card
             variant="bordered"
             title="Data Portability"
@@ -1164,7 +1307,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Developer */}
-        <div className="animate-stagger" style={stagger(6)}>
+        <div className="animate-stagger" style={stagger(7)}>
           <Card
             variant="bordered"
             accent={settings.debugMode ? 'amber' : undefined}
@@ -1194,7 +1337,7 @@ export function AdvancedSection() {
         </div>
 
         {/* Danger Zone — isolated, severity-ranked destructive actions */}
-        <div className="animate-stagger" style={stagger(7)}>
+        <div className="animate-stagger" style={stagger(8)}>
           <DangerZone description="Irreversible or costly actions. Export a backup first if you plan to reset.">
             <DangerAction
               severity="caution"
