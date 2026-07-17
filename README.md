@@ -388,8 +388,9 @@ For layout-preserving scientific papers, enable **Options → Advanced → Scien
 
 ```bash
 # From repo root (Docker Desktop must be running)
-docker compose -f docker-compose.scientific-pdf.yml up -d --build
-curl -sS http://127.0.0.1:17890/health
+./scripts/scientific-pdf-docker.sh up      # down if exists → build → start → health
+# ./scripts/scientific-pdf-docker.sh logs  # optional live logs
+# ./scripts/scientific-pdf-docker.sh down  # stop
 # Then: Options → Advanced → Scientific PDF → Set up… → Check health
 ```
 

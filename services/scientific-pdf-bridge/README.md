@@ -8,28 +8,23 @@ Full API contract: [`docs/scientific-pdf-bridge-api.md`](../../docs/scientific-p
 
 ## Quick start (Docker)
 
-Default port **17890** (matches extension `DEFAULT_SCIENTIFIC_PDF_PORT`):
+Default port **17890** (matches extension `DEFAULT_SCIENTIFIC_PDF_PORT`).
+
+**Easiest (from repo root):**
 
 ```bash
-# From repo root
+./scripts/scientific-pdf-docker.sh up       # stop old → build → start → health
+./scripts/scientific-pdf-docker.sh logs     # optional
+./scripts/scientific-pdf-docker.sh down     # stop
+./scripts/scientific-pdf-docker.sh rebuild  # clean rebuild
+```
+
+User guide: [`docs/scientific-pdf-setup.md`](../../docs/scientific-pdf-setup.md)
+
+```bash
+# Equivalent compose (if you prefer not to use the script)
 docker compose -f docker-compose.scientific-pdf.yml up -d --build
-```
-
-One-liner after the image exists:
-
-```bash
-docker run --rm -d \
-  --name anyllm-scientific-pdf \
-  -p 17890:17890 \
-  -v anyllm-scientific-pdf-data:/data \
-  anyllm-scientific-pdf-bridge:latest
-```
-
-### Health check
-
-```bash
 curl -sS http://127.0.0.1:17890/health
-# {"status":"ok","version":"1.0.0","pdf2zh":"available"}
 ```
 
 ### First-run model download

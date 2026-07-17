@@ -128,37 +128,37 @@ export function mergeScientificPdfSettings(
 }
 
 /**
- * Primary install command for new users: build image + start container.
+ * Primary install for new users — helper script (down if exists → build → start → health).
  * Run from the AnyLLMTranslate **repo root**.
  */
 export function scientificPdfDockerComposeUpCommand(): string {
-  return 'docker compose -f docker-compose.scientific-pdf.yml up -d --build';
+  return './scripts/scientific-pdf-docker.sh up';
 }
 
-/** Stop / remove the bridge container (compose). */
+/** Stop / remove the bridge container. */
 export function scientificPdfDockerComposeDownCommand(): string {
-  return 'docker compose -f docker-compose.scientific-pdf.yml down';
+  return './scripts/scientific-pdf-docker.sh down';
 }
 
 /** Rebuild image from scratch (after Dockerfile/bridge code changes). */
 export function scientificPdfDockerComposeRebuildCommand(): string {
-  return [
-    'docker compose -f docker-compose.scientific-pdf.yml down',
-    'docker compose -f docker-compose.scientific-pdf.yml build --no-cache',
-    'docker compose -f docker-compose.scientific-pdf.yml up -d',
-  ].join('\n');
+  return './scripts/scientific-pdf-docker.sh rebuild';
 }
 
 /** Health check once the container is up. */
 export function scientificPdfHealthCurlCommand(
   port: number = DEFAULT_SCIENTIFIC_PDF_PORT,
 ): string {
+  // Script health uses default port; keep curl form when port overridden.
+  if (port === DEFAULT_SCIENTIFIC_PDF_PORT) {
+    return './scripts/scientific-pdf-docker.sh health';
+  }
   return `curl -sS http://127.0.0.1:${port}/health`;
 }
 
 /** Follow live bridge logs (useful while a Scientific job runs). */
 export function scientificPdfDockerLogsCommand(): string {
-  return 'docker logs -f -t anyllm-scientific-pdf';
+  return './scripts/scientific-pdf-docker.sh logs';
 }
 
 /**
@@ -187,17 +187,17 @@ export function scientificPdfSetupCommands(port: number = DEFAULT_SCIENTIFIC_PDF
     {
       title: '1. Build & start (from repo root)',
       command: scientificPdfDockerComposeUpCommand(),
-      hint: 'First build can take several minutes (downloads pdf2zh). Needs Docker Desktop running.',
+      hint: 'Stops any old container, builds the image, starts it, and checks health. Needs Docker Desktop. First build is slow.',
     },
     {
-      title: '2. Check health',
+      title: '2. Check health again (optional)',
       command: scientificPdfHealthCurlCommand(port),
-      hint: 'Expect JSON with "status":"ok". Then click “Check health” in the wizard.',
+      hint: 'Expect JSON with "status":"ok". Then click “Check health” in this wizard.',
     },
     {
       title: '3. View logs (optional)',
       command: scientificPdfDockerLogsCommand(),
-      hint: 'Leave this running in a second terminal while you translate a PDF.',
+      hint: 'Leave this running in a second terminal while you translate a PDF. Ctrl+C stops logs only.',
     },
   ];
 }

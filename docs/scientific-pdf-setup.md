@@ -35,24 +35,29 @@ ls docker-compose.scientific-pdf.yml   # must exist
 
 ---
 
-## First-time: build and start
+## First-time: build and start (recommended)
+
+Helper script (from **repo root**):
 
 ```bash
-# From repo root — builds the image and starts the container
-docker compose -f docker-compose.scientific-pdf.yml up -d --build
+cd /path/to/AnyLLMTranslate
+chmod +x scripts/scientific-pdf-docker.sh   # once
+./scripts/scientific-pdf-docker.sh up
 ```
 
-- First build can take **several minutes** (downloads Python packages + pdf2zh).
-- Build log should include: `pdf2zh import ok`.
-- Container name: `anyllm-scientific-pdf`
+What `up` does:
 
-### Check it is running
+1. Stops an existing bridge container if present  
+2. Builds the Docker image  
+3. Starts the container  
+4. Waits for `GET /health`  
 
-```bash
-curl -sS http://127.0.0.1:17890/health
-```
+- First build can take **several minutes** (downloads Python packages + pdf2zh).  
+- Build log should include: `pdf2zh import ok`.  
+- Container name: `anyllm-scientific-pdf`  
+- Shortcuts: `./scripts/scientific-pdf-up.sh` / `./scripts/scientific-pdf-down.sh`
 
-Expected (approx.):
+Expected health (printed by the script):
 
 ```json
 {"status":"ok","version":"1.0.0","pdf2zh":"available"}
@@ -64,19 +69,23 @@ Then in the extension:
 2. Click **Check health** / finish the wizard
 3. Open a PDF in the built-in viewer → **Scientific** → **Translate (Scientific)**
 
+### Manual compose (equivalent)
+
+```bash
+docker compose -f docker-compose.scientific-pdf.yml down
+docker compose -f docker-compose.scientific-pdf.yml up -d --build
+curl -sS http://127.0.0.1:17890/health
+```
+
 ---
 
 ## Everyday use (already installed)
 
 ```bash
-# Start (if stopped)
-docker compose -f docker-compose.scientific-pdf.yml up -d
-
-# Stop
-docker compose -f docker-compose.scientific-pdf.yml down
-
-# Live logs while translating
-docker logs -f -t anyllm-scientific-pdf
+./scripts/scientific-pdf-docker.sh start    # start without rebuild
+./scripts/scientific-pdf-docker.sh down     # stop
+./scripts/scientific-pdf-docker.sh status   # container + health
+./scripts/scientific-pdf-docker.sh logs     # follow logs (Ctrl+C)
 ```
 
 ---
@@ -86,16 +95,8 @@ docker logs -f -t anyllm-scientific-pdf
 When you pull commits that change `services/scientific-pdf-bridge/` or the Dockerfile:
 
 ```bash
-docker compose -f docker-compose.scientific-pdf.yml down
-docker compose -f docker-compose.scientific-pdf.yml build --no-cache
-docker compose -f docker-compose.scientific-pdf.yml up -d
-curl -sS http://127.0.0.1:17890/health
-```
-
-Or shorter:
-
-```bash
-docker compose -f docker-compose.scientific-pdf.yml up -d --build
+./scripts/scientific-pdf-docker.sh rebuild
+# or: ./scripts/scientific-pdf-docker.sh up   # also rebuilds with --build
 ```
 
 ---

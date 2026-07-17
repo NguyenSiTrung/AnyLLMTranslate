@@ -128,19 +128,18 @@ describe('scientificPdf helpers', () => {
   });
 
   describe('setup commands for new users', () => {
-    it('compose up is the primary install path', () => {
+    it('helper script up is the primary install path', () => {
       const up = scientificPdfDockerComposeUpCommand();
-      expect(up).toContain('docker compose');
-      expect(up).toContain('docker-compose.scientific-pdf.yml');
-      expect(up).toContain('--build');
+      expect(up).toContain('scientific-pdf-docker.sh');
+      expect(up).toContain('up');
     });
 
-    it('setupCommands lists build, health, and logs', () => {
+    it('setupCommands lists build, health, and logs via script', () => {
       const cmds = scientificPdfSetupCommands();
       expect(cmds).toHaveLength(3);
-      expect(cmds[0]!.command).toContain('up -d --build');
-      expect(cmds[1]!.command).toContain('/health');
-      expect(cmds[2]!.command).toContain('docker logs');
+      expect(cmds[0]!.command).toContain('scientific-pdf-docker.sh up');
+      expect(cmds[1]!.command).toMatch(/scientific-pdf-docker\.sh health|curl.*health/);
+      expect(cmds[2]!.command).toContain('scientific-pdf-docker.sh logs');
     });
   });
 });
