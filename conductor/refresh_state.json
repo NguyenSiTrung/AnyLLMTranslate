@@ -9,7 +9,7 @@
     "tracks.md: refresh marker 69 archived / 0 active (pdf-composition already listed).",
     "workflow.md: no content drift (not rewritten).",
     "learnings consolidation: active tracks empty; pdf-composition learnings already in patterns.md section.",
-    "beads DRIFT: open 9 (zg4 real suite fail; 7uk PDF OCR backlog; pgv.1.2–1.8 stale vs ops redesign — left open); 0 in_progress; 221 total / 212 closed. Suite also fails parallel-batch concurrency + bidirectional chunk context (not filed to Beads).",
+    "beads DRIFT: open 2 after sync B (zg4 real suite fail; 7uk PDF OCR backlog); closed pgv.1.2–1.8 as superseded by Providers ops redesign; 0 in_progress; 221 total / 219 closed. Suite also fails parallel-batch concurrency + bidirectional chunk context (not filed to Beads).",
     "backups: product.md.bak, tech-stack.md.bak, tracks.md.bak, patterns.md.bak, refresh_state.json.bak.",
     "verification: vitest 869/872 pass (3 fail); tsc 6 errors; eslint 113 errors; build output ~4.1 MB."
   ],
@@ -35,5 +35,5 @@
       "PDF Composition Pipeline (BabelDOC-inspired) — full 8-phase track archived"
     ]
   },
-  "beadsDrift": "9 open: zg4 real (stale seek test); 7uk PDF OCR P3; pgv.1.2–1.8 stale Providers extract tasks superseded by ops redesign (left open — user chose not to auto-close); 0 in_progress; 221 total / 212 closed / 9 open. New suite fails (parallel batches, bidirectional context) not filed. No active plan.md tasks to sync."
+  "beadsDrift": "2 open after user chose sync B: zg4 (stale seek test); 7uk (PDF OCR P3). Closed pgv.1.2–1.8 as superseded by Providers ops dashboard redesign. 0 in_progress; 221 total / 219 closed / 2 open. Unfiled suite fails: parallel batches + bidirectional context. No active plan.md tasks to sync."
 }

@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (pdf-composition archived; 872 TCs / 144 files / 3 fail / 69 archived; tsc 6; lint 113; build ~4.1 MB; Beads 9 open: zg4 + 7uk + stale pgv.1.*) -->
+<!-- conductor-refresh: 2026-07-17 all (pdf-composition archived; 872 TCs / 144 files / 3 fail / 69 archived; tsc 6; lint 113; build ~4.1 MB; Beads 2 open: zg4 + 7uk; pgv.1.* closed superseded) -->
 # Initial Concept
 
 AnyLLMTranslate — an open-source Chrome extension that replicates and extends the core value proposition of Immersive Translate: bilingual side-by-side web page translation and video subtitle translation, powered by any OpenAI-compatible LLM endpoint (fully BYOK).
@@ -233,7 +233,7 @@ AnyLLMTranslate is an open-source, privacy-first Chrome extension for immersive 
 ### Current State
 - **872 tests** across **144 files**: **869 passing**, **3 failing** — (1) `tests/unit/subtitleCoordinatorManifest.test.ts` stale chunk after seek still calls `updateCues` (Beads `AnyLLMTranslate-zg4`); (2) `services/__tests__/background.translate.test.ts` parallel sub-batches peak concurrency stays 1; (3) `services/__tests__/background.test.ts` bidirectional context for subtitle chunks 1+. Build present (`.output/chrome-mv3` ≈ **4.1 MB**). `tsc --noEmit`: **6 errors** — coordinator test mock missing `getDomCueSource`; `EN_BREAK_WORDS` implicit `any[]` in `lib/youtubeAsrResegment.ts` (2 sites); pageScopePreset test casts; settingsStore test `priority` on `PoolKey`. Lint: **113 errors** — mostly `@typescript-eslint/no-non-null-assertion` in tests, plus unused vars, dynamic-delete in stats tests, and a few production nits.
 - **0 active Conductor tracks**. **69 tracks archived**. Latest Conductor archive: `pdf-composition_20260717`. Pre-composition polish (PDF cooling/kind, ModelPicker, safe throttle, rate-limit presets) also shipped outside Conductor track folders earlier the same day.
-- **Beads:** 9 open / 0 in progress / 212 closed / 221 total. Real work: `AnyLLMTranslate-zg4` (stale-chunk seek test), `AnyLLMTranslate-7uk` (PDF empty-page OCR, P3). Stale backlog: `AnyLLMTranslate-pgv.1.2`–`1.8` (old Providers extract tasks — superseded by ops dashboard redesign; left open).
+- **Beads:** 2 open / 0 in progress / 219 closed / 221 total. Open: `AnyLLMTranslate-zg4` (stale-chunk seek test), `AnyLLMTranslate-7uk` (PDF empty-page OCR, P3). Closed as superseded: `AnyLLMTranslate-pgv.1.2`–`1.8` (old Providers extract tasks — ops dashboard redesign).
 - **Test suite history:** (2026-07-08) 1487 → 999 TCs; pipeline-hardening ~1047; inline-parity trim → 788; selection-dict → 926; stats+General → 1042/92; suite prune `3750112` → ~703; post web-translate-v3 → 782 / 133; post PDF/Providers UX → 837 / 141; post pdf-composition (2026-07-17) → **872 / 144**.
 
 ## Out of Scope (Initial Release)
