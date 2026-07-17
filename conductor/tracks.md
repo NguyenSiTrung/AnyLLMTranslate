@@ -79,16 +79,10 @@ This file tracks all major tracks for the project.
 - ✅ **YouTube ASR Subtitle Sentence Re-alignment** (`youtube-asr-resegment_20260709`) — Archived 2026-07-09. Pre-translate re-chunk of YouTube auto-generated captions: pure Immersive-style local rules (`lib/youtubeAsrResegment.ts`) + optional AI/BYOK index-range resegment (`RESEGMENT_YOUTUBE_ASR`, fail-open to local). Options → Subtitles → YouTube toggles (local default on, AI opt-in). 5 phases; Toggle `onChange` fix. [View](./conductor/archive/youtube-asr-resegment_20260709/)
 - ✅ **Selection Translate — Dictionary Mode** (`selection-dict-mode_20260709`) — Archived 2026-07-09. Immersive-style dictionary popup for short selections (phonetic, POS, definitions, examples, contextual analysis); plain translation for sentences; opt-in `dictionaryMode` on shared `translateSelection`; `dict:` cache namespace; Options → Advanced toggle (default on). 5 phases, 78 track tests. [View](./conductor/archive/selection-dict-mode_20260709/)
 - ✅ **Web Page Translation — UX, Performance & Quality v3** (`web-translate-v3_20260714`) — Archived 2026-07-14. Balanced defaults (streaming + aside caps ON), page-scope presets (Classic escape hatch), viewport-aware progress, sticky systemic-pause banner, parallel sub-batches + look-ahead, term memory, JSON repair, expanded langDetect, stream/context parity, resume parentPath identity, mini progress. Successor to `web-bilingual-quality_20260707` + `web-pipeline-hardening_20260708`. 4 phases. [View](./conductor/archive/web-translate-v3_20260714/)
+- ✅ **PDF Composition Pipeline (BabelDOC-inspired)** (`pdf-composition_20260717`) — Archived 2026-07-17. Run-level extraction, multi-signal formula detection, `{vN}` placeholders + reassembly, table regions protect-by-default + `translateTableText`, multi-column reading order, selective Layout/download mask, power-user PDF card (3 toggles). 8 phases. [View](./conductor/archive/pdf-composition_20260717/)
 
 ---
 
 ## Active Tracks
-
----
-
-## [x] Track: PDF Composition Pipeline (BabelDOC-inspired)
-*Link: [./conductor/tracks/pdf-composition_20260717/](./conductor/tracks/pdf-composition_20260717/)*
-*Priority: 🟠 High — run-level extract, formula placeholders, table regions, multi-column, selective mask, power-user PDF card*
-*Completed: 2026-07-17 — 8 phases; FR-1–FR-8 delivered*
 
 ---
