@@ -30,10 +30,10 @@ export const SCIENTIFIC_STAGE_META: Record<
   running: {
     label: 'Translate',
     step: 3,
-    hint: 'Layout-preserving translation (pdf2zh). This can take several minutes.',
+    hint: 'Layout-preserving translation. This can take several minutes.',
   },
   downloading: { label: 'Fetch', step: 4, hint: 'Fetching mono and dual PDFs…' },
-  done: { label: 'Done', step: 5, hint: 'Choose a download format or open in the viewer.' },
+  done: { label: 'Done', step: 5, hint: 'Choose a format, then download.' },
   error: { label: 'Error', step: 0, hint: 'Job failed or was cancelled.' },
 };
 

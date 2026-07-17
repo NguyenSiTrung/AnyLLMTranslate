@@ -669,8 +669,8 @@ html, body, #root {
 
 /* Scientific job modal — wider panel + log console */
 .pdf-sci-modal {
-  min-width: min(520px, 92vw);
-  max-width: min(560px, 94vw);
+  min-width: min(560px, 92vw);
+  max-width: min(600px, 94vw);
   max-height: min(88vh, 720px);
   overflow-y: auto;
   display: flex;
@@ -796,23 +796,149 @@ html, body, #root {
   background: rgba(59, 130, 246, 0.06);
 }
 
-.pdf-sci-result-hint {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: #d4d4d8;
+.pdf-sci-format-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.pdf-sci-format-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.6);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.pdf-sci-format-card:hover {
+  border-color: #3f3f46;
+  background: rgba(39, 39, 42, 0.5);
+}
+
+.pdf-sci-format-card--selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.pdf-sci-format-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.pdf-sci-format-card-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a1a1aa;
   line-height: 1.45;
 }
 
-.pdf-sci-format-list {
-  margin: 0 0 12px;
-  padding-left: 18px;
-  font-size: 11px;
-  color: #a1a1aa;
-  line-height: 1.5;
+.pdf-sci-recommended {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 999px;
+  padding: 2px 7px;
 }
 
-.pdf-sci-format-list strong {
-  color: #e4e4e7;
+/* Abstract format glyphs */
+.pdf-sci-format-glyph {
+  flex-shrink: 0;
+  width: 36px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid #3f3f46;
+  background: #09090b;
+  position: relative;
+}
+
+.pdf-sci-format-glyph--mono::after {
+  content: '';
+  position: absolute;
+  inset: 4px 10px;
+  border-radius: 2px;
+  background: #3b82f6;
+  opacity: 0.55;
+}
+
+.pdf-sci-format-glyph--dual::before,
+.pdf-sci-format-glyph--dual::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 8px;
+  border-radius: 2px;
+  background: #60a5fa;
+  opacity: 0.5;
+}
+
+.pdf-sci-format-glyph--dual::before {
+  top: 5px;
+}
+
+.pdf-sci-format-glyph--dual::after {
+  bottom: 5px;
+  background: #86efac;
+}
+
+.pdf-sci-format-glyph--side-by-side::before,
+.pdf-sci-format-glyph--side-by-side::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 12px;
+  border-radius: 2px;
+}
+
+.pdf-sci-format-glyph--side-by-side::before {
+  left: 5px;
+  background: #71717a;
+  opacity: 0.7;
+}
+
+.pdf-sci-format-glyph--side-by-side::after {
+  right: 5px;
+  background: #3b82f6;
+  opacity: 0.65;
+}
+
+.pdf-sci-download-primary {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+.pdf-sci-download-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.pdf-sci-feedback {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #86efac;
+  min-height: 1em;
 }
 
 .pdf-sci-download-row {
@@ -824,6 +950,40 @@ html, body, #root {
 
 .pdf-sci-download-row--secondary {
   margin-bottom: 0;
+}
+
+.pdf-sci-log-wrap > summary.pdf-sci-log-header {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.pdf-sci-log-wrap > summary.pdf-sci-log-header::-webkit-details-marker {
+  display: none;
+}
+
+.pdf-sci-log-wrap > summary.pdf-sci-log-header::after {
+  content: 'Show details';
+  float: right;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #a1a1aa;
+}
+
+.pdf-sci-log-wrap[open] > summary.pdf-sci-log-header::after {
+  content: 'Hide';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-sci-step--active .pdf-sci-step-dot {
+    box-shadow: none;
+  }
+
+  .pdf-download-modal,
+  .pdf-download-modal-backdrop {
+    animation: none;
+  }
 }
 
 .pdf-download-format-list {

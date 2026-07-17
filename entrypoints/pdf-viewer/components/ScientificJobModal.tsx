@@ -1,15 +1,22 @@
 /**
  * Progress / result modal for Scientific PDF bridge jobs.
- * Shows staged progress, live activity log, and explicit download choices
- * (mono / pdf2zh dual / side-by-side) — no auto-download.
+ * State-focused UX: calm running, clear error recovery, download-first done cards.
  */
 
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   SCIENTIFIC_STAGE_META,
   type ScientificJobProgress,
   type ScientificJobStage,
 } from '../hooks/useScientificPdfJob';
+import {
+  availableFormats,
+  defaultFormat,
+  formatCardCopy,
+  isRecommended,
+  openResultPrefer,
+  type ScientificDownloadFormat,
+} from './scientificJobModalFormats';
 
 export interface ScientificJobModalProps {
   progress: ScientificJobProgress;
@@ -20,7 +27,7 @@ export interface ScientificJobModalProps {
   onOpenSetup?: () => void;
   onDownloadMono?: () => void;
   onDownloadDual?: () => void;
-  onDownloadSideBySide?: () => void;
+  onDownloadSideBySide?: () => void | Promise<void>;
 }
 
 function formatPercent(fraction: number): string {
@@ -40,7 +47,6 @@ function stepState(
   step: ScientificJobStage,
 ): 'done' | 'active' | 'todo' | 'error' {
   if (stage === 'error') {
-    // Highlight translate step as the failure anchor (most common)
     if (step === 'running') return 'error';
     if (step === 'checking' || step === 'uploading') return 'done';
     return 'todo';
@@ -69,36 +75,106 @@ export function ScientificJobModal({
   const isError = progress.stage === 'error';
   const isActive = !isDone && !isError && progress.stage !== 'idle';
   const offline = progress.errorCode === 'offline';
-  const logRef = useRef<HTMLDivElement>(null);
   const meta = SCIENTIFIC_STAGE_META[progress.stage];
 
-  // Auto-scroll log console
+  const flags = useMemo(
+    () => ({ hasMono: progress.hasMono, hasDual: progress.hasDual }),
+    [progress.hasMono, progress.hasDual],
+  );
+  const formats = useMemo(() => availableFormats(flags), [flags]);
+  const formatsKey = formats.join('|');
+
+  const [selected, setSelected] = useState<ScientificDownloadFormat | null>(null);
   useEffect(() => {
+    if (!isDone) {
+      setSelected(null);
+      return;
+    }
+    setSelected((prev) => {
+      if (prev && formats.includes(prev)) return prev;
+      return defaultFormat(flags);
+    });
+  }, [isDone, flags, formats, formatsKey]);
+
+  const [logOpen, setLogOpen] = useState(false);
+  useEffect(() => {
+    if (isError) setLogOpen(true);
+    else if (isDone || isActive) setLogOpen(false);
+  }, [isError, isDone, isActive, progress.stage]);
+
+  const [downloadPhase, setDownloadPhase] = useState<'idle' | 'busy' | 'saved'>('idle');
+  useEffect(() => {
+    if (!isDone) setDownloadPhase('idle');
+  }, [isDone]);
+
+  const logRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!logOpen) return;
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [progress.logs.length]);
+  }, [progress.logs.length, logOpen]);
+
+  const titleId = 'pdf-sci-title';
+  const title = isError
+    ? 'Translation failed'
+    : isDone
+      ? 'Translation ready'
+      : 'Translating with Scientific layout…';
+
+  const selectedCopy = selected ? formatCardCopy(selected) : null;
+
+  async function handlePrimaryDownload(): Promise<void> {
+    if (!selected) return;
+    setDownloadPhase('busy');
+    try {
+      if (selected === 'mono') {
+        onDownloadMono?.();
+      } else if (selected === 'dual') {
+        onDownloadDual?.();
+      } else {
+        await Promise.resolve(onDownloadSideBySide?.());
+      }
+      setDownloadPhase('saved');
+      window.setTimeout(() => setDownloadPhase('idle'), 2000);
+    } catch {
+      setDownloadPhase('idle');
+    }
+  }
+
+  function handleOpen(): void {
+    const prefer = openResultPrefer(selected, flags);
+    if (prefer) onOpenResult(prefer);
+  }
+
+  const primaryDownloadLabel =
+    downloadPhase === 'busy'
+      ? selected === 'side-by-side'
+        ? 'Assembling…'
+        : 'Downloading…'
+      : (selectedCopy?.downloadLabel ?? 'Download');
 
   return (
     <div className="pdf-download-modal-backdrop">
       <div
         className="pdf-download-modal pdf-sci-modal"
         role="dialog"
-        aria-label="Scientific PDF progress"
+        aria-labelledby={titleId}
         aria-live="polite"
       >
         <div className="pdf-download-modal-header">
-          {isError ? (
-            <h2 className="pdf-download-modal-title pdf-download-modal-title--error">
-              Scientific translation failed
-            </h2>
-          ) : isDone ? (
-            <h2 className="pdf-download-modal-title pdf-download-modal-title--success">
-              Scientific translation complete
-            </h2>
-          ) : (
-            <h2 className="pdf-download-modal-title">Scientific layout translation</h2>
-          )}
+          <h2
+            id={titleId}
+            className={
+              isError
+                ? 'pdf-download-modal-title pdf-download-modal-title--error'
+                : isDone
+                  ? 'pdf-download-modal-title pdf-download-modal-title--success'
+                  : 'pdf-download-modal-title'
+            }
+          >
+            {isDone ? `${title} ✓` : title}
+          </h2>
           {progress.jobId && (
             <p className="pdf-sci-job-id" title={progress.jobId}>
               Job {progress.jobId}
@@ -106,28 +182,34 @@ export function ScientificJobModal({
           )}
         </div>
 
-        {/* Pipeline steps */}
-        <ol className="pdf-sci-steps" aria-label="Pipeline stages">
-          {PIPELINE_STEPS.map((s) => {
-            const st = stepState(progress.stage, s);
-            const label = SCIENTIFIC_STAGE_META[s].label;
-            return (
-              <li
-                key={s}
-                className={`pdf-sci-step pdf-sci-step--${st}`}
-                aria-current={st === 'active' ? 'step' : undefined}
-              >
-                <span className="pdf-sci-step-dot" aria-hidden />
-                <span className="pdf-sci-step-label">{label}</span>
-              </li>
-            );
-          })}
-        </ol>
+        {(isActive || isDone) && (
+          <ol className="pdf-sci-steps" aria-label="Pipeline stages">
+            {PIPELINE_STEPS.map((s) => {
+              const st = stepState(progress.stage, s);
+              const label = SCIENTIFIC_STAGE_META[s].label;
+              return (
+                <li
+                  key={s}
+                  className={`pdf-sci-step pdf-sci-step--${st}`}
+                  aria-current={st === 'active' ? 'step' : undefined}
+                >
+                  <span className="pdf-sci-step-dot" aria-hidden />
+                  <span className="pdf-sci-step-label">{label}</span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
 
-        {/* Progress bar */}
         {(isActive || isDone) && (
           <div className="pdf-download-progress-wrap">
-            <div className="pdf-download-progress-bar" aria-hidden>
+            <div
+              className="pdf-download-progress-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progress.progress * 100)}
+            >
               <div
                 className={`pdf-download-progress-fill${isDone ? ' pdf-download-progress-fill--done' : ''}`}
                 style={{ width: formatPercent(progress.progress) }}
@@ -137,14 +219,90 @@ export function ScientificJobModal({
           </div>
         )}
 
-        <p className="pdf-download-modal-message">
-          <strong className="pdf-sci-status-label">{meta.label}:</strong> {progress.message || meta.hint}
-        </p>
+        {isDone ? (
+          <p className="pdf-download-modal-message">
+            Choose a format, then download. Nothing downloads automatically.
+          </p>
+        ) : isError ? null : (
+          <p className="pdf-download-modal-message">
+            <strong className="pdf-sci-status-label">{meta.label}:</strong>{' '}
+            {progress.message || meta.hint}
+          </p>
+        )}
 
-        {/* Live log console */}
+        {isError && progress.error && (
+          <p className="pdf-download-modal-error">{progress.error}</p>
+        )}
+
+        {isDone && formats.length > 0 && (
+          <div className="pdf-sci-result-panel">
+            <div className="pdf-sci-format-cards" role="radiogroup" aria-label="Download format">
+              {formats.map((f) => {
+                const copy = formatCardCopy(f);
+                const checked = selected === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    role="radio"
+                    aria-checked={checked}
+                    aria-label={copy.title}
+                    className={`pdf-sci-format-card${checked ? ' pdf-sci-format-card--selected' : ''}`}
+                    onClick={() => setSelected(f)}
+                  >
+                    <span
+                      className={`pdf-sci-format-glyph pdf-sci-format-glyph--${f}`}
+                      aria-hidden
+                    />
+                    <span className="pdf-sci-format-card-text">
+                      <span className="pdf-sci-format-card-title">
+                        {copy.title}
+                        {isRecommended(f, flags) && (
+                          <span className="pdf-sci-recommended">Recommended</span>
+                        )}
+                      </span>
+                      <span className="pdf-sci-format-card-hint">{copy.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="pdf-download-btn pdf-download-btn--primary pdf-sci-download-primary"
+              disabled={!selected || downloadPhase === 'busy'}
+              onClick={() => void handlePrimaryDownload()}
+            >
+              {primaryDownloadLabel}
+            </button>
+            {downloadPhase === 'saved' && (
+              <p className="pdf-sci-feedback" role="status">
+                Download started
+              </p>
+            )}
+
+            <div className="pdf-sci-download-row pdf-sci-download-row--secondary">
+              {(progress.hasDual || progress.hasMono) && (
+                <button
+                  type="button"
+                  className="pdf-download-btn pdf-download-btn--secondary"
+                  onClick={handleOpen}
+                >
+                  Open in viewer
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {progress.logs.length > 0 && (
-          <div className="pdf-sci-log-wrap">
-            <div className="pdf-sci-log-header">Activity</div>
+          <details
+            className="pdf-sci-log-wrap"
+            open={logOpen}
+            onToggle={(e) => setLogOpen((e.target as HTMLDetailsElement).open)}
+          >
+            <summary className="pdf-sci-log-header">Activity</summary>
             <div
               ref={logRef}
               className="pdf-sci-log"
@@ -157,73 +315,7 @@ export function ScientificJobModal({
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {isError && progress.error && (
-          <p className="pdf-download-modal-error">{progress.error}</p>
-        )}
-
-        {/* Done: format choices */}
-        {isDone && (
-          <div className="pdf-sci-result-panel">
-            <p className="pdf-sci-result-hint">
-              Downloads are manual (nothing auto-downloads). Choose a format:
-            </p>
-            <ul className="pdf-sci-format-list">
-              <li>
-                <strong>Mono</strong> — translated pages only (layout-preserving).
-              </li>
-              <li>
-                <strong>Dual (pdf2zh)</strong> — bilingual PDF from the bridge (layout engine;
-                often original + translation paired — not always strict left|right).
-              </li>
-              <li>
-                <strong>Side-by-side</strong> — original <em>left</em>, translation <em>right</em>{' '}
-                (assembled here from original + mono).
-              </li>
-            </ul>
-            <div className="pdf-sci-download-row">
-              {progress.hasMono && onDownloadMono && (
-                <button
-                  type="button"
-                  className="pdf-download-btn pdf-download-btn--primary"
-                  onClick={onDownloadMono}
-                >
-                  Download mono
-                </button>
-              )}
-              {progress.hasDual && onDownloadDual && (
-                <button
-                  type="button"
-                  className="pdf-download-btn pdf-download-btn--primary"
-                  onClick={onDownloadDual}
-                >
-                  Download dual
-                </button>
-              )}
-              {progress.hasMono && onDownloadSideBySide && (
-                <button
-                  type="button"
-                  className="pdf-download-btn pdf-download-btn--secondary"
-                  onClick={() => void onDownloadSideBySide()}
-                >
-                  Side-by-side L|R
-                </button>
-              )}
-            </div>
-            <div className="pdf-sci-download-row pdf-sci-download-row--secondary">
-              {(progress.hasDual || progress.hasMono) && (
-                <button
-                  type="button"
-                  className="pdf-download-btn pdf-download-btn--secondary"
-                  onClick={() => onOpenResult(progress.hasDual ? 'dual' : 'mono')}
-                >
-                  Open {progress.hasDual ? 'dual' : 'mono'} in viewer
-                </button>
-              )}
-            </div>
-          </div>
+          </details>
         )}
 
         <div className="pdf-download-modal-actions">
