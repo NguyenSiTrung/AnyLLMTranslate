@@ -1,9 +1,10 @@
 /**
- * Compact API key row with optional advanced limits and live status chip.
+ * Compact API key row with rate-limit summary strip, presets, and live status chip.
  */
 
 import { useState } from 'react';
 import {
+  ChevronDown,
   ChevronUp,
   ExternalLink,
   GripVertical,
@@ -11,6 +12,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { KeyChipView } from '@/lib/poolDashboardStatus';
+import {
+  formatKeyRateLimitSummary,
+  getKeyRateLimitPresetValues,
+  KEY_RATE_LIMIT_PRESETS,
+  matchKeyRateLimitPreset,
+  type KeyRateLimitValues,
+} from '@/lib/keyRateLimits';
 import { getConnectionErrorMessage } from '@/lib/providerReadiness';
 import { getCatalogEntryById, getKeyUrlForProvider } from '@/lib/openAiCompatibleCatalog';
 import {
@@ -18,7 +26,6 @@ import {
   canRunConnectionTest,
 } from '@/lib/providerPoolHelpers';
 import type { PoolKey, PoolProvider } from '@/types/config';
-import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { Button } from '@/ui/Button';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
@@ -66,7 +73,7 @@ export function ProviderKeyRow({
     String(poolKey.concurrencyLimit ?? 0),
   );
   const [intervalDraft, setIntervalDraft] = useState(String(poolKey.interval ?? 0));
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [rateLimitsOpen, setRateLimitsOpen] = useState(false);
   const apiKeyField = useDeferredCommit(poolKey.apiKey, (v) => onUpdate({ apiKey: v }));
   const labelField = useDeferredCommit(poolKey.label ?? '', (v) => onUpdate({ label: v }));
   const { isTesting, testProgress, testResult, runTest } = useConnectionTest(targetLanguage);
@@ -79,6 +86,16 @@ export function ProviderKeyRow({
   const keyPlaceholder = catalogEntry?.placeholder ?? 'sk-...';
   const getKeyUrl = getKeyUrlForProvider(provider.baseUrl);
   const displayLabel = poolKey.label?.trim() || `Key ${displayIndex}`;
+
+  const committedLimits: KeyRateLimitValues = {
+    maxRpm: poolKey.maxRpm,
+    concurrencyLimit: poolKey.concurrencyLimit ?? 0,
+    interval: poolKey.interval ?? 0,
+  };
+  const summary = formatKeyRateLimitSummary(committedLimits);
+  const activePreset = matchKeyRateLimitPreset(committedLimits);
+  const regionId = `rate-limits-${poolKey.id}`;
+  const rateLimitsBtnId = `rate-limits-btn-${poolKey.id}`;
 
   const handleTest = async () => {
     const result = await runTest(
@@ -111,6 +128,17 @@ export function ProviderKeyRow({
     const n = Math.max(0, Math.min(60000, Math.floor(Number(intervalDraft) || 0)));
     setIntervalDraft(String(n));
     if (n !== (poolKey.interval ?? 0)) onUpdate({ interval: n });
+  };
+
+  const applyRateLimits = (values: KeyRateLimitValues) => {
+    setMaxRpmDraft(String(values.maxRpm));
+    setConcurrencyDraft(String(values.concurrencyLimit));
+    setIntervalDraft(String(values.interval));
+    onUpdate({
+      maxRpm: values.maxRpm,
+      concurrencyLimit: values.concurrencyLimit,
+      interval: values.interval,
+    });
   };
 
   return (
@@ -179,13 +207,6 @@ export function ProviderKeyRow({
             )}
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-              onClick={() => setShowAdvanced((v) => !v)}
-            >
-              {showAdvanced ? 'Hide limits' : 'Advanced limits'}
-            </button>
-            <button
-              type="button"
               className="w-full text-left px-3 py-1.5 text-xs text-rose-400 hover:bg-zinc-800 flex items-center gap-2"
               onClick={onRemove}
             >
@@ -233,70 +254,135 @@ export function ProviderKeyRow({
         />
       </FieldGroup>
 
-      {(showAdvanced || false) && (
-        <AdvancedDisclosure label="Concurrency & throttle" defaultExpanded>
-          <p className="text-xs text-zinc-500 leading-relaxed mb-3">
-            Limits how fast this key talks to the API. Enter numbers only — units are shown in each
-            field. Use <span className="text-zinc-400">0</span> for unlimited / off.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <FieldGroup
-              label="Max rate"
-              description="How many API requests this key may start each minute."
-              htmlFor={`pr-${poolKey.id}`}
+      <div className="rounded-lg border border-zinc-700/50 bg-zinc-900/30">
+        <button
+          type="button"
+          id={rateLimitsBtnId}
+          aria-expanded={rateLimitsOpen}
+          aria-controls={regionId}
+          aria-label={`Rate limits, ${summary}`}
+          onClick={() => setRateLimitsOpen((v) => !v)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors rounded-lg"
+        >
+          <span className="text-xs font-medium text-zinc-300 shrink-0">Rate limits</span>
+          <span className="text-xs text-zinc-500 font-mono truncate flex-1" title={summary}>
+            {summary}
+          </span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-zinc-500 shrink-0 transition-transform duration-200 ${
+              rateLimitsOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {rateLimitsOpen && (
+          <div
+            id={regionId}
+            role="region"
+            aria-labelledby={rateLimitsBtnId}
+            className="px-3 pb-3 space-y-3 border-t border-zinc-700/40"
+          >
+            <p className="text-xs text-zinc-500 leading-relaxed pt-3">
+              Limits how fast this key hits the API. Presets are a starting point — tweak the
+              numbers if you need to.
+            </p>
+
+            <div
+              role="radiogroup"
+              aria-label="Rate limit presets"
+              className="flex flex-wrap gap-1.5"
             >
-              <Input
-                id={`pr-${poolKey.id}`}
-                type="number"
-                min={0}
-                max={600}
-                value={maxRpmDraft}
-                onChange={(e) => setMaxRpmDraft(e.target.value)}
-                onBlur={commitMaxRpm}
-                suffix="req/min"
-                placeholder="20"
-                hint="Unit: requests per minute · 0 = unlimited · range 0–600"
-              />
-            </FieldGroup>
-            <FieldGroup
-              label="Max concurrent"
-              description="How many requests may run at the same time on this key."
-              htmlFor={`pc-${poolKey.id}`}
+              {KEY_RATE_LIMIT_PRESETS.map((preset) => {
+                const selected = activePreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => applyRateLimits(preset.values)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                      selected
+                        ? 'bg-cyan-600/20 border-cyan-500/40 text-cyan-300'
+                        : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+              {activePreset === null && (
+                <span className="px-2 py-1 text-xs text-zinc-500 self-center">Custom</span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <FieldGroup
+                label="Max rate"
+                description="Requests this key may start per minute."
+                htmlFor={`pr-${poolKey.id}`}
+              >
+                <Input
+                  id={`pr-${poolKey.id}`}
+                  type="number"
+                  min={0}
+                  max={600}
+                  value={maxRpmDraft}
+                  onChange={(e) => setMaxRpmDraft(e.target.value)}
+                  onBlur={commitMaxRpm}
+                  suffix="req/min"
+                  placeholder="20"
+                  hint="0 = unlimited · 0–600"
+                />
+              </FieldGroup>
+              <FieldGroup
+                label="Max concurrent"
+                description="In-flight requests at the same time."
+                htmlFor={`pc-${poolKey.id}`}
+              >
+                <Input
+                  id={`pc-${poolKey.id}`}
+                  type="number"
+                  min={0}
+                  max={20}
+                  value={concurrencyDraft}
+                  onChange={(e) => setConcurrencyDraft(e.target.value)}
+                  onBlur={commitConcurrency}
+                  suffix="at once"
+                  placeholder="1"
+                  hint="0 = global cap only · 0–20"
+                />
+              </FieldGroup>
+              <FieldGroup
+                label="Min gap"
+                description="Wait after one request before the next."
+                htmlFor={`pi-${poolKey.id}`}
+              >
+                <Input
+                  id={`pi-${poolKey.id}`}
+                  type="number"
+                  min={0}
+                  max={60000}
+                  value={intervalDraft}
+                  onChange={(e) => setIntervalDraft(e.target.value)}
+                  onBlur={commitInterval}
+                  suffix="ms"
+                  placeholder="500"
+                  hint="0 = off · 0–60000 · 1000 ms = 1 s"
+                />
+              </FieldGroup>
+            </div>
+
+            <button
+              type="button"
+              className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+              onClick={() => applyRateLimits(getKeyRateLimitPresetValues('safe'))}
             >
-              <Input
-                id={`pc-${poolKey.id}`}
-                type="number"
-                min={0}
-                max={20}
-                value={concurrencyDraft}
-                onChange={(e) => setConcurrencyDraft(e.target.value)}
-                onBlur={commitConcurrency}
-                suffix="at once"
-                placeholder="1"
-                hint="Unit: parallel requests · 0 = use global cap only · range 0–20"
-              />
-            </FieldGroup>
-            <FieldGroup
-              label="Min gap between requests"
-              description="Wait at least this long after one request before starting the next."
-              htmlFor={`pi-${poolKey.id}`}
-            >
-              <Input
-                id={`pi-${poolKey.id}`}
-                type="number"
-                min={0}
-                max={60000}
-                value={intervalDraft}
-                onChange={(e) => setIntervalDraft(e.target.value)}
-                onBlur={commitInterval}
-                suffix="ms"
-                placeholder="500"
-                hint="Unit: milliseconds (1000 ms = 1 s) · 0 = no gap · range 0–60000"
-              />
-            </FieldGroup>
+              Reset to Safe
+            </button>
           </div>
-        </AdvancedDisclosure>
-      )}
+        )}
+      </div>
 
       {provider.requiresApiKey && !canTest && !isTesting && (
         <p className="text-xs text-zinc-500">Enter an API key to test this key.</p>
