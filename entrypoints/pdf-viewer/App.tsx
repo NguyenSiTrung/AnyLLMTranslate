@@ -11,8 +11,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Loader2, AlertCircle, FileWarning, Download } from 'lucide-react';
+import { Loader2, AlertCircle, FileWarning, Download, FlaskConical } from 'lucide-react';
 import type { PdfViewMode } from '@/lib/constants';
+import { loadSettings } from '@/lib/config';
+import { mergeScientificPdfSettings } from '@/lib/scientificPdf';
 import { loadPdfViewMode, savePdfViewMode } from './lib/pdfViewMode';
 import { ViewerLayout } from './components/ViewerLayout';
 import { PdfCanvasRenderer } from './components/PdfCanvasRenderer';
@@ -22,10 +24,15 @@ import { usePdfDocument } from './hooks/usePdfDocument';
 import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
 import { useVisiblePages } from './hooks/useVisiblePages';
 import { usePdfDownload, type DualExportMode } from './hooks/usePdfDownload';
+import { useScientificPdfJob } from './hooks/useScientificPdfJob';
 import {
   DownloadFormatPicker,
   DownloadProgressModal,
 } from './components/DownloadProgressModal';
+import { ScientificJobModal } from './components/ScientificJobModal';
+
+/** Fast = in-browser pipeline; Scientific = local pdf2zh bridge. */
+type PdfPipelineMode = 'fast' | 'scientific';
 
 /** Stable sentinel for untranslated pages — avoids creating a new
  *  { paragraphs: new Map(), state: 'idle' } object on every render. */
@@ -57,6 +64,8 @@ function isFileScheme(url: string): boolean {
 export default function App(): ReactElement {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<PdfViewMode>('split');
+  const [pipelineMode, setPipelineMode] = useState<PdfPipelineMode>('fast');
+  const [showScientificModal, setShowScientificModal] = useState(false);
   const rightContainerRef = useRef<HTMLDivElement | null>(null);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -145,7 +154,6 @@ export default function App(): ReactElement {
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [pendingExportMode, setPendingExportMode] = useState<DualExportMode>('mono');
 
-
   const isFile = pdfUrl ? isFileScheme(pdfUrl) : false;
   const fileName = pdfUrl ? (() => {
     try {
@@ -155,6 +163,34 @@ export default function App(): ReactElement {
       return 'document.pdf';
     }
   })() : 'document.pdf';
+
+  const scientific = useScientificPdfJob({
+    pdfUrl: pdfUrl ?? '',
+    fileName,
+  });
+
+  // Prefer Scientific only when settings say so AND bridge is Ready (fail-open to Fast).
+  useEffect(() => {
+    if (!pdfUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const settings = await loadSettings();
+        const sci = mergeScientificPdfSettings(settings.scientificPdf);
+        const ok = await scientific.refreshHealth();
+        if (cancelled) return;
+        if (sci.preferScientific && ok) {
+          setPipelineMode('scientific');
+        }
+      } catch {
+        /* keep Fast */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per pdfUrl
+  }, [pdfUrl]);
 
   // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport.
   // In translation-only mode there is no left pane; observe the right pane so
@@ -258,6 +294,40 @@ export default function App(): ReactElement {
         }
         headerExtra={
           <div className="pdf-viewer-header-controls">
+            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation pipeline (Fast or Scientific)">
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${pipelineMode === 'fast' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => setPipelineMode('fast')}
+                aria-pressed={pipelineMode === 'fast'}
+                title="Fast: in-browser PDF.js translation (always available)."
+              >
+                Fast
+              </button>
+              <button
+                type="button"
+                className={`pdf-viewer-toggle-btn ${pipelineMode === 'scientific' ? 'pdf-viewer-toggle-btn--active' : ''}`}
+                onClick={() => {
+                  if (scientific.bridgeStatus !== 'ready' && scientific.healthOk !== true) {
+                    void scientific.refreshHealth().then((ok) => {
+                      if (ok) setPipelineMode('scientific');
+                      else setShowScientificModal(true);
+                    });
+                    return;
+                  }
+                  setPipelineMode('scientific');
+                }}
+                aria-pressed={pipelineMode === 'scientific'}
+                title={
+                  scientific.healthOk === true
+                    ? 'Scientific: layout-preserving translation via local Docker bridge.'
+                    : 'Scientific bridge offline — click to check or set up.'
+                }
+              >
+                <FlaskConical size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                Scientific
+              </button>
+            </div>
             <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split, translation only)">
               <button
                 type="button"
@@ -279,18 +349,38 @@ export default function App(): ReactElement {
               </button>
             </div>
             <div className="pdf-viewer-progress-pill">
-              {translatedCount} / {totalCount} pages translated
+              {pipelineMode === 'scientific'
+                ? scientific.healthOk === true
+                  ? 'Scientific ready'
+                  : 'Scientific offline'
+                : `${translatedCount} / ${totalCount} pages translated`}
             </div>
-            <button
-              type="button"
-              className="pdf-download-btn-header"
-              onClick={() => setShowFormatPicker(true)}
-              disabled={translatedCount === 0 || isDownloading}
-              title="Download translated or dual bilingual PDF"
-            >
-              <Download size={14} />
-              Download
-            </button>
+            {pipelineMode === 'scientific' ? (
+              <button
+                type="button"
+                className="pdf-download-btn-header"
+                onClick={() => {
+                  setShowScientificModal(true);
+                  void scientific.startJob();
+                }}
+                disabled={scientific.isRunning || !pdfUrl}
+                title="Run layout-preserving Scientific translation via local bridge"
+              >
+                <FlaskConical size={14} />
+                Translate (Scientific)
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="pdf-download-btn-header"
+                onClick={() => setShowFormatPicker(true)}
+                disabled={translatedCount === 0 || isDownloading}
+                title="Download translated or dual bilingual PDF"
+              >
+                <Download size={14} />
+                Download
+              </button>
+            )}
           </div>
         }
       />
@@ -314,6 +404,29 @@ export default function App(): ReactElement {
           exportMode={exportMode}
           onCancel={cancelDownload}
           onRetry={() => startDownload(exportMode)}
+        />
+      )}
+      {(showScientificModal || scientific.isRunning || scientific.progress.stage === 'done' || scientific.progress.stage === 'error') && (
+        <ScientificJobModal
+          progress={scientific.progress}
+          onCancel={() => void scientific.cancel()}
+          onClose={() => {
+            setShowScientificModal(false);
+            scientific.reset();
+          }}
+          onRetry={() => {
+            setShowScientificModal(true);
+            void scientific.startJob();
+          }}
+          onOpenResult={() => scientific.openResultInViewer()}
+          onOpenSetup={() => {
+            setShowScientificModal(false);
+            try {
+              void chrome.runtime.openOptionsPage();
+            } catch {
+              window.open(chrome.runtime.getURL('options.html'), '_blank');
+            }
+          }}
         />
       )}
     </>);
