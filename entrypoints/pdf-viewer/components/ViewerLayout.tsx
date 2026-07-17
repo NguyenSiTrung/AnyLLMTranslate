@@ -86,7 +86,7 @@ export function ViewerLayout({
       {isSingleColumn(viewMode) ? (
         <main className="pdf-viewer-main pdf-viewer-main--single">
           <section className="pdf-viewer-pane pdf-viewer-pane--right">
-            <div className="pdf-viewer-pane-label">Translation</div>
+            <div className="pdf-viewer-pane-label">PDF Translate</div>
             <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
               {right}
             </div>
@@ -101,7 +101,7 @@ export function ViewerLayout({
             </div>
           </section>
           <section className="pdf-viewer-pane pdf-viewer-pane--right">
-            <div className="pdf-viewer-pane-label">Translation</div>
+            <div className="pdf-viewer-pane-label">PDF Translate</div>
             <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
               {right}
             </div>

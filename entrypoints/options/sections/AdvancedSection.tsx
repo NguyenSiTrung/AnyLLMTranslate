@@ -1133,7 +1133,7 @@ export function AdvancedSection() {
             variant="bordered"
             accent="amber"
             title="Scientific PDF"
-            description="Optional layout-preserving path via a local Docker bridge (pdf2zh). Uses the same provider pool as normal translation."
+            description="PDF translation runs only via a local Docker bridge (pdf2zh). When the bridge is offline, PDF Translate shows as unavailable in the viewer."
             icon={<FlaskConical className="w-3.5 h-3.5" />}
             headerExtra={<Badge variant={scientificBadge.variant}>{scientificBadge.label}</Badge>}
           >
@@ -1148,25 +1148,12 @@ export function AdvancedSection() {
                     },
                   })
                 }
-                label="Enable Scientific mode UI"
-                description="Shows Scientific controls in the PDF viewer when the bridge is reachable. Fast (browser) mode always remains available."
-              />
-              <Toggle
-                checked={scientificPdf.preferScientific}
-                onChange={(checked) =>
-                  updateSettings({
-                    scientificPdf: {
-                      ...scientificPdf,
-                      preferScientific: checked,
-                    },
-                  })
-                }
-                label="Prefer Scientific when Ready"
-                description="Pre-selects Scientific in the viewer only when the bridge health check succeeds. Never forces offline Scientific."
+                label="Enable PDF bridge"
+                description="Required for PDF Translate. Uses the same provider pool as normal page translation. There is no in-browser Fast PDF path."
               />
               <FieldGroup
                 label="Bridge server URL"
-                description="Default is loopback. Credentials and the full PDF are sent here only for Scientific jobs."
+                description="Default is loopback. Credentials and the full PDF are sent here only for PDF translate jobs."
                 htmlFor="scientific-pdf-server-url"
               >
                 <Input

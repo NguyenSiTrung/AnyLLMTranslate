@@ -59,11 +59,10 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 
 ### 📄 PDF Translation
 
-- **PDF viewer** — opens PDFs in a bundled React app that renders each page on canvas with translated text overlaid at original positions (split or translation-only); download a translated PDF with embedded text via `pdf-lib` + `@pdf-lib/fontkit`
+- **PDF viewer** — opens PDFs in a bundled React app that renders pages on canvas; translation runs via a **local Docker bridge** (not in-browser)
 - **PDF auto-detection** — detects when a tab is rendering a PDF via `document.contentType === 'application/pdf'`, which catches extensionless URLs (e.g. `https://arxiv.org/pdf/2606.20543`) that URL-only heuristics miss
 - **Auto-open translator** — optional setting (`Options → Advanced → PDF Translator`) to open the translator automatically when a PDF tab loads. Off by default; supports per-site opt-out and new-tab vs same-tab open modes
-- **Math/figure-aware extraction** — LLM classifies paragraphs as prose vs figure/table so equations and captions are preserved untranslated
-- **Scientific layout (optional)** — layout-preserving path via a local Docker bridge wrapping [pdf2zh](https://github.com/PDFMathTranslate/PDFMathTranslate) (`services/scientific-pdf-bridge/`). Uses the **same provider pool** per job (no second API key). In-extension setup wizard + **Fast vs Scientific** toggle in the PDF viewer. Offline bridge → Fast still works. See [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)
+- **Layout-preserving (Docker bridge)** — required path via a local bridge wrapping [pdf2zh](https://github.com/PDFMathTranslate/PDFMathTranslate) (`services/scientific-pdf-bridge/`). Uses the **same provider pool** per job (no second API key). In-extension setup wizard. If the bridge is offline, PDF Translate shows **not available** with setup guidance. See [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)
 
 ### ⚙️ Settings & Advanced
 
@@ -349,7 +348,7 @@ The **Custom** theme allows user-defined styling via the theme editor in Options
 
 ## 📄 PDF Translation
 
-PDF translation runs in a bundled React page at `chrome-extension://<id>/pdf-viewer.html?file=<url>`. The viewer renders each page to canvas (left pane) and shows translations side-by-side (right pane); translated text can be downloaded as a new PDF with embedded text.
+PDF translation runs in a bundled React page at `chrome-extension://<id>/pdf-viewer.html?file=<url>`. The viewer renders the original PDF on canvas (left pane) and runs translation only through a **local Docker bridge** (right pane shows bridge status). Jobs produce downloadable mono / dual / side-by-side PDFs.
 
 ### Opening the translator
 
@@ -380,9 +379,11 @@ Safeguards:
 - `file://` PDFs require **Allow access to file URLs** toggled on in `chrome://extensions` (content scripts cannot run on `file://` otherwise).
 - Embedded PDFs (`<embed type="application/pdf">` inside an HTML host page) are not detected — only standalone PDF tabs.
 
-### Scientific layout (optional local bridge)
+### Docker bridge (required for PDF Translate)
 
-For layout-preserving scientific papers, enable **Options → Advanced → Scientific PDF** and complete the in-extension setup wizard. Default bridge: `http://127.0.0.1:17890`.
+PDF Translate requires the local Docker bridge. Enable **Options → Advanced → Scientific PDF**, complete the setup wizard, and leave the bridge running. Default URL: `http://127.0.0.1:17890`.
+
+If the bridge is offline or not configured, the viewer shows **PDF Translate not available** and guides you to set up / connect the bridge. There is no in-browser Fast fallback.
 
 **New users — full guide:** [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)
 
@@ -394,7 +395,7 @@ For layout-preserving scientific papers, enable **Options → Advanced → Scien
 # Then: Options → Advanced → Scientific PDF → Set up… → Check health
 ```
 
-In the PDF viewer, choose **Scientific** (when Ready) and **Translate (Scientific)**. Progress + logs appear in a modal; downloads are manual (mono / dual / side-by-side). Jobs use the **active provider pool** (including maxRpm / concurrency / interval). If the bridge is stopped, **Fast** mode is unchanged.
+When the bridge is **Ready**, click **Translate** in the PDF viewer. Progress + logs appear in a modal; downloads are manual (mono / dual / side-by-side). Jobs use the **active provider pool** (including maxRpm / concurrency / interval).
 
 - Setup guide: [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)  
 - API: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)  

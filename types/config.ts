@@ -348,7 +348,7 @@ export interface PdfSettings {
  * active provider pool at job time; never stored here.
  */
 export interface ScientificPdfSettings {
-  /** Master toggle for Scientific mode UI/entry points (default false). */
+  /** Master toggle for PDF Docker bridge (required for PDF Translate). */
   enabled: boolean;
   /**
    * Bridge base URL (no trailing path). Default loopback:
@@ -356,8 +356,8 @@ export interface ScientificPdfSettings {
    */
   serverUrl: string;
   /**
-   * UI preference only: pre-select Scientific when Ready. Never forces
-   * Scientific when the bridge is offline (fail-open to Fast).
+   * @deprecated PDF Translate is bridge-only; this flag is ignored by the viewer.
+   * Kept for settings migration / backward compatibility.
    */
   preferScientific: boolean;
   /** ISO timestamp when the setup wizard completed successfully (optional). */

@@ -260,14 +260,14 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
           {wizard.step === 'intro' && (
             <div className="space-y-3">
               <p>
-                Scientific mode keeps equations and layout using a{' '}
-                <strong className="text-zinc-100">local</strong> bridge you run with Docker.
+                PDF translation keeps equations and layout using a{' '}
+                <strong className="text-zinc-100">local</strong> Docker bridge (pdf2zh).
                 Your PDF and short-lived API credentials are sent only to the server URL you
                 configure (default: loopback).
               </p>
               <ul className="list-inside list-disc space-y-1 text-xs text-zinc-400">
                 <li>Uses the same provider pool as normal translation (no second API key).</li>
-                <li>Fast (browser) PDF mode stays available if the bridge is offline.</li>
+                <li>PDF Translate is unavailable until this bridge is Ready.</li>
                 <li>Requires Docker Desktop (or Docker Engine) installed by you.</li>
               </ul>
               <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100/90">

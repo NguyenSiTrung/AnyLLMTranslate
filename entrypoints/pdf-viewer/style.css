@@ -340,6 +340,131 @@ html, body, #root {
   white-space: nowrap;
 }
 
+.pdf-viewer-progress-pill--ok {
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(22, 101, 52, 0.25);
+}
+
+.pdf-viewer-progress-pill--warn {
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(120, 53, 15, 0.25);
+}
+
+/* Bridge-only right pane */
+.pdf-bridge-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px 24px;
+  max-width: 420px;
+  margin: 40px auto;
+  color: #d4d4d8;
+}
+
+.pdf-bridge-panel-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(39, 39, 42, 0.8);
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+}
+
+.pdf-bridge-panel-icon--ok {
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(22, 101, 52, 0.2);
+}
+
+.pdf-bridge-panel-icon--warn {
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(120, 53, 15, 0.2);
+}
+
+.pdf-bridge-panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: #fafafa;
+  letter-spacing: -0.02em;
+}
+
+.pdf-bridge-panel-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #a1a1aa;
+}
+
+.pdf-bridge-panel-steps {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #a1a1aa;
+}
+
+.pdf-bridge-panel-steps code {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  color: #e4e4e7;
+}
+
+.pdf-bridge-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pdf-bridge-panel-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #71717a;
+}
+
+.pdf-bridge-panel-hint code {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #18181b;
+  color: #d4d4d8;
+}
+
+.pdf-viewer-banner-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: #fbbf24;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.pdf-viewer-banner-link:hover {
+  color: #fde68a;
+}
+
+.pdf-download-btn-header--muted {
+  opacity: 0.95;
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+
 .pdf-viewer-banner {
   flex-shrink: 0;
   padding: 10px 16px;

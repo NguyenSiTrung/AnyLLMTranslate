@@ -120,7 +120,25 @@ export interface UseScientificPdfJobResult {
   startJob: () => Promise<void>;
   cancel: () => Promise<void>;
   reset: () => void;
-  openResultInViewer: (prefer?: 'dual' | 'mono') => void;
+  /**
+   * Resolve the blob: URL for the preferred result artifact.
+   * Returns null if that artifact is missing.
+   * Does not navigate — the viewer should set this URL as the active PDF.
+   */
+  resolveResultUrl: (prefer?: 'dual' | 'mono') => string | null;
+  /** Preferred mono/dual Blob for adopting into the current viewer. */
+  resolveResultBlob: (prefer?: 'dual' | 'mono') => Blob | null;
+  /**
+   * Load the preferred result into a viewer context.
+   * Returns the blob: URL so the current viewer can adopt it (preferred).
+   * Falls back to opening a new tab only when `openInNewTab` is true.
+   */
+  openResultInViewer: (prefer?: 'dual' | 'mono', opts?: { openInNewTab?: boolean }) => string | null;
+  /**
+   * Clear job progress UI state without revoking mono/dual blob URLs.
+   * Use after adopting a result into the current viewer so the PDF keeps loading.
+   */
+  dismissProgress: () => void;
   /** User-triggered downloads (no auto-download on complete). */
   downloadMono: () => void;
   downloadDual: () => void;
@@ -210,6 +228,12 @@ export function useScientificPdfJob({
             logs: appendLog(p.logs, stamp('Cancelled by user')),
           },
     );
+  }, []);
+
+  const dismissProgress = useCallback(() => {
+    abortRef.current = false;
+    jobIdRef.current = null;
+    setProgress(IDLE);
   }, []);
 
   const reset = useCallback(() => {
@@ -465,20 +489,45 @@ export function useScientificPdfJob({
     });
   }, [pdfUrl, fileName, refreshHealth, reset, push]);
 
-  const openResultInViewer = useCallback((prefer: 'dual' | 'mono' = 'dual') => {
+  const resolveResultUrl = useCallback((prefer: 'dual' | 'mono' = 'dual'): string | null => {
     const url =
       prefer === 'mono'
         ? resultUrlsRef.current.mono ?? resultUrlsRef.current.dual
         : resultUrlsRef.current.dual ?? resultUrlsRef.current.mono;
-    if (!url) return;
-    try {
-      const viewerBase = chrome.runtime.getURL('pdf-viewer.html');
-      const target = `${viewerBase}?file=${encodeURIComponent(url)}`;
-      void chrome.tabs.create({ url: target });
-    } catch {
-      window.open(url, '_blank');
-    }
+    return url ?? null;
   }, []);
+
+  const resolveResultBlob = useCallback((prefer: 'dual' | 'mono' = 'dual'): Blob | null => {
+    const blob =
+      prefer === 'mono'
+        ? monoBlobRef.current ?? dualBlobRef.current
+        : dualBlobRef.current ?? monoBlobRef.current;
+    return blob ?? null;
+  }, []);
+
+  /**
+   * Prefer returning the blob URL for the **current** viewer to adopt.
+   * Opening a new tab with `?file=blob:…` is unreliable: blob URLs are tied to
+   * the creating document lifetime, and a full navigation / new document often
+   * shows a blank viewer. New-tab is opt-in only.
+   */
+  const openResultInViewer = useCallback(
+    (prefer: 'dual' | 'mono' = 'dual', opts?: { openInNewTab?: boolean }): string | null => {
+      const url = resolveResultUrl(prefer);
+      if (!url) return null;
+      if (opts?.openInNewTab) {
+        try {
+          const viewerBase = chrome.runtime.getURL('pdf-viewer.html');
+          const target = `${viewerBase}?file=${encodeURIComponent(url)}`;
+          void chrome.tabs.create({ url: target });
+        } catch {
+          window.open(url, '_blank');
+        }
+      }
+      return url;
+    },
+    [resolveResultUrl],
+  );
 
   const downloadMono = useCallback(() => {
     const blob = monoBlobRef.current;
@@ -536,6 +585,9 @@ export function useScientificPdfJob({
     startJob,
     cancel,
     reset,
+    dismissProgress,
+    resolveResultUrl,
+    resolveResultBlob,
     openResultInViewer,
     downloadMono,
     downloadDual,

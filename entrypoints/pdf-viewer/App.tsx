@@ -1,46 +1,22 @@
 /**
- * PDF Viewer — Side-by-side translation UI with layout overlay.
+ * PDF Viewer — side-by-side original PDF + Docker-bridge translation.
  *
- * Architecture:
- * 1. `usePdfDocument` — loads the PDF via the bundled worker.
- * 2. `useVisiblePages` — tracks which pages are in the viewport (+buffer).
- * 3. `PdfCanvasRenderer` — left pane: renders only visible pages to canvas.
- * 4. `usePdfPageTranslations` — extracts + translates text on viewport visibility.
- * 5. `PdfTranslationPane` — right pane: layout overlay with translated text boxes.
- * 6. `useSynchronizedScroll` — mirrors the left pane's scroll on the right.
+ * PDF translation runs only via the local Scientific Docker bridge (pdf2zh).
+ * The legacy in-browser Fast translate path is no longer offered: when the
+ * bridge is offline or not configured, translate controls show as unavailable
+ * and guide the user to set up / connect the bridge.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Loader2, AlertCircle, FileWarning, Download, FlaskConical } from 'lucide-react';
-import type { PdfViewMode } from '@/lib/constants';
-import { loadSettings } from '@/lib/config';
-import { mergeScientificPdfSettings } from '@/lib/scientificPdf';
-import { loadPdfViewMode, savePdfViewMode } from './lib/pdfViewMode';
+import { Loader2, AlertCircle, FileWarning, FlaskConical, Settings2 } from 'lucide-react';
 import { ViewerLayout } from './components/ViewerLayout';
 import { PdfCanvasRenderer } from './components/PdfCanvasRenderer';
-import { PdfTranslationPane } from './components/PdfTranslationPane';
 import { FilePermissionGuide } from './components/FilePermissionGuide';
+import { BridgeStatusPanel } from './components/BridgeStatusPanel';
 import { usePdfDocument } from './hooks/usePdfDocument';
-import { usePdfPageTranslations } from './hooks/usePdfPageTranslations';
 import { useVisiblePages } from './hooks/useVisiblePages';
-import { usePdfDownload, type DualExportMode } from './hooks/usePdfDownload';
 import { useScientificPdfJob } from './hooks/useScientificPdfJob';
-import {
-  DownloadFormatPicker,
-  DownloadProgressModal,
-} from './components/DownloadProgressModal';
 import { ScientificJobModal } from './components/ScientificJobModal';
-
-/** Fast = in-browser pipeline; Scientific = local pdf2zh bridge. */
-type PdfPipelineMode = 'fast' | 'scientific';
-
-/** Stable sentinel for untranslated pages — avoids creating a new
- *  { paragraphs: new Map(), state: 'idle' } object on every render. */
-const IDLE_PAGE: { paragraphs: Map<string, string>; state: 'idle'; originalParagraphs?: never } = {
-  paragraphs: new Map() as Map<string, string>,
-  state: 'idle' as const,
-};
-
 
 /** Extract a PDF URL from the `?file=` query parameter */
 function getPdfUrlFromQuery(): string | null {
@@ -61,26 +37,46 @@ function isFileScheme(url: string): boolean {
   }
 }
 
+function openOptionsPage(): void {
+  try {
+    void chrome.runtime.openOptionsPage();
+  } catch {
+    window.open(chrome.runtime.getURL('options.html'), '_blank');
+  }
+}
+
 export default function App(): ReactElement {
+  /** Currently displayed PDF (original or a scientific result). */
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<PdfViewMode>('split');
-  const [pipelineMode, setPipelineMode] = useState<PdfPipelineMode>('fast');
+  /**
+   * Original source PDF used for Translate jobs. Kept separate so opening a
+   * result does not make the next job re-translate the already-translated PDF,
+   * and so job reset can revoke result blob URLs without breaking the source.
+   */
+  const [sourcePdfUrl, setSourcePdfUrl] = useState<string | null>(null);
   const [showScientificModal, setShowScientificModal] = useState(false);
-  const rightContainerRef = useRef<HTMLDivElement | null>(null);
+  const [viewingResult, setViewingResult] = useState(false);
   const leftContainerRef = useRef<HTMLDivElement | null>(null);
+  /** Object URLs created when adopting a scientific result into this tab. */
+  const adoptedResultUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setPdfUrl(getPdfUrlFromQuery());
+    const initial = getPdfUrlFromQuery();
+    setPdfUrl(initial);
+    setSourcePdfUrl(initial);
   }, []);
 
+  // Revoke App-owned result object URLs on unmount.
   useEffect(() => {
-    void loadPdfViewMode().then((mode) => setViewMode(mode));
+    return () => {
+      if (adoptedResultUrlRef.current) {
+        URL.revokeObjectURL(adoptedResultUrlRef.current);
+        adoptedResultUrlRef.current = null;
+      }
+    };
   }, []);
 
-  // Register a PDF viewer session on mount so the background service worker
-  // stays alive (via its keep-alive alarm) for the duration of long content-
-  // heavy translation work. Deregister on unmount. Best-effort: a closed tab
-  // is also cleaned up via the background's chrome.tabs.onRemoved listener.
+  // Keep the background SW alive while the viewer tab is open.
   useEffect(() => {
     void chrome.runtime.sendMessage({ action: 'REGISTER_PDF_SESSION' }).catch(() => {
       /* best-effort: SW may be asleep on first call */
@@ -92,120 +88,56 @@ export default function App(): ReactElement {
     };
   }, []);
 
-  const handleViewModeChange = (mode: PdfViewMode): void => {
-    setViewMode(mode);
-    void savePdfViewMode(mode);
-  };
-
-  // Compute viewport visibility FIRST (using the numPages from the previous
-  // render via a ref), so it can feed page-proxy eviction into usePdfDocument.
-  // On first render the ref is 0 and useVisiblePages returns an empty set —
-  // eviction is a no-op until real page slots are observed. After usePdfDocument
-  // runs, the ref is updated for the next render.
-  const visibilityContainerRef =
-    viewMode === 'translation-only' ? rightContainerRef : leftContainerRef;
   const numPagesRef = useRef(0);
   const { visiblePages } = useVisiblePages({
     totalPages: numPagesRef.current,
-    containerRef: visibilityContainerRef,
+    containerRef: leftContainerRef,
   });
 
-  // Page-proxy eviction: pass the visible set so proxies outside the window are
-  // evicted (large-document memory management). Re-entry re-fetches via getPage().
   const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl, {
     visiblePages,
   });
   numPagesRef.current = numPages;
 
-  // Filter to non-null pages for the translation hook (which needs actual PDFPageProxy)
-  const loadedPages = useMemo(
-    () => pages.filter((p): p is NonNullable<typeof p> => p !== null),
-    [pages],
-  );
-
-  const {
-    pages: translations,
-    translatedCount,
-    totalCount,
-    retryPage,
-    scanSession,
-  } = usePdfPageTranslations({
-    pages: loadedPages,
-    numPages,
-    pdfUrl: pdfUrl ?? '',
-    containerRef: rightContainerRef,
-  });
-
-  const {
-    startDownload,
-    cancel: cancelDownload,
-    stage: downloadStage,
-    progress: downloadProgress,
-    message: downloadMessage,
-    error: downloadError,
-    isDownloading,
-    exportMode,
-  } = usePdfDownload({
-    pdfUrl: pdfUrl ?? '',
-    pages: loadedPages,
-    translations,
-  });
-
-  const [showFormatPicker, setShowFormatPicker] = useState(false);
-  const [pendingExportMode, setPendingExportMode] = useState<DualExportMode>('mono');
-
-  const isFile = pdfUrl ? isFileScheme(pdfUrl) : false;
-  const fileName = pdfUrl ? (() => {
-    try {
-      const u = new URL(pdfUrl);
-      return u.pathname.split('/').pop() || u.hostname || 'document.pdf';
-    } catch {
-      return 'document.pdf';
-    }
-  })() : 'document.pdf';
+  const isFile = sourcePdfUrl ? isFileScheme(sourcePdfUrl) : false;
+  const fileName = sourcePdfUrl
+    ? (() => {
+        try {
+          const u = new URL(sourcePdfUrl);
+          return u.pathname.split('/').pop() || u.hostname || 'document.pdf';
+        } catch {
+          return 'document.pdf';
+        }
+      })()
+    : 'document.pdf';
 
   const scientific = useScientificPdfJob({
-    pdfUrl: pdfUrl ?? '',
+    pdfUrl: sourcePdfUrl ?? '',
     fileName,
   });
 
-  // Prefer Scientific only when settings say so AND bridge is Ready (fail-open to Fast).
+  // Probe bridge health on open so Ready / Unavailable is accurate.
   useEffect(() => {
-    if (!pdfUrl) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const settings = await loadSettings();
-        const sci = mergeScientificPdfSettings(settings.scientificPdf);
-        const ok = await scientific.refreshHealth();
-        if (cancelled) return;
-        if (sci.preferScientific && ok) {
-          setPipelineMode('scientific');
-        }
-      } catch {
-        /* keep Fast */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per pdfUrl
-  }, [pdfUrl]);
+    if (!sourcePdfUrl) return;
+    void scientific.refreshHealth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per source document
+  }, [sourcePdfUrl]);
 
-  // Canvas virtualization: only mount PdfCanvasRenderer for pages near viewport.
-  // In translation-only mode there is no left pane; observe the right pane so
-  // overlay canvases still mount/unmount near the viewport. useVisiblePages
-  // selects [data-page-number]; PdfCanvasRenderer tags both panes with that
-  // attribute (left originals and right overlay backgrounds).
+  const bridgeReady = scientific.healthOk === true;
+  const bridgeStatusLabel = bridgeReady
+    ? 'Bridge ready'
+    : scientific.healthOk === null
+      ? 'Checking bridge…'
+      : scientific.bridgeStatus === 'not_configured'
+        ? 'Not configured'
+        : 'Bridge offline';
 
-  // Pre-compute page dimensions for placeholder sizing (cheap — no text extraction)
   const pageDimensions = useMemo(() => {
     const dims = new Map<number, { width: number; height: number }>();
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
-      if (!page) continue; // Skip pages not yet fetched
+      if (!page) continue;
       const viewport = page.getViewport({ scale: 1 });
-      // Scale to fit 720px width (matching PdfCanvasRenderer default)
       const scale = 720 / viewport.width;
       dims.set(i + 1, {
         width: Math.floor(viewport.width * scale),
@@ -215,9 +147,17 @@ export default function App(): ReactElement {
     return dims;
   }, [pages]);
 
-  // Fully-loaded state: render the split / translation-only viewer
+  const startTranslate = (): void => {
+    if (!bridgeReady) {
+      setShowScientificModal(true);
+      return;
+    }
+    setShowScientificModal(true);
+    void scientific.startJob();
+  };
+
   if (loadState === 'loaded' && pdfUrl) {
-    const leftPane = viewMode === 'translation-only' ? null : (
+    const leftPane = (
       <>
         {Array.from({ length: numPages }, (_, idx) => {
           const pageNumber = idx + 1;
@@ -236,203 +176,168 @@ export default function App(): ReactElement {
         })}
       </>
     );
+
     const rightPane = (
+      <BridgeStatusPanel
+        status={scientific.bridgeStatus}
+        healthOk={scientific.healthOk}
+        isRunning={scientific.isRunning}
+        onRefresh={() => void scientific.refreshHealth()}
+        onOpenSetup={openOptionsPage}
+        onTranslate={startTranslate}
+      />
+    );
+
+    return (
       <>
-        {Array.from({ length: numPages }, (_, idx) => {
-          const pageNumber = idx + 1;
-          const translation = translations.get(pageNumber) ?? IDLE_PAGE;
-          const dims = pageDimensions.get(pageNumber);
-          const widthStyle = dims ? `${dims.width}px` : '720px';
-          const page = pages[idx] ?? null;
-          const isVisible = visiblePages.has(pageNumber);
-          return (
-            <div
-              key={`translation-${pageNumber}`}
-              data-page-slot={pageNumber}
-              className="pdf-viewer-page"
-              style={{ width: widthStyle }}
-            >
-              <PdfTranslationPane
-                pageNumber={pageNumber}
-                page={translation}
-                onRetry={retryPage}
-                pdfPage={page}
-                visible={isVisible}
-                dims={dims}
-              />
+        <ViewerLayout
+          title="PDF Translator"
+          subtitle={fileName}
+          viewMode="split"
+          banner={
+            <>
+              <FilePermissionGuide visible={isFile} />
+              {viewingResult && sourcePdfUrl && (
+                <div className="pdf-viewer-scan-banner pdf-viewer-scan-banner--info" role="status">
+                  Showing translated result from the Docker bridge.{' '}
+                  <button
+                    type="button"
+                    className="pdf-viewer-banner-link"
+                    onClick={() => {
+                      if (adoptedResultUrlRef.current) {
+                        URL.revokeObjectURL(adoptedResultUrlRef.current);
+                        adoptedResultUrlRef.current = null;
+                      }
+                      setPdfUrl(sourcePdfUrl);
+                      setViewingResult(false);
+                    }}
+                  >
+                    Back to original
+                  </button>
+                </div>
+              )}
+              {!bridgeReady && scientific.healthOk !== null && (
+                <div className="pdf-viewer-scan-banner" role="status">
+                  PDF Translate is not available until the Docker bridge is connected.{' '}
+                  <button
+                    type="button"
+                    className="pdf-viewer-banner-link"
+                    onClick={openOptionsPage}
+                  >
+                    Set up bridge
+                  </button>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="pdf-viewer-banner-link"
+                    onClick={() => void scientific.refreshHealth()}
+                  >
+                    Check connection
+                  </button>
+                </div>
+              )}
+            </>
+          }
+          left={leftPane}
+          leftPaneRef={leftContainerRef}
+          right={rightPane}
+          headerExtra={
+            <div className="pdf-viewer-header-controls">
+              <div
+                className={`pdf-viewer-progress-pill${
+                  bridgeReady
+                    ? ' pdf-viewer-progress-pill--ok'
+                    : scientific.healthOk === false
+                      ? ' pdf-viewer-progress-pill--warn'
+                      : ''
+                }`}
+                title="Local Docker bridge status for PDF translation"
+              >
+                {bridgeStatusLabel}
+              </div>
+              {bridgeReady ? (
+                <button
+                  type="button"
+                  className="pdf-download-btn-header"
+                  onClick={startTranslate}
+                  disabled={scientific.isRunning || !pdfUrl}
+                  title="Run layout-preserving translation via local Docker bridge"
+                >
+                  <FlaskConical size={14} />
+                  Translate
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="pdf-download-btn-header pdf-download-btn-header--muted"
+                  onClick={openOptionsPage}
+                  title="PDF Translate requires the Docker bridge — open setup"
+                >
+                  <Settings2 size={14} />
+                  Set up bridge
+                </button>
+              )}
             </div>
-          );
-        })}
+          }
+        />
+        {(showScientificModal ||
+          scientific.isRunning ||
+          scientific.progress.stage === 'done' ||
+          scientific.progress.stage === 'error') && (
+          <ScientificJobModal
+            progress={
+              !bridgeReady &&
+              scientific.progress.stage === 'idle' &&
+              showScientificModal
+                ? {
+                    ...scientific.progress,
+                    stage: 'error',
+                    error:
+                      'PDF Translate is not available. Connect the local Docker bridge first.',
+                    errorCode: 'offline',
+                    message: 'Bridge not ready',
+                  }
+                : scientific.progress
+            }
+            onCancel={() => void scientific.cancel()}
+            onClose={() => {
+              setShowScientificModal(false);
+              // Soft dismiss: keep mono/dual blob URLs alive so a previously
+              // adopted "Open in viewer" result (or a re-open) still works.
+              // Full revoke happens on the next startJob() via reset().
+              scientific.dismissProgress();
+            }}
+            onRetry={() => {
+              setShowScientificModal(true);
+              void scientific.startJob();
+            }}
+            onOpenResult={(prefer) => {
+              // Load the result into *this* viewer. Opening a new tab with
+              // ?file=blob:… is unreliable (blank page). Own a fresh object URL
+              // so job reset() can revoke the hook's URLs without blanking us.
+              const blob = scientific.resolveResultBlob(prefer);
+              if (!blob) return;
+              if (adoptedResultUrlRef.current) {
+                URL.revokeObjectURL(adoptedResultUrlRef.current);
+              }
+              const localUrl = URL.createObjectURL(blob);
+              adoptedResultUrlRef.current = localUrl;
+              setPdfUrl(localUrl);
+              setViewingResult(true);
+              setShowScientificModal(false);
+              scientific.dismissProgress();
+            }}
+            onDownloadMono={() => scientific.downloadMono()}
+            onDownloadDual={() => scientific.downloadDual()}
+            onDownloadSideBySide={() => void scientific.downloadSideBySide()}
+            onOpenSetup={() => {
+              setShowScientificModal(false);
+              openOptionsPage();
+            }}
+          />
+        )}
       </>
     );
-    return (<>
-      <ViewerLayout
-        title="PDF Translator"
-        subtitle={fileName}
-        viewMode={viewMode}
-        banner={
-          <>
-            <FilePermissionGuide visible={isFile} />
-            {scanSession.message && (
-              <div className="pdf-viewer-scan-banner" role="status">
-                {scanSession.message}
-              </div>
-            )}
-            {scanSession.ocrWorkaround && !scanSession.pureScanBlocked && (
-              <div className="pdf-viewer-scan-banner pdf-viewer-scan-banner--info" role="status">
-                Scanned PDF detected — OCR workaround enabled (white underlay + forced text overlay).
-              </div>
-            )}
-          </>
-        }
-        left={leftPane}
-        leftPaneRef={leftContainerRef}
-        right={
-          <div ref={rightContainerRef}>
-            {rightPane}
-          </div>
-        }
-        headerExtra={
-          <div className="pdf-viewer-header-controls">
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="Translation pipeline (Fast or Scientific)">
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${pipelineMode === 'fast' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => setPipelineMode('fast')}
-                aria-pressed={pipelineMode === 'fast'}
-                title="Fast: in-browser PDF.js translation (always available)."
-              >
-                Fast
-              </button>
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${pipelineMode === 'scientific' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => {
-                  if (scientific.bridgeStatus !== 'ready' && scientific.healthOk !== true) {
-                    void scientific.refreshHealth().then((ok) => {
-                      if (ok) setPipelineMode('scientific');
-                      else setShowScientificModal(true);
-                    });
-                    return;
-                  }
-                  setPipelineMode('scientific');
-                }}
-                aria-pressed={pipelineMode === 'scientific'}
-                title={
-                  scientific.healthOk === true
-                    ? 'Scientific: layout-preserving translation via local Docker bridge.'
-                    : 'Scientific bridge offline — click to check or set up.'
-                }
-              >
-                <FlaskConical size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                Scientific
-              </button>
-            </div>
-            <div className="pdf-viewer-toggle-group" role="group" aria-label="PDF view mode (split, translation only)">
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${viewMode === 'split' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => handleViewModeChange('split')}
-                aria-pressed={viewMode === 'split'}
-                title="Split: show the original PDF on the left and the translation on the right, scroll-synced."
-              >
-                Split
-              </button>
-              <button
-                type="button"
-                className={`pdf-viewer-toggle-btn ${viewMode === 'translation-only' ? 'pdf-viewer-toggle-btn--active' : ''}`}
-                onClick={() => handleViewModeChange('translation-only')}
-                aria-pressed={viewMode === 'translation-only'}
-                title="Translation only: hide the original PDF pane and show the translation full-width."
-              >
-                Translation
-              </button>
-            </div>
-            <div className="pdf-viewer-progress-pill">
-              {pipelineMode === 'scientific'
-                ? scientific.healthOk === true
-                  ? 'Scientific ready'
-                  : 'Scientific offline'
-                : `${translatedCount} / ${totalCount} pages translated`}
-            </div>
-            {pipelineMode === 'scientific' ? (
-              <button
-                type="button"
-                className="pdf-download-btn-header"
-                onClick={() => {
-                  setShowScientificModal(true);
-                  void scientific.startJob();
-                }}
-                disabled={scientific.isRunning || !pdfUrl}
-                title="Run layout-preserving Scientific translation via local bridge"
-              >
-                <FlaskConical size={14} />
-                Translate (Scientific)
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="pdf-download-btn-header"
-                onClick={() => setShowFormatPicker(true)}
-                disabled={translatedCount === 0 || isDownloading}
-                title="Download translated or dual bilingual PDF"
-              >
-                <Download size={14} />
-                Download
-              </button>
-            )}
-          </div>
-        }
-      />
-      {showFormatPicker && !isDownloading && (
-        <DownloadFormatPicker
-          value={pendingExportMode}
-          onChange={setPendingExportMode}
-          onCancel={() => setShowFormatPicker(false)}
-          onConfirm={() => {
-            setShowFormatPicker(false);
-            startDownload(pendingExportMode);
-          }}
-        />
-      )}
-      {isDownloading && (
-        <DownloadProgressModal
-          stage={downloadStage}
-          progress={downloadProgress}
-          message={downloadMessage}
-          error={downloadError}
-          exportMode={exportMode}
-          onCancel={cancelDownload}
-          onRetry={() => startDownload(exportMode)}
-        />
-      )}
-      {(showScientificModal || scientific.isRunning || scientific.progress.stage === 'done' || scientific.progress.stage === 'error') && (
-        <ScientificJobModal
-          progress={scientific.progress}
-          onCancel={() => void scientific.cancel()}
-          onClose={() => {
-            setShowScientificModal(false);
-            scientific.reset();
-          }}
-          onRetry={() => {
-            setShowScientificModal(true);
-            void scientific.startJob();
-          }}
-          onOpenResult={(prefer) => scientific.openResultInViewer(prefer)}
-          onDownloadMono={() => scientific.downloadMono()}
-          onDownloadDual={() => scientific.downloadDual()}
-          onDownloadSideBySide={() => void scientific.downloadSideBySide()}
-          onOpenSetup={() => {
-            setShowScientificModal(false);
-            try {
-              void chrome.runtime.openOptionsPage();
-            } catch {
-              window.open(chrome.runtime.getURL('options.html'), '_blank');
-            }
-          }}
-        />
-      )}
-    </>);
   }
 
   // Non-loaded states render in a single centered column
@@ -465,7 +370,6 @@ export default function App(): ReactElement {
         </div>
       );
     }
-    // loadState === 'error'
     return (
       <div className="pdf-viewer-empty-state pdf-viewer-empty-state--error">
         <AlertCircle size={36} />
@@ -473,7 +377,8 @@ export default function App(): ReactElement {
         <p>{error ?? 'Unknown error'}</p>
         {isFile && (
           <p className="pdf-viewer-empty-state-hint">
-            For local files, make sure you enabled &quot;Allow access to file URLs&quot; in the extension settings.
+            For local files, make sure you enabled &quot;Allow access to file URLs&quot; in the
+            extension settings.
           </p>
         )}
       </div>
@@ -488,9 +393,7 @@ export default function App(): ReactElement {
           {pdfUrl && <p className="pdf-viewer-subtitle">{fileName}</p>}
         </div>
       </header>
-      <main className="pdf-viewer-main pdf-viewer-main--single">
-        {body}
-      </main>
+      <main className="pdf-viewer-main pdf-viewer-main--single">{body}</main>
     </div>
   );
 }

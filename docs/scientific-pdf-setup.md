@@ -1,7 +1,7 @@
 # Scientific PDF bridge — setup guide (for new users)
 
-Optional **layout-preserving** PDF translation via a local Docker bridge (pdf2zh).  
-The browser extension (Fast PDF) works **without** this. Scientific mode needs Docker.
+**Required** for PDF Translate: layout-preserving translation via a local Docker bridge (pdf2zh).  
+If the bridge is offline or not set up, the PDF viewer shows **not available** and guides you here. There is no in-browser Fast fallback.
 
 **Default URL:** `http://127.0.0.1:17890`  
 **Port:** `17890`
@@ -67,7 +67,7 @@ Then in the extension:
 
 1. **Options → Advanced → Scientific PDF → Set up…**
 2. Click **Check health** / finish the wizard
-3. Open a PDF in the built-in viewer → **Scientific** → **Translate (Scientific)**
+3. Open a PDF in the built-in viewer → wait for **Bridge ready** → **Translate**
 
 ### Manual compose (equivalent)
 
