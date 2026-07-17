@@ -9,6 +9,11 @@
  *   pages and degrades cache reuse across pages.
  * - Paragraphs are the natural unit of LLM translation (matches the rest of
  *   the extension's translation pipeline).
+ *
+ * Run-level model (BabelDOC-inspired):
+ * - Each PDF.js text item becomes a `PdfTextRun` with font/size/geometry.
+ * - Paragraphs still expose aggregated `text` + bbox for backward compatibility;
+ *   optional `runs` enables multi-signal formula detection and placeholders.
  */
 
 import type { PDFPageProxy } from 'pdfjs-dist';
@@ -16,6 +21,24 @@ import type { PDFPageProxy } from 'pdfjs-dist';
 // from the package root. Importing via the deep path is the only stable way to
 // reach it in pdfjs-dist v4+.
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
+
+/** A single text run with font/geometry (one PDF.js text item after filter). */
+export interface PdfTextRun {
+  /** Raw run text (as extracted; join spaces live only on paragraph.text). */
+  text: string;
+  /** PDF.js converted font name (may be empty if sparse). */
+  fontName: string;
+  /** Font size / glyph height in PDF space. */
+  fontSize: number;
+  /** X coordinate (left) in PDF space. */
+  x: number;
+  /** Y coordinate (baseline / bottom of transform) in PDF space. */
+  y: number;
+  /** Width in PDF space. */
+  width: number;
+  /** Height in PDF space. */
+  height: number;
+}
 
 /** A single extracted paragraph (one LLM translation unit). */
 export interface PdfParagraph {
@@ -35,6 +58,11 @@ export interface PdfParagraph {
   width: number;
   /** Height in PDF space. */
   height: number;
+  /**
+   * Ordered text runs that compose this paragraph (optional for callers that
+   * only need aggregated text; always populated by `extractPageText`).
+   */
+  runs?: PdfTextRun[];
 }
 
 /** Result of extracting text from one page. */
@@ -43,6 +71,18 @@ export interface PdfPageText {
   pageNumber: number;
   /** Paragraphs in reading order (top-to-bottom, left-to-right). */
   paragraphs: PdfParagraph[];
+}
+
+/**
+ * Minimal item shape used by pure grouping (subset of PDF.js TextItem).
+ * Exported for unit tests that do not need a full PDFPageProxy.
+ */
+export interface PdfTextItemLike {
+  str: string;
+  transform: number[];
+  width: number;
+  height: number;
+  fontName?: string;
 }
 
 /**
@@ -59,7 +99,31 @@ export interface PdfPageText {
 const Y_TOLERANCE = 1.5; // PDF units
 const LINE_GAP_FACTOR = 1.6;
 
-function groupIntoLines(items: TextItem[]): Array<{ text: string; y: number; height: number; x: number; xEnd: number }> {
+interface LineWithRuns {
+  text: string;
+  y: number;
+  height: number;
+  x: number;
+  xEnd: number;
+  runs: PdfTextRun[];
+}
+
+function itemToRun(item: PdfTextItemLike): PdfTextRun {
+  const y = item.transform[5];
+  const height = item.height || Math.abs(item.transform[3]) || 10;
+  const x = item.transform[4];
+  return {
+    text: item.str,
+    fontName: item.fontName ?? '',
+    fontSize: height,
+    x,
+    y,
+    width: item.width,
+    height,
+  };
+}
+
+function groupIntoLines(items: PdfTextItemLike[]): LineWithRuns[] {
   if (items.length === 0) return [];
 
   // Sort by y descending (PDF y axis is bottom-up)
@@ -70,8 +134,8 @@ function groupIntoLines(items: TextItem[]): Array<{ text: string; y: number; hei
     return a.transform[4] - b.transform[4];
   });
 
-  const lines: Array<{ text: string; y: number; height: number; x: number; xEnd: number }> = [];
-  let current: typeof lines[number] | null = null;
+  const lines: LineWithRuns[] = [];
+  let current: LineWithRuns | null = null;
 
   for (const item of sorted) {
     const y = item.transform[5];
@@ -79,6 +143,7 @@ function groupIntoLines(items: TextItem[]): Array<{ text: string; y: number; hei
     const x = item.transform[4];
     const xEnd = x + item.width;
     const text = item.str;
+    const run = itemToRun(item);
 
     if (current && Math.abs(current.y - y) <= Y_TOLERANCE) {
       // Same line — append a space when items do not visually touch
@@ -89,8 +154,16 @@ function groupIntoLines(items: TextItem[]): Array<{ text: string; y: number; hei
       current.text += text;
       current.xEnd = Math.max(current.xEnd, xEnd);
       current.height = Math.max(current.height, height);
+      current.runs.push(run);
     } else {
-      current = { text: text.trim(), y, height, x, xEnd };
+      current = {
+        text: text.trim(),
+        y,
+        height,
+        x,
+        xEnd,
+        runs: [run],
+      };
       lines.push(current);
     }
   }
@@ -98,10 +171,7 @@ function groupIntoLines(items: TextItem[]): Array<{ text: string; y: number; hei
   return lines;
 }
 
-function groupLinesIntoParagraphs(
-  lines: Array<{ text: string; y: number; height: number; x: number; xEnd: number }>,
-  pageNumber: number,
-): PdfParagraph[] {
+function groupLinesIntoParagraphs(lines: LineWithRuns[], pageNumber: number): PdfParagraph[] {
   if (lines.length === 0) return [];
 
   // Compute the median line height to use as the "normal" size
@@ -119,6 +189,7 @@ function groupLinesIntoParagraphs(
     xMax: number;
     yMin: number;
     yMax: number;
+    runs: PdfTextRun[];
   } | null = null;
   let lastY: number | null = null;
 
@@ -136,6 +207,7 @@ function groupLinesIntoParagraphs(
         y: current.yMax,
         width: current.xMax - current.xMin,
         height: current.yMax - current.yMin,
+        runs: current.runs,
       });
     }
     current = null;
@@ -157,6 +229,7 @@ function groupLinesIntoParagraphs(
         xMax: line.xEnd,
         yMin: line.y,
         yMax: line.y + line.height,
+        runs: [...line.runs],
       };
       lastY = line.y;
       continue;
@@ -164,7 +237,7 @@ function groupLinesIntoParagraphs(
 
     const verticalGap = (lastY ?? line.y) - line.y; // top-to-bottom is decreasing y
     const sameLineGap = verticalGap <= 0;
-    const paraBreakGap = verticalGap > LINE_GAP_FACTOR * current.totalHeight / current.samples;
+    const paraBreakGap = verticalGap > (LINE_GAP_FACTOR * current.totalHeight) / current.samples;
 
     if (paraBreakGap) {
       flush();
@@ -177,6 +250,7 @@ function groupLinesIntoParagraphs(
         xMax: line.xEnd,
         yMin: line.y,
         yMax: line.y + line.height,
+        runs: [...line.runs],
       };
       lastY = line.y;
     } else {
@@ -192,6 +266,7 @@ function groupLinesIntoParagraphs(
         current.totalHeight += line.height;
         current.samples += 1;
       }
+      current.runs.push(...line.runs);
       current.xMin = Math.min(current.xMin, line.x);
       current.xMax = Math.max(current.xMax, line.xEnd);
       current.yMin = Math.min(current.yMin, line.y);
@@ -205,6 +280,18 @@ function groupLinesIntoParagraphs(
 }
 
 /**
+ * Pure paragraph grouping from PDF.js-like text items (no page proxy).
+ * Used by unit tests and by `extractPageText` after filtering.
+ */
+export function paragraphsFromTextItems(
+  items: PdfTextItemLike[],
+  pageNumber: number,
+): PdfParagraph[] {
+  const lines = groupIntoLines(items);
+  return groupLinesIntoParagraphs(lines, pageNumber);
+}
+
+/**
  * Extract paragraphs of text from a single PDF page.
  * Returns an empty array if the page has no extractable text (e.g. scanned PDF).
  */
@@ -215,20 +302,18 @@ export async function extractPageText(page: PDFPageProxy, pageNumber: number): P
   // non-zero b/c values in its transform matrix [a, b, c, d, e, f]. Including
   // it produces overlay boxes at wrong coordinates that mask headings and
   // other horizontal content.
-  const items = content.items.filter(
-    (item): item is TextItem => {
-      if (!('str' in item)) return false;
-      const ti = item as TextItem;
-      if (typeof ti.str !== 'string' || ti.str.trim().length === 0) return false;
-      // Reject rotated text: for horizontal text a≠0, d≠0 and b≈0, c≈0.
-      // Rotated text has significant b or c components.
-      const [a, b, c, d] = ti.transform;
-      const isRotated = (Math.abs(b) > 0.1 || Math.abs(c) > 0.1) && (Math.abs(a) < 0.1 || Math.abs(d) < 0.1);
-      return !isRotated;
-    },
-  );
-  const lines = groupIntoLines(items);
-  const paragraphs = groupLinesIntoParagraphs(lines, pageNumber);
+  const items = content.items.filter((item): item is TextItem => {
+    if (!('str' in item)) return false;
+    const ti = item as TextItem;
+    if (typeof ti.str !== 'string' || ti.str.trim().length === 0) return false;
+    // Reject rotated text: for horizontal text a≠0, d≠0 and b≈0, c≈0.
+    // Rotated text has significant b or c components.
+    const [a, b, c, d] = ti.transform;
+    const isRotated =
+      (Math.abs(b) > 0.1 || Math.abs(c) > 0.1) && (Math.abs(a) < 0.1 || Math.abs(d) < 0.1);
+    return !isRotated;
+  });
+  const paragraphs = paragraphsFromTextItems(items, pageNumber);
   return { pageNumber, paragraphs };
 }
 

@@ -1,0 +1,30 @@
+{
+  "track_id": "pdf-composition_20260717",
+  "type": "feature",
+  "status": "new",
+  "priority": "high",
+  "depends_on": [],
+  "estimated_hours": 24,
+  "created_at": "2026-07-17T04:17:09Z",
+  "updated_at": "2026-07-17T04:17:09Z",
+  "description": "BabelDOC-inspired PDF composition pipeline: run-level extraction, multi-signal formulas, placeholders+reinsert, table regions with opt-in translate, multi-column order, selective mask, power-user PDF card",
+  "beads_epic": "AnyLLMTranslate-dcb",
+  "beads_tasks": {
+    "phase1": "AnyLLMTranslate-dcb.1",
+    "phase1_task1": "AnyLLMTranslate-dcb.1.1",
+    "phase2": "AnyLLMTranslate-dcb.2",
+    "phase2_task1": "AnyLLMTranslate-dcb.2.1",
+    "phase3": "AnyLLMTranslate-dcb.3",
+    "phase3_task1": "AnyLLMTranslate-dcb.3.1",
+    "phase4": "AnyLLMTranslate-dcb.4",
+    "phase4_task1": "AnyLLMTranslate-dcb.4.1",
+    "phase5": "AnyLLMTranslate-dcb.5",
+    "phase5_task1": "AnyLLMTranslate-dcb.5.1",
+    "phase6": "AnyLLMTranslate-dcb.6",
+    "phase6_task1": "AnyLLMTranslate-dcb.6.1",
+    "phase7": "AnyLLMTranslate-dcb.7",
+    "phase7_task1": "AnyLLMTranslate-dcb.7.1",
+    "phase8": "AnyLLMTranslate-dcb.8",
+    "phase8_task1": "AnyLLMTranslate-dcb.8.1"
+  }
+}
