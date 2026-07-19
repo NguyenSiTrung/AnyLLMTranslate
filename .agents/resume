@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Orb resume — runs every time an existing orb wakes from pause, before Amp
+# continues. Fast and idempotent: no installs, no slow steps. Must finish
+# within ~10 seconds.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Dependencies should already be installed from setup (snapshot persists).
+if [[ ! -d node_modules ]]; then
+  echo "warn: node_modules missing — run .agents/setup to install" >&2
+fi
+
+# Confirm the Node toolchain is still on PATH.
+if ! command -v node >/dev/null 2>&1; then
+  echo "warn: node not on PATH" >&2
+  exit 1
+fi
+
+echo "resume ok: node $(node --version), pnpm $(pnpm --version 2>/dev/null || echo '?')"
