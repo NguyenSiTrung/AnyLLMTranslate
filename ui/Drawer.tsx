@@ -27,13 +27,15 @@ export function Drawer({
 }: DrawerProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === 'Tab' && dialogRef.current) {
@@ -54,9 +56,16 @@ export function Drawer({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    closeRef.current?.focus();
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [open]);
+
+  // Initial focus only when the drawer opens. Do not re-run when the parent
+  // re-creates `onClose` (pool status polls ~3s, cooldown ticks, store writes)
+  // or typing in fields will lose focus after a few seconds.
+  useEffect(() => {
+    if (!open) return;
+    closeRef.current?.focus();
+  }, [open]);
 
   if (!open) return null;
 

@@ -32,12 +32,14 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   // Focus trap & Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (e.key === 'Tab' && dialogRef.current) {
@@ -57,14 +59,20 @@ export function Modal({
     };
 
     document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Initial focus once on mount / when variant changes. Do not depend on
+  // onCancel identity — parent re-renders must not steal focus from inputs
+  // inside custom modal bodies (e.g. GuidedAddProvider search field).
+  useEffect(() => {
     // L1: For danger variant, focus Cancel (safer default); for info, focus Confirm
     if (variant === 'danger') {
       cancelRef.current?.focus();
     } else {
       confirmRef.current?.focus();
     }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onCancel, variant]);
+  }, [variant]);
 
   const IconComp = variant === 'danger' ? AlertTriangle : Info;
   const iconColor = variant === 'danger' ? 'text-rose-400' : 'text-blue-400';

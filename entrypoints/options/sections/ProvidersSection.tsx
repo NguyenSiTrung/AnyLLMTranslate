@@ -91,6 +91,11 @@ export function ProvidersSection({
     [],
   );
 
+  const closeEdit = useCallback(() => {
+    setEditingProviderId(null);
+    setFocusKeyId(null);
+  }, []);
+
   const handleCatalogSelect = useCallback(
     (providerId: string, selection: { patch: Partial<ProviderConfig> }) => {
       updateProviderFields(providerId, {
@@ -190,10 +195,7 @@ export function ProvidersSection({
         focusKeyId={focusKeyId}
         targetLanguage={targetLanguage}
         liveByKeyId={statuses}
-        onClose={() => {
-          setEditingProviderId(null);
-          setFocusKeyId(null);
-        }}
+        onClose={closeEdit}
         onUpdateProvider={(patch) => {
           if (editingProviderId) updateProviderFields(editingProviderId, patch);
         }}
