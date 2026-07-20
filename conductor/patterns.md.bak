@@ -1,7 +1,18 @@
-<!-- conductor-refresh: 2026-07-17 all (scientific-pdf patterns extended; 995 TCs / 3 fail; Beads zg4 + 7uk; s3t closed; 70 archived + 1 complete active) -->
+<!-- conductor-refresh: 2026-07-20 all (seek/session patterns; eslint test overrides; 572 TCs / 0 fail; lint 0; tsc 6; 71 archived / 0 active; Beads 7uk open, zg4 closed) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Subtitle session lifecycle (from: a656c3b seek stale-chunk fix, 2026-07-20)
+- Progressive subtitle sessions need a hard **`cancelled` flag** on the background queue object — clearing `queue.length` alone still lets an in-flight `translateChunk` finish and emit `SUBTITLE_CHUNK_TRANSLATED`.
+- After seek / SPA reset, set `activeSubtitleSessionId = null` and **drop any chunk that still carries a `sessionId`** (do not adopt id while active is null — that re-applies pre-seek cues onto a cleared overlay).
+- Manifest activation should **pre-allocate** a content-owned session id before `translateSubtitle` so progressive chunks and the first response share one identity.
+- Background tests that drive multi-chunk subtitle work must **cancel/drain sessions in `beforeEach`**, use **unique cue text prefixes**, and **filter fetch bodies** by that prefix — shared `"Line N"` strings + leftover sessions poison the next test's body index.
+- Parallel web sub-batch concurrency tests need explicit pool key throttle: `concurrencyLimit: 0`, `interval: 0`, and `safeKeyThrottleMigrated: true` — defaults (`concurrencyLimit: 1` + migration upgrade of 0→1) serialize LLM calls and fail `maxConcurrent >= 2`.
+
+## ESLint / quality gates (from: a656c3b, 2026-07-20)
+- Keep production strict (`no-non-null-assertion`, `no-dynamic-delete`); in `eslint.config.mjs` scope overrides to `**/__tests__/**`, `**/*.test.*`, `tests/**` so test helpers can use `!` after expects and delete mock storage keys.
+- Prefer top-level `import type` over inline `import('…').Type` annotations (`@typescript-eslint/consistent-type-imports`).
 
 ## Scientific PDF bridge (from: scientific-pdf-backend_20260717, 2026-07-17)
 - Scientific / PDF Translate is an optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
@@ -453,7 +464,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - **When the spec/plan and a revisions.md disagree, revisions.md wins:** Always check for a `revisions.md` in the track folder before implementing against the original spec.md — an earlier session may have logged an authoritative design change. Implementing the superseded spec literally wastes a full cycle. (from: pdf-elastic-overlay_20260616, archived 2026-06-16)
 
 ## PDF Download (2026-06-18)
-- **`pdf-lib` fontBytes optional with dynamic `@pdf-lib/fontkit` import** — falls back to Helvetica when no custom font is provided, avoiding WASM bundling when unused. Use dynamic `import('@pdf-lib/fontkit')` to keep the main bundle lean. (from: pdf-download_20260618, archived 2026-06-18)
+- **`pdf-lib` dual export uses Helvetica fallback** — `@pdf-lib/fontkit` was removed from package dependencies after the Fast PDF path deletion (`1dd8771`); keep export path working without custom TTF embedding unless fontkit is re-added intentionally. (from: pdf-download_20260618; updated 2026-07-20 refresh)
 - **`pdf-lib` `embedPdf()` requires pages with Content streams** — `doc.addPage()` creates pages without a Contents stream; draw at least one element (even invisible) before embedding in tests. (from: pdf-download_20260618, archived 2026-06-18)
 - **Font caching via `idb-keyval` with versioned key** — cache key `'pdf-font:noto-sans:v1'` allows cache-busting on font version changes. Handle both `Uint8Array` and `ArrayBuffer` from IndexedDB. (from: pdf-download_20260618, archived 2026-06-18)
 - **`vi.stubGlobal()` returns previous value, not the spy** — create `vi.fn()` separately and pass to `stubGlobal` to assert on the mock. (from: pdf-download_20260618, archived 2026-06-18)
@@ -743,4 +754,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-17 (post scientific-pdf complete; bridge-only PDF; 995 TCs)
+Last refreshed: 2026-07-20 (seek/session patterns; suite 572/0 fail; lint 0; scientific archived; zg4 closed)

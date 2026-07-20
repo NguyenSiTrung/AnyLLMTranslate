@@ -1,44 +1,43 @@
 {
-  "lastRefresh": "2026-07-17T18:42:39+07:00",
+  "lastRefresh": "2026-07-20T10:11:05+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 11:45 refresh: scientific-pdf-backend full implement + ship gate; pdf-babeldoc-parity archived; PDF bilingual/text modes removed (cd00b50); PDF math/tofu hardening; scientific job modal UX redesign; docker lifecycle scripts; Node engines pin; bridge throttle honor.",
-    "product.md: refresh marker; PDF Key Features rewritten (bridge-only translate; split|translation-only only; composition retained as helpers); Completed: babeldoc-parity, s3t mode removal, math hardening, scientific-pdf backend; Current State → 995 TCs / 157 files / 992 pass + 3 fail / tsc 10 / lint 126 / build ~3.5 MB / 70 archived / 1 complete active / Beads 2 open.",
-    "tech-stack.md: Node engines ≥20.12.0; Scientific PDF Docker bridge architecture decision; build ~3.5 MB; npm deps/scripts unchanged.",
-    "patterns.md: extended Scientific PDF section (base64, error codes, settingsStore keys, unstub gotcha, MOCK_TRANSLATE, pool throttle, docker scripts, job modal formats).",
-    "tracks.md: refresh marker; scientific track noted complete + ready-to-archive; metadata.json status new→completed.",
+    "Scope: full refresh. Intervening work since 2026-07-17: scientific-pdf-backend archived; legacy Fast PDF path removed; test suite consolidate ~995→572; orb setup/resume scripts; seek stale-chunk fix + lint green (a656c3b).",
+    "product.md: refresh marker; PDF fontkit wording; scientific marked Archived; Completed bullets for Fast-path removal, suite consolidate, orb scripts, seek fix; Current State → 572 TCs / 147 files / 0 fail / tsc 6 / lint 0 / build ~3.5 MB / 71 archived / 0 active / Beads 1 open (7uk); zg4 closed.",
+    "tech-stack.md: removed @pdf-lib/fontkit dependency row; quality-gates snapshot line; refresh marker.",
+    "patterns.md: elevated subtitle session lifecycle + ESLint test-override patterns; fontkit pattern updated for dep removal; refresh marker + last refreshed footer.",
+    "tracks.md: refresh marker only (already 71 archived / 0 active).",
     "workflow.md: no content drift (not rewritten).",
-    "learnings consolidation: scientific-pdf learnings elevated into patterns.md; babeldoc/composition already elevated at archive.",
-    "beads DRIFT sync B (Conductor→Beads): closed AnyLLMTranslate-s3t (code already shipped). Left open zg4 + 7uk. 0 in_progress; 287 total / 285 closed / 2 open. Unfiled suite fails: parallel batches + bidirectional context.",
-    "backups: product.md.bak, tech-stack.md.bak, tracks.md.bak, patterns.md.bak, refresh_state.json.bak.",
-    "verification: vitest 992/995 pass (3 fail); tsc 10 errors; eslint 126 errors; build output ~3.5 MB."
+    "learnings consolidation: seek/session + test isolation + eslint overrides elevated into patterns.md.",
+    "beads DRIFT sync B (Conductor→Beads): closed AnyLLMTranslate-zg4 (fixed in a656c3b). Left open AnyLLMTranslate-7uk (PDF empty-page OCR, P3).",
+    "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, refresh_state.json.bak.",
+    "verification: vitest 572/572 pass; tsc 6 errors; eslint 0; build output ~3.5 MB."
   ],
   "codebaseHealth": {
-    "tests": 995,
-    "testsPassing": 992,
-    "testsFailing": 3,
-    "testFiles": 157,
+    "tests": 572,
+    "testsPassing": 572,
+    "testsFailing": 0,
+    "testFiles": 147,
     "buildSize": "~3.5 MB",
-    "lintErrors": 126,
-    "lintErrorsDetail": "Mostly no-non-null-assertion in tests; unused vars; no-dynamic-delete in stats tests; no-useless-assignment in openaiCompatible.ts.",
-    "tscErrors": 10,
-    "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority; pdfTermExtract/translatedPdfGenerator typesetting PdfParagraph pageNumber/kind fixtures (4).",
-    "archivedTracks": 70,
-    "activeTracks": 1,
-    "activeTracksDetail": "scientific-pdf-backend_20260717 complete [x] ready-to-archive",
-    "failingTests": [
-      "tests/unit/subtitleCoordinatorManifest.test.ts > drops stale background chunks after a seek cancels the active subtitle session",
-      "services/__tests__/background.translate.test.ts > handleTranslate — parallel sub-batches > issues ≥2 concurrent LLM calls when multiple batches exist",
-      "services/__tests__/background.test.ts > handleMessage — translateSubtitle > provides bidirectional context for chunks 1+ (preceding + following)"
-    ],
-    "flakyTests": "second sample run briefly showed +2 subtitle cache/retry failures; not filed",
+    "lintErrors": 0,
+    "lintErrorsDetail": "Clean. Production remains strict; tests override no-non-null-assertion and no-dynamic-delete in eslint.config.mjs.",
+    "tscErrors": 6,
+    "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority.",
+    "archivedTracks": 71,
+    "activeTracks": 0,
+    "activeTracksDetail": "None — all tracks archived as of 2026-07-17 (confirmed 2026-07-20).",
+    "failingTests": [],
     "shippedSinceLastRefresh": [
-      "Scientific PDF Backend (pdf2zh Docker bridge) — full 6-phase track complete",
-      "BabelDOC-parity PDF pipeline archived",
-      "PDF bilingual/text modes removed (bridge-only + split|translation-only)",
-      "Scientific job modal UX redesign",
-      "Docker lifecycle helper scripts + pool throttle on bridge"
+      "Scientific PDF Backend archived (99eee8f)",
+      "Legacy in-browser Fast PDF path removed (1dd8771)",
+      "Test suite consolidate multi-assert merges (a032c66) → 572 TCs",
+      "Orb .agents/setup + .agents/resume (f84724b)",
+      "Stale subtitle chunk after seek + lint/test green (a656c3b)"
     ]
   },
-  "beadsDrift": "Sync B: closed s3t (bilingual/text removal already in tree). Open remain zg4 (suite fail) + 7uk (OCR backlog). Epic 17v already closed matching plan. 287 total / 285 closed / 2 open / 0 in_progress. Unfiled: parallel-batch concurrency + bidirectional subtitle context."
+  "beads": {
+    "open": ["AnyLLMTranslate-7uk"],
+    "closedThisRefresh": ["AnyLLMTranslate-zg4"],
+    "syncDirection": "Conductor→Beads"
+  }
 }

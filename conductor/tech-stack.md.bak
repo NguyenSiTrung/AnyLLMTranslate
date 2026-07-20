@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (Node engines; scientific-pdf bridge; build ~3.5 MB; 995 TCs) -->
+<!-- conductor-refresh: 2026-07-20 all (Node engines; scientific-pdf bridge; no fontkit dep; build ~3.5 MB; 572 TCs / 0 fail; lint 0) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -26,8 +26,7 @@
 | **Lucide React** | latest | Consistent, lightweight icon set |
 | **Zustand** | 5.x | Lightweight reactive state management, synced with chrome.storage |
 | **pdfjs-dist** | 4.x | PDF.js library for built-in PDF viewer — canvas rendering, text extraction, page proxy streaming |
-| **pdf-lib** | 1.x | PDF generation library for creating translated PDF exports — page embedding, text overlay, rectangle masking |
-| **@pdf-lib/fontkit** | 1.x | Font embedding addon for pdf-lib — enables custom TTF font embedding (Noto Sans) for Unicode text in generated PDFs |
+| **pdf-lib** | 1.x | PDF generation library for dual/mono export assembly — page embedding, text overlay, rectangle masking (Helvetica fallback; `@pdf-lib/fontkit` no longer a package dependency after Fast-path removal) |
 
 ## Extension APIs
 
@@ -133,3 +132,4 @@
 - `MOCK_TRANSLATE=1` enables CI/smoke without downloading ONNX models
 - Helper scripts: `scripts/scientific-pdf-docker.sh` / `scientific-pdf-up.sh` / `scientific-pdf-down.sh`; compose: `docker-compose.scientific-pdf.yml`
 - Production extension build (`.output/chrome-mv3`) is ≈ **3.5 MB** total (`du`); bridge is external
+- Quality gates snapshot (2026-07-20): **572** Vitest TCs / **0** fail; **eslint 0**; `tsc --noEmit` still has **6** known test/lib type nits (not ship-blocking for runtime)

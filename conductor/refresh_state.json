@@ -1,43 +1,42 @@
 {
-  "lastRefresh": "2026-07-20T10:11:05+07:00",
+  "lastRefresh": "2026-07-20T11:17:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since 2026-07-17: scientific-pdf-backend archived; legacy Fast PDF path removed; test suite consolidate ~995→572; orb setup/resume scripts; seek stale-chunk fix + lint green (a656c3b).",
-    "product.md: refresh marker; PDF fontkit wording; scientific marked Archived; Completed bullets for Fast-path removal, suite consolidate, orb scripts, seek fix; Current State → 572 TCs / 147 files / 0 fail / tsc 6 / lint 0 / build ~3.5 MB / 71 archived / 0 active / Beads 1 open (7uk); zg4 closed.",
-    "tech-stack.md: removed @pdf-lib/fontkit dependency row; quality-gates snapshot line; refresh marker.",
-    "patterns.md: elevated subtitle session lifecycle + ESLint test-override patterns; fontkit pattern updated for dep removal; refresh marker + last refreshed footer.",
-    "tracks.md: refresh marker only (already 71 archived / 0 active).",
+    "Scope: full refresh. Intervening work since prior 2026-07-20 refresh (dc40985): PDF viewer reader/compare shell (design d7c8934, plan 9c92ac8, helpers 978ade4, UI ec2ddf2).",
+    "product.md: refresh marker; PDF section rewritten for PdfShellMode reader|compare (supersedes live PdfViewMode split/translation-only); Completed bullet for reader/compare shell; Current State → 582 TCs / 149 files / 0 fail / tsc 6 / lint 1 / build ~3.5 MB / 71 archived / 0 active / Beads 1 open (7uk).",
+    "tech-stack.md: quality-gates snapshot → 582 / lint 1 / tsc 6; refresh marker.",
+    "patterns.md: elevated PDF viewer shell reader/compare patterns + ESLint unknown-rule disable gotcha; merged prior ESLint section; refresh marker + last refreshed footer.",
+    "tracks.md: refresh marker only (already 71 archived / 0 active; shell shipped without Conductor track).",
     "workflow.md: no content drift (not rewritten).",
-    "learnings consolidation: seek/session + test isolation + eslint overrides elevated into patterns.md.",
-    "beads DRIFT sync B (Conductor→Beads): closed AnyLLMTranslate-zg4 (fixed in a656c3b). Left open AnyLLMTranslate-7uk (PDF empty-page OCR, P3).",
+    "learnings consolidation: reader/compare shell + unknown-rule eslint disable elevated into patterns.md.",
+    "beads DRIFT: none — AnyLLMTranslate-7uk remains open (P3 PDF empty-page OCR); no plan.md mismatch.",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, refresh_state.json.bak.",
-    "verification: vitest 572/572 pass; tsc 6 errors; eslint 0; build output ~3.5 MB."
+    "verification: vitest 582/582 pass; tsc 6 errors; eslint 1 (App.tsx unknown react-hooks/exhaustive-deps); build output ~3.5 MB."
   ],
   "codebaseHealth": {
-    "tests": 572,
-    "testsPassing": 572,
+    "tests": 582,
+    "testsPassing": 582,
     "testsFailing": 0,
-    "testFiles": 147,
+    "testFiles": 149,
     "buildSize": "~3.5 MB",
-    "lintErrors": 0,
-    "lintErrorsDetail": "Clean. Production remains strict; tests override no-non-null-assertion and no-dynamic-delete in eslint.config.mjs.",
+    "lintErrors": 1,
+    "lintErrorsDetail": "entrypoints/pdf-viewer/App.tsx:115 — eslint-disable react-hooks/exhaustive-deps but rule not registered (Definition for rule was not found). Production remains strict; tests override no-non-null-assertion and no-dynamic-delete in eslint.config.mjs.",
     "tscErrors": 6,
     "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority.",
     "archivedTracks": 71,
     "activeTracks": 0,
-    "activeTracksDetail": "None — all tracks archived as of 2026-07-17 (confirmed 2026-07-20).",
+    "activeTracksDetail": "None — all tracks archived as of 2026-07-17. PDF reader/compare shell shipped directly on master without a Conductor track.",
     "failingTests": [],
     "shippedSinceLastRefresh": [
-      "Scientific PDF Backend archived (99eee8f)",
-      "Legacy in-browser Fast PDF path removed (1dd8771)",
-      "Test suite consolidate multi-assert merges (a032c66) → 572 TCs",
-      "Orb .agents/setup + .agents/resume (f84724b)",
-      "Stale subtitle chunk after seek + lint/test green (a656c3b)"
+      "PDF viewer reader/compare design (d7c8934)",
+      "PDF viewer reader/compare plan (9c92ac8)",
+      "PdfShellMode session helpers (978ade4)",
+      "Reader-first shell with original|result compare UI (ec2ddf2)"
     ]
   },
   "beads": {
     "open": ["AnyLLMTranslate-7uk"],
-    "closedThisRefresh": ["AnyLLMTranslate-zg4"],
-    "syncDirection": "Conductor→Beads"
+    "closedThisRefresh": [],
+    "syncDirection": "none"
   }
 }

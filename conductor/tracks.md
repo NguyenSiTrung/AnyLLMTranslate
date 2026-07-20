@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-07-17 scientific-pdf-backend_20260717 archived (71 archived / 0 active) -->
-<!-- conductor-refresh: 2026-07-20 all (confirmed 71 archived / 0 active; no track list changes) -->
+<!-- conductor-refresh: 2026-07-20 all (confirmed 71 archived / 0 active; PDF reader/compare shipped without track; no track list changes) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
