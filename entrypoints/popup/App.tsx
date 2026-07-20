@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { PROVIDER_PRESETS } from '@/types/config';
 import type { ThemeName, DisplayMode } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
-import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { PREDEFINED_CATEGORIES, resolveCategorySource } from '@/lib/categories';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import {
   formatProgressDetail,
@@ -96,6 +96,7 @@ export default function App() {
     );
   const detectedCategoryDisplay = tab.categoryInfo?.autoDetected;
   const showSaveAsRule = Boolean(tab.categoryInfo?.override && tab.activeHostname);
+  const categorySourceKind = resolveCategorySource(tab.categoryInfo);
 
   const popupStatus = derivePopupStatus({
     status: tab.status.status,
@@ -187,6 +188,7 @@ export default function App() {
                   showSaveAsRule,
                   onSaveAsRule: () => void tab.handleSaveAsRule(),
                   activeHostname: tab.activeHostname,
+                  sourceKind: categorySourceKind,
                 }
               : null
           }
