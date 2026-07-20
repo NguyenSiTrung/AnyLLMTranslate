@@ -1,5 +1,5 @@
-<!-- conductor-archive: 2026-07-17 scientific-pdf-backend_20260717 archived (71 archived / 0 active) -->
-<!-- conductor-refresh: 2026-07-20 all (confirmed 71 archived / 0 active; PDF reader/compare shipped without track; no track list changes) -->
+<!-- conductor-archive: 2026-07-20 web-translate-hardening_20260720 archived (72 archived / 0 active) -->
+<!-- conductor-refresh: 2026-07-20 all (confirmed 72 archived / 0 active after web-translate-hardening) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -83,16 +83,12 @@ This file tracks all major tracks for the project.
 - ✅ **PDF Composition Pipeline (BabelDOC-inspired)** (`pdf-composition_20260717`) — Archived 2026-07-17. Run-level extraction, multi-signal formula detection, `{vN}` placeholders + reassembly, table regions protect-by-default + `translateTableText`, multi-column reading order, selective Layout/download mask, power-user PDF card (3 toggles). 8 phases. [View](./conductor/archive/pdf-composition_20260717/)
 - ✅ **BabelDOC-parity PDF pipeline (scientific translation + bilingual dual export)** (`pdf-babeldoc-parity_20260717`) — Archived 2026-07-17. Dual export (mono / side-by-side / alternating), shared typesetting ladder, document term extraction, scanned detect + OCR workaround, PdfSettings toggles. Predecessor: `pdf-composition_20260717`. 6 phases. [View](./conductor/archive/pdf-babeldoc-parity_20260717/)
 - ✅ **Scientific PDF Backend (layout-preserving local bridge)** (`scientific-pdf-backend_20260717`) — Archived 2026-07-17. Optional Scientific / PDF Translate mode via Docker pdf2zh bridge; same provider pool credentials per-job; setup wizard + Docker helper scripts; bridge-only viewer path; mono/dual/side-by-side job modal. 6 phases; Beads epic `AnyLLMTranslate-17v`. [View](./conductor/archive/scientific-pdf-backend_20260717/)
+- ✅ **Web Translate Lifecycle & Bilingual Display Hardening** (`web-translate-hardening_20260720`) — Archived 2026-07-20. P0 lifecycle (session/stream/stop/resume), cache fingerprint, piece registry, langDetect skip bar, site-rule specificity, blocklist boundary, a11y retry; 638 tests. Beads epic `AnyLLMTranslate-5x6`. [View](./conductor/archive/web-translate-hardening_20260720/)
 
 ---
 
 ## Active Tracks
 
----
-
-## [x] Track: Web Translate Lifecycle & Bilingual Display Hardening
-*Link: [./conductor/tracks/web-translate-hardening_20260720/](./conductor/tracks/web-translate-hardening_20260720/)*
-*Priority: High · Type: Hardening · Source: 2026-07-20 deep analysis (P0+P1+P2)*
-*Completed: 2026-07-20 — P0 lifecycle + cache fingerprint + SPA registry/langDetect/rules/a11y seams; 638 tests green*
+*(none)*
 
 ---

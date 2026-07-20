@@ -1,12 +1,12 @@
 {
   "track_id": "web-translate-hardening_20260720",
   "type": "hardening",
-  "status": "new",
+  "status": "archived",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": null,
   "created_at": "2026-07-20T07:38:42Z",
-  "updated_at": "2026-07-20T07:40:24Z",
+  "updated_at": "2026-07-20T08:10:00Z",
   "description": "Harden web page translation lifecycle (session/stream/stop/resume), SPA scale, bilingual layout isolation, a11y/status, and cache fingerprinting \u2014 full P0+P1+P2 from 2026-07-20 analysis",
   "source_thread": "https://ampcode.com/threads/T-019f7e68-1b7b-71cd-9202-83b84e4e441f",
   "beads_epic": "AnyLLMTranslate-5x6",
@@ -47,5 +47,6 @@
     "phase5_task1": "AnyLLMTranslate-5x6.5.1",
     "phase5_task2": "AnyLLMTranslate-5x6.5.2",
     "phase5_task3": "AnyLLMTranslate-5x6.5.3"
-  }
+  },
+  "archived_at": "2026-07-20T08:10:00Z"
 }
