@@ -1,22 +1,29 @@
 /**
- * PDF Viewer — side-by-side original PDF + Docker-bridge translation.
+ * PDF Viewer — full-width reader with optional original|result compare.
  *
  * PDF translation runs only via the local Scientific Docker bridge (pdf2zh).
- * The legacy in-browser Fast translate path is no longer offered: when the
- * bridge is offline or not configured, translate controls show as unavailable
- * and guide the user to set up / connect the bridge.
+ * Idle shell is a single-column reader; split exists only to compare source
+ * vs an adopted bridge result. Bridge health is header chrome + offline setup card.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Loader2, AlertCircle, FileWarning, FlaskConical, Settings2 } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { FileWarning, FlaskConical, Settings2 } from 'lucide-react';
 import { ViewerLayout } from './components/ViewerLayout';
-import { PdfCanvasRenderer } from './components/PdfCanvasRenderer';
+import { PdfDocumentPane } from './components/PdfDocumentPane';
 import { FilePermissionGuide } from './components/FilePermissionGuide';
-import { BridgeStatusPanel } from './components/BridgeStatusPanel';
-import { usePdfDocument } from './hooks/usePdfDocument';
-import { useVisiblePages } from './hooks/useVisiblePages';
+import { BridgeSetupCard } from './components/BridgeSetupCard';
 import { useScientificPdfJob } from './hooks/useScientificPdfJob';
 import { ScientificJobModal } from './components/ScientificJobModal';
+import { compareArtifactKind } from './components/scientificJobModalFormats';
+import {
+  applyOpenCompare,
+  applyOpenTranslated,
+  applyShellMode,
+  compareRightLabel,
+  initialSessionState,
+  readerPaneLabel,
+  type ResultArtifactKind,
+} from './lib/pdfShellMode';
 
 /** Extract a PDF URL from the `?file=` query parameter */
 function getPdfUrlFromQuery(): string | null {
@@ -46,32 +53,26 @@ function openOptionsPage(): void {
 }
 
 export default function App(): ReactElement {
-  /** Currently displayed PDF (original or a scientific result). */
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  /**
-   * Original source PDF used for Translate jobs. Kept separate so opening a
-   * result does not make the next job re-translate the already-translated PDF,
-   * and so job reset can revoke result blob URLs without breaking the source.
-   */
   const [sourcePdfUrl, setSourcePdfUrl] = useState<string | null>(null);
+  const [resultPdfUrl, setResultPdfUrl] = useState<string | null>(null);
+  const [session, setSession] = useState(initialSessionState);
   const [showScientificModal, setShowScientificModal] = useState(false);
-  const [viewingResult, setViewingResult] = useState(false);
-  const leftContainerRef = useRef<HTMLDivElement | null>(null);
-  /** Object URLs created when adopting a scientific result into this tab. */
-  const adoptedResultUrlRef = useRef<string | null>(null);
+  const [setupCardDismissed, setSetupCardDismissed] = useState(false);
+
+  const readerScrollRef = useRef<HTMLDivElement | null>(null);
+  const compareLeftRef = useRef<HTMLDivElement | null>(null);
+  const compareRightRef = useRef<HTMLDivElement | null>(null);
+  const resultUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const initial = getPdfUrlFromQuery();
-    setPdfUrl(initial);
-    setSourcePdfUrl(initial);
+    setSourcePdfUrl(getPdfUrlFromQuery());
   }, []);
 
-  // Revoke App-owned result object URLs on unmount.
   useEffect(() => {
     return () => {
-      if (adoptedResultUrlRef.current) {
-        URL.revokeObjectURL(adoptedResultUrlRef.current);
-        adoptedResultUrlRef.current = null;
+      if (resultUrlRef.current) {
+        URL.revokeObjectURL(resultUrlRef.current);
+        resultUrlRef.current = null;
       }
     };
   }, []);
@@ -88,18 +89,6 @@ export default function App(): ReactElement {
     };
   }, []);
 
-  const numPagesRef = useRef(0);
-  const { visiblePages } = useVisiblePages({
-    totalPages: numPagesRef.current,
-    containerRef: leftContainerRef,
-  });
-
-  const { loadState, pages, numPages, bytesLoaded, bytesTotal, error } = usePdfDocument(pdfUrl, {
-    visiblePages,
-  });
-  numPagesRef.current = numPages;
-
-  const isFile = sourcePdfUrl ? isFileScheme(sourcePdfUrl) : false;
   const fileName = sourcePdfUrl
     ? (() => {
         try {
@@ -111,6 +100,8 @@ export default function App(): ReactElement {
       })()
     : 'document.pdf';
 
+  const isFile = sourcePdfUrl ? isFileScheme(sourcePdfUrl) : false;
+
   const scientific = useScientificPdfJob({
     pdfUrl: sourcePdfUrl ?? '',
     fileName,
@@ -121,6 +112,7 @@ export default function App(): ReactElement {
     if (!sourcePdfUrl) return;
     void scientific.refreshHealth();
     // Once per source document (scientific identity is stable for that URL).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional once-per-source
   }, [sourcePdfUrl]);
 
   const bridgeReady = scientific.healthOk === true;
@@ -132,158 +124,189 @@ export default function App(): ReactElement {
         ? 'Not configured'
         : 'Bridge offline';
 
-  const pageDimensions = useMemo(() => {
-    const dims = new Map<number, { width: number; height: number }>();
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
-      if (!page) continue;
-      const viewport = page.getViewport({ scale: 1 });
-      const scale = 720 / viewport.width;
-      dims.set(i + 1, {
-        width: Math.floor(viewport.width * scale),
-        height: Math.floor(viewport.height * scale),
-      });
+  function adoptResultBlob(
+    blob: Blob,
+    kind: ResultArtifactKind,
+    next: 'translated' | 'compare',
+  ): void {
+    if (resultUrlRef.current) {
+      URL.revokeObjectURL(resultUrlRef.current);
     }
-    return dims;
-  }, [pages]);
+    const url = URL.createObjectURL(blob);
+    resultUrlRef.current = url;
+    setResultPdfUrl(url);
+    setSession((s) =>
+      next === 'compare' ? applyOpenCompare(s, kind) : applyOpenTranslated(s, kind),
+    );
+  }
 
   const startTranslate = (): void => {
     if (!bridgeReady) {
-      setShowScientificModal(true);
+      setSetupCardDismissed(false);
       return;
     }
     setShowScientificModal(true);
     void scientific.startJob();
   };
 
-  if (loadState === 'loaded' && pdfUrl) {
-    const leftPane = (
-      <>
-        {Array.from({ length: numPages }, (_, idx) => {
-          const pageNumber = idx + 1;
-          const page = pages[idx] ?? null;
-          const dims = pageDimensions.get(pageNumber);
-          const isVisible = visiblePages.has(pageNumber);
-          return (
-            <PdfCanvasRenderer
-              key={`page-${pageNumber}`}
-              page={page}
-              pageNumber={pageNumber}
-              visible={isVisible}
-              dims={dims}
-            />
-          );
-        })}
-      </>
-    );
+  const shellMode =
+    session.shellMode === 'compare' && resultPdfUrl ? 'compare' : 'reader';
 
-    const rightPane = (
-      <BridgeStatusPanel
-        status={scientific.bridgeStatus}
-        healthOk={scientific.healthOk}
-        isRunning={scientific.isRunning}
-        onRefresh={() => void scientific.refreshHealth()}
-        onOpenSetup={openOptionsPage}
-        onTranslate={startTranslate}
-      />
-    );
+  const readerUrl =
+    session.readerFocus === 'result' && resultPdfUrl ? resultPdfUrl : sourcePdfUrl;
 
+  const showSetupOverlay =
+    scientific.healthOk === false && !setupCardDismissed && !scientific.isRunning;
+
+  const headerExtra = (
+    <div className="pdf-viewer-header-controls">
+      {resultPdfUrl && (
+        <div className="pdf-viewer-mode-toggle" role="radiogroup" aria-label="View mode">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={shellMode === 'reader'}
+            className={`pdf-viewer-mode-btn${shellMode === 'reader' ? ' pdf-viewer-mode-btn--active' : ''}`}
+            onClick={() => setSession((s) => applyShellMode(s, 'reader'))}
+          >
+            Reader
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={shellMode === 'compare'}
+            className={`pdf-viewer-mode-btn${shellMode === 'compare' ? ' pdf-viewer-mode-btn--active' : ''}`}
+            onClick={() => setSession((s) => applyShellMode(s, 'compare'))}
+          >
+            Compare
+          </button>
+        </div>
+      )}
+      <div
+        className={`pdf-viewer-progress-pill${
+          bridgeReady
+            ? ' pdf-viewer-progress-pill--ok'
+            : scientific.healthOk === false
+              ? ' pdf-viewer-progress-pill--warn'
+              : ''
+        }`}
+        title="Local Docker bridge status for PDF translation"
+      >
+        {bridgeStatusLabel}
+      </div>
+      {bridgeReady ? (
+        <button
+          type="button"
+          className="pdf-download-btn-header"
+          onClick={startTranslate}
+          disabled={scientific.isRunning || !sourcePdfUrl}
+          title="Run layout-preserving translation via local Docker bridge"
+        >
+          <FlaskConical size={14} />
+          Translate
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="pdf-download-btn-header pdf-download-btn-header--muted"
+          onClick={openOptionsPage}
+          disabled={scientific.healthOk === null}
+          title="PDF Translate requires the Docker bridge — open setup"
+        >
+          <Settings2 size={14} />
+          Set up bridge
+        </button>
+      )}
+    </div>
+  );
+
+  const banner = (
+    <>
+      <FilePermissionGuide visible={isFile} />
+      {!bridgeReady && scientific.healthOk !== null && (
+        <div className="pdf-viewer-scan-banner" role="status">
+          PDF Translate needs the Docker bridge.{' '}
+          <button type="button" className="pdf-viewer-banner-link" onClick={openOptionsPage}>
+            Set up bridge
+          </button>
+          {' · '}
+          <button
+            type="button"
+            className="pdf-viewer-banner-link"
+            onClick={() => void scientific.refreshHealth()}
+          >
+            Check connection
+          </button>
+        </div>
+      )}
+      {shellMode === 'reader' && session.readerFocus === 'result' && resultPdfUrl && (
+        <div className="pdf-viewer-scan-banner pdf-viewer-scan-banner--info" role="status">
+          Viewing translated result.{' '}
+          <button
+            type="button"
+            className="pdf-viewer-banner-link"
+            onClick={() =>
+              setSession((s) => ({ ...s, readerFocus: 'source', shellMode: 'reader' }))
+            }
+          >
+            Show original
+          </button>
+          {' · '}
+          <button
+            type="button"
+            className="pdf-viewer-banner-link"
+            onClick={() => setSession((s) => applyShellMode(s, 'compare'))}
+          >
+            Compare side-by-side
+          </button>
+        </div>
+      )}
+    </>
+  );
+
+  const showModal =
+    showScientificModal ||
+    scientific.isRunning ||
+    scientific.progress.stage === 'done' ||
+    scientific.progress.stage === 'error';
+
+  if (sourcePdfUrl) {
     return (
       <>
         <ViewerLayout
           title="PDF Translator"
           subtitle={fileName}
-          viewMode="split"
-          banner={
-            <>
-              <FilePermissionGuide visible={isFile} />
-              {viewingResult && sourcePdfUrl && (
-                <div className="pdf-viewer-scan-banner pdf-viewer-scan-banner--info" role="status">
-                  Showing translated result from the Docker bridge.{' '}
-                  <button
-                    type="button"
-                    className="pdf-viewer-banner-link"
-                    onClick={() => {
-                      if (adoptedResultUrlRef.current) {
-                        URL.revokeObjectURL(adoptedResultUrlRef.current);
-                        adoptedResultUrlRef.current = null;
-                      }
-                      setPdfUrl(sourcePdfUrl);
-                      setViewingResult(false);
-                    }}
-                  >
-                    Back to original
-                  </button>
-                </div>
-              )}
-              {!bridgeReady && scientific.healthOk !== null && (
-                <div className="pdf-viewer-scan-banner" role="status">
-                  PDF Translate is not available until the Docker bridge is connected.{' '}
-                  <button
-                    type="button"
-                    className="pdf-viewer-banner-link"
-                    onClick={openOptionsPage}
-                  >
-                    Set up bridge
-                  </button>
-                  {' · '}
-                  <button
-                    type="button"
-                    className="pdf-viewer-banner-link"
-                    onClick={() => void scientific.refreshHealth()}
-                  >
-                    Check connection
-                  </button>
-                </div>
-              )}
-            </>
+          mode={shellMode}
+          banner={banner}
+          headerExtra={headerExtra}
+          readerLabel={readerPaneLabel(session.readerFocus, session.resultKind)}
+          readerPaneRef={readerScrollRef}
+          reader={<PdfDocumentPane url={readerUrl} containerRef={readerScrollRef} />}
+          leftPaneRef={compareLeftRef}
+          rightPaneRef={compareRightRef}
+          leftLabel="Original"
+          rightLabel={compareRightLabel(session.resultKind)}
+          left={<PdfDocumentPane url={sourcePdfUrl} containerRef={compareLeftRef} />}
+          right={
+            resultPdfUrl ? (
+              <PdfDocumentPane url={resultPdfUrl} containerRef={compareRightRef} />
+            ) : null
           }
-          left={leftPane}
-          leftPaneRef={leftContainerRef}
-          right={rightPane}
-          headerExtra={
-            <div className="pdf-viewer-header-controls">
-              <div
-                className={`pdf-viewer-progress-pill${
-                  bridgeReady
-                    ? ' pdf-viewer-progress-pill--ok'
-                    : scientific.healthOk === false
-                      ? ' pdf-viewer-progress-pill--warn'
-                      : ''
-                }`}
-                title="Local Docker bridge status for PDF translation"
-              >
-                {bridgeStatusLabel}
+          mainOverlay={
+            showSetupOverlay ? (
+              <div className="pdf-bridge-setup-overlay">
+                <BridgeSetupCard
+                  variant="overlay"
+                  status={scientific.bridgeStatus}
+                  onRefresh={() => void scientific.refreshHealth()}
+                  onOpenSetup={openOptionsPage}
+                  onDismiss={() => setSetupCardDismissed(true)}
+                />
               </div>
-              {bridgeReady ? (
-                <button
-                  type="button"
-                  className="pdf-download-btn-header"
-                  onClick={startTranslate}
-                  disabled={scientific.isRunning || !pdfUrl}
-                  title="Run layout-preserving translation via local Docker bridge"
-                >
-                  <FlaskConical size={14} />
-                  Translate
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="pdf-download-btn-header pdf-download-btn-header--muted"
-                  onClick={openOptionsPage}
-                  title="PDF Translate requires the Docker bridge — open setup"
-                >
-                  <Settings2 size={14} />
-                  Set up bridge
-                </button>
-              )}
-            </div>
+            ) : null
           }
         />
-        {(showScientificModal ||
-          scientific.isRunning ||
-          scientific.progress.stage === 'done' ||
-          scientific.progress.stage === 'error') && (
+        {showModal && (
           <ScientificJobModal
             progress={
               !bridgeReady &&
@@ -302,31 +325,41 @@ export default function App(): ReactElement {
             onCancel={() => void scientific.cancel()}
             onClose={() => {
               setShowScientificModal(false);
-              // Soft dismiss: keep mono/dual blob URLs alive so a previously
-              // adopted "Open in viewer" result (or a re-open) still works.
-              // Full revoke happens on the next startJob() via reset().
               scientific.dismissProgress();
             }}
             onRetry={() => {
               setShowScientificModal(true);
               void scientific.startJob();
             }}
-            onOpenResult={(prefer) => {
-              // Load the result into *this* viewer. Opening a new tab with
-              // ?file=blob:… is unreliable (blank page). Own a fresh object URL
-              // so job reset() can revoke the hook's URLs without blanking us.
+            onOpenTranslated={() => {
+              const prefer = scientific.progress.hasMono
+                ? 'mono'
+                : scientific.progress.hasDual
+                  ? 'dual'
+                  : null;
+              if (!prefer) return;
               const blob = scientific.resolveResultBlob(prefer);
               if (!blob) return;
-              if (adoptedResultUrlRef.current) {
-                URL.revokeObjectURL(adoptedResultUrlRef.current);
-              }
-              const localUrl = URL.createObjectURL(blob);
-              adoptedResultUrlRef.current = localUrl;
-              setPdfUrl(localUrl);
-              setViewingResult(true);
+              adoptResultBlob(blob, prefer, 'translated');
               setShowScientificModal(false);
               scientific.dismissProgress();
             }}
+            onOpenCompare={
+              sourcePdfUrl
+                ? () => {
+                    const prefer = compareArtifactKind({
+                      hasMono: scientific.progress.hasMono,
+                      hasDual: scientific.progress.hasDual,
+                    });
+                    if (!prefer) return;
+                    const blob = scientific.resolveResultBlob(prefer);
+                    if (!blob) return;
+                    adoptResultBlob(blob, prefer, 'compare');
+                    setShowScientificModal(false);
+                    scientific.dismissProgress();
+                  }
+                : undefined
+            }
             onDownloadMono={() => scientific.downloadMono()}
             onDownloadDual={() => scientific.downloadDual()}
             onDownloadSideBySide={() => void scientific.downloadSideBySide()}
@@ -340,10 +373,16 @@ export default function App(): ReactElement {
     );
   }
 
-  // Non-loaded states render in a single centered column
-  const body: ReactElement = (() => {
-    if (!pdfUrl) {
-      return (
+  // No source URL — centered empty shell
+  return (
+    <div className="pdf-viewer-root">
+      <header className="pdf-viewer-header">
+        <div className="pdf-viewer-header-left">
+          <h1>PDF Translator</h1>
+        </div>
+        {headerExtra}
+      </header>
+      <main className="pdf-viewer-main pdf-viewer-main--single">
         <div className="pdf-viewer-empty-state">
           <FileWarning size={36} />
           <h2>No PDF URL provided</h2>
@@ -352,48 +391,7 @@ export default function App(): ReactElement {
             <code>pdf-viewer.html?file=https://example.com/sample.pdf</code>.
           </p>
         </div>
-      );
-    }
-    if (loadState === 'loading') {
-      const percent = bytesTotal > 0 ? Math.round((bytesLoaded / bytesTotal) * 100) : null;
-      return (
-        <div className="pdf-viewer-empty-state">
-          <Loader2 size={36} className="pdf-viewer-spin-large" />
-          <h2>Loading PDF...</h2>
-          {percent !== null ? (
-            <p>
-              {Math.round(bytesLoaded / 1024)} KB / {Math.round(bytesTotal / 1024)} KB ({percent}%)
-            </p>
-          ) : (
-            <p>Connecting to {fileName}...</p>
-          )}
-        </div>
-      );
-    }
-    return (
-      <div className="pdf-viewer-empty-state pdf-viewer-empty-state--error">
-        <AlertCircle size={36} />
-        <h2>Failed to load PDF</h2>
-        <p>{error ?? 'Unknown error'}</p>
-        {isFile && (
-          <p className="pdf-viewer-empty-state-hint">
-            For local files, make sure you enabled &quot;Allow access to file URLs&quot; in the
-            extension settings.
-          </p>
-        )}
-      </div>
-    );
-  })();
-
-  return (
-    <div className="pdf-viewer-root">
-      <header className="pdf-viewer-header">
-        <div className="pdf-viewer-header-left">
-          <h1>PDF Translator</h1>
-          {pdfUrl && <p className="pdf-viewer-subtitle">{fileName}</p>}
-        </div>
-      </header>
-      <main className="pdf-viewer-main pdf-viewer-main--single">{body}</main>
+      </main>
     </div>
   );
 }

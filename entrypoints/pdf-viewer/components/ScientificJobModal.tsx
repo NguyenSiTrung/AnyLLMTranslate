@@ -14,7 +14,6 @@ import {
   defaultFormat,
   formatCardCopy,
   isRecommended,
-  openResultPrefer,
   type ScientificDownloadFormat,
 } from './scientificJobModalFormats';
 
@@ -23,7 +22,10 @@ export interface ScientificJobModalProps {
   onCancel: () => void;
   onClose: () => void;
   onRetry: () => void;
-  onOpenResult: (prefer?: 'dual' | 'mono') => void;
+  /** Open translated-only in reader */
+  onOpenTranslated: () => void;
+  /** Open original|result compare; hide button if undefined */
+  onOpenCompare?: () => void;
   onOpenSetup?: () => void;
   onDownloadMono?: () => void;
   onDownloadDual?: () => void;
@@ -65,7 +67,8 @@ export function ScientificJobModal({
   onCancel,
   onClose,
   onRetry,
-  onOpenResult,
+  onOpenTranslated,
+  onOpenCompare,
   onOpenSetup,
   onDownloadMono,
   onDownloadDual,
@@ -140,11 +143,6 @@ export function ScientificJobModal({
     } catch {
       setDownloadPhase('idle');
     }
-  }
-
-  function handleOpen(): void {
-    const prefer = openResultPrefer(selected, flags);
-    if (prefer) onOpenResult(prefer);
   }
 
   const primaryDownloadLabel =
@@ -287,9 +285,18 @@ export function ScientificJobModal({
                 <button
                   type="button"
                   className="pdf-download-btn pdf-download-btn--secondary"
-                  onClick={handleOpen}
+                  onClick={onOpenTranslated}
                 >
-                  Open in viewer
+                  Open translated
+                </button>
+              )}
+              {onOpenCompare && (progress.hasDual || progress.hasMono) && (
+                <button
+                  type="button"
+                  className="pdf-download-btn pdf-download-btn--secondary"
+                  onClick={onOpenCompare}
+                >
+                  Compare side-by-side
                 </button>
               )}
             </div>

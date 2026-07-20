@@ -1,77 +1,77 @@
 /**
- * ViewerLayout — Two-pane shell for the PDF viewer.
+ * ViewerLayout — Shell for the PDF viewer.
  *
- * Each pane has its own scroll container. Synchronization is delegated to
- * `useSynchronizedScroll`, which mirrors scroll offsets between them.
- *
- * The layout is a CSS grid so that the right pane can be a flex column
- * (label + scroll container) without disturbing the left pane's vertical
- * canvas stack.
+ * - reader: single full-width scroll pane
+ * - compare: two panes (original | result) with synchronized scroll
  */
 
-import { type ReactNode, useState, type RefObject, type RefCallback } from 'react';
-import type { PdfViewMode } from '@/lib/constants';
+import {
+  type ReactNode,
+  useState,
+  type RefObject,
+  type RefCallback,
+  type ReactElement,
+} from 'react';
+import type { PdfShellMode } from '@/lib/constants';
 import { useSynchronizedScroll } from '../hooks/useSynchronizedScroll';
 
 export interface ViewerLayoutProps {
-  /** Title shown in the header (defaults to the file URL or "PDF Translator"). */
   title?: string;
-  /** Optional subtitle / secondary line (e.g. file URL). */
   subtitle?: string;
-  /** Top banner — e.g. file-scheme permission warning. */
   banner?: ReactNode;
-  /** Left pane content (original PDF canvases). */
-  left: ReactNode;
-  /** Right pane content (translated text). */
-  right: ReactNode;
-  /** Optional external ref to the left scroll container (for canvas virtualization). */
-  leftPaneRef?: RefObject<HTMLDivElement | null>;
-  /** Optional extra content to place on the right side of the header. */
   headerExtra?: ReactNode;
-  /** Whether to render the split (two-pane) layout or translation-only (single column). Defaults to 'split'. */
-  viewMode?: PdfViewMode;
-}
-
-/**
- * Whether a view mode renders a single column (no left/original pane).
- * Only 'translation-only' collapses to a single column; 'split' keeps
- * the side-by-side panes.
- */
-function isSingleColumn(mode: PdfViewMode | undefined): boolean {
-  return mode === 'translation-only';
+  mode: PdfShellMode;
+  /** reader mode */
+  reader?: ReactNode;
+  readerPaneRef?: RefObject<HTMLDivElement | null>;
+  readerLabel?: string;
+  /** compare mode */
+  left?: ReactNode;
+  right?: ReactNode;
+  leftPaneRef?: RefObject<HTMLDivElement | null>;
+  rightPaneRef?: RefObject<HTMLDivElement | null>;
+  leftLabel?: string;
+  rightLabel?: string;
+  /** Optional absolute overlay inside main (setup card) */
+  mainOverlay?: ReactNode;
 }
 
 export function ViewerLayout({
   title = 'PDF Translator',
   subtitle,
   banner,
+  headerExtra,
+  mode,
+  reader,
+  readerPaneRef,
+  readerLabel = 'Original',
   left,
   right,
   leftPaneRef,
-  headerExtra,
-  viewMode = 'split',
-}: ViewerLayoutProps): React.ReactElement {
-  // Track the pane elements in STATE via callback refs. Unlike ref objects,
-  // state updates trigger re-render, so useSynchronizedScroll's effect re-runs
-  // (detaching stale listeners, attaching fresh ones) when a pane element
-  // mounts/unmounts — e.g. Split → Translation → Split. A plain ref would miss
-  // the remount because ref mutations don't cause re-render.
+  rightPaneRef,
+  leftLabel = 'Original',
+  rightLabel = 'Translated',
+  mainOverlay,
+}: ViewerLayoutProps): ReactElement {
   const [leftEl, setLeftEl] = useState<HTMLDivElement | null>(null);
   const [rightEl, setRightEl] = useState<HTMLDivElement | null>(null);
 
-  // Merge the external leftPaneRef (used by App's useVisiblePages) with the
-  // internal state-setting callback ref. The external ref is read-only here.
-  const externalLeftRef = leftPaneRef ?? null;
-  const leftRefCallback: RefCallback<HTMLDivElement> = (el) => {
-    setLeftEl(el);
-    if (externalLeftRef) {
-      (externalLeftRef as { current: HTMLDivElement | null }).current = el;
-    }
-  };
-  const rightRefCallback: RefCallback<HTMLDivElement> = (el) => {
-    setRightEl(el);
-  };
-  useSynchronizedScroll({ leftEl, rightEl });
+  const bindRef =
+    (
+      setEl: (el: HTMLDivElement | null) => void,
+      external?: RefObject<HTMLDivElement | null>,
+    ): RefCallback<HTMLDivElement> =>
+    (el) => {
+      setEl(el);
+      if (external) {
+        (external as { current: HTMLDivElement | null }).current = el;
+      }
+    };
+
+  useSynchronizedScroll({
+    leftEl: mode === 'compare' ? leftEl : null,
+    rightEl: mode === 'compare' ? rightEl : null,
+  });
 
   return (
     <div className="pdf-viewer-root">
@@ -83,31 +83,52 @@ export function ViewerLayout({
         {headerExtra && <div className="pdf-viewer-header-right">{headerExtra}</div>}
       </header>
       {banner && <div className="pdf-viewer-banner-wrap">{banner}</div>}
-      {isSingleColumn(viewMode) ? (
-        <main className="pdf-viewer-main pdf-viewer-main--single">
-          <section className="pdf-viewer-pane pdf-viewer-pane--right">
-            <div className="pdf-viewer-pane-label">PDF Translate</div>
-            <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
-              {right}
+      <main
+        className={
+          mode === 'compare' ? 'pdf-viewer-main' : 'pdf-viewer-main pdf-viewer-main--single'
+        }
+        style={{ position: 'relative' }}
+      >
+        {mode === 'reader' ? (
+          <section className="pdf-viewer-pane pdf-viewer-pane--reader">
+            <div className="pdf-viewer-pane-label">{readerLabel}</div>
+            <div
+              ref={bindRef(setLeftEl, readerPaneRef)}
+              className="pdf-viewer-pages"
+              data-pane="reader"
+              aria-label={`${readerLabel} PDF`}
+            >
+              {reader}
             </div>
           </section>
-        </main>
-      ) : (
-        <main className="pdf-viewer-main">
-          <section className="pdf-viewer-pane pdf-viewer-pane--left">
-            <div className="pdf-viewer-pane-label">Original</div>
-            <div ref={leftRefCallback} className="pdf-viewer-pages pdf-viewer-pages--left" data-pane="left">
-              {left}
-            </div>
-          </section>
-          <section className="pdf-viewer-pane pdf-viewer-pane--right">
-            <div className="pdf-viewer-pane-label">PDF Translate</div>
-            <div ref={rightRefCallback} className="pdf-viewer-pages pdf-viewer-pages--right" data-pane="right">
-              {right}
-            </div>
-          </section>
-        </main>
-      )}
+        ) : (
+          <>
+            <section className="pdf-viewer-pane pdf-viewer-pane--left">
+              <div className="pdf-viewer-pane-label">{leftLabel}</div>
+              <div
+                ref={bindRef(setLeftEl, leftPaneRef)}
+                className="pdf-viewer-pages pdf-viewer-pages--left"
+                data-pane="left"
+                aria-label="Original PDF"
+              >
+                {left}
+              </div>
+            </section>
+            <section className="pdf-viewer-pane pdf-viewer-pane--right">
+              <div className="pdf-viewer-pane-label">{rightLabel}</div>
+              <div
+                ref={bindRef(setRightEl, rightPaneRef)}
+                className="pdf-viewer-pages pdf-viewer-pages--right"
+                data-pane="right"
+                aria-label={`${rightLabel} PDF`}
+              >
+                {right}
+              </div>
+            </section>
+          </>
+        )}
+        {mainOverlay}
+      </main>
     </div>
   );
 }

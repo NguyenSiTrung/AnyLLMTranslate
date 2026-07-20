@@ -284,7 +284,41 @@ html, body, #root {
   background: rgba(120, 53, 15, 0.25);
 }
 
-/* Bridge-only right pane */
+/* Bridge setup card (offline overlay / inline — not a permanent half-pane) */
+.pdf-bridge-setup-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px 24px;
+  max-width: 420px;
+  margin: 40px auto;
+  color: #d4d4d8;
+  border-radius: 14px;
+  border: 1px solid #27272a;
+  background: #18181b;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.pdf-bridge-setup-card--overlay {
+  margin: 0;
+  position: relative;
+  z-index: 5;
+}
+
+.pdf-bridge-setup-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(9, 9, 11, 0.72);
+  pointer-events: auto;
+}
+
+/* Shared icon/title/body styles used by BridgeSetupCard */
 .pdf-bridge-panel {
   display: flex;
   flex-direction: column;
@@ -437,6 +471,36 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.pdf-viewer-mode-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.8);
+  gap: 2px;
+}
+
+.pdf-viewer-mode-btn {
+  border: none;
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pdf-viewer-mode-btn--active {
+  background: rgba(14, 165, 233, 0.18);
+  color: #e0f2fe;
+}
+
+.pdf-viewer-mode-btn:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 1px;
 }
 
 /* Download / Translate header button */

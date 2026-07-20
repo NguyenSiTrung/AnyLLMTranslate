@@ -26,7 +26,7 @@ describe('ScientificJobModal', () => {
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={noop}
+        onOpenTranslated={noop}
         onDownloadMono={noop}
         onDownloadDual={noop}
         onDownloadSideBySide={noop}
@@ -49,7 +49,7 @@ describe('ScientificJobModal', () => {
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={noop}
+        onOpenTranslated={noop}
         onDownloadMono={noop}
         onDownloadSideBySide={noop}
       />,
@@ -66,7 +66,7 @@ describe('ScientificJobModal', () => {
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={noop}
+        onOpenTranslated={noop}
         onDownloadMono={onDownloadMono}
         onDownloadDual={noop}
         onDownloadSideBySide={noop}
@@ -77,22 +77,42 @@ describe('ScientificJobModal', () => {
     expect(onDownloadMono).toHaveBeenCalledTimes(1);
   });
 
-  it('done: open in viewer uses mono prefer for side-by-side selection', () => {
-    const onOpenResult = vi.fn();
+  it('done: Open translated and Compare call respective handlers', () => {
+    const onOpenTranslated = vi.fn();
+    const onOpenCompare = vi.fn();
     render(
       <ScientificJobModal
         progress={baseProgress()}
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={onOpenResult}
+        onOpenTranslated={onOpenTranslated}
+        onOpenCompare={onOpenCompare}
         onDownloadMono={noop}
         onDownloadDual={noop}
         onDownloadSideBySide={noop}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /open in viewer/i }));
-    expect(onOpenResult).toHaveBeenCalledWith('mono');
+    fireEvent.click(screen.getByRole('button', { name: /open translated/i }));
+    expect(onOpenTranslated).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /compare side-by-side/i }));
+    expect(onOpenCompare).toHaveBeenCalledTimes(1);
+  });
+
+  it('done: hides Compare when onOpenCompare omitted', () => {
+    render(
+      <ScientificJobModal
+        progress={baseProgress()}
+        onCancel={noop}
+        onClose={noop}
+        onRetry={noop}
+        onOpenTranslated={noop}
+        onDownloadMono={noop}
+        onDownloadDual={noop}
+        onDownloadSideBySide={noop}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /compare side-by-side/i })).toBeNull();
   });
 
   it('running: activity log is collapsed by default', () => {
@@ -109,7 +129,7 @@ describe('ScientificJobModal', () => {
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={noop}
+        onOpenTranslated={noop}
       />,
     );
     const details = screen.getByText(/activity/i).closest('details');
@@ -133,7 +153,7 @@ describe('ScientificJobModal', () => {
         onCancel={noop}
         onClose={noop}
         onRetry={noop}
-        onOpenResult={noop}
+        onOpenTranslated={noop}
         onOpenSetup={onOpenSetup}
       />,
     );

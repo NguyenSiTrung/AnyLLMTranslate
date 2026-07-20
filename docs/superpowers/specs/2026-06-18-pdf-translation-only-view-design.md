@@ -1,7 +1,9 @@
 # PDF Viewer — Translation-only View Mode
 
+> **Status:** Superseded for the live bridge-only viewer by [2026-07-20-pdf-viewer-reader-compare-design.md](./2026-07-20-pdf-viewer-reader-compare-design.md). Kept for historical Fast-path context only.
+
 **Date:** 2026-06-18
-**Status:** Design (awaiting implementation plan)
+**Status:** Superseded
 **Surface:** `entrypoints/pdf-viewer/`
 
 ## Goal

@@ -2,7 +2,7 @@
 
 > **Date:** 2026-07-20  
 > **Scope:** `entrypoints/pdf-viewer/` shell (layout, header, bridge status, post-job viewing)  
-> **Status:** Draft (awaiting user review)  
+> **Status:** Implemented (Phase 1)  
 > **Decision:** Approach **B** — full-width reader by default; split only for original vs result compare  
 > **Related:** [Scientific Job Modal UX](./2026-07-17-scientific-job-modal-ux-design.md) (job modal stays; open-in-viewer contract extended)  
 > **Supersedes (layout intent):** [PDF translation-only view](./2026-06-18-pdf-translation-only-view-design.md) for the live bridge-only product (that spec targeted the removed Fast overlay path)

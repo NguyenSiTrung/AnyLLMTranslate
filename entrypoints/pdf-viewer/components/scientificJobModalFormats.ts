@@ -69,3 +69,13 @@ export function isRecommended(
 ): boolean {
   return defaultFormat(flags) === format;
 }
+
+/** Prefer mono for compare right pane; dual only if mono is missing. */
+export function compareArtifactKind(flags: {
+  hasMono: boolean;
+  hasDual: boolean;
+}): 'mono' | 'dual' | null {
+  if (flags.hasMono) return 'mono';
+  if (flags.hasDual) return 'dual';
+  return null;
+}
