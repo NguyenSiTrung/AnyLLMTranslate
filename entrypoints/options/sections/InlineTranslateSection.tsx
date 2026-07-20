@@ -75,6 +75,15 @@ export function InlineTranslateSection() {
       inlineTranslate: { ...current, blocklistPatterns: patterns },
     });
   });
+  const languagePrefixField = useDeferredCommit(
+    inlineTranslate.languagePrefix ?? '/',
+    (languagePrefix) => {
+      const current = useSettingsStore.getState().inlineTranslate;
+      void updateSettings({
+        inlineTranslate: { ...current, languagePrefix },
+      });
+    },
+  );
   const patternCount = blocklistField.value
     .split('\n')
     .map((s) => s.trim())
@@ -257,10 +266,18 @@ export function InlineTranslateSection() {
                     id="inline-translate-prefix-char"
                     type="text"
                     maxLength={1}
-                    value={inlineTranslate.languagePrefix ?? '/'}
-                    onChange={(e) => {
-                      const languagePrefix = e.target.value.slice(0, 1) || '/';
-                      patch({ languagePrefix });
+                    value={languagePrefixField.value}
+                    onChange={(e) => languagePrefixField.setValue(e.target.value.slice(0, 1))}
+                    onBlur={() => {
+                      if (languagePrefixField.value) {
+                        languagePrefixField.commit();
+                        return;
+                      }
+                      languagePrefixField.adopt('/');
+                      const current = useSettingsStore.getState().inlineTranslate;
+                      void updateSettings({
+                        inlineTranslate: { ...current, languagePrefix: '/' },
+                      });
                     }}
                     disabled={!enabled || !(inlineTranslate.enableLanguagePrefix ?? true)}
                     className="w-16 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"

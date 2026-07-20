@@ -75,4 +75,23 @@ describe('ThemesSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open General/i }));
     expect(nav).toHaveBeenCalled();
   });
+
+  it('keeps custom color text edits local until blur', () => {
+    const updateSettings = vi.fn();
+    useSettingsStore.setState({ theme: 'custom', updateSettings });
+    render(<ThemesSection />);
+    const input = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+
+    input.focus();
+    fireEvent.change(input, { target: { value: '#123456' } });
+
+    expect(input).toHaveFocus();
+    expect(input.value).toBe('#123456');
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    fireEvent.blur(input);
+    expect(updateSettings).toHaveBeenCalledWith({
+      customTheme: expect.objectContaining({ textColor: '#123456' }),
+    });
+  });
 });

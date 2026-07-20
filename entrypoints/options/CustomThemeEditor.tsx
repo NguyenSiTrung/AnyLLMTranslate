@@ -15,6 +15,7 @@ import { Toggle } from '@/ui/Toggle';
 import { Palette, RotateCcw } from 'lucide-react';
 import { GENERAL_THEME_OPTIONS } from '@/lib/themes';
 import { customThemeFromPreset } from '@/lib/customThemePresets';
+import { useDeferredCommit } from './hooks/useDeferredCommit';
 
 interface ColorPickerFieldProps {
   id: string;
@@ -31,7 +32,8 @@ function ColorPickerField({
   onChange,
   disabled = false,
 }: ColorPickerFieldProps) {
-  const hexValue = value === 'transparent' ? '#ffffff' : value;
+  const textField = useDeferredCommit(value, onChange);
+  const hexValue = textField.value === 'transparent' ? '#ffffff' : textField.value;
 
   return (
     <FieldGroup label={label} htmlFor={id}>
@@ -40,15 +42,19 @@ function ColorPickerField({
           id={id}
           type="color"
           value={hexValue.startsWith('#') ? hexValue : '#ffffff'}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            textField.adopt(e.target.value);
+            onChange(e.target.value);
+          }}
           aria-label={label}
           disabled={disabled}
           className="w-10 h-10 rounded-lg border border-zinc-700 bg-zinc-900 cursor-pointer disabled:cursor-not-allowed"
         />
         <input
           type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={textField.value}
+          onChange={(e) => textField.setValue(e.target.value)}
+          onBlur={textField.commit}
           disabled={disabled}
           className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 disabled:cursor-not-allowed"
         />

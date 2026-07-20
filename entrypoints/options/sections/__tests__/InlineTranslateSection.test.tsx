@@ -107,4 +107,23 @@ describe('InlineTranslateSection', () => {
       ]);
     });
   });
+
+  it('keeps the language-prefix edit local until blur', () => {
+    const updateSettings = vi.fn();
+    useSettingsStore.setState({ updateSettings });
+    render(<InlineTranslateSection />);
+    const input = screen.getByLabelText('Language prefix character') as HTMLInputElement;
+
+    input.focus();
+    fireEvent.change(input, { target: { value: '#' } });
+
+    expect(input).toHaveFocus();
+    expect(input.value).toBe('#');
+    expect(updateSettings).not.toHaveBeenCalled();
+
+    fireEvent.blur(input);
+    expect(updateSettings).toHaveBeenCalledWith({
+      inlineTranslate: expect.objectContaining({ languagePrefix: '#' }),
+    });
+  });
 });

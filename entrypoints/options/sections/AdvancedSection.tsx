@@ -128,25 +128,21 @@ export function AdvancedSection() {
   const [maxBatchCharsError, setMaxBatchCharsError] = useState('');
   const [maxRpmError, setMaxRpmError] = useState('');
 
-  // FR-9: Global System Prompt editor relocated here from the Providers tab
-  // (it's unrelated to any provider). Local draft synced to the upstream
-  // setting when reset to null externally (Reset button / settings import).
-  const [draftPrompt, setDraftPrompt] = useState(
+  // FR-9: Global System Prompt editor relocated here from the Providers tab.
+  // Keep edits local until blur so storage-sync writes cannot replace the
+  // controlled textarea while the user is typing.
+  const promptField = useDeferredCommit(
     settings.customSystemPrompt ?? DEFAULT_SYSTEM_PROMPT_TEMPLATE,
+    (customSystemPrompt) => updateSettings({ customSystemPrompt }),
   );
-  useEffect(() => {
-    if (settings.customSystemPrompt === null) {
-      setDraftPrompt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
-    }
-  }, [settings.customSystemPrompt]);
-  const promptValidation = settings.customSystemPrompt
-    ? validatePromptTemplate(settings.customSystemPrompt)
+  const promptValidation = promptField.value
+    ? validatePromptTemplate(promptField.value)
     : null;
 
   /** FR-5 — insert a template variable at the cursor (or append) and commit. */
   const insertVariable = (variable: string) => {
     const el = document.getElementById('advanced-system-prompt') as HTMLTextAreaElement | null;
-    const text = draftPrompt;
+    const text = promptField.value;
     const start = el?.selectionStart ?? text.length;
     const end = el?.selectionEnd ?? text.length;
     const next =
@@ -156,7 +152,7 @@ export function AdvancedSection() {
     if (el && typeof el.setRangeText === 'function') {
       el.setRangeText(variable, start, end, 'end');
     }
-    setDraftPrompt(next);
+    promptField.adopt(next);
     updateSettings({ customSystemPrompt: next });
   };
 
@@ -339,7 +335,7 @@ export function AdvancedSection() {
     }
     void refreshScientificHealth();
   }, [scientificPdf.enabled, scientificPdf.setupCompletedAt, scientificPdf.serverUrl, refreshScientificHealth]);
-  const isPromptCustom = settings.customSystemPrompt !== null;
+  const isPromptCustom = promptField.value !== DEFAULT_SYSTEM_PROMPT_TEMPLATE;
   const promptWarnings =
     promptValidation && !promptValidation.valid ? promptValidation.warnings : [];
 
@@ -501,12 +497,9 @@ export function AdvancedSection() {
               </div>
               <Textarea
                 id="advanced-system-prompt"
-                value={draftPrompt}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setDraftPrompt(val);
-                  updateSettings({ customSystemPrompt: val });
-                }}
+                value={promptField.value}
+                onChange={(e) => promptField.setValue(e.target.value)}
+                onBlur={promptField.commit}
                 rows={8}
                 mono
                 flush
@@ -533,7 +526,10 @@ export function AdvancedSection() {
                 variant="ghost"
                 size="sm"
                 icon={<RotateCcw className="w-3 h-3" />}
-                onClick={() => updateSettings({ customSystemPrompt: null })}
+                onClick={() => {
+                  promptField.adopt(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
+                  updateSettings({ customSystemPrompt: null });
+                }}
                 disabled={!isPromptCustom}
               >
                 Reset to default
