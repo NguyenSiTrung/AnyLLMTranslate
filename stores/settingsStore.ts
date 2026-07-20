@@ -68,6 +68,55 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 }));
 
+/**
+ * Keep decrypted in-memory API keys across a storage-event merge.
+ *
+ * chrome.storage.onChanged delivers ciphertext (or would force a "***" mask).
+ * Writing "***"/ciphertext into the store mid-edit resets controlled inputs and
+ * useDeferredCommit drafts, so the field looks unfocused / refuses typing.
+ * Prefer the previous plaintext until async loadFromStorage decrypts; brand-new
+ * keys without a prior plaintext stay blank (never flash ciphertext).
+ */
+function preserveInMemoryApiKeys(
+  prev: ExtensionSettings,
+  next: ExtensionSettings,
+): ExtensionSettings {
+  const prevLegacy = prev.provider?.apiKey;
+  const keepLegacy =
+    typeof prevLegacy === 'string' && prevLegacy.length > 0 && prevLegacy !== '***'
+      ? prevLegacy
+      : '';
+
+  let provider = next.provider;
+  if (provider?.apiKey) {
+    provider = { ...provider, apiKey: keepLegacy };
+  }
+
+  const prevKeyById = new Map<string, string>();
+  for (const p of prev.providers ?? []) {
+    for (const k of p.keys ?? []) {
+      if (k.apiKey && k.apiKey !== '***') prevKeyById.set(k.id, k.apiKey);
+    }
+  }
+
+  let providers = next.providers;
+  if (providers && providers.length > 0) {
+    providers = providers.map((p) => ({
+      ...p,
+      keys: (p.keys ?? []).map((key) => {
+        if (!key.apiKey) return key;
+        return { ...key, apiKey: prevKeyById.get(key.id) ?? '' };
+      }),
+    }));
+  }
+
+  return {
+    ...next,
+    ...(provider ? { provider } : {}),
+    ...(providers ? { providers } : {}),
+  };
+}
+
 /** Listen for storage changes from other contexts (popup, options, content) */
 export function initStorageSync(): () => void {
   const listener = (
@@ -81,29 +130,14 @@ export function initStorageSync(): () => void {
       | undefined;
     if (!newVal) return;
 
-    // Synchronous merge for immediate UI updates — but strip the encrypted
-    // apiKey so it doesn't briefly flash in UI before async decryption.
-    // Use a sentinel value instead of empty string to prevent a flash of the
-    // unencrypted key state (UI can detect the sentinel and show a placeholder).
+    // Synchronous merge for immediate UI updates — never inject ciphertext or
+    // the "***" sentinel into live form state (that resets focused inputs).
     const merged = deepMerge(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       newVal as Record<string, unknown>,
     ) as unknown as ExtensionSettings;
-    if (merged.provider?.apiKey) {
-      merged.provider = { ...merged.provider, apiKey: '***' };
-    }
-    // Multi-provider pool: mask EACH providers[].keys[].apiKey so the encrypted
-    // (or plaintext, depending on the writing context) value never flashes in
-    // the UI before the async reload decrypts it in place.
-    if (merged.providers && merged.providers.length > 0) {
-      merged.providers = merged.providers.map((provider) => ({
-        ...provider,
-        keys: (provider.keys ?? []).map((key) =>
-          key.apiKey ? { ...key, apiKey: '***' } : key,
-        ),
-      }));
-    }
-    useSettingsStore.setState(merged);
+    const prev = useSettingsStore.getState();
+    useSettingsStore.setState(preserveInMemoryApiKeys(prev, merged));
 
     // Async reload to decrypt any encrypted fields (e.g. apiKey)
     useSettingsStore.getState().loadFromStorage().catch(() => {});

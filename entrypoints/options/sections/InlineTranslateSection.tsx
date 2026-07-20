@@ -30,6 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
 import { DEFAULT_INLINE_TRANSLATE_BLOCKLIST } from '@/types/config';
 import { InlineTranslatePreview } from '@/entrypoints/options/components/InlineTranslatePreview';
+import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 
 const DUAL_MODE_OPTIONS: { value: string; label: string; icon: ReactNode }[] = [
   {
@@ -59,19 +60,31 @@ export function InlineTranslateSection() {
       ? `Space × ${inlineTranslate.tapCount}`
       : `${inlineTranslate.triggerKey} × ${inlineTranslate.tapCount}`;
 
-  const blocklistText = (inlineTranslate.blocklistPatterns ?? []).join('\n');
-  const patternCount = (inlineTranslate.blocklistPatterns ?? []).filter(Boolean).length;
-
-  const handleBlocklistChange = (value: string) => {
-    const patterns = value
+  // Local draft so newlines / trailing spaces survive while typing. Parse +
+  // persist only on blur (trim/filter on every keystroke ate separators and
+  // made the textarea feel unfocused / untypable).
+  const blocklistCommitted = (inlineTranslate.blocklistPatterns ?? []).join('\n');
+  const blocklistField = useDeferredCommit(blocklistCommitted, (text) => {
+    const patterns = text
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean);
-    patch({ blocklistPatterns: patterns });
-  };
+    // Read latest store so blur-commit does not clobber concurrent patches.
+    const current = useSettingsStore.getState().inlineTranslate;
+    void updateSettings({
+      inlineTranslate: { ...current, blocklistPatterns: patterns },
+    });
+  });
+  const patternCount = blocklistField.value
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean).length;
 
   const resetBlocklist = () => {
-    patch({ blocklistPatterns: [...DEFAULT_INLINE_TRANSLATE_BLOCKLIST] });
+    const next = [...DEFAULT_INLINE_TRANSLATE_BLOCKLIST];
+    const text = next.join('\n');
+    blocklistField.adopt(text);
+    patch({ blocklistPatterns: next });
   };
 
   const dualModeValue = inlineTranslate.dualMode ? 'dual' : 'translation-only';
@@ -291,8 +304,9 @@ export function InlineTranslateSection() {
                   <Textarea
                     id="inline-translate-blocklist"
                     rows={6}
-                    value={blocklistText}
-                    onChange={(e) => handleBlocklistChange(e.target.value)}
+                    value={blocklistField.value}
+                    onChange={(e) => blocklistField.setValue(e.target.value)}
+                    onBlur={blocklistField.commit}
                     disabled={!enabled}
                     mono
                     spellCheck={false}

@@ -77,4 +77,34 @@ describe('InlineTranslateSection', () => {
     render(<InlineTranslateSection />);
     expect(screen.getByText(/Enable inline translation to preview/i)).toBeInTheDocument();
   });
+
+  it('keeps blocklist draft while typing (newlines/spaces) and commits on blur', async () => {
+    useSettingsStore.setState({
+      inlineTranslate: {
+        ...DEFAULT_INLINE_TRANSLATE_SETTINGS,
+        enabled: true,
+        blocklistPatterns: ['*.figma.com'],
+      },
+    });
+    render(<InlineTranslateSection />);
+    const ta = screen.getByLabelText('Blocklist patterns') as HTMLTextAreaElement;
+
+    fireEvent.change(ta, { target: { value: '*.figma.com\n' } });
+    expect(ta.value).toBe('*.figma.com\n');
+    // Not yet committed — store still has the single pattern
+    expect(useSettingsStore.getState().inlineTranslate.blocklistPatterns).toEqual([
+      '*.figma.com',
+    ]);
+
+    fireEvent.change(ta, { target: { value: '*.figma.com\n*.notion.so' } });
+    expect(ta.value).toBe('*.figma.com\n*.notion.so');
+
+    fireEvent.blur(ta);
+    await waitFor(() => {
+      expect(useSettingsStore.getState().inlineTranslate.blocklistPatterns).toEqual([
+        '*.figma.com',
+        '*.notion.so',
+      ]);
+    });
+  });
 });

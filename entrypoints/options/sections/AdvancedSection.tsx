@@ -296,6 +296,22 @@ export function AdvancedSection() {
   const pdfAutoOpen = settings.pdfSettings?.autoOpen ?? 'off';
   const pdfOpenMode = settings.pdfSettings?.openMode ?? 'new-tab';
   const neverAutoOpenSites = settings.pdfSettings?.neverAutoOpenSites ?? [];
+  // Local draft: join/split/trim on every keystroke stripped commas and spaces
+  // so the field could not be edited. Commit parsed hosts on blur.
+  const neverAutoOpenCommitted = neverAutoOpenSites.join(', ');
+  const neverAutoOpenField = useDeferredCommit(neverAutoOpenCommitted, (text) => {
+    const currentPdf =
+      useSettingsStore.getState().pdfSettings ?? defaultPdfSettings;
+    void updateSettings({
+      pdfSettings: {
+        ...currentPdf,
+        neverAutoOpenSites: text
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+    });
+  });
   const scientificPdf = mergeScientificPdfSettings(settings.scientificPdf);
   const scientificStatus = resolveScientificPdfStatus({
     settings: scientificPdf,
@@ -1012,32 +1028,30 @@ export function AdvancedSection() {
                     id="pdf-never-open-input"
                     type="text"
                     placeholder="example.com, arxiv.org"
-                    value={neverAutoOpenSites.join(', ')}
-                    onChange={(e) =>
-                      updateSettings({
-                        pdfSettings: {
-                          ...(settings.pdfSettings ?? defaultPdfSettings),
-                          neverAutoOpenSites: e.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean),
-                        },
-                      })
-                    }
+                    value={neverAutoOpenField.value}
+                    onChange={(e) => neverAutoOpenField.setValue(e.target.value)}
+                    onBlur={neverAutoOpenField.commit}
                   />
-                  {neverAutoOpenSites.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-zinc-500">Skipping:</span>
-                      {neverAutoOpenSites.map((host) => (
-                        <span
-                          key={host}
-                          className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200/90"
-                        >
-                          {host}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const draftHosts = neverAutoOpenField.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    if (draftHosts.length === 0) return null;
+                    return (
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] text-zinc-500">Skipping:</span>
+                        {draftHosts.map((host) => (
+                          <span
+                            key={host}
+                            className="inline-flex items-center rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200/90"
+                          >
+                            {host}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </FieldGroup>
               </div>
             )}

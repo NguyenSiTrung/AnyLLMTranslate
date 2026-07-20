@@ -181,7 +181,7 @@ describe('useSettingsStore', () => {
   });
 
   describe('providers — multi-provider pool', () => {
-    it('defaults to one pool slot, persists updates, and masks apiKeys on cross-context sync', async () => {
+    it('defaults to one pool slot, persists updates, and preserves in-memory apiKeys on sync', async () => {
       expect(DEFAULT_SETTINGS.providers).toHaveLength(1);
       expect(DEFAULT_SETTINGS.providers[0]?.keys).toHaveLength(1);
       expect(useSettingsStore.getState().providers).toHaveLength(1);
@@ -224,8 +224,11 @@ describe('useSettingsStore', () => {
         },
         'local',
       );
-      expect(useSettingsStore.getState().providers[0]?.keys[0]?.apiKey).toBe('***');
-      expect(useSettingsStore.getState().providers[0]?.keys[1]?.apiKey).toBe('***');
+      // Existing key keeps prior plaintext (never flash ciphertext / "***").
+      expect(useSettingsStore.getState().providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
+      // Brand-new key id with no prior plaintext stays blank until decrypt reload.
+      expect(useSettingsStore.getState().providers[0]?.keys[1]?.apiKey).toBe('');
+      expect(useSettingsStore.getState().providers[0]?.keys[0]?.maxRpm).toBe(30);
 
       mockListeners[0](
         {
