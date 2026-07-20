@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-17 all (no dep/script drift; build ~4.1 MB; post pdf-composition archive) -->
+<!-- conductor-refresh: 2026-07-17 all (Node engines; scientific-pdf bridge; build ~3.5 MB; 995 TCs) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -6,6 +6,7 @@
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
 | **TypeScript** | 5.x | Type safety across all extension contexts (background, content, inject, UI) |
+| **Node.js** | ≥ 20.12.0 | Pinned via `package.json` `engines` (WXT/Vite toolchain) |
 
 ## Build & Tooling
 
@@ -123,4 +124,12 @@
 - Chrome's built-in PDF viewer runs in a sandboxed plugin — content scripts cannot access the rendered DOM
 - Bundling `pdfjs-dist` (~1.38 MB worker) inside the extension gives full control over page rendering, text extraction, and translation overlay
 - The viewer is an unlisted WXT page (`entrypoints/pdf-viewer/`) that opens via redirect or popup action
-- Side-by-side layout (canvas left, translated text right) avoids injecting into the original PDF rendering pipeline
+- Side-by-side layout (canvas left, translated result right) avoids injecting into the original PDF rendering pipeline
+
+### Why an optional Scientific PDF Docker bridge?
+- Layout-preserving scientific translation (pdf2zh / PDFMathTranslate) needs Python + models — must **not** ship in the MV3 bundle (size + AGPL)
+- Thin FastAPI orchestrator in `services/scientific-pdf-bridge/` calls pdf2zh at **runtime** only; extension talks HTTP to loopback (`127.0.0.1:17890` by default)
+- Per-job OpenAI-compatible credentials come from the extension provider pool — no second credential store
+- `MOCK_TRANSLATE=1` enables CI/smoke without downloading ONNX models
+- Helper scripts: `scripts/scientific-pdf-docker.sh` / `scientific-pdf-up.sh` / `scientific-pdf-down.sh`; compose: `docker-compose.scientific-pdf.yml`
+- Production extension build (`.output/chrome-mv3`) is ≈ **3.5 MB** total (`du`); bridge is external
