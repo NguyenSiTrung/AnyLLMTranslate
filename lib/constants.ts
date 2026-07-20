@@ -77,10 +77,9 @@ export const DATA_ATTRS = {
 export type PageState = 'dual' | 'translation-only' | 'off';
 
 /**
- * PDF viewer layout mode (split is the only live mode; translation-only was
- * for the removed in-browser Fast overlay path).
+ * PDF viewer shell mode (bridge-only): full-width reader, or original|result compare.
  */
-export type PdfViewMode = 'split' | 'translation-only';
+export type PdfShellMode = 'reader' | 'compare';
 
 /** Extension storage keys */
 export const STORAGE_KEYS = {
