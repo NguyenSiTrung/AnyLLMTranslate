@@ -45,7 +45,10 @@ export function installJsonParseSubtitleHook(
     installed = true;
   }
 
-  const baseParse = originalParse!;
+  const baseParse = originalParse;
+  if (!baseParse) {
+    return () => {};
+  }
 
   JSON.parse = function jsonParseWithSubtitleDiscovery(
     text: string,

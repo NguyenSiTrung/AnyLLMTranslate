@@ -120,7 +120,7 @@ export default function App(): ReactElement {
   useEffect(() => {
     if (!sourcePdfUrl) return;
     void scientific.refreshHealth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per source document
+    // Once per source document (scientific identity is stable for that URL).
   }, [sourcePdfUrl]);
 
   const bridgeReady = scientific.healthOk === true;

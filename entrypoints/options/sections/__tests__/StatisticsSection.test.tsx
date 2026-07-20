@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ZERO_COUNTERS, type DailyStatRecord, type TranslationStatsV2 } from '@/types/stats';
+import type * as StatsQuery from '@/services/statsQuery';
 
 vi.mock('@/services/statsCollector', () => ({
   getStatsV2: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock('@/services/statsCollector', () => ({
 }));
 
 vi.mock('@/services/statsQuery', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/services/statsQuery')>();
+  const actual = (await importOriginal()) as typeof StatsQuery;
   return {
     ...actual,
     loadDaysForPeriod: vi.fn(),

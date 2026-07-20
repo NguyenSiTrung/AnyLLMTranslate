@@ -716,9 +716,36 @@ describe('handleTranslate — parallel sub-batches', () => {
 
   it('issues ≥2 concurrent LLM calls when multiple batches exist', async () => {
     // Force many small batches: max 1 piece + low char budget → one piece per request.
+    // concurrencyLimit must be 0 (unlimited per-key) so sub-batch parallelism is
+    // not serialized by the default safe-key throttle (concurrencyLimit: 1).
+    // safeKeyThrottleMigrated: true prevents loadSettings from upgrading 0 → 1.
     mockStorage['anyllm-translate-settings'] = {
       maxTextGroupLengthPerRequest: 1,
       maxTextLengthPerRequest: 50,
+      safeKeyThrottleMigrated: true,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'Test',
+          baseUrl: 'https://api.example.com/v1',
+          model: 'test-model',
+          requiresApiKey: false,
+          temperature: 0.3,
+          maxTokens: 4096,
+          requestTimeoutMs: 60000,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk-test',
+              maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ],
     };
 
     let concurrent = 0;

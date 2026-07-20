@@ -21,7 +21,6 @@ import {
   undoMap,
   tryFallbackUndo,
   removeToast,
-  PULSING_CLASS,
 } from '@/content/inlineTranslate';
 import { runInlineTranslate } from '@/content/inlineTranslate/orchestrate';
 import type { InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';

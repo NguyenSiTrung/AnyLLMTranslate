@@ -81,13 +81,13 @@ export function computeTranslationStatus(input: ComputeStatusInput): ComputeStat
     };
   }
 
-  if (activeRequests > 0 || visiblePending > 0) {
+  if (!viewportComplete) {
     return {
       status: 'translating',
       translatedCount,
       totalCount,
       visiblePending,
-      viewportComplete: false,
+      viewportComplete,
     };
   }
 
@@ -107,7 +107,7 @@ export function computeTranslationStatus(input: ComputeStatusInput): ComputeStat
     translatedCount,
     totalCount,
     visiblePending: 0,
-    viewportComplete: true,
+    viewportComplete,
   };
 }
 

@@ -48,7 +48,8 @@ export function normalizeCategoryKey(category: string | undefined | null): strin
 export function getCategoryPromptSnippet(category: string | undefined | null): string | null {
   const key = normalizeCategoryKey(category);
   if (!key) return null;
-  if (CATEGORY_PROMPT_SNIPPETS[key]) return CATEGORY_PROMPT_SNIPPETS[key]!;
+  const exact = CATEGORY_PROMPT_SNIPPETS[key];
+  if (exact) return exact;
   // Prefix match: "News - Tech" → news
   for (const [k, snippet] of Object.entries(CATEGORY_PROMPT_SNIPPETS)) {
     if (key.startsWith(k) || key.includes(k)) return snippet;

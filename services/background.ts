@@ -131,6 +131,8 @@ interface TranslationSession {
   queue: number[];
   setPriority: (cueIndex: number, chunkSize: number) => void;
   sessionId: number;
+  /** Set when cancelled/reset so an in-flight chunk does not schedule more work. */
+  cancelled: boolean;
 }
 const activeSessions = new Map<number, TranslationSession>();
 let subtitleSessionCounter = 0;
@@ -165,6 +167,7 @@ function clearKeepaliveAlarm(): void {
 function stopSubtitleSession(tabId: number): void {
   const session = activeSessions.get(tabId);
   if (session) {
+    session.cancelled = true;
     session.queue.length = 0; // running loop exits on its next iteration
     activeSessions.delete(tabId);
   }
@@ -512,7 +515,12 @@ function __getPdfSemaphoreStateForTest(): { active: number; queued: number } {
 /** Seed an active subtitle session. Exported for tests. */
 function __seedSubtitleSessionForTest(tabId: number): { queue: number[]; sessionId: number } {
   const sid = ++subtitleSessionCounter;
-  const session: TranslationSession = { queue: [1, 2, 3], setPriority: () => {}, sessionId: sid };
+  const session: TranslationSession = {
+    queue: [1, 2, 3],
+    setPriority: () => {},
+    sessionId: sid,
+    cancelled: false,
+  };
   activeSessions.set(tabId, session);
   keepaliveAlarmActive = true; // simulate ensureKeepaliveAlarm having been called
   return session;
@@ -1206,15 +1214,16 @@ async function handleTranslateSubtitle(
           }
         },
         sessionId,
+        cancelled: false,
       };
 
       activeSessions.set(tabId, session);
       ensureKeepaliveAlarm();
 
       (async () => {
-         while (session.queue.length > 0) {
+         while (!session.cancelled && session.queue.length > 0) {
             const i = session.queue.shift();
-            if (i === undefined) break;
+            if (i === undefined || session.cancelled) break;
             const chunkCues = cues.slice(i, i + CHUNK_SIZE);
             // Bidirectional context: preceding cues + following cues.
             const precedingCues = cues.slice(Math.max(0, i - CONTEXT_SIZE), i);
@@ -1223,22 +1232,24 @@ async function handleTranslateSubtitle(
             
             try {
                const chunkResult = await translateChunk(chunkCues, contextCues);
+               if (session.cancelled) break;
                if (chunkResult.length > 0) {
-                 // Merge chunk into the full translatedCues array exactly at the right offset
-                 for (let j = 0; j < chunkResult.length; j++) {
-                    translatedCues[i + j] = chunkResult[j];
-                 }
-                 // Send ONLY the translated chunk delta (not the full array)
-                 // to reduce message size from O(n) to O(chunk_size)
-                 chrome.tabs.sendMessage(tabId, {
-                    action: 'SUBTITLE_CHUNK_TRANSLATED',
-                    chunkStart: i,
-                    chunkCues: chunkResult,
-                    sessionId: session.sessionId,
-                 });
-                 // subtitleCues counted inside translateChunk via recordUsage
+                  // Merge chunk into the full translatedCues array exactly at the right offset
+                  for (let j = 0; j < chunkResult.length; j++) {
+                     translatedCues[i + j] = chunkResult[j];
+                  }
+                  // Send ONLY the translated chunk delta (not the full array)
+                  // to reduce message size from O(n) to O(chunk_size)
+                  chrome.tabs.sendMessage(tabId, {
+                     action: 'SUBTITLE_CHUNK_TRANSLATED',
+                     chunkStart: i,
+                     chunkCues: chunkResult,
+                     sessionId: session.sessionId,
+                  });
+                  // subtitleCues counted inside translateChunk via recordUsage
                }
             } catch (error) {
+               if (session.cancelled) break;
                console.warn("AnyLLMTranslate: Background chunk translation failed", error);
                // Sub-project 6: surface the failure so the user knows a section
                // wasn't translated (instead of silently swallowing). Best-effort
@@ -1255,7 +1266,7 @@ async function handleTranslateSubtitle(
          activeSessions.delete(tabId);
          clearKeepaliveAlarm();
       })();
-    }
+      }
 
     // subtitleCues for the first chunk are recorded inside translateChunk.
     // Background chunks also record per successful translateChunk (avoids
@@ -2400,6 +2411,7 @@ function __getSubtitleSessionCounterForTest(): number {
 function __resetSubtitleSessionCounterForTest(): void {
   subtitleSessionCounter = 0;
   for (const session of activeSessions.values()) {
+    session.cancelled = true;
     session.queue.length = 0;
   }
   activeSessions.clear();

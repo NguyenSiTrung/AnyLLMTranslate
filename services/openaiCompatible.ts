@@ -202,7 +202,7 @@ export class OpenAICompatibleService implements TranslationService {
     }
 
     // FR-12: one repair request for still-missing ids before source back-fill.
-    let missing = missingTranslationIds(translations, expectedIds);
+    const missing = missingTranslationIds(translations, expectedIds);
     if (missing.length > 0 && missing.length < expectedIds.length) {
       try {
         const repairTexts = new Map<string, string>();
@@ -236,7 +236,8 @@ export class OpenAICompatibleService implements TranslationService {
       } catch {
         // Repair is best-effort; fall through to partial back-fill.
       }
-      missing = missingTranslationIds(translations, expectedIds);
+      // Remaining missing ids are handled by the partial back-fill below
+      // (translations.size < expectedIds.length).
     }
 
     // FR-16: opt-in quality self-check — one re-prompt on source-echo / dropped <z>.

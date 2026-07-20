@@ -11,6 +11,19 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  // Tests: allow non-null assertions (common after expect) and dynamic delete
+  // on mock storage maps. Production code still uses the strict defaults above.
+  {
+    files: [
+      '**/__tests__/**/*.{ts,tsx}',
+      '**/*.test.{ts,tsx}',
+      'tests/**/*.{ts,tsx}',
+    ],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-dynamic-delete': 'off',
+    },
+  },
   {
     ignores: [
       'node_modules/**',

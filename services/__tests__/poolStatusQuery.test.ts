@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { queryPoolKeyStatuses } from '../poolStatusQuery';
 import { ProviderPoolCoordinator } from '../providerPool';
 import type { TranslationService } from '@/services/base';
+import type { ExtensionSettings } from '@/types/config';
 
 describe('queryPoolKeyStatuses', () => {
   it('returns empty statuses when service is not a pool coordinator', async () => {
@@ -36,7 +37,7 @@ describe('queryPoolKeyStatuses', () => {
           ],
         },
       ],
-    } as any);
+    } as ExtensionSettings);
 
     const result = await queryPoolKeyStatuses(async () => coord);
     expect(result.success).toBe(true);

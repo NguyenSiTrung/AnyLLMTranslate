@@ -16,7 +16,8 @@ import {
   updateCues,
   cleanup as cleanupOverlay,
 } from '@/content/subtitleOverlay';
-import { NativeTrackRenderer } from '@/content/nativeTrackRenderer';
+// NativeTrackRenderer is intentionally not imported until createRenderer can
+// safely suppress player-owned native tracks (see createRenderer note below).
 
 export interface SubtitleDisplayConfig {
   displayMode?: 'bilingual' | 'translation-only';

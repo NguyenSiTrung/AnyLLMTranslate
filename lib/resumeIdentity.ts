@@ -66,7 +66,8 @@ export function matchResumeTranslations<
 
   const usedText = new Set<string>();
   for (let i = 0; i < livePieces.length; i++) {
-    const live = livePieces[i]!;
+    const live = livePieces[i];
+    if (!live) continue;
     const idKey = resumeIdentityKey({
       text: live.text,
       parentPath: live.parentPath,

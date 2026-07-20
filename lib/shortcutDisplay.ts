@@ -143,11 +143,12 @@ export function buildGlobalRows(
   const rows: ShortcutDisplayRow[] = [];
 
   for (const id of GLOBAL_COMMAND_ORDER) {
-    const meta = GLOBAL_COMMAND_META[id]!;
+    const meta = GLOBAL_COMMAND_META[id];
+    if (!meta) continue;
     const api = byName.get(id);
     const hasApi = Boolean(api);
     const shortcut = hasApi
-      ? (api!.shortcut ?? '').trim()
+      ? (api?.shortcut ?? '').trim()
       : (DEFAULT_GLOBAL_SHORTCUTS[id] ?? '');
     rows.push({
       id,

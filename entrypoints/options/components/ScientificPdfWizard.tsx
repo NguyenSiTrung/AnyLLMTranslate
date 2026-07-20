@@ -73,8 +73,7 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
       document.body.style.overflow = '';
       window.clearTimeout(t);
     };
-    // Only re-run when open flips true
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional open gate
+    // Only re-run when open flips true (intentional open gate).
   }, [open]);
 
   // Escape to close

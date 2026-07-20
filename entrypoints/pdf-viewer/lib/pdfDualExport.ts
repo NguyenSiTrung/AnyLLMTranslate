@@ -219,7 +219,8 @@ export async function buildAlternatingDualPdf(
 
   for (let i = 0; i < filtered.length; i++) {
     if (signal?.aborted) break;
-    const ref = filtered[i]!;
+    const ref = filtered[i];
+    if (!ref) continue;
     const sourceDoc = ref.source === 'original' ? originalDoc : monoDoc;
     const [embedded] = await output.embedPdf(sourceDoc, [ref.pageIndex]);
     const page = output.addPage([embedded.width, embedded.height]);

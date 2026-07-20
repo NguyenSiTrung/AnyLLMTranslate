@@ -5,6 +5,7 @@
  */
 
 import type { TranslationPiece } from '@/types/translation';
+import type { PageContext } from '@/types/config';
 import { extractPieces } from '@/content/domWalker';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
@@ -113,7 +114,6 @@ const handledContentKeys = new Set<string>();
  * the user scrolls. Cleared on explicit retry or a successful batch.
  */
 let systemicPause = false;
-let lastSystemicError = '';
 /** FR-11: per-session document terms for subsequent batch prompts. */
 let sessionTermMemory: string[] = [];
 /** Monotonically increasing translation session id.
@@ -198,7 +198,6 @@ function openProvidersSettings(): void {
 
 function enterSystemicPause(error: string): void {
   systemicPause = true;
-  lastSystemicError = error;
   viewportObserver?.setPaused(true);
   // Sticky banner: Retry resumes scroll translation; Dismiss only hides chrome
   // (pause stays so further scroll does not storm a dead pool).
@@ -218,7 +217,6 @@ function enterSystemicPause(error: string): void {
 function clearSystemicPause(): void {
   if (!systemicPause && !viewportObserver?.isPaused) return;
   systemicPause = false;
-  lastSystemicError = '';
   hideSystemicPauseBanner();
   viewportObserver?.setPaused(false);
   // Re-observe unfinished pieces so scrolling/resume can continue after recovery.
@@ -286,7 +284,7 @@ function streamTranslate(
   targetLanguage: string,
   compactInlineEnabled: boolean,
   extras?: {
-    pageContext?: import('@/types/config').PageContext;
+    pageContext?: PageContext;
     termMemoryBlock?: string;
   },
 ): Promise<TranslationResultMessage> {
@@ -909,7 +907,6 @@ export async function startTranslation(): Promise<void> {
   inFlightPieceIds.clear();
   handledContentKeys.clear();
   systemicPause = false;
-  lastSystemicError = '';
   sessionTermMemory = [];
   hideTranslationErrorNotification();
   hideSystemicPauseBanner();
@@ -1059,7 +1056,6 @@ export function stopTranslation(): void {
   inFlightPieceIds.clear();
   handledContentKeys.clear();
   systemicPause = false;
-  lastSystemicError = '';
   sessionTermMemory = [];
   invalidateSessionSettingsCache();
   // FR-7: write a final snapshot before clearing so the next session can resume,

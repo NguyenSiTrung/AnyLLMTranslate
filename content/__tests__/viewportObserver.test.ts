@@ -130,7 +130,6 @@ describe('ViewportObserver', () => {
     const p2 = document.createElement('p');
     document.body.appendChild(p1);
     document.body.appendChild(p2);
-    const shared: TranslationPiece = makePiece('shared', p1);
     // Same piece object observed under two parents is unrealistic; simulate
     // pending accumulation of the same id by observing one piece and pushing
     // via two intersection targets that share the piece list... Instead:

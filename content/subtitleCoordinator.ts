@@ -1039,7 +1039,13 @@ async function translateManifestBatch(
     endTime: i + 1,
     text,
   }));
-  const activeSessionId = state.activeSubtitleSessionId;
+  // Snapshot at send time. Prefer an already-active id; otherwise allocate so
+  // progressive chunks and this response share a stable identity before seek.
+  let requestSessionId = state.activeSubtitleSessionId;
+  if (requestSessionId === null) {
+    requestSessionId = allocateSubtitleSessionId();
+    state.activeSubtitleSessionId = requestSessionId;
+  }
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
@@ -1049,7 +1055,7 @@ async function translateManifestBatch(
       pageContext,
       profile: currentSubtitleProfile(),
       knobOverrides: state.subtitleKnobOverride,
-      sessionId: activeSessionId ?? undefined,
+      sessionId: requestSessionId,
       skipFilmPreScan,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
@@ -1057,14 +1063,9 @@ async function translateManifestBatch(
       console.warn('AnyLLMTranslate: Manifest cue delta translation failed', response?.error);
       return false;
     }
-    // Seek-cancellation detection: if the active session changed (seek reset
-    // cancelled the session and a new one was started), drop this stale result.
-    if (
-      activeSessionId !== null &&
-      response.sessionId !== undefined &&
-      response.sessionId !== state.activeSubtitleSessionId &&
-      state.activeSubtitleSessionId !== null
-    ) {
+    // Seek-cancellation: active id was cleared or replaced while this batch was
+    // in flight — drop the stale result (do not re-adopt a cancelled session).
+    if (state.activeSubtitleSessionId !== requestSessionId) {
       console.log('AnyLLMTranslate: Dropping stale manifest batch (session changed)');
       return true; // Not a failure — just stale; don't sub-batch retry
     }
@@ -1645,6 +1646,12 @@ async function activateOverlayFromManifestCues(
     ? (language || 'en')
     : settings.sourceLanguage;
 
+  // Pre-assign session id so progressive SUBTITLE_CHUNK_TRANSLATED messages
+  // and the translateSubtitle response share one identity. Seek reset clears
+  // this to null; stale chunks with a prior sessionId are then dropped.
+  const sessionId = allocateSubtitleSessionId();
+  state.activeSubtitleSessionId = sessionId;
+
   // Translate the first delta (all cue texts seen so far). On success the
   // manifestTranslationMap is populated and the overlay upgrades to
   // translated text for the initial chunk. This mirrors translateDomCueTexts.
@@ -1654,7 +1661,7 @@ async function activateOverlayFromManifestCues(
     sourceLanguage,
     settings.targetLanguage,
     pageContext,
-    null,
+    sessionId,
   );
 
   hideSubtitleToast();
@@ -2153,25 +2160,24 @@ export function startCoordinator(): () => void {
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; chunkStart?: number; chunkCues?: SubtitleCue[]; language?: string };
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED') {
-      // Drop stale chunks from old subtitle sessions. Only drop when we already
-      // have an active session id and it differs — never treat "active is null"
-      // as a mismatch (that raced with progressive chunks before the first
-      // translateSubtitle response set the id; fixed by pre-assigning, kept as
-      // defense-in-depth).
+      // Drop stale chunks from cancelled/old subtitle sessions.
+      // After seek/SPA reset, activeSubtitleSessionId is null — any chunk still
+      // carrying a sessionId is from the cancelled session and must be dropped.
+      // Adopting a sessionId while active is null used to re-apply stale cues
+      // (e.g. pre-seek translations) onto the cleared overlay.
+      // Chunks without sessionId remain accepted for backward compatibility.
       const chunkSessionId = (message as { sessionId?: number }).sessionId;
-      if (
-        chunkSessionId !== undefined &&
-        state.activeSubtitleSessionId !== null &&
-        chunkSessionId !== state.activeSubtitleSessionId
-      ) {
-        console.log('AnyLLMTranslate: Dropping stale subtitle chunk', {
-          expected: state.activeSubtitleSessionId,
-          received: chunkSessionId,
-        });
-        return;
-      }
-      if (chunkSessionId !== undefined && state.activeSubtitleSessionId === null) {
-        state.activeSubtitleSessionId = chunkSessionId;
+      if (chunkSessionId !== undefined) {
+        if (
+          state.activeSubtitleSessionId === null ||
+          chunkSessionId !== state.activeSubtitleSessionId
+        ) {
+          console.log('AnyLLMTranslate: Dropping stale subtitle chunk', {
+            expected: state.activeSubtitleSessionId,
+            received: chunkSessionId,
+          });
+          return;
+        }
       }
       // Handle chunk delta format (chunkStart + chunkCues)
       const useManifestChunkPath =

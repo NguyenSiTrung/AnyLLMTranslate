@@ -4,6 +4,8 @@ import {
   __resetSemaphoreForTest,
   __resetTranslationServiceForTest,
   __resetSettingsCacheForTest,
+  __resetSubtitleSessionCounterForTest,
+  __getActiveSessionCountForTest,
 } from '../background';
 
 // Mock chrome APIs
@@ -74,10 +76,17 @@ describe('services/background', () => {
   beforeEach(async () => {
     // Reset stored settings before each test
     delete mockStorage['anyllm-translate-settings'];
-    // Drain any pending background chunks from the previous test so their
-    // async fetch calls don't leak into the next test's fetch mock. Also
-    // reset the global semaphore so stale slots/queued waiters don't block.
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Drain leftover progressive subtitle chunk queues first so prior tests'
+    // background loops stop scheduling more work, then wait until in-flight
+    // chunk translates finish (session count hits 0). A short fixed sleep was
+    // not enough under load and leaked fetch bodies into the next test.
+    __resetSubtitleSessionCounterForTest();
+    const drainDeadline = Date.now() + 2000;
+    while (__getActiveSessionCountForTest() > 0 && Date.now() < drainDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      __resetSubtitleSessionCounterForTest();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
     __resetSemaphoreForTest();
     // Reset the cached provider-pool coordinator. FR-1 made the pool open
     // circuit breakers on real failures (previously swallowed), and the
@@ -435,10 +444,11 @@ describe('services/background', () => {
     it('provides bidirectional context for chunks 1+ (preceding + following)', async () => {
       // Build 60 cues: chunk 0 = [0..24], chunk 1 = [25..49], chunk 2 = [50..59]
       // For chunk 1 (i=25): preceding = [22..24], following = [50..52]
+      // Unique prefix avoids cross-test subtitle cache hits on bare "Line N" texts.
       const cues = Array.from({ length: 60 }, (_, i) => ({
         startTime: i,
         endTime: i + 1,
-        text: `Line ${i}`,
+        text: `Bidir line ${i}`,
       }));
 
       // Capture all fetch calls
@@ -475,29 +485,30 @@ describe('services/background', () => {
         { tab: { id: 42 } } as chrome.runtime.MessageSender,
       );
 
-      // Wait for at least 2 background chunks to be processed. Polling (vs a
-      // fixed setTimeout) is deterministic — it advances as soon as chunk 1
-      // lands, and is robust to parallel-suite scheduling jitter under load.
+      // Wait for this test's own chunk bodies (filter by unique "Bidir" prefix
+      // so a drained-but-finishing prior session cannot poison fetchCalls[1]).
       const deadline = Date.now() + 5000;
-      while (fetchCalls.length < 2 && Date.now() < deadline) {
+      const bidirBodies = () => fetchCalls.filter((b) => b.includes('Bidir line'));
+      while (bidirBodies().length < 2 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
-      // fetchCalls[0] = chunk 0 (first chunk, forward look-ahead only)
-      // fetchCalls[1] = chunk 1 (should have bidirectional context)
-      expect(fetchCalls.length).toBeGreaterThanOrEqual(2);
+      const ownCalls = bidirBodies();
+      expect(ownCalls.length).toBeGreaterThanOrEqual(2);
 
-      const chunk1Body = JSON.parse(fetchCalls[1]) as { messages: Array<{ content: string }> };
+      // ownCalls[0] = chunk 0 (first chunk, forward look-ahead only)
+      // ownCalls[1] = chunk 1 (should have bidirectional context)
+      const chunk1Body = JSON.parse(ownCalls[1]) as { messages: Array<{ content: string }> };
       const chunk1UserContent = chunk1Body.messages[1].content;
 
       // Preceding context: cues 22, 23, 24 (before chunk 1 at index 25)
-      expect(chunk1UserContent).toContain('"ctx1": "Line 22"');
-      expect(chunk1UserContent).toContain('"ctx2": "Line 23"');
-      expect(chunk1UserContent).toContain('"ctx3": "Line 24"');
+      expect(chunk1UserContent).toContain('"ctx1": "Bidir line 22"');
+      expect(chunk1UserContent).toContain('"ctx2": "Bidir line 23"');
+      expect(chunk1UserContent).toContain('"ctx3": "Bidir line 24"');
       // Following context: cues 50, 51, 52 (after chunk 1 which ends at 49)
-      expect(chunk1UserContent).toContain('"ctx4": "Line 50"');
-      expect(chunk1UserContent).toContain('"ctx5": "Line 51"');
-      expect(chunk1UserContent).toContain('"ctx6": "Line 52"');
+      expect(chunk1UserContent).toContain('"ctx4": "Bidir line 50"');
+      expect(chunk1UserContent).toContain('"ctx5": "Bidir line 51"');
+      expect(chunk1UserContent).toContain('"ctx6": "Bidir line 52"');
     });
 
     it('accumulates rolling glossary across chunks', async () => {

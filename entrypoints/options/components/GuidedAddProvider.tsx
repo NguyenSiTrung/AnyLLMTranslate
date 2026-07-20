@@ -134,7 +134,11 @@ export function GuidedAddProvider({
       if (result.overall) {
         setTestOk(true);
         // auto-commit on success after brief moment
-        const id = addProviderFromCatalog(catalogId!, {
+        if (!catalogId) {
+          setTestOk(false);
+          return;
+        }
+        const id = addProviderFromCatalog(catalogId, {
           displayName,
           baseUrl,
           model,
