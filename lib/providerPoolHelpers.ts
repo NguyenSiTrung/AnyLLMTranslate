@@ -32,6 +32,8 @@ export function buildProviderConfig(provider: PoolProvider, key: PoolKey): Provi
     requiresApiKey: provider.requiresApiKey,
     requestTimeoutMs: provider.requestTimeoutMs,
     maxRpm: key.maxRpm,
+    maxBatchChars: provider.maxBatchChars,
+    maxTextGroupCount: provider.maxTextGroupCount,
   };
 }
 

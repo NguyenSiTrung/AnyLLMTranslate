@@ -42,6 +42,13 @@ export interface TranslationService {
    *  updated provider fields (baseUrl/model/apiKey/maxRpm). */
   updateConfig?(config: ProviderConfig): void;
 
+  /**
+   * Temporarily override same-key 429 retry budget for the next request(s).
+   * Pool sets `0` when other healthy keys exist (fail over immediately) and
+   * `null`/`undefined` to restore the service default. Optional.
+   */
+  setMax429Retries?(maxRetries: number | null | undefined): void;
+
   /** Detect the page category using LLM */
   detectPageCategory?(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }>;
 

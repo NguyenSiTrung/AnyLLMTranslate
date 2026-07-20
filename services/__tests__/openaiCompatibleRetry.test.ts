@@ -200,6 +200,21 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it('setMax429Retries(0) fails over immediately on first 429 (no same-key retry)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(make429Response());
+    globalThis.fetch = fetchMock;
+
+    const service = new OpenAICompatibleService(makeConfig());
+    service.setMax429Retries(0);
+    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    await flushTimers();
+
+    await expect(promise).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
+    // Only the initial attempt — no same-key 429 retries.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    service.setMax429Retries(null); // restore default
+  });
+
   // ── Non-429 errors unaffected ────────────────────────────────────────────
 
   it('non-429 errors (500 / network / 401) use the existing retry path, not 429 backoff', async () => {

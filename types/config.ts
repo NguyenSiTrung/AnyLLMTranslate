@@ -39,10 +39,14 @@ export interface ProviderConfig {
   requestTimeoutMs?: number;
   /** Max requests per minute (0 = unlimited). Threaded into the service for RPM limiting. */
   maxRpm?: number;
-  /** Per-provider max batch size in characters. Overrides the global
-   *  maxBatchChars when set (> 0). 0 = use global default. */
+  /**
+   * Optional per-provider batch char budget (from pool provider override).
+   * Used when building member configs; web batching reads via resolvePoolBatchBudgets.
+   */
   maxBatchChars?: number;
-  /** Per-provider max number of text pieces per request. 0 = unlimited. */
+  /**
+   * Optional per-provider max pieces per request (from pool provider override).
+   */
   maxTextGroupCount?: number;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
@@ -128,10 +132,18 @@ export interface PoolProvider {
   maxTokens: number;
   /** Request timeout in milliseconds (default: 60000). */
   requestTimeoutMs?: number;
-  /** Per-provider max batch size in characters. Overrides the global
-   *  maxBatchChars when set (> 0). 0 = use global default. */
+  /**
+   * Per-provider max batch size in characters for web translate.
+   * When > 0, tightens the effective budget vs global
+   * {@link ExtensionSettings.maxTextLengthPerRequest} (min across enabled
+   * providers). 0 / unset = use global only.
+   */
   maxBatchChars?: number;
-  /** Per-provider max number of text pieces per request. 0 = unlimited. */
+  /**
+   * Per-provider max number of text pieces per LLM request.
+   * When > 0, tightens vs global {@link ExtensionSettings.maxTextGroupLengthPerRequest}.
+   * 0 / unset = use global only.
+   */
   maxTextGroupCount?: number;
   /** Whether this provider participates in the rotation pool. */
   enabled: boolean;

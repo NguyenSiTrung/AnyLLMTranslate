@@ -686,21 +686,44 @@ Rules:
    *   retry delay to avoid thundering-herd retries when many concurrent
    *   requests get rate-limited simultaneously.
    */
+  private static DEFAULT_MAX_429_RETRIES = 3;
   private static MAX_429_RETRIES = 3;
   private static RATE_LIMIT_BASE_DELAY_MS = 1000;
   private static RATE_LIMIT_MAX_DELAY_MS = 30_000;
   private static RATE_LIMIT_JITTER_MS = 500;
 
+  /**
+   * Per-instance override for same-key 429 retries. `null` = use class default.
+   * Pool sets 0 when other healthy keys can absorb traffic immediately.
+   */
+  private max429RetriesOverride: number | null = null;
+
+  /**
+   * Override same-key 429 retry budget. Pass `null`/`undefined` to restore the
+   * class default ({@link DEFAULT_MAX_429_RETRIES}).
+   */
+  setMax429Retries(maxRetries: number | null | undefined): void {
+    if (maxRetries === null || maxRetries === undefined) {
+      this.max429RetriesOverride = null;
+      return;
+    }
+    this.max429RetriesOverride = Math.max(0, Math.floor(maxRetries));
+  }
+
+  private effectiveMax429Retries(): number {
+    return this.max429RetriesOverride ?? OpenAICompatibleService.MAX_429_RETRIES;
+  }
+
   /** Test override: set all 429 retry delays to near-zero so integration
    *  tests don't wait through real backoff timers. Restore in afterEach. */
   static __set429DelaysForTest(zero: boolean): void {
     if (zero) {
-      OpenAICompatibleService.MAX_429_RETRIES = 3;
+      OpenAICompatibleService.MAX_429_RETRIES = OpenAICompatibleService.DEFAULT_MAX_429_RETRIES;
       OpenAICompatibleService.RATE_LIMIT_BASE_DELAY_MS = 0;
       OpenAICompatibleService.RATE_LIMIT_MAX_DELAY_MS = 0;
       OpenAICompatibleService.RATE_LIMIT_JITTER_MS = 0;
     } else {
-      OpenAICompatibleService.MAX_429_RETRIES = 3;
+      OpenAICompatibleService.MAX_429_RETRIES = OpenAICompatibleService.DEFAULT_MAX_429_RETRIES;
       OpenAICompatibleService.RATE_LIMIT_BASE_DELAY_MS = 1000;
       OpenAICompatibleService.RATE_LIMIT_MAX_DELAY_MS = 30_000;
       OpenAICompatibleService.RATE_LIMIT_JITTER_MS = 500;
@@ -812,7 +835,8 @@ Rules:
         // exhausted, throw a friendly ApiError carrying statusCode 429 so the
         // pool's circuit breaker can trip and fail over to another key.
         if (response.status === 429) {
-          if (rateLimitAttempts < OpenAICompatibleService.MAX_429_RETRIES) {
+          const max429 = this.effectiveMax429Retries();
+          if (rateLimitAttempts < max429) {
             const delay = this.compute429Delay(response, rateLimitAttempts);
             await new Promise((resolve) => setTimeout(resolve, delay));
             return this.fetchWithRetry(request, maxRetries, attempt, rateLimitAttempts + 1);

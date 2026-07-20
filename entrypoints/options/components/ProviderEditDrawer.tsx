@@ -300,6 +300,40 @@ export function ProviderEditDrawer({
             minLabel="256"
             maxLabel="16384"
           />
+          <FieldGroup
+            label="Max batch characters"
+            description="Override global batch size for this provider (0 = use Advanced default). Tightest enabled provider wins in a multi-provider pool."
+            htmlFor={`pbc-${provider.id}`}
+          >
+            <Input
+              id={`pbc-${provider.id}`}
+              type="number"
+              min={0}
+              max={10000}
+              value={provider.maxBatchChars ?? 0}
+              onChange={(e) =>
+                onUpdateProvider({ maxBatchChars: Math.max(0, Number(e.target.value) || 0) })
+              }
+              hint="0 = global default"
+            />
+          </FieldGroup>
+          <FieldGroup
+            label="Max pieces per request"
+            description="Override global max pieces per LLM request for this provider (0 = use Advanced default)."
+            htmlFor={`ptg-${provider.id}`}
+          >
+            <Input
+              id={`ptg-${provider.id}`}
+              type="number"
+              min={0}
+              max={50}
+              value={provider.maxTextGroupCount ?? 0}
+              onChange={(e) =>
+                onUpdateProvider({ maxTextGroupCount: Math.max(0, Number(e.target.value) || 0) })
+              }
+              hint="0 = global default"
+            />
+          </FieldGroup>
         </div>
       )}
 

@@ -338,6 +338,8 @@ export function computePoolSignature(settings: ExtensionSettings): string {
     temperature: p.temperature,
     maxTokens: p.maxTokens,
     requestTimeoutMs: p.requestTimeoutMs,
+    maxBatchChars: p.maxBatchChars ?? 0,
+    maxTextGroupCount: p.maxTextGroupCount ?? 0,
     enabled: p.enabled,
     keys: (p.keys ?? []).map((k) => ({
       id: k.id,
@@ -348,7 +350,12 @@ export function computePoolSignature(settings: ExtensionSettings): string {
       enabled: k.enabled,
     })),
   }));
-  return JSON.stringify({ providers, maxRpm: settings.maxRpm ?? 0 });
+  return JSON.stringify({
+    providers,
+    maxRpm: settings.maxRpm ?? 0,
+    maxTextGroupLengthPerRequest: settings.maxTextGroupLengthPerRequest ?? 0,
+    maxTextLengthPerRequest: settings.maxTextLengthPerRequest ?? 0,
+  });
 }
 
 /** Save settings to chrome.storage.local */

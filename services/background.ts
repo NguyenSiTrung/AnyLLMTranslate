@@ -134,6 +134,7 @@ function resolveWebCacheScope(settings: ExtensionSettings): {
   };
 }
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
+import { resolvePoolBatchBudgets } from '@/lib/poolBatchBudgets';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
 import { withRetry } from '@/lib/subtitleRetry';
@@ -767,10 +768,9 @@ async function handleTranslate(
     // FR-3: partition by inArticleContext so article prose and chrome text
     // don't interleave in the same LLM request (coherent context per batch).
     const { deduped, dupes } = dedupPiecesByText(uncachedPieces);
-    const baseBatchOpts = {
-      maxTextGroupLengthPerRequest: settings.maxTextGroupLengthPerRequest,
-      maxTextLengthPerRequest: settings.maxTextLengthPerRequest,
-    };
+    // Global Advanced budgets, tightened by any enabled provider's
+    // maxBatchChars / maxTextGroupCount overrides (tightest positive wins).
+    const baseBatchOpts = resolvePoolBatchBudgets(settings);
     const batchOpts = settings.enableAdaptiveBatching
       ? computeAdaptiveBudgets(baseBatchOpts, adaptiveBatchState)
       : baseBatchOpts;

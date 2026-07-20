@@ -29,6 +29,8 @@ interface StubService extends TranslationService {
   /** Every config handed to updateConfig (excludes the construction config). */
   updateConfigCalls: ProviderConfig[];
   updateConfig(config: ProviderConfig): void;
+  /** Optional: pool sets same-key 429 retry budget before dispatch. */
+  setMax429Retries?(n?: number | null): void;
 }
 
 function makeStub(keyId: string, initialConfig: ProviderConfig): StubService {
@@ -679,6 +681,148 @@ describe('ProviderPoolCoordinator', () => {
         sourceLanguage: 'en',
       });
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('skip saturated keys (load-spread)', () => {
+    function twoKeyConcurrency(limit: number): ExtensionSettings {
+      const providers: PoolProvider[] = [
+        {
+          id: 'p1',
+          displayName: 'P1',
+          baseUrl: 'https://a/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: limit, interval: 0, enabled: true },
+            { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: limit, interval: 0, enabled: true },
+          ],
+        },
+      ];
+      return { ...DEFAULT_SETTINGS, providers };
+    }
+
+    it('skips a busy key and uses a free sibling instead of queuing', async () => {
+      // Scenario: k1 held by req1; req2 uses k2 and finishes; req3's RR lands on
+      // busy k1 — must skip to free k2 rather than queue behind k1.
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeyConcurrency(1));
+
+      const k1 = stubs.get('k1');
+      const k2 = stubs.get('k2');
+      if (!k1 || !k2) throw new Error('stubs missing');
+
+      let releaseK1: () => void = () => {};
+      const k1Blocked = new Promise<void>((resolve) => {
+        releaseK1 = resolve;
+      });
+      k1.translate = async () => {
+        k1.callCount++;
+        await k1Blocked;
+        return { success: true, translations: new Map([['id1', 'from-k1']]) };
+      };
+      k2.translate = async () => {
+        k2.callCount++;
+        return { success: true, translations: new Map([['id1', 'from-k2']]) };
+      };
+
+      const first = coord.translate(baseRequest()); // → k1, holds
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(k1.callCount).toBe(1);
+
+      const second = await coord.translate(baseRequest()); // → k2, done
+      expect(second.translations.get('id1')).toBe('from-k2');
+      expect(k2.callCount).toBe(1);
+
+      // Third: RR would pick k1 again, but k1 is still at concurrency cap.
+      const thirdPromise = coord.translate(baseRequest());
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Without load-spread, third queues on k1 (k2.callCount stays 1 until k1 frees).
+      // With load-spread, third uses free k2 immediately.
+      expect(k2.callCount).toBe(2);
+      const third = await thirdPromise;
+      expect(third.translations.get('id1')).toBe('from-k2');
+
+      releaseK1();
+      await first;
+      expect(k1.callCount).toBe(1); // never double-dispatched while capped
+    });
+  });
+
+  describe('fast 429 failover when siblings exist', () => {
+    it('configures member for 0 same-key 429 retries when other healthy keys exist', async () => {
+      const max429Sets: Array<{ keyId: string; value: number | null | undefined }> = [];
+      factory = vi.fn(
+        (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
+          const s = makeStub(identity.keyId, config);
+          s.setMax429Retries = (n?: number | null) => {
+            max429Sets.push({ keyId: identity.keyId, value: n });
+          };
+          stubs.set(identity.keyId, s);
+          return s;
+        },
+      );
+
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      await coord.translate(baseRequest());
+      // First request: 2 healthy keys → prefer fast failover (0 retries)
+      expect(max429Sets.some((e) => e.value === 0)).toBe(true);
+    });
+
+    it('allows default 429 retries when only one healthy key remains', async () => {
+      const max429Sets: Array<{ keyId: string; value: number | null | undefined }> = [];
+      factory = vi.fn(
+        (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
+          const s = makeStub(identity.keyId, config);
+          s.setMax429Retries = (n?: number | null) => {
+            max429Sets.push({ keyId: identity.keyId, value: n });
+          };
+          stubs.set(identity.keyId, s);
+          return s;
+        },
+      );
+
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      // Open k1 so only k2 is healthy
+      setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
+      await coord.translate(baseRequest()).catch(() => null);
+      max429Sets.length = 0;
+
+      setOutcome('k1', {
+        kind: 'success',
+        result: { success: true, translations: new Map([['id1', 'from-k1']]) },
+      });
+      setOutcome('k2', {
+        kind: 'success',
+        result: { success: true, translations: new Map([['id1', 'from-k2']]) },
+      });
+
+      await coord.translate(baseRequest());
+      // Only one healthy → restore default retries (null/undefined)
+      const last = max429Sets[max429Sets.length - 1];
+      expect(last?.value === null || last?.value === undefined || last?.value === 3).toBe(true);
     });
   });
 });

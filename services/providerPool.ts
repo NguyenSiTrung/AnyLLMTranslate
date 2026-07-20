@@ -360,17 +360,29 @@ export class ProviderPoolCoordinator implements TranslationService {
    *  - Failover walks the REMAINING healthy slots sequentially (a `tried` set
    *    guarantees no revisit), recomputing the healthy pool after each open.
    */
+  /** True when the key is at its concurrency cap (and a free sibling could take work). */
+  private isKeySaturated(slot: PoolSlot): boolean {
+    const limit = slot.concurrencyLimit;
+    if (!limit || limit <= 0) return false;
+    return (this.inFlight.get(slot.keyId) ?? 0) >= limit;
+  }
+
   /**
-   * FR-5: acquire a per-key concurrency slot. If `concurrencyLimit > 0` and the
-   * key already has `concurrencyLimit` in-flight requests, the caller awaits a
-   * FIFO queue position. Returns a `release` fn that must be called in `finally`.
-   * When `concurrencyLimit === 0`, this is a no-op (uses the global semaphore
-   * cap only) — preserving the pre-FR-5 default behavior.
+   * FR-5: acquire a per-key concurrency slot.
+   *
+   * - When `blockIfSaturated` is false (default for multi-key pick): if the key
+   *   is already at its concurrency cap, returns `null` immediately so the
+   *   dispatcher can try another healthy key (load-spread).
+   * - When `blockIfSaturated` is true (all keys saturated, or single-key pool):
+   *   queues FIFO until a slot frees — same as pre-load-spread behavior.
+   * - `concurrencyLimit === 0` → no per-key cap (global semaphore only).
    */
-  private async acquireKeySlot(slot: PoolSlot): Promise<() => void> {
+  private async acquireKeySlot(
+    slot: PoolSlot,
+    blockIfSaturated = true,
+  ): Promise<(() => void) | null> {
     const limit = slot.concurrencyLimit;
     if (!limit || limit <= 0) {
-      // No per-key cap — track in-flight anyway for status, release is a no-op.
       this.inFlight.set(slot.keyId, (this.inFlight.get(slot.keyId) ?? 0) + 1);
       return () => {
         const n = (this.inFlight.get(slot.keyId) ?? 1) - 1;
@@ -379,7 +391,7 @@ export class ProviderPoolCoordinator implements TranslationService {
     }
     const current = this.inFlight.get(slot.keyId) ?? 0;
     if (current >= limit) {
-      // Block until a slot frees up.
+      if (!blockIfSaturated) return null;
       await new Promise<void>((resolve) => {
         const queue = this.keyQueues.get(slot.keyId) ?? [];
         queue.push(resolve);
@@ -468,10 +480,11 @@ export class ProviderPoolCoordinator implements TranslationService {
     // the invariant obvious and survives any breaker-clock skew).
     const tried = new Set<string>();
 
-    // Bounded by the healthy count — guarantees termination.
-    for (let attempt = 0; attempt < healthy.length; attempt++) {
-      // Advance the cursor for each attempt; skip any already-tried slot. No
-      // modulo-fallback: every healthy index is real.
+    // free-pass (skip saturated) + optional queue-pass (block when all busy).
+    const maxAttempts = healthy.length * 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const allowQueue = attempt >= healthy.length;
+
       let idx = this.cursor.next();
       if (idx === null) break;
       let slot = healthy[idx];
@@ -483,29 +496,44 @@ export class ProviderPoolCoordinator implements TranslationService {
         slot = healthy[idx];
       }
       if (!slot) break;
+
+      // Load-spread: prefer a free sibling over queuing on a saturated key.
+      if (!allowQueue && this.isKeySaturated(slot)) {
+        const freeLeft = healthy.some(
+          (s) => !tried.has(s.keyId) && !this.isKeySaturated(s),
+        );
+        if (freeLeft) continue;
+      }
+
       tried.add(slot.keyId);
       const member = this.members.get(slot.keyId);
       if (!member) continue;
 
-      // FR-5: acquire a per-key concurrency slot before dispatch, then apply
-      // the per-key throttle interval. Release in finally so the slot frees up
-      // on both success and failure (failover).
-      const releaseKeySlot = await this.acquireKeySlot(slot);
+      const hasFreeSibling = healthy.some(
+        (s) => s.keyId !== slot.keyId && !this.isKeySaturated(s) && !tried.has(s.keyId),
+      );
+      const blockIfSaturated = allowQueue || !hasFreeSibling;
+      const releaseKeySlot = await this.acquireKeySlot(slot, blockIfSaturated);
+      if (!releaseKeySlot) {
+        tried.delete(slot.keyId);
+        continue;
+      }
+
+      // Fast 429 failover when other untried healthy keys can absorb traffic.
+      const otherUntriedHealthy = healthy.some((s) => !tried.has(s.keyId));
+      member.service.setMax429Retries?.(otherUntriedHealthy ? 0 : null);
+
       try {
         await this.applyKeyThrottle(slot);
         const result = await call(member.service);
         this.breaker.recordSuccess(slot.keyId);
         return result;
       } catch (error) {
-        // Normalize: lastError is always a real Error (FR-8 #11) so callers
-        // reading .lastError.message never throw.
         lastError = error instanceof Error ? error : new Error(String(error));
         const statusCode = error instanceof ApiError ? error.statusCode : undefined;
         const kind = this.breaker.classifyFailure(statusCode);
         if (kind !== 'clientError') {
-          // Eligible failure: open the breaker and fail over to the next slot.
           this.breaker.recordFailure(slot.keyId, kind, this.clock());
-          // If no healthy slots remain (recomputed), surface the last error.
           const failNow = this.clock();
           const remaining = healthySlots(this.slots, this.breaker, failNow);
           if (remaining.length === 0) {
@@ -517,11 +545,10 @@ export class ProviderPoolCoordinator implements TranslationService {
           }
           continue;
         }
-        // Non-eligible (clientError): surface directly, no failover.
         throw error;
       } finally {
-        // FR-5: release the per-key concurrency slot on every exit path.
         releaseKeySlot();
+        member.service.setMax429Retries?.(null);
       }
     }
 

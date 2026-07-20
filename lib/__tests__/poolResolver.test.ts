@@ -75,6 +75,7 @@ describe('resolveSlots', () => {
     const ordered = [
       provider({
         id: 'pB',
+        requiresApiKey: false,
         keys: [
           { id: 'kB2', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
           { id: 'kB1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
@@ -82,10 +83,44 @@ describe('resolveSlots', () => {
       }),
       provider({
         id: 'pA',
+        requiresApiKey: false,
         keys: [{ id: 'kA1', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
       }),
     ];
     expect(resolveSlots(ordered).map((s) => s.keyId)).toEqual(['kB2', 'kB1', 'kA1']);
+  });
+
+  it('skips empty apiKey when requiresApiKey is true, keeps empty for keyless', () => {
+    const withEmpty = [
+      provider({
+        id: 'needs-key',
+        requiresApiKey: true,
+        keys: [
+          { id: 'empty', apiKey: '   ', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+          { id: 'good', apiKey: 'sk-real', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+        ],
+      }),
+      provider({
+        id: 'local',
+        requiresApiKey: false,
+        keys: [
+          { id: 'no-key', apiKey: '', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+        ],
+      }),
+    ];
+    expect(resolveSlots(withEmpty).map((s) => s.keyId)).toEqual(['good', 'no-key']);
+  });
+
+  it('carries per-provider maxBatchChars and maxTextGroupCount into slots', () => {
+    const slots = resolveSlots([
+      provider({
+        maxBatchChars: 1500,
+        maxTextGroupCount: 2,
+        keys: [{ id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+      }),
+    ]);
+    expect(slots[0]?.providerConfig.maxBatchChars).toBe(1500);
+    expect(slots[0]?.providerConfig.maxTextGroupCount).toBe(2);
   });
 });
 

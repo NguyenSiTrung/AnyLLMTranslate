@@ -38,6 +38,9 @@ export function resolveSlots(providers: PoolProvider[]): PoolSlot[] {
     if (!provider.enabled) continue;
     for (const key of provider.keys ?? []) {
       if (!key.enabled) continue;
+      // Skip empty credentials on key-required providers so they never enter
+      // rotation (would 401 → long-open and waste failover budget).
+      if (provider.requiresApiKey && !key.apiKey.trim()) continue;
       slots.push(
         buildSlot(provider, key.id, key.apiKey, key.maxRpm, key.concurrencyLimit, key.interval),
       );
@@ -80,6 +83,8 @@ function buildSlot(
     requiresApiKey: provider.requiresApiKey,
     requestTimeoutMs: provider.requestTimeoutMs,
     maxRpm,
+    maxBatchChars: provider.maxBatchChars,
+    maxTextGroupCount: provider.maxTextGroupCount,
   };
   return {
     providerId: provider.id,
