@@ -21,16 +21,25 @@ function getStore(): ReturnType<typeof createStore> {
   return store;
 }
 
-/** Generate SHA-256 cache key from source text + language pair (+ optional model). */
+/**
+ * Generate SHA-256 cache key from source text + language pair
+ * (+ optional model and/or config fingerprint).
+ *
+ * FR-14: `modelId` scopes keys so model switches miss cache.
+ * FR-6 (web-translate-hardening): `fingerprint` folds provider/prompt/glossary/
+ * category/temp/rich-format. Old keys without fingerprint miss safely.
+ * Subtitle path uses `getCachedTranslationByKey` / `subtitle:` namespace — untouched.
+ */
 export async function generateCacheKey(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
   modelId?: string,
+  fingerprint?: string,
 ): Promise<string> {
-  // FR-14: when model is provided, scope the key so model switches miss cache.
   const modelPart = modelId ? `:${modelId}` : '';
-  const input = `${sourceLanguage}:${targetLanguage}${modelPart}:${text}`;
+  const fpPart = fingerprint ? `:fp:${fingerprint}` : '';
+  const input = `${sourceLanguage}:${targetLanguage}${modelPart}${fpPart}:${text}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
 
@@ -52,8 +61,9 @@ export async function generateNegativeCacheKey(
   sourceLanguage: string,
   targetLanguage: string,
   modelId?: string,
+  fingerprint?: string,
 ): Promise<string> {
-  const base = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
+  const base = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId, fingerprint);
   return `${NEGATIVE_CACHE_PREFIX}${base}`;
 }
 
@@ -100,9 +110,10 @@ export async function getCachedTranslation(
   targetLanguage: string,
   ttlDays = 30,
   modelId?: string,
+  fingerprint?: string,
 ): Promise<string | null> {
   try {
-    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
+    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId, fingerprint);
     const entry = await get<CacheEntry>(key, getStore());
 
     if (!entry) return null;
@@ -141,9 +152,10 @@ export async function cacheTranslation(
   sourceLanguage: string,
   targetLanguage: string,
   modelId?: string,
+  fingerprint?: string,
 ): Promise<void> {
   try {
-    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId);
+    const key = await generateCacheKey(text, sourceLanguage, targetLanguage, modelId, fingerprint);
     const entry = buildCacheEntry(key, translatedText, sourceLanguage, targetLanguage);
     await set(key, entry, getStore());
   } catch {
@@ -230,9 +242,17 @@ export async function getCachedFailure(
   sourceLanguage: string,
   targetLanguage: string,
   ttlMinutes = 120,
+  modelId?: string,
+  fingerprint?: string,
 ): Promise<string | null> {
   try {
-    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    const key = await generateNegativeCacheKey(
+      text,
+      sourceLanguage,
+      targetLanguage,
+      modelId,
+      fingerprint,
+    );
     const entry = await get<NegativeCacheEntry>(key, getStore());
     if (!entry) return null;
     const ttlMs = Math.max(1, ttlMinutes) * 60 * 1000;
@@ -258,12 +278,20 @@ export async function cacheFailure(
   error: string,
   sourceLanguage: string,
   targetLanguage: string,
+  modelId?: string,
+  fingerprint?: string,
 ): Promise<void> {
   if (!shouldNegativeCacheFailure(error)) {
     return;
   }
   try {
-    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    const key = await generateNegativeCacheKey(
+      text,
+      sourceLanguage,
+      targetLanguage,
+      modelId,
+      fingerprint,
+    );
     const entry: NegativeCacheEntry = { key, error, cachedAt: Date.now() };
     await set(key, entry, getStore());
   } catch {
@@ -277,9 +305,17 @@ export async function deleteCachedFailure(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
+  modelId?: string,
+  fingerprint?: string,
 ): Promise<void> {
   try {
-    const key = await generateNegativeCacheKey(text, sourceLanguage, targetLanguage);
+    const key = await generateNegativeCacheKey(
+      text,
+      sourceLanguage,
+      targetLanguage,
+      modelId,
+      fingerprint,
+    );
     await del(key, getStore());
   } catch {
     // Silently fail — negative cache is best-effort

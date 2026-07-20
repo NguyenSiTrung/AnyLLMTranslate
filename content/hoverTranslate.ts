@@ -23,6 +23,12 @@ let currentHoverTarget: Element | null = null;
 let hoverCache = new WeakMap<Element, string>();
 
 /**
+ * FR-15: in-flight hover translations keyed by element so leave/re-enter before
+ * completion reuses the same promise (no double-dispatch).
+ */
+const hoverInFlight = new WeakMap<Element, Promise<void>>();
+
+/**
  * Monotonic counter incorporated into hover IDs so two elements with identical
  * textContent (repetitive UI like "Loading...", repeated product titles) get
  * distinct piece IDs. Without this, the second element's ID collides with the
@@ -116,40 +122,56 @@ function cancelHoverTimer(): void {
   }
 }
 
-/** Translate the hovered element */
+/** Translate the hovered element (FR-15: per-element in-flight dedup). */
 async function translateHoverTarget(element: Element): Promise<void> {
   if (!isEnabled) return;
 
   // Check cache first
   if (hoverCache.has(element)) return;
 
-  const text = element.textContent?.trim() ?? '';
-  if (text.length < 2) return;
-
-  const pieceId = generateHoverId(element);
-
-  // Check if already injected
-  if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) {
+  // FR-15: join existing in-flight request for this element
+  const pending = hoverInFlight.get(element);
+  if (pending) {
+    await pending;
     return;
   }
 
-  try {
-    const settings = await loadSettings();
+  const work = (async () => {
+    const text = element.textContent?.trim() ?? '';
+    if (text.length < 2) return;
 
-    const response = await chrome.runtime.sendMessage({
-      action: 'translateSelection',
-      text,
-      sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-    });
+    const pieceId = generateHoverId(element);
 
-    if (response?.success && response.translatedText) {
-      // Use existing translationDisplay for consistent theming
-      applyTranslation(element, pieceId, response.translatedText);
-      hoverCache.set(element, response.translatedText);
+    // Check if already injected
+    if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${CSS.escape(pieceId)}"]`)) {
+      return;
     }
-  } catch (error) {
-    console.warn('[AnyLLMTranslate] Hover translate failed:', error);
+
+    try {
+      const settings = await loadSettings();
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'translateSelection',
+        text,
+        sourceLanguage: settings.sourceLanguage,
+        targetLanguage: settings.targetLanguage,
+      });
+
+      if (response?.success && response.translatedText) {
+        // Use existing translationDisplay for consistent theming
+        applyTranslation(element, pieceId, response.translatedText);
+        hoverCache.set(element, response.translatedText);
+      }
+    } catch (error) {
+      console.warn('[AnyLLMTranslate] Hover translate failed:', error);
+    }
+  })();
+
+  hoverInFlight.set(element, work);
+  try {
+    await work;
+  } finally {
+    hoverInFlight.delete(element);
   }
 }
 

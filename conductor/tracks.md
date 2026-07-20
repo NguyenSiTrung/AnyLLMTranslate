@@ -88,6 +88,11 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-_None — all tracks archived as of 2026-07-17._
+---
+
+## [x] Track: Web Translate Lifecycle & Bilingual Display Hardening
+*Link: [./conductor/tracks/web-translate-hardening_20260720/](./conductor/tracks/web-translate-hardening_20260720/)*
+*Priority: High · Type: Hardening · Source: 2026-07-20 deep analysis (P0+P1+P2)*
+*Completed: 2026-07-20 — P0 lifecycle + cache fingerprint + SPA registry/langDetect/rules/a11y seams; 638 tests green*
 
 ---

@@ -76,10 +76,63 @@ import {
   recordBatchLatency,
   type AdaptiveBatchState,
 } from '@/lib/adaptiveBatching';
+import {
+  computeCacheFingerprint,
+  hashGlossaryContent,
+} from '@/lib/cacheFingerprint';
 
 /** Rolling latency for adaptive batch sizing (SW lifetime; opt-in only). */
 let adaptiveBatchState: AdaptiveBatchState = createAdaptiveBatchState();
 import { formatGlossary } from '@/lib/glossary';
+
+/**
+ * FR-6: web cache fingerprint from live settings.
+ * Always-on for dimensions that change output; empty string when nothing
+ * optional is set (legacy lang+text keys still work for bare configs).
+ */
+function resolveWebCacheScope(settings: ExtensionSettings): {
+  modelId: string | undefined;
+  fingerprint: string | undefined;
+} {
+  const enabled =
+    settings.providers?.find((p) => p.enabled) ?? settings.providers?.[0];
+  const model =
+    enabled?.model || settings.provider?.model || undefined;
+  const baseUrl =
+    enabled?.baseUrl || settings.provider?.baseUrl || undefined;
+  const temperature =
+    typeof enabled?.temperature === 'number'
+      ? enabled.temperature
+      : typeof settings.provider?.temperature === 'number'
+        ? settings.provider.temperature
+        : undefined;
+  const glossaryHash = hashGlossaryContent(settings.glossary ?? []);
+  const promptVersion = settings.customSystemPrompt
+    ? hashGlossaryContent(settings.customSystemPrompt)
+    : '';
+  const categoryMode = settings.enableContextAwareTranslation
+    ? `ctx:${settings.enableLLMPageCategoryDetection ? 'llm' : 'heuristic'}`
+    : '';
+  const richFormatVersion = settings.enableRichTranslate ? 'rich-v1' : '';
+  const fingerprint = computeCacheFingerprint({
+    providerEndpoint: baseUrl,
+    // Model is also folded into fingerprint so keys miss when model changes
+    // even if cacheKeyIncludesModel is off (legacy toggle still adds modelId).
+    model,
+    sourceLanguage: '', // languages stay on the primary key path
+    targetLanguage: '',
+    promptVersion: promptVersion || undefined,
+    glossaryHash: glossaryHash || undefined,
+    categoryMode: categoryMode || undefined,
+    temperature,
+    richFormatVersion: richFormatVersion || undefined,
+  });
+  const modelId = settings.cacheKeyIncludesModel ? model : undefined;
+  return {
+    modelId,
+    fingerprint: fingerprint || undefined,
+  };
+}
 import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
@@ -322,11 +375,8 @@ export function initWebStreamPortListener(): void {
         // FR-2/FR-7: write fresh translations to the success cache so resume +
         // negative-cache lookups work the same as the non-streaming path.
         if (result.success) {
-          const cacheModelId = settings.cacheKeyIncludesModel
-            ? (settings.providers?.find((p) => p.enabled)?.model ||
-                settings.provider?.model ||
-                undefined)
-            : undefined;
+          const { modelId: cacheModelId, fingerprint: cacheFp } =
+            resolveWebCacheScope(settings);
           for (const { id, translatedText } of results) {
             const piece = msg.pieces.find((p) => p.id === id);
             if (piece) {
@@ -338,6 +388,7 @@ export function initWebStreamPortListener(): void {
                   msg.sourceLanguage,
                   msg.targetLanguage,
                   cacheModelId,
+                  cacheFp,
                 ).catch(() => {});
               }
             }
@@ -651,12 +702,9 @@ async function handleTranslate(
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
     const providerId = bestEffortProviderId(settings);
     const host = hostFromSender(sender);
-    // FR-14: optional model-scoped cache key.
-    const cacheModelId = settings.cacheKeyIncludesModel
-      ? (settings.providers?.find((p) => p.enabled)?.model ||
-          settings.provider?.model ||
-          undefined)
-      : undefined;
+    // FR-14 + FR-6: model-scoped + config fingerprint for web cache keys.
+    const { modelId: cacheModelId, fingerprint: cacheFp } =
+      resolveWebCacheScope(settings);
 
     // FR-1 + FR-5 (web-translate-v3): parallel success/failure cache lookups
     // per piece (Promise.all) — same semantics as serial, lower latency on
@@ -673,9 +721,11 @@ async function handleTranslate(
       },
       {
         getCachedTranslation: (text, src, tgt, ttl) =>
-          getCachedTranslation(text, src, tgt, ttl, cacheModelId),
-        getCachedFailure,
-        deleteCachedFailure,
+          getCachedTranslation(text, src, tgt, ttl, cacheModelId, cacheFp),
+        getCachedFailure: (text, src, tgt, ttlMin) =>
+          getCachedFailure(text, src, tgt, ttlMin, cacheModelId, cacheFp),
+        deleteCachedFailure: (text, src, tgt) =>
+          deleteCachedFailure(text, src, tgt, cacheModelId, cacheFp),
       },
     );
     const originalById = new Map(message.pieces.map((p) => [p.id, p]));
@@ -790,6 +840,7 @@ async function handleTranslate(
                   message.sourceLanguage,
                   message.targetLanguage,
                   cacheModelId,
+                  cacheFp,
                 );
               }
             }
@@ -813,6 +864,8 @@ async function handleTranslate(
               error,
               message.sourceLanguage,
               message.targetLanguage,
+              cacheModelId,
+              cacheFp,
             ).catch(() => {});
           }
         }

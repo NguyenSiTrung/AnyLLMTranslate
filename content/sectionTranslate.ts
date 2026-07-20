@@ -10,6 +10,9 @@ import { loadSettings } from '@/lib/config';
 import { findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { DATA_ATTRS } from '@/lib/constants';
 
+/** Matches translationDisplay's original-wrapper attribute (FR-5). */
+const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
+
 interface TranslatedSection {
   element: Element;
   pieces: TranslationPiece[];
@@ -130,14 +133,38 @@ function addSectionDismissButton(sectionEl: Element): void {
 }
 
 export function removeSectionTranslation(sectionEl: Element): void {
+  // FR-5: mirror removeAllTranslations cleanup scoped to this section so
+  // translation-only mode does not leave originals display:none / wrapped.
+
   // Remove translation elements within this section only
   const translations = sectionEl.querySelectorAll(`[${DATA_ATTRS.ROLE}="translation"]`);
   translations.forEach((el) => el.remove());
 
+  // Sibling translations may sit outside the section element (inserted after
+  // a block original). Collect piece ids from marked originals and drop matching
+  // following siblings that still carry ROLE=translation or PIECE_ID.
+  const markedInSection = sectionEl.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
+  for (const original of markedInSection) {
+    let next = original.nextElementSibling;
+    while (next) {
+      const isTranslationSibling =
+        next.getAttribute(DATA_ATTRS.ROLE) === 'translation' ||
+        next.hasAttribute(DATA_ATTRS.PIECE_ID) ||
+        next.classList.contains('anyllm-inline-bilingual') ||
+        next.hasAttribute('data-anyllm-inline-clone-for');
+      if (!isTranslationSibling) break;
+      const toRemove = next;
+      next = next.nextElementSibling;
+      toRemove.remove();
+    }
+  }
+
   // Remove inline bilingual elements and translation-only clones (siblings of the
   // originals created in translation-only mode). Previously these were missed,
   // leaving orphaned inline translations behind after section removal.
-  const inlineBilinguals = sectionEl.querySelectorAll('.anyllm-inline-bilingual, [data-anyllm-inline-clone-for]');
+  const inlineBilinguals = sectionEl.querySelectorAll(
+    '.anyllm-inline-bilingual, [data-anyllm-inline-clone-for]',
+  );
   inlineBilinguals.forEach((el) => el.remove());
 
   // Remove loading/error placeholders by piece-id (they carry PIECE_ID, not a
@@ -151,9 +178,27 @@ export function removeSectionTranslation(sectionEl: Element): void {
   const dismissBtn = sectionEl.querySelector(`[${DATA_ATTRS.ROLE}="section-dismiss"]`);
   if (dismissBtn) dismissBtn.remove();
 
-  // Remove translated markers
-  const marked = sectionEl.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
-  marked.forEach((el) => el.removeAttribute(DATA_ATTRS.TRANSLATED));
+  // Canonical marker cleanup: ROLE=original + TRANSLATED + loading/error attrs
+  const marked = sectionEl.querySelectorAll(
+    `[${DATA_ATTRS.TRANSLATED}], [${DATA_ATTRS.ROLE}="original"]`,
+  );
+  marked.forEach((el) => {
+    el.removeAttribute(DATA_ATTRS.ROLE);
+    el.removeAttribute(DATA_ATTRS.TRANSLATED);
+    el.removeAttribute('data-anyllm-loading');
+    el.removeAttribute('data-anyllm-error');
+  });
+
+  // Unwrap data-anyllm-original-wrapper nodes (same as removeAllTranslations)
+  const wrappers = sectionEl.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`);
+  for (const wrapper of wrappers) {
+    const parent = wrapper.parentElement;
+    if (!parent) continue;
+    while (wrapper.firstChild) {
+      parent.insertBefore(wrapper.firstChild, wrapper);
+    }
+    wrapper.remove();
+  }
 
   // Remove from tracking
   const idx = translatedSections.findIndex((s) => s.element === sectionEl);

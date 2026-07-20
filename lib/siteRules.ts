@@ -20,13 +20,38 @@ export function matchHostname(hostname: string, pattern: string): boolean {
 }
 
 /**
- * Find the first matching SiteRule for a given hostname.
+ * Specificity score for a hostname pattern (FR-28: most-specific wins).
+ * Higher = more specific. Exact host > longer wildcard suffix > shorter.
+ */
+export function hostnamePatternSpecificity(pattern: string): number {
+  const p = pattern.toLowerCase();
+  if (!p.startsWith('*.')) {
+    // Exact host — highest tier + length
+    return 1000 + p.length;
+  }
+  // Wildcard: longer suffix is more specific (*.docs.google.com > *.google.com)
+  return p.length;
+}
+
+/**
+ * Find the most-specific matching SiteRule for a given hostname (FR-28).
+ * Ties break by first occurrence in the rules array (stable, documented order).
  */
 export function findMatchingRule(
   hostname: string,
   rules: SiteRule[] = [],
 ): SiteRule | undefined {
-  return rules.find((rule) => matchHostname(hostname, rule.hostname));
+  let best: SiteRule | undefined;
+  let bestScore = -1;
+  for (const rule of rules) {
+    if (!matchHostname(hostname, rule.hostname)) continue;
+    const score = hostnamePatternSpecificity(rule.hostname);
+    if (score > bestScore) {
+      best = rule;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 /**

@@ -3,6 +3,17 @@
 
 Reusable patterns discovered during development. Read this before starting new work.
 
+## Web translate lifecycle (from: web-translate-hardening_20260720, 2026-07-20)
+- **Thin session contract:** `TranslationSessionRegistry` (id + port/abort registry) + `LifecycleMutex` in `lib/translationSession.ts`. Bump session *before* any await on start/stop; guard stream `piece` events and non-stream responses with `isCurrent`. Disconnect registered ports on bump.
+- **Stop snapshot order:** Freeze pieces synchronously in `writeResumeSnapshot` *before* `allPieces = []`. Closing over the live array after clear makes Stop a resume no-op.
+- **Resume before observe:** Await `restoreFromSnapshot` (or set `resumeRestorePending`) before `viewportObserver.observeAll`; gate `translatePieces` while restore is pending.
+- **Piece registry:** `Map<pieceId>` + `WeakMap<parent, Map<text, piece>>` for O(1) dedup; `pruneDetachedPieces` on mutation flush (`!parent.isConnected`).
+- **Cache fingerprint:** `lib/cacheFingerprint.ts` + `resolveWebCacheScope` on web success/negative keys (endpoint, model, prompt hash, glossary hash, category mode, temp, rich-v1). Old keys miss safely. Subtitle stays on `subtitle:` / ByKey.
+- **langDetect skip bar:** Prefer unnecessary translate over wrong skip. `SAME_LANG_SKIP_CONFIDENCE = 0.78`. Ukrainian letters → `uk`; Han-only confidence capped below skip bar; kana+kanji → `ja`.
+- **Blocklist boundary:** `*figma.com` matches `figma.com` / `*.figma.com` only — never `evilfigma.com` (`hostnameMatchesBlockPattern`).
+- **Site rules:** `findMatchingRule` picks most-specific pattern (exact > longer wildcard).
+- **Display lookup:** `findPieceElement` + `pieceElements` Map + `CSS.escape`; keyboard retry via tabindex + Enter/Space.
+
 ## PDF viewer shell — reader / compare (from: ec2ddf2 reader-first shell, 2026-07-20)
 - Bridge-only product uses **`PdfShellMode = 'reader' | 'compare'`** (session-only; new `?file=` always starts `reader`). Do **not** persist shell mode; do **not** revive live `PdfViewMode` split/translation-only as the primary IA.
 - **`reader`** = full-width single document; **`compare`** = Original | result only when `resultKind` is held — `applyShellMode(..., 'compare')` is a no-op without a result.

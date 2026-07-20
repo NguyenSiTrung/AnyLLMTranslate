@@ -42,10 +42,48 @@ export interface ParallelCacheLookupOptions {
   failureCacheTtlMinutes: number;
   enableFailureCache: boolean;
   skipFailureCache?: boolean;
+  /**
+   * FR-11: max concurrent IDB lookups. Default {@link DEFAULT_CACHE_LOOKUP_CONCURRENCY}.
+   * Set to 0 or Infinity for unbounded (legacy Promise.all).
+   */
+  concurrency?: number;
+}
+
+/** Default cap on parallel cache get/set fan-out (FR-11). */
+export const DEFAULT_CACHE_LOOKUP_CONCURRENCY = 8;
+
+/**
+ * Run async workers over items with a concurrency cap; preserve result order.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const limit =
+    !Number.isFinite(concurrency) || concurrency <= 0
+      ? items.length
+      : Math.max(1, Math.floor(concurrency));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runOne(): Promise<void> {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      const item = items[i];
+      if (item === undefined) continue;
+      results[i] = await worker(item, i);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, () => runOne());
+  await Promise.all(runners);
+  return results;
 }
 
 /**
- * Look up success + failure caches for all pieces in parallel.
+ * Look up success + failure caches for all pieces with bounded concurrency (FR-11).
  * Preserves semantic order of outcomes matching input piece order.
  */
 export async function parallelCacheLookup(
@@ -60,45 +98,44 @@ export async function parallelCacheLookup(
     failureCacheTtlMinutes,
     enableFailureCache,
     skipFailureCache = false,
+    concurrency = DEFAULT_CACHE_LOOKUP_CONCURRENCY,
   } = options;
 
-  return Promise.all(
-    pieces.map(async (piece): Promise<CacheLookupOutcome> => {
-      const cached = await deps.getCachedTranslation(
+  return mapWithConcurrency(pieces, concurrency, async (piece): Promise<CacheLookupOutcome> => {
+    const cached = await deps.getCachedTranslation(
+      piece.text,
+      sourceLanguage,
+      targetLanguage,
+      cacheTTLDays,
+    );
+    if (cached !== null) {
+      return {
+        kind: 'cached',
+        id: piece.id,
+        translatedText: cached,
+        textLength: piece.text.length,
+      };
+    }
+
+    if (enableFailureCache && !skipFailureCache) {
+      const failure = await deps.getCachedFailure(
         piece.text,
         sourceLanguage,
         targetLanguage,
-        cacheTTLDays,
+        failureCacheTtlMinutes,
       );
-      if (cached !== null) {
-        return {
-          kind: 'cached',
-          id: piece.id,
-          translatedText: cached,
-          textLength: piece.text.length,
-        };
+      if (failure !== null) {
+        return { kind: 'failed', id: piece.id, error: failure };
       }
+    } else if (skipFailureCache) {
+      // Fire-and-forget clear so forced retries re-hit the LLM.
+      deps
+        .deleteCachedFailure(piece.text, sourceLanguage, targetLanguage)
+        .catch(() => {});
+    }
 
-      if (enableFailureCache && !skipFailureCache) {
-        const failure = await deps.getCachedFailure(
-          piece.text,
-          sourceLanguage,
-          targetLanguage,
-          failureCacheTtlMinutes,
-        );
-        if (failure !== null) {
-          return { kind: 'failed', id: piece.id, error: failure };
-        }
-      } else if (skipFailureCache) {
-        // Fire-and-forget clear so forced retries re-hit the LLM.
-        deps
-          .deleteCachedFailure(piece.text, sourceLanguage, targetLanguage)
-          .catch(() => {});
-      }
-
-      return { kind: 'uncached', id: piece.id, text: piece.text };
-    }),
-  );
+    return { kind: 'uncached', id: piece.id, text: piece.text };
+  });
 }
 
 /**

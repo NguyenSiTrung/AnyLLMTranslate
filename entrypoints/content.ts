@@ -57,7 +57,7 @@ import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 import { isContextInvalidated } from '@/lib/utils';
-import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
+import { detectLanguage, isSameLanguage, SAME_LANG_SKIP_CONFIDENCE } from '@/lib/langDetect';
 import { isTransientTranslationError } from '@/lib/translationErrors';
 import {
   loadSnapshot,
@@ -88,6 +88,10 @@ import {
   matchResumeTranslations,
   parentPathFromElement,
 } from '@/lib/resumeIdentity';
+import {
+  TranslationSessionRegistry,
+  LifecycleMutex,
+} from '@/lib/translationSession';
 
 let viewportObserver: ViewportObserver | null = null;
 let mutationWatcher: MutationWatcher | null = null;
@@ -116,11 +120,18 @@ const handledContentKeys = new Set<string>();
 let systemicPause = false;
 /** FR-11: per-session document terms for subsequent batch prompts. */
 let sessionTermMemory: string[] = [];
-/** Monotonically increasing translation session id.
- *  Bumped on startTranslation and stopTranslation so that in-flight
- *  responses from previous sessions are recognized as stale and
- *  silently dropped (no late DOM writes after restore / re-start). */
+/**
+ * Thin session contract (FR-1): monotonically increasing id + registry of
+ * live stream ports/AbortControllers. Bumped on start/stop/body-swap so
+ * in-flight responses (including stream piece events) are dropped.
+ */
+const sessionRegistry = new TranslationSessionRegistry();
+/** @deprecated Prefer sessionRegistry.current — kept as a live alias for tests. */
 let translationSession = 0;
+/** Serializes start/stop/body-swap so concurrent commands cannot dual-observe (FR-3). */
+const lifecycleMutex = new LifecycleMutex();
+/** True while a resume restore is in flight — gates viewport LLM dispatch (FR-4). */
+let resumeRestorePending = false;
 let _textSelectionCleanup: (() => void) | null = null;
 let _hoverTranslateCleanup: (() => void) | null = null;
 let _keyboardShortcutsCleanup: (() => void) | null = null;
@@ -227,6 +238,65 @@ function clearSystemicPause(): void {
   }
 }
 
+/** FR-7: piece-id registry + parent/text identity index (O(1) dup checks). */
+const piecesById = new Map<string, TranslationPiece>();
+/** parentElement → (text → piece) for identity-based dedup without O(N×M) scans. */
+const piecesByParentText = new WeakMap<Element, Map<string, TranslationPiece>>();
+
+function registerPiece(piece: TranslationPiece): void {
+  piecesById.set(piece.id, piece);
+  let byText = piecesByParentText.get(piece.parentElement);
+  if (!byText) {
+    byText = new Map();
+    piecesByParentText.set(piece.parentElement, byText);
+  }
+  byText.set(piece.text, piece);
+}
+
+function unregisterPiece(piece: TranslationPiece): void {
+  piecesById.delete(piece.id);
+  const byText = piecesByParentText.get(piece.parentElement);
+  if (byText) {
+    byText.delete(piece.text);
+  }
+}
+
+function replaceAllPieces(next: TranslationPiece[]): void {
+  piecesById.clear();
+  // WeakMap entries drop with GC when parents detach; rebuild from next list.
+  allPieces = next;
+  for (const piece of next) {
+    registerPiece(piece);
+  }
+}
+
+function appendPieces(next: TranslationPiece[]): void {
+  for (const piece of next) {
+    allPieces.push(piece);
+    registerPiece(piece);
+  }
+}
+
+/** FR-7: drop pieces whose parent is no longer in the document. */
+function pruneDetachedPieces(): number {
+  let removed = 0;
+  const kept: TranslationPiece[] = [];
+  for (const piece of allPieces) {
+    if (!piece.parentElement.isConnected) {
+      unregisterPiece(piece);
+      inFlightPieceIds.delete(piece.id);
+      handledContentKeys.delete(contentKeyForPiece(piece));
+      removed++;
+    } else {
+      kept.push(piece);
+    }
+  }
+  if (removed > 0) {
+    allPieces = kept;
+  }
+  return removed;
+}
+
 function extractDynamicPieces(
   element: Element,
   includeSelectors: string[] | undefined,
@@ -254,14 +324,12 @@ function extractDynamicPieces(
     enableAsideCaps,
   });
 
-  // Drop pieces we already tracked (same parent + same text) — common when
-  // scrolling SPAs re-insert or mutate nodes under a large container.
+  // Drop pieces we already tracked (same parent + same text) — FR-7 index, not O(N×M).
   return extracted.filter((piece) => {
     if (isContentHandled(piece)) return false;
-    const dup = allPieces.some(
-      (p) => p.parentElement === piece.parentElement && p.text === piece.text,
-    );
-    return !dup;
+    const byText = piecesByParentText.get(piece.parentElement);
+    if (byText?.has(piece.text)) return false;
+    return true;
   });
 }
 
@@ -286,14 +354,28 @@ function streamTranslate(
   extras?: {
     pageContext?: PageContext;
     termMemoryBlock?: string;
+    /** Session captured at request start — piece events must match (FR-1). */
+    requestSession: number;
   },
 ): Promise<TranslationResultMessage> {
+  const requestSession = extras?.requestSession ?? sessionRegistry.current;
   return new Promise((resolve) => {
     const pieceById = new Map(pieces.map((p) => [p.id, p]));
     const results: TranslationResultItem[] = [];
     let settled = false;
 
     const port = chrome.runtime.connect({ name: WEB_STREAM_PORT });
+    sessionRegistry.registerPort(requestSession, port);
+
+    const cleanupPort = () => {
+      sessionRegistry.unregisterPort(requestSession, port);
+      try {
+        port.disconnect();
+      } catch {
+        /* already disconnected */
+      }
+    };
+
     // FR-21: include pageContext + term memory so streaming matches non-stream.
     port.postMessage({
       type: 'request',
@@ -312,6 +394,15 @@ function streamTranslate(
       error?: string;
       partial?: boolean;
     }) => {
+      // FR-1: drop every stream event (including piece) when session advanced.
+      if (!sessionRegistry.isCurrent(requestSession)) {
+        if (!settled) {
+          settled = true;
+          cleanupPort();
+          resolve({ success: false, error: 'Session superseded' });
+        }
+        return;
+      }
       if (msg.type === 'piece' && msg.id && msg.text) {
         // Incremental in-place update: find the piece + swap its spinner.
         const piece = pieceById.get(msg.id);
@@ -327,7 +418,7 @@ function streamTranslate(
         }
       } else if (msg.type === 'done') {
         settled = true;
-        port.disconnect();
+        cleanupPort();
         resolve({
           success: true,
           results: msg.results ?? results,
@@ -335,7 +426,7 @@ function streamTranslate(
         });
       } else if (msg.type === 'error') {
         settled = true;
-        port.disconnect();
+        cleanupPort();
         // Surface as a failure so translatePieces' error branch + non-streaming
         // fallback can handle it.
         resolve({ success: false, error: msg.error ?? 'Streaming failed' });
@@ -343,7 +434,9 @@ function streamTranslate(
     });
 
     port.onDisconnect.addListener(() => {
+      sessionRegistry.unregisterPort(requestSession, port);
       if (!settled) {
+        settled = true;
         // Port closed unexpectedly — fall back to non-streaming.
         resolve({ success: false, error: 'Streaming port disconnected' });
       }
@@ -413,7 +506,16 @@ async function translatePieces(
   // Capture session at request start; if the page is restored or
   // re-translated before the response arrives, the session will have
   // advanced and this response must be ignored to prevent stale DOM writes.
-  const requestSession = translationSession;
+  const requestSession = sessionRegistry.current;
+  translationSession = requestSession;
+
+  // FR-4: while resume restore is applying snapshot, do not dispatch LLM work.
+  if (resumeRestorePending && !skipFailureCache) {
+    for (const piece of workPieces) {
+      inFlightPieceIds.delete(piece.id);
+    }
+    return;
+  }
 
   // Load settings before the placeholder loop so the compact-inline flag
   // gates which spinner style each piece gets (short → inline, long → block).
@@ -481,16 +583,18 @@ async function translatePieces(
       }
     }
 
-    // FR-3: source-language gate. When detection is on and sourceLanguage is
-    // 'auto', skip pieces whose detected language already matches the target —
-    // they would round-trip through the LLM unchanged (wasted tokens + latency).
-    // Confidence threshold guards against false positives on ambiguous text.
-    const SAME_LANG_CONFIDENCE = 0.55;
+    // FR-3 / FR-13: source-language gate. When detection is on and sourceLanguage
+    // is 'auto', skip pieces already in the target language. Prefer translating
+    // unnecessarily over silent skip of valid foreign text (higher confidence bar).
     let translatablePieces = workPieces;
     if (settings.enableSourceLanguageDetection && settings.sourceLanguage === 'auto') {
       translatablePieces = workPieces.filter((piece) => {
         const detected = detectLanguage(piece.text);
-        if (detected.lang && isSameLanguage(detected.lang, settings.targetLanguage) && detected.confidence >= SAME_LANG_CONFIDENCE) {
+        if (
+          detected.lang &&
+          isSameLanguage(detected.lang, settings.targetLanguage) &&
+          detected.confidence >= SAME_LANG_SKIP_CONFIDENCE
+        ) {
           // Already in the target language — mark translated (source = target),
           // clear the loading spinner, and skip injection entirely.
           piece.isTranslated = true;
@@ -517,24 +621,44 @@ async function translatePieces(
     let response: TranslationResultMessage;
     if (settings.enableStreamingTranslation) {
       // FR-6: try streaming first; fall back to non-streaming on failure.
+      // FR-14: on stream error, re-request only unfinished piece ids.
       const streamed = await streamTranslate(
         translatablePieces,
         settings.sourceLanguage,
         settings.targetLanguage,
         settings.enableCompactInlineForShortText,
-        { pageContext, termMemoryBlock },
+        { pageContext, termMemoryBlock, requestSession },
       );
-      response = streamed.success
-        ? streamed
-        : await chrome.runtime.sendMessage({
+      if (streamed.success) {
+        response = streamed;
+      } else {
+        const unfinished = translatablePieces.filter((p) => !p.isTranslated);
+        if (unfinished.length === 0) {
+          // All pieces already applied via stream deltas — treat as success.
+          response = {
+            success: true,
+            results: translatablePieces
+              .filter((p): p is typeof p & { translatedText: string } =>
+                p.translatedText !== undefined,
+              )
+              .map((p) => ({ id: p.id, translatedText: p.translatedText })),
+          };
+        } else {
+          response = await chrome.runtime.sendMessage({
             action: 'translate',
-            pieces: translatablePieces.map((p) => ({ id: p.id, text: p.text, inArticleContext: p.inArticleContext })),
+            pieces: unfinished.map((p) => ({
+              id: p.id,
+              text: p.text,
+              inArticleContext: p.inArticleContext,
+            })),
             sourceLanguage: settings.sourceLanguage,
             targetLanguage: settings.targetLanguage,
             pageContext,
             skipFailureCache,
             termMemoryBlock,
           });
+        }
+      }
     } else {
       response = await chrome.runtime.sendMessage({
         action: 'translate',
@@ -551,7 +675,7 @@ async function translatePieces(
     // since this request was issued, drop the response without touching
     // the DOM. This prevents the classic "ghost translation" race where
     // a late LLM reply re-injects translations onto an already-restored page.
-    if (requestSession !== translationSession) {
+    if (!sessionRegistry.isCurrent(requestSession)) {
       return;
     }
 
@@ -633,7 +757,7 @@ async function translatePieces(
       }
     }
   } catch (err) {
-    if (requestSession !== translationSession) {
+    if (!sessionRegistry.isCurrent(requestSession)) {
       return;
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -659,7 +783,7 @@ async function translatePieces(
   if (
     pendingAutoRetry &&
     pendingAutoRetry.length > 0 &&
-    requestSession === translationSession
+    sessionRegistry.isCurrent(requestSession)
   ) {
     await translatePieces(pendingAutoRetry, {
       skipFailureCache: true,
@@ -667,7 +791,7 @@ async function translatePieces(
     });
   } else if (
     !isLookahead &&
-    requestSession === translationSession &&
+    sessionRegistry.isCurrent(requestSession) &&
     !systemicPause
   ) {
     // FR-8: one hop of look-ahead after a primary (viewport) flush.
@@ -848,20 +972,36 @@ async function restoreFromSnapshot(
   }
 }
 
-/** FR-7: write a resume snapshot on pagehide/beforeunload so the next session can restore. */
-function writeResumeSnapshot(): void {
-  if (allPieces.length === 0) return;
+/**
+ * FR-2 / FR-7: write a resume snapshot.
+ * Captures a frozen copy of pieces immediately so callers may clear `allPieces`
+ * without racing the async IDB write (stop path used to clear first → no-op).
+ */
+function writeResumeSnapshot(options?: { awaitable?: false }): void;
+function writeResumeSnapshot(options: { awaitable: true }): Promise<void>;
+function writeResumeSnapshot(options?: { awaitable?: boolean }): void | Promise<void> {
+  if (allPieces.length === 0) {
+    return options?.awaitable ? Promise.resolve() : undefined;
+  }
   const url = window.location.href;
   const targetLang = currentTargetLanguage;
-  void (async () => {
+  // Freeze pieces NOW — stopTranslation clears allPieces right after this call.
+  const frozenPieces = allPieces.map((p) => ({
+    id: p.id,
+    text: p.text,
+    translatedText: p.translatedText,
+    isTranslated: p.isTranslated,
+    parentPath: parentPathFromElement(p.parentElement),
+  }));
+  const work = (async () => {
     try {
-      const contentHash = await deriveContentHash(allPieces.map((p) => p.text).join('\n'));
-      const resumePieces: ResumePiece[] = allPieces.map((p) => ({
+      const contentHash = await deriveContentHash(frozenPieces.map((p) => p.text).join('\n'));
+      const resumePieces: ResumePiece[] = frozenPieces.map((p) => ({
         id: p.id,
         text: p.text,
         ...(p.translatedText !== undefined ? { translatedText: p.translatedText } : {}),
         status: p.isTranslated ? 'translated' : 'pending',
-        parentPath: parentPathFromElement(p.parentElement),
+        parentPath: p.parentPath,
       }));
       await saveSnapshot({
         url,
@@ -874,6 +1014,7 @@ function writeResumeSnapshot(): void {
       // Best-effort — resume is non-critical.
     }
   })();
+  if (options?.awaitable) return work;
 }
 
 /** Register the pagehide/beforeunload snapshot writer once per session (FR-7). */
@@ -884,11 +1025,16 @@ function registerResumeSnapshotWriter(): void {
   window.addEventListener('beforeunload', writeResumeSnapshot, { once: false });
 }
 
-/** Start translation on the current page */
+/** Start translation on the current page (serialized via lifecycle mutex — FR-3). */
 export async function startTranslation(): Promise<void> {
-  // Bump the session id so any in-flight translations from a previous
-  // start/stop cycle are recognized as stale and dropped on response.
-  translationSession++;
+  return lifecycleMutex.run(() => startTranslationUnlocked());
+}
+
+async function startTranslationUnlocked(): Promise<void> {
+  // Bump the session id FIRST (before any await) so in-flight work from a
+  // previous start/stop is stale; also disconnect registered stream ports.
+  translationSession = sessionRegistry.bump();
+  resumeRestorePending = false;
 
   // Tear down any existing viewport observer / mutation watcher from a
   // prior start. Repeated startTranslation calls (e.g. via popup spam,
@@ -902,7 +1048,7 @@ export async function startTranslation(): Promise<void> {
     mutationWatcher = null;
   }
   // Reset accounting so progress reflects this session's pieces only.
-  allPieces = [];
+  replaceAllPieces([]);
   activeRequests = 0;
   inFlightPieceIds.clear();
   handledContentKeys.clear();
@@ -914,6 +1060,12 @@ export async function startTranslation(): Promise<void> {
   // Load settings to apply visual settings (session-scoped cache for FR-5)
   invalidateSessionSettingsCache();
   const settings = await loadSettingsCached();
+
+  // FR-3: session may have advanced while we awaited settings (concurrent stop).
+  if (!sessionRegistry.isCurrent(translationSession)) {
+    return;
+  }
+
   // FR-7: capture the target language for the pagehide snapshot writer.
   currentTargetLanguage = settings.targetLanguage;
 
@@ -939,21 +1091,48 @@ export async function startTranslation(): Promise<void> {
     baseExcludes = Array.from(smartSet);
   }
 
+  if (!sessionRegistry.isCurrent(translationSession)) {
+    return;
+  }
+
   const effectiveExcludes = mergeExcludeSelectors(
     baseExcludes,
     matchingRule?.excludeSelectors,
   );
-  allPieces = extractPieces(document.body, {
-    includeSelectors: matchingRule?.includeSelectors,
-    excludeSelectors: effectiveExcludes,
-    enableRichTranslate: settings.enableRichTranslate,
-    enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
-    enableAsideCaps: settings.enableAsideCaps,
-    enableShadowDomWalk: settings.enableShadowDomWalk,
-  });
+  replaceAllPieces(
+    extractPieces(document.body, {
+      includeSelectors: matchingRule?.includeSelectors,
+      excludeSelectors: effectiveExcludes,
+      enableRichTranslate: settings.enableRichTranslate,
+      enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
+      enableAsideCaps: settings.enableAsideCaps,
+      enableShadowDomWalk: settings.enableShadowDomWalk,
+    }),
+  );
 
   // Set page state based on displayMode setting
   setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
+
+  // FR-4: restore snapshot BEFORE viewport observe so restored pieces never
+  // race a fresh LLM request in the same session.
+  if (settings.enableWebResume && allPieces.length > 0) {
+    resumeRestorePending = true;
+    try {
+      await restoreFromSnapshot(
+        allPieces,
+        settings.targetLanguage,
+        settings.enableCompactInlineForShortText,
+      );
+    } catch {
+      /* best-effort */
+    } finally {
+      resumeRestorePending = false;
+    }
+    if (!sessionRegistry.isCurrent(translationSession)) {
+      return;
+    }
+    registerResumeSnapshotWriter();
+  }
 
   // Create viewport observer for lazy translation.
   // FR-10: when many pieces become visible at once, prefer top-of-fold + headings.
@@ -984,30 +1163,27 @@ export async function startTranslation(): Promise<void> {
     100,
   );
 
-  // Observe all pieces
+  // Observe all pieces (after resume so restored pieces skip LLM)
   if (allPieces.length > 0) {
     viewportObserver.observeAll([...allPieces]);
-  }
-
-  // FR-7: cross-session resume. If a fresh snapshot exists for this URL +
-  // content hash, restore already-translated pieces immediately (no LLM calls
-  // — relies on the success cache still holding the translations).
-  if (settings.enableWebResume && allPieces.length > 0) {
-    void restoreFromSnapshot(allPieces, settings.targetLanguage, settings.enableCompactInlineForShortText).catch(() => {});
-    // Register a one-time snapshot writer on page hide so the next session can resume.
-    registerResumeSnapshotWriter();
   }
 
   mutationWatcher = new MutationWatcher(
     (addedElements) => {
       if (!viewportObserver || getPageState() === 'off') return;
 
+      // FR-7: prune detached nodes on every mutation flush.
+      pruneDetachedPieces();
+
       const newPieces = addedElements.flatMap((element) =>
         extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate, settings.enableAsideCaps),
       );
-      if (newPieces.length === 0) return;
+      if (newPieces.length === 0) {
+        sendStatusUpdate();
+        return;
+      }
 
-      allPieces.push(...newPieces);
+      appendPieces(newPieces);
       // While paused, observe still tracks pieces; dispatch stays gated by setPaused.
       viewportObserver.observeAll(newPieces);
       sendStatusUpdate();
@@ -1024,11 +1200,29 @@ export async function startTranslation(): Promise<void> {
   mutationWatcher.start(document.body);
 }
 
-/** Stop translation and restore the page */
+/**
+ * Stop translation and restore the page.
+ * FR-2: snapshot translated pieces BEFORE clearing allPieces.
+ * FR-3: serialized with start via lifecycle mutex.
+ */
 export function stopTranslation(): void {
-  // Bump session FIRST so any in-flight translation responses are
-  // dropped before they can reinsert text into the now-restored DOM.
-  translationSession++;
+  void lifecycleMutex.run(() => stopTranslationUnlocked());
+}
+
+/** Awaitable stop for command handlers that need structured completion (FR-3). */
+export async function stopTranslationAsync(): Promise<void> {
+  return lifecycleMutex.run(() => stopTranslationUnlocked());
+}
+
+function stopTranslationUnlocked(): void {
+  // Bump session FIRST so any in-flight translation responses / stream pieces
+  // are dropped before they can reinsert text into the now-restored DOM.
+  translationSession = sessionRegistry.bump();
+  resumeRestorePending = false;
+
+  // FR-2: snapshot BEFORE clearing pieces (writeResumeSnapshot freezes a copy).
+  writeResumeSnapshot();
+  resumeSnapshotWriterRegistered = false;
 
   // Clean up visual settings
   document.documentElement.removeAttribute('data-anyllm-theme');
@@ -1051,17 +1245,13 @@ export function stopTranslation(): void {
   hideTranslationErrorNotification();
   hideSystemicPauseBanner();
   hideMiniProgress();
-  allPieces = [];
+  replaceAllPieces([]);
   activeRequests = 0;
   inFlightPieceIds.clear();
   handledContentKeys.clear();
   systemicPause = false;
   sessionTermMemory = [];
   invalidateSessionSettingsCache();
-  // FR-7: write a final snapshot before clearing so the next session can resume,
-  // then reset the writer-registration flag.
-  writeResumeSnapshot();
-  resumeSnapshotWriterRegistered = false;
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
   try {
@@ -1076,7 +1266,7 @@ export async function toggleTranslation(): Promise<void> {
   if (state === 'off') {
     await startTranslation();
   } else {
-    stopTranslation();
+    await stopTranslationAsync();
   }
 }
 
@@ -1158,11 +1348,33 @@ export function setupMessageListener(): void {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (isContextInvalidated()) return;
     if (message.action === 'startTranslation') {
-      startTranslation();
+      // FR-3: await lifecycle so concurrent commands serialize.
+      void startTranslation().then(() => {
+        try {
+          sendResponse?.({ success: true });
+        } catch {
+          /* channel may be closed */
+        }
+      });
+      return true;
     } else if (message.action === 'stopTranslation') {
-      stopTranslation();
+      void stopTranslationAsync().then(() => {
+        try {
+          sendResponse?.({ success: true });
+        } catch {
+          /* channel may be closed */
+        }
+      });
+      return true;
     } else if (message.action === 'toggleTranslation') {
-      toggleTranslation();
+      void toggleTranslation().then(() => {
+        try {
+          sendResponse?.({ success: true });
+        } catch {
+          /* channel may be closed */
+        }
+      });
+      return true;
     } else if (message.action === 'translateSelectedText') {
       if (message.text) {
         translateSelectedTextViaContextMenu(message.text);
@@ -1276,7 +1488,7 @@ function destroyZombie(): void {
   try { clearHoverCache(); } catch { /* noop */ }
   try { hideAutoTranslateNotification(); } catch { /* noop */ }
 
-  allPieces = [];
+  replaceAllPieces([]);
   activeRequests = 0;
 }
 

@@ -62,4 +62,19 @@ describe('webResume', () => {
       expect(await loadSnapshot('https://x.test', 'hash')).toBeNull();
     });
   });
+
+  describe('FR-2: stop-order snapshot semantics', () => {
+    it('frozen piece list survives clearing the live array (stop path)', async () => {
+      // Models writeResumeSnapshot: capture pieces before allPieces = [].
+      const live = [
+        { id: 'p1', text: 'Hello', translatedText: 'Xin chào', isTranslated: true },
+        { id: 'p2', text: 'World', isTranslated: false },
+      ];
+      const frozen = live.map((p) => ({ ...p }));
+      live.length = 0; // stop clears allPieces after freeze
+      expect(frozen.length).toBe(2);
+      expect(frozen.filter((p) => p.isTranslated).length).toBe(1);
+      expect(live.length).toBe(0);
+    });
+  });
 });

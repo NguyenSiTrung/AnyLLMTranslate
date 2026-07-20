@@ -18,14 +18,52 @@ export const DEFAULT_BLOCKLIST_PATTERNS: string[] = [
  * Convert a simple wildcard pattern to a RegExp.
  * Supports `*` anywhere (hostname or full URL style).
  * Patterns without scheme match against hostname (and host+path lightly).
+ *
+ * FR-28: for hostname patterns like `*figma.com`, the leading `*` is treated as
+ * a subdomain/empty-label wildcard with a dot boundary — NOT a free suffix on
+ * the previous label (`evilfigma.com` must not match).
  */
 export function patternToRegExp(pattern: string): RegExp {
   const trimmed = pattern.trim();
+  // Hostname-only `*domain.tld` / `*.domain.tld` → boundary-safe host match
+  if (!trimmed.includes('://') && !trimmed.includes('/') && trimmed.includes('*')) {
+    if (trimmed.startsWith('*.')) {
+      const suffix = trimmed.slice(2).replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      // sub.domain.tld only (not bare domain.tld — matches siteRules *. semantics)
+      return new RegExp(`^.+\\.${suffix}$`, 'i');
+    }
+    if (trimmed.startsWith('*') && !trimmed.startsWith('*.')) {
+      // *figma.com → figma.com OR *.figma.com (dot boundary before figma)
+      const rest = trimmed.slice(1).replace(/^\./, '');
+      const escaped = rest.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`^(.+\\.)?${escaped}$`, 'i');
+    }
+  }
   // Escape regex specials except *
   const escaped = trimmed
     .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '.*');
   return new RegExp(`^${escaped}$`, 'i');
+}
+
+/** FR-28: hostname match with label boundary (no evilfigma.com ⊆ *figma.com). */
+export function hostnameMatchesBlockPattern(hostname: string, pattern: string): boolean {
+  const h = hostname.toLowerCase();
+  const p = pattern.trim().toLowerCase();
+  if (!h || !p) return false;
+  if (!p.includes('*')) {
+    return h === p;
+  }
+  if (p.startsWith('*.')) {
+    const suffix = p.slice(1); // .example.com
+    return h.endsWith(suffix) && h.length > suffix.length && h !== suffix.slice(1);
+  }
+  if (p.startsWith('*')) {
+    const domain = p.slice(1).replace(/^\./, ''); // figma.com
+    return h === domain || h.endsWith(`.${domain}`);
+  }
+  // Mid-string wildcards — fall back to regex
+  return patternToRegExp(p).test(h);
 }
 
 /**
@@ -58,21 +96,9 @@ export function isUrlBlocked(
     const p = raw.trim();
     if (!p) continue;
 
-    // Hostname-style: *figma.com → match hostname or endsWith
+    // Hostname-style patterns (FR-28: boundary-safe; evilfigma.com must NOT match *figma.com)
     if (!p.includes('://') && !p.includes('/')) {
-      const re = patternToRegExp(p);
-      if (re.test(hostname)) return true;
-      // Also allow *.domain.com style against full host
-      if (p.startsWith('*') && !p.startsWith('*.')) {
-        const suffix = p.slice(1); // e.g. figma.com from *figma.com
-        if (
-          hostname === suffix.replace(/^\./, '') ||
-          hostname.endsWith(suffix.startsWith('.') ? suffix : `.${suffix.replace(/^\./, '')}`) ||
-          hostname.endsWith(suffix)
-        ) {
-          return true;
-        }
-      }
+      if (hostnameMatchesBlockPattern(hostname, p)) return true;
       continue;
     }
 

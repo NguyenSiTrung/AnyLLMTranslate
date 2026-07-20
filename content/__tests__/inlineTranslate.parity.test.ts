@@ -197,6 +197,11 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     expect(isUrlBlocked('https://www.notion.so/page', patterns)).toBe(true);
     expect(isUrlBlocked('https://www.figma.com/file/xyz', patterns)).toBe(true);
     expect(isUrlBlocked('https://example.com', patterns)).toBe(false);
+    // FR-28: label boundary — evilfigma.com must NOT match *figma.com
+    expect(isUrlBlocked('https://evilfigma.com/', patterns)).toBe(false);
+    expect(isUrlBlocked('evilfigma.com', patterns)).toBe(false);
+    expect(isUrlBlocked('figma.com', patterns)).toBe(true);
+    expect(isUrlBlocked('www.figma.com', patterns)).toBe(true);
 
     const r = parseLanguagePrefix('/en hello');
     expect(r.targetLang).toBe('en');

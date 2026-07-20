@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { detectLanguage, isSameLanguage } from '../langDetect';
+import {
+  detectLanguage,
+  isSameLanguage,
+  SAME_LANG_SKIP_CONFIDENCE,
+} from '../langDetect';
 
 describe('langDetect', () => {
   it('detects scripts/n-grams, handles empty/ambiguous, and compares language tags', () => {
@@ -25,5 +29,30 @@ describe('langDetect', () => {
     expect(isSameLanguage('en', 'vi')).toBe(false);
     expect(isSameLanguage('auto', 'en')).toBe(false);
     expect(isSameLanguage(null, 'en')).toBe(false);
+  });
+
+  it('FR-13: Ukrainian is not skipped as Russian; JP kanji-heavy not skipped as zh', () => {
+    // Ukrainian with і/ї/є/ґ
+    const uk = detectLanguage('Це український текст про свободу і незалежність країни');
+    expect(uk.lang).toBe('uk');
+    expect(uk.confidence).toBeGreaterThanOrEqual(0.7);
+    // Must not equal ru for skip-as-complete when target is ru
+    expect(isSameLanguage(uk.lang, 'ru')).toBe(false);
+
+    // Japanese with kana + kanji
+    const ja = detectLanguage('日本語の文章です。漢字が多くても仮名があれば日本語です。');
+    expect(ja.lang).toBe('ja');
+
+    // Han-only (no kana): confidence stays below skip bar so zh target won't
+    // silently skip Japanese classical / ambiguous Han as "already zh".
+    const hanOnly = detectLanguage('今日天気真好世界和平');
+    expect(hanOnly.lang).toBe('zh');
+    expect(hanOnly.confidence).toBeLessThan(SAME_LANG_SKIP_CONFIDENCE);
+
+    // Soft Russian Cyrillic without Ukrainian markers stays below skip bar
+    const softRu = detectLanguage('Это простой текст на кириллице без украинских букв');
+    if (softRu.lang === 'ru') {
+      expect(softRu.confidence).toBeLessThan(SAME_LANG_SKIP_CONFIDENCE);
+    }
   });
 });

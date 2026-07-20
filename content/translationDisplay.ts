@@ -17,6 +17,40 @@ const INLINE_CLONE_ATTR = 'data-anyllm-inline-clone-for';
  *  instead of querySelectorAll on every sync. */
 const inlineCloneElements = new Set<HTMLElement>();
 
+/**
+ * FR-10 / FR-29: piece-id → live translation element map (avoids document-wide
+ * querySelector on every update). Cleared on full remove.
+ */
+const pieceElements = new Map<string, HTMLElement>();
+
+/** Safe CSS.escape for piece-id attribute selectors (FR-29). */
+function escapePieceId(pieceId: string): string {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+    return CSS.escape(pieceId);
+  }
+  return pieceId.replace(/["\\]/g, '\\$&');
+}
+
+/** FR-29: look up a piece element by id (map first, then escaped query). */
+export function findPieceElement(
+  pieceId: string,
+  root: ParentNode = document,
+): HTMLElement | null {
+  const mapped = pieceElements.get(pieceId);
+  if (mapped && mapped.isConnected) return mapped;
+  if (mapped) pieceElements.delete(pieceId);
+  const el = root.querySelector(`[${DATA_ATTRS.PIECE_ID}="${escapePieceId(pieceId)}"]`);
+  return el instanceof HTMLElement ? el : null;
+}
+
+function trackPieceElement(pieceId: string, el: HTMLElement): void {
+  pieceElements.set(pieceId, el);
+}
+
+function untrackPieceElement(pieceId: string): void {
+  pieceElements.delete(pieceId);
+}
+
 /** Re-trigger a CSS fade-in animation without a synchronous forced reflow.
  *  Uses requestAnimationFrame to defer the offsetHeight read so the main
  *  thread isn't blocked for layout calculation per translated piece. */
@@ -278,7 +312,7 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
   }
 
   // Already exists — do nothing
-  if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) {
+  if (findPieceElement(pieceId)) {
     return;
   }
 
@@ -296,6 +330,7 @@ export function showLoadingPlaceholder(parentElement: Element, pieceId: string):
   placeholder.setAttribute('aria-label', 'Translating');
 
   insertTranslationElement(parentElement, placeholder);
+  trackPieceElement(pieceId, placeholder);
 }
 
 /** Apply a single translation relative to its original paragraph.
@@ -324,7 +359,7 @@ export function applyTranslation(
     ? decodeInlineHtml(translatedText, variables)
     : document.createTextNode(translatedText);
 
-  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const existing = findPieceElement(pieceId);
   if (existing) {
     // Update placeholder in-place: remove spinner class, set translated content
     existing.classList.remove('anyllm-translate-loading');
@@ -333,9 +368,10 @@ export function applyTranslation(
     existing.replaceChildren(contentNode.cloneNode(true));
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
     if (!existing.hasAttribute('dir')) existing.setAttribute('dir', 'auto');
-    applyMaskA11yIfNeeded(existing as HTMLElement);
+    applyMaskA11yIfNeeded(existing);
     // Re-trigger fade-in animation via rAF to avoid synchronous forced reflow
-    restartAnimation(existing as HTMLElement);
+    restartAnimation(existing);
+    trackPieceElement(pieceId, existing);
     return;
   }
 
@@ -350,13 +386,14 @@ export function applyTranslation(
   applyMaskA11yIfNeeded(translationEl);
 
   insertTranslationElement(parentElement, translationEl);
+  trackPieceElement(pieceId, translationEl);
 }
 
 /** Show a compact inline loading indicator inside parentElement for short pieces.
  *  Idempotent: calling twice for the same pieceId does nothing. */
 export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: string): void {
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
-  if (document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`)) return;
+  if (findPieceElement(pieceId)) return;
 
   const renderTarget = getInlineRenderTarget(parentElement);
 
@@ -369,6 +406,7 @@ export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: st
   placeholder.setAttribute('aria-label', 'Translating');
 
   renderTarget.appendChild(placeholder);
+  trackPieceElement(pieceId, placeholder);
 
   // Ensure a visible sibling clone exists in translation-only mode where
   // the original (hidden) container would otherwise hide the spinner too.
@@ -460,7 +498,7 @@ export function applyInlineTranslation(
     return document.createTextNode(formatInlineText(translatedText, translationOnly));
   };
 
-  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const existing = findPieceElement(pieceId);
   if (existing) {
     // Update inline placeholder in-place
     existing.classList.remove('anyllm-inline-bilingual-loading');
@@ -468,9 +506,11 @@ export function applyInlineTranslation(
     existing.replaceChildren(buildContent().cloneNode(true));
     // Accessibility: set lang for screen readers and title for hover tooltip
     if (targetLanguage) existing.setAttribute('lang', targetLanguage);
-    (existing as HTMLElement).title = translatedText;
+    existing.title = translatedText;
+    if (!existing.hasAttribute('dir')) existing.setAttribute('dir', 'auto');
     // Re-trigger animation via rAF to avoid synchronous forced reflow
-    restartAnimation(existing as HTMLElement);
+    restartAnimation(existing);
+    trackPieceElement(pieceId, existing);
     debouncedSyncInlineSiblings();
     return;
   }
@@ -482,11 +522,13 @@ export function applyInlineTranslation(
     ? 'anyllm-inline-bilingual anyllm-inline-constrained'
     : 'anyllm-inline-bilingual';
   inlineEl.appendChild(buildContent());
+  inlineEl.setAttribute('dir', 'auto');
   // Accessibility: lang attribute for correct pronunciation, title for hover
   if (targetLanguage) inlineEl.setAttribute('lang', targetLanguage);
   inlineEl.title = translatedText;
 
   renderTarget.appendChild(inlineEl);
+  trackPieceElement(pieceId, inlineEl);
   debouncedSyncInlineSiblings();
 }
 
@@ -499,20 +541,34 @@ export function setInlineErrorState(
 ): void {
   if (parentElement.tagName === 'BODY' || parentElement.tagName === 'HTML') return;
 
-  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const existing = findPieceElement(pieceId);
   if (existing) {
     existing.classList.remove('anyllm-inline-bilingual-loading');
     existing.classList.add('anyllm-inline-bilingual-error');
     existing.textContent = ' (⚠ error)';
     existing.setAttribute('role', 'alert');
     existing.removeAttribute('aria-label');
-    (existing as HTMLElement).title = `Translation failed: ${errorMessage}. Click to retry.`;
+    existing.title = `Translation failed: ${errorMessage}. Click to retry.`;
 
     if (onRetry) {
-      existing.addEventListener('click', () => {
+      // FR-25: keyboard-operable retry
+      if (!existing.hasAttribute('tabindex')) existing.setAttribute('tabindex', '0');
+      const runRetry = () => {
         existing.remove();
+        untrackPieceElement(pieceId);
         onRetry();
-      }, { once: true });
+      };
+      existing.addEventListener('click', runRetry, { once: true });
+      existing.addEventListener(
+        'keydown',
+        (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            runRetry();
+          }
+        },
+        { once: true },
+      );
     }
     syncInlineTranslationOnlySiblings();
     return;
@@ -527,17 +583,59 @@ export function setInlineErrorState(
   errorEl.title = `Translation failed: ${errorMessage}. Click to retry.`;
 
   if (onRetry) {
-    errorEl.addEventListener('click', () => {
+    if (!errorEl.hasAttribute('tabindex')) errorEl.setAttribute('tabindex', '0');
+    const runRetry = () => {
       errorEl.remove();
+      untrackPieceElement(pieceId);
       onRetry();
-    }, { once: true });
+    };
+    errorEl.addEventListener('click', runRetry, { once: true });
+    errorEl.addEventListener(
+      'keydown',
+      (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          runRetry();
+        }
+      },
+      { once: true },
+    );
   }
 
   parentElement.appendChild(errorEl);
+  trackPieceElement(pieceId, errorEl);
   syncInlineTranslationOnlySiblings();
 }
 
-
+function attachRetryHandlers(
+  el: HTMLElement,
+  pieceId: string,
+  onRetry: () => void,
+  clearFirst: boolean,
+  parentElement?: Element,
+): void {
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  const runRetry = () => {
+    if (clearFirst && parentElement) {
+      clearErrorState(parentElement, pieceId);
+    } else {
+      el.remove();
+      untrackPieceElement(pieceId);
+    }
+    onRetry();
+  };
+  el.addEventListener('click', runRetry, { once: true });
+  el.addEventListener(
+    'keydown',
+    (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        runRetry();
+      }
+    },
+    { once: true },
+  );
+}
 
 /** Set error state — updates the placeholder element in-place if it exists. */
 export function setErrorState(
@@ -558,7 +656,7 @@ export function setErrorState(
   const compactLabel = '⚠ Translation failed';
   const fullTitle = `${errorMessage}. Click to retry.`;
 
-  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const existing = findPieceElement(pieceId);
   if (existing) {
     // Update placeholder in-place: swap loading class for error state
     existing.classList.remove('anyllm-translate-loading');
@@ -567,12 +665,10 @@ export function setErrorState(
     existing.setAttribute('title', fullTitle);
     existing.setAttribute('role', 'alert');
     existing.removeAttribute('aria-label');
+    trackPieceElement(pieceId, existing);
 
     if (onRetry) {
-      existing.addEventListener('click', () => {
-        clearErrorState(parentElement, pieceId);
-        onRetry();
-      }, { once: true });
+      attachRetryHandlers(existing, pieceId, onRetry, true, parentElement);
     }
     return;
   }
@@ -588,11 +684,9 @@ export function setErrorState(
   errorEl.title = fullTitle;
 
   if (onRetry) {
-    errorEl.addEventListener('click', () => {
-      clearErrorState(parentElement, pieceId);
-      onRetry();
-    }, { once: true });
+    attachRetryHandlers(errorEl, pieceId, onRetry, true, parentElement);
   }
+  trackPieceElement(pieceId, errorEl);
 
   insertTranslationElement(parentElement, errorEl);
 }
@@ -600,16 +694,18 @@ export function setErrorState(
 /** Clear error state from an element */
 export function clearErrorState(parentElement: Element, pieceId: string): void {
   parentElement.removeAttribute('data-anyllm-error');
-  const existing = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const existing = findPieceElement(pieceId);
   if (existing) {
     existing.remove();
+    untrackPieceElement(pieceId);
   }
 }
 
 /** Remove a single translation by piece ID */
 export function removeTranslation(pieceId: string): void {
-  const el = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${pieceId}"]`);
+  const el = findPieceElement(pieceId);
   if (!el) return;
+  untrackPieceElement(pieceId);
 
   // Determine the associated original element BEFORE removing the translation.
   // Translations may be either a descendant of the marked original (contained
@@ -682,6 +778,7 @@ export function removeAllTranslations(): void {
     el.remove();
   }
 
+  pieceElements.clear();
   removeInlineTranslationOnlyClones();
 
   // Clean up original markers

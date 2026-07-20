@@ -86,6 +86,39 @@ describe('parallelCacheLookup', () => {
     expect(maxConcurrent).toBeGreaterThanOrEqual(2);
   });
 
+  it('FR-11: caps concurrent lookups under large piece lists', async () => {
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const deps = makeDeps({
+      getCachedTranslation: vi.fn(async () => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        await new Promise((r) => setTimeout(r, 5));
+        concurrent--;
+        return null;
+      }),
+    });
+
+    const pieces = Array.from({ length: 40 }, (_, i) => ({
+      id: `p${i}`,
+      text: `text-${i}`,
+    }));
+    await parallelCacheLookup(
+      {
+        pieces,
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        cacheTTLDays: 30,
+        failureCacheTtlMinutes: 120,
+        enableFailureCache: false,
+        concurrency: 4,
+      },
+      deps,
+    );
+    expect(maxConcurrent).toBeLessThanOrEqual(4);
+    expect(maxConcurrent).toBeGreaterThanOrEqual(2);
+  });
+
   it('skips failure cache and clears entries when skipFailureCache is true', async () => {
     const deleteCachedFailure = vi.fn().mockResolvedValue(undefined);
     const getCachedFailure = vi.fn().mockResolvedValue('stale');

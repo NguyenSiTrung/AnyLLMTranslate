@@ -70,4 +70,15 @@ describe('siteRules', () => {
     expect(mergeExcludeSelectors([], undefined)).toEqual([]);
     expect(mergeExcludeSelectors(['PRE'], ['pre'])).toEqual(['PRE', 'pre']);
   });
+
+  it('FR-28: most-specific hostname match wins', () => {
+    const rules: SiteRule[] = [
+      makeSiteRule({ id: 'broad', hostname: '*.example.com' }),
+      makeSiteRule({ id: 'exact', hostname: 'docs.example.com' }),
+      makeSiteRule({ id: 'mid', hostname: '*.docs.example.com' }),
+    ];
+    expect(findMatchingRule('docs.example.com', rules)?.id).toBe('exact');
+    expect(findMatchingRule('api.docs.example.com', rules)?.id).toBe('mid');
+    expect(findMatchingRule('www.example.com', rules)?.id).toBe('broad');
+  });
 });

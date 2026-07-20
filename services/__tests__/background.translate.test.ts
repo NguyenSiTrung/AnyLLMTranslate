@@ -149,8 +149,23 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       ]),
     );
     // Write-back should happen for each uncached piece
-    expect(cacheTranslation).toHaveBeenCalledWith('Hello', 'Xin chào', 'en', 'vi', undefined);
-    expect(cacheTranslation).toHaveBeenCalledWith('World', 'Thế giới', 'en', 'vi', undefined);
+    // FR-6: trailing modelId + fingerprint args (fingerprint may be set from defaults)
+    expect(cacheTranslation).toHaveBeenCalledWith(
+      'Hello',
+      'Xin chào',
+      'en',
+      'vi',
+      undefined,
+      expect.anything(),
+    );
+    expect(cacheTranslation).toHaveBeenCalledWith(
+      'World',
+      'Thế giới',
+      'en',
+      'vi',
+      undefined,
+      expect.anything(),
+    );
   });
 
   it('sends only uncached pieces to LLM when some are cached (mixed)', async () => {
@@ -568,7 +583,14 @@ describe('handleTranslate — FR-4 negative-cache + forced-retry bypass', () => 
     // The failure cache is bypassed (not consulted) ...
     expect(getCachedFailure).not.toHaveBeenCalled();
     // ... and the stale entry is cleared so a fresh success isn't shadowed.
-    expect(deleteCachedFailure).toHaveBeenCalledWith('Hello', 'en', 'vi');
+    // FR-6: delete also receives modelId + fingerprint
+    expect(deleteCachedFailure).toHaveBeenCalledWith(
+      'Hello',
+      'en',
+      'vi',
+      undefined,
+      expect.anything(),
+    );
     // The LLM is actually called and the retry succeeds.
     expect(result.success).toBe(true);
     expect(result.results).toEqual([{ id: 'p1', translatedText: 'Xin chào' }]);

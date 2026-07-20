@@ -82,5 +82,19 @@ describe('services/cacheManager', () => {
       expect(negKey).not.toBe(key1);
       expect(await generateNegativeCacheKey('World', 'en', 'vi')).not.toBe(negKey);
     });
+
+    it('FR-6: glossary/model fingerprint change produces cache miss (distinct keys)', async () => {
+      const base = await generateCacheKey('Hello', 'en', 'vi', 'gpt-4o-mini', 'fp-gloss-a');
+      const glossB = await generateCacheKey('Hello', 'en', 'vi', 'gpt-4o-mini', 'fp-gloss-b');
+      const modelB = await generateCacheKey('Hello', 'en', 'vi', 'other-model', 'fp-gloss-a');
+      const legacy = await generateCacheKey('Hello', 'en', 'vi');
+      expect(base).not.toBe(glossB);
+      expect(base).not.toBe(modelB);
+      // Old keys without fingerprint miss safely (no silent cross-config hit)
+      expect(base).not.toBe(legacy);
+      expect(await generateNegativeCacheKey('Hello', 'en', 'vi', 'gpt-4o-mini', 'fp-gloss-a')).toBe(
+        `${NEGATIVE_CACHE_PREFIX}${base}`,
+      );
+    });
   });
 });

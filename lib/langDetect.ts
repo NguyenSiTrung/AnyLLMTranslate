@@ -26,15 +26,17 @@ interface ScriptRule {
 }
 
 // Unicode code-point ranges for strong-signal scripts.
+// FR-13: ambiguous families (Cyrillic, Han) are NOT mapped to a single language
+// here — see detectLanguage() for family-aware handling.
 const SCRIPT_RULES: ScriptRule[] = [
   // Hiragana + Katakana → Japanese (check before CJK Han, since ja text mixes).
   { lang: 'ja', test: (c) => (c >= 0x3040 && c <= 0x30ff) || (c >= 0x31f0 && c <= 0x31ff) },
   // Hangul Syllables + Jamo → Korean.
   { lang: 'ko', test: (c) => (c >= 0xac00 && c <= 0xd7a3) || (c >= 0x1100 && c <= 0x11ff) || (c >= 0x3130 && c <= 0x318f) },
-  // CJK Unified Ideographs + Extensions A → Chinese.
-  { lang: 'zh', test: (c) => (c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf) },
-  // Cyrillic → Russian (most common Cyrillic user of this extension).
-  { lang: 'ru', test: (c) => c >= 0x0400 && c <= 0x04ff },
+  // CJK Unified Ideographs + Extensions A → tracked as 'han' family (not zh).
+  { lang: 'han', test: (c) => (c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf) },
+  // Cyrillic → family token (not always Russian).
+  { lang: 'cyrl', test: (c) => c >= 0x0400 && c <= 0x04ff },
   // Arabic → Arabic.
   { lang: 'ar', test: (c) => c >= 0x0600 && c <= 0x06ff },
   // Hebrew → Hebrew.
@@ -44,6 +46,13 @@ const SCRIPT_RULES: ScriptRule[] = [
   // Devanagari → Hindi.
   { lang: 'hi', test: (c) => c >= 0x0900 && c <= 0x097f },
 ];
+
+/** Ukrainian-specific letters (not used in standard Russian orthography). */
+const UK_SPECIFIC_RE = /[іїєґІЇЄҐ]/;
+/** Common Ukrainian function words for secondary signal. */
+const UK_STOPWORDS = new Set([
+  'і', 'та', 'не', 'що', 'на', 'в', 'у', 'з', 'до', 'як', 'це', 'для', 'від', 'за', 'про', 'або',
+]);
 
 // Latin-script stopword sets (lowercased). Scored as n-grams: count of
 // stopword tokens present in the input. The language with the highest count
@@ -152,19 +161,126 @@ function detectLatin(text: string): DetectionResult {
 /**
  * Detect the dominant language of `text`. Script-range signals dominate when
  * present (non-Latin); Latin-script text falls back to stopword n-gram scoring.
+ *
+ * FR-13: Prefer undetermined over wrong-language high confidence for ambiguous
+ * families (Cyrillic ≠ always Russian; Han-only ≠ always Chinese).
  */
 export function detectLanguage(text: string): DetectionResult {
   if (!text || !text.trim()) return { lang: null, confidence: 0 };
 
-  // Strong script-signal path.
+  // Count scripts with multi-bucket awareness for CJK mixtures.
+  let totalLetters = 0;
+  let jaKana = 0;
+  let han = 0;
+  let ko = 0;
+  let cyrl = 0;
+  let otherLang: string | null = null;
+  let otherCount = 0;
+
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    if (code === undefined) continue;
+    if (!/\p{L}/u.test(ch)) continue;
+    totalLetters++;
+    if ((code >= 0x3040 && code <= 0x30ff) || (code >= 0x31f0 && code <= 0x31ff)) {
+      jaKana++;
+    } else if ((code >= 0x4e00 && code <= 0x9fff) || (code >= 0x3400 && code <= 0x4dbf)) {
+      han++;
+    } else if (
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0x1100 && code <= 0x11ff) ||
+      (code >= 0x3130 && code <= 0x318f)
+    ) {
+      ko++;
+    } else if (code >= 0x0400 && code <= 0x04ff) {
+      cyrl++;
+    } else {
+      for (const rule of SCRIPT_RULES) {
+        if (rule.lang === 'han' || rule.lang === 'cyrl' || rule.lang === 'ja' || rule.lang === 'ko') {
+          continue;
+        }
+        if (rule.test(code)) {
+          otherLang = rule.lang;
+          otherCount++;
+          break;
+        }
+      }
+    }
+  }
+
+  if (totalLetters > 0) {
+    // Japanese: kana present (even with heavy kanji) → ja
+    if (jaKana / totalLetters >= 0.05 || (jaKana >= 2 && han > 0)) {
+      const ratio = (jaKana + han) / totalLetters;
+      if (ratio >= 0.3) {
+        return { lang: 'ja', confidence: Math.min(0.99, 0.65 + ratio * 0.35) };
+      }
+    }
+    // Korean
+    if (ko / totalLetters >= 0.3) {
+      return { lang: 'ko', confidence: Math.min(0.99, 0.6 + (ko / totalLetters) * 0.4) };
+    }
+    // Han-only (no kana): ambiguous zh/ja/ko classical — do NOT claim zh with high confidence.
+    // Prefer null so the source-lang skip gate will not mark as complete (FR-13).
+    if (han / totalLetters >= 0.3 && jaKana === 0 && ko === 0) {
+      // Short pure-Han runs stay undetermined; long Simplified-heavy prose may still
+      // be zh but we keep confidence below the skip bar unless very dominant.
+      const conf = Math.min(0.72, 0.45 + (han / totalLetters) * 0.25);
+      return { lang: 'zh', confidence: conf };
+    }
+    // Cyrillic family: Ukrainian letters / stopwords → uk; else undetermined or soft ru
+    if (cyrl / totalLetters >= 0.3) {
+      const ukLetters = (text.match(UK_SPECIFIC_RE) ?? []).length;
+      if (ukLetters >= 1) {
+        return {
+          lang: 'uk',
+          confidence: Math.min(0.95, 0.7 + ukLetters / Math.max(1, totalLetters)),
+        };
+      }
+      const tokens = text.toLowerCase().match(/[\u0400-\u04ff]+/g) ?? [];
+      let ukStops = 0;
+      for (const t of tokens) {
+        if (UK_STOPWORDS.has(t)) ukStops++;
+      }
+      if (ukStops >= 2) {
+        return { lang: 'uk', confidence: Math.min(0.9, 0.55 + ukStops / tokens.length) };
+      }
+      // Generic Cyrillic — do not assert Russian with skip-level confidence.
+      // Soft ru only when overwhelmingly Cyrillic and no disambiguators.
+      return {
+        lang: 'ru',
+        confidence: Math.min(0.7, 0.4 + (cyrl / totalLetters) * 0.3),
+      };
+    }
+    if (otherLang && otherCount / totalLetters >= 0.3) {
+      return {
+        lang: otherLang,
+        confidence: Math.min(0.99, 0.6 + (otherCount / totalLetters) * 0.4),
+      };
+    }
+  }
+
+  // Fallback: original single-bucket path for edge cases
   const script = countScriptChars(text);
   if (script && script.ratio >= 0.3) {
+    if (script.lang === 'han') {
+      return { lang: 'zh', confidence: Math.min(0.72, 0.45 + script.ratio * 0.25) };
+    }
+    if (script.lang === 'cyrl') {
+      return { lang: 'ru', confidence: Math.min(0.7, 0.4 + script.ratio * 0.3) };
+    }
     return { lang: script.lang, confidence: Math.min(0.99, 0.6 + script.ratio * 0.4) };
   }
 
   // Latin n-gram path.
   return detectLatin(text);
 }
+
+/**
+ * Minimum confidence required before the source-language gate may skip a piece
+ * as already-in-target (FR-13). Higher than the old 0.55 bar.
+ */
+export const SAME_LANG_SKIP_CONFIDENCE = 0.78;
 
 /**
  * Compare two BCP-47-ish codes for primary-subtag equality (zh-Hans ≈ zh).
