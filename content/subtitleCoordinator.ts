@@ -725,6 +725,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues,
       sourceLanguage,
       targetLanguage: settings.targetLanguage,
@@ -820,6 +821,7 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
 
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
@@ -920,6 +922,7 @@ async function translateDomCueTexts(
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues: cuesToTranslate,
       sourceLanguage,
       targetLanguage,
@@ -1049,6 +1052,7 @@ async function translateManifestBatch(
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues: cuesToTranslate,
       sourceLanguage,
       targetLanguage,
@@ -1359,6 +1363,7 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
     const pageContext = await buildSubtitlePageContext();
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues: payload.cues,
       sourceLanguage: settings.sourceLanguage === 'auto'
         ? (payload.language || 'en')
@@ -1844,6 +1849,7 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
     const pageContext = await buildSubtitlePageContext();
     const response = await chrome.runtime.sendMessage({
       action: 'translateSubtitle',
+      hostname: window.location.hostname,
       cues: payload.cues,
       sourceLanguage: settings.sourceLanguage === 'auto'
         ? (payload.language || 'en')

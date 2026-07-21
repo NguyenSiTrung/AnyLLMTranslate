@@ -139,6 +139,15 @@ import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '
 import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
 import { withRetry } from '@/lib/subtitleRetry';
 import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
+import {
+  filterUnlockedProperNouns,
+  formatNamedListGlossary,
+  getNamedListById,
+  lockedSourceSet,
+  normalizeSubtitleSiteHost,
+  omitGlobalEntriesCoveredByNamed,
+  resolveActiveSubtitleListId,
+} from '@/lib/namedGlossaryLists';
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
 import { preScanNames } from '@/services/subtitleNameScanner';
@@ -998,7 +1007,23 @@ async function handleTranslateSubtitle(
     const tabId = sender?.tab?.id;
 
     const subtitleSettings = await loadSettings();
-    const subtitleGlossary = formatGlossary(subtitleSettings.glossary ?? []);
+    const host = normalizeSubtitleSiteHost(message.hostname ?? hostFromSender(sender) ?? '');
+    const namedLists = subtitleSettings.namedGlossaryLists ?? [];
+    const activeList = getNamedListById(
+      namedLists,
+      resolveActiveSubtitleListId(
+        namedLists,
+        subtitleSettings.subtitleListBySite ?? {},
+        host,
+      ),
+    );
+    const lockedSources = lockedSourceSet(activeList);
+    const namedBlock = activeList ? formatNamedListGlossary(activeList) : '';
+    const globalForPrompt = omitGlobalEntriesCoveredByNamed(
+      subtitleSettings.glossary ?? [],
+      lockedSources,
+    );
+    const subtitleGlossary = formatGlossary(globalForPrompt);
 
     // Resolve translation knobs from the content-script-provided profile.
     // Unknown/absent profile falls back to 'media' (balanced defaults); an
@@ -1044,7 +1069,11 @@ async function handleTranslateSubtitle(
     // MAX_ROLLING_GLOSSARY uniformly.
     const rollingGlossary = new Map<string, string>();
     if (filmGlossary) {
-      mergeProperNouns(rollingGlossary, filmGlossary);
+      mergeProperNouns(
+        rollingGlossary,
+        filterUnlockedProperNouns(filmGlossary, lockedSources),
+        { lockedSources },
+      );
     }
 
     /** Build a stable glossary snapshot for the subtitle cache key. Captures the
@@ -1053,12 +1082,13 @@ async function handleTranslateSubtitle(
     const buildGlossarySnapshot = (): GlossarySnapshot => ({
       globalEntries: (subtitleSettings.glossary ?? []).map((e) => ({ source: e.source, target: e.target })),
       properNouns: [...new Set([...rollingGlossary.keys(), ...(filmGlossary ? Object.keys(filmGlossary) : [])])],
+      namedListId: activeList?.id ?? null,
+      namedListEntries: (activeList?.entries ?? []).map((e) => ({ source: e.source, target: e.target })),
     });
 
     // Mutate a copy of cues as we go
     const translatedCues = [...cues];
 
-    const host = hostFromSender(sender);
     const providerId = bestEffortProviderId(subtitleSettings);
 
     // Helper to translate a chunk
@@ -1148,6 +1178,7 @@ async function handleTranslateSubtitle(
               sourceLanguage,
               targetLanguage,
               glossaryBlock: subtitleGlossary || undefined,
+              namedListGlossaryBlock: namedBlock || undefined,
               // Subtitle path: subtitleKnobs routes to the subtitle prompt and
               // customSystemPrompt/pageContext are ignored by the service.
               subtitleKnobs,
@@ -1218,7 +1249,7 @@ async function handleTranslateSubtitle(
             // Merge extracted proper nouns into the rolling glossary so the
             // next chunk's prompt carries forward name consistency.
             if (result.properNouns) {
-              mergeProperNouns(rollingGlossary, result.properNouns);
+              mergeProperNouns(rollingGlossary, result.properNouns, { lockedSources });
             }
           } else {
             throw new Error(result.error ?? 'Chunk translation failed');

@@ -115,6 +115,8 @@ export interface TranslateSubtitleMessage {
   cues: SubtitleCue[];
   sourceLanguage: string;
   targetLanguage: string;
+  /** Page hostname for per-site named list resolution. */
+  hostname?: string;
   pageContext?: PageContext;
   /** Subtitle profile resolved by the content script from window.location.hostname.
    *  Background falls back to 'media' when absent (backward compat). */

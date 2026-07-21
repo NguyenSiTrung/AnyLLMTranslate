@@ -300,6 +300,79 @@ describe('services/background', () => {
   });
 
   describe('handleMessage — translateSubtitle', () => {
+    it('applies the hostname-selected named glossary as a separate locked prompt block', async () => {
+      mockStorage['anyllm-translate-settings'] = {
+        glossary: [
+          { id: 'global-locked', source: 'Alice', target: 'Global Alice' },
+          { id: 'global-free', source: 'Rabbit', target: 'Con thỏ' },
+        ],
+        namedGlossaryLists: [{
+          id: 'cast',
+          name: 'Cast names',
+          entries: [{ id: 'alice', source: 'Alice', target: 'A-lít' }],
+          updatedAt: 1,
+        }],
+        subtitleListBySite: { 'example.com': 'cast' },
+      };
+      mockFetch(JSON.stringify({
+        translations: { s1: 'A-lít' },
+        properNouns: { Alice: 'Wrong Alice' },
+      }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          hostname: 'WWW.Example.com.',
+          cues: [{ startTime: 0, endTime: 2, text: 'Alice' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          skipFilmPreScan: true,
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      const systemPrompt = body.messages[0].content;
+      expect(systemPrompt).toContain('Personal dictionary "Cast names"');
+      expect(systemPrompt).toContain('- "Alice" → "A-lít"');
+      expect(systemPrompt).toContain('- "Rabbit" → "Con thỏ"');
+      expect(systemPrompt).not.toContain('- "Alice" → "Global Alice"');
+    });
+
+    it('does not apply a named glossary when the hostname resolves to None', async () => {
+      mockStorage['anyllm-translate-settings'] = {
+        namedGlossaryLists: [{
+          id: 'cast',
+          name: 'Cast names',
+          entries: [{ id: 'alice', source: 'Alice', target: 'A-lít' }],
+          updatedAt: 1,
+        }],
+        subtitleListBySite: { 'example.com': 'cast' },
+      };
+      mockFetch(JSON.stringify({ translations: { s1: 'Alice' } }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          hostname: '',
+          cues: [{ startTime: 0, endTime: 2, text: 'Alice' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          skipFilmPreScan: true,
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      expect(body.messages[0].content).not.toContain('Personal dictionary');
+    });
+
     it('uses the subtitle prompt (pageContext is not injected for subtitles)', async () => {
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
@@ -512,6 +585,15 @@ describe('services/background', () => {
     });
 
     it('accumulates rolling glossary across chunks', async () => {
+      mockStorage['anyllm-translate-settings'] = {
+        namedGlossaryLists: [{
+          id: 'cast',
+          name: 'Cast names',
+          entries: [{ id: 'alice', source: 'Alice', target: 'A-lít' }],
+          updatedAt: 1,
+        }],
+        subtitleListBySite: { 'example.com': 'cast' },
+      };
       const cues = Array.from({ length: 30 }, (_, i) => ({
         startTime: i,
         endTime: i + 1,
@@ -532,7 +614,7 @@ describe('services/background', () => {
         }
         const response: Record<string, unknown> = { translations };
         if (callCount === 1) {
-          response.properNouns = { John: 'Juan' };
+          response.properNouns = { John: 'Juan', Alice: 'Wrong Alice' };
         }
         return Promise.resolve({
           ok: true,
@@ -549,6 +631,7 @@ describe('services/background', () => {
       await handleMessage(
         {
           action: 'translateSubtitle',
+          hostname: 'example.com',
           cues,
           sourceLanguage: 'en',
           targetLanguage: 'vi',
@@ -577,6 +660,8 @@ describe('services/background', () => {
       const messages = chunkWithGlossary?.messages;
       expect(messages?.[0].content).toContain('Previously translated names');
       expect(messages?.[0].content).toContain('"John" → "Juan"');
+      expect(messages?.[0].content).toContain('- "Alice" → "A-lít"');
+      expect(messages?.[0].content).not.toContain('Wrong Alice');
     });
 
     it('prefixes cue text with [voice] when cue.voice is set', async () => {
@@ -792,4 +877,3 @@ describe('services/background', () => {
     });
   });
 });
-
