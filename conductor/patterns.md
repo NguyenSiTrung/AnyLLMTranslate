@@ -1,7 +1,30 @@
-<!-- conductor-refresh: 2026-07-20 all (PDF reader/compare shell; eslint unknown-rule gotcha; 582 TCs / 0 fail; lint 1; tsc 6; 71 archived / 0 active; Beads 7uk open) -->
+<!-- conductor-refresh: 2026-07-21 all (named glossary; popup toolbar; pool load-spread; options focus; 683 TCs / 0 fail; lint 1; tsc 13; 72 archived / 0 active; Beads 7uk open) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Named subtitle glossary lists (from: named glossary v1, 2026-07-21)
+- **Authority order is product law:** named list (LOCKED) > global Custom terms > film seed > rolling `properNouns`. Auto layers assist; they must never overwrite user list sources (`lockedSourceSet` / lock-aware merge). (from: 2026-07-21 named glossary lists)
+- **Identity = user-named lists only** — no fragile series/episode auto-detect in v1. Per-site memory via `subtitleListBySite[normalizeSubtitleSiteHost(host)]` (decision C: last list used on this site). Caps: 50 lists / 200 entries / 64-char name (`lib/namedGlossaryLists.ts`).
+- **Pure helpers own CRUD + selection:** `createNamedList`, `pushEntries`, `setSiteListSelection`, `resolveActiveSubtitleListId`, `formatNamedListGlossary`, `pruneSubtitleListBySite` — UI only maps clicks; background loads locked Map at session start.
+- **Prompt block order:** personal dictionary `"«name»"` → global glossary → rolling proper nouns → JSON contract. Cache key folds named list **id + entry snapshot** so list edits invalidate subtitle cache without colliding with web keys (`subtitle:` namespace).
+- **Re-resolve on forward chunks:** do not freeze list id only at session open — each forward subtitle chunk should call `resolveActiveSubtitleListId` against current settings so mid-session popup site-memory changes apply (`b40f1fc`).
+- **Suggestions without extra LLM:** reuse film pre-scan + rolling map → `buildSuggestionRows` (skip locked sources, sort, cap) → user edit/push into active list (`lib/namedGlossarySuggestions.ts`, popup modal).
+
+## Popup toolbar IA (from: popup redesign 2026-07-20, Approach B)
+- **Translate-first hierarchy:** Header → LanguageBar → primary ActionZone (one status channel + progress under CTA) → contextual ThisPage (PDF only when relevant; category when context-aware) → collapsible QuickSettings → Footer. Kill competing always-visible PDF cards and triplicated status.
+- **Split the god file:** extract presentational components + pure libs (`derivePopupStatus`, `unsupportedPage`, `truncateHost`) + thin hooks (`usePopupTab`, `useTranslationToggle`, `usePopupSettings`); reuse Options primitives (`Toggle`, `SegmentedControl`, `Button`). Prefer no new settings keys for pure IA refactors.
+- **CategoryPicker polish stays local** — Approach A visual/interaction polish without changing category resolution semantics.
+
+## Options focus & deferred commits (from: f94f671…5b63f84, 2026-07-20/21)
+- **Drawer/Modal initial focus once:** focus-trap setup may depend on open/variant, but the effect that focuses the first control must **not** re-run when parent passes a new `onClose`/`onCancel` identity every render — that steals caret from inputs after a few seconds of typing.
+- **Defer list/blocklist commits to blur** (and keep apiKeys in local state while typing) so chrome.storage AES-GCM writes and parent re-renders do not fight the focused field. Pattern pairs with `useDeferredCommit`.
+
+## Provider pool load-spread & batch budgets (from: a32158f, 2026-07-21)
+- **Filter empty keys** before dispatch so blank slots never consume the cursor or trip breakers.
+- **Load-spread:** when concurrency allows, prefer distributing across healthy untried keys rather than stacking on one hot key; document FIFO fallback when all healthy keys are busy.
+- **Fast 429 failover:** if other untried healthy keys exist, set `max429Retries` to 0 on the current member so the pool can hop immediately; restore default retries when alone.
+- **Per-provider batch budgets:** pure `resolvePoolBatchBudgets` takes the **tightest positive** `maxBatchChars` / `maxTextGroupCount` across enabled providers with ≥1 enabled key (0/undefined = use global). Multi-provider pools must not emit batches larger than any member accepts.
 
 ## Web translate lifecycle (from: web-translate-hardening_20260720, 2026-07-20)
 - **Thin session contract:** `TranslationSessionRegistry` (id + port/abort registry) + `LifecycleMutex` in `lib/translationSession.ts`. Bump session *before* any await on start/stop; guard stream `piece` events and non-stream responses with `isCurrent`. Disconnect registered ports on bump.
@@ -774,4 +797,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-20 (PDF reader/compare shell; suite 582/0 fail; lint 1 unknown-rule; tsc 6; Beads 7uk open)
+Last refreshed: 2026-07-21 (popup toolbar + named glossary lists + pool load-spread + options focus; suite 683/0 fail; lint 1 unknown-rule; tsc 13; 72 archived / 0 active; Beads 7uk open)

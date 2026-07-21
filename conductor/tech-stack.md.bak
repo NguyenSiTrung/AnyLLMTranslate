@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-20 all (Node engines; scientific-pdf bridge; no fontkit dep; build ~3.5 MB; 572 TCs / 0 fail; lint 0) -->
+<!-- conductor-refresh: 2026-07-20 all (PDF reader/compare shell; build ~3.5 MB; 582 TCs / 0 fail; lint 1 unknown-rule; tsc 6) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -132,4 +132,4 @@
 - `MOCK_TRANSLATE=1` enables CI/smoke without downloading ONNX models
 - Helper scripts: `scripts/scientific-pdf-docker.sh` / `scientific-pdf-up.sh` / `scientific-pdf-down.sh`; compose: `docker-compose.scientific-pdf.yml`
 - Production extension build (`.output/chrome-mv3`) is ≈ **3.5 MB** total (`du`); bridge is external
-- Quality gates snapshot (2026-07-20): **572** Vitest TCs / **0** fail; **eslint 0**; `tsc --noEmit` still has **6** known test/lib type nits (not ship-blocking for runtime)
+- Quality gates snapshot (2026-07-20, post reader/compare shell): **582** Vitest TCs / **0** fail; **eslint 1** (`App.tsx` unknown `react-hooks/exhaustive-deps` disable — rule not in config); `tsc --noEmit` still has **6** known test/lib type nits (not ship-blocking for runtime)

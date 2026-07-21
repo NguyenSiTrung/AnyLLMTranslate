@@ -1,7 +1,31 @@
-<!-- conductor-refresh: 2026-07-20 all (seek/session patterns; eslint test overrides; 572 TCs / 0 fail; lint 0; tsc 6; 71 archived / 0 active; Beads 7uk open, zg4 closed) -->
+<!-- conductor-refresh: 2026-07-20 all (PDF reader/compare shell; eslint unknown-rule gotcha; 582 TCs / 0 fail; lint 1; tsc 6; 71 archived / 0 active; Beads 7uk open) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Web translate lifecycle (from: web-translate-hardening_20260720, 2026-07-20)
+- **Thin session contract:** `TranslationSessionRegistry` (id + port/abort registry) + `LifecycleMutex` in `lib/translationSession.ts`. Bump session *before* any await on start/stop; guard stream `piece` events and non-stream responses with `isCurrent`. Disconnect registered ports on bump.
+- **Stop snapshot order:** Freeze pieces synchronously in `writeResumeSnapshot` *before* `allPieces = []`. Closing over the live array after clear makes Stop a resume no-op.
+- **Resume before observe:** Await `restoreFromSnapshot` (or set `resumeRestorePending`) before `viewportObserver.observeAll`; gate `translatePieces` while restore is pending.
+- **Piece registry:** `Map<pieceId>` + `WeakMap<parent, Map<text, piece>>` for O(1) dedup; `pruneDetachedPieces` on mutation flush (`!parent.isConnected`).
+- **Cache fingerprint:** `lib/cacheFingerprint.ts` + `resolveWebCacheScope` on web success/negative keys (endpoint, model, prompt hash, glossary hash, category mode, temp, rich-v1). Old keys miss safely. Subtitle stays on `subtitle:` / ByKey.
+- **langDetect skip bar:** Prefer unnecessary translate over wrong skip. `SAME_LANG_SKIP_CONFIDENCE = 0.78`. Ukrainian letters → `uk`; Han-only confidence capped below skip bar; kana+kanji → `ja`.
+- **Blocklist boundary:** `*figma.com` matches `figma.com` / `*.figma.com` only — never `evilfigma.com` (`hostnameMatchesBlockPattern`).
+- **Site rules:** `findMatchingRule` picks most-specific pattern (exact > longer wildcard).
+- **Display lookup:** `findPieceElement` + `pieceElements` Map + `CSS.escape`; keyboard retry via tabindex + Enter/Space.
+
+## PDF viewer shell — reader / compare (from: ec2ddf2 reader-first shell, 2026-07-20)
+- Bridge-only product uses **`PdfShellMode = 'reader' | 'compare'`** (session-only; new `?file=` always starts `reader`). Do **not** persist shell mode; do **not** revive live `PdfViewMode` split/translation-only as the primary IA.
+- **`reader`** = full-width single document; **`compare`** = Original | result only when `resultKind` is held — `applyShellMode(..., 'compare')` is a no-op without a result.
+- Keep session transitions in **pure helpers** (`entrypoints/pdf-viewer/lib/pdfShellMode.ts`: `initialSessionState`, `applyOpenTranslated`, `applyOpenCompare`, `applyShellMode`, label helpers) so UI and tests share one state machine.
+- Bridge health is **chrome** (header pill + offline setup overlay on the reader), never a permanent half-pane content column pretending to be “translation.”
+- Open-from-job-modal: adopt result blob into App-owned object URL, then `applyOpenTranslated` vs `applyOpenCompare` from the chosen mono/dual kind.
+- One primary Translate/Set-up CTA in the header; avoid duplicating primary actions on a side status card.
+
+## ESLint / quality gates (from: a656c3b + ec2ddf2, 2026-07-20)
+- Keep production strict (`no-non-null-assertion`, `no-dynamic-delete`); in `eslint.config.mjs` scope overrides to `**/__tests__/**`, `**/*.test.*`, `tests/**` so test helpers can use `!` after expects and delete mock storage keys.
+- Prefer top-level `import type` over inline `import('…').Type` annotations (`@typescript-eslint/consistent-type-imports`).
+- **Do not** `eslint-disable` a rule that is not registered — e.g. `react-hooks/exhaustive-deps` without `eslint-plugin-react-hooks` fails lint with “Definition for rule … was not found.” Prefer a plain comment, install the plugin, or restructure deps so the disable is unnecessary. (from: pdf-viewer App.tsx, 2026-07-20)
 
 ## Subtitle session lifecycle (from: a656c3b seek stale-chunk fix, 2026-07-20)
 - Progressive subtitle sessions need a hard **`cancelled` flag** on the background queue object — clearing `queue.length` alone still lets an in-flight `translateChunk` finish and emit `SUBTITLE_CHUNK_TRANSLATED`.
@@ -9,10 +33,6 @@ Reusable patterns discovered during development. Read this before starting new w
 - Manifest activation should **pre-allocate** a content-owned session id before `translateSubtitle` so progressive chunks and the first response share one identity.
 - Background tests that drive multi-chunk subtitle work must **cancel/drain sessions in `beforeEach`**, use **unique cue text prefixes**, and **filter fetch bodies** by that prefix — shared `"Line N"` strings + leftover sessions poison the next test's body index.
 - Parallel web sub-batch concurrency tests need explicit pool key throttle: `concurrencyLimit: 0`, `interval: 0`, and `safeKeyThrottleMigrated: true` — defaults (`concurrencyLimit: 1` + migration upgrade of 0→1) serialize LLM calls and fail `maxConcurrent >= 2`.
-
-## ESLint / quality gates (from: a656c3b, 2026-07-20)
-- Keep production strict (`no-non-null-assertion`, `no-dynamic-delete`); in `eslint.config.mjs` scope overrides to `**/__tests__/**`, `**/*.test.*`, `tests/**` so test helpers can use `!` after expects and delete mock storage keys.
-- Prefer top-level `import type` over inline `import('…').Type` annotations (`@typescript-eslint/consistent-type-imports`).
 
 ## Scientific PDF bridge (from: scientific-pdf-backend_20260717, 2026-07-17)
 - Scientific / PDF Translate is an optional external Docker bridge (pdf2zh at runtime); never vendor PDFMathTranslate source into the extension (AGPL boundary).
@@ -754,4 +774,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-20 (seek/session patterns; suite 572/0 fail; lint 0; scientific archived; zg4 closed)
+Last refreshed: 2026-07-20 (PDF reader/compare shell; suite 582/0 fail; lint 1 unknown-rule; tsc 6; Beads 7uk open)

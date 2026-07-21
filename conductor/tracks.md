@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-07-20 web-translate-hardening_20260720 archived (72 archived / 0 active) -->
-<!-- conductor-refresh: 2026-07-20 all (confirmed 72 archived / 0 active after web-translate-hardening) -->
+<!-- conductor-refresh: 2026-07-21 all (confirmed 72 archived / 0 active; popup + named glossary + pool shipped without Conductor tracks) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.

@@ -1,37 +1,38 @@
 {
-  "lastRefresh": "2026-07-20T11:17:00+07:00",
+  "lastRefresh": "2026-07-21T13:40:00+00:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh. Intervening work since prior 2026-07-20 refresh (dc40985): PDF viewer reader/compare shell (design d7c8934, plan 9c92ac8, helpers 978ade4, UI ec2ddf2).",
-    "product.md: refresh marker; PDF section rewritten for PdfShellMode reader|compare (supersedes live PdfViewMode split/translation-only); Completed bullet for reader/compare shell; Current State → 582 TCs / 149 files / 0 fail / tsc 6 / lint 1 / build ~3.5 MB / 71 archived / 0 active / Beads 1 open (7uk).",
-    "tech-stack.md: quality-gates snapshot → 582 / lint 1 / tsc 6; refresh marker.",
-    "patterns.md: elevated PDF viewer shell reader/compare patterns + ESLint unknown-rule disable gotcha; merged prior ESLint section; refresh marker + last refreshed footer.",
-    "tracks.md: refresh marker only (already 71 archived / 0 active; shell shipped without Conductor track).",
+    "Scope: full refresh. Intervening work since 2026-07-20 refresh (deee20b): popup toolbar redesign; web-translate-hardening archive; options input-focus; pool load-spread/batch budgets; named subtitle glossary lists v1.",
+    "product.md: refresh marker; named glossary feature expanded; popup UI → translate-first toolbar; Completed bullets for web-translate-hardening, popup redesign, options focus, pool load-spread, named glossary; Current State → 683 TCs / 169 files / 0 fail / tsc 13 / lint 1 / build ~3.5 MB / 72 archived / 0 active / Beads 1 open (7uk).",
+    "tech-stack.md: quality-gates snapshot → 683 / lint 1 / tsc 13; refresh marker. Deps/scripts unchanged.",
+    "patterns.md: elevated named glossary lists, popup toolbar IA, options focus/deferred commits, pool load-spread & batch budgets; refresh marker + last refreshed footer. Web-translate-hardening patterns already present.",
+    "tracks.md: refresh marker only (already 72 archived / 0 active).",
     "workflow.md: no content drift (not rewritten).",
-    "learnings consolidation: reader/compare shell + unknown-rule eslint disable elevated into patterns.md.",
+    "learnings consolidation: named glossary + popup + options focus + pool load-spread elevated into patterns.md; web-translate-hardening already elevated at prior archive.",
     "beads DRIFT: none — AnyLLMTranslate-7uk remains open (P3 PDF empty-page OCR); no plan.md mismatch.",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, refresh_state.json.bak.",
-    "verification: vitest 582/582 pass; tsc 6 errors; eslint 1 (App.tsx unknown react-hooks/exhaustive-deps); build output ~3.5 MB."
+    "verification: vitest 683/683 pass; tsc 13 errors; eslint 1 (App.tsx unknown react-hooks/exhaustive-deps); build output ~3.5 MB."
   ],
   "codebaseHealth": {
-    "tests": 582,
-    "testsPassing": 582,
+    "tests": 683,
+    "testsPassing": 683,
     "testsFailing": 0,
-    "testFiles": 149,
+    "testFiles": 169,
     "buildSize": "~3.5 MB",
     "lintErrors": 1,
     "lintErrorsDetail": "entrypoints/pdf-viewer/App.tsx:115 — eslint-disable react-hooks/exhaustive-deps but rule not registered (Definition for rule was not found). Production remains strict; tests override no-non-null-assertion and no-dynamic-delete in eslint.config.mjs.",
-    "tscErrors": 6,
-    "tscErrorsDetail": "subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority.",
-    "archivedTracks": 71,
+    "tscErrors": 13,
+    "tscErrorsDetail": "Prior 6: subtitleCoordinator.test.ts mock missing getDomCueSource; pageScopePreset.test.ts ExtensionSettings casts (2); youtubeAsrResegment EN_BREAK_WORDS any[] (2); settingsStore.test.ts PoolKey.priority. New 7: content.ts pagehide/beforeunload listener typing (2); CategoryPicker.test.tsx ComponentProps from vitest; QuickSettings.namedList.test.tsx theme \"dark\" vs ThemeName (4).",
+    "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None — all tracks archived as of 2026-07-17. PDF reader/compare shell shipped directly on master without a Conductor track.",
+    "activeTracksDetail": "None. Latest archive web-translate-hardening_20260720. Popup redesign, named glossary lists, pool load-spread, and options focus shipped on master without Conductor tracks.",
     "failingTests": [],
     "shippedSinceLastRefresh": [
-      "PDF viewer reader/compare design (d7c8934)",
-      "PDF viewer reader/compare plan (9c92ac8)",
-      "PdfShellMode session helpers (978ade4)",
-      "Reader-first shell with original|result compare UI (ec2ddf2)"
+      "Popup toolbar redesign — translate-first IA (36242ec, e44b666)",
+      "Web translate lifecycle hardening archive (fd052d5, a890cb7)",
+      "Options input-focus / Drawer-Modal focus / deferred commits (f94f671…5b63f84)",
+      "Pool load-spread, empty-key filter, fast 429 failover, per-provider batch budgets (a32158f)",
+      "Subtitle named glossary lists v1 (237cf3a…b40f1fc)"
     ]
   },
   "beads": {
