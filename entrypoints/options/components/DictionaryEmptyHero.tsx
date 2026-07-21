@@ -5,6 +5,7 @@
 import { BookOpen, Plus, Upload, Sparkles } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { GlossaryImportHint } from './GlossaryImportHint';
 
 export interface DictionaryEmptyHeroProps {
   onAddFirst: () => void;
@@ -45,6 +46,9 @@ export function DictionaryEmptyHero({
               Use examples
             </Button>
           )}
+        </div>
+        <div className="mt-4 w-full max-w-md">
+          <GlossaryImportHint onChooseFile={onImport} />
         </div>
       </div>
     </Card>

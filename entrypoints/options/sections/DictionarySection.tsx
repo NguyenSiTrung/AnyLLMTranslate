@@ -23,6 +23,7 @@ import { DictionaryAddForm } from '../components/DictionaryAddForm';
 import { DictionaryEmptyHero } from '../components/DictionaryEmptyHero';
 import { GlossaryEntryList } from '../components/GlossaryEntryList';
 import { NamedGlossaryListPanel } from '../components/NamedGlossaryListPanel';
+import { GlossaryImportHint } from '../components/GlossaryImportHint';
 import { GlossaryTranslatePreview } from './GlossaryTranslatePreview';
 
 const EXAMPLE_TERMS: Omit<GlossaryEntry, 'id'>[] = [
@@ -241,6 +242,9 @@ export function DictionarySection() {
             exportDisabled={glossary.length === 0}
             termCount={glossary.length}
           />
+          <div className="mt-2 px-0.5">
+            <GlossaryImportHint onChooseFile={() => fileInputRef.current?.click()} />
+          </div>
         </div>
 
         {addOpen && (
@@ -302,6 +306,7 @@ export function DictionarySection() {
         type="file"
         accept=".json,.csv"
         className="hidden"
+        aria-label="Import glossary terms from JSON or CSV"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void handleImportFile(file);

@@ -26,4 +26,12 @@ describe('DictionaryEmptyHero', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use examples' }));
     expect(onUseExamples).toHaveBeenCalledOnce();
   });
+
+  it('shows glossary import format hint', () => {
+    render(
+      <DictionaryEmptyHero onAddFirst={vi.fn()} onImport={vi.fn()} />,
+    );
+    expect(screen.getByText(/Supports/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /See format/i })).toBeInTheDocument();
+  });
 });
