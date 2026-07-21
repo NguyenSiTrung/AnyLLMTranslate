@@ -41,7 +41,10 @@ describe('glossary import templates', () => {
   });
 
   it('downloadGlossaryTemplate creates a blob download with the right name', () => {
-    const createObjectURL = vi.fn(() => 'blob:template');
+    const createObjectURL = vi.fn((blob: Blob) => {
+      expect(blob).toBeInstanceOf(Blob);
+      return 'blob:template';
+    });
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', {
       createObjectURL,
@@ -62,8 +65,7 @@ describe('glossary import templates', () => {
 
     expect(createElement).toHaveBeenCalledWith('a');
     expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0]![0] as Blob;
-    expect(blob.type).toBe('application/json');
+    expect(createObjectURL.mock.calls[0]![0].type).toBe('application/json');
     expect(anchor.download).toBe(GLOSSARY_JSON_TEMPLATE_FILENAME);
     expect(anchor.href).toBe('blob:template');
     expect(click).toHaveBeenCalledOnce();
@@ -71,7 +73,6 @@ describe('glossary import templates', () => {
 
     downloadGlossaryTemplate('csv');
     expect(anchor.download).toBe(GLOSSARY_CSV_TEMPLATE_FILENAME);
-    const csvBlob = createObjectURL.mock.calls[1]![0] as Blob;
-    expect(csvBlob.type).toBe('text/csv');
+    expect(createObjectURL.mock.calls[1]![0].type).toBe('text/csv');
   });
 });
