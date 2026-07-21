@@ -55,6 +55,7 @@ export function buildSubtitleSystemPrompt(
   knobs: ProfileKnobs,
   glossaryBlock?: string,
   rollingGlossaryBlock?: string,
+  namedListGlossaryBlock?: string,
 ): string {
   const targetLanguageName = getLanguageName(targetLanguage);
   const displayTargetLanguage = targetLanguageName !== targetLanguage
@@ -82,12 +83,17 @@ export function buildSubtitleSystemPrompt(
     prompt += '\n\n' + knobLines.join('\n');
   }
 
-  // Part C — glossary (user's global glossary).
+  // Part C — named personal dictionary.
+  if (namedListGlossaryBlock) {
+    prompt += '\n\n' + namedListGlossaryBlock;
+  }
+
+  // Part C2 — glossary (user's global glossary).
   if (glossaryBlock) {
     prompt += '\n\n' + glossaryBlock;
   }
 
-  // Part C2 — rolling proper-noun glossary (per-session continuity).
+  // Part C3 — rolling proper-noun glossary (per-session continuity).
   if (rollingGlossaryBlock) {
     prompt += '\n\n' + rollingGlossaryBlock;
   }

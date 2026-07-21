@@ -128,6 +128,7 @@ export class OpenAICompatibleService implements TranslationService {
             request.subtitleKnobs,
             request.glossaryBlock,
             request.rollingGlossaryBlock,
+            request.namedListGlossaryBlock,
           )
         : buildSystemPrompt(
             request.targetLanguage,

@@ -50,6 +50,9 @@ export interface TranslationRequest {
   /** When set, the request is a subtitle translation: the service routes to
    *  buildSubtitleSystemPrompt() and ignores customSystemPrompt. */
   subtitleKnobs?: ProfileKnobs;
+  /** Named-list glossary block for subtitle translation.
+   *  Injected before the global glossary on the subtitle path. */
+  namedListGlossaryBlock?: string;
   /** Rolling proper-noun glossary block for subtitle cross-chunk continuity.
    *  Injected into the subtitle system prompt after the user's global glossary. */
   rollingGlossaryBlock?: string;
