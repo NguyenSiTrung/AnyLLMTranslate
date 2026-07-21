@@ -28,6 +28,7 @@ export default defineConfig({
       ['lib/**/__tests__/maxSubtitleLanguages.test.ts', 'jsdom'],
       ['lib/**/__tests__/performance.test.ts', 'jsdom'],
       ['lib/**/__tests__/ttmlParser.test.ts', 'jsdom'],
+      ['lib/**/__tests__/glossaryImportTemplates.test.ts', 'jsdom'],
     ],
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/__tests__/**/*.test.{ts,tsx}', '**/*.test.{ts,tsx}'],
