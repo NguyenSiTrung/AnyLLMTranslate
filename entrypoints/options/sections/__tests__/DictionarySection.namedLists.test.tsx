@@ -80,12 +80,16 @@ describe('DictionarySection named lists', () => {
     });
     renderSection();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename Old name' }));
+    expect(screen.queryByRole('menuitem', { name: 'Rename Old name' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Old name' }));
+    expect(screen.getByRole('menuitem', { name: 'Export JSON' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename Old name' }));
     fireEvent.change(screen.getByLabelText('Rename list'), { target: { value: 'New name' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     await waitFor(() => expect(useSettingsStore.getState().namedGlossaryLists[0].name).toBe('New name'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete New name' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for New name' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete New name' }));
     expect(screen.getByRole('dialog', { name: 'Delete named list?' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(useSettingsStore.getState().namedGlossaryLists).toEqual([]));
