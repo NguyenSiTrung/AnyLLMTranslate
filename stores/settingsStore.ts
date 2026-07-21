@@ -177,6 +177,8 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     siteRules: state.siteRules,
     globalExcludeSelectors: state.globalExcludeSelectors,
     glossary: state.glossary,
+    namedGlossaryLists: state.namedGlossaryLists,
+    subtitleListBySite: state.subtitleListBySite,
     subtitleSettings: state.subtitleSettings,
     customSystemPrompt: state.customSystemPrompt,
     debugMode: state.debugMode,

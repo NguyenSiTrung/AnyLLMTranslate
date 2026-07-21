@@ -222,6 +222,17 @@ export interface GlossaryEntry {
   target: string;
 }
 
+/** User-owned named glossary pack (subtitle-scoped in v1). */
+export interface NamedGlossaryList {
+  id: string;
+  name: string;
+  entries: GlossaryEntry[];
+  updatedAt: number;
+}
+
+/** hostname → named list id (last selection per site). */
+export type SubtitleListBySite = Record<string, string>;
+
 /** Subtitle font family options */
 export type SubtitleFontFamily = 'system' | 'serif' | 'monospace';
 
@@ -429,6 +440,10 @@ export interface ExtensionSettings {
   globalExcludeSelectors: string[];
   /** Custom glossary/dictionary entries */
   glossary: GlossaryEntry[];
+  /** Named glossary packs for subtitle personal dictionaries. */
+  namedGlossaryLists: NamedGlossaryList[];
+  /** Last selected named list id per subtitle site hostname. */
+  subtitleListBySite: SubtitleListBySite;
   /** Subtitle display settings */
   subtitleSettings: SubtitleSettings;
   /** Custom system prompt template (null = use default) */
@@ -704,6 +719,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   siteRules: [],
   globalExcludeSelectors: [...CRITICAL_GLOBAL_EXCLUDES],
   glossary: [],
+  namedGlossaryLists: [],
+  subtitleListBySite: {},
   subtitleSettings: { ...DEFAULT_SUBTITLE_SETTINGS },
   customSystemPrompt: null,
   debugMode: false,

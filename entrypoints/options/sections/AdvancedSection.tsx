@@ -73,7 +73,8 @@ import { ScientificPdfWizard } from '@/entrypoints/options/components/Scientific
  */
 const PORTABLE_KEYS = [
   'provider', 'sourceLanguage', 'targetLanguage', 'displayMode', 'theme',
-  'translationPosition', 'darkMode', 'siteRules', 'glossary', 'subtitleSettings',
+  'translationPosition', 'darkMode', 'siteRules', 'glossary',
+  'namedGlossaryLists', 'subtitleListBySite', 'subtitleSettings',
   'customSystemPrompt', 'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
   'debugMode', 'customTheme', 'enableContextAwareTranslation',
   'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
