@@ -48,6 +48,50 @@ describe('hashKnobs / hashGlossary', () => {
       hashGlossary({ globalEntries: [{ source: 'AI', target: 'x' }], properNouns: [] }),
     );
   });
+
+  it('changes when named list id or entries change', () => {
+    const base: GlossarySnapshot = { globalEntries: [], properNouns: [] };
+    const withId: GlossarySnapshot = {
+      ...base,
+      namedListId: 'L1',
+      namedListEntries: [{ source: 'A', target: 'B' }],
+    };
+    const withId2: GlossarySnapshot = {
+      ...base,
+      namedListId: 'L2',
+      namedListEntries: [{ source: 'A', target: 'B' }],
+    };
+    const edited: GlossarySnapshot = {
+      ...base,
+      namedListId: 'L1',
+      namedListEntries: [{ source: 'A', target: 'C' }],
+    };
+    expect(hashGlossary(withId)).not.toBe(hashGlossary(base));
+    expect(hashGlossary(withId)).not.toBe(hashGlossary(withId2));
+    expect(hashGlossary(withId)).not.toBe(hashGlossary(edited));
+    expect(hashGlossary(base)).toBe(
+      hashGlossary({ ...base, namedListId: null, namedListEntries: [] }),
+    );
+    expect(
+      hashGlossary({
+        ...base,
+        namedListId: 'L1',
+        namedListEntries: [
+          { source: 'p', target: 'q' },
+          { source: 'a', target: 'b' },
+        ],
+      }),
+    ).toBe(
+      hashGlossary({
+        ...base,
+        namedListId: 'L1',
+        namedListEntries: [
+          { source: 'a', target: 'b' },
+          { source: 'p', target: 'q' },
+        ],
+      }),
+    );
+  });
 });
 
 describe('generateSubtitleCacheKey', () => {

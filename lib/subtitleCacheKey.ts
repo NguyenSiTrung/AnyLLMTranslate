@@ -17,6 +17,10 @@ export interface GlossarySnapshot {
   globalEntries: Array<{ source: string; target: string }>;
   /** Rolling + film proper-noun glossary names. Order is normalized before hashing. */
   properNouns: string[];
+  /** Active named list id, or null/omit when None. */
+  namedListId?: string | null;
+  /** Active named list entries. Order is normalized before hashing. */
+  namedListEntries?: Array<{ source: string; target: string }>;
 }
 
 const encoder = new TextEncoder();
@@ -41,8 +45,8 @@ export function hashKnobs(knobs: ProfileKnobs): string {
 }
 
 /**
- * Stable hex hash of a glossary snapshot. Both globalEntries and properNouns
- * are sorted before hashing, so entry order does not affect the key.
+ * Stable hex hash of a glossary snapshot. Glossary entries and properNouns are
+ * sorted before hashing, so entry order does not affect the key.
  */
 export function hashGlossary(snapshot: GlossarySnapshot): string {
   const globalSorted = [...snapshot.globalEntries]
@@ -50,7 +54,12 @@ export function hashGlossary(snapshot: GlossarySnapshot): string {
     .map((e) => `${e.source}=>${e.target}`)
     .join(';');
   const nounsSorted = [...snapshot.properNouns].sort().join(';');
-  return fnv1aHex(`${globalSorted}|${nounsSorted}`);
+  const namedId = snapshot.namedListId ?? '';
+  const namedSorted = [...(snapshot.namedListEntries ?? [])]
+    .sort((a, b) => (a.source < b.source ? -1 : a.source > b.source ? 1 : 0))
+    .map((e) => `${e.source}=>${e.target}`)
+    .join(';');
+  return fnv1aHex(`${globalSorted}|${nounsSorted}|${namedId}|${namedSorted}`);
 }
 
 /**
