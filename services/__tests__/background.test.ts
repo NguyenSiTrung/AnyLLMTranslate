@@ -373,6 +373,71 @@ describe('services/background', () => {
       expect(body.messages[0].content).not.toContain('Personal dictionary');
     });
 
+    it('re-resolves the hostname-selected named glossary for forward chunks', async () => {
+      const listA = {
+        id: 'cast-a',
+        name: 'Cast A',
+        entries: [{ id: 'alice', source: 'Alice', target: 'A-lít' }],
+        updatedAt: 1,
+      };
+      const listB = {
+        id: 'cast-b',
+        name: 'Cast B',
+        entries: [{ id: 'bob', source: 'Bob', target: 'Bóp' }],
+        updatedAt: 2,
+      };
+      mockStorage['anyllm-translate-settings'] = {
+        namedGlossaryLists: [listA, listB],
+        subtitleListBySite: { 'example.com': 'cast-a' },
+      };
+      const cues = Array.from({ length: 26 }, (_, i) => ({
+        startTime: i,
+        endTime: i + 1,
+        text: `Switch-list line ${i}`,
+      }));
+
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, opts: { body: string }) => {
+        const body = JSON.parse(opts.body) as { messages: Array<{ content: string }> };
+        const userJson = JSON.parse(body.messages[1].content.split('\n\n').pop() ?? '{}');
+        const translations = Object.fromEntries(Object.keys(userJson).map((key) => [key, `T-${key}`]));
+        const settings = mockStorage['anyllm-translate-settings'] as {
+          subtitleListBySite: Record<string, string>;
+        };
+        settings.subtitleListBySite = { 'example.com': 'cast-b' };
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () => Promise.resolve({
+            id: 'test',
+            choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations }) }, finish_reason: 'stop' }],
+          }),
+          text: () => Promise.resolve(''),
+        });
+      }));
+
+      await handleMessage(
+        {
+          action: 'translateSubtitle',
+          hostname: 'example.com',
+          cues,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          skipFilmPreScan: true,
+        },
+        { tab: { id: 43 } } as chrome.runtime.MessageSender,
+      );
+
+      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      const firstBody = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { messages: Array<{ content: string }> };
+      const secondBody = JSON.parse(fetchMock.mock.calls[1][1]?.body as string) as { messages: Array<{ content: string }> };
+      expect(firstBody.messages[0].content).toContain('Personal dictionary "Cast A"');
+      expect(secondBody.messages[0].content).toContain('Personal dictionary "Cast B"');
+      expect(secondBody.messages[0].content).toContain('- "Bob" → "Bóp"');
+      expect(secondBody.messages[0].content).not.toContain('Personal dictionary "Cast A"');
+    });
+
     it('uses the subtitle prompt (pageContext is not injected for subtitles)', async () => {
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 

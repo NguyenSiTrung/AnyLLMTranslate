@@ -48,7 +48,7 @@ import { generateSelectionDictionaryCacheKey } from '@/lib/selectionCacheKey';
 import { getLanguageName } from '@/lib/languages';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
-import type { ExtensionSettings } from '@/types/config';
+import type { ExtensionSettings, NamedGlossaryList } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
@@ -1018,12 +1018,6 @@ async function handleTranslateSubtitle(
       ),
     );
     const lockedSources = lockedSourceSet(activeList);
-    const namedBlock = activeList ? formatNamedListGlossary(activeList) : '';
-    const globalForPrompt = omitGlobalEntriesCoveredByNamed(
-      subtitleSettings.glossary ?? [],
-      lockedSources,
-    );
-    const subtitleGlossary = formatGlossary(globalForPrompt);
 
     // Resolve translation knobs from the content-script-provided profile.
     // Unknown/absent profile falls back to 'media' (balanced defaults); an
@@ -1082,11 +1076,14 @@ async function handleTranslateSubtitle(
     /** Build a stable glossary snapshot for the subtitle cache key. Captures the
      *  current global + rolling + film glossary state so a cache entry is
      *  invalidated when the glossary grows. */
-    const buildGlossarySnapshot = (): GlossarySnapshot => ({
-      globalEntries: (subtitleSettings.glossary ?? []).map((e) => ({ source: e.source, target: e.target })),
+    const buildGlossarySnapshot = (
+      currentSettings: ExtensionSettings,
+      currentActiveList: NamedGlossaryList | undefined,
+    ): GlossarySnapshot => ({
+      globalEntries: (currentSettings.glossary ?? []).map((e) => ({ source: e.source, target: e.target })),
       properNouns: [...new Set([...rollingGlossary.keys(), ...(filmGlossary ? Object.keys(filmGlossary) : [])])],
-      namedListId: activeList?.id ?? null,
-      namedListEntries: (activeList?.entries ?? []).map((e) => ({ source: e.source, target: e.target })),
+      namedListId: currentActiveList?.id ?? null,
+      namedListEntries: (currentActiveList?.entries ?? []).map((e) => ({ source: e.source, target: e.target })),
     });
 
     // Mutate a copy of cues as we go
@@ -1100,6 +1097,27 @@ async function handleTranslateSubtitle(
       // across the synchronous first chunk AND the background chunk loop.
       await acquireSemaphore();
       try {
+        // Re-resolve the per-site named list for every forward chunk. Popup list
+        // changes only update settings; completed cues remain untouched while
+        // subsequent cache keys, prompts, and proper-noun locks use the new list.
+        const currentSettings = await loadSettings();
+        const currentNamedLists = currentSettings.namedGlossaryLists ?? [];
+        const currentActiveList = getNamedListById(
+          currentNamedLists,
+          resolveActiveSubtitleListId(
+            currentNamedLists,
+            currentSettings.subtitleListBySite ?? {},
+            host,
+          ),
+        );
+        const currentLockedSources = lockedSourceSet(currentActiveList);
+        const currentNamedBlock = currentActiveList ? formatNamedListGlossary(currentActiveList) : '';
+        const currentSubtitleGlossary = formatGlossary(omitGlobalEntriesCoveredByNamed(
+          currentSettings.glossary ?? [],
+          currentLockedSources,
+        ));
+        const glossarySnapshot = () => buildGlossarySnapshot(currentSettings, currentActiveList);
+
         const chunkResult: SubtitleCue[] = new Array(chunkCues.length);
         const uncachedIndices: number[] = [];
         const uniqueTexts = new Set<string>();
@@ -1110,7 +1128,7 @@ async function handleTranslateSubtitle(
           // Sub-project 6: context-aware subtitle cache key (profile + knobs +
           // glossary, namespaced from the web path) instead of the bare
           // SHA-256(src:tgt:text). Web path's getCachedTranslation is untouched.
-          const subtitleKey = await generateSubtitleCacheKey(cue.text, sourceLanguage, targetLanguage, subtitleKnobs, buildGlossarySnapshot());
+          const subtitleKey = await generateSubtitleCacheKey(cue.text, sourceLanguage, targetLanguage, subtitleKnobs, glossarySnapshot());
           const cached = await getCachedTranslationByKey(subtitleKey, subtitleSettings.cacheTTLDays);
           if (cached) {
             chunkResult[i] = {
@@ -1180,8 +1198,8 @@ async function handleTranslateSubtitle(
               texts,
               sourceLanguage,
               targetLanguage,
-              glossaryBlock: subtitleGlossary || undefined,
-              namedListGlossaryBlock: namedBlock || undefined,
+              glossaryBlock: currentSubtitleGlossary || undefined,
+              namedListGlossaryBlock: currentNamedBlock || undefined,
               // Subtitle path: subtitleKnobs routes to the subtitle prompt and
               // customSystemPrompt/pageContext are ignored by the service.
               subtitleKnobs,
@@ -1213,7 +1231,7 @@ async function handleTranslateSubtitle(
                 // persist source-as-translation. (result.partial marks the chunk.)
                 const isBackfilled = result.partial === true && translatedText === originalText;
                 if (!isBackfilled) {
-                  const writeKey = await generateSubtitleCacheKey(originalText, sourceLanguage, targetLanguage, subtitleKnobs, buildGlossarySnapshot());
+                  const writeKey = await generateSubtitleCacheKey(originalText, sourceLanguage, targetLanguage, subtitleKnobs, glossarySnapshot());
                   await cacheTranslationByKey(writeKey, translatedText, sourceLanguage, targetLanguage);
                 }
               }
@@ -1252,7 +1270,7 @@ async function handleTranslateSubtitle(
             // Merge extracted proper nouns into the rolling glossary so the
             // next chunk's prompt carries forward name consistency.
             if (result.properNouns) {
-              mergeProperNouns(rollingGlossary, result.properNouns, { lockedSources });
+              mergeProperNouns(rollingGlossary, result.properNouns, { lockedSources: currentLockedSources });
             }
           } else {
             throw new Error(result.error ?? 'Chunk translation failed');
