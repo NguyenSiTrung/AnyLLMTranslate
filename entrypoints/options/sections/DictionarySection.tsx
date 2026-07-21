@@ -22,6 +22,7 @@ import { DictionaryCommandBar } from '../components/DictionaryCommandBar';
 import { DictionaryAddForm } from '../components/DictionaryAddForm';
 import { DictionaryEmptyHero } from '../components/DictionaryEmptyHero';
 import { GlossaryEntryList } from '../components/GlossaryEntryList';
+import { NamedGlossaryListPanel } from '../components/NamedGlossaryListPanel';
 import { GlossaryTranslatePreview } from './GlossaryTranslatePreview';
 
 const EXAMPLE_TERMS: Omit<GlossaryEntry, 'id'>[] = [
@@ -34,6 +35,8 @@ const DUPLICATE_MSG = 'This source term already exists';
 
 export function DictionarySection() {
   const glossary = useSettingsStore((s) => s.glossary);
+  const namedGlossaryLists = useSettingsStore((s) => s.namedGlossaryLists);
+  const subtitleListBySite = useSettingsStore((s) => s.subtitleListBySite);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -304,6 +307,14 @@ export function DictionarySection() {
           if (file) void handleImportFile(file);
           e.target.value = '';
         }}
+      />
+
+      <NamedGlossaryListPanel
+        lists={namedGlossaryLists}
+        bySite={subtitleListBySite}
+        onUpdate={updateSettings}
+        onSuccess={showSuccess}
+        onError={showError}
       />
 
       {pendingDeleteId && pendingEntry && (
