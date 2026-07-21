@@ -1057,6 +1057,9 @@ async function handleTranslateSubtitle(
         filmGlossary = undefined;
       }
     }
+    if (sender?.tab?.id !== undefined && !message.skipFilmPreScan) {
+      await writeNamedGlossarySuggestions(sender.tab.id, filmGlossary ?? {});
+    }
 
     const CONTEXT_SIZE = 3;
 
@@ -1998,6 +2001,42 @@ function handleStatusUpdate(
 
 /** Storage key for the set of (tabId::url) keys already auto-opened this session. */
 const PDF_AUTOOPEN_SESSION_KEY = 'pdf-autoopen-opened';
+const NAMED_GLOSSARY_SUGGESTIONS_PREFIX = 'namedGlossarySuggest:';
+
+async function writeNamedGlossarySuggestions(
+  tabId: number,
+  suggestions: Record<string, string>,
+): Promise<void> {
+  try {
+    await chrome.storage.session.set({
+      [`${NAMED_GLOSSARY_SUGGESTIONS_PREFIX}${tabId}`]: suggestions,
+    });
+  } catch {
+    // Session storage is best-effort; subtitle translation must continue.
+  }
+}
+
+async function getNamedGlossarySuggestions(
+  tabId: number | undefined,
+): Promise<{ success: boolean; suggestions: Record<string, string> }> {
+  try {
+    const resolvedTabId =
+      tabId ?? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+    if (resolvedTabId === undefined) return { success: false, suggestions: {} };
+    const key = `${NAMED_GLOSSARY_SUGGESTIONS_PREFIX}${resolvedTabId}`;
+    const stored = await chrome.storage.session.get(key);
+    const suggestions = stored[key];
+    return {
+      success: true,
+      suggestions:
+        suggestions && typeof suggestions === 'object'
+          ? (suggestions as Record<string, string>)
+          : {},
+    };
+  } catch {
+    return { success: false, suggestions: {} };
+  }
+}
 
 /** Open the bundled PDF viewer for a URL. Shared by popup, context menu,
  *  and auto-trigger so URL validation lives in one place.
@@ -2075,6 +2114,8 @@ export function handleMessage(
       return queryPoolKeyStatuses(() => initService());
     case 'updateSettings':
       return initService().then(() => ({ success: true })).catch(() => ({ success: false, error: 'Failed to update settings' }));
+    case 'getNamedGlossarySuggestions':
+      return getNamedGlossarySuggestions(message.tabId ?? _sender.tab?.id);
     case 'translateSubtitle':
       return handleTranslateSubtitle(message, _sender);
     case 'FETCH_SUBTITLE':

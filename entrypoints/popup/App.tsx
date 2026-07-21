@@ -5,9 +5,14 @@ import { LANGUAGES } from '@/lib/languages';
 import { PREDEFINED_CATEGORIES, resolveCategorySource } from '@/lib/categories';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import {
+  getNamedListById,
+  pushEntriesIntoList,
   resolveActiveSubtitleListId,
   setSiteListSelection,
 } from '@/lib/namedGlossaryLists';
+import { buildSuggestionRows } from '@/lib/namedGlossarySuggestions';
+import type { NamedGlossarySuggestionRow } from '@/lib/namedGlossarySuggestions';
+import type { GetNamedGlossarySuggestionsResult } from '@/types/messages';
 import {
   formatProgressDetail,
   formatProgressLabel,
@@ -23,6 +28,7 @@ import { LanguageBar } from './components/LanguageBar';
 import { ActionZone } from './components/ActionZone';
 import { ThisPageSection } from './components/ThisPageSection';
 import { QuickSettings } from './components/QuickSettings';
+import { NamedGlossarySuggestionsModal } from './components/NamedGlossarySuggestionsModal';
 import { PopupFooter } from './components/PopupFooter';
 
 export default function App() {
@@ -40,6 +46,8 @@ export default function App() {
   const [styleExpanded, setStyleExpanded] = useState(false);
   const [pdfUrlInput, setPdfUrlInput] = useState('');
   const [pdfInputOpen, setPdfInputOpen] = useState(false);
+  const [suggestionRows, setSuggestionRows] = useState<NamedGlossarySuggestionRow[] | null>(null);
+  const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!styleExpanded) return;
@@ -134,6 +142,42 @@ export default function App() {
         listId,
       ),
     });
+  };
+
+  const activeSubtitleList = getNamedListById(settings.namedGlossaryLists, activeSubtitleListId);
+
+  const handleReviewSuggestions = async () => {
+    setSuggestionNotice(null);
+    try {
+      const result = (await chrome.runtime.sendMessage({
+        action: 'getNamedGlossarySuggestions',
+      })) as GetNamedGlossarySuggestionsResult;
+      setSuggestionRows(buildSuggestionRows(result?.suggestions ?? {}, activeSubtitleList));
+    } catch {
+      setSuggestionRows([]);
+      setSuggestionNotice('Suggestions are unavailable right now.');
+    }
+  };
+
+  const handlePushSuggestions = async (rows: NamedGlossarySuggestionRow[]) => {
+    if (!activeSubtitleList) {
+      setSuggestionNotice('Select or create a list first');
+      return;
+    }
+    const result = pushEntriesIntoList(activeSubtitleList, rows);
+    if (!result.ok) {
+      setSuggestionNotice(
+        result.error === 'cap' ? 'This list has reached its entry limit.' : 'Could not add suggestions.',
+      );
+      return;
+    }
+    await updateSetting({
+      namedGlossaryLists: settings.namedGlossaryLists.map((list) =>
+        list.id === result.list.id ? result.list : list,
+      ),
+    });
+    setSuggestionRows(null);
+    setSuggestionNotice('Suggestions added to the active list.');
   };
 
   return (
@@ -240,13 +284,28 @@ export default function App() {
           activeSubtitleListId={activeSubtitleListId}
           activeHostname={tab.activeHostname}
           onSubtitleListChange={(listId) => void handleSubtitleListChange(listId)}
+          onReviewSuggestions={() => void handleReviewSuggestions()}
           styleExpanded={styleExpanded}
           onStyleToggle={() => setStyleExpanded((v) => !v)}
           tabOverrides={tab.tabOverrides}
           onTabKnob={(knob, value) => void tab.handleTabKnob(knob, value)}
           onOpenMoreSettings={() => openOptionsWindow()}
         />
+        {suggestionNotice && (
+          <p role="status" className="text-[11px] text-zinc-400">
+            {suggestionNotice}
+          </p>
+        )}
       </div>
+
+      {suggestionRows && (
+        <NamedGlossarySuggestionsModal
+          rows={suggestionRows}
+          activeListName={activeSubtitleList?.name ?? null}
+          onClose={() => setSuggestionRows(null)}
+          onPush={(rows) => void handlePushSuggestions(rows)}
+        />
+      )}
 
       <PopupFooter
         displayName={activeDisplayName}

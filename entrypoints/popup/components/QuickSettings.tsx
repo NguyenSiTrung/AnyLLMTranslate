@@ -29,6 +29,7 @@ export function QuickSettings({
   activeSubtitleListId,
   activeHostname,
   onSubtitleListChange,
+  onReviewSuggestions,
   styleExpanded,
   onStyleToggle,
   tabOverrides,
@@ -47,6 +48,7 @@ export function QuickSettings({
   activeSubtitleListId: string | null;
   activeHostname: string | null;
   onSubtitleListChange: (listId: string | null) => void;
+  onReviewSuggestions: () => void;
   styleExpanded: boolean;
   onStyleToggle: () => void;
   tabOverrides: Partial<ProfileKnobs>;
@@ -121,6 +123,13 @@ export function QuickSettings({
                       ? `Using last choice for ${activeHostname}`
                       : 'No list for this site'}
                   </p>
+                  <button
+                    type="button"
+                    onClick={onReviewSuggestions}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Review suggestions
+                  </button>
                 </div>
                 <button
                   type="button"

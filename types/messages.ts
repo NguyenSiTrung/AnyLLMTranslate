@@ -26,6 +26,7 @@ export type MessageAction =
   | 'getStatus'
   | 'testConnection'
   | 'updateSettings'
+  | 'getNamedGlossarySuggestions'
   | 'translateSubtitle'
   | 'translateSelection'
   | 'FETCH_SUBTITLE'
@@ -107,6 +108,17 @@ export interface TestConnectionMessage {
 /** Settings update notification */
 export interface UpdateSettingsMessage {
   action: 'updateSettings';
+}
+
+/** Popup → background: fetch the latest film-name suggestions for a tab. */
+export interface GetNamedGlossarySuggestionsMessage {
+  action: 'getNamedGlossarySuggestions';
+  tabId?: number;
+}
+
+export interface GetNamedGlossarySuggestionsResult {
+  success: boolean;
+  suggestions: Record<string, string>;
 }
 
 /** Subtitle translation request from content script → background */
@@ -528,6 +540,7 @@ export type ExtensionMessage =
   | GetStatusMessage
   | TestConnectionMessage
   | UpdateSettingsMessage
+  | GetNamedGlossarySuggestionsMessage
   | TranslateSubtitleMessage
   | TranslateSelectionMessage
   | FetchSubtitleMessage
