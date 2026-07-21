@@ -46,6 +46,9 @@ describe('DictionarySection named lists', () => {
     expect(screen.getByText('Anime names')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Anime names' }));
     expect(screen.getByRole('heading', { name: 'Anime names' })).toBeInTheDocument();
+    // Custom terms command bar + named list detail each show a format hint
+    expect(screen.getAllByRole('button', { name: /See format/i }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Supports/i).length).toBeGreaterThanOrEqual(2);
   });
 
   it('adds, rejects duplicate, edits, and imports entries in list detail', async () => {

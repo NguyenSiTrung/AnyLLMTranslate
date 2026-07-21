@@ -7,6 +7,7 @@ import { Button } from '@/ui/Button';
 import { Modal } from '@/ui/Modal';
 import { DictionaryAddForm } from './DictionaryAddForm';
 import { GlossaryEntryList } from './GlossaryEntryList';
+import { GlossaryImportHint } from './GlossaryImportHint';
 
 interface Props {
   list: NamedGlossaryList;
@@ -66,6 +67,7 @@ export function NamedGlossaryListDetail({ list, onBack, onChange, onSuccess, onE
         </div>
         <Button className="ml-auto" variant="secondary" size="sm" onClick={() => fileRef.current?.click()} icon={<Upload className="w-4 h-4" />}>Import</Button>
       </div>
+      <GlossaryImportHint onChooseFile={() => fileRef.current?.click()} />
       <div className="flex flex-wrap gap-2">
         {list.entries.length > 0 && <input className="flex-1 min-w-48 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200" type="search" aria-label={`Search ${list.name}`} placeholder="Search terms…" value={search} onChange={(e) => setSearch(e.target.value)} />}
         <Button size="sm" aria-label={`Add term to ${list.name}`} onClick={() => setAddOpen((value) => !value)}>Add term</Button>
