@@ -1,5 +1,5 @@
 import { ChevronDown, Palette } from 'lucide-react';
-import type { ThemeName, DisplayMode } from '@/types/config';
+import type { ThemeName, DisplayMode, NamedGlossaryList } from '@/types/config';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 import { Toggle as SharedToggle } from '@/ui/Toggle';
 import { SegmentedControl } from '@/ui/SegmentedControl';
@@ -25,6 +25,10 @@ export function QuickSettings({
   onDisplayModeChange,
   subtitlesEnabled,
   onSubtitlesToggle,
+  subtitleLists,
+  activeSubtitleListId,
+  activeHostname,
+  onSubtitleListChange,
   styleExpanded,
   onStyleToggle,
   tabOverrides,
@@ -39,6 +43,10 @@ export function QuickSettings({
   onDisplayModeChange: (mode: DisplayMode) => void;
   subtitlesEnabled: boolean;
   onSubtitlesToggle: () => void;
+  subtitleLists: NamedGlossaryList[];
+  activeSubtitleListId: string | null;
+  activeHostname: string | null;
+  onSubtitleListChange: (listId: string | null) => void;
   styleExpanded: boolean;
   onStyleToggle: () => void;
   tabOverrides: Partial<ProfileKnobs>;
@@ -97,6 +105,23 @@ export function QuickSettings({
 
             {subtitlesEnabled && (
               <div className="pt-1">
+                <div className="mb-3 space-y-1.5">
+                  <CustomSelect
+                    id="popup-subtitle-dictionary"
+                    label="Subtitle dictionary"
+                    value={activeSubtitleListId ?? ''}
+                    onChange={(value) => onSubtitleListChange(value || null)}
+                    options={[
+                      { value: '', label: 'None' },
+                      ...subtitleLists.map((list) => ({ value: list.id, label: list.name })),
+                    ]}
+                  />
+                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                    {activeSubtitleListId && activeHostname
+                      ? `Using last choice for ${activeHostname}`
+                      : 'No list for this site'}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={onStyleToggle}

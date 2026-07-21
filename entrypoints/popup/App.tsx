@@ -5,6 +5,10 @@ import { LANGUAGES } from '@/lib/languages';
 import { PREDEFINED_CATEGORIES, resolveCategorySource } from '@/lib/categories';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
 import {
+  resolveActiveSubtitleListId,
+  setSiteListSelection,
+} from '@/lib/namedGlossaryLists';
+import {
   formatProgressDetail,
   formatProgressLabel,
   isReadingAreaReady,
@@ -113,6 +117,25 @@ export default function App() {
     setPdfInputOpen(false);
   };
 
+  const activeSubtitleListId = tab.activeHostname
+    ? resolveActiveSubtitleListId(
+        settings.namedGlossaryLists,
+        settings.subtitleListBySite,
+        tab.activeHostname,
+      )
+    : null;
+
+  const handleSubtitleListChange = async (listId: string | null) => {
+    if (!tab.activeHostname) return;
+    await updateSetting({
+      subtitleListBySite: setSiteListSelection(
+        settings.subtitleListBySite,
+        tab.activeHostname,
+        listId,
+      ),
+    });
+  };
+
   return (
     <div className="w-[340px] bg-zinc-950 text-zinc-100 font-sans selection:bg-blue-500/30 relative shadow-2xl flex flex-col min-h-0">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -213,6 +236,10 @@ export default function App() {
           onSubtitlesToggle={() =>
             void updateSubtitleSetting({ enabled: !settings.subtitleSettings.enabled })
           }
+          subtitleLists={settings.namedGlossaryLists}
+          activeSubtitleListId={activeSubtitleListId}
+          activeHostname={tab.activeHostname}
+          onSubtitleListChange={(listId) => void handleSubtitleListChange(listId)}
           styleExpanded={styleExpanded}
           onStyleToggle={() => setStyleExpanded((v) => !v)}
           tabOverrides={tab.tabOverrides}
