@@ -3,13 +3,19 @@
  *
  * Snapshots the per-URL translation state (piece id + text + translation +
  * status + targetLanguage) to IndexedDB so a page refresh can restore
- * translated content without re-calling the LLM (when the success cache still
- * holds the translations). Entries are keyed by a stable `url + contentHash`
- * namespace, capped at {@link MAX_RESUME_URLS} URLs (LRU), and expire after
- * {@link RESUME_TTL_DAYS} days.
+ * translated content without re-calling the LLM.
+ *
+ * **Storage context:** these IDB helpers MUST run in an extension context
+ * (background / options) — never directly from a content script. Content
+ * scripts share the *page* origin for IndexedDB, so direct use would write
+ * snapshots the background Clear cache path cannot see or delete. Content
+ * scripts proxy via `WEB_RESUME_LOAD` / `WEB_RESUME_SAVE` messages.
+ *
+ * Entries are keyed by a stable `url + contentHash` namespace, capped at
+ * {@link MAX_RESUME_URLS} URLs (LRU), and expire after {@link RESUME_TTL_DAYS} days.
  */
 
-import { createStore, get, set, del, entries } from 'idb-keyval';
+import { createStore, get, set, del, entries, clear } from 'idb-keyval';
 import { STORAGE_KEYS } from './constants';
 
 /** Resume entry TTL in days. */
@@ -116,6 +122,15 @@ export async function loadSnapshot(url: string, contentHash: string): Promise<We
   } catch {
     return null;
   }
+}
+
+/**
+ * Delete every web-resume snapshot.
+ * Called from Settings → Advanced → Clear cache so a full cache wipe also
+ * prevents cross-session resume from restoring old page translations.
+ */
+export async function clearAllResumeSnapshots(): Promise<void> {
+  await clear(getStore());
 }
 
 /**

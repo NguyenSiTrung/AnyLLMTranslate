@@ -12,7 +12,44 @@ import {
   type WebResumeSnapshot,
 } from '../webResume';
 
+/** In-memory idb-keyval stand-in so save/load/clear exercise real store logic. */
+const idbStores = new Map<string, Map<string, unknown>>();
+
+function storeMap(dbName: string, storeName: string): Map<string, unknown> {
+  const name = `${dbName}::${storeName}`;
+  let m = idbStores.get(name);
+  if (!m) {
+    m = new Map();
+    idbStores.set(name, m);
+  }
+  return m;
+}
+
+vi.mock('idb-keyval', () => ({
+  createStore: vi.fn((dbName: string, storeName: string) => ({ dbName, storeName })),
+  get: vi.fn(async (key: string, store: { dbName: string; storeName: string }) => {
+    return storeMap(store.dbName, store.storeName).get(key);
+  }),
+  set: vi.fn(async (key: string, value: unknown, store: { dbName: string; storeName: string }) => {
+    storeMap(store.dbName, store.storeName).set(key, value);
+  }),
+  del: vi.fn(async (key: string, store: { dbName: string; storeName: string }) => {
+    storeMap(store.dbName, store.storeName).delete(key);
+  }),
+  entries: vi.fn(async (store: { dbName: string; storeName: string }) => {
+    return Array.from(storeMap(store.dbName, store.storeName).entries());
+  }),
+  clear: vi.fn(async (store: { dbName: string; storeName: string }) => {
+    storeMap(store.dbName, store.storeName).clear();
+  }),
+}));
+
 describe('webResume', () => {
+  beforeEach(() => {
+    idbStores.clear();
+    vi.clearAllMocks();
+  });
+
   it('key stability, serialize round-trip, freshness/TTL constants', () => {
     const a = computeResumeKey('https://x.test/page', 'abc123');
     expect(a).toBe(computeResumeKey('https://x.test/page', 'abc123'));
@@ -53,13 +90,32 @@ describe('webResume', () => {
   });
 
   describe('storage integration', () => {
-    beforeEach(() => {
-      vi.resetModules();
-    });
-
     it('loadSnapshot returns null when nothing is stored', async () => {
       const { loadSnapshot } = await import('../webResume');
       expect(await loadSnapshot('https://x.test', 'hash')).toBeNull();
+    });
+
+    it('clearAllResumeSnapshots removes saved page snapshots', async () => {
+      const {
+        saveSnapshot,
+        loadSnapshot,
+        clearAllResumeSnapshots,
+      } = await import('../webResume');
+
+      const snapshot: WebResumeSnapshot = {
+        url: 'https://x.test/page',
+        contentHash: 'abc123',
+        targetLanguage: 'vi',
+        capturedAt: Date.now(),
+        pieces: [
+          { id: 'p1', text: 'Hello', translatedText: 'Xin chào', status: 'translated' },
+        ],
+      };
+      await saveSnapshot(snapshot);
+      expect(await loadSnapshot(snapshot.url, snapshot.contentHash)).not.toBeNull();
+
+      await clearAllResumeSnapshots();
+      expect(await loadSnapshot(snapshot.url, snapshot.contentHash)).toBeNull();
     });
   });
 

@@ -60,13 +60,44 @@ import { isContextInvalidated } from '@/lib/utils';
 import { detectLanguage, isSameLanguage, SAME_LANG_SKIP_CONFIDENCE } from '@/lib/langDetect';
 import { isTransientTranslationError } from '@/lib/translationErrors';
 import {
-  loadSnapshot,
-  saveSnapshot,
   deriveContentHash,
   type ResumePiece,
+  type WebResumeSnapshot,
 } from '@/lib/webResume';
 import { WEB_STREAM_PORT } from '@/types/messages';
 import type { StatusResponse, TranslationResultMessage, TranslationResultItem } from '@/types/messages';
+
+/**
+ * Resume snapshots live in extension-origin IndexedDB (background).
+ * Content must not open that IDB — page-origin isolation would make
+ * Settings → Clear cache miss these entries.
+ */
+async function loadSnapshotViaBackground(
+  url: string,
+  contentHash: string,
+): Promise<WebResumeSnapshot | null> {
+  try {
+    const res = await chrome.runtime.sendMessage({
+      action: 'WEB_RESUME_LOAD',
+      url,
+      contentHash,
+    }) as { success?: boolean; snapshot?: WebResumeSnapshot | null } | undefined;
+    return res?.snapshot ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveSnapshotViaBackground(snapshot: WebResumeSnapshot): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({
+      action: 'WEB_RESUME_SAVE',
+      snapshot,
+    });
+  } catch {
+    // Best-effort — resume is non-critical (pagehide may race SW teardown).
+  }
+}
 import {
   collectNearViewportPieceIds,
   computeTranslationStatus,
@@ -926,10 +957,9 @@ let resumeSnapshotWriterRegistered = false;
 
 /**
  * FR-7: restore already-translated pieces from a prior session's snapshot.
- * Matches pieces by `text` (the snapshot may use different piece ids after a
- * re-extraction) and applies the cached translation via the display layer. Only
- * restores pieces whose translation is still in the success cache — a cache
- * miss degrades gracefully (the viewport observer re-translates normally).
+ * Matches pieces by parent path + text (FR-20) and applies translations from
+ * the web-resume store. Settings → Clear cache also wipes that store so a
+ * full cache clear forces re-fetch on the next Translate Web.
  */
 async function restoreFromSnapshot(
   pieces: TranslationPiece[],
@@ -939,7 +969,7 @@ async function restoreFromSnapshot(
   try {
     const url = window.location.href;
     const contentHash = await deriveContentHash(pieces.map((p) => p.text).join('\n'));
-    const snapshot = await loadSnapshot(url, contentHash);
+    const snapshot = await loadSnapshotViaBackground(url, contentHash);
     if (!snapshot) return;
     // Only restore if the target language matches the snapshot's.
     if (snapshot.targetLanguage !== targetLanguage) return;
@@ -1003,7 +1033,7 @@ function writeResumeSnapshot(options?: { awaitable?: boolean }): void | Promise<
         status: p.isTranslated ? 'translated' : 'pending',
         parentPath: p.parentPath,
       }));
-      await saveSnapshot({
+      await saveSnapshotViaBackground({
         url,
         contentHash,
         targetLanguage: targetLang,

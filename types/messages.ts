@@ -49,6 +49,8 @@ export type MessageAction =
   | 'EXTRACT_PDF_TERMS'
   | 'RESEGMENT_YOUTUBE_ASR'
   | 'CLEAR_CACHE'
+  | 'WEB_RESUME_LOAD'
+  | 'WEB_RESUME_SAVE'
   | 'OPEN_PDF_VIEWER'
   | 'PDF_DETECTED'
   | 'REGISTER_PDF_SESSION'
@@ -326,6 +328,35 @@ export interface ClearCacheMessage {
   action: 'CLEAR_CACHE';
 }
 
+/**
+ * Load a cross-session web-resume snapshot (content → background).
+ * Resume IDB lives in the extension origin so Clear cache can wipe it;
+ * content scripts must not open that IDB directly (page-origin isolation).
+ */
+export interface WebResumeLoadMessage {
+  action: 'WEB_RESUME_LOAD';
+  url: string;
+  contentHash: string;
+}
+
+/** Persist a cross-session web-resume snapshot (content → background). */
+export interface WebResumeSaveMessage {
+  action: 'WEB_RESUME_SAVE';
+  snapshot: {
+    url: string;
+    contentHash: string;
+    targetLanguage: string;
+    capturedAt: number;
+    pieces: Array<{
+      id: string;
+      text: string;
+      translatedText?: string;
+      status: 'pending' | 'translated' | 'error';
+      parentPath?: string;
+    }>;
+  };
+}
+
 /** Open the bundled PDF viewer for a given URL (Popup → Background). */
 export interface OpenPdfViewerMessage {
   action: 'OPEN_PDF_VIEWER';
@@ -562,6 +593,8 @@ export type ExtensionMessage =
   | ExtractPdfTermsMessage
   | ResegmentYoutubeAsrMessage
   | ClearCacheMessage
+  | WebResumeLoadMessage
+  | WebResumeSaveMessage
   | OpenPdfViewerMessage
   | PdfDetectedMessage
   | RegisterPdfSessionMessage

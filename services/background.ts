@@ -68,6 +68,12 @@ import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
 import type { TranslationService } from '@/services/base';
 import { validateProviderConfig } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
+import {
+  clearAllResumeSnapshots,
+  loadSnapshot,
+  saveSnapshot,
+  type WebResumeSnapshot,
+} from '@/lib/webResume';
 import { parallelCacheLookup, partitionCacheOutcomes } from '@/lib/parallelCacheLookup';
 import { runWithConcurrency } from '@/lib/concurrency';
 import {
@@ -2201,7 +2207,35 @@ export function handleMessage(
     case 'RESEGMENT_YOUTUBE_ASR':
       return handleResegmentYoutubeAsr(message);
     case 'CLEAR_CACHE':
-      return clearCache().then(() => ({ success: true })).catch(() => ({ success: false }));
+      // Wipe text-level translation cache + per-URL web resume snapshots so
+      // Settings → Advanced → Clear cache fully resets stored page translations.
+      // Both stores live in the extension-origin IndexedDB (resume is only
+      // written via WEB_RESUME_SAVE from content, never page-origin IDB).
+      return Promise.all([clearCache(), clearAllResumeSnapshots()])
+        .then(() => ({ success: true }))
+        .catch(() => ({ success: false }));
+    case 'WEB_RESUME_LOAD': {
+      const { url, contentHash } = message as {
+        action: 'WEB_RESUME_LOAD';
+        url: string;
+        contentHash: string;
+      };
+      return loadSnapshot(url, contentHash)
+        .then((snapshot) => ({ success: true, snapshot }))
+        .catch(() => ({ success: false, snapshot: null }));
+    }
+    case 'WEB_RESUME_SAVE': {
+      const { snapshot } = message as {
+        action: 'WEB_RESUME_SAVE';
+        snapshot: WebResumeSnapshot;
+      };
+      if (!snapshot?.url || !snapshot?.contentHash) {
+        return Promise.resolve({ success: false });
+      }
+      return saveSnapshot(snapshot)
+        .then(() => ({ success: true }))
+        .catch(() => ({ success: false }));
+    }
     case 'OPEN_PDF_VIEWER': {
       // Validate the URL before forwarding to the viewer.
       const url = (message as { url: string }).url;

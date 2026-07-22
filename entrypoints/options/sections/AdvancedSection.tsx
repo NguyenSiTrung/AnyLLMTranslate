@@ -1258,7 +1258,7 @@ export function AdvancedSection() {
               severity="caution"
               icon={<Trash2 />}
               title="Clear translation cache"
-              description="Deletes every stored translation. The next pages you open will re-fetch from your provider and may incur API costs."
+              description="Deletes every stored translation and cross-session resume snapshots. The next pages you open will re-fetch from your provider and may incur API costs."
               meta={
                 <div className="inline-flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700/80 bg-zinc-900/70 px-2 py-1 font-medium tabular-nums text-zinc-300">
