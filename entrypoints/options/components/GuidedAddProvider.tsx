@@ -237,20 +237,26 @@ export function GuidedAddProvider({
               className="font-mono"
             />
           </FieldGroup>
-          {requiresApiKey && (
-            <FieldGroup label="API key" htmlFor="guided-key">
-              <Input
-                id="guided-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="font-mono"
-                placeholder={
-                  getCatalogEntryById(catalogId ?? '')?.placeholder ?? 'sk-...'
-                }
-              />
-            </FieldGroup>
-          )}
+          <FieldGroup
+            label="API key"
+            htmlFor="guided-key"
+            description={
+              requiresApiKey
+                ? 'Required for this provider.'
+                : 'Optional — leave blank for local or unauthenticated endpoints.'
+            }
+          >
+            <Input
+              id="guided-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="font-mono"
+              placeholder={
+                getCatalogEntryById(catalogId ?? '')?.placeholder ?? 'sk-...'
+              }
+            />
+          </FieldGroup>
           <ModelPicker
             inputId="guided-model"
             provider={{

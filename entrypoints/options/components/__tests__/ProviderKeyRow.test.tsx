@@ -52,6 +52,7 @@ const chip: KeyChipView = {
 
 function renderRow(
   opts: {
+    provider?: Partial<PoolProvider>;
     poolKey?: PoolKey;
     onUpdate?: ReturnType<typeof vi.fn>;
     onRemove?: ReturnType<typeof vi.fn>;
@@ -64,7 +65,7 @@ function renderRow(
   render(
     <ToastProvider>
       <ProviderKeyRow
-        provider={sampleProvider()}
+        provider={sampleProvider(opts.provider)}
         poolKey={poolKey}
         targetLanguage="vi"
         chip={chip}
@@ -77,6 +78,37 @@ function renderRow(
   );
   return { onUpdate, onRemove };
 }
+
+describe('ProviderKeyRow API key field', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    cleanup();
+  });
+
+  it('always shows API key input when requiresApiKey is true', () => {
+    renderRow();
+    expect(screen.getByLabelText(/^API key$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No key required/i)).not.toBeInTheDocument();
+  });
+
+  it('still shows optional API key input when requiresApiKey is false (custom/local)', () => {
+    renderRow({
+      provider: {
+        displayName: 'Custom endpoint',
+        baseUrl: 'https://proxy.example.com/v1',
+        requiresApiKey: false,
+        catalogId: 'custom',
+      },
+      poolKey: sampleKey({ apiKey: '' }),
+    });
+    const input = screen.getByLabelText(/^API key$/i);
+    expect(input).toBeInTheDocument();
+    expect(
+      screen.getByText(/Optional — leave blank for local or unauthenticated endpoints/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No key required/i)).not.toBeInTheDocument();
+  });
+});
 
 describe('ProviderKeyRow rate limits UX', () => {
   beforeEach(() => {

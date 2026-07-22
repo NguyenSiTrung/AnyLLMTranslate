@@ -216,33 +216,35 @@ export function ProviderKeyRow({
         </div>
       </div>
 
-      {provider.requiresApiKey ? (
-        <FieldGroup label="API key" htmlFor={`pk-${poolKey.id}`}>
-          <Input
-            id={`pk-${poolKey.id}`}
-            type="password"
-            value={apiKeyField.value}
-            onChange={(e) => apiKeyField.setValue(e.target.value)}
-            onBlur={apiKeyField.commit}
-            placeholder={keyPlaceholder}
-            className="font-mono"
-          />
-          {getKeyUrl && (
-            <a
-              href={getKeyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors mt-1"
-            >
-              Get a key <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-        </FieldGroup>
-      ) : (
-        <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 px-3 py-2">
-          <p className="text-xs text-zinc-500">No key required for this provider</p>
-        </div>
-      )}
+      <FieldGroup
+        label="API key"
+        htmlFor={`pk-${poolKey.id}`}
+        description={
+          provider.requiresApiKey
+            ? undefined
+            : 'Optional — leave blank for local or unauthenticated endpoints.'
+        }
+      >
+        <Input
+          id={`pk-${poolKey.id}`}
+          type="password"
+          value={apiKeyField.value}
+          onChange={(e) => apiKeyField.setValue(e.target.value)}
+          onBlur={apiKeyField.commit}
+          placeholder={keyPlaceholder}
+          className="font-mono"
+        />
+        {getKeyUrl && (
+          <a
+            href={getKeyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors mt-1"
+          >
+            Get a key <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </FieldGroup>
 
       <FieldGroup label="Label (optional)" htmlFor={`pl-${poolKey.id}`}>
         <Input
