@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-22 all (587 TCs pass / 2 fail; lint 17; tsc 17; 72 archived / 0 active; Beads 7uk open) -->
+<!-- conductor-refresh: 2026-07-21 all (named glossary; popup toolbar; pool load-spread; options focus; 683 TCs / 0 fail; lint 1; tsc 13; 72 archived / 0 active; Beads 7uk open) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
