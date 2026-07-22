@@ -34,6 +34,7 @@ export function buildProviderConfig(provider: PoolProvider, key: PoolKey): Provi
     maxRpm: key.maxRpm,
     maxBatchChars: provider.maxBatchChars,
     maxTextGroupCount: provider.maxTextGroupCount,
+    thinkingMode: provider.thinkingMode,
   };
 }
 

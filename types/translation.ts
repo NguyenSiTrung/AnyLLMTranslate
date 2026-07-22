@@ -112,6 +112,15 @@ export interface ChatCompletionRequest {
   /** When true, request a streamed SSE response. The caller must consume the
    *  response body as a ReadableStream of SSE deltas (Phase 2 streaming path). */
   stream?: boolean;
+  /**
+   * NIM / vLLM chat-template kwargs. Used to force thinking on/off via
+   * `enable_thinking` when the user sets provider `thinkingMode` to on|off.
+   * Omitted entirely when thinkingMode is `auto`.
+   */
+  chat_template_kwargs?: {
+    enable_thinking?: boolean;
+    [key: string]: unknown;
+  };
 }
 
 /** Chat message */

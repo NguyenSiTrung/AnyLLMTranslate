@@ -23,6 +23,20 @@ export interface KeyTestResult {
   error?: string;
 }
 
+/**
+ * Force reasoning/thinking tokens on OpenAI-compatible endpoints that support
+ * `chat_template_kwargs.enable_thinking` (NVIDIA NIM / Nemotron, many vLLM
+ * Qwen3 builds, etc.).
+ *
+ * - `auto` — omit the field; use the provider/model default (safest)
+ * - `on`  — send `enable_thinking: true`
+ * - `off` — send `enable_thinking: false` (recommended for bulk translation)
+ */
+export type ThinkingMode = 'auto' | 'on' | 'off';
+
+/** Default thinking mode for new providers and missing persisted values. */
+export const DEFAULT_THINKING_MODE: ThinkingMode = 'auto';
+
 /** Provider configuration for OpenAI-compatible APIs */
 export interface ProviderConfig {
   preset: ProviderPreset;
@@ -48,6 +62,11 @@ export interface ProviderConfig {
    * Optional per-provider max pieces per request (from pool provider override).
    */
   maxTextGroupCount?: number;
+  /**
+   * Force model thinking/reasoning on or off. Default {@link DEFAULT_THINKING_MODE}.
+   * Injected as `chat_template_kwargs.enable_thinking` when not `auto`.
+   */
+  thinkingMode?: ThinkingMode;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
@@ -145,6 +164,11 @@ export interface PoolProvider {
    * 0 / unset = use global only.
    */
   maxTextGroupCount?: number;
+  /**
+   * Force model thinking/reasoning on or off. Default {@link DEFAULT_THINKING_MODE}.
+   * See {@link ThinkingMode}. Missing on legacy stored providers = auto.
+   */
+  thinkingMode?: ThinkingMode;
   /** Whether this provider participates in the rotation pool. */
   enabled: boolean;
   /** The pool of API keys for this provider. */
@@ -706,6 +730,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     requiresApiKey: false,
     requestTimeoutMs: 60000,
     maxRpm: DEFAULT_KEY_MAX_RPM,
+    thinkingMode: DEFAULT_THINKING_MODE,
   },
   onboarding: { ...DEFAULT_ONBOARDING_STATE },
   sourceLanguage: 'auto',
@@ -759,6 +784,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       temperature: 0.3,
       maxTokens: 4096,
       requestTimeoutMs: 60000,
+      thinkingMode: DEFAULT_THINKING_MODE,
       enabled: true,
       keys: [
         {

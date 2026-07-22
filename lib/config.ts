@@ -173,6 +173,7 @@ export function syncProviderToPool(
       temperature: providerPatch.temperature ?? 0.3,
       maxTokens: providerPatch.maxTokens ?? 4096,
       requestTimeoutMs: providerPatch.requestTimeoutMs ?? 60000,
+      thinkingMode: providerPatch.thinkingMode ?? 'auto',
       enabled: true,
       keys: [
         {
@@ -204,6 +205,7 @@ export function syncProviderToPool(
     ...(providerPatch.temperature !== undefined ? { temperature: providerPatch.temperature } : {}),
     ...(providerPatch.maxTokens !== undefined ? { maxTokens: providerPatch.maxTokens } : {}),
     ...(providerPatch.requestTimeoutMs !== undefined ? { requestTimeoutMs: providerPatch.requestTimeoutMs } : {}),
+    ...(providerPatch.thinkingMode !== undefined ? { thinkingMode: providerPatch.thinkingMode } : {}),
   };
   // Patch the first key (apiKey + maxRpm live on the key in the pool model).
   let patchedKeys = first.keys;
@@ -340,6 +342,7 @@ export function computePoolSignature(settings: ExtensionSettings): string {
     requestTimeoutMs: p.requestTimeoutMs,
     maxBatchChars: p.maxBatchChars ?? 0,
     maxTextGroupCount: p.maxTextGroupCount ?? 0,
+    thinkingMode: p.thinkingMode ?? 'auto',
     enabled: p.enabled,
     keys: (p.keys ?? []).map((k) => ({
       id: k.id,

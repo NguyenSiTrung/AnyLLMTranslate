@@ -15,6 +15,7 @@ import { FieldGroup } from '@/ui/FieldGroup';
 import { Input } from '@/ui/Input';
 import { Slider } from '@/ui/Slider';
 import { Toggle } from '@/ui/Toggle';
+import { SegmentedControl } from '@/ui/SegmentedControl';
 import { ModelPicker } from './ModelPicker';
 import { ProviderCatalogPicker, inferCatalogId } from './ProviderCatalogPicker';
 import { ProviderKeyRow } from './ProviderKeyRow';
@@ -22,7 +23,8 @@ import {
   buildProviderConfig,
   getCredentialKey,
 } from '@/lib/providerPoolHelpers';
-import type { PoolKey, PoolProvider, ProviderConfig } from '@/types/config';
+import type { PoolKey, PoolProvider, ProviderConfig, ThinkingMode } from '@/types/config';
+import { DEFAULT_THINKING_MODE } from '@/types/config';
 
 type DrawerSection = 'connection' | 'keys' | 'advanced' | 'danger';
 
@@ -300,6 +302,24 @@ export function ProviderEditDrawer({
             minLabel="256"
             maxLabel="16384"
           />
+          <FieldGroup
+            label="Thinking mode"
+            description="Force reasoning tokens on or off for models that support it (e.g. NVIDIA NIM Nemotron). Auto keeps the provider default. Off is recommended for bulk translation."
+            htmlFor={`ptm-${provider.id}`}
+          >
+            <SegmentedControl
+              id={`ptm-${provider.id}`}
+              label="Thinking mode"
+              size="sm"
+              value={provider.thinkingMode ?? DEFAULT_THINKING_MODE}
+              onChange={(v: ThinkingMode) => onUpdateProvider({ thinkingMode: v })}
+              options={[
+                { value: 'auto', label: 'Auto' },
+                { value: 'off', label: 'Off' },
+                { value: 'on', label: 'On' },
+              ]}
+            />
+          </FieldGroup>
           <FieldGroup
             label="Max batch characters"
             description="Override global batch size for this provider (0 = use Advanced default). Tightest enabled provider wins in a multi-provider pool."

@@ -31,6 +31,7 @@ describe('resolveSlots', () => {
         model: 'gpt-4o',
         temperature: 0.7,
         maxTokens: 8192,
+        thinkingMode: 'off',
         keys: [
           {
             id: 'k1',
@@ -68,6 +69,7 @@ describe('resolveSlots', () => {
         apiKey: 'sk-x',
         maxRpm: 60,
         temperature: 0.7,
+        thinkingMode: 'off',
       },
     });
 

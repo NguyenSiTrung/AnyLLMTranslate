@@ -177,6 +177,93 @@ describe('OpenAICompatibleService', () => {
 
 
 
+    it('sends chat_template_kwargs.enable_thinking when thinkingMode is on/off', async () => {
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'off' }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const offBody = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { chat_template_kwargs?: { enable_thinking?: boolean } };
+      expect(offBody.chat_template_kwargs).toEqual({ enable_thinking: false });
+
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'on' }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const onBody = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { chat_template_kwargs?: { enable_thinking?: boolean } };
+      expect(onBody.chat_template_kwargs).toEqual({ enable_thinking: true });
+
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'auto' }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const autoBody = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { chat_template_kwargs?: unknown };
+      expect(autoBody.chat_template_kwargs).toBeUndefined();
+    });
+
+    it('retries without chat_template_kwargs when provider rejects thinking kwargs', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: () =>
+            Promise.resolve(
+              '{"error":{"message":"Unknown field: chat_template_kwargs"}}',
+            ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            Promise.resolve({
+              id: 'chatcmpl-test',
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: '{"translations":{"p1":"Xin chào"}}',
+                  },
+                  finish_reason: 'stop',
+                },
+              ],
+              usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+            }),
+          text: () => Promise.resolve(''),
+        });
+      globalThis.fetch = fetchMock;
+
+      const service = new OpenAICompatibleService({
+        ...mockConfig,
+        thinkingMode: 'off',
+      });
+      const result = await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      expect(result.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const secondBody = JSON.parse(fetchMock.mock.calls[1]![1]?.body as string) as {
+        chat_template_kwargs?: unknown;
+      };
+      expect(secondBody.chat_template_kwargs).toBeUndefined();
+    });
+
     it('retries without response_format when provider rejects it (NVIDIA NIM / vLLM)', async () => {
       // First call: 400 with response_format error (like NVIDIA NIM / vLLM).
       // Second call: success without response_format in the body.

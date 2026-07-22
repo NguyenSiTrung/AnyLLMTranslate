@@ -38,6 +38,10 @@ import {
   type AsrTimedUnit,
 } from '@/lib/youtubeAsrResegment';
 import type { SubtitleCue } from '@/types/subtitle';
+import {
+  applyThinkingModeToRequest,
+  isThinkingKwargsRejected,
+} from '@/lib/thinkingMode';
 
 /** Custom error class carrying the HTTP status code so retry logic can
  *  distinguish 4xx client errors (no retry) from 5xx/network errors (retry)
@@ -64,6 +68,13 @@ export class OpenAICompatibleService implements TranslationService {
    *  provider+model (e.g. only maxRpm changed) does NOT forget the learned
    *  rejection — avoiding a wasted 400 on every request after each rebuild. */
   private responseFormatIdentity: { baseUrl: string; model: string } | null = null;
+  /**
+   * Set when the provider rejects `chat_template_kwargs` / `enable_thinking`.
+   * Subsequent requests omit thinking kwargs (falls back to auto behavior)
+   * until baseUrl/model changes.
+   */
+  private thinkingKwargsDisabled = false;
+  private thinkingKwargsIdentity: { baseUrl: string; model: string } | null = null;
 
   constructor(config: ProviderConfig) {
     this.config = config;
@@ -84,19 +95,31 @@ export class OpenAICompatibleService implements TranslationService {
       this.responseFormatDisabled = false;
       this.responseFormatIdentity = null;
     }
+    const thinkingIdentityChanged =
+      !this.thinkingKwargsIdentity ||
+      this.thinkingKwargsIdentity.baseUrl !== config.baseUrl ||
+      this.thinkingKwargsIdentity.model !== config.model;
+    if (thinkingIdentityChanged) {
+      this.thinkingKwargsDisabled = false;
+      this.thinkingKwargsIdentity = null;
+    }
     this.config = config;
     this.rateLimiter.setMaxRpm(config.maxRpm ?? 0);
   }
 
   /** Build a chat completion request, conditionally including response_format
-   *  based on whether the provider has rejected it in a prior call. */
+   *  and thinking kwargs based on config + learned provider rejections. */
   private buildCompletionRequest(
-    base: Omit<ChatCompletionRequest, 'response_format'>,
+    base: Omit<ChatCompletionRequest, 'response_format' | 'chat_template_kwargs'>,
   ): ChatCompletionRequest {
-    if (this.responseFormatDisabled) {
-      return base;
+    let request: ChatCompletionRequest = this.responseFormatDisabled
+      ? { ...base }
+      : { ...base, response_format: { type: 'json_object' } };
+
+    if (!this.thinkingKwargsDisabled) {
+      request = applyThinkingModeToRequest(request, this.config.thinkingMode);
     }
-    return { ...base, response_format: { type: 'json_object' } };
+    return request;
   }
 
   /**
@@ -826,6 +849,25 @@ Rules:
           };
           const strippedRequest = { ...request };
           delete strippedRequest.response_format;
+          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
+        }
+
+        // Some endpoints reject chat_template_kwargs / enable_thinking (plain
+        // OpenAI, gateways that strip unknown fields strictly). When the user
+        // forced on|off, retry once without the kwargs and remember so later
+        // requests fall back to auto behavior for this baseUrl+model.
+        if (
+          request.chat_template_kwargs &&
+          response.status === 400 &&
+          isThinkingKwargsRejected(errorMessage)
+        ) {
+          this.thinkingKwargsDisabled = true;
+          this.thinkingKwargsIdentity = {
+            baseUrl: this.config.baseUrl,
+            model: this.config.model,
+          };
+          const strippedRequest = { ...request };
+          delete strippedRequest.chat_template_kwargs;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
         }
 

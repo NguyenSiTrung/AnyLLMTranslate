@@ -142,6 +142,7 @@ export function useProviderPoolActions() {
         temperature: overrides?.temperature ?? 0.3,
         maxTokens: overrides?.maxTokens ?? 4096,
         requestTimeoutMs: overrides?.requestTimeoutMs ?? 60000,
+        thinkingMode: overrides?.thinkingMode ?? 'auto',
         enabled: overrides?.enabled ?? true,
         keys: [
           {
