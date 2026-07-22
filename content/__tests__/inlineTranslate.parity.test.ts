@@ -175,6 +175,123 @@ describe('gesture IME / repeat', () => {
     expect(triggers).toHaveLength(1);
   });
 
+  it('counts Space via input insertText when keydown is missing (dual path)', async () => {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 1000,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    const fireInput = () => {
+      const ev = new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: ' ',
+      });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onInput(ev);
+    };
+    fireInput();
+    fireInput();
+    fireInput();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
+  it('does not cancel a pending fire when compositionend arrives after the Nth space', async () => {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 1000,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    const fire = () => {
+      const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onKeyDown(ev);
+    };
+    fire();
+    fire();
+    fire();
+    // IME often emits compositionend right after the committing space
+    g.onCompositionEnd(new Event('compositionend'));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
+  it('recovers when compositionstart stuck without compositionend', async () => {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 1000,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    g.onCompositionStart(new Event('compositionstart'));
+    // Missed compositionend — next keydown has isComposing:false and must recover
+    const fire = () => {
+      const ev = new KeyboardEvent('keydown', {
+        key: ' ',
+        bubbles: true,
+        isComposing: false,
+      });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onKeyDown(ev);
+    };
+    fire();
+    fire();
+    fire();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
   it('fires after idle debounce when idleMs > 0', async () => {
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');

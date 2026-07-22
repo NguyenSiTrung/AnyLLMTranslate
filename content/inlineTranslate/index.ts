@@ -213,11 +213,25 @@ export async function translateFocusedInput(): Promise<void> {
 /** Initialize the inline translate feature. Returns a cleanup function. */
 export function initInlineTranslate(): () => void {
   if (listenersAttached) {
-    return () => {};
+    // Already live — return a real cleanup so callers can still tear down.
+    return () => {
+      if (!listenersAttached) return;
+      window.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('compositionstart', onCompositionStart, true);
+      document.removeEventListener('compositionend', onCompositionEnd, true);
+      document.removeEventListener('input', onInput, true);
+      gesture?.dispose();
+      gesture = null;
+      removeToast();
+      cancelActiveRequest('cleanup');
+      listenersAttached = false;
+    };
   }
   ensureGesture();
 
-  // Dual capture: window + document (Google Search stopImmediatePropagation)
+  // Dual capture: window + document (Google Search stopImmediatePropagation).
+  // Capture phase + early attach so page handlers cannot swallow the gesture.
   window.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('compositionstart', onCompositionStart, true);
@@ -228,6 +242,7 @@ export function initInlineTranslate(): () => void {
   console.log('[AnyLLMTranslate:inline] Initialized — config:', { ...config });
 
   return () => {
+    if (!listenersAttached) return;
     window.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('compositionstart', onCompositionStart, true);
@@ -256,7 +271,7 @@ export { undoMap, isInlineTranslating, tryFallbackUndo, cancelActiveRequest };
 export { PULSING_CLASS, TOAST_CLASS, removeToast, getActiveToast };
 export { isUrlBlocked, isCurrentPageBlocked, resolveBlocklistPatterns } from './blocklist';
 export { joinDualMode, writeElementText } from './writeback';
-export { createGestureController } from './gesture';
+export { createGestureController, isTriggerKey, isTriggerInsertData } from './gesture';
 export { parseLanguagePrefix } from '@/lib/inlineTranslatePrefix';
 
 /** Test helper: activeToast alias */

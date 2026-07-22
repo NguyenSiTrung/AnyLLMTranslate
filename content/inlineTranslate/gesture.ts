@@ -1,5 +1,10 @@
 /**
  * IME-safe gesture detection for trailing trigger keys (e.g. triple-space).
+ *
+ * Dual path:
+ *  - keydown (primary) for physical presses
+ *  - input insertText (fallback) when sites/IMEs swallow or omit keydown
+ * Deduped so the same physical press never counts twice.
  */
 
 export interface GestureConfig {
@@ -54,6 +59,16 @@ export function isTriggerKey(event: KeyboardEvent, triggerKey: string): boolean 
   return false;
 }
 
+/** Whether inserted text from an InputEvent matches the trigger key. */
+export function isTriggerInsertData(data: string | null, triggerKey: string): boolean {
+  if (data == null || data.length === 0) return false;
+  if (triggerKey === ' ' || triggerKey === 'Space') {
+    // Single space, or NBSP which some editors insert for trailing spaces
+    return data === ' ' || data === '\u00a0';
+  }
+  return data === triggerKey;
+}
+
 /**
  * Create a gesture controller. Callers attach listeners and call the handlers.
  */
@@ -66,7 +81,14 @@ export function createGestureController(
   let composing = false;
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingTarget: HTMLElement | null = null;
+  /** Bumped to cancel a scheduled fire without racing element identity. */
+  let fireToken = 0;
   const processedEvents = new WeakSet<Event>();
+  /**
+   * After a keydown counts a trigger, suppress the matching input insertText
+   * for a short window so dual-path does not double-count one physical press.
+   */
+  let keydownCountUntil = 0;
 
   const now = () => (callbacks.now ? callbacks.now() : Date.now());
 
@@ -76,44 +98,55 @@ export function createGestureController(
       idleTimer = null;
     }
     pendingTarget = null;
+    fireToken += 1;
+  }
+
+  function resetTaps(): void {
+    keyTimestamps = [];
   }
 
   function reset(): void {
-    keyTimestamps = [];
+    resetTaps();
     clearIdle();
   }
 
   function fire(target: HTMLElement): void {
-    clearIdle();
+    // Invalidate any other scheduled fires, then trigger once.
+    if (idleTimer != null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+    pendingTarget = null;
+    fireToken += 1;
     keyTimestamps = [];
+    keydownCountUntil = 0;
     callbacks.onTrigger(target);
   }
 
   function scheduleFire(target: HTMLElement): void {
-    clearIdle();
-    pendingTarget = target;
-    const idle = config.idleMs > 0 ? config.idleMs : 0;
-    if (idle <= 0) {
-      // microtask so the last character lands in the field
-      setTimeout(() => {
-        if (pendingTarget === target) fire(target);
-      }, 0);
-      return;
+    if (idleTimer != null) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
     }
+    pendingTarget = target;
+    const token = ++fireToken;
+    const idle = config.idleMs > 0 ? config.idleMs : 0;
+    const delay = idle <= 0 ? 0 : idle;
     idleTimer = setTimeout(() => {
-      if (pendingTarget === target) fire(target);
-    }, idle);
+      idleTimer = null;
+      // Only fire if this schedule is still current
+      if (token === fireToken && pendingTarget === target) {
+        fire(target);
+      }
+    }, delay);
   }
 
   function acceptTap(target: HTMLElement): void {
     const t = now();
 
-    // Gap filter: if triggerGapMs > 0, taps closer than gap still count
-    // but we only prune by time window
     keyTimestamps.push(t);
     keyTimestamps = keyTimestamps.filter((ts) => t - ts <= config.timeWindowMs);
 
-    // Tolerance: if we somehow have way more taps, trim to window
     if (
       config.triggerToleranceCount > 0 &&
       keyTimestamps.length > config.tapCount + config.triggerToleranceCount
@@ -126,11 +159,43 @@ export function createGestureController(
     }
   }
 
+  /**
+   * Shared guards for keydown / input trigger paths.
+   * Returns the target to count against, or null to ignore.
+   */
+  function resolveCountTarget(raw: Element | null): HTMLElement | null {
+    if (!config.enabled) return null;
+    if (!callbacks.shouldAccept(raw)) return null;
+    const target = raw as HTMLElement;
+
+    if (callbacks.isCaretAtEnd && !callbacks.isCaretAtEnd(target)) {
+      // Mid-string — do not count; reset burst so partial progress does not leak
+      resetTaps();
+      return null;
+    }
+
+    if (callbacks.getText) {
+      const text = callbacks.getText(target);
+      // Skip truly empty before any trigger landed (avoid blank-field spam)
+      if (!text.trim() && keyTimestamps.length === 0) {
+        return null;
+      }
+    }
+
+    return target;
+  }
+
   function onKeyDown(event: KeyboardEvent): void {
     if (processedEvents.has(event)) return;
     processedEvents.add(event);
 
     if (!config.enabled) return;
+
+    // Recover from missed compositionend — sticky flag would otherwise
+    // permanently swallow every subsequent Space×N attempt.
+    if (!event.isComposing && composing) {
+      composing = false;
+    }
 
     // P0: ignore untrusted, composing, and key-repeat.
     // jsdom KeyboardEvents are never trusted — allow them only under Vitest.
@@ -141,67 +206,85 @@ export function createGestureController(
       process.env.VITEST === 'true';
     if (!event.isTrusted && !isTestEnv) return;
     if (event.isComposing || composing) {
-      reset();
+      // Do not cancel a pending fire — composition noise after the Nth space
+      // previously wiped scheduleFire via full reset().
+      resetTaps();
       return;
     }
     if (event.repeat) return;
 
     if (!isTriggerKey(event, config.triggerKey)) {
-      // Non-trigger key resets gesture (user continued typing)
-      keyTimestamps = [];
-      clearIdle();
+      // Non-trigger key resets gesture progress (user continued typing)
+      // but does not cancel a pending fire already scheduled.
+      resetTaps();
       return;
     }
 
-    const rawTarget = event.target as Element | null;
-    if (!callbacks.shouldAccept(rawTarget)) {
-      reset();
-      return;
-    }
-    // Prefer the accepted host element (type guard narrows to HTMLElement)
-    const target = rawTarget as HTMLElement;
+    const target = resolveCountTarget(event.target as Element | null);
+    if (!target) return;
 
-    if (callbacks.isCaretAtEnd && !callbacks.isCaretAtEnd(target)) {
-      // Mid-string space — do not count toward trailing gesture
-      reset();
-      return;
-    }
-
-    if (callbacks.getText) {
-      const text = callbacks.getText(target);
-      // Allow counting when only trigger chars exist if user is about to fire
-      // but skip truly empty before any trigger landed
-      if (!text.trim() && keyTimestamps.length === 0) {
-        // First space on empty field — ignore
-        return;
-      }
-    }
-
+    // Suppress the following input insertText for this physical press
+    keydownCountUntil = now() + 50;
     acceptTap(target);
   }
 
   function onCompositionStart(_event: Event): void {
     composing = true;
-    reset();
+    resetTaps();
   }
 
   function onCompositionEnd(_event: Event): void {
     composing = false;
-    reset();
+    // Clear tap progress only — never cancel a pending scheduled fire.
+    // Space often commits IME composition; compositionend used to call reset()
+    // and wipe setTimeout(0) fires right as the gesture completed.
+    resetTaps();
   }
 
   function onInput(event: Event): void {
     if (processedEvents.has(event)) return;
-    // Delete-like inputTypes reset gesture progress
+    processedEvents.add(event);
+
     const ie = event as InputEvent;
     const inputType = ie.inputType ?? '';
+
+    // Delete-like inputTypes reset gesture progress
     if (
       inputType.startsWith('delete') ||
       inputType === 'historyUndo' ||
       inputType === 'historyRedo'
     ) {
-      reset();
+      resetTaps();
+      return;
     }
+
+    if (!config.enabled) return;
+    if (composing) return;
+
+    // Dual path: count trigger inserts when keydown was swallowed / missing.
+    // insertText with space data, or insertCompositionText that ends with space.
+    const isInsert =
+      inputType === 'insertText' ||
+      inputType === 'insertCompositionText' ||
+      inputType === 'insertFromPaste' ||
+      inputType === '';
+    if (!isInsert) return;
+    if (!isTriggerInsertData(ie.data ?? null, config.triggerKey)) return;
+
+    // keydown already counted this press
+    if (now() < keydownCountUntil) return;
+
+    // Untrusted synthetic inputs (our own write-back) — skip outside tests
+    const isTestEnv =
+      typeof process !== 'undefined' &&
+      typeof process.env === 'object' &&
+      process.env.VITEST === 'true';
+    if (!event.isTrusted && !isTestEnv) return;
+
+    const target = resolveCountTarget(event.target as Element | null);
+    if (!target) return;
+
+    acceptTap(target);
   }
 
   return {

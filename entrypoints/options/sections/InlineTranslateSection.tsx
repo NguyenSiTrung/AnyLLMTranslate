@@ -212,7 +212,7 @@ export function InlineTranslateSection() {
                   <Slider
                     id="inline-translate-time-window"
                     min={200}
-                    max={1000}
+                    max={2000}
                     step={50}
                     value={inlineTranslate.timeWindowMs}
                     onChange={(timeWindowMs) => patch({ timeWindowMs })}

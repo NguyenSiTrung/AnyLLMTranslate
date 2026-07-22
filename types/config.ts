@@ -369,7 +369,7 @@ export interface InlineTranslateSettings {
   triggerKey: string;
   /** Number of consecutive key presses required (2–5, default: 3) */
   tapCount: number;
-  /** Time window in ms for consecutive presses (200–1000, default: 500) */
+  /** Time window in ms for consecutive presses (200–2000, default: 1000) */
   timeWindowMs: number;
   /** Target language for inline translation (ISO 639-1 code) */
   targetLanguage: string;
@@ -610,7 +610,8 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  timeWindowMs: 500,
+  /** 1000ms — 500ms was too tight for deliberate Space×3 on many keyboards */
+  timeWindowMs: 1000,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,

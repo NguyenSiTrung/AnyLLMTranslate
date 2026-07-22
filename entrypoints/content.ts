@@ -1286,11 +1286,14 @@ async function initInteractionFeatures(): Promise<void> {
   // Keyboard shortcuts (page-specific)
   _keyboardShortcutsCleanup = initKeyboardShortcuts();
 
-  // Inline translate (key-gesture)
-  _inlineTranslateCleanup = initInlineTranslate();
+  // Inline translate (key-gesture) — listeners are attached early in main() so
+  // the gesture works before settings load. Only apply stored config here.
+  if (!_inlineTranslateCleanup) {
+    _inlineTranslateCleanup = initInlineTranslate();
+  }
   // Always apply inline translate settings (defaults are guaranteed by loadSettings)
-  if (settings.inlineTranslate?.enabled !== undefined) {
-    setInlineTranslateEnabled(settings.inlineTranslate.enabled);
+  if (settings.inlineTranslate) {
+    setInlineTranslateEnabled(settings.inlineTranslate.enabled !== false);
     updateInlineTranslateConfig(settings.inlineTranslate);
   }
 
@@ -1495,6 +1498,9 @@ function destroyZombie(): void {
 // Content script definition for WXT
 export default defineContentScript({
   matches: ['<all_urls>'],
+  // document_end: DOM ready, listeners before idle scripts finish; earlier than
+  // document_idle so page capture handlers are less likely to steal keydown.
+  runAt: 'document_end',
   cssInjectionMode: 'manifest',
   async main() {
     // Guard against re-injection on SPA re-routes or WXT reloads
@@ -1519,6 +1525,10 @@ export default defineContentScript({
 
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
+
+    // Attach inline-translate key listeners immediately (defaults), then apply
+    // stored settings. Waiting on loadSettings() first delayed gesture capture.
+    _inlineTranslateCleanup = initInlineTranslate();
     await initInteractionFeatures();
 
     // Auto-translate: check site rules for matching hostname

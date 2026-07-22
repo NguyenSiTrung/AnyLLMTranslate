@@ -20,7 +20,7 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enabled: true,
       triggerKey: ' ',
       tapCount: 3,
-      timeWindowMs: 500,
+      timeWindowMs: 1000,
       idleMs: 0,
       enableLanguagePrefix: true,
       languagePrefix: '/',
