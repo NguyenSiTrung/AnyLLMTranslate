@@ -251,6 +251,102 @@ describe('gesture IME / repeat', () => {
     expect(triggers).toHaveLength(1);
   });
 
+  it('fires on exactly 3 spaces even when compositionend wipes after the first space', async () => {
+    // Regression: compositionend used to resetTaps(), so Space×3 required 4 presses.
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'xin chào';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 1000,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    const fire = (opts: { isComposing?: boolean } = {}) => {
+      const ev = new KeyboardEvent('keydown', {
+        key: ' ',
+        bubbles: true,
+        isComposing: opts.isComposing ?? false,
+      });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onKeyDown(ev);
+    };
+
+    fire(); // tap 1
+    g.onCompositionEnd(new Event('compositionend')); // must NOT wipe tap 1
+    fire(); // tap 2
+    fire(); // tap 3 → fire
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+
+    // A composing keydown mid-burst must also not wipe prior taps
+    triggers.length = 0;
+    fire();
+    fire({ isComposing: true }); // ignored, no reset
+    fire();
+    fire();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
+  it('does not double-count keydown + input for the same physical Space', async () => {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 1000,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    const press = () => {
+      const kd = new KeyboardEvent('keydown', { key: ' ', bubbles: true });
+      Object.defineProperty(kd, 'target', { value: input });
+      g.onKeyDown(kd);
+      const inp = new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: ' ',
+      });
+      Object.defineProperty(inp, 'target', { value: input });
+      g.onInput(inp);
+    };
+
+    // Exactly 3 physical presses (each keydown+input pair) must fire once
+    press();
+    press();
+    expect(triggers).toHaveLength(0);
+    press();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
   it('recovers when compositionstart stuck without compositionend', async () => {
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');

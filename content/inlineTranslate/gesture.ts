@@ -205,10 +205,11 @@ export function createGestureController(
       typeof process.env === 'object' &&
       process.env.VITEST === 'true';
     if (!event.isTrusted && !isTestEnv) return;
+
+    // During IME composition: ignore this keydown but do NOT reset taps.
+    // Resetting here caused Space×(N+1): the word-commit Space or a mid-burst
+    // isComposing flicker wiped tap 1, so users needed 4 spaces for tapCount 3.
     if (event.isComposing || composing) {
-      // Do not cancel a pending fire — composition noise after the Nth space
-      // previously wiped scheduleFire via full reset().
-      resetTaps();
       return;
     }
     if (event.repeat) return;
@@ -223,22 +224,25 @@ export function createGestureController(
     const target = resolveCountTarget(event.target as Element | null);
     if (!target) return;
 
-    // Suppress the following input insertText for this physical press
-    keydownCountUntil = now() + 50;
+    // Suppress the following input insertText for this physical press.
+    // Use a slightly wider window — some editors deliver input on the next
+    // task after keydown (ProseMirror/React), which exceeded 50ms and
+    // double-counted, but more often the commit path lost a tap instead.
+    keydownCountUntil = now() + 100;
     acceptTap(target);
   }
 
   function onCompositionStart(_event: Event): void {
     composing = true;
+    // Real IME character composition — cancel an in-progress space burst.
     resetTaps();
   }
 
   function onCompositionEnd(_event: Event): void {
     composing = false;
-    // Clear tap progress only — never cancel a pending scheduled fire.
-    // Space often commits IME composition; compositionend used to call reset()
-    // and wipe setTimeout(0) fires right as the gesture completed.
-    resetTaps();
+    // Do NOT reset taps or cancel pending fire.
+    // Space often ends composition; wiping taps here made Space×3 require
+    // a 4th press (count 1 → compositionend wipe → need 3 more).
   }
 
   function onInput(event: Event): void {
