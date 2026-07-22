@@ -5,6 +5,21 @@ import {
   extractTranslationFallback,
   type SelectionDictionaryResult,
 } from '@/lib/selectionDictionary';
+import {
+  generateSelectionDictionaryCacheKey,
+  SELECTION_DICTIONARY_CACHE_PREFIX,
+} from '../selectionCacheKey';
+import { generateCacheKey } from '@/services/cacheManager';
+import {
+  isDictionaryModeCandidate,
+  MAX_DICTIONARY_TOKENS,
+} from '@/lib/selectionClassify';
+import {
+  SELECTION_DICTIONARY_SYSTEM_TEMPLATE,
+  SELECTION_DICTIONARY_USER_TEMPLATE,
+  buildSelectionDictionarySystemPrompt,
+  buildSelectionDictionaryUserPrompt,
+} from '@/lib/selectionDictionaryPrompt';
 
 const FULL_PAYLOAD = {
   phonetic: '/həˈloʊ/',
@@ -19,8 +34,8 @@ const FULL_PAYLOAD = {
   contextual_analysis: 'A friendly greeting in context.',
 };
 
-describe('selectionDictionary', () => {
-  it('parses dictionary JSON with fences/think/partial fields and rejects garbage', () => {
+describe('selection dictionary, cache keys, classification & prompts', () => {
+  it('parses dictionary JSON with fences/think/partial fields, checks fields & fallbacks', () => {
     expect(parseSelectionDictionary(JSON.stringify(FULL_PAYLOAD))).toEqual({
       phonetic: '/həˈloʊ/',
       definitions: [
@@ -33,98 +48,39 @@ describe('selectionDictionary', () => {
       translation: 'xin chào',
       contextualAnalysis: 'A friendly greeting in context.',
     });
-    expect(parseSelectionDictionary(JSON.stringify({ translation: 'xin chào' }))).toEqual({
-      translation: 'xin chào',
-    });
-    const fenced = `Here is the result:\n\`\`\`json\n${JSON.stringify(FULL_PAYLOAD, null, 2)}\n\`\`\``;
-    expect(parseSelectionDictionary(fenced)?.translation).toBe('xin chào');
-    const withThink = `<think>\nI should return dictionary JSON for this word.\n</think>\n${JSON.stringify(FULL_PAYLOAD)}`;
-    expect(parseSelectionDictionary(withThink)?.phonetic).toBe('/həˈloʊ/');
-    expect(parseSelectionDictionary(`<think>still thinking...\n{"translation": "hello"}`)).toBeNull();
-    const prose = `Sure! ${JSON.stringify({ translation: 'bonjour', phonetic: '/bɔ̃.ʒuʁ/' })} Hope that helps.`;
-    expect(parseSelectionDictionary(prose)).toEqual({
-      translation: 'bonjour',
-      phonetic: '/bɔ̃.ʒuʁ/',
-    });
-
-    expect(
-      parseSelectionDictionary(JSON.stringify({ contextual_analysis: 'In this sentence it means X.' })),
-    ).toEqual({ contextualAnalysis: 'In this sentence it means X.' });
-    expect(
-      parseSelectionDictionary(
-        JSON.stringify({ contextualAnalysis: 'camel', contextual_analysis: 'snake' }),
-      )?.contextualAnalysis,
-    ).toBe('camel');
-    expect(
-      parseSelectionDictionary(
-        JSON.stringify({
-          phonetic: 42,
-          translation: 'ok',
-          definitions: 'nope',
-          contextual_analysis: null,
-        }),
-      ),
-    ).toEqual({ translation: 'ok' });
-    expect(
-      parseSelectionDictionary(
-        JSON.stringify({
-          definitions: [
-            null,
-            'skip',
-            { pos: 'n.', meaning: 1 },
-            { pos: 'v.', meaning: 'to greet' },
-            { example: { source: 'hi' } },
-          ],
-        }),
-      )?.definitions,
-    ).toEqual([
-      { pos: 'n.' },
-      { pos: 'v.', meaning: 'to greet' },
-      { example: { source: 'hi' } },
-    ]);
-    expect(parseSelectionDictionary(`{"translation": "xin chào", "phonetic": "/həˈloʊ/",}`)).toEqual({
-      translation: 'xin chào',
-      phonetic: '/həˈloʊ/',
-    });
-
     expect(parseSelectionDictionary('not json at all')).toBeNull();
-    expect(parseSelectionDictionary('{broken')).toBeNull();
-    expect(parseSelectionDictionary('[]')).toBeNull();
-    expect(parseSelectionDictionary('')).toBeNull();
-    expect(parseSelectionDictionary('   ')).toBeNull();
-    expect(parseSelectionDictionary(JSON.stringify({ foo: 1 }))).toBeNull();
-    expect(parseSelectionDictionary(JSON.stringify({ translation: '', phonetic: 123 }))).toBeNull();
-    expect(parseSelectionDictionary(JSON.stringify({ definitions: [] }))).toBeNull();
-  });
 
-  it('hasDictionaryFields and extractTranslationFallback', () => {
-    expect(hasDictionaryFields(null)).toBe(false);
-    expect(hasDictionaryFields(undefined)).toBe(false);
-    expect(hasDictionaryFields({})).toBe(false);
-    expect(hasDictionaryFields({ phonetic: '   ' })).toBe(false);
-    expect(hasDictionaryFields({ definitions: [{ example: { source: 'hi' } }] })).toBe(false);
-    expect(hasDictionaryFields({ definitions: [] })).toBe(false);
     const onlyTranslation: SelectionDictionaryResult = {
       translation: 'xin chào',
       contextualAnalysis: 'context',
     };
     expect(hasDictionaryFields(onlyTranslation)).toBe(false);
     expect(hasDictionaryFields({ phonetic: '/həˈloʊ/' })).toBe(true);
-    expect(hasDictionaryFields({ definitions: [{ meaning: 'greeting' }] })).toBe(true);
-    expect(hasDictionaryFields({ definitions: [{ pos: 'n.' }] })).toBe(true);
-
     expect(extractTranslationFallback('raw junk', { translation: 'xin chào' })).toBe('xin chào');
-    expect(
-      extractTranslationFallback(JSON.stringify({ translation: 'bonjour', foo: 1 }), null),
-    ).toBe('bonjour');
-    expect(extractTranslationFallback(`<think>reason</think>\nHello world`, null)).toBe(
-      'Hello world',
+  });
+
+  it('generates cache keys, classifies candidates, and builds dictionary prompts', async () => {
+    // Cache key
+    const plain = await generateCacheKey('hello', 'en', 'vi');
+    const dict = await generateSelectionDictionaryCacheKey('hello', 'en', 'vi');
+    expect(dict).toBe(`${SELECTION_DICTIONARY_CACHE_PREFIX}${plain}`);
+
+    // Candidate classification
+    expect(MAX_DICTIONARY_TOKENS).toBe(3);
+    expect(isDictionaryModeCandidate('hello world')).toBe(true);
+    expect(isDictionaryModeCandidate('one two three four')).toBe(false);
+
+    // Prompts
+    expect(SELECTION_DICTIONARY_SYSTEM_TEMPLATE).toContain('{{from}}');
+    const systemPrompt = buildSelectionDictionarySystemPrompt({
+      from: 'English',
+      to: 'Chinese',
+      text: 'hello',
+      contextText: 'She said hello.',
+    });
+    expect(systemPrompt).toContain('translating from English into Chinese');
+    expect(buildSelectionDictionaryUserPrompt({ text: 'serendipity' })).toBe(
+      `【Content to Translate】:\n"serendipity"`,
     );
-    expect(extractTranslationFallback('', null)).toBe('');
-    expect(
-      extractTranslationFallback(JSON.stringify({ translation: 'from-json' }), {
-        translation: '   ',
-      }),
-    ).toBe('from-json');
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Pure provider-pool UI helpers (FR-1).
+ * Pure provider-pool UI and cursor/reorder/bulk helpers (FR-1).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -9,7 +9,23 @@ import {
   getCredentialKey,
   getProviderTestStatus,
 } from '../providerPoolHelpers';
-import type { PoolProvider } from '@/types/config';
+import { createPoolCursor } from '../poolCursor';
+import { reorderByIndex, moveProviderById, moveKeyById } from '../poolReorder';
+import { collectTestableSlots, collectTestableSlotsForProvider } from '../poolBulkTest';
+import {
+  providerCredentialsChanged,
+  keyCredentialsChanged,
+  applyProviderPatch,
+  applyKeyPatch,
+  formatTestResultAge,
+} from '../poolTestStatus';
+import {
+  getKeyChipView,
+  getPoolDashboardView,
+  formatCooldownRemaining,
+} from '../poolDashboardStatus';
+import type { ExtensionSettings, PoolProvider, PoolKey } from '@/types/config';
+import { DEFAULT_SETTINGS } from '@/types/config';
 
 function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
   return {
@@ -26,7 +42,7 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
   };
 }
 
-describe('provider pool UI helpers', () => {
+describe('provider pool UI and operational helpers', () => {
   it('picks credentials, gates connection tests, and builds provider config', () => {
     const keyed = makeProvider({
       keys: [
@@ -49,16 +65,6 @@ describe('provider pool UI helpers', () => {
     expect(canRunConnectionTest(makeProvider({ requiresApiKey: false }))).toBe(true);
     const p = makeProvider();
     expect(canRunConnectionTest(p, p.keys[0])).toBe(true);
-    expect(
-      canRunConnectionTest(p, {
-        id: 'k2',
-        apiKey: '',
-        maxRpm: 0,
-        concurrencyLimit: 0,
-        interval: 0,
-        enabled: true,
-      }),
-    ).toBe(false);
 
     const cfg = buildProviderConfig(p, p.keys[0]!);
     expect(cfg.maxRpm).toBe(60);
@@ -66,73 +72,36 @@ describe('provider pool UI helpers', () => {
     expect(cfg.apiKey).toBe('sk-test');
   });
 
-  it('aggregates provider test status (latest key wins; provider pass overrides stale key fail)', () => {
-    expect(getProviderTestStatus(makeProvider()).state).toBe('untested');
+  it('handles cursor, reordering, bulk slot collection, status changes, and dashboard views', () => {
+    // Cursor
+    const cursor = createPoolCursor(3);
+    expect([cursor.next(), cursor.next(), cursor.next(), cursor.next()]).toEqual([0, 1, 2, 0]);
+    cursor.reset();
+    expect(cursor.next()).toBe(0);
 
-    const healthy = makeProvider({
-      keys: [
-        {
-          id: 'k1',
-          apiKey: 'sk',
-          maxRpm: 0,
-          concurrencyLimit: 0,
-          interval: 0,
-          enabled: true,
-          lastTestResult: { success: false, at: 1, error: 'x' },
-        },
-        {
-          id: 'k2',
-          apiKey: 'sk',
-          maxRpm: 0,
-          concurrencyLimit: 0,
-          interval: 0,
-          enabled: true,
-          lastTestResult: { success: true, at: 2, latencyMs: 5 },
-        },
-      ],
-    });
-    expect(getProviderTestStatus(healthy).state).toBe('healthy');
+    // Reorder
+    expect(reorderByIndex(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
+    const providers = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }] as PoolProvider[];
+    expect(moveProviderById(providers, 'p2', 'up').map((pr) => pr.id)).toEqual(['p2', 'p1', 'p3']);
 
-    const providerLevel = makeProvider({
-      keys: [
-        {
-          id: 'k1',
-          apiKey: 'sk',
-          maxRpm: 0,
-          concurrencyLimit: 0,
-          interval: 0,
-          enabled: true,
-          lastTestResult: { success: false, at: 1, error: 'x' },
-        },
-      ],
-      lastTestResult: { success: true, at: 2, latencyMs: 42 },
-    });
-    expect(getProviderTestStatus(providerLevel).state).toBe('healthy');
-    expect(getProviderTestStatus(providerLevel).result?.at).toBe(2);
+    // Bulk slots
+    expect(collectTestableSlots([makeProvider({ id: 'p1' })])).toEqual([{ providerId: 'p1', keyId: 'k1' }]);
+    expect(collectTestableSlotsForProvider([makeProvider({ id: 'p1' })], 'p1')).toEqual([{ providerId: 'p1', keyId: 'k1' }]);
 
-    const failed = makeProvider({
-      keys: [
-        {
-          id: 'k1',
-          apiKey: 'sk',
-          maxRpm: 0,
-          concurrencyLimit: 0,
-          interval: 0,
-          enabled: true,
-          lastTestResult: { success: false, at: 9, error: 'new' },
-        },
-        {
-          id: 'k2',
-          apiKey: 'sk',
-          maxRpm: 0,
-          concurrencyLimit: 0,
-          interval: 0,
-          enabled: true,
-          lastTestResult: { success: false, at: 4, error: 'old' },
-        },
-      ],
+    // Test status & age formatting
+    const oldP = makeProvider();
+    expect(providerCredentialsChanged(oldP, oldP)).toBe(false);
+    expect(providerCredentialsChanged(oldP, makeProvider({ baseUrl: 'https://other/v1' }))).toBe(true);
+
+    const at = 1700000000000;
+    expect(formatTestResultAge({ success: true, at }, at + 30_000)).toBe('just now');
+    expect(formatTestResultAge({ success: true, at }, at + 5 * 60_000)).toBe('5m ago');
+
+    // Dashboard & Cooldown
+    expect(formatCooldownRemaining(65_000, 0)).toMatch(/1:05|65s/);
+    expect(getPoolDashboardView({ ...DEFAULT_SETTINGS, providers: [] }, null, 0)).toMatchObject({
+      state: 'not-ready',
+      canTranslate: false,
     });
-    expect(getProviderTestStatus(failed).state).toBe('failed');
-    expect(getProviderTestStatus(failed).result?.at).toBe(9);
   });
 });

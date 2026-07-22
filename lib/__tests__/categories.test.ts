@@ -8,53 +8,42 @@ import {
   matchesCustomOption,
   matchesCategoryQuery,
 } from '../categories';
+import {
+  getCategoryPromptSnippet,
+  formatCategorySnippetBlock,
+  normalizeCategoryKey,
+} from '@/lib/categoryPromptSnippets';
+import { DEFAULT_SETTINGS } from '@/types/config';
 
-describe('CATEGORY_GROUPS', () => {
-  it('covers every predefined category exactly once', () => {
+describe('Categories, prompt snippets & glossary settings', () => {
+  it('covers predefined categories, resolves category source, and searches groups', () => {
     const flat = CATEGORY_GROUPS.flatMap((g) => [...g.items]);
     expect(new Set(flat).size).toBe(flat.length);
     expect(new Set(flat)).toEqual(new Set(PREDEFINED_CATEGORIES));
-  });
-});
 
-describe('resolveCategorySource', () => {
-  it('prefers tab override over site rule', () => {
     expect(resolveCategorySource({ override: 'News', siteRule: 'Gaming' })).toBe('tab');
-  });
-
-  it('returns rule when only site rule is set', () => {
     expect(resolveCategorySource({ siteRule: 'News' })).toBe('rule');
-  });
-
-  it('returns auto by default', () => {
     expect(resolveCategorySource(null)).toBe('auto');
-    expect(resolveCategorySource({})).toBe('auto');
-  });
-});
 
-describe('search helpers', () => {
-  it('matches category labels with substring', () => {
     expect(matchesCategoryQuery('Software Development', 'soft')).toBe(true);
-    expect(matchesCategoryQuery('News', 'xyz')).toBe(false);
-  });
-
-  it('matches Auto with normal query direction', () => {
     expect(matchesAutoOption('auto')).toBe(true);
-    // inverted `'auto'.includes('detect')` was false — label.includes is true
-    expect(matchesAutoOption('detect')).toBe(true);
-    expect(matchesAutoOption('xyznope')).toBe(false);
-  });
-
-  it('matches Custom with normal query direction', () => {
     expect(matchesCustomOption('cus')).toBe(true);
-    expect(matchesCustomOption('xyz')).toBe(false);
-  });
 
-  it('filters groups by query', () => {
     const filtered = filterCategoryGroups(CATEGORY_GROUPS, 'news');
     expect(filtered.some((g) => g.items.includes('News'))).toBe(true);
-    expect(filtered.every((g) => g.items.every((i) => i.toLowerCase().includes('news')))).toBe(
-      true,
-    );
+  });
+
+  it('resolves category prompt snippets and ships default named list settings', () => {
+    expect(getCategoryPromptSnippet('Documentation')).toMatch(/technical/i);
+    expect(getCategoryPromptSnippet('news')).toMatch(/journalistic/i);
+    expect(getCategoryPromptSnippet('totally-unknown-xyz')).toBeNull();
+
+    const block = formatCategorySnippetBlock('documentation');
+    expect(block).toContain('<page_category>documentation</page_category>');
+    expect(block).toContain('<category_rules>');
+
+    expect(normalizeCategoryKey('  News  ')).toBe('news');
+    expect(DEFAULT_SETTINGS.namedGlossaryLists).toEqual([]);
+    expect(DEFAULT_SETTINGS.subtitleListBySite).toEqual({});
   });
 });

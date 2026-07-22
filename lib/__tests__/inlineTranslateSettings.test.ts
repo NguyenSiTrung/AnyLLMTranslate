@@ -6,8 +6,14 @@ import {
 } from '@/types/config';
 import { deepMerge } from '@/lib/utils';
 import { loadSettings } from '@/lib/config';
+import { parseLanguagePrefix, LANGUAGE_PREFIX_ALIASES } from '@/lib/inlineTranslatePrefix';
+import {
+  INLINE_PREVIEW_SOURCE,
+  resolvePreviewTranslation,
+  buildPreviewProjection,
+} from '@/lib/inlineTranslatePreview';
 
-describe('InlineTranslateSettings defaults & deep-merge', () => {
+describe('InlineTranslate settings, prefix & preview helpers', () => {
   it('defaults, deep-merge partial storage, and loadSettings fill missing nested fields', async () => {
     const d = DEFAULT_INLINE_TRANSLATE_SETTINGS;
     expect(d).toMatchObject({
@@ -64,5 +70,72 @@ describe('InlineTranslateSettings defaults & deep-merge', () => {
     expect(settings.inlineTranslate.tapCount).toBe(2);
     expect(settings.inlineTranslate.idleMs).toBe(DEFAULT_INLINE_TRANSLATE_SETTINGS.idleMs);
     expect(settings.inlineTranslate.enableLanguagePrefix).toBe(true);
+  });
+
+  it('parses language prefixes, resolves preview samples, and builds projections', () => {
+    expect(parseLanguagePrefix('/en hello world')).toMatchObject({
+      targetLang: 'en',
+      body: 'hello world',
+      rawPrefix: '/en',
+    });
+    expect(parseLanguagePrefix('/zh 测试').targetLang).toBe('zh-CN');
+    expect(parseLanguagePrefix('/中文 测试').targetLang).toBe('zh-CN');
+    expect(parseLanguagePrefix('/vi xin chào').targetLang).toBe('vi');
+    expect(parseLanguagePrefix('/sv hej').targetLang).toBe('sv');
+    expect(parseLanguagePrefix('hello world').targetLang).toBeUndefined();
+    expect(parseLanguagePrefix('/en hello', { enabled: false }).body).toBe('/en hello');
+    expect(parseLanguagePrefix('/notalang hello').targetLang).toBeUndefined();
+    expect(parseLanguagePrefix('/en')).toMatchObject({ targetLang: 'en', body: '' });
+    expect(parseLanguagePrefix('#en hello', { prefixChar: '#' }).targetLang).toBe('en');
+    expect(Object.keys(LANGUAGE_PREFIX_ALIASES).length).toBeGreaterThan(10);
+
+    expect(resolvePreviewTranslation('vi')).toBeTruthy();
+    expect(resolvePreviewTranslation('vi')).not.toContain('translated ·');
+    expect(resolvePreviewTranslation('en')).toMatch(/hello/i);
+    expect(resolvePreviewTranslation('xx')).toBe('(translated · xx)');
+
+    const only = buildPreviewProjection({
+      targetLanguage: 'vi',
+      dualMode: false,
+      enableLanguagePrefix: false,
+      languagePrefix: '/',
+    });
+    expect(only.before).toBe(INLINE_PREVIEW_SOURCE);
+    expect(only.after).toBe(resolvePreviewTranslation('vi'));
+    expect(only.meta).toContain('vi');
+
+    const dual = buildPreviewProjection({
+      targetLanguage: 'vi',
+      dualMode: true,
+      enableLanguagePrefix: false,
+      languagePrefix: '/',
+    });
+    expect(dual.after).toBe(`${INLINE_PREVIEW_SOURCE} / ${resolvePreviewTranslation('vi')}`);
+
+    const prefix = buildPreviewProjection({
+      targetLanguage: 'vi',
+      dualMode: false,
+      enableLanguagePrefix: true,
+      languagePrefix: '/',
+    });
+    expect(prefix.before).toBe(`/en ${INLINE_PREVIEW_SOURCE}`);
+    expect(prefix.after).toBe(resolvePreviewTranslation('en'));
+
+    const prefixDual = buildPreviewProjection({
+      targetLanguage: 'ja',
+      dualMode: true,
+      enableLanguagePrefix: true,
+      languagePrefix: '#',
+    });
+    expect(prefixDual.before).toBe(`#en ${INLINE_PREVIEW_SOURCE}`);
+    expect(prefixDual.after).toBe(`${INLINE_PREVIEW_SOURCE} / ${resolvePreviewTranslation('en')}`);
+
+    const emptyPrefix = buildPreviewProjection({
+      targetLanguage: 'en',
+      dualMode: false,
+      enableLanguagePrefix: true,
+      languagePrefix: '',
+    });
+    expect(emptyPrefix.before.startsWith('/en ')).toBe(true);
   });
 });
