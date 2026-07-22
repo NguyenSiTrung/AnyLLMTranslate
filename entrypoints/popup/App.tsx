@@ -151,6 +151,9 @@ export default function App() {
     try {
       const result = (await chrome.runtime.sendMessage({
         action: 'getNamedGlossarySuggestions',
+        // Prefer the tab we already resolved at popup open so suggestions
+        // match the page the user was viewing (not a racey re-query).
+        ...(tab.activeTabId != null ? { tabId: tab.activeTabId } : {}),
       })) as GetNamedGlossarySuggestionsResult;
       setSuggestionRows(buildSuggestionRows(result?.suggestions ?? {}, activeSubtitleList));
     } catch {

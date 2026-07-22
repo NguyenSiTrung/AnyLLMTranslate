@@ -20,6 +20,7 @@ export function usePopupTab(
   const [status, setStatus] = useState<StatusResponse>(IDLE_STATUS);
   const [isTranslating, setIsTranslating] = useState(false);
   const [activeHostname, setActiveHostname] = useState<string | null>(null);
+  const [activeTabId, setActiveTabId] = useState<number | null>(null);
   const [categoryInfo, setCategoryInfo] = useState<CategoryInfo | null>(null);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [tabOverrides, setTabOverrides] = useState<Partial<ProfileKnobs>>({});
@@ -79,6 +80,8 @@ export function usePopupTab(
       }
 
       void queryTabStatus(tab);
+
+      setActiveTabId(tab?.id ?? null);
 
       if (tab?.url) {
         setActiveTabUrl(tab.url);
@@ -328,6 +331,7 @@ export function usePopupTab(
     isTranslating,
     setIsTranslating,
     activeHostname,
+    activeTabId,
     activeTabUrl,
     activeTabIsPdf,
     unsupportedPage,

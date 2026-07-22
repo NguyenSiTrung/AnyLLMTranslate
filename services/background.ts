@@ -154,6 +154,7 @@ import {
   omitGlobalEntriesCoveredByNamed,
   resolveActiveSubtitleListId,
 } from '@/lib/namedGlossaryLists';
+import { mergeSuggestionMaps } from '@/lib/namedGlossarySuggestions';
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
 import { preScanNames } from '@/services/subtitleNameScanner';
@@ -1057,8 +1058,10 @@ async function handleTranslateSubtitle(
         filmGlossary = undefined;
       }
     }
-    if (sender?.tab?.id !== undefined && !message.skipFilmPreScan) {
-      await writeNamedGlossarySuggestions(sender.tab.id, filmGlossary ?? {});
+    // Seed session suggestions from film pre-scan (non-empty only). Empty maps
+    // must not wipe names already accumulated from earlier batches / rolling nouns.
+    if (tabId !== undefined && filmGlossary && Object.keys(filmGlossary).length > 0) {
+      await writeNamedGlossarySuggestions(tabId, filmGlossary);
     }
 
     const CONTEXT_SIZE = 3;
@@ -1274,9 +1277,15 @@ async function handleTranslateSubtitle(
             }).catch(() => {});
 
             // Merge extracted proper nouns into the rolling glossary so the
-            // next chunk's prompt carries forward name consistency.
+            // next chunk's prompt carries forward name consistency. Also
+            // accumulate into session suggestions so the popup "Review
+            // suggestions" panel fills even when film pre-scan was skipped
+            // or returned nothing (DOM/manifest deltas, cache hits, etc.).
             if (result.properNouns) {
               mergeProperNouns(rollingGlossary, result.properNouns, { lockedSources: currentLockedSources });
+              if (tabId !== undefined) {
+                void writeNamedGlossarySuggestions(tabId, result.properNouns);
+              }
             }
           } else {
             throw new Error(result.error ?? 'Chunk translation failed');
@@ -2031,10 +2040,19 @@ async function writeNamedGlossarySuggestions(
   tabId: number,
   suggestions: Record<string, string>,
 ): Promise<void> {
+  // Never replace stored names with an empty payload (failed pre-scan / empty
+  // chunk). Callers should still skip obvious empties; this is defense-in-depth.
+  if (!suggestions || Object.keys(suggestions).length === 0) return;
   try {
-    await chrome.storage.session.set({
-      [`${NAMED_GLOSSARY_SUGGESTIONS_PREFIX}${tabId}`]: suggestions,
-    });
+    const key = `${NAMED_GLOSSARY_SUGGESTIONS_PREFIX}${tabId}`;
+    const stored = await chrome.storage.session.get(key);
+    const existingRaw = stored[key];
+    const existing =
+      existingRaw && typeof existingRaw === 'object' && !Array.isArray(existingRaw)
+        ? (existingRaw as Record<string, string>)
+        : {};
+    const merged = mergeSuggestionMaps(existing, suggestions);
+    await chrome.storage.session.set({ [key]: merged });
   } catch {
     // Session storage is best-effort; subtitle translation must continue.
   }
