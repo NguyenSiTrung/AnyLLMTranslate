@@ -37,8 +37,19 @@ export function isPasswordField(el: Element): boolean {
   return el instanceof HTMLInputElement && el.type === 'password';
 }
 
-/** Whether the element is inside a code editor (Monaco, CodeMirror, Ace, …) */
+/**
+ * Whether the element is inside a *code IDE* editor (Monaco, CodeMirror, Ace).
+ *
+ * Intentionally does NOT treat general rich-text / chat composers as code
+ * editors — ProseMirror, Quill, and role=textbox+aria-multiline are used by
+ * ChatGPT, Claude, Discord, X/Twitter, etc. Blocking those made Space×N
+ * inline translate appear completely broken on the sites users care about.
+ *
+ * True code surfaces are identified by IDE class names or explicit language
+ * mode markers (data-mode-id / data-language / data-testid=code-editor).
+ */
 export function isCodeEditor(el: Element): boolean {
+  // Real code IDEs only — not ProseMirror / Quill chat composers.
   const editorClasses = [
     'monaco-editor',
     'CodeMirror',
@@ -46,8 +57,6 @@ export function isCodeEditor(el: Element): boolean {
     'cm-editor',
     'cm-content',
     'ace_text-input',
-    'ql-editor', // Quill
-    'ProseMirror',
   ];
 
   let current: Element | null = el;
@@ -57,17 +66,11 @@ export function isCodeEditor(el: Element): boolean {
         if (current.classList.contains(cls)) return true;
       }
     }
-    if (
-      current.getAttribute('role') === 'textbox' &&
-      (current.getAttribute('aria-multiline') === 'true' ||
-        current.getAttribute('data-mode-id') != null ||
-        current.getAttribute('data-language') != null)
-    ) {
-      return true;
-    }
-    // data-gramm / code-editor markers
+    // Explicit language/mode markers (Monaco and similar) — not bare
+    // role=textbox + aria-multiline, which chat UIs also use.
     if (
       current.hasAttribute('data-mode-id') ||
+      current.hasAttribute('data-language') ||
       current.getAttribute('data-testid') === 'code-editor'
     ) {
       return true;
@@ -136,6 +139,37 @@ export function getDeepActiveElement(
   return active;
 }
 
+/**
+ * Walk up from a key/input event target to the editable host we should
+ * translate (input, textarea, or contentEditable root).
+ *
+ * Needed because ProseMirror/Quill keydowns often target a nested node
+ * (`<p>`, text wrapper) rather than the contentEditable host itself.
+ */
+export function resolveEditableHost(el: Element | null): HTMLElement | null {
+  let current: Element | null = el;
+  while (current) {
+    if (isEditableElement(current)) {
+      // Prefer the outermost contentEditable host when nested CE nodes exist
+      if (current instanceof HTMLElement && (current.isContentEditable || current.contentEditable === 'true')) {
+        const host = current.closest?.('[contenteditable="true"]');
+        if (host instanceof HTMLElement && isEditableElement(host)) {
+          return host;
+        }
+      }
+      return current;
+    }
+    // Shadow boundary: climb to host
+    const root = current.getRootNode?.();
+    if (root instanceof ShadowRoot && root.host) {
+      current = root.host;
+      continue;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
 /** Get plain text from an editable element */
 export function getElementText(el: HTMLElement): string {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
@@ -148,6 +182,10 @@ export function getElementText(el: HTMLElement): string {
  * Whether the caret is at the end of the field (for trailing-trigger gestures).
  * contentEditable uses selection; returns true when selection APIs unavailable
  * (fail-open so gesture still works in limited environments).
+ *
+ * If the live selection is outside `el` (common in jsdom after focus moves, or
+ * when keydown targets a nested node while selection lags), fail open — a
+ * false "mid-string" would silently kill Space×N on every chat composer.
  */
 export function isCaretAtEnd(el: HTMLElement): boolean {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
@@ -159,6 +197,15 @@ export function isCaretAtEnd(el: HTMLElement): boolean {
     const sel = el.ownerDocument.getSelection();
     if (!sel || sel.rangeCount === 0) return true;
     const range = sel.getRangeAt(0);
+    // Selection not inside this editable host → cannot judge; fail open
+    const anchor = range.commonAncestorContainer;
+    const anchorEl =
+      anchor.nodeType === Node.ELEMENT_NODE
+        ? (anchor as Element)
+        : anchor.parentElement;
+    if (!anchorEl || !el.contains(anchorEl)) {
+      return true;
+    }
     // Collapse check: caret (not range selection) near end of content
     if (!range.collapsed) return false;
     const pre = range.cloneRange();

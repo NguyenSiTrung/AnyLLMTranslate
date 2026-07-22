@@ -139,6 +139,42 @@ describe('gesture IME / repeat', () => {
     // fire via setTimeout(0)
   });
 
+  it('counts Space via event.code when event.key is not a plain space character', async () => {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 500,
+        idleMs: 0,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
+        getText: () => input.value,
+      },
+    );
+
+    const fire = (key: string, code: string) => {
+      const ev = new KeyboardEvent('keydown', { key, code, bubbles: true });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onKeyDown(ev);
+    };
+    // Some IME/OS combos report key differently while code stays Space
+    fire('Process', 'Space');
+    fire('Process', 'Space');
+    fire('Process', 'Space');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(triggers).toHaveLength(1);
+  });
+
   it('fires after idle debounce when idleMs > 0', async () => {
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');

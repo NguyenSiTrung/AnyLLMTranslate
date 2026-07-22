@@ -17,8 +17,9 @@ import {
   isCodeEditor,
   isEditableElement,
   isPasswordField,
+  resolveEditableHost,
 } from './editable';
-import { createGestureController, type GestureController } from './gesture';
+import { createGestureController, isTriggerKey, type GestureController } from './gesture';
 import {
   isCurrentPageBlocked,
   resolveBlocklistPatterns,
@@ -70,10 +71,21 @@ function isBlocked(): boolean {
 }
 
 function shouldAccept(el: Element | null): el is HTMLElement {
-  if (!isEditableElement(el)) return false;
-  if (isPasswordField(el)) return false;
-  if (isCodeEditor(el)) return false;
+  const host = resolveEditableHost(el);
+  if (!host) return false;
+  if (isPasswordField(host)) return false;
+  if (isCodeEditor(host)) return false;
   return true;
+}
+
+/**
+ * Gesture callbacks receive event.target; normalize to the editable host
+ * so write-back hits the ProseMirror/Quill root, not a nested `<p>`.
+ */
+function resolveTriggerTarget(el: Element | null): HTMLElement | null {
+  const host = resolveEditableHost(el);
+  if (!host || !shouldAccept(host)) return null;
+  return host;
 }
 
 function onTrigger(target: HTMLElement): void {
@@ -81,7 +93,8 @@ function onTrigger(target: HTMLElement): void {
     console.debug('[AnyLLMTranslate:inline] blocked host — no-op');
     return;
   }
-  void runInlineTranslate(config, { element: target, skipStripTrailing: false });
+  const host = resolveTriggerTarget(target) ?? target;
+  void runInlineTranslate(config, { element: host, skipStripTrailing: false });
 }
 
 function ensureGesture(): GestureController {
@@ -98,9 +111,17 @@ function ensureGesture(): GestureController {
       },
       {
         onTrigger,
-        shouldAccept,
-        isCaretAtEnd,
-        getText: getElementText,
+        // Accept any descendant of an editable host (ProseMirror nested nodes)
+        shouldAccept: (el): el is HTMLElement => resolveTriggerTarget(el) != null,
+        // Caret / text checks must run on the host, not a nested child
+        isCaretAtEnd: (el) => {
+          const host = resolveEditableHost(el) ?? el;
+          return isCaretAtEnd(host);
+        },
+        getText: (el) => {
+          const host = resolveEditableHost(el) ?? el;
+          return getElementText(host);
+        },
       },
     );
   }
@@ -109,7 +130,7 @@ function ensureGesture(): GestureController {
 
 function onKeyDown(event: KeyboardEvent): void {
   // Cancel-on-type: any non-trigger key while translating
-  if (isInlineTranslating() && event.key !== config.triggerKey) {
+  if (isInlineTranslating() && !isTriggerKey(event, config.triggerKey)) {
     onUserInputDuringTranslate(event.target as Element);
   }
   ensureGesture().onKeyDown(event);
@@ -228,6 +249,7 @@ export {
   getDeepActiveElement,
   isCaretAtEnd,
   isPasswordField,
+  resolveEditableHost,
 };
 export { replaceElementText };
 export { undoMap, isInlineTranslating, tryFallbackUndo, cancelActiveRequest };

@@ -111,6 +111,41 @@ describe('isCodeEditor', () => {
     document.body.appendChild(input);
     expect(isCodeEditor(input)).toBe(false);
   });
+
+  it('does NOT treat chat/rich-text composers as code editors (ProseMirror, Quill, role=textbox)', () => {
+    // ChatGPT / Claude / many chat UIs use ProseMirror contenteditable
+    const prose = document.createElement('div');
+    prose.className = 'ProseMirror';
+    prose.contentEditable = 'true';
+    prose.setAttribute('role', 'textbox');
+    prose.setAttribute('aria-multiline', 'true');
+    document.body.appendChild(prose);
+    expect(isCodeEditor(prose)).toBe(false);
+
+    // Quill is a general rich-text editor, not a code IDE
+    const quill = document.createElement('div');
+    quill.className = 'ql-editor';
+    quill.contentEditable = 'true';
+    document.body.appendChild(quill);
+    expect(isCodeEditor(quill)).toBe(false);
+
+    // Generic ARIA multiline textbox (Discord, X/Twitter composers)
+    const ariaBox = document.createElement('div');
+    ariaBox.setAttribute('role', 'textbox');
+    ariaBox.setAttribute('aria-multiline', 'true');
+    ariaBox.contentEditable = 'true';
+    document.body.appendChild(ariaBox);
+    expect(isCodeEditor(ariaBox)).toBe(false);
+  });
+
+  it('still treats Monaco-style role=textbox with data-mode-id as a code editor', () => {
+    const monacoLike = document.createElement('div');
+    monacoLike.setAttribute('role', 'textbox');
+    monacoLike.setAttribute('aria-multiline', 'true');
+    monacoLike.setAttribute('data-mode-id', 'typescript');
+    document.body.appendChild(monacoLike);
+    expect(isCodeEditor(monacoLike)).toBe(true);
+  });
 });
 
 /* ── getElementText ───────────────────────────────────────────── */
@@ -321,6 +356,63 @@ describe('gesture detection', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('triple-space works in ProseMirror chat composers (not treated as code editor)', async () => {
+    const prose = document.createElement('div');
+    prose.className = 'ProseMirror';
+    prose.contentEditable = 'true';
+    prose.setAttribute('role', 'textbox');
+    prose.setAttribute('aria-multiline', 'true');
+    prose.textContent = 'xin chào   ';
+    document.body.appendChild(prose);
+    prose.focus();
+
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'hello',
+    });
+
+    fireKeydown(prose, ' ');
+    fireKeydown(prose, ' ');
+    fireKeydown(prose, ' ');
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSelection',
+        text: 'xin chào',
+      }),
+    );
+  });
+
+  it('triple-space works when keydown target is a nested child inside ProseMirror', async () => {
+    const prose = document.createElement('div');
+    prose.className = 'ProseMirror';
+    prose.contentEditable = 'true';
+    const p = document.createElement('p');
+    p.textContent = 'xin chào   ';
+    prose.appendChild(p);
+    document.body.appendChild(prose);
+    prose.focus();
+
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'hello',
+    });
+
+    // Real ProseMirror keydowns often target the inner <p>, not the host
+    fireKeydown(p, ' ');
+    fireKeydown(p, ' ');
+    fireKeydown(p, ' ');
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSelection',
+        text: 'xin chào',
+      }),
+    );
   });
 });
 

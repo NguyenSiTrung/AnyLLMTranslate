@@ -14,6 +14,7 @@ export {
   replaceElementText,
   getDeepActiveElement,
   isCaretAtEnd,
+  resolveEditableHost,
   isInlineTranslating,
   tryFallbackUndo,
   cancelActiveRequest,

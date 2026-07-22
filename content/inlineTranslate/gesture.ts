@@ -42,6 +42,19 @@ export interface GestureController {
 }
 
 /**
+ * Match the configured trigger key against a KeyboardEvent.
+ * Space is special-cased: many IME/OS layouts report a non-space `event.key`
+ * while `event.code` remains `"Space"`. Accept either so Space×N stays reliable.
+ */
+export function isTriggerKey(event: KeyboardEvent, triggerKey: string): boolean {
+  if (event.key === triggerKey) return true;
+  if (triggerKey === ' ' || triggerKey === 'Space') {
+    return event.code === 'Space' || event.key === 'Spacebar' || event.key === 'Space';
+  }
+  return false;
+}
+
+/**
  * Create a gesture controller. Callers attach listeners and call the handlers.
  */
 export function createGestureController(
@@ -133,18 +146,20 @@ export function createGestureController(
     }
     if (event.repeat) return;
 
-    if (event.key !== config.triggerKey) {
+    if (!isTriggerKey(event, config.triggerKey)) {
       // Non-trigger key resets gesture (user continued typing)
       keyTimestamps = [];
       clearIdle();
       return;
     }
 
-    const target = event.target as Element | null;
-    if (!callbacks.shouldAccept(target)) {
+    const rawTarget = event.target as Element | null;
+    if (!callbacks.shouldAccept(rawTarget)) {
       reset();
       return;
     }
+    // Prefer the accepted host element (type guard narrows to HTMLElement)
+    const target = rawTarget as HTMLElement;
 
     if (callbacks.isCaretAtEnd && !callbacks.isCaretAtEnd(target)) {
       // Mid-string space — do not count toward trailing gesture
