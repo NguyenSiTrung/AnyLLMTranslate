@@ -931,9 +931,12 @@ function buildStatusResponse(): StatusResponse {
 /** Broadcast current status to popup + update in-page mini progress (FR-25). */
 function sendStatusUpdate(): void {
   const status = buildStatusResponse();
+  // tabId is resolved by receivers via sender.tab.id (content scripts cannot
+  // read their own tab id). Popup filters statusUpdate by that origin tab so
+  // a translating tab does not overwrite another tab's popup progress.
   chrome.runtime.sendMessage({
     action: 'statusUpdate',
-    tabId: 0, // Tab ID is handled implicitly by the popup not filtering, or fallback
+    tabId: 0,
     status,
   }).catch(() => { /* Popup likely closed */ });
 

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { StatusResponse, ExtensionMessage, CategoryInfo } from '@/types/messages';
 import type { ExtensionSettings } from '@/types/config';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
 import { getUnsupportedPageInfo, type UnsupportedPageInfo } from '../lib/unsupportedPage';
 import { openOptionsWindow } from '../lib/openOptions';
+import { shouldAcceptTabScopedMessage } from '../lib/shouldAcceptTabScopedMessage';
 
 const IDLE_STATUS: StatusResponse = {
   status: 'idle',
@@ -27,6 +28,8 @@ export function usePopupTab(
   const [unsupportedPage, setUnsupportedPage] = useState<UnsupportedPageInfo | null>(null);
   const [activeTabUrl, setActiveTabUrl] = useState<string | null>(null);
   const [activeTabIsPdf, setActiveTabIsPdf] = useState(false);
+  /** Ref so onMessage can filter by the tab the popup is bound to without stale closures. */
+  const activeTabIdRef = useRef<number | null>(null);
 
   const queryTabStatus = useCallback(async (activeTab?: chrome.tabs.Tab) => {
     try {
@@ -71,6 +74,33 @@ export function usePopupTab(
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    // Content scripts on *every* open tab broadcast status/category over
+    // chrome.runtime. Only apply updates that originate from the tab this
+    // popup instance is bound to (sender.tab.id), otherwise a translating
+    // background tab overwrites the active tab's progress strip.
+    const messageListener = (
+      message: ExtensionMessage,
+      sender: chrome.runtime.MessageSender,
+    ) => {
+      if (message.action === 'statusUpdate') {
+        const fromTabId = sender.tab?.id ?? message.tabId;
+        if (!shouldAcceptTabScopedMessage(activeTabIdRef.current, fromTabId)) {
+          return;
+        }
+        setStatus(message.status);
+        setIsTranslating(message.status.status === 'translating');
+      } else if (message.action === 'pageCategoryUpdate') {
+        const fromTabId = sender.tab?.id;
+        if (!shouldAcceptTabScopedMessage(activeTabIdRef.current, fromTabId)) {
+          return;
+        }
+        setCategoryInfo(message.categoryInfo);
+      }
+    };
+    chrome.runtime.onMessage.addListener(messageListener);
+
     void (async () => {
       let tab: chrome.tabs.Tab | undefined;
       try {
@@ -78,10 +108,15 @@ export function usePopupTab(
       } catch {
         /* tab query failed */
       }
+      if (cancelled) return;
+
+      // Bind tab id before getStatus so concurrent statusUpdate messages
+      // from other tabs are rejected while this popup is open.
+      const tabId = tab?.id ?? null;
+      activeTabIdRef.current = tabId;
+      setActiveTabId(tabId);
 
       void queryTabStatus(tab);
-
-      setActiveTabId(tab?.id ?? null);
 
       if (tab?.url) {
         setActiveTabUrl(tab.url);
@@ -110,19 +145,21 @@ export function usePopupTab(
       if (tab?.id) {
         try {
           const ct = await chrome.tabs.sendMessage(tab.id, { action: 'getPageContentType' });
+          if (cancelled) return;
           if (ct?.isPdf === true) {
             setActiveTabIsPdf(true);
           } else {
             setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
           }
         } catch {
-          setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
+          if (!cancelled) setActiveTabIsPdf(/\.pdf(?:\?|#|$)/i.test(tab.url ?? ''));
         }
       }
 
       if (tab?.id) {
         try {
           const catInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getPageCategory' });
+          if (cancelled) return;
           if (catInfo) setCategoryInfo(catInfo as CategoryInfo);
         } catch {
           try {
@@ -130,6 +167,7 @@ export function usePopupTab(
               action: 'getCategoryOverride',
               tabId: tab.id,
             });
+            if (cancelled) return;
             if (bgResult?.override) {
               setCategoryInfo({
                 override: bgResult.override,
@@ -151,17 +189,8 @@ export function usePopupTab(
       }
     })();
 
-    const messageListener = (message: ExtensionMessage) => {
-      if (message.action === 'statusUpdate') {
-        setStatus(message.status);
-        setIsTranslating(message.status.status === 'translating');
-      } else if (message.action === 'pageCategoryUpdate') {
-        setCategoryInfo(message.categoryInfo);
-      }
-    };
-    chrome.runtime.onMessage.addListener(messageListener);
-
     return () => {
+      cancelled = true;
       chrome.runtime.onMessage.removeListener(messageListener);
     };
   }, [queryTabStatus]);
