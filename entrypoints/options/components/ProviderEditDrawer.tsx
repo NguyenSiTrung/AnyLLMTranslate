@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, Zap } from 'lucide-react';
 import {
+  aggregateLiveStatusForKey,
   getKeyChipView,
   type PoolKeyLiveStatus,
 } from '@/lib/poolDashboardStatus';
@@ -263,7 +264,7 @@ export function ProviderEditDrawer({
                 chip={getKeyChipView(
                   provider,
                   poolKey,
-                  liveByKeyId?.[poolKey.id],
+                  aggregateLiveStatusForKey(liveByKeyId, poolKey.id, now),
                   now,
                 )}
                 displayIndex={index + 1}

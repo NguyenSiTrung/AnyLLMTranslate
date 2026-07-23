@@ -8,6 +8,7 @@ import {
   ProviderRow,
 } from './ProviderRow';
 import {
+  aggregateLiveStatusForKey,
   getKeyChipView,
   type PoolKeyLiveStatus,
 } from '@/lib/poolDashboardStatus';
@@ -42,7 +43,12 @@ export function ProviderRotationList({
     <div className="space-y-2" role="list" aria-label="Provider rotation order">
       {providers.map((provider, index) => {
         const chips = (provider.keys ?? []).map((k) =>
-          getKeyChipView(provider, k, liveByKeyId?.[k.id], now),
+          getKeyChipView(
+            provider,
+            k,
+            aggregateLiveStatusForKey(liveByKeyId, k.id, now),
+            now,
+          ),
         );
         return (
           <div

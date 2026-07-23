@@ -341,6 +341,8 @@ export function computePoolSignature(settings: ExtensionSettings): string {
     id: p.id,
     baseUrl: p.baseUrl,
     model: p.model,
+    models: p.models ?? [],
+    modelStrategy: p.modelStrategy ?? 'preferred_failover',
     requiresApiKey: p.requiresApiKey,
     temperature: p.temperature,
     maxTokens: p.maxTokens,

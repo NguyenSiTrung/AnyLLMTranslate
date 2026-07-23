@@ -450,6 +450,10 @@ export interface GetPoolKeyStatusesMessage {
 /** Serializable key status returned to options (mirrors coordinator KeyStatus). */
 export interface PoolKeyStatusPayload {
   keyId: string;
+  /** Breaker identity — keyId for single-model, keyId::model for multi-model. */
+  slotId: string;
+  /** Model id for this slot. */
+  model: string;
   providerId: string;
   open: boolean;
   openUntil: number;

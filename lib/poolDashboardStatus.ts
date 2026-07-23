@@ -12,12 +12,48 @@ import { getPoolReadinessStatus } from '@/lib/providerReadiness';
 /** Serializable live key status (mirrors coordinator KeyStatus without importing services). */
 export interface PoolKeyLiveStatus {
   keyId: string;
+  /** Breaker identity — keyId for single-model, keyId::model for multi-model. */
+  slotId?: string;
+  /** Model id for this slot (multi-model). */
+  model?: string;
   providerId: string;
   open: boolean;
   openUntil: number;
   credentialInvalid: boolean;
   lastFailureKind?: string;
   disabled: boolean;
+}
+
+/** All live statuses belonging to a PoolKey (one or more model slots). */
+export function statusesForKey(
+  statuses: Record<string, PoolKeyLiveStatus> | null | undefined,
+  keyId: string,
+): PoolKeyLiveStatus[] {
+  if (!statuses) return [];
+  const byKey = Object.values(statuses).filter((s) => s.keyId === keyId);
+  if (byKey.length > 0) return byKey;
+  const direct = statuses[keyId];
+  return direct ? [direct] : [];
+}
+
+/**
+ * Pick the most severe live status for a key across multi-model slots.
+ * Priority: credentialInvalid → open/cooling (earliest openUntil) → first.
+ */
+export function aggregateLiveStatusForKey(
+  statuses: Record<string, PoolKeyLiveStatus> | null | undefined,
+  keyId: string,
+  now: number,
+): PoolKeyLiveStatus | undefined {
+  const list = statusesForKey(statuses, keyId);
+  if (list.length === 0) return undefined;
+  const invalid = list.find((s) => s.credentialInvalid);
+  if (invalid) return invalid;
+  const cooling = list
+    .filter((s) => s.open && s.openUntil > now)
+    .sort((a, b) => a.openUntil - b.openUntil)[0];
+  if (cooling) return cooling;
+  return list[0];
 }
 
 export type PoolDashboardState = 'ready' | 'partial' | 'degraded' | 'not-ready';
@@ -107,11 +143,12 @@ export function getKeyChipView(
 
   if (live?.open && live.openUntil > now) {
     const remaining = formatCooldownRemaining(live.openUntil, now);
+    const modelHint = live.model ? ` (${live.model})` : '';
     return {
       keyId,
       kind: 'cooling',
       label: CHIP_LABEL.cooling,
-      title: `Cooling down · back in ${remaining}`,
+      title: `Cooling down${modelHint} · back in ${remaining}`,
       openUntil: live.openUntil,
       latencyMs: poolKey.lastTestResult?.latencyMs,
     };
@@ -226,7 +263,7 @@ export function getPoolDashboardView(
   let untestedKeyCount = 0;
 
   for (const { provider, key: poolKey } of slots) {
-    const live = liveByKeyId?.[poolKey.id];
+    const live = aggregateLiveStatusForKey(liveByKeyId, poolKey.id, now);
     const chip = getKeyChipView(provider, poolKey, live, now);
     switch (chip.kind) {
       case 'healthy':
