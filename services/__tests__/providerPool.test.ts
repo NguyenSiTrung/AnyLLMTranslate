@@ -136,9 +136,13 @@ describe('ProviderPoolCoordinator', () => {
     clockNow = 1_000_000;
     stubs = new Map();
     factory = vi.fn(
-      (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
-        const s = makeStub(identity.keyId, config);
-        stubs.set(identity.keyId, s);
+      (
+        config: ProviderConfig,
+        identity: { keyId: string; providerId: string; slotId?: string },
+      ) => {
+        const id = identity.slotId ?? identity.keyId;
+        const s = makeStub(id, config);
+        stubs.set(id, s);
         return s;
       },
     );
@@ -823,6 +827,122 @@ describe('ProviderPoolCoordinator', () => {
       // Only one healthy → restore default retries (null/undefined)
       const last = max429Sets[max429Sets.length - 1];
       expect(last?.value === null || last?.value === undefined || last?.value === 3).toBe(true);
+    });
+  });
+
+  describe('Google AI Studio multi-model', () => {
+    function googleMultiSettings(
+      strategy: 'preferred_failover' | 'round_robin' = 'preferred_failover',
+    ): ExtensionSettings {
+      const providers: PoolProvider[] = [
+        {
+          id: 'g1',
+          displayName: 'Google',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+          catalogId: 'google-ai-studio',
+          model: 'gemini-2.5-flash',
+          models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+          modelStrategy: strategy,
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk-1',
+              maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
+              enabled: true,
+            },
+            {
+              id: 'k2',
+              apiKey: 'sk-2',
+              maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ];
+      return { ...DEFAULT_SETTINGS, providers };
+    }
+
+    it('preferred: always uses primary model when healthy (order A)', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(googleMultiSettings('preferred_failover'));
+      for (let i = 0; i < 4; i++) {
+        await coord.translate(baseRequest());
+      }
+      const flashCalls =
+        (stubs.get('k1::gemini-2.5-flash')?.callCount ?? 0) +
+        (stubs.get('k2::gemini-2.5-flash')?.callCount ?? 0);
+      const liteCalls =
+        (stubs.get('k1::gemini-2.5-flash-lite')?.callCount ?? 0) +
+        (stubs.get('k2::gemini-2.5-flash-lite')?.callCount ?? 0);
+      expect(flashCalls).toBe(4);
+      expect(liteCalls).toBe(0);
+    });
+
+    it('preferred: fails over to lite when flash slots 429', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(googleMultiSettings('preferred_failover'));
+      setOutcome('k1::gemini-2.5-flash', {
+        kind: 'fail',
+        error: new ApiError('rl', 429),
+      });
+      setOutcome('k2::gemini-2.5-flash', {
+        kind: 'fail',
+        error: new ApiError('rl', 429),
+      });
+      const result = await coord.translate(baseRequest());
+      expect(result.success).toBe(true);
+      const liteUsed =
+        (stubs.get('k1::gemini-2.5-flash-lite')?.callCount ?? 0) +
+        (stubs.get('k2::gemini-2.5-flash-lite')?.callCount ?? 0);
+      expect(liteUsed).toBeGreaterThan(0);
+      expect(coord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
+      expect(coord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
+    });
+
+    it('round_robin: spreads across models', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(googleMultiSettings('round_robin'));
+      for (let i = 0; i < 4; i++) {
+        await coord.translate(baseRequest());
+      }
+      const modelsUsed = [...stubs.values()].filter((s) => s.callCount > 0).length;
+      expect(modelsUsed).toBeGreaterThanOrEqual(2);
+    });
+
+    it('flash 429 does not open lite slot on same key', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(googleMultiSettings('preferred_failover'));
+      setOutcome('k1::gemini-2.5-flash', {
+        kind: 'fail',
+        error: new ApiError('rl', 429),
+      });
+      setOutcome('k2::gemini-2.5-flash', {
+        kind: 'fail',
+        error: new ApiError('rl', 429),
+      });
+      await coord.translate(baseRequest());
+      expect(coord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
+      expect(coord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
     });
   });
 });

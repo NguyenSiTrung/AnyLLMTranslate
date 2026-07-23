@@ -9,13 +9,14 @@
  * Responsibilities:
  *  - Holds one {@link OpenAICompatibleService} per enabled pool slot (own
  *    RateLimiter + own responseFormatDisabled state — correct, since those are
- *    scoped to the provider's baseUrl + key).
- *  - Round-robin distribution across slots via {@link PoolCursor} (FR-3).
+ *    scoped to the provider's baseUrl + key + model).
+ *  - Round-robin distribution across slots via {@link PoolCursor} (FR-3), or
+ *    preferred+failover walk for Google AI Studio multi-model.
  *  - Circuit-breaker failover via {@link CircuitBreaker} (FR-4): on 429/5xx/
  *    network → escalating cooldown + retry next healthy slot; on 401/403 →
  *    long-open + credentialInvalid; on other 4xx → no cooldown (surfaces).
  *  - `rebuild(settings)` live-reconfigures member services in place, preserving
- *    circuit-breaker state for unchanged key identities (FR-6).
+ *    circuit-breaker state for unchanged slot identities (FR-6).
  *
  * The default `serviceFactory` constructs an {@link OpenAICompatibleService}
  * from a ProviderConfig; tests inject a stub factory to observe dispatch.
@@ -44,10 +45,10 @@ import { resolveSlots, healthySlots, type PoolSlot } from '@/lib/poolResolver';
 
 /** Factory that builds a member service for a slot's resolved config.
  *  Receives the slot identity as a second arg so factories can log/instrument
- *  per-key (the production OpenAICompatibleService factory ignores it). */
+ *  per-key / per-model (the production OpenAICompatibleService factory ignores it). */
 export type ServiceFactory = (
   config: ProviderConfig,
-  slotIdentity: { keyId: string; providerId: string },
+  slotIdentity: { keyId: string; providerId: string; slotId: string; model: string },
 ) => TranslationService;
 
 /** Options for constructing a coordinator (mostly for test injection). */
@@ -60,10 +61,14 @@ export interface ProviderPoolCoordinatorOptions {
   delay?: (ms: number) => Promise<void>;
 }
 
-/** Public view of a single key's status — drives the UI badge. */
+/** Public view of a single slot's status — drives the UI badge. */
 export interface KeyStatus {
-  /** Stable key id. */
+  /** Parent PoolKey id. */
   keyId: string;
+  /** Breaker / member identity (keyId or keyId::model). */
+  slotId: string;
+  /** Model id for this slot. */
+  model: string;
   /** Parent provider id. */
   providerId: string;
   /** True while the slot is in cooldown (skipped by rotation). */
@@ -114,23 +119,22 @@ export class ProviderPoolCoordinator implements TranslationService {
   private readonly breaker: CircuitBreaker;
   private readonly clock: () => number;
   private readonly cursor: PoolCursor;
+  /** Rotates which provider group is tried first under preferred multi-model. */
+  private readonly providerCursor: PoolCursor;
   private readonly delay: (ms: number) => Promise<void>;
 
   /** All currently-enabled slots (the rotation universe). */
   private slots: PoolSlot[] = [];
-  /** keyId → member service, kept in sync with `slots`. */
+  /** slotId → member service, kept in sync with `slots`. */
   private members: Map<string, MemberRecord> = new Map();
   /** Tracks which keyIds are disabled (for status reporting). */
   private disabledKeyIds: Set<string> = new Set();
   /** keyId → providerId, for status reporting. */
   private keyToProvider: Map<string, string> = new Map();
 
-  // FR-5: per-key concurrency limit + throttle interval state.
-  /** keyId → count of in-flight requests on that key. */
+  // FR-5: per-slot concurrency limit + throttle interval state (keyed by slotId).
   private readonly inFlight: Map<string, number> = new Map();
-  /** keyId → queue of pending per-key-concurrency waiters (FIFO). */
   private readonly keyQueues: Map<string, Array<() => void>> = new Map();
-  /** keyId → wall-clock ms of the last dispatched request on that key. */
   private readonly lastDispatchAt: Map<string, number> = new Map();
 
   constructor(options: ProviderPoolCoordinatorOptions = {}) {
@@ -140,21 +144,20 @@ export class ProviderPoolCoordinator implements TranslationService {
     this.clock = options.clock ?? (() => Date.now());
     this.breaker = createCircuitBreaker({ clock: this.clock });
     this.cursor = createPoolCursor(0);
+    this.providerCursor = createPoolCursor(0);
     this.delay = options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   /**
    * Live-reconfigure member services from settings. Member instances are
-   * PRESERVED for any key whose identity (keyId) is unchanged, so circuit-
-   * breaker state and RateLimiter windows survive a rebuild (FR-6). New keys
-   * get fresh services; removed keys are dropped.
+   * PRESERVED for any slot whose identity (slotId) is unchanged, so circuit-
+   * breaker state and RateLimiter windows survive a rebuild (FR-6). New slots
+   * get fresh services; removed slots are dropped.
    */
   rebuild(settings: ExtensionSettings): void {
     const now = this.clock();
     const providers = settings.providers ?? [];
 
-    // Build the full slot list (all enabled-provider × enabled-key pairs) AND
-    // track every key (enabled or not) for status reporting.
     const newSlots = resolveSlots(providers);
     this.disabledKeyIds = new Set();
     this.keyToProvider.clear();
@@ -167,29 +170,24 @@ export class ProviderPoolCoordinator implements TranslationService {
       }
     }
 
-    // Diff against existing members: keep shared keyIds, drop removed, add new.
-    const newMemberIds = new Set(newSlots.map((s) => s.keyId));
-    for (const keyId of Array.from(this.members.keys())) {
-      if (!newMemberIds.has(keyId)) {
-        this.members.delete(keyId);
+    const newMemberIds = new Set(newSlots.map((s) => s.slotId));
+    for (const slotId of Array.from(this.members.keys())) {
+      if (!newMemberIds.has(slotId)) {
+        this.members.delete(slotId);
       }
     }
     for (const slot of newSlots) {
-      const existing = this.members.get(slot.keyId);
+      const existing = this.members.get(slot.slotId);
       if (existing) {
-        // Preserve the member instance (breaker state + rate limiter window).
         existing.slot = slot;
-        // Live-reconfigure the member in place so it dispatches with the new
-        // config (baseUrl/model/apiKey/maxRpm). Without this, the member keeps
-        // its original config and every translation request goes out stale
-        // while a per-key Test (which builds a fresh config from the UI) still
-        // succeeds — the bug behind AnyLLMTranslate-bfw.
         existing.service.updateConfig?.(slot.providerConfig);
       } else {
-        this.members.set(slot.keyId, {
+        this.members.set(slot.slotId, {
           service: this.serviceFactory(slot.providerConfig, {
             keyId: slot.keyId,
             providerId: slot.providerId,
+            slotId: slot.slotId,
+            model: slot.model,
           }),
           slot,
         });
@@ -198,29 +196,13 @@ export class ProviderPoolCoordinator implements TranslationService {
 
     this.slots = newSlots;
     this.cursor.setSlotCount(newSlots.length);
-    // Touch the breaker so `now` is current (no-op, but documents intent).
     void now;
   }
 
-  /**
-   * Pick the next healthy slot via the cursor, dispatch, and fail over on
-   * eligible failures (FR-3 + FR-4). Bounded by the healthy-slot count so it
-   * never loops infinitely; if every slot fails, throws the last error.
-   */
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     return this.dispatchWithFailover((service) => service.translate(request));
   }
 
-  /**
-   * Streaming translation (Phase 2, PDF-only opt-in). Delegates to member
-   * services that implement `translateStream`, with the same failover semantics
-   * as translate() — on a transport/auth/rate-limit error, the next healthy
-   * slot is tried. The `onPiece` callback is invoked per completed paragraph
-   * as the SSE stream arrives.
-   *
-   * If NO member supports streaming (all lack translateStream), falls back to
-   * non-streaming translate() so the caller still gets a result.
-   */
   async translateStream(
     request: TranslationRequest,
     onPiece: (id: string, text: string) => void,
@@ -229,8 +211,6 @@ export class ProviderPoolCoordinator implements TranslationService {
       if (service.translateStream) {
         return service.translateStream(request, onPiece);
       }
-      // Member doesn't support streaming — fall back to non-streaming and
-      // emit all pieces at once via the callback (best-effort incremental UX).
       return service.translate(request).then((result) => {
         if (result.success) {
           for (const [id, text] of result.translations) {
@@ -248,10 +228,6 @@ export class ProviderPoolCoordinator implements TranslationService {
     if (opts?.keyId) {
       return this.testSpecificKey(opts.keyId);
     }
-    // FR-8 #12: a keyId-less testConnection routes through dispatchWithFailover,
-    // which filters to healthySlots — so an open (cooling) slot is automatically
-    // skipped and a healthy slot is tested instead. This is the preferred
-    // behavior: "Test all" should never block on a rate-limited key.
     try {
       await this.dispatchWithFailover((service) => service.testConnection());
       return { success: true };
@@ -264,8 +240,6 @@ export class ProviderPoolCoordinator implements TranslationService {
     pageContext: PageContext,
   ): Promise<{ success: boolean; category?: string; error?: string }> {
     try {
-      // The member service returns {success, category, error}; we propagate it.
-      // Failover only triggers on a thrown error, not on success:false.
       const result = await this.dispatchWithFailover((service) => {
         if (!service.detectPageCategory) {
           return Promise.resolve({ success: false, error: 'detectPageCategory not supported' });
@@ -284,7 +258,11 @@ export class ProviderPoolCoordinator implements TranslationService {
     try {
       const result = await this.dispatchWithFailover((service) => {
         if (!service.classifyPdfParagraphs) {
-          return Promise.resolve({ success: false, error: 'classifyPdfParagraphs not supported', labels: {} } as ClassifyPdfParagraphsResult);
+          return Promise.resolve({
+            success: false,
+            error: 'classifyPdfParagraphs not supported',
+            labels: {},
+          } as ClassifyPdfParagraphsResult);
         }
         return service.classifyPdfParagraphs(paragraphs);
       });
@@ -314,12 +292,21 @@ export class ProviderPoolCoordinator implements TranslationService {
     }
   }
 
-  /** Snapshot a single key's status (for the UI badge). */
-  getKeyStatus(keyId: string): KeyStatus {
-    const state = this.breaker.getState(keyId);
+  /**
+   * Snapshot a slot's status. `id` may be a slotId (multi-model) or keyId
+   * (single-model, where slotId === keyId).
+   */
+  getKeyStatus(id: string): KeyStatus {
+    const slot = this.slots.find((s) => s.slotId === id || s.keyId === id);
+    const slotId = slot?.slotId ?? id;
+    const keyId = slot?.keyId ?? id;
+    const model = slot?.model ?? '';
+    const state = this.breaker.getState(slotId);
     return {
       keyId,
-      providerId: this.keyToProvider.get(keyId) ?? '',
+      slotId,
+      model,
+      providerId: slot?.providerId ?? this.keyToProvider.get(keyId) ?? '',
       open: state.open && this.clock() < state.openUntil,
       openUntil: state.openUntil,
       credentialInvalid: state.credentialInvalid,
@@ -328,116 +315,126 @@ export class ProviderPoolCoordinator implements TranslationService {
     };
   }
 
-  /** Snapshot all key statuses (for the UI manager list). */
+  /**
+   * Snapshot all slot statuses (keyed by slotId). Multi-model emits one entry
+   * per key×model; single-model keeps keyId as the map key.
+   */
   getAllKeyStatuses(): Record<string, KeyStatus> {
     const out: Record<string, KeyStatus> = {};
+    if (this.slots.length > 0) {
+      for (const slot of this.slots) {
+        out[slot.slotId] = this.getKeyStatus(slot.slotId);
+      }
+      // Disabled keys that never entered rotation still need a status row.
+      for (const keyId of this.keyToProvider.keys()) {
+        if (this.disabledKeyIds.has(keyId) && !Object.values(out).some((s) => s.keyId === keyId)) {
+          out[keyId] = this.getKeyStatus(keyId);
+        }
+      }
+      return out;
+    }
     for (const keyId of this.keyToProvider.keys()) {
       out[keyId] = this.getKeyStatus(keyId);
     }
     return out;
   }
 
-  /** Number of currently-enabled slots. */
   getPoolSize(): number {
     return this.slots.length;
   }
 
-  /**
-   * Core dispatch loop: round-robin pick → acquire limiter (inside the member
-   * service's fetchWithRetry) → call → on thrown error, classify + open the
-   * breaker for eligible failures, then retry the next healthy slot. Bounded
-   * by the count of slots that were healthy at dispatch time.
-   *
-   * FR-3 (cursor over healthy pool): the cursor advances over the HEALTHY
-   * subset's own index space, not the full slots array. Before this fix, the
-   * cursor advanced in [0, slots.length) but indexed the filtered `healthy[]`,
-   * so when any slot was open the indices misaligned and the modulo fallback
-   * skewed distribution / re-selected a failing slot within one failover
-   * chain. Now:
-   *  - `healthy[]` is computed once at dispatch entry.
-   *  - The round-robin cursor advances ONCE per request over healthy-space
-   *    (we snapshot its position into the healthy array).
-   *  - Failover walks the REMAINING healthy slots sequentially (a `tried` set
-   *    guarantees no revisit), recomputing the healthy pool after each open.
-   */
-  /** True when the key is at its concurrency cap (and a free sibling could take work). */
-  private isKeySaturated(slot: PoolSlot): boolean {
+  private isSlotSaturated(slot: PoolSlot): boolean {
     const limit = slot.concurrencyLimit;
     if (!limit || limit <= 0) return false;
-    return (this.inFlight.get(slot.keyId) ?? 0) >= limit;
+    return (this.inFlight.get(slot.slotId) ?? 0) >= limit;
   }
 
-  /**
-   * FR-5: acquire a per-key concurrency slot.
-   *
-   * - When `blockIfSaturated` is false (default for multi-key pick): if the key
-   *   is already at its concurrency cap, returns `null` immediately so the
-   *   dispatcher can try another healthy key (load-spread).
-   * - When `blockIfSaturated` is true (all keys saturated, or single-key pool):
-   *   queues FIFO until a slot frees — same as pre-load-spread behavior.
-   * - `concurrencyLimit === 0` → no per-key cap (global semaphore only).
-   */
   private async acquireKeySlot(
     slot: PoolSlot,
     blockIfSaturated = true,
   ): Promise<(() => void) | null> {
+    const id = slot.slotId;
     const limit = slot.concurrencyLimit;
     if (!limit || limit <= 0) {
-      this.inFlight.set(slot.keyId, (this.inFlight.get(slot.keyId) ?? 0) + 1);
+      this.inFlight.set(id, (this.inFlight.get(id) ?? 0) + 1);
       return () => {
-        const n = (this.inFlight.get(slot.keyId) ?? 1) - 1;
-        this.inFlight.set(slot.keyId, Math.max(0, n));
+        const n = (this.inFlight.get(id) ?? 1) - 1;
+        this.inFlight.set(id, Math.max(0, n));
       };
     }
-    const current = this.inFlight.get(slot.keyId) ?? 0;
+    const current = this.inFlight.get(id) ?? 0;
     if (current >= limit) {
       if (!blockIfSaturated) return null;
       await new Promise<void>((resolve) => {
-        const queue = this.keyQueues.get(slot.keyId) ?? [];
+        const queue = this.keyQueues.get(id) ?? [];
         queue.push(resolve);
-        this.keyQueues.set(slot.keyId, queue);
+        this.keyQueues.set(id, queue);
       });
     }
-    this.inFlight.set(slot.keyId, (this.inFlight.get(slot.keyId) ?? 0) + 1);
+    this.inFlight.set(id, (this.inFlight.get(id) ?? 0) + 1);
     return () => {
-      const n = (this.inFlight.get(slot.keyId) ?? 1) - 1;
-      this.inFlight.set(slot.keyId, Math.max(0, n));
-      const queue = this.keyQueues.get(slot.keyId);
+      const n = (this.inFlight.get(id) ?? 1) - 1;
+      this.inFlight.set(id, Math.max(0, n));
+      const queue = this.keyQueues.get(id);
       const next = queue?.shift();
       if (next) next();
     };
   }
 
-  /**
-   * FR-5: per-key throttle. Sleeps the configured `interval` ms since the last
-   * dispatched request on this key, if an interval is set. No-op when 0.
-   */
   private async applyKeyThrottle(slot: PoolSlot): Promise<void> {
     if (!slot.interval || slot.interval <= 0) return;
-    const last = this.lastDispatchAt.get(slot.keyId);
+    const id = slot.slotId;
+    const last = this.lastDispatchAt.get(id);
     const now = this.clock();
     if (last !== undefined) {
       const elapsed = now - last;
       const wait = slot.interval - elapsed;
       if (wait > 0) await this.delay(wait);
     }
-    this.lastDispatchAt.set(slot.keyId, this.clock());
+    this.lastDispatchAt.set(id, this.clock());
   }
 
-  /**
-   * Earliest absolute openUntil among currently-open slots, or undefined when
-   * no slot is open / pool is empty. Used to surface a retry countdown.
-   */
   private earliestOpenUntil(now: number): number | undefined {
     let earliest: number | undefined;
     for (const slot of this.slots) {
-      const st = this.breaker.getState(slot.keyId);
+      const st = this.breaker.getState(slot.slotId);
       if (!st.open || st.openUntil <= now) continue;
       if (earliest === undefined || st.openUntil < earliest) {
         earliest = st.openUntil;
       }
     }
     return earliest;
+  }
+
+  /**
+   * Preferred multi-model: walk healthy slots in expansion order (model-major
+   * × key) with inter-provider group rotation so later providers are not
+   * starved when a Google preferred model is always healthy.
+   */
+  private buildPreferredAttemptOrder(healthy: PoolSlot[]): PoolSlot[] {
+    const providerOrder: string[] = [];
+    const seen = new Set<string>();
+    for (const s of this.slots) {
+      if (!seen.has(s.providerId)) {
+        seen.add(s.providerId);
+        providerOrder.push(s.providerId);
+      }
+    }
+    const groups = providerOrder
+      .map((pid) => healthy.filter((s) => s.providerId === pid))
+      .filter((g) => g.length > 0);
+    if (groups.length === 0) return [];
+    if (groups.length === 1) return groups[0]!;
+
+    this.providerCursor.setSlotCount(groups.length);
+    const start = this.providerCursor.next() ?? 0;
+    return [...groups.slice(start), ...groups.slice(0, start)].flat();
+  }
+
+  private usesPreferredWalk(healthy: PoolSlot[]): boolean {
+    return healthy.some(
+      (s) => s.multiModel && s.modelStrategy === 'preferred_failover',
+    );
   }
 
   private async dispatchWithFailover<T>(
@@ -463,77 +460,96 @@ export class ProviderPoolCoordinator implements TranslationService {
       );
     }
 
-    // FR-3: the cursor advances over the HEALTHY subset's own index space.
-    // Feed the cursor healthy.length so its modulo wrap matches the array we
-    // index. The cursor advances once PER ATTEMPT (not once per request): on a
-    // failover, each successive attempt calls next() again, so after a dispatch
-    // the cursor sits at the last-attempted slot and the NEXT request rotates
-    // to the slot after it — giving even distribution across requests even when
-    // a previous request consumed multiple slots via failover.
-    this.cursor.setSlotCount(healthy.length);
+    const preferredWalk = this.usesPreferredWalk(healthy);
+    const attemptOrder = preferredWalk
+      ? this.buildPreferredAttemptOrder(healthy)
+      : healthy;
+
+    if (!preferredWalk) {
+      this.cursor.setSlotCount(healthy.length);
+    }
 
     let lastError: Error = new Error(
       'Provider pool dispatch made no attempts (unexpected).',
     );
-    // Track tried key ids so a failover chain never revisits a slot it already
-    // attempted (the failed slot is also now open, but the explicit set makes
-    // the invariant obvious and survives any breaker-clock skew).
     const tried = new Set<string>();
 
-    // free-pass (skip saturated) + optional queue-pass (block when all busy).
     const maxAttempts = healthy.length * 2;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const allowQueue = attempt >= healthy.length;
 
-      let idx = this.cursor.next();
-      if (idx === null) break;
-      let slot = healthy[idx];
-      let probes = 0;
-      while (slot && tried.has(slot.keyId) && probes < healthy.length) {
-        probes++;
-        idx = this.cursor.next();
+      let slot: PoolSlot | undefined;
+      if (preferredWalk) {
+        for (const candidate of attemptOrder) {
+          if (tried.has(candidate.slotId)) continue;
+          if (
+            !allowQueue &&
+            this.isSlotSaturated(candidate) &&
+            attemptOrder.some(
+              (s) =>
+                !tried.has(s.slotId) &&
+                s.slotId !== candidate.slotId &&
+                !this.isSlotSaturated(s),
+            )
+          ) {
+            continue;
+          }
+          slot = candidate;
+          break;
+        }
+        if (!slot) break;
+      } else {
+        let idx = this.cursor.next();
         if (idx === null) break;
         slot = healthy[idx];
-      }
-      if (!slot) break;
+        let probes = 0;
+        while (slot && tried.has(slot.slotId) && probes < healthy.length) {
+          probes++;
+          idx = this.cursor.next();
+          if (idx === null) break;
+          slot = healthy[idx];
+        }
+        if (!slot) break;
 
-      // Load-spread: prefer a free sibling over queuing on a saturated key.
-      if (!allowQueue && this.isKeySaturated(slot)) {
-        const freeLeft = healthy.some(
-          (s) => !tried.has(s.keyId) && !this.isKeySaturated(s),
-        );
-        if (freeLeft) continue;
+        if (!allowQueue && this.isSlotSaturated(slot)) {
+          const freeLeft = healthy.some(
+            (s) => !tried.has(s.slotId) && !this.isSlotSaturated(s),
+          );
+          if (freeLeft) continue;
+        }
       }
 
-      tried.add(slot.keyId);
-      const member = this.members.get(slot.keyId);
+      tried.add(slot.slotId);
+      const member = this.members.get(slot.slotId);
       if (!member) continue;
 
       const hasFreeSibling = healthy.some(
-        (s) => s.keyId !== slot.keyId && !this.isKeySaturated(s) && !tried.has(s.keyId),
+        (s) =>
+          s.slotId !== slot.slotId &&
+          !this.isSlotSaturated(s) &&
+          !tried.has(s.slotId),
       );
       const blockIfSaturated = allowQueue || !hasFreeSibling;
       const releaseKeySlot = await this.acquireKeySlot(slot, blockIfSaturated);
       if (!releaseKeySlot) {
-        tried.delete(slot.keyId);
+        tried.delete(slot.slotId);
         continue;
       }
 
-      // Fast 429 failover when other untried healthy keys can absorb traffic.
-      const otherUntriedHealthy = healthy.some((s) => !tried.has(s.keyId));
+      const otherUntriedHealthy = healthy.some((s) => !tried.has(s.slotId));
       member.service.setMax429Retries?.(otherUntriedHealthy ? 0 : null);
 
       try {
         await this.applyKeyThrottle(slot);
         const result = await call(member.service);
-        this.breaker.recordSuccess(slot.keyId);
+        this.breaker.recordSuccess(slot.slotId);
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         const statusCode = error instanceof ApiError ? error.statusCode : undefined;
         const kind = this.breaker.classifyFailure(statusCode);
         if (kind !== 'clientError') {
-          this.breaker.recordFailure(slot.keyId, kind, this.clock());
+          this.breaker.recordFailure(slot.slotId, kind, this.clock());
           const failNow = this.clock();
           const remaining = healthySlots(this.slots, this.breaker, failNow);
           if (remaining.length === 0) {
@@ -564,21 +580,28 @@ export class ProviderPoolCoordinator implements TranslationService {
   private async testSpecificKey(
     keyId: string,
   ): Promise<{ success: boolean; error?: string }> {
-    const member = this.members.get(keyId);
+    // Prefer primary model slot for this key (first match in expansion order).
+    const slot =
+      this.slots.find((s) => s.keyId === keyId) ??
+      this.slots.find((s) => s.slotId === keyId);
+    const member = slot
+      ? this.members.get(slot.slotId)
+      : this.members.get(keyId);
     if (!member) {
       return { success: false, error: 'Key not found in pool' };
     }
+    const statusId = member.slot.slotId;
     try {
       const result = await member.service.testConnection();
       if (result.success) {
-        this.breaker.recordSuccess(keyId);
+        this.breaker.recordSuccess(statusId);
       }
       return result;
     } catch (error) {
       const statusCode = error instanceof ApiError ? error.statusCode : undefined;
       const kind = this.breaker.classifyFailure(statusCode);
       if (kind !== 'clientError') {
-        this.breaker.recordFailure(keyId, kind, this.clock());
+        this.breaker.recordFailure(statusId, kind, this.clock());
       }
       return { success: false, error: errorMessage(error) };
     }
@@ -590,8 +613,6 @@ function errorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-// Re-export the pure helpers so callers (background.ts) can reach them from one
-// import if needed.
 export { resolveSlots, healthySlots };
 export type { PoolSlot };
 export type { PoolProvider };
