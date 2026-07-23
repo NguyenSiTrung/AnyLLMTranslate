@@ -1,6 +1,5 @@
 /**
- * Text Selection Translate — shows a floating translate button on text selection,
- * then displays translation (or dictionary popup) in a tooltip near the selection.
+ * Text Selection Translate — floating chip + branded result dialog.
  */
 
 import { loadSettings } from '@/lib/config';
@@ -11,202 +10,63 @@ import {
   type SelectionDictionaryResult,
 } from '@/lib/selectionDictionary';
 import type { SelectionDictionaryPayload, TranslateSelectionResult } from '@/types/messages';
+import {
+  addToGlobalGlossary,
+  applyDictionary,
+  applyError,
+  applySentence,
+  buildDictionaryContent,
+  CHIP_CLASS,
+  createTranslateChip,
+  DIALOG_CLASS,
+  DIALOG_LEGACY_CLASS,
+  getDialogEl,
+  getOriginalText,
+  getPrimaryText,
+  getTargetLanguage,
+  isPinned,
+  removeDialog,
+  removeTranslateChip,
+  reposition,
+  setPinned,
+  setSpeakingState,
+  shouldDismissOnOutsideClick,
+  showLoading,
+  showStatus,
+  SpeakController,
+  __setDialogForTest,
+} from '@/content/selectionBubble';
+import type { AnchorRect, BubbleActionHandlers } from '@/content/selectionBubble';
 
 /** Minimum characters to trigger translate button */
 const MIN_SELECTION_CHARS = 2;
 
-/** Translate button template HTML */
-const TRANSLATE_BUTTON_CLASS = 'anyllm-selection-btn';
-const TOOLTIP_CLASS = 'anyllm-selection-tooltip';
+/** @deprecated Prefer DIALOG_CLASS; kept for tests/selectors (legacy class on root). */
+const TOOLTIP_CLASS = DIALOG_LEGACY_CLASS;
+const TRANSLATE_BUTTON_CLASS = CHIP_CLASS;
 
-/** State management */
 let isEnabled = true;
-let currentTooltip: HTMLElement | null = null;
-let currentButton: HTMLElement | null = null;
 let suppressNextMouseUp = false;
-/** Monotonically increasing session id — bumped on every new selection
- *  translation so that stale LLM responses from a previous request
- *  are silently dropped instead of overwriting the current tooltip. */
+/** Monotonically increasing session id — drop stale LLM responses. */
 let selectionSession = 0;
 
-/**
- * Brand mark for the selection translate chip — same asset as the toolbar
- * icon (A monogram + bidirectional arrows). Requires `icon/*` in
- * web_accessible_resources so the page can paint the chrome-extension URL.
- */
-function createBrandMarkImg(size = 32): HTMLImageElement {
-  const img = document.createElement('img');
-  img.src = chrome.runtime.getURL('icon/128.png');
-  img.width = size;
-  img.height = size;
-  img.alt = '';
-  img.draggable = false;
-  img.setAttribute('aria-hidden', 'true');
-  return img;
+const speakController = new SpeakController();
+
+/** Last request context for retry */
+let lastSelectedText = '';
+let lastAnchor: AnchorRect | null = null;
+let lastRange: Range | null = null;
+
+function viewportAnchorFromRange(range: Range): AnchorRect {
+  const rect = range.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height || 20,
+  };
 }
 
-/** Build copy SVG icon */
-function createCopySvg(): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-
-  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  rect.setAttribute('x', '9');
-  rect.setAttribute('y', '9');
-  rect.setAttribute('width', '13');
-  rect.setAttribute('height', '13');
-  rect.setAttribute('rx', '2');
-  rect.setAttribute('ry', '2');
-
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', 'M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1');
-
-  svg.appendChild(rect);
-  svg.appendChild(path);
-  return svg;
-}
-
-/** Build a copy button with SVG icon and click handler */
-function buildCopyButton(textToCopy: string): HTMLButtonElement {
-  const copyBtn = document.createElement('button');
-  copyBtn.className = 'anyllm-tooltip-copy';
-  copyBtn.setAttribute('aria-label', 'Copy translation');
-  copyBtn.setAttribute('title', 'Copy');
-  copyBtn.appendChild(createCopySvg());
-
-  copyBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      copyBtn.textContent = '✓';
-      setTimeout(() => {
-        copyBtn.textContent = '';
-        copyBtn.appendChild(createCopySvg());
-      }, 1500);
-    } catch {
-      copyBtn.textContent = '!';
-      setTimeout(() => {
-        copyBtn.textContent = '';
-        copyBtn.appendChild(createCopySvg());
-      }, 1500);
-    }
-  });
-
-  return copyBtn;
-}
-
-/** Build a close button with click handler */
-function buildCloseButton(): HTMLButtonElement {
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'anyllm-tooltip-close';
-  closeBtn.setAttribute('aria-label', 'Close tooltip');
-  closeBtn.setAttribute('title', 'Close');
-  closeBtn.textContent = '✕';
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    removeTooltip();
-  });
-  return closeBtn;
-}
-
-/** Create the floating translate button */
-function createTranslateButton(x: number, y: number): HTMLElement {
-  removeTranslateButton();
-
-  const btn = document.createElement('div');
-  btn.className = TRANSLATE_BUTTON_CLASS;
-  btn.setAttribute('data-anyllm-role', 'selection-btn');
-  btn.setAttribute('role', 'button');
-  btn.setAttribute('aria-label', 'Translate selection');
-  btn.appendChild(createBrandMarkImg(32));
-
-  // Position near selection (above the cursor)
-  btn.style.left = `${x}px`;
-  btn.style.top = `${y - 40}px`;
-
-  document.body.appendChild(btn);
-  currentButton = btn;
-
-  return btn;
-}
-
-/** Remove the translate button */
-function removeTranslateButton(): void {
-  if (currentButton) {
-    currentButton.remove();
-    currentButton = null;
-  }
-}
-
-/** Create the translation tooltip */
-function createTooltip(
-  text: string,
-  x: number,
-  y: number,
-  isLoading = false,
-): HTMLElement {
-  removeTooltip();
-
-  const tooltip = document.createElement('div');
-  tooltip.className = TOOLTIP_CLASS;
-  tooltip.setAttribute('data-anyllm-role', 'selection-tooltip');
-  tooltip.setAttribute('role', 'tooltip');
-
-  const contentDiv = document.createElement('div');
-  contentDiv.className = 'anyllm-tooltip-content';
-
-  if (isLoading) {
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'anyllm-tooltip-loading';
-
-    const spinner = document.createElement('div');
-    spinner.className = 'anyllm-tooltip-spinner';
-
-    const span = document.createElement('span');
-    span.textContent = 'Translating...';
-
-    loadingDiv.appendChild(spinner);
-    loadingDiv.appendChild(span);
-    contentDiv.appendChild(loadingDiv);
-  } else {
-    const textDiv = document.createElement('div');
-    textDiv.className = 'anyllm-tooltip-text';
-    textDiv.textContent = text;
-
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'anyllm-tooltip-actions';
-    actionsDiv.appendChild(buildCopyButton(text));
-    actionsDiv.appendChild(buildCloseButton());
-
-    contentDiv.appendChild(textDiv);
-    contentDiv.appendChild(actionsDiv);
-  }
-
-  tooltip.appendChild(contentDiv);
-
-  // Position near the visible selection. x/y are document coordinates because
-  // the tooltip is absolutely positioned in document space; viewport values are
-  // only used to decide whether there is enough visible room above.
-  const viewportX = x - window.scrollX;
-  const viewportY = y - window.scrollY;
-  const posX = Math.max(10, Math.min(viewportX - 100, window.innerWidth - 320)) + window.scrollX;
-  const posY = (viewportY - 40 - 80 > 0 ? viewportY - 40 - 80 : viewportY + 20) + window.scrollY;
-
-  tooltip.style.left = `${posX}px`;
-  tooltip.style.top = `${posY}px`;
-
-  document.body.appendChild(tooltip);
-  currentTooltip = tooltip;
-
-  return tooltip;
-}
-
-/** Map message payload to local dictionary type for field checks. */
 function payloadToResult(
   payload: SelectionDictionaryPayload | undefined,
 ): SelectionDictionaryResult | null {
@@ -220,140 +80,35 @@ function payloadToResult(
 }
 
 /**
- * Build dictionary layout DOM (pure DOM construction — testable).
- * Shows original word, phonetic, POS+meanings, examples, translation, context.
+ * Build dictionary layout DOM (pure — testable).
+ * Actions live in the dialog footer; this root has no action bar.
  */
 export function buildDictionaryTooltipContent(
   originalText: string,
   dict: SelectionDictionaryPayload,
   translatedText: string,
 ): HTMLElement {
-  const root = document.createElement('div');
-  root.className = 'anyllm-word-dictionary';
-
-  const head = document.createElement('div');
-  head.className = 'anyllm-word-dictionary-head';
-
-  const wordEl = document.createElement('div');
-  wordEl.className = 'anyllm-word-dictionary-word';
-  wordEl.textContent = originalText;
-  head.appendChild(wordEl);
-
-  if (dict.phonetic) {
-    const phoneticEl = document.createElement('div');
-    phoneticEl.className = 'anyllm-word-dictionary-phonetic';
-    phoneticEl.textContent = dict.phonetic;
-    head.appendChild(phoneticEl);
-  }
-
-  root.appendChild(head);
-
-  if (dict.definitions && dict.definitions.length > 0) {
-    const defsList = document.createElement('ul');
-    defsList.className = 'anyllm-word-dictionary-defs';
-
-    for (const def of dict.definitions) {
-      if (!def.meaning && !def.pos) continue;
-      const li = document.createElement('li');
-      li.className = 'anyllm-word-dictionary-def';
-
-      if (def.pos) {
-        const pos = document.createElement('span');
-        pos.className = 'anyllm-word-dictionary-pos';
-        pos.textContent = def.pos;
-        li.appendChild(pos);
-      }
-
-      if (def.meaning) {
-        const meaning = document.createElement('span');
-        meaning.className = 'anyllm-word-dictionary-meaning';
-        meaning.textContent = def.meaning;
-        li.appendChild(meaning);
-      }
-
-      if (def.example?.source || def.example?.target) {
-        const ex = document.createElement('div');
-        ex.className = 'anyllm-word-dictionary-example';
-        if (def.example.source) {
-          const src = document.createElement('div');
-          src.className = 'anyllm-word-dictionary-example-source';
-          src.textContent = def.example.source;
-          ex.appendChild(src);
-        }
-        if (def.example.target) {
-          const tgt = document.createElement('div');
-          tgt.className = 'anyllm-word-dictionary-example-target';
-          tgt.textContent = def.example.target;
-          ex.appendChild(tgt);
-        }
-        li.appendChild(ex);
-      }
-
-      defsList.appendChild(li);
-    }
-
-    if (defsList.childNodes.length > 0) {
-      root.appendChild(defsList);
-    }
-  }
-
-  const primaryTranslation = dict.translation || translatedText;
-  if (primaryTranslation) {
-    const trans = document.createElement('div');
-    trans.className = 'anyllm-word-dictionary-translation';
-    trans.textContent = primaryTranslation;
-    root.appendChild(trans);
-  }
-
-  if (dict.contextualAnalysis) {
-    const analysis = document.createElement('div');
-    analysis.className = 'anyllm-word-dictionary-context';
-    analysis.textContent = dict.contextualAnalysis;
-    root.appendChild(analysis);
-  }
-
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'anyllm-tooltip-actions';
-  actionsDiv.appendChild(buildCopyButton(primaryTranslation || originalText));
-  actionsDiv.appendChild(buildCloseButton());
-  root.appendChild(actionsDiv);
-
-  return root;
+  return buildDictionaryContent(originalText, dict, translatedText);
 }
 
 /** Update tooltip with plain translation (sentence layout). */
 function updateTooltipContent(translatedText: string): void {
-  if (!currentTooltip) return;
-
-  const contentDiv = currentTooltip.querySelector('.anyllm-tooltip-content');
-  if (!contentDiv) return;
-
-  while (contentDiv.firstChild) {
-    contentDiv.removeChild(contentDiv.firstChild);
-  }
-
-  const textDiv = document.createElement('div');
-  textDiv.className = 'anyllm-tooltip-text';
-  textDiv.textContent = translatedText;
-
-  const actionsDiv = document.createElement('div');
-  actionsDiv.className = 'anyllm-tooltip-actions';
-  actionsDiv.appendChild(buildCopyButton(translatedText));
-  actionsDiv.appendChild(buildCloseButton());
-
-  contentDiv.appendChild(textDiv);
-  contentDiv.appendChild(actionsDiv);
+  if (!getDialogEl()) return;
+  applySentence({
+    translatedText,
+    originalText: getOriginalText() || lastSelectedText,
+  });
 }
 
-/** Update tooltip with dictionary or sentence layout based on response. */
+/** Update dialog with dictionary or sentence layout based on response. */
 export function applySelectionResponse(
   originalText: string,
   response: TranslateSelectionResult,
 ): void {
-  if (!currentTooltip) return;
+  if (!getDialogEl()) return;
 
   if (!response.success) {
-    updateTooltipContent(`⚠ ${response.error ?? 'Translation failed'}`);
+    applyError(response.error ?? 'Translation failed');
     return;
   }
 
@@ -363,45 +118,106 @@ export function applySelectionResponse(
     response.dictionary &&
     hasDictionaryFields(dictResult)
   ) {
-    const contentDiv = currentTooltip.querySelector('.anyllm-tooltip-content');
-    if (!contentDiv) return;
-    while (contentDiv.firstChild) {
-      contentDiv.removeChild(contentDiv.firstChild);
-    }
-    contentDiv.appendChild(
-      buildDictionaryTooltipContent(
-        originalText,
-        response.dictionary,
-        response.translatedText ?? '',
-      ),
-    );
+    applyDictionary({
+      originalText,
+      dict: response.dictionary,
+      translatedText: response.translatedText ?? '',
+    });
     return;
   }
 
-  updateTooltipContent(response.translatedText ?? '');
+  applySentence({
+    translatedText: response.translatedText ?? '',
+    originalText,
+  });
 }
 
-/** Remove the translation tooltip */
-function removeTooltip(): void {
-  if (currentTooltip) {
-    currentTooltip.remove();
-    currentTooltip = null;
-  }
+function buildHandlers(): BubbleActionHandlers {
+  return {
+    onClose: () => {
+      speakController.stop();
+      setSpeakingState(false);
+      removeDialog();
+      removeTranslateChip();
+    },
+    onPin: () => {
+      setPinned(!isPinned());
+    },
+    onCopy: async () => {
+      const text = getPrimaryText();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        showStatus('Copied', 'success');
+      } catch {
+        showStatus('Copy failed', 'error');
+      }
+    },
+    onRetry: async () => {
+      if (!lastSelectedText || !lastAnchor) return;
+      await runSelectionTranslation(lastSelectedText, lastAnchor, lastRange);
+    },
+    onSpeak: () => {
+      const text = getPrimaryText();
+      if (!text) return;
+      try {
+        if (speakController.isSpeaking()) {
+          speakController.stop();
+          setSpeakingState(false);
+          return;
+        }
+        speakController.speak(text, getTargetLanguage());
+        setSpeakingState(true);
+      } catch (e) {
+        setSpeakingState(false);
+        showStatus(
+          e instanceof Error ? e.message : 'Speech not supported',
+          'error',
+        );
+      }
+    },
+    onGlossary: async () => {
+      const source = getOriginalText() || lastSelectedText;
+      const target = getPrimaryText();
+      const result = await addToGlobalGlossary(source, target);
+      if (result.status === 'added') {
+        showStatus('Added to glossary', 'success');
+      } else if (result.status === 'duplicate') {
+        showStatus('Already in glossary', 'info');
+      } else if (result.status === 'invalid') {
+        showStatus(result.reason, 'error');
+      } else {
+        showStatus(result.reason, 'error');
+      }
+    },
+  };
 }
 
-/** Shared translate request + tooltip fill for button click and context menu. */
+/** Shared translate request + dialog fill for button click and context menu. */
 async function runSelectionTranslation(
   selectedText: string,
-  x: number,
-  y: number,
+  anchor: AnchorRect,
   range: Range | null,
 ): Promise<void> {
   selectionSession++;
   const requestSession = selectionSession;
-  createTooltip('', x, y, true);
+  lastSelectedText = selectedText;
+  lastAnchor = anchor;
+  lastRange = range;
+
+  speakController.stop();
+  setSpeakingState(false);
+
+  const settings = await loadSettings();
+  showLoading({
+    anchor,
+    originalText: selectedText,
+    sourceLanguage: settings.sourceLanguage,
+    targetLanguage: settings.targetLanguage,
+    handlers: buildHandlers(),
+  });
 
   try {
-    const settings = await loadSettings();
     const dictionaryCandidate =
       settings.selectionDictionaryEnabled !== false &&
       isDictionaryModeCandidate(selectedText);
@@ -420,19 +236,18 @@ async function runSelectionTranslation(
         : {}),
     })) as TranslateSelectionResult | undefined;
 
-    // Stale guard: a newer selection translation was started while
-    // this one was in-flight — drop the response silently.
     if (requestSession !== selectionSession) return;
 
     if (response) {
       applySelectionResponse(selectedText, response);
     } else {
-      updateTooltipContent('⚠ Translation failed');
+      applyError('Translation failed');
     }
+    reposition();
   } catch (error) {
     if (requestSession !== selectionSession) return;
     const errorMsg = error instanceof Error ? error.message : 'Translation failed';
-    updateTooltipContent(`⚠ ${errorMsg}`);
+    applyError(errorMsg);
   }
 }
 
@@ -444,11 +259,11 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
     return;
   }
 
-  // Ignore clicks on our own UI elements
   const target = event.target as HTMLElement;
   if (!target || typeof target.closest !== 'function') return;
   if (
     target.closest(`.${TRANSLATE_BUTTON_CLASS}`) ||
+    target.closest(`.${DIALOG_CLASS}`) ||
     target.closest(`.${TOOLTIP_CLASS}`)
   ) {
     return;
@@ -458,20 +273,19 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
   const selectedText = selection?.toString().trim() ?? '';
 
   if (selectedText.length < MIN_SELECTION_CHARS) {
-    removeTranslateButton();
+    removeTranslateChip();
     return;
   }
 
-  // Get selection position
   const range = selection?.getRangeAt(0);
   if (!range) return;
 
   const rect = range.getBoundingClientRect();
   const x = rect.left + rect.width / 2 + window.scrollX;
   const y = rect.top + window.scrollY;
+  const anchor = viewportAnchorFromRange(range);
 
-  // Show translate button
-  const btn = createTranslateButton(x, y);
+  const btn = createTranslateChip(x, y);
   let hasStartedTranslation = false;
 
   const startTranslation = async (e: MouseEvent) => {
@@ -482,41 +296,53 @@ async function onMouseUp(event: MouseEvent): Promise<void> {
     hasStartedTranslation = true;
     suppressNextMouseUp = true;
 
-    // Remove button and show loading tooltip
-    removeTranslateButton();
-    // Clone range before selection may clear
+    removeTranslateChip();
     let rangeClone: Range | null = range;
     try {
       rangeClone = range.cloneRange();
     } catch {
-      // keep original range reference if clone fails
+      // keep original
     }
-    await runSelectionTranslation(selectedText, x, y, rangeClone);
+    await runSelectionTranslation(selectedText, anchor, rangeClone);
   };
 
   btn.addEventListener('mousedown', startTranslation);
   btn.addEventListener('click', startTranslation);
 }
 
-/** Handle keydown for Escape to dismiss tooltip */
 function onKeyDown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
-    removeTooltip();
-    removeTranslateButton();
+    speakController.stop();
+    setSpeakingState(false);
+    removeDialog();
+    removeTranslateChip();
   }
 }
 
-/** Handle click outside to dismiss tooltip */
 function onClickOutside(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   if (!target || typeof target.closest !== 'function') return;
   if (
-    !target.closest(`.${TOOLTIP_CLASS}`) &&
-    !target.closest(`.${TRANSLATE_BUTTON_CLASS}`)
+    target.closest(`.${TOOLTIP_CLASS}`) ||
+    target.closest(`.${DIALOG_CLASS}`) ||
+    target.closest(`.${TRANSLATE_BUTTON_CLASS}`)
   ) {
-    removeTooltip();
-    removeTranslateButton();
+    return;
   }
+
+  if (!shouldDismissOnOutsideClick()) {
+    removeTranslateChip();
+    return;
+  }
+
+  speakController.stop();
+  setSpeakingState(false);
+  removeDialog();
+  removeTranslateChip();
+}
+
+function onViewportChange(): void {
+  if (getDialogEl()) reposition();
 }
 
 /** Initialize text selection translate feature */
@@ -524,41 +350,46 @@ export function initTextSelection(): () => void {
   document.addEventListener('mouseup', onMouseUp);
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('mousedown', onClickOutside);
+  window.addEventListener('resize', onViewportChange, { passive: true });
+  window.addEventListener('scroll', onViewportChange, { passive: true, capture: true });
 
   return () => {
     document.removeEventListener('mouseup', onMouseUp);
     document.removeEventListener('keydown', onKeyDown);
     document.removeEventListener('mousedown', onClickOutside);
+    window.removeEventListener('resize', onViewportChange);
+    window.removeEventListener('scroll', onViewportChange, true);
     suppressNextMouseUp = false;
-    removeTooltip();
-    removeTranslateButton();
+    speakController.stop();
+    removeDialog();
+    removeTranslateChip();
   };
 }
 
-/** Enable/disable text selection translate */
 export function setTextSelectionEnabled(enabled: boolean): void {
   isEnabled = enabled;
   if (!enabled) {
     suppressNextMouseUp = false;
-    removeTooltip();
-    removeTranslateButton();
+    speakController.stop();
+    removeDialog();
+    removeTranslateChip();
   }
 }
 
-/** Get current enabled state */
 export function isTextSelectionEnabled(): boolean {
   return isEnabled;
 }
 
 /**
  * Handle "Translate Selection" from context menu.
- * Uses the current window selection position for tooltip placement,
- * shows a loading tooltip, then translates via the background service.
  */
 export async function translateSelectedTextViaContextMenu(text: string): Promise<void> {
-  // Try to position near the current selection, fall back to viewport center
-  let x = window.innerWidth / 2 + window.scrollX;
-  let y = window.innerHeight / 3 + window.scrollY;
+  let anchor: AnchorRect = {
+    left: window.innerWidth / 2,
+    top: window.innerHeight / 3,
+    width: 1,
+    height: 1,
+  };
   let range: Range | null = null;
 
   const selection = window.getSelection();
@@ -567,28 +398,27 @@ export async function translateSelectedTextViaContextMenu(text: string): Promise
       range = selection.getRangeAt(0).cloneRange();
       const rect = range.getBoundingClientRect();
       if (rect.width > 0 || rect.height > 0) {
-        x = rect.left + rect.width / 2 + window.scrollX;
-        y = rect.top + window.scrollY;
+        anchor = viewportAnchorFromRange(range);
       }
     } catch {
       range = null;
     }
   }
 
-  // Remove any existing button/tooltip and show loading
-  removeTranslateButton();
-  await runSelectionTranslation(text, x, y, range);
+  removeTranslateChip();
+  await runSelectionTranslation(text, anchor, range);
 }
 
 export {
-  removeTooltip,
-  removeTranslateButton,
+  removeDialog as removeTooltip,
+  removeTranslateChip as removeTranslateButton,
   TRANSLATE_BUTTON_CLASS,
   TOOLTIP_CLASS,
   updateTooltipContent,
+  DIALOG_CLASS,
 };
 
-/** Test-only: set module currentTooltip for applySelectionResponse unit tests. */
+/** Test-only: set module dialog for applySelectionResponse unit tests. */
 export function __setCurrentTooltipForTest(el: HTMLElement | null): void {
-  currentTooltip = el;
+  __setDialogForTest(el);
 }

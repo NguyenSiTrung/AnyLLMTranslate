@@ -1,10 +1,10 @@
 /**
- * Tooltip and selection translate styles.
+ * Selection translate chip + dialog styles (brand redesign).
  * Injected alongside inject.css for text selection popup and hover UI.
  */
 
 /* =============================================
-   Text Selection Translate Button
+   Text Selection Translate Button (chip)
    ============================================= */
 .anyllm-selection-btn {
   position: absolute;
@@ -15,25 +15,31 @@
   width: 32px;
   height: 32px;
   padding: 0;
+  margin: 0;
   border: none;
   border-radius: 8px;
-  /* Brand PNG already includes navy tile — keep chip transparent */
   background: transparent;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.18);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(14, 165, 233, 0.22);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   animation: anyllmBtnFadeIn 0.15s ease;
   pointer-events: auto;
   overflow: hidden;
+  transform: translateX(-50%);
 }
 
 .anyllm-selection-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(34, 211, 238, 0.28);
+  transform: translateX(-50%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(14, 165, 233, 0.35);
 }
 
 .anyllm-selection-btn:active {
-  transform: scale(0.95);
+  transform: translateX(-50%) scale(0.95);
+}
+
+.anyllm-selection-btn:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
 }
 
 .anyllm-selection-btn img {
@@ -48,32 +54,58 @@
 @keyframes anyllmBtnFadeIn {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.9);
+    transform: translateX(-50%) translateY(4px) scale(0.9);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 
 /* =============================================
-   Translation Tooltip
+   Selection Dialog (brand card)
    ============================================= */
+.anyllm-selection-dialog,
 .anyllm-selection-tooltip {
+  --anyllm-sb-bg: #ffffff;
+  --anyllm-sb-bg-elevated: #f8fafc;
+  --anyllm-sb-fg: #0f172a;
+  --anyllm-sb-muted: #64748b;
+  --anyllm-sb-border: rgba(15, 23, 42, 0.08);
+  --anyllm-sb-primary: #0ea5e9;
+  --anyllm-sb-primary-soft: rgba(14, 165, 233, 0.12);
+  --anyllm-sb-accent: #f59e0b;
+  --anyllm-sb-success: #10b981;
+  --anyllm-sb-danger: #f43f5e;
+  --anyllm-sb-shadow: 0 8px 28px rgba(15, 23, 42, 0.14), 0 0 0 1px var(--anyllm-sb-border);
+  --anyllm-sb-radius: 14px;
+  --anyllm-sb-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
   position: absolute;
   z-index: 2147483647;
-  max-width: 360px;
-  min-width: 200px;
-  border-radius: 12px;
-  background: #fff;
-  color: #1a1a2e;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  animation: anyllmTooltipFadeIn 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  max-width: 380px;
+  min-width: 220px;
+  border-radius: var(--anyllm-sb-radius);
+  background: var(--anyllm-sb-bg);
+  color: var(--anyllm-sb-fg);
+  box-shadow: var(--anyllm-sb-shadow);
+  animation: anyllmTooltipFadeIn 0.18s ease;
   pointer-events: auto;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: visible;
+  font-family: var(--anyllm-sb-font);
   font-size: 14px;
   line-height: 1.5;
+  box-sizing: border-box;
+}
+
+@supports (backdrop-filter: blur(12px)) {
+  .anyllm-selection-dialog,
+  .anyllm-selection-tooltip {
+    background: color-mix(in srgb, var(--anyllm-sb-bg) 92%, transparent);
+    backdrop-filter: blur(12px);
+  }
 }
 
 @keyframes anyllmTooltipFadeIn {
@@ -87,30 +119,66 @@
   }
 }
 
-.anyllm-tooltip-content {
-  padding: 12px 14px;
+/* Caret */
+.anyllm-selection-caret {
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--anyllm-sb-bg);
+  border: 1px solid var(--anyllm-sb-border);
+  transform: translateX(-50%) rotate(45deg);
+  pointer-events: none;
+  z-index: 0;
 }
 
-.anyllm-tooltip-text {
-  margin: 0;
-  padding: 0;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-  color: #1a1a2e;
+.anyllm-selection-dialog[data-placement='above'] .anyllm-selection-caret,
+.anyllm-selection-tooltip[data-placement='above'] .anyllm-selection-caret {
+  bottom: -6px;
+  border-top: none;
+  border-left: none;
 }
 
-.anyllm-tooltip-actions {
+.anyllm-selection-dialog[data-placement='below'] .anyllm-selection-caret,
+.anyllm-selection-tooltip[data-placement='below'] .anyllm-selection-caret {
+  top: -6px;
+  border-bottom: none;
+  border-right: none;
+}
+
+/* Header */
+.anyllm-selection-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--anyllm-sb-border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  border-radius: var(--anyllm-sb-radius) var(--anyllm-sb-radius) 0 0;
+  background: var(--anyllm-sb-bg);
 }
 
-.anyllm-tooltip-copy,
-.anyllm-tooltip-close {
+.anyllm-selection-lang {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--anyllm-sb-primary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anyllm-selection-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.anyllm-selection-header-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,16 +189,173 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #666;
+  color: var(--anyllm-sb-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.anyllm-selection-header-btn:hover {
+  background: var(--anyllm-sb-primary-soft);
+  color: var(--anyllm-sb-fg);
+}
+
+.anyllm-selection-header-btn:focus-visible,
+.anyllm-selection-action-btn:focus-visible,
+.anyllm-selection-original-toggle:focus-visible {
+  outline: 2px solid var(--anyllm-sb-primary);
+  outline-offset: 2px;
+}
+
+.anyllm-selection-header-btn.is-active,
+.anyllm-selection-header-btn[aria-pressed='true'] {
+  color: var(--anyllm-sb-accent);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+/* Body */
+.anyllm-selection-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  max-height: min(360px, 50vh);
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+}
+
+.anyllm-tooltip-content {
+  padding: 0;
+}
+
+.anyllm-tooltip-text,
+[data-anyllm-role='selection-translation'] {
+  margin: 0;
+  padding: 0;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  color: var(--anyllm-sb-fg);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.anyllm-selection-original-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--anyllm-sb-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.anyllm-selection-original-toggle:hover {
+  text-decoration: underline;
+}
+
+.anyllm-selection-original {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--anyllm-sb-bg-elevated);
+  color: var(--anyllm-sb-muted);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.anyllm-selection-original-preview {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--anyllm-sb-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.anyllm-selection-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--anyllm-sb-muted);
+  margin-top: 4px;
+}
+
+/* Footer */
+.anyllm-selection-footer {
+  flex-shrink: 0;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--anyllm-sb-border);
+  position: relative;
+  z-index: 1;
+  border-radius: 0 0 var(--anyllm-sb-radius) var(--anyllm-sb-radius);
+  background: var(--anyllm-sb-bg);
+}
+
+.anyllm-selection-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.anyllm-selection-action-btn,
+.anyllm-tooltip-copy,
+.anyllm-tooltip-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--anyllm-sb-muted);
   cursor: pointer;
   font-size: 13px;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
+.anyllm-selection-action-btn:hover:not(:disabled),
 .anyllm-tooltip-copy:hover,
 .anyllm-tooltip-close:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #333;
+  background: var(--anyllm-sb-primary-soft);
+  color: var(--anyllm-sb-fg);
+}
+
+.anyllm-selection-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anyllm-selection-status {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--anyllm-sb-muted);
+  min-height: 0;
+}
+
+.anyllm-selection-status[data-kind='success'] {
+  color: var(--anyllm-sb-success);
+}
+
+.anyllm-selection-status[data-kind='error'] {
+  color: var(--anyllm-sb-danger);
+}
+
+/* Legacy actions row (if any remain) */
+.anyllm-tooltip-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--anyllm-sb-border);
 }
 
 /* =============================================
@@ -138,19 +363,26 @@
    ============================================= */
 .anyllm-tooltip-loading {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--anyllm-sb-muted);
+  font-size: 13px;
+}
+
+.anyllm-tooltip-loading-row {
+  display: flex;
   align-items: center;
   gap: 10px;
-  color: #666;
-  font-size: 13px;
 }
 
 .anyllm-tooltip-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-top-color: #1a73e8;
+  border: 2px solid rgba(14, 165, 233, 0.2);
+  border-top-color: var(--anyllm-sb-primary);
   border-radius: 50%;
   animation: anyllmSpinnerSpin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 
 @keyframes anyllmSpinnerSpin {
@@ -160,14 +392,33 @@
 }
 
 /* =============================================
-   Word Dictionary Layout (selection word-mode)
+   Error
+   ============================================= */
+.anyllm-selection-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.anyllm-selection-error-title {
+  font-weight: 600;
+  color: var(--anyllm-sb-danger);
+  font-size: 14px;
+}
+
+.anyllm-selection-error-detail {
+  font-size: 13px;
+  color: var(--anyllm-sb-muted);
+  word-wrap: break-word;
+}
+
+/* =============================================
+   Word Dictionary Layout
    ============================================= */
 .anyllm-word-dictionary {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
 }
 
 .anyllm-word-dictionary-head {
@@ -179,13 +430,13 @@
 .anyllm-word-dictionary-word {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--anyllm-sb-fg);
   word-break: break-word;
 }
 
 .anyllm-word-dictionary-phonetic {
   font-size: 13px;
-  color: #666;
+  color: var(--anyllm-sb-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -210,23 +461,23 @@
   margin-right: 6px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(26, 115, 232, 0.1);
-  color: #1a73e8;
+  background: var(--anyllm-sb-primary-soft);
+  color: var(--anyllm-sb-primary);
   font-size: 11px;
   font-weight: 600;
   font-style: italic;
 }
 
 .anyllm-word-dictionary-meaning {
-  color: #1a1a2e;
+  color: var(--anyllm-sb-fg);
 }
 
 .anyllm-word-dictionary-example {
   margin-top: 4px;
   padding-left: 8px;
-  border-left: 2px solid rgba(0, 0, 0, 0.08);
+  border-left: 2px solid var(--anyllm-sb-border);
   font-size: 12px;
-  color: #555;
+  color: var(--anyllm-sb-muted);
 }
 
 .anyllm-word-dictionary-example-source {
@@ -235,118 +486,67 @@
 
 .anyllm-word-dictionary-example-target {
   margin-top: 2px;
-  color: #666;
+  color: var(--anyllm-sb-muted);
 }
 
 .anyllm-word-dictionary-translation {
   font-size: 14px;
   font-weight: 500;
-  color: #1a73e8;
-  padding-top: 4px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--anyllm-sb-primary);
 }
 
 .anyllm-word-dictionary-context {
   font-size: 12px;
-  color: #666;
+  color: var(--anyllm-sb-muted);
   line-height: 1.4;
 }
 
 /* =============================================
-   Dark Mode Support
+   Dark Mode
    ============================================= */
 @media (prefers-color-scheme: dark) {
+  .anyllm-selection-dialog,
   .anyllm-selection-tooltip {
-    background: #2a2a3e;
-    color: #e0e0e8;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    --anyllm-sb-bg: #0f172a;
+    --anyllm-sb-bg-elevated: #1e293b;
+    --anyllm-sb-fg: #e2e8f0;
+    --anyllm-sb-muted: #94a3b8;
+    --anyllm-sb-border: rgba(255, 255, 255, 0.1);
+    --anyllm-sb-primary: #38bdf8;
+    --anyllm-sb-primary-soft: rgba(56, 189, 248, 0.15);
+    --anyllm-sb-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--anyllm-sb-border);
   }
 
-  .anyllm-tooltip-text {
-    color: #e0e0e8;
-  }
-
-  .anyllm-tooltip-actions {
-    border-top-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .anyllm-word-dictionary-word {
-    color: #e0e0e8;
-  }
-
-  .anyllm-word-dictionary-phonetic {
-    color: #aaa;
-  }
-
-  .anyllm-word-dictionary-pos {
-    background: rgba(100, 160, 255, 0.15);
-    color: #8ab4f8;
-  }
-
-  .anyllm-word-dictionary-meaning {
-    color: #e0e0e8;
-  }
-
-  .anyllm-word-dictionary-example {
-    border-left-color: rgba(255, 255, 255, 0.1);
-    color: #bbb;
-  }
-
-  .anyllm-word-dictionary-example-target {
-    color: #aaa;
-  }
-
-  .anyllm-word-dictionary-translation {
-    color: #8ab4f8;
-    border-top-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .anyllm-word-dictionary-context {
-    color: #aaa;
-  }
-
-  .anyllm-tooltip-copy,
-  .anyllm-tooltip-close {
-    color: #aaa;
-  }
-
-  .anyllm-tooltip-copy:hover,
-  .anyllm-tooltip-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #ddd;
-  }
-
-  .anyllm-tooltip-loading {
-    color: #aaa;
+  .anyllm-selection-caret {
+    background: #0f172a;
   }
 }
 
-/* Explicit dark mode class */
+.anyllm-dark .anyllm-selection-dialog,
 .anyllm-dark .anyllm-selection-tooltip {
-  background: #2a2a3e;
-  color: #e0e0e8;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --anyllm-sb-bg: #0f172a;
+  --anyllm-sb-bg-elevated: #1e293b;
+  --anyllm-sb-fg: #e2e8f0;
+  --anyllm-sb-muted: #94a3b8;
+  --anyllm-sb-border: rgba(255, 255, 255, 0.1);
+  --anyllm-sb-primary: #38bdf8;
+  --anyllm-sb-primary-soft: rgba(56, 189, 248, 0.15);
+  --anyllm-sb-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--anyllm-sb-border);
 }
 
-.anyllm-dark .anyllm-tooltip-text {
-  color: #e0e0e8;
+.anyllm-dark .anyllm-selection-caret {
+  background: #0f172a;
 }
 
-.anyllm-dark .anyllm-tooltip-actions {
-  border-top-color: rgba(255, 255, 255, 0.08);
-}
-
-.anyllm-dark .anyllm-tooltip-copy,
-.anyllm-dark .anyllm-tooltip-close {
-  color: #aaa;
-}
-
-.anyllm-dark .anyllm-tooltip-copy:hover,
-.anyllm-dark .anyllm-tooltip-close:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ddd;
-}
-
-.anyllm-dark .anyllm-tooltip-loading {
-  color: #aaa;
+/* =============================================
+   Reduced motion
+   ============================================= */
+@media (prefers-reduced-motion: reduce) {
+  .anyllm-selection-btn,
+  .anyllm-selection-dialog,
+  .anyllm-selection-tooltip,
+  .anyllm-tooltip-spinner {
+    animation: none !important;
+    transition: none !important;
+  }
 }

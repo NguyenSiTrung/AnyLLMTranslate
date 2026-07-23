@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   buildDictionaryTooltipContent,
   applySelectionResponse,
@@ -9,26 +9,50 @@ import {
   TOOLTIP_CLASS,
   __setCurrentTooltipForTest,
 } from '@/content/textSelection';
+import {
+  showLoading,
+  removeDialog,
+} from '@/content/selectionBubble/shell';
+
+vi.mock('@/lib/config', () => ({
+  loadSettings: vi.fn(async () => ({
+    sourceLanguage: 'en',
+    targetLanguage: 'vi',
+    selectionDictionaryEnabled: true,
+    glossary: [],
+  })),
+  updateSettings: vi.fn(async (p: unknown) => p),
+}));
+
+const handlers = {
+  onCopy: () => {},
+  onRetry: () => {},
+  onSpeak: () => {},
+  onGlossary: () => {},
+  onPin: () => {},
+  onClose: () => {},
+};
 
 function seedTooltip(): void {
-  const tooltip = document.createElement('div');
-  tooltip.className = TOOLTIP_CLASS;
-  tooltip.setAttribute('data-anyllm-role', 'selection-tooltip');
-  const content = document.createElement('div');
-  content.className = 'anyllm-tooltip-content';
-  tooltip.appendChild(content);
-  document.body.appendChild(tooltip);
-  __setCurrentTooltipForTest(tooltip);
+  showLoading({
+    anchor: { left: 100, top: 100, width: 40, height: 20 },
+    originalText: 'seed',
+    sourceLanguage: 'en',
+    targetLanguage: 'vi',
+    handlers,
+  });
 }
 
 describe('textSelection dictionary UI', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    removeDialog();
     __setCurrentTooltipForTest(null);
   });
 
   afterEach(() => {
     removeTooltip();
+    removeDialog();
     __setCurrentTooltipForTest(null);
     document.body.innerHTML = '';
   });
@@ -55,21 +79,29 @@ describe('textSelection dictionary UI', () => {
         'xin chào',
       );
 
-      expect(el.className).toBe('anyllm-word-dictionary');
+      expect(el.className).toContain('anyllm-word-dictionary');
       expect(el.querySelector('.anyllm-word-dictionary-word')?.textContent).toBe('hello');
-      expect(el.querySelector('.anyllm-word-dictionary-phonetic')?.textContent).toBe('/həˈloʊ/');
+      expect(el.querySelector('.anyllm-word-dictionary-phonetic')?.textContent).toBe(
+        '/həˈloʊ/',
+      );
       expect(el.querySelector('.anyllm-word-dictionary-pos')?.textContent).toBe('excl.');
-      expect(el.querySelector('.anyllm-word-dictionary-meaning')?.textContent).toBe('xin chào');
+      expect(el.querySelector('.anyllm-word-dictionary-meaning')?.textContent).toBe(
+        'xin chào',
+      );
       expect(el.querySelector('.anyllm-word-dictionary-example-source')?.textContent).toContain(
         'Hello',
       );
       expect(el.querySelector('.anyllm-word-dictionary-example-target')?.textContent).toContain(
         'Xin chào',
       );
-      expect(el.querySelector('.anyllm-word-dictionary-translation')?.textContent).toBe('xin chào');
-      expect(el.querySelector('.anyllm-word-dictionary-context')?.textContent).toContain('greeting');
-      expect(el.querySelector('.anyllm-tooltip-copy')).toBeTruthy();
-      expect(el.querySelector('.anyllm-tooltip-close')).toBeTruthy();
+      expect(el.querySelector('.anyllm-word-dictionary-translation')?.textContent).toBe(
+        'xin chào',
+      );
+      expect(el.querySelector('.anyllm-word-dictionary-context')?.textContent).toContain(
+        'greeting',
+      );
+      // Actions moved to dialog footer
+      expect(el.querySelector('.anyllm-tooltip-copy')).toBeNull();
     });
 
     it('works with phonetic-only dictionary fields', () => {
@@ -84,7 +116,9 @@ describe('textSelection dictionary UI', () => {
 
       expect(el.querySelector('.anyllm-word-dictionary-phonetic')?.textContent).toBe('/tɛst/');
       expect(el.querySelector('.anyllm-word-dictionary-defs')).toBeNull();
-      expect(el.querySelector('.anyllm-word-dictionary-translation')?.textContent).toBe('kiểm tra');
+      expect(el.querySelector('.anyllm-word-dictionary-translation')?.textContent).toBe(
+        'kiểm tra',
+      );
     });
   });
 
@@ -107,6 +141,7 @@ describe('textSelection dictionary UI', () => {
       expect(document.querySelector('.anyllm-word-dictionary-phonetic')?.textContent).toBe(
         '/həˈloʊ/',
       );
+      expect(document.querySelector(`.${TOOLTIP_CLASS}`)).toBeTruthy();
     });
 
     it('renders sentence layout when dictionary fields absent', () => {
@@ -119,9 +154,9 @@ describe('textSelection dictionary UI', () => {
       });
 
       expect(document.querySelector('.anyllm-word-dictionary')).toBeNull();
-      expect(document.querySelector('.anyllm-tooltip-text')?.textContent).toBe(
-        'Một câu dài về nhiều thứ.',
-      );
+      expect(
+        document.querySelector('[data-anyllm-role="selection-translation"]')?.textContent,
+      ).toBe('Một câu dài về nhiều thứ.');
     });
 
     it('fail-open shows plain text for sentence-mode response', () => {
@@ -133,7 +168,9 @@ describe('textSelection dictionary UI', () => {
         translatedText: 'raw fallback text',
       });
 
-      expect(document.querySelector('.anyllm-tooltip-text')?.textContent).toBe('raw fallback text');
+      expect(
+        document.querySelector('[data-anyllm-role="selection-translation"]')?.textContent,
+      ).toBe('raw fallback text');
     });
   });
 });
