@@ -1,17 +1,7 @@
-<!-- conductor-refresh: 2026-07-23 all (638 TCs pass / 33 fail; lint 3; tsc 0; 72 archived / 0 active; Beads 7uk open; Google multi-model patterns elevated) -->
+<!-- conductor-refresh: 2026-07-23 all (652 TCs pass / 2 fail; lint 17; tsc 22; 72 archived / 0 active; Beads 7uk open) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
-
-## Google AI Studio multi-model pool (from: AnyLLMTranslate-xxq / multi-model pool, 2026-07-23)
-- **Google-only expansion:** Multi-model slots activate only when `catalogId === 'google-ai-studio'` or Gemini OpenAI-compat base URL **and** `models.length ≥ 2`. Other providers always resolve to a single model; `normalizeGoogleModels` strips `models` / `modelStrategy` for non-Google or single-model configs. (from: `lib/googleMultiModel.ts`, 2026-07-23)
-- **Canonical primary:** `model` always equals `models[0]` when multi-model is active; preferred list is ordered; dedupe + trim empty ids on save.
-- **Composite slot identity:** Single-model breaker/throttle id stays `keyId`. Multi-model uses `` `${keyId}::${model}` `` via `makeSlotId` so one model’s 429/cooldown does not open the breaker for sibling models on the same key.
-- **Expansion order (locked):** model-major (primary first) × key insertion order → preferred try order `Flash+K1 → Flash+K2 → Lite+K1 → Lite+K2`.
-- **Two strategies only:** `preferred_failover` (default) walks healthy slots in expansion order with inter-provider group rotation so later providers are not starved; `round_robin` uses the existing healthy-subset cursor over flat equal `(key × model)` slots. (from: `lib/poolResolver.ts`, `services/providerPool.ts`, 2026-07-23)
-- **UI is Google-gated:** Free-tier multi-model controls live in Provider edit drawer only when `isGoogleAiStudioProvider`; strategy SegmentedControl + secondary model chips. (from: `ProviderEditDrawer.tsx`, 2026-07-23)
-- **Status surfaces use slotId:** Dashboard / test-status chips must key by composite `slotId` (not raw `keyId` alone) when multi-model is active so cool-down badges attach to the correct model. (from: `poolDashboardStatus` / `poolTestStatus`, 2026-07-23)
-- **No hard-coded free-tier tables:** Rely on live 429 + circuit breaker; Google changes RPM/RPD. Do not add ToS-hostile multi-project key farming automation.
 
 ## Selection bubble — modular host-page DOM (from: selection bubble Phase A, 2026-07-23)
 - **Not React on host pages:** content-script UI stays plain DOM modules under `content/selectionBubble/` (shell, chip, contentDictionary/sentence/loading/error, actions, position, speak, icons, types). Thin public API remains in `content/textSelection.ts`.
@@ -823,4 +813,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-23 (Google multi-model pool elevated; suite 638 pass / 33 fail / 671; lint 3; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk open, xxq closed)
+Last refreshed: 2026-07-21 (popup toolbar + named glossary lists + pool load-spread + options focus; suite 683/0 fail; lint 1 unknown-rule; tsc 13; 72 archived / 0 active; Beads 7uk open)

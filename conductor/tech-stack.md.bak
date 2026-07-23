@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-23 all (638 TCs pass / 33 fail; lint 3; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk open; multi-model pure helpers) -->
+<!-- conductor-refresh: 2026-07-23 all (652 TCs pass / 2 fail; lint 17; tsc 22; build ~3.5 MB; 72 archived / 0 active; Beads 7uk open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -143,10 +143,4 @@
 - Pure mappers in `lib/thinkingMode.ts` keep `OpenAICompatibleService` free of per-vendor SDK deps
 - `auto` omits fields so server defaults apply; rejection self-heals like `response_format`
 
-### Why Google multi-model is pure helpers, not a new package?
-- Free-tier Gemini RPM/RPD are **per model** (and per project); stacking Flash + Flash-Lite needs first-class `(key × model)` slots without a vendor SDK
-- Pure `lib/googleMultiModel.ts` + `resolveSlots` expansion keep the pool coordinator free of Gemini-specific npm deps
-- Composite `slotId` (`keyId::model`) scopes circuit breakers and throttle so one model’s 429 does not cool siblings on the same key
-- Non-Google providers strip `models` / `modelStrategy` on normalize — zero schema migration for other catalogs
-
-- Quality gates snapshot (2026-07-23, post multi-model): **638** Vitest TCs passed / **33** fail across **149** test files (**671** TCs total); **eslint 3** errors (`no-non-null-assertion` in multi-model paths); `tsc --noEmit` **0** errors; build ≈ **3.6 MB**.
+- Quality gates snapshot (2026-07-23): **652** Vitest TCs passed / **2** fail across **147** test files (**654** TCs total); **eslint 17** errors; `tsc --noEmit` has **22** type errors (12 files).
