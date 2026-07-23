@@ -2,7 +2,7 @@
 
 **Issue:** AnyLLMTranslate-xxq  
 **Date:** 2026-07-23  
-**Status:** Approved — implementation plan `docs/superpowers/plans/2026-07-23-google-ai-studio-multi-model-pool.md`  
+**Status:** Implemented — plan `docs/superpowers/plans/2026-07-23-google-ai-studio-multi-model-pool.md`  
 
 **Scope:** Provider pool + Options → Providers (Google AI Studio only)
 
