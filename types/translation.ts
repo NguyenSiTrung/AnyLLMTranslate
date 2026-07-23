@@ -102,6 +102,14 @@ export interface TranslationService {
   testConnection(): Promise<{ success: boolean; error?: string }>;
 }
 
+/**
+ * OpenAI-style reasoning effort. Google AI Studio (Gemini) OpenAI-compat maps
+ * this to thinking level/budget. `"none"` fully disables thinking only on
+ * models that allow it (e.g. Gemini 2.5 Flash); Gemini 3.x / 2.5 Pro use
+ * `"minimal"` as the lowest supported setting.
+ */
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high';
+
 /** OpenAI-compatible chat completion request */
 export interface ChatCompletionRequest {
   model: string;
@@ -112,6 +120,11 @@ export interface ChatCompletionRequest {
   /** When true, request a streamed SSE response. The caller must consume the
    *  response body as a ReadableStream of SSE deltas (Phase 2 streaming path). */
   stream?: boolean;
+  /**
+   * Gemini OpenAI-compat thinking control. Set from provider `thinkingMode`
+   * when baseUrl is Google AI Studio. Omitted when thinkingMode is `auto`.
+   */
+  reasoning_effort?: ReasoningEffort;
   /**
    * NIM / vLLM chat-template kwargs. Used to force thinking on/off via
    * `enable_thinking` when the user sets provider `thinkingMode` to on|off.

@@ -21,6 +21,7 @@ import { runWithConcurrency } from '@/lib/concurrency';
 import { testConnection } from '@/services/providerTester';
 import { useToast } from '@/ui/ToastProvider';
 import {
+  DEFAULT_THINKING_EFFORT,
   defaultPoolKeyThrottle,
   type KeyTestResult,
   type PoolKey,
@@ -143,6 +144,7 @@ export function useProviderPoolActions() {
         maxTokens: overrides?.maxTokens ?? 4096,
         requestTimeoutMs: overrides?.requestTimeoutMs ?? 60000,
         thinkingMode: overrides?.thinkingMode ?? 'auto',
+        thinkingEffort: overrides?.thinkingEffort ?? DEFAULT_THINKING_EFFORT,
         enabled: overrides?.enabled ?? true,
         keys: [
           {

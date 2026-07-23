@@ -44,9 +44,10 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
 
 describe('provider pool UI and operational helpers', () => {
   it('picks credentials, gates connection tests, and builds provider config', () => {
-    const withThinking = makeProvider({ thinkingMode: 'off' });
+    const withThinking = makeProvider({ thinkingMode: 'off', thinkingEffort: 'high' });
     const built = buildProviderConfig(withThinking, withThinking.keys[0]!);
     expect(built.thinkingMode).toBe('off');
+    expect(built.thinkingEffort).toBe('high');
 
     const keyed = makeProvider({
       keys: [

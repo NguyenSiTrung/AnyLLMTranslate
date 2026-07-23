@@ -10,6 +10,7 @@ import {
   DEFAULT_KEY_MAX_RPM,
   DEFAULT_KEY_CONCURRENCY_LIMIT,
   DEFAULT_KEY_INTERVAL_MS,
+  DEFAULT_THINKING_EFFORT,
   defaultPoolKeyThrottle,
 } from '@/types/config';
 import { STORAGE_KEYS } from './constants';
@@ -174,6 +175,7 @@ export function syncProviderToPool(
       maxTokens: providerPatch.maxTokens ?? 4096,
       requestTimeoutMs: providerPatch.requestTimeoutMs ?? 60000,
       thinkingMode: providerPatch.thinkingMode ?? 'auto',
+      thinkingEffort: providerPatch.thinkingEffort ?? DEFAULT_THINKING_EFFORT,
       enabled: true,
       keys: [
         {
@@ -206,6 +208,9 @@ export function syncProviderToPool(
     ...(providerPatch.maxTokens !== undefined ? { maxTokens: providerPatch.maxTokens } : {}),
     ...(providerPatch.requestTimeoutMs !== undefined ? { requestTimeoutMs: providerPatch.requestTimeoutMs } : {}),
     ...(providerPatch.thinkingMode !== undefined ? { thinkingMode: providerPatch.thinkingMode } : {}),
+    ...(providerPatch.thinkingEffort !== undefined
+      ? { thinkingEffort: providerPatch.thinkingEffort }
+      : {}),
   };
   // Patch the first key (apiKey + maxRpm live on the key in the pool model).
   let patchedKeys = first.keys;
@@ -343,6 +348,7 @@ export function computePoolSignature(settings: ExtensionSettings): string {
     maxBatchChars: p.maxBatchChars ?? 0,
     maxTextGroupCount: p.maxTextGroupCount ?? 0,
     thinkingMode: p.thinkingMode ?? 'auto',
+    thinkingEffort: p.thinkingEffort ?? DEFAULT_THINKING_EFFORT,
     enabled: p.enabled,
     keys: (p.keys ?? []).map((k) => ({
       id: k.id,

@@ -24,18 +24,35 @@ export interface KeyTestResult {
 }
 
 /**
- * Force reasoning/thinking tokens on OpenAI-compatible endpoints that support
- * `chat_template_kwargs.enable_thinking` (NVIDIA NIM / Nemotron, many vLLM
- * Qwen3 builds, etc.).
+ * Force reasoning/thinking on OpenAI-compatible endpoints.
  *
- * - `auto` — omit the field; use the provider/model default (safest)
- * - `on`  — send `enable_thinking: true`
- * - `off` — send `enable_thinking: false` (recommended for bulk translation)
+ * Wire format depends on the provider:
+ * - **NIM / vLLM / Qwen3**: `chat_template_kwargs.enable_thinking`
+ * - **Google AI Studio (Gemini)**: `reasoning_effort`
+ *   (`none` / `minimal` / `low` / `medium` / `high`). Gemini 3.x and 2.5 Pro
+ *   cannot fully disable thinking; `off` uses the lowest allowed effort
+ *   (`minimal`). When `on`, level comes from {@link ThinkingEffort}.
+ *
+ * - `auto` — omit thinking fields; use the provider/model default (safest)
+ * - `on`  — force thinking on (NIM: enable_thinking true; Gemini: effort)
+ * - `off` — force thinking off / lowest (recommended for bulk translation)
  */
 export type ThinkingMode = 'auto' | 'on' | 'off';
 
+/**
+ * Reasoning effort when {@link ThinkingMode} is `on` for Google AI Studio
+ * (Gemini OpenAI-compat). Maps 1:1 to `reasoning_effort` (except `none`,
+ * which is reserved for Thinking mode Off on Flash models).
+ *
+ * Ignored for non-Gemini providers (they only support boolean enable_thinking).
+ */
+export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high';
+
 /** Default thinking mode for new providers and missing persisted values. */
 export const DEFAULT_THINKING_MODE: ThinkingMode = 'auto';
+
+/** Default Gemini reasoning effort when thinking mode is On. */
+export const DEFAULT_THINKING_EFFORT: ThinkingEffort = 'medium';
 
 /** Provider configuration for OpenAI-compatible APIs */
 export interface ProviderConfig {
@@ -64,9 +81,15 @@ export interface ProviderConfig {
   maxTextGroupCount?: number;
   /**
    * Force model thinking/reasoning on or off. Default {@link DEFAULT_THINKING_MODE}.
-   * Injected as `chat_template_kwargs.enable_thinking` when not `auto`.
+   * NIM/vLLM: `chat_template_kwargs.enable_thinking`. Gemini AI Studio:
+   * `reasoning_effort`. Omitted when `auto`.
    */
   thinkingMode?: ThinkingMode;
+  /**
+   * Gemini reasoning level when {@link thinkingMode} is `on`.
+   * Default {@link DEFAULT_THINKING_EFFORT}. Ignored for non-Gemini hosts.
+   */
+  thinkingEffort?: ThinkingEffort;
   /** Connection test result status */
   connectionStatus?: 'unknown' | 'success' | 'error';
 }
@@ -169,6 +192,11 @@ export interface PoolProvider {
    * See {@link ThinkingMode}. Missing on legacy stored providers = auto.
    */
   thinkingMode?: ThinkingMode;
+  /**
+   * Gemini reasoning level when {@link thinkingMode} is `on`.
+   * See {@link ThinkingEffort}. Missing = {@link DEFAULT_THINKING_EFFORT}.
+   */
+  thinkingEffort?: ThinkingEffort;
   /** Whether this provider participates in the rotation pool. */
   enabled: boolean;
   /** The pool of API keys for this provider. */
@@ -731,6 +759,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     requestTimeoutMs: 60000,
     maxRpm: DEFAULT_KEY_MAX_RPM,
     thinkingMode: DEFAULT_THINKING_MODE,
+    thinkingEffort: DEFAULT_THINKING_EFFORT,
   },
   onboarding: { ...DEFAULT_ONBOARDING_STATE },
   sourceLanguage: 'auto',
@@ -785,6 +814,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
       maxTokens: 4096,
       requestTimeoutMs: 60000,
       thinkingMode: DEFAULT_THINKING_MODE,
+      thinkingEffort: DEFAULT_THINKING_EFFORT,
       enabled: true,
       keys: [
         {

@@ -15,8 +15,23 @@ describe('openAiCompatibleCatalog', () => {
     expect(ids).toContain('openrouter');
     expect(ids).toContain('ollama');
     expect(ids).toContain('groq');
+    expect(ids).toContain('google-ai-studio');
     expect(getCatalogEntryById('openrouter')?.baseUrl).toBe('https://openrouter.ai/api/v1');
     expect(getCatalogEntryById('openrouter')?.requiresApiKey).toBe(true);
+    expect(getCatalogEntryById('google-ai-studio')?.baseUrl).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/openai',
+    );
+    expect(getCatalogEntryById('google-ai-studio')?.requiresApiKey).toBe(true);
+    expect(getCatalogEntryById('google-ai-studio')?.getKeyUrl).toBe(
+      'https://aistudio.google.com/apikey',
+    );
+    expect(filterCatalog('gemini').some((e) => e.id === 'google-ai-studio')).toBe(true);
+    expect(getKeyUrlForProvider('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
+      'https://aistudio.google.com/apikey',
+    );
+    expect(inferCatalogId('https://generativelanguage.googleapis.com/v1beta/openai/')).toBe(
+      'google-ai-studio',
+    );
 
     expect(filterCatalog('')).toHaveLength(OPENAI_COMPATIBLE_CATALOG.length);
     expect(filterCatalog('router').some((e) => e.id === 'openrouter')).toBe(true);

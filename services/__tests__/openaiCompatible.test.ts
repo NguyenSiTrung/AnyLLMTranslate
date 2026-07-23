@@ -212,6 +212,75 @@ describe('OpenAICompatibleService', () => {
       expect(autoBody.chat_template_kwargs).toBeUndefined();
     });
 
+    it('sends reasoning_effort for Google AI Studio Gemini (2.x none, 3.x minimal)', async () => {
+      const geminiConfig = {
+        ...mockConfig,
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        model: 'gemini-2.5-flash',
+        thinkingMode: 'off' as const,
+      };
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService(geminiConfig).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const flashOff = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as {
+        reasoning_effort?: string;
+        chat_template_kwargs?: unknown;
+      };
+      expect(flashOff.reasoning_effort).toBe('none');
+      expect(flashOff.chat_template_kwargs).toBeUndefined();
+
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({
+        ...geminiConfig,
+        model: 'gemini-3.6-flash',
+        thinkingMode: 'off',
+      }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const g3Off = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { reasoning_effort?: string };
+      expect(g3Off.reasoning_effort).toBe('minimal');
+
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({
+        ...geminiConfig,
+        model: 'gemini-3.6-flash',
+        thinkingMode: 'on',
+      }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const g3On = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { reasoning_effort?: string };
+      expect(g3On.reasoning_effort).toBe('medium');
+
+      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
+      await new OpenAICompatibleService({
+        ...geminiConfig,
+        model: 'gemini-3.6-flash',
+        thinkingMode: 'on',
+        thinkingEffort: 'high',
+      }).translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      const g3High = JSON.parse(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
+      ) as { reasoning_effort?: string };
+      expect(g3High.reasoning_effort).toBe('high');
+    });
+
     it('retries without chat_template_kwargs when provider rejects thinking kwargs', async () => {
       const fetchMock = vi
         .fn()
@@ -262,6 +331,62 @@ describe('OpenAICompatibleService', () => {
         chat_template_kwargs?: unknown;
       };
       expect(secondBody.chat_template_kwargs).toBeUndefined();
+    });
+
+    it('retries without reasoning_effort when Gemini rejects thinking field', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: () =>
+            Promise.resolve('{"error":{"message":"Unknown field: reasoning_effort"}}'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            Promise.resolve({
+              id: 'chatcmpl-test',
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: '{"translations":{"p1":"Xin chào"}}',
+                  },
+                  finish_reason: 'stop',
+                },
+              ],
+              usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+            }),
+          text: () => Promise.resolve(''),
+        });
+      globalThis.fetch = fetchMock;
+
+      const service = new OpenAICompatibleService({
+        ...mockConfig,
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        model: 'gemini-3.6-flash',
+        thinkingMode: 'off',
+      });
+      const result = await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      expect(result.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const firstBody = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string) as {
+        reasoning_effort?: string;
+      };
+      const secondBody = JSON.parse(fetchMock.mock.calls[1]![1]?.body as string) as {
+        reasoning_effort?: unknown;
+      };
+      expect(firstBody.reasoning_effort).toBe('minimal');
+      expect(secondBody.reasoning_effort).toBeUndefined();
     });
 
     it('retries without response_format when provider rejects it (NVIDIA NIM / vLLM)', async () => {

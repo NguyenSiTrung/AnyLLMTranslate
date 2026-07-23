@@ -67,7 +67,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 ### ⚙️ Settings & Advanced
 
 - **Any OpenAI-compatible API** — OpenAI, Ollama, LM Studio, Groq, Together AI, Gemini, etc.
-- **Provider catalog** — search and select from 8 popular providers (OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI, Ollama, LM Studio) or configure a custom endpoint
+- **Provider catalog** — search and select from popular providers (OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI, Google AI Studio / Gemini, Ollama, LM Studio) or configure a custom endpoint
 - **Auto model listing** — fetches available models from providers that support model listing via the `/v1/models` endpoint
 - **Connection tester** — sends a round-trip ping and reports latency
 - **Request timeout configuration** — configurable timeout for API requests (default: 60s)
@@ -286,7 +286,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 │   ├── subtitleParser.ts      # WebVTT parser
 │   ├── subtitleBuilder.ts     # Bilingual VTT builder
 │   ├── subtitleSites.ts       # Subtitle platform metadata (5 supported platforms)
-│   ├── openAiCompatibleCatalog.ts # Static catalog of 9 LLM providers (8 popular + custom)
+│   ├── openAiCompatibleCatalog.ts # Static catalog of OpenAI-compatible LLM providers (+ custom)
 │   ├── providerReadiness.ts   # Provider readiness state machine
 │   ├── findPrimaryVideo.ts    # Video element detection
 │   ├── crypto.ts              # SHA-256 hashing for cache keys + AES-GCM encryption for API keys

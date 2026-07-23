@@ -12,7 +12,7 @@ export type ProviderAccent = 'blue' | 'pink' | 'emerald' | 'amber' | 'zinc' | 't
 
 /**
  * Catalog category for the AddProviderModal grouping (FR-7).
- * - `cloud`  — hosted commercial APIs (OpenRouter, NVIDIA, Groq, Together, Fireworks, Mistral)
+ * - `cloud`  — hosted commercial APIs (OpenRouter, NVIDIA, Groq, Together, Fireworks, Mistral, Google AI Studio)
  * - `local`  — self-hosted / localhost runtimes (Ollama, LM Studio)
  * - `custom` — user-defined endpoint
  */
@@ -121,6 +121,30 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     getKeyUrl: 'https://console.mistral.ai/api-keys/',
     accent: 'amber',
     monogram: 'MI',
+    category: 'cloud',
+  },
+  {
+    id: 'google-ai-studio',
+    displayName: 'Google AI Studio (Gemini)',
+    keywords: [
+      'google',
+      'gemini',
+      'ai studio',
+      'aistudio',
+      'generativelanguage',
+      'google ai',
+    ],
+    // Official OpenAI-compatible endpoint (chat/completions + models).
+    // Trailing slash stripped by callers; path must end with /openai.
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    requiresApiKey: true,
+    placeholder: 'AIza...',
+    // Flash is a good default for translation latency; 3.x also works.
+    defaultModel: 'gemini-2.5-flash',
+    supportsModelListing: true,
+    getKeyUrl: 'https://aistudio.google.com/apikey',
+    accent: 'blue',
+    monogram: 'G',
     category: 'cloud',
   },
   {

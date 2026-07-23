@@ -86,6 +86,7 @@ function buildSlot(
     maxBatchChars: provider.maxBatchChars,
     maxTextGroupCount: provider.maxTextGroupCount,
     thinkingMode: provider.thinkingMode,
+    thinkingEffort: provider.thinkingEffort,
   };
   return {
     providerId: provider.id,

@@ -69,8 +69,9 @@ export class OpenAICompatibleService implements TranslationService {
    *  rejection — avoiding a wasted 400 on every request after each rebuild. */
   private responseFormatIdentity: { baseUrl: string; model: string } | null = null;
   /**
-   * Set when the provider rejects `chat_template_kwargs` / `enable_thinking`.
-   * Subsequent requests omit thinking kwargs (falls back to auto behavior)
+   * Set when the provider rejects thinking controls
+   * (`chat_template_kwargs` / `enable_thinking` or Gemini `reasoning_effort`).
+   * Subsequent requests omit thinking fields (falls back to auto behavior)
    * until baseUrl/model changes.
    */
   private thinkingKwargsDisabled = false;
@@ -110,14 +111,20 @@ export class OpenAICompatibleService implements TranslationService {
   /** Build a chat completion request, conditionally including response_format
    *  and thinking kwargs based on config + learned provider rejections. */
   private buildCompletionRequest(
-    base: Omit<ChatCompletionRequest, 'response_format' | 'chat_template_kwargs'>,
+    base: Omit<
+      ChatCompletionRequest,
+      'response_format' | 'chat_template_kwargs' | 'reasoning_effort'
+    >,
   ): ChatCompletionRequest {
     let request: ChatCompletionRequest = this.responseFormatDisabled
       ? { ...base }
       : { ...base, response_format: { type: 'json_object' } };
 
     if (!this.thinkingKwargsDisabled) {
-      request = applyThinkingModeToRequest(request, this.config.thinkingMode);
+      request = applyThinkingModeToRequest(request, this.config.thinkingMode, {
+        baseUrl: this.config.baseUrl,
+        thinkingEffort: this.config.thinkingEffort,
+      });
     }
     return request;
   }
@@ -852,12 +859,13 @@ Rules:
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
         }
 
-        // Some endpoints reject chat_template_kwargs / enable_thinking (plain
-        // OpenAI, gateways that strip unknown fields strictly). When the user
-        // forced on|off, retry once without the kwargs and remember so later
-        // requests fall back to auto behavior for this baseUrl+model.
+        // Some endpoints reject thinking controls:
+        // - NIM/vLLM: chat_template_kwargs / enable_thinking
+        // - Gemini OpenAI-compat: reasoning_effort (or unsupported values)
+        // When the user forced on|off, retry once without those fields and
+        // remember so later requests fall back to auto for this baseUrl+model.
         if (
-          request.chat_template_kwargs &&
+          (request.chat_template_kwargs || request.reasoning_effort !== undefined) &&
           response.status === 400 &&
           isThinkingKwargsRejected(errorMessage)
         ) {
@@ -868,6 +876,7 @@ Rules:
           };
           const strippedRequest = { ...request };
           delete strippedRequest.chat_template_kwargs;
+          delete strippedRequest.reasoning_effort;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
         }
 
