@@ -160,7 +160,7 @@ function buildHandlers(): BubbleActionHandlers {
       if (!lastSelectedText || !lastAnchor) return;
       await runSelectionTranslation(lastSelectedText, lastAnchor, lastRange);
     },
-    onSpeak: () => {
+    onSpeak: async () => {
       const text = getPrimaryText();
       if (!text) return;
       try {
@@ -169,8 +169,10 @@ function buildHandlers(): BubbleActionHandlers {
           setSpeakingState(false);
           return;
         }
-        speakController.speak(text, getTargetLanguage());
-        setSpeakingState(true);
+        const result = await speakController.speakSmart(text, getTargetLanguage());
+        if ('fallbackFromProvider' in result && result.fallbackFromProvider) {
+          showStatus('Using browser voice', 'info');
+        }
       } catch (e) {
         setSpeakingState(false);
         showStatus(

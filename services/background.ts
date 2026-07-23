@@ -33,6 +33,8 @@ import type {
   ScientificPdfDownloadResult,
   ScientificPdfCancelMessage,
   ScientificPdfCancelResult,
+  SynthesizeSpeechMessage,
+  SynthesizeSpeechResult,
 } from '@/types/messages';
 import {
   parseSelectionDictionary,
@@ -46,6 +48,8 @@ import {
 } from '@/lib/selectionDictionaryPrompt';
 import { generateSelectionDictionaryCacheKey } from '@/lib/selectionCacheKey';
 import { getLanguageName } from '@/lib/languages';
+import { pickTtsCredentials } from '@/lib/tts/resolveTtsBackend';
+import { fetchProviderSpeech } from '@/lib/tts/providerTts';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { ExtensionSettings, NamedGlossaryList } from '@/types/config';
@@ -2297,8 +2301,41 @@ export function handleMessage(
       return handleScientificPdfDownload(message as ScientificPdfDownloadMessage);
     case 'SCIENTIFIC_PDF_CANCEL':
       return handleScientificPdfCancel(message as ScientificPdfCancelMessage);
+    case 'SYNTHESIZE_SPEECH':
+      return handleSynthesizeSpeech(message as SynthesizeSpeechMessage);
     default:
       return undefined;
+  }
+}
+
+/** OpenAI-compatible TTS via pool credentials (keys stay in background). */
+async function handleSynthesizeSpeech(
+  message: SynthesizeSpeechMessage,
+): Promise<SynthesizeSpeechResult> {
+  try {
+    const settings = await loadSettings();
+    const ttsEnabled = settings.tts?.enabled !== false;
+    if (!ttsEnabled) {
+      return { success: false, error: 'Speech is disabled in Settings' };
+    }
+    const creds = pickTtsCredentials(settings);
+    if (!creds) {
+      return { success: false, error: 'No provider credentials configured for TTS' };
+    }
+    const result = await fetchProviderSpeech(message.text ?? '', creds);
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    return {
+      success: true,
+      audioBase64: result.audioBase64,
+      mimeType: result.mimeType,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'TTS failed',
+    };
   }
 }
 

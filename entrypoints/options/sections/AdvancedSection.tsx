@@ -22,6 +22,7 @@ import {
   Zap,
   CheckCircle2,
   FlaskConical,
+  Volume2,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -30,6 +31,11 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_PDF_SETTINGS,
   DEFAULT_SCIENTIFIC_PDF_SETTINGS,
+  DEFAULT_TTS_SETTINGS,
+  TTS_MODEL_OPTIONS,
+  TTS_VOICE_OPTIONS,
+  type TtsPreferredBackend,
+  type TtsSettings,
 } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
@@ -81,6 +87,7 @@ const PORTABLE_KEYS = [
   'textSelectionEnabled', 'selectionDictionaryEnabled', 'hoverTranslateEnabled', 'hoverDelay',
   'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
   'enableCompactInlineForShortText',
+  'tts',
 ] as const;
 
 function scientificStatusBadge(status: ScientificPdfStatus): {
@@ -95,6 +102,157 @@ function scientificStatusBadge(status: ScientificPdfStatus): {
     default:
       return { variant: 'info', label: 'Not installed' };
   }
+}
+
+const TTS_BACKEND_OPTIONS: { value: TtsPreferredBackend; label: string }[] = [
+  { value: 'auto', label: 'Auto (provider if configured)' },
+  { value: 'browser', label: 'Browser only' },
+  { value: 'provider', label: 'Provider first (fallback to browser)' },
+];
+
+function TtsSettingsGroup({
+  tts,
+  onChange,
+}: {
+  tts: TtsSettings;
+  onChange: (tts: TtsSettings) => void;
+}) {
+  const merged = { ...DEFAULT_TTS_SETTINGS, ...tts };
+  const { success: showSuccess, error: showError } = useToast();
+  const [testing, setTesting] = useState(false);
+
+  const patch = (partial: Partial<TtsSettings>) => {
+    onChange({ ...merged, ...partial });
+  };
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      if (merged.preferredBackend === 'browser' || !merged.enabled) {
+        if (typeof speechSynthesis === 'undefined') {
+          showError('Browser speech is not available');
+          return;
+        }
+        const utt = new SpeechSynthesisUtterance(
+          'AnyLLMTranslate speech test. Browser voice is working.',
+        );
+        utt.rate = merged.rate;
+        speechSynthesis.speak(utt);
+        showSuccess('Playing browser test voice');
+        return;
+      }
+
+      const res = (await chrome.runtime.sendMessage({
+        action: 'SYNTHESIZE_SPEECH',
+        text: 'AnyLLMTranslate speech test. Provider voice is working.',
+      })) as { success?: boolean; error?: string; audioBase64?: string; mimeType?: string };
+
+      if (!res?.success || !res.audioBase64) {
+        showError(res?.error ?? 'Provider TTS failed — try Browser only or check API key');
+        return;
+      }
+      const binary = atob(res.audioBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const url = URL.createObjectURL(
+        new Blob([bytes], { type: res.mimeType || 'audio/mpeg' }),
+      );
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+      showSuccess('Playing provider test voice');
+    } catch (e) {
+      showError(e instanceof Error ? e.message : 'Speech test failed');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <SettingsGroup
+      title="Speech (selection Speak)"
+      description="Read selection translations aloud. Provider TTS uses your active pool credentials (OpenAI-compatible /audio/speech); browser voice is free and local."
+    >
+      <Toggle
+        id="tts-enabled-toggle"
+        checked={merged.enabled}
+        onChange={(checked) => patch({ enabled: checked })}
+        label="Enable Speak on selection bubble"
+        description="Show and allow the Speak action after translating selected text."
+      />
+      <DisabledDimmer disabled={!merged.enabled}>
+        <div className="space-y-4">
+          <FieldGroup label="Backend" htmlFor="tts-backend">
+            <Select
+              id="tts-backend"
+              value={merged.preferredBackend}
+              onChange={(e) =>
+                patch({ preferredBackend: e.target.value as TtsPreferredBackend })
+              }
+              options={TTS_BACKEND_OPTIONS.map((o) => ({
+                value: o.value,
+                label: o.label,
+              }))}
+            />
+          </FieldGroup>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldGroup label="Provider model" htmlFor="tts-model" hint="Used when backend is Auto or Provider">
+              <Select
+                id="tts-model"
+                value={merged.model}
+                onChange={(e) => patch({ model: e.target.value })}
+                options={[
+                  ...TTS_MODEL_OPTIONS.map((m) => ({ value: m, label: m })),
+                  ...(TTS_MODEL_OPTIONS as readonly string[]).includes(merged.model)
+                    ? []
+                    : [{ value: merged.model, label: merged.model }],
+                ]}
+              />
+            </FieldGroup>
+            <FieldGroup label="Voice" htmlFor="tts-voice">
+              <Select
+                id="tts-voice"
+                value={merged.voice}
+                onChange={(e) => patch({ voice: e.target.value })}
+                options={[
+                  ...TTS_VOICE_OPTIONS.map((v) => ({ value: v, label: v })),
+                  ...(TTS_VOICE_OPTIONS as readonly string[]).includes(merged.voice)
+                    ? []
+                    : [{ value: merged.voice, label: merged.voice }],
+                ]}
+              />
+            </FieldGroup>
+          </div>
+          <FieldGroup
+            label="Rate"
+            htmlFor="tts-rate"
+            hint={`${merged.rate.toFixed(1)}× · 0.5–2.0`}
+          >
+            <input
+              id="tts-rate"
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={merged.rate}
+              onChange={(e) => patch({ rate: Number(e.target.value) })}
+              className="w-full accent-cyan-500"
+            />
+          </FieldGroup>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={testing}
+            onClick={() => void handleTest()}
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            {testing ? 'Testing…' : 'Test voice'}
+          </Button>
+        </div>
+      </DisabledDimmer>
+    </SettingsGroup>
+  );
 }
 
 export function AdvancedSection() {
@@ -681,6 +839,13 @@ export function AdvancedSection() {
                   description="Preserve bold, links, code, and other inline formatting in translated paragraphs."
                 />
               </SettingsGroup>
+
+              <div className="border-t border-zinc-800/80 pt-5">
+                <TtsSettingsGroup
+                  tts={settings.tts ?? DEFAULT_TTS_SETTINGS}
+                  onChange={(tts) => updateSettings({ tts })}
+                />
+              </div>
 
               <div className="border-t border-zinc-800/80 pt-5">
                 <SettingsGroup title="Efficiency & reliability" description="Spend fewer tokens and recover faster from flaky providers.">

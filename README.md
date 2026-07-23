@@ -50,7 +50,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 
 ### 🖱️ Interactive Translation
 
-- **Text selection translate** — select text, click the floating icon; results open in a branded dialog with **copy**, **retry**, **speak** (browser TTS), **add to glossary**, and **pin**. Short selections use **dictionary mode** (phonetic, POS, definitions, examples, context) when enabled; longer text uses translation with collapsible original
+- **Text selection translate** — select text, click the floating icon; results open in a branded dialog with **copy**, **retry**, **speak** (browser TTS or OpenAI-compatible provider TTS; Settings → Advanced → Speech), **add to glossary**, and **pin**. Short selections use **dictionary mode** (phonetic, POS, definitions, examples, context) when enabled; longer text uses translation with collapsible original
 - **Mouse hover translate** — hover over paragraph-level elements; configurable 200–500ms delay, element-level cache
 - **Inline translate** — rapid key-gesture translation in editable fields (default: triple-space); includes native undo support, pulsing border feedback, and floating toast notifications; works with Google Search, ChatGPT, and other input fields via window-level capture phase listener
 - **Section translate** — translate specific DOM sections without full-page commitment; multiple sections can be translated independently with dismiss buttons; visual section picker with highlight overlay

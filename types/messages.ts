@@ -61,7 +61,8 @@ export type MessageAction =
   | 'SCIENTIFIC_PDF_CREATE_JOB'
   | 'SCIENTIFIC_PDF_GET_JOB'
   | 'SCIENTIFIC_PDF_DOWNLOAD'
-  | 'SCIENTIFIC_PDF_CANCEL';
+  | 'SCIENTIFIC_PDF_CANCEL'
+  | 'SYNTHESIZE_SPEECH';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -564,6 +565,21 @@ export interface ScientificPdfCancelResult {
   code?: string;
 }
 
+/** Content → background: synthesize speech via OpenAI-compatible /audio/speech */
+export interface SynthesizeSpeechMessage {
+  action: 'SYNTHESIZE_SPEECH';
+  text: string;
+  /** Optional BCP-47 hint (unused by most TTS APIs; reserved). */
+  lang?: string;
+}
+
+export interface SynthesizeSpeechResult {
+  success: boolean;
+  audioBase64?: string;
+  mimeType?: string;
+  error?: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -604,7 +620,8 @@ export type ExtensionMessage =
   | ScientificPdfCreateJobMessage
   | ScientificPdfGetJobMessage
   | ScientificPdfDownloadMessage
-  | ScientificPdfCancelMessage;
+  | ScientificPdfCancelMessage
+  | SynthesizeSpeechMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

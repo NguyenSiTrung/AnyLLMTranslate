@@ -274,6 +274,56 @@ export interface GlossaryEntry {
   target: string;
 }
 
+/**
+ * Selection-bubble Speak (TTS) settings.
+ * Provider path uses OpenAI-compatible POST /audio/speech on the active pool
+ * credentials; browser path uses speechSynthesis. Keys never leave background.
+ */
+export type TtsPreferredBackend = 'auto' | 'browser' | 'provider';
+
+export interface TtsSettings {
+  /** Master switch for Speak (default true). */
+  enabled: boolean;
+  /**
+   * auto = provider when pool credentials exist, else browser;
+   * browser = always local speechSynthesis;
+   * provider = try OpenAI-compatible TTS, fail-open to browser.
+   */
+  preferredBackend: TtsPreferredBackend;
+  /** TTS model id (e.g. tts-1, tts-1-hd). */
+  model: string;
+  /** Voice id for provider TTS (e.g. alloy, nova). */
+  voice: string;
+  /** Playback rate 0.5–2 (browser utterance rate; provider `speed` when supported). */
+  rate: number;
+}
+
+export const DEFAULT_TTS_SETTINGS: TtsSettings = {
+  enabled: true,
+  preferredBackend: 'auto',
+  model: 'tts-1',
+  voice: 'alloy',
+  rate: 1,
+};
+
+/** Common OpenAI-compatible TTS voices for Options UI. */
+export const TTS_VOICE_OPTIONS = [
+  'alloy',
+  'ash',
+  'ballad',
+  'coral',
+  'echo',
+  'fable',
+  'onyx',
+  'nova',
+  'sage',
+  'shimmer',
+  'verse',
+] as const;
+
+/** Common OpenAI-compatible TTS models for Options UI. */
+export const TTS_MODEL_OPTIONS = ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'] as const;
+
 /** User-owned named glossary pack (subtitle-scoped in v1). */
 export interface NamedGlossaryList {
   id: string;
@@ -576,6 +626,8 @@ export interface ExtensionSettings {
    *  is in BODY_TRANSLATE_TAGS (MAIN, ARTICLE, SECTION, DIV); other top-level tags
    *  (NAV, ASIDE, HEADER, FOOTER, FORM, TABLE, …) are skipped entirely. Default off. */
   enableBodyTagWhitelist: boolean;
+  /** Selection bubble Speak / TTS (browser + optional OpenAI-compatible provider). */
+  tts: TtsSettings;
   /** FR-5: When ON, within aside regions (ASIDE, [role="complementary"], sidebar selectors),
    *  apply per-paragraph and per-region text caps to limit token waste + page clutter.
    *  Default ON (Balanced). Classic preset turns off. Cap values are constants
@@ -842,6 +894,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   enableTranslationQualityCheck: false,
   enableLayoutContainment: false,
   enableShadowDomWalk: false,
+  tts: { ...DEFAULT_TTS_SETTINGS },
 };
 
 /** All available provider presets */
