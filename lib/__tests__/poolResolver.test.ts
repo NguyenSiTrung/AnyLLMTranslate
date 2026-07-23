@@ -131,6 +131,10 @@ describe('healthySlots', () => {
     return ids.map((id, i) => ({
       providerId: `p${i}`,
       keyId: id,
+      model: 'm',
+      slotId: id,
+      multiModel: false,
+      modelStrategy: 'preferred_failover' as const,
       providerConfig: {
         preset: 'custom' as const,
         baseUrl: 'https://x/v1',
