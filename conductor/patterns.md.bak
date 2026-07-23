@@ -1,23 +1,7 @@
-<!-- conductor-refresh: 2026-07-23 all (652 TCs pass / 2 fail; lint 17; tsc 22; 72 archived / 0 active; Beads 7uk open) -->
+<!-- conductor-refresh: 2026-07-22 all (587 TCs pass / 2 fail; lint 17; tsc 17; 72 archived / 0 active; Beads 7uk open) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
-
-## Selection bubble — modular host-page DOM (from: selection bubble Phase A, 2026-07-23)
-- **Not React on host pages:** content-script UI stays plain DOM modules under `content/selectionBubble/` (shell, chip, contentDictionary/sentence/loading/error, actions, position, speak, icons, types). Thin public API remains in `content/textSelection.ts`.
-- **Shell contract:** header / scrollable body / sticky footer + caret; re-measure after content swap (dictionary grows); clamp + flip above/below selection; pin keeps open until Close/Escape (no drag, no history stack).
-- **Actions are pure-ish controllers:** Copy / Retry / Speak / Glossary / Pin wire through `actions.ts`; glossary target is **global** `settings.glossary` only (named lists stay subtitle-scoped).
-- **A11y:** real `<button>`s, focus rings, dialog semantics (not `role="tooltip"` with interactive children). (from: selection-bubble-full-redesign, 2026-07-23)
-
-## Selection Speak / TTS (from: selection TTS Phase B, 2026-07-23)
-- **Credentials never enter the page:** content calls background `SYNTHESIZE_SPEECH`; OpenAI-compatible `/audio/speech` fetch lives in SW (`lib/tts/providerTts.ts`).
-- **Resolve then fail-open:** pure `resolveTtsBackend` / `hasProviderTtsCredentials` — `preferredBackend: auto` → provider if pool has baseUrl+usable key else browser; provider error → browser + user-visible “Using browser voice” status (`speakSmart`).
-- **Settings snapshot rule:** `tts` is a top-level `ExtensionSettings` key — every `extractSettings` / `toSettings` / export path **must** include it or TypeScript and persist/export silently break. (from: 34bb4c2 + settingsStore TSC, 2026-07-23)
-
-## thinkingMode / Gemini effort (from: thinkingMode + Google AI Studio, 2026-07-22/23)
-- **`auto` means omit:** do not send thinking fields when mode is auto so the model keeps server defaults (`lib/thinkingMode.ts`).
-- **Two request shapes, one setting:** NIM/Nemotron/Qwen3 → `chat_template_kwargs.enable_thinking`; Google AI Studio Gemini OpenAI-compat → top-level `reasoning_effort` (`none`/`minimal`/`low`/`medium`/`high`); detect Gemini via baseUrl host helper.
-- **Self-heal rejections** the same way as `response_format` — remember endpoint capability on the service instance; reset on provider/model switch. (from: cc4b7d2, 2fb47a0)
 
 ## Named subtitle glossary lists (from: named glossary v1, 2026-07-21)
 - **Authority order is product law:** named list (LOCKED) > global Custom terms > film seed > rolling `properNouns`. Auto layers assist; they must never overwrite user list sources (`lockedSourceSet` / lock-aware merge). (from: 2026-07-21 named glossary lists)

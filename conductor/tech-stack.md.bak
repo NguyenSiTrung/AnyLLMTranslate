@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-23 all (652 TCs pass / 2 fail; lint 17; tsc 22; build ~3.5 MB; 72 archived / 0 active; Beads 7uk open) -->
+<!-- conductor-refresh: 2026-07-22 all (587 TCs pass / 2 fail; lint 17; tsc 17; build ~3.5 MB; 72 archived / 0 active; Beads 7uk open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -132,15 +132,4 @@
 - `MOCK_TRANSLATE=1` enables CI/smoke without downloading ONNX models
 - Helper scripts: `scripts/scientific-pdf-docker.sh` / `scientific-pdf-up.sh` / `scientific-pdf-down.sh`; compose: `docker-compose.scientific-pdf.yml`
 - Production extension build (`.output/chrome-mv3`) is ≈ **3.5 MB** total (`du`); bridge is external
-
-### Why no dedicated TTS / speech package?
-- Selection **Speak** uses the browser **Web Speech API** (`speechSynthesis`) for zero-dependency offline voices
-- Optional **OpenAI-compatible** TTS hits provider `/audio/speech` from the **background** service worker only (keys never enter content scripts)
-- Pure resolve helpers in `lib/tts/` — no new npm deps
-
-### Why thinkingMode is request-shape, not a new SDK?
-- Hosted models differ: NIM/vLLM style `chat_template_kwargs.enable_thinking` vs Google AI Studio `reasoning_effort`
-- Pure mappers in `lib/thinkingMode.ts` keep `OpenAICompatibleService` free of per-vendor SDK deps
-- `auto` omits fields so server defaults apply; rejection self-heals like `response_format`
-
-- Quality gates snapshot (2026-07-23): **652** Vitest TCs passed / **2** fail across **147** test files (**654** TCs total); **eslint 17** errors; `tsc --noEmit` has **22** type errors (12 files).
+- Quality gates snapshot (2026-07-22): **587** Vitest TCs passed / **2** fail across **136** test files; **eslint 17** errors; `tsc --noEmit` has **17** type errors.

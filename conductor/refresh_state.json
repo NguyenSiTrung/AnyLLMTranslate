@@ -1,39 +1,48 @@
 {
-  "lastRefresh": "2026-07-22T09:17:00+07:00",
+  "lastRefresh": "2026-07-23T10:52:00+07:00",
   "scope": "all",
   "changes": [
     "Scope: full refresh.",
-    "product.md: refresh marker updated to 2026-07-22.",
-    "tech-stack.md: quality-gates snapshot updated to 587 pass / 2 fail Vitest TCs, 17 ESLint errors, 17 TSC errors.",
-    "patterns.md: refresh marker updated to 2026-07-22.",
-    "tracks.md: refresh marker updated (72 archived / 0 active).",
-    "workflow.md: no content drift.",
-    "beads DRIFT: none — AnyLLMTranslate-7uk remains open (P3 PDF empty-page OCR); no plan.md mismatch.",
+    "product.md: selection bubble Phase A/B (TTS), brand monogram, Google AI Studio, thinkingMode/thinkingEffort, inline Space×N, web-resume/cache, named-list suggestion fix; Current State → 652 pass / 2 fail / 654 TCs, tsc 22, lint 17.",
+    "tech-stack.md: quality-gates snapshot 652/2; added TTS (no npm dep) + thinkingMode rationale sections.",
+    "patterns.md: selection bubble modular DOM; Speak/TTS fail-open + settings snapshot; thinkingMode dual request shapes.",
+    "tracks.md: refresh marker (72 archived / 0 active).",
+    "workflow.md: refresh marker only (no content drift).",
+    "beads: Conductor→Beads requested — no active plan.md tasks; open backlog AnyLLMTranslate-7uk retained (P3 OCR).",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, refresh_state.json.bak.",
-    "verification: vitest 587/589 pass (2 fail); tsc 17 errors; eslint 17 errors."
+    "verification: vitest 652/654 pass (2 fail interception); tsc 22 errors / 12 files; eslint 17 errors; build ~3.5 MB."
   ],
   "codebaseHealth": {
-    "tests": 589,
-    "testsPassing": 587,
+    "tests": 654,
+    "testsPassing": 652,
     "testsFailing": 2,
-    "testFiles": 136,
+    "testFiles": 147,
     "buildSize": "~3.5 MB",
     "lintErrors": 17,
-    "lintErrorsDetail": "17 problems across 8 files (mostly unused imports/vars in test files and rule name config in App.tsx).",
-    "tscErrors": 17,
-    "tscErrorsDetail": "17 errors across 10 files (missing modules in unit test stubs, type casts, and variable typings).",
+    "lintErrorsDetail": "17 problems (unused imports in tests; unregistered react-hooks/exhaustive-deps in pdf-viewer App.tsx).",
+    "tscErrors": 22,
+    "tscErrorsDetail": "22 errors across 12 files — notably stores/settingsStore extractSettings missing tts; platformHandlers/interception stubs; youtubeAsrResegment EN_BREAK_WORDS; content pagehide typing; test-only theme/ComponentProps mismatches.",
     "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None.",
+    "activeTracksDetail": "None. Selection bubble/TTS/thinkingMode/brand shipped on master without Conductor tracks.",
     "failingTests": [
-      "tests/unit/platformHandlers.test.ts (unresolved import @/inject/subtitleHandlers/disney)",
-      "tests/unit/interception.test.ts (handlers.filter is not a function)"
+      "tests/unit/interception.test.ts (handlers.filter is not a function / XHR SUBTITLE_INTERCEPTED assertion)"
+    ],
+    "shippedSinceLastRefresh": [
+      "selection bubble Phase A modular redesign",
+      "selection TTS Phase B multi-provider Speak",
+      "brand A monogram icon",
+      "Google AI Studio catalog + Gemini thinkingEffort",
+      "thinkingMode auto/on/off",
+      "inline Space×N hardening",
+      "web resume clear with cache",
+      "named glossary suggestion review fix"
     ]
   },
   "beads": {
     "open": ["AnyLLMTranslate-7uk"],
     "closedThisRefresh": [],
-    "syncDirection": "none"
+    "syncDirection": "conductor-to-beads",
+    "syncNote": "No active tracks/plan.md checkboxes to close; 7uk remains intentional open backlog."
   }
 }
-

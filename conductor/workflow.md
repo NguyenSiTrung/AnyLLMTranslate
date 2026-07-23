@@ -1,3 +1,4 @@
+<!-- conductor-refresh: 2026-07-23 all (no workflow content drift; quality gates updated elsewhere) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
