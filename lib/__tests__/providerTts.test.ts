@@ -32,10 +32,11 @@ describe('fetchProviderSpeech', () => {
       expect(result.audioBase64).toBe(btoa(String.fromCharCode(1, 2, 3, 4)));
     }
     expect(fetchImpl).toHaveBeenCalledOnce();
-    const [url, init] = fetchImpl.mock.calls[0];
+    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = call;
     expect(url).toBe('https://api.openai.com/v1/audio/speech');
-    expect((init as RequestInit).method).toBe('POST');
-    const body = JSON.parse((init as RequestInit).body as string);
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
     expect(body.input).toBe('Hello world');
     expect(body.voice).toBe('alloy');
   });

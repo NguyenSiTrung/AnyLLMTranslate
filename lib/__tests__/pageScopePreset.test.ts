@@ -61,7 +61,7 @@ describe('pageScopePreset', () => {
     const merged = deepMerge(
       DEFAULT_SETTINGS as unknown as Record<string, unknown>,
       { targetLanguage: 'en' } as Record<string, unknown>,
-    ) as typeof DEFAULT_SETTINGS;
+    ) as unknown as typeof DEFAULT_SETTINGS;
     expect(merged.enableStreamingTranslation).toBe(true);
     expect(merged.enableAsideCaps).toBe(true);
     expect(merged.targetLanguage).toBe('en');
@@ -72,7 +72,7 @@ describe('pageScopePreset', () => {
         enableStreamingTranslation: false,
         enableAsideCaps: false,
       } as Record<string, unknown>,
-    ) as typeof DEFAULT_SETTINGS;
+    ) as unknown as typeof DEFAULT_SETTINGS;
     expect(classic.enableStreamingTranslation).toBe(false);
     expect(classic.enableAsideCaps).toBe(false);
   });

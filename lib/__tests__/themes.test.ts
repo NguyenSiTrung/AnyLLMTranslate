@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ThemeName } from '@/types/config';
 import {
   THEME_DEFINITIONS,
-  GENERAL_THEME_OPTIONS,
   getThemeDefinition,
-  getThemeOptionMeta,
   themeOptionsForSelect,
   themesByCategory,
 } from '@/lib/themes';

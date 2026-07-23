@@ -131,9 +131,8 @@ const EN_START_WORDS = [
   'which', 'who', 'whom', 'whose', 'where', 'when', 'while', 'if',
 ];
 
-const EN_BREAK_WORDS = [
-  // Light: primarily rely on punctuation + gap; a few strong clause markers
-];
+// Light: primarily rely on punctuation + gap; a few strong clause markers.
+const EN_BREAK_WORDS: string[] = [];
 
 const BASE_LANG_CONFIG: AsrLangConfig = {
   splitConfig: {

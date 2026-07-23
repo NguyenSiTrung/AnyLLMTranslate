@@ -7,24 +7,19 @@ import {
   buildProviderConfig,
   canRunConnectionTest,
   getCredentialKey,
-  getProviderTestStatus,
 } from '../providerPoolHelpers';
 import { createPoolCursor } from '../poolCursor';
-import { reorderByIndex, moveProviderById, moveKeyById } from '../poolReorder';
+import { reorderByIndex, moveProviderById } from '../poolReorder';
 import { collectTestableSlots, collectTestableSlotsForProvider } from '../poolBulkTest';
 import {
   providerCredentialsChanged,
-  keyCredentialsChanged,
-  applyProviderPatch,
-  applyKeyPatch,
   formatTestResultAge,
 } from '../poolTestStatus';
 import {
-  getKeyChipView,
   getPoolDashboardView,
   formatCooldownRemaining,
 } from '../poolDashboardStatus';
-import type { ExtensionSettings, PoolProvider, PoolKey } from '@/types/config';
+import type { PoolProvider } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {

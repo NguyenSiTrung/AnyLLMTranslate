@@ -212,5 +212,6 @@ function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSet
     enableTranslationQualityCheck: state.enableTranslationQualityCheck,
     enableLayoutContainment: state.enableLayoutContainment,
     enableShadowDomWalk: state.enableShadowDomWalk,
+    tts: state.tts,
   };
 }

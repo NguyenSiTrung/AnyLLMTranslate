@@ -32,7 +32,7 @@ describe('Popup modals and quick settings', () => {
       <QuickSettings
         expanded={true}
         onToggle={vi.fn()}
-        theme="dark"
+        theme="dividing-line"
         onThemeChange={vi.fn()}
         displayMode="bilingual-below"
         onDisplayModeChange={vi.fn()}
@@ -63,7 +63,7 @@ describe('Popup modals and quick settings', () => {
       <QuickSettings
         expanded={true}
         onToggle={vi.fn()}
-        theme="dark"
+        theme="dividing-line"
         onThemeChange={vi.fn()}
         displayMode="bilingual-below"
         onDisplayModeChange={vi.fn()}

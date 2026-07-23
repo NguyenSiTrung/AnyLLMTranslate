@@ -1051,8 +1051,13 @@ function writeResumeSnapshot(options?: { awaitable?: boolean }): void | Promise<
 function registerResumeSnapshotWriter(): void {
   if (resumeSnapshotWriterRegistered) return;
   resumeSnapshotWriterRegistered = true;
-  window.addEventListener('pagehide', writeResumeSnapshot, { once: false });
-  window.addEventListener('beforeunload', writeResumeSnapshot, { once: false });
+  // Wrapper: writeResumeSnapshot has an overload taking options, so it is not a
+  // valid EventListener by itself — always call the zero-arg form on unload.
+  const onUnload = (): void => {
+    writeResumeSnapshot();
+  };
+  window.addEventListener('pagehide', onUnload, { once: false });
+  window.addEventListener('beforeunload', onUnload, { once: false });
 }
 
 /** Start translation on the current page (serialized via lifecycle mutex — FR-3). */

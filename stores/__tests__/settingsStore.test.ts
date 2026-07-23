@@ -197,7 +197,7 @@ describe('useSettingsStore', () => {
             temperature: 0.3,
             maxTokens: 4096,
             enabled: true,
-            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, concurrencyLimit: 0, priority: 0, enabled: true }],
+            keys: [{ id: 'k1', apiKey: 'sk-secret', maxRpm: 60, concurrencyLimit: 0, interval: 0, enabled: true }],
           },
         ],
       });

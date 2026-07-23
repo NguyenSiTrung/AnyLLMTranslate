@@ -144,6 +144,13 @@ const mockHandler = {
   getPatterns: vi.fn(() => []),
   transformResponse: vi.fn(() => MOCK_CUES),
   isWatchPage: vi.fn(() => window.location.pathname === '/watch'),
+  getDomCueSource: vi.fn(
+    (): {
+      cueSelector: string;
+      captionWindowSelector: string;
+      captionHideMethod: 'visibility' | 'display' | 'opacity';
+    } | null => null,
+  ),
 };
 
 // ============================================================================

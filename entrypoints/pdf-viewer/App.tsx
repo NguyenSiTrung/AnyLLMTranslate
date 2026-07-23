@@ -108,11 +108,12 @@ export default function App(): ReactElement {
   });
 
   // Probe bridge health on open so Ready / Unavailable is accurate.
+  // Intentional once-per-source: only re-run when the PDF URL changes (not on
+  // every scientific object identity change). react-hooks/exhaustive-deps is not
+  // registered in this project's ESLint config — do not disable unknown rules.
   useEffect(() => {
     if (!sourcePdfUrl) return;
     void scientific.refreshHealth();
-    // Once per source document (scientific identity is stable for that URL).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional once-per-source
   }, [sourcePdfUrl]);
 
   const bridgeReady = scientific.healthOk === true;

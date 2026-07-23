@@ -16,7 +16,6 @@ import {
 } from '@/lib/selectionClassify';
 import {
   SELECTION_DICTIONARY_SYSTEM_TEMPLATE,
-  SELECTION_DICTIONARY_USER_TEMPLATE,
   buildSelectionDictionarySystemPrompt,
   buildSelectionDictionaryUserPrompt,
 } from '@/lib/selectionDictionaryPrompt';

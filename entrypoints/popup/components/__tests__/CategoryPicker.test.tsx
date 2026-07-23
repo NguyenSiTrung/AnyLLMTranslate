@@ -2,7 +2,8 @@
  * CategoryPicker — portal menu, search, custom draft, source chip.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, type ComponentProps } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ComponentProps } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CategoryPicker } from '../CategoryPicker';
 

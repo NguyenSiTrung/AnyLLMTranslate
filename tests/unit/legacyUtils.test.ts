@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { isTranslatablePageUrl, resolveWizardEntryStep } from '@/lib/setupWizard';
 import { getProviderReadiness, getPoolReadinessStatus } from '@/lib/providerReadiness';
 import { DEFAULT_SETTINGS } from '@/types/config';

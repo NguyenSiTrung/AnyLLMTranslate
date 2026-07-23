@@ -10,10 +10,8 @@ import {
   isOnWatchPage,
   tryAutoActivateForDom,
 } from '@/content/subtitleCoordinator';
-import * as handlerRegistry from '@/inject/subtitleHandlers/registry';
 import { resetOverlayState } from '@/content/subtitleOverlay';
 import type { SubtitleCue } from '@/types/subtitle';
-import * as subtitleOverlay from '@/content/subtitleOverlay';
 import * as subtitleParser from '@/lib/subtitleParser';
 
 vi.mock('@/content/messageBridge', () => ({

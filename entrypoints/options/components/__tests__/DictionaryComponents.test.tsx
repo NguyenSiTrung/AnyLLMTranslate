@@ -6,9 +6,10 @@ import { DictionaryEmptyHero } from '../DictionaryEmptyHero';
 import { GlossaryEntryList } from '../GlossaryEntryList';
 import { GlossaryImportHint } from '../GlossaryImportHint';
 import * as templates from '@/lib/glossaryImportTemplates';
+import type * as GlossaryImportTemplates from '@/lib/glossaryImportTemplates';
 
 vi.mock('@/lib/glossaryImportTemplates', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/glossaryImportTemplates')>(
+  const actual = await vi.importActual<typeof GlossaryImportTemplates>(
     '@/lib/glossaryImportTemplates',
   );
   return {
@@ -71,18 +72,26 @@ describe('Dictionary UI components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add term' }));
     expect(onAddClick).toHaveBeenCalled();
 
-    // Empty Hero
-    render(<DictionaryEmptyHero onAddClick={vi.fn()} onImportClick={vi.fn()} />);
+    // Empty Hero — props are onAddFirst / onImport
+    render(<DictionaryEmptyHero onAddFirst={vi.fn()} onImport={vi.fn()} />);
     expect(screen.getByText('No custom terms yet')).toBeInTheDocument();
 
-    // Entry List
+    // Entry List — full edit/delete contract
     render(
       <GlossaryEntryList
         entries={[{ id: '1', source: 'src', target: 'tgt' }]}
         searchQuery=""
         mismatchedIds={new Set()}
-        onUpdateEntry={vi.fn()}
-        onDeleteEntry={vi.fn()}
+        editingId={null}
+        editSource=""
+        editTarget=""
+        onEditSourceChange={vi.fn()}
+        onEditTargetChange={vi.fn()}
+        onStartEdit={vi.fn()}
+        onSaveEdit={vi.fn()}
+        onCancelEdit={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onClearSearch={vi.fn()}
       />,
     );
     expect(screen.getByText('src')).toBeInTheDocument();
