@@ -7,21 +7,25 @@
  */
 
 import type { PoolProvider, PoolKey, KeyTestResult } from '@/types/config';
+import { normalizeGoogleModels } from '@/lib/googleMultiModel';
 
 /**
  * Returns `true` when a credential-relevant field changed between an old and
  * new provider, meaning any persisted {@link PoolProvider.lastTestResult}
  * is stale and should be cleared. The fields that invalidate a test result
- * are `baseUrl`, `model`, and `requiresApiKey` (a provider that suddenly
- * requires a key changes the test surface).
+ * are `baseUrl`, `model`, `models`, and `requiresApiKey` (a provider that
+ * suddenly requires a key changes the test surface).
  */
 export function providerCredentialsChanged(
-  oldP: Pick<PoolProvider, 'baseUrl' | 'model' | 'requiresApiKey'>,
-  newP: Pick<PoolProvider, 'baseUrl' | 'model' | 'requiresApiKey'>,
+  oldP: Pick<PoolProvider, 'baseUrl' | 'model' | 'requiresApiKey' | 'models'>,
+  newP: Pick<PoolProvider, 'baseUrl' | 'model' | 'requiresApiKey' | 'models'>,
 ): boolean {
+  const oldModels = (oldP.models ?? []).join('\0');
+  const newModels = (newP.models ?? []).join('\0');
   return (
     oldP.baseUrl !== newP.baseUrl ||
     oldP.model !== newP.model ||
+    oldModels !== newModels ||
     oldP.requiresApiKey !== newP.requiresApiKey
   );
 }
@@ -49,13 +53,24 @@ export function applyProviderPatch(
   provider: PoolProvider,
   patch: Partial<PoolProvider>,
 ): PoolProvider {
-  const merged = { ...provider, ...patch };
-  if (patch.baseUrl !== undefined || patch.model !== undefined || patch.requiresApiKey !== undefined) {
-    if (providerCredentialsChanged(provider, merged)) {
-      delete merged.lastTestResult;
+  const merged: PoolProvider = { ...provider, ...patch };
+  // When primary model changes and multi-model list exists, put primary first.
+  if (patch.model !== undefined && Array.isArray(merged.models) && merged.models.length > 0) {
+    const rest = merged.models.filter((m) => m !== patch.model);
+    merged.models = [patch.model, ...rest];
+  }
+  const normalized = normalizeGoogleModels(merged);
+  if (
+    patch.baseUrl !== undefined ||
+    patch.model !== undefined ||
+    patch.models !== undefined ||
+    patch.requiresApiKey !== undefined
+  ) {
+    if (providerCredentialsChanged(provider, normalized)) {
+      delete normalized.lastTestResult;
     }
   }
-  return merged;
+  return normalized;
 }
 
 /**

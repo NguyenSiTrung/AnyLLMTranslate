@@ -145,6 +145,9 @@ export function ProviderRow({
             {provider.model ? (
               <span className="text-xs text-zinc-600 font-mono truncate hidden sm:inline">
                 · {provider.model}
+                {provider.models && provider.models.length > 1
+                  ? ` +${provider.models.length - 1}`
+                  : ''}
               </span>
             ) : null}
           </div>

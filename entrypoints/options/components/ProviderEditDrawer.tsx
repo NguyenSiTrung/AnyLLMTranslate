@@ -21,10 +21,15 @@ import { ModelPicker } from './ModelPicker';
 import { ProviderCatalogPicker, inferCatalogId } from './ProviderCatalogPicker';
 import { ProviderKeyRow } from './ProviderKeyRow';
 import {
+  isGoogleAiStudioProvider,
+  isMultiModelActive,
+} from '@/lib/googleMultiModel';
+import {
   buildProviderConfig,
   getCredentialKey,
 } from '@/lib/providerPoolHelpers';
 import type {
+  GoogleModelStrategy,
   PoolKey,
   PoolProvider,
   ProviderConfig,
@@ -230,6 +235,13 @@ export function ProviderEditDrawer({
             )}
             onModelChange={(model) => onUpdateProvider({ model })}
           />
+
+          {isGoogleAiStudioProvider(provider) && (
+            <GoogleMultiModelFields
+              provider={provider}
+              onUpdateProvider={onUpdateProvider}
+            />
+          )}
         </div>
       )}
 
@@ -403,5 +415,134 @@ export function ProviderEditDrawer({
         </div>
       )}
     </Drawer>
+  );
+}
+
+/**
+ * Google AI Studio only: extra free-tier models + preferred/round-robin strategy.
+ */
+function GoogleMultiModelFields({
+  provider,
+  onUpdateProvider,
+}: {
+  provider: PoolProvider;
+  onUpdateProvider: (patch: Partial<PoolProvider>) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const multi = isMultiModelActive(provider);
+  const secondary = multi ? (provider.models ?? []).slice(1) : [];
+
+  const addModel = () => {
+    const id = draft.trim();
+    if (!id) return;
+    const primary = provider.model.trim() || id;
+    const existing = provider.models?.length
+      ? [...provider.models]
+      : primary
+        ? [primary]
+        : [];
+    if (existing.some((m) => m === id)) {
+      setDraft('');
+      return;
+    }
+    // If no primary yet, this becomes primary only.
+    if (!provider.model.trim()) {
+      onUpdateProvider({ model: id, models: undefined });
+      setDraft('');
+      return;
+    }
+    const next = existing.includes(primary)
+      ? [...existing, id]
+      : [primary, ...existing.filter((m) => m !== primary), id];
+    onUpdateProvider({ model: next[0], models: next });
+    setDraft('');
+  };
+
+  const removeSecondary = (model: string) => {
+    const all = (provider.models ?? [provider.model]).filter((m) => m !== model);
+    if (all.length <= 1) {
+      onUpdateProvider({ model: all[0] ?? provider.model, models: undefined, modelStrategy: undefined });
+      return;
+    }
+    onUpdateProvider({ model: all[0], models: all });
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-3">
+      <div>
+        <p className="text-xs font-medium text-zinc-300">Free-tier multi-model</p>
+        <p className="text-[11px] text-zinc-500 mt-1 leading-relaxed">
+          Free-tier Gemini limits are per model (and per project). Extra models let the pool use
+          remaining free quota when the preferred model is rate-limited. Extra API keys on the same
+          project do not increase free limits.
+        </p>
+      </div>
+
+      {secondary.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {secondary.map((m) => (
+            <span
+              key={m}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-[11px] font-mono text-zinc-300"
+            >
+              {m}
+              <button
+                type="button"
+                className="text-zinc-500 hover:text-zinc-200"
+                aria-label={`Remove ${m}`}
+                onClick={() => removeSecondary(m)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Input
+          id={`gmm-add-${provider.id}`}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addModel();
+            }
+          }}
+          placeholder="e.g. gemini-2.5-flash-lite"
+          className="font-mono text-xs"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={addModel}
+          disabled={!draft.trim()}
+        >
+          Add
+        </Button>
+      </div>
+
+      {multi && (
+        <FieldGroup
+          label="Model strategy"
+          description="Preferred + failover keeps quality on the primary model. Round-robin spreads load across free-tier models."
+          htmlFor={`gmm-strat-${provider.id}`}
+        >
+          <SegmentedControl
+            id={`gmm-strat-${provider.id}`}
+            label="Model strategy"
+            size="sm"
+            value={provider.modelStrategy ?? 'preferred_failover'}
+            onChange={(v: GoogleModelStrategy) => onUpdateProvider({ modelStrategy: v })}
+            options={[
+              { value: 'preferred_failover', label: 'Preferred + failover' },
+              { value: 'round_robin', label: 'Round-robin' },
+            ]}
+          />
+        </FieldGroup>
+      )}
+    </div>
   );
 }
