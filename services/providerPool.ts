@@ -424,7 +424,8 @@ export class ProviderPoolCoordinator implements TranslationService {
       .map((pid) => healthy.filter((s) => s.providerId === pid))
       .filter((g) => g.length > 0);
     if (groups.length === 0) return [];
-    if (groups.length === 1) return groups[0]!;
+    const only = groups[0];
+    if (groups.length === 1) return only ?? [];
 
     this.providerCursor.setSlotCount(groups.length);
     const start = this.providerCursor.next() ?? 0;

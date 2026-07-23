@@ -25,20 +25,28 @@ function dedupeModels(ids: string[]): string[] {
   return out;
 }
 
+/**
+ * Resolve ordered model ids for slot expansion.
+ *
+ * Always returns at least one entry (may be `""`) so unconfigured defaults
+ * still form a single pool slot — pre multi-model behavior. Skipping empty
+ * models emptied the pool for DEFAULT_SETTINGS (`model: ''`) and broke
+ * background translate tests with "pool is empty".
+ *
+ * Multi-model (≥2) only applies to Google AI Studio when `models[]` is set.
+ */
 export function resolveProviderModels(
   provider: Pick<PoolProvider, 'catalogId' | 'baseUrl' | 'model' | 'models'>,
 ): string[] {
   if (!isGoogleAiStudioProvider(provider)) {
-    const m = (provider.model ?? '').trim();
-    return m ? [m] : [];
+    return [(provider.model ?? '').trim()];
   }
   const fromList = Array.isArray(provider.models) ? provider.models : [];
   if (fromList.length > 0) {
     const deduped = dedupeModels(fromList);
     if (deduped.length > 0) return deduped;
   }
-  const m = (provider.model ?? '').trim();
-  return m ? [m] : [];
+  return [(provider.model ?? '').trim()];
 }
 
 export function isMultiModelActive(
@@ -70,20 +78,19 @@ export function normalizeGoogleModels(provider: PoolProvider): PoolProvider {
     return rest as PoolProvider;
   }
   const models = resolveProviderModels(provider);
-  if (models.length === 0) {
-    return { ...provider, models: undefined, modelStrategy: undefined };
-  }
-  if (models.length === 1) {
+  // resolveProviderModels always returns ≥1 entry; single (incl. empty) → no multi-model fields.
+  const primary = models[0] ?? '';
+  if (models.length <= 1) {
     return {
       ...provider,
-      model: models[0]!,
+      model: primary,
       models: undefined,
       modelStrategy: undefined,
     };
   }
   return {
     ...provider,
-    model: models[0]!,
+    model: primary,
     models,
     modelStrategy:
       provider.modelStrategy === 'round_robin' ? 'round_robin' : 'preferred_failover',

@@ -78,6 +78,14 @@ describe('resolveProviderModels / isMultiModelActive', () => {
     expect(resolveProviderModels(p)).toEqual(['openai/gpt-4o-mini']);
     expect(isMultiModelActive(p)).toBe(false);
   });
+
+  it('returns a single empty model when model is unset (default install / tests)', () => {
+    // Must not return [] — empty list would skip the provider in resolveSlots
+    // and surface "pool is empty" for DEFAULT_SETTINGS (model: '').
+    expect(resolveProviderModels({ baseUrl: '', model: '' })).toEqual(['']);
+    expect(resolveProviderModels(google({ model: '', models: undefined }))).toEqual(['']);
+    expect(isMultiModelActive(google({ model: '', models: undefined }))).toBe(false);
+  });
 });
 
 describe('resolveModelStrategy', () => {

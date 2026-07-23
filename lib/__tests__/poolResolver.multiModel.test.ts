@@ -66,6 +66,36 @@ describe('resolveSlots multi-model', () => {
     expect(slots.every((s) => !s.multiModel)).toBe(true);
   });
 
+  it('still yields a slot when model is empty and key not required (DEFAULT_SETTINGS)', () => {
+    // Regression: multi-model resolveProviderModels used to return [] for
+    // model:'' → resolveSlots skipped the provider → empty pool.
+    const slots = resolveSlots([
+      {
+        id: 'p_default',
+        displayName: 'Custom',
+        baseUrl: '',
+        model: '',
+        requiresApiKey: false,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        keys: [
+          {
+            id: 'k_default',
+            apiKey: '',
+            maxRpm: 20,
+            concurrencyLimit: 1,
+            interval: 500,
+            enabled: true,
+          },
+        ],
+      },
+    ]);
+    expect(slots).toHaveLength(1);
+    expect(slots[0]?.slotId).toBe('k_default');
+    expect(slots[0]?.providerConfig.model).toBe('');
+  });
+
   it('does not expand models on OpenRouter', () => {
     const slots = resolveSlots([
       {
