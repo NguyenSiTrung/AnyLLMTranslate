@@ -51,6 +51,9 @@ let suppressNextMouseUp = false;
 let selectionSession = 0;
 
 const speakController = new SpeakController();
+speakController.setOnSpeakingChange((speaking) => {
+  setSpeakingState(speaking);
+});
 
 /** Last request context for retry */
 let lastSelectedText = '';

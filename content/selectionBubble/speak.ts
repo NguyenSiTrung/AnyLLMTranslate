@@ -4,9 +4,20 @@
 
 export class SpeakController {
   private speaking = false;
+  private onSpeakingChange: ((speaking: boolean) => void) | null = null;
+
+  /** Optional UI hook when speak starts/stops. */
+  setOnSpeakingChange(cb: ((speaking: boolean) => void) | null): void {
+    this.onSpeakingChange = cb;
+  }
 
   isSpeaking(): boolean {
     return this.speaking;
+  }
+
+  private setSpeaking(next: boolean): void {
+    this.speaking = next;
+    this.onSpeakingChange?.(next);
   }
 
   speak(text: string, lang?: string): void {
@@ -22,12 +33,12 @@ export class SpeakController {
     const utt = new SpeechSynthesisUtterance(trimmed);
     if (lang) utt.lang = lang;
     utt.onend = () => {
-      this.speaking = false;
+      this.setSpeaking(false);
     };
     utt.onerror = () => {
-      this.speaking = false;
+      this.setSpeaking(false);
     };
-    this.speaking = true;
+    this.setSpeaking(true);
     speechSynthesis.speak(utt);
   }
 
@@ -35,6 +46,6 @@ export class SpeakController {
     if (typeof speechSynthesis !== 'undefined') {
       speechSynthesis.cancel();
     }
-    this.speaking = false;
+    this.setSpeaking(false);
   }
 }
