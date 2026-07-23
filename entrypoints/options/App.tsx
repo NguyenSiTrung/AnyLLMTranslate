@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Languages, Check, BarChart3, TextCursorInput, Layers,
+  Check, BarChart3, TextCursorInput, Layers,
 } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
@@ -227,7 +227,14 @@ export default function App() {
         >
           {/* Brand header */}
           <div className="sidebar-header">
-            <Languages className="sidebar-brand-icon" />
+            <img
+              src={chrome.runtime.getURL('icon/128.png')}
+              alt=""
+              width={24}
+              height={24}
+              className="sidebar-brand-icon"
+              draggable={false}
+            />
             <span className="sidebar-brand-name">AnyLLMTranslate</span>
             <span className="sidebar-version">v{chrome.runtime.getManifest().version}</span>
           </div>

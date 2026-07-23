@@ -1,4 +1,4 @@
-import { Languages, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import type { PopupStatusKind } from '../lib/derivePopupStatus';
 import { TYPOGRAPHY } from '../lib/typography';
 
@@ -10,6 +10,8 @@ const CHIP_DOT: Record<PopupStatusKind, string> = {
   blocked: 'bg-zinc-500',
   setup: 'bg-amber-500',
 };
+
+const BRAND_ICON_URL = chrome.runtime.getURL('icon/128.png');
 
 export function PopupHeader({
   chipLabel,
@@ -26,11 +28,14 @@ export function PopupHeader({
     <div className="relative px-4 py-4 flex items-center justify-between border-b border-zinc-900/80">
       <div className="flex items-center gap-3 min-w-0">
         <div className="relative flex items-center justify-center shrink-0">
-          <div
-            className={`w-8 h-8 rounded-[10px] bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 z-10 transition-all duration-500 ${isTranslating ? 'scale-95' : ''}`}
-          >
-            <Languages className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src={BRAND_ICON_URL}
+            alt=""
+            width={32}
+            height={32}
+            className={`w-8 h-8 rounded-[10px] shadow-lg shadow-blue-500/20 z-10 transition-all duration-500 ${isTranslating ? 'scale-95' : ''}`}
+            draggable={false}
+          />
           {isTranslating && (
             <div className="absolute inset-0 rounded-[10px] border border-blue-400 animate-ping opacity-50" />
           )}

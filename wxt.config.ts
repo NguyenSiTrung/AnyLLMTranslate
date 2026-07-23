@@ -26,7 +26,8 @@ export default defineConfig({
     // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.
     web_accessible_resources: [
       {
-        resources: ['assets/*', 'pdf.worker.min.mjs', 'pdf.worker.mjs'],
+        // icon/* — selection translate chip on web pages loads brand PNG via getURL
+        resources: ['assets/*', 'icon/*', 'pdf.worker.min.mjs', 'pdf.worker.mjs'],
         matches: ['<all_urls>'],
       },
     ],

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AnyLLMTranslate">
+  <defs>
+    <linearGradient id="g" x1="256" y1="100" x2="256" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/><stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0B1224"/>
+  <!-- A peak (open counter) -->
+  <path fill="url(#g)" d="M148 248 L244 108h24l96 140h-44L256 150 192 248z"/>
+  <!-- A feet -->
+  <path fill="url(#g)" d="M152 268 L100 404h48l40-100h-36zm208 0h-36l40 100h48L360 268z"/>
+  <!-- Bidirectional translation arrow -->
+  <g fill="#3B82F6">
+    <rect x="140" y="246" width="232" height="20" rx="2"/>
+    <path d="M118 256l40-30v60L118 256z"/>
+    <path d="M394 256l-40-30v60L394 256z"/>
+  </g>
+</svg>

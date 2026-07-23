@@ -29,23 +29,20 @@ let suppressNextMouseUp = false;
  *  are silently dropped instead of overwriting the current tooltip. */
 let selectionSession = 0;
 
-/** Build an SVG icon using createElementNS */
-function createSvgIcon(width: number, height: number, paths: string[]): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', String(width));
-  svg.setAttribute('height', String(height));
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  for (const d of paths) {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-  }
-  return svg;
+/**
+ * Brand mark for the selection translate chip — same asset as the toolbar
+ * icon (A monogram + bidirectional arrows). Requires `icon/*` in
+ * web_accessible_resources so the page can paint the chrome-extension URL.
+ */
+function createBrandMarkImg(size = 32): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = chrome.runtime.getURL('icon/128.png');
+  img.width = size;
+  img.height = size;
+  img.alt = '';
+  img.draggable = false;
+  img.setAttribute('aria-hidden', 'true');
+  return img;
 }
 
 /** Build copy SVG icon */
@@ -126,16 +123,7 @@ function createTranslateButton(x: number, y: number): HTMLElement {
   btn.setAttribute('data-anyllm-role', 'selection-btn');
   btn.setAttribute('role', 'button');
   btn.setAttribute('aria-label', 'Translate selection');
-  btn.appendChild(
-    createSvgIcon(16, 16, [
-      'M5 8l6 6',
-      'M4 14l6-6 2-3',
-      'M2 5h12',
-      'M7 2h1',
-      'M22 22l-5-10-5 10',
-      'M14 18h6',
-    ]),
-  );
+  btn.appendChild(createBrandMarkImg(32));
 
   // Position near selection (above the cursor)
   btn.style.left = `${x}px`;

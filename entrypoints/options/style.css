@@ -72,8 +72,9 @@ select, input, textarea { font-family: inherit; }
 .sidebar-brand-icon {
   width: 24px;
   height: 24px;
-  color: #60a5fa;
+  border-radius: 6px;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.12);
 }
 
 .sidebar-brand-name {
