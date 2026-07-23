@@ -48,6 +48,13 @@ export type ThinkingMode = 'auto' | 'on' | 'off';
  */
 export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high';
 
+/**
+ * Multi-model rotation strategy for Google AI Studio free-tier stacking.
+ * Only meaningful when {@link PoolProvider.models} has length ≥ 2 on a Google
+ * AI Studio provider. Default when unset: preferred_failover.
+ */
+export type GoogleModelStrategy = 'preferred_failover' | 'round_robin';
+
 /** Default thinking mode for new providers and missing persisted values. */
 export const DEFAULT_THINKING_MODE: ThinkingMode = 'auto';
 
@@ -162,8 +169,20 @@ export interface PoolProvider {
   displayName: string;
   /** OpenAI-compatible base URL (e.g. https://api.openai.com/v1). */
   baseUrl: string;
-  /** Model identifier (e.g. gpt-4o-mini). */
+  /** Model identifier (e.g. gpt-4o-mini). Primary / preferred when multi-model is active. */
   model: string;
+  /**
+   * Optional ordered model list (Google AI Studio only).
+   * Absent / empty / single → single-model behavior.
+   * When length ≥ 2 and provider is Google AI Studio, pool expands key×model slots.
+   * models[0] must equal {@link model} when multi-model is active.
+   */
+  models?: string[];
+  /**
+   * How to pick among multi-model slots. Default: preferred_failover.
+   * Ignored when multi-model is inactive or provider is not Google AI Studio.
+   */
+  modelStrategy?: GoogleModelStrategy;
   /** Whether this provider requires an API key per request. */
   requiresApiKey: boolean;
   /** Catalog entry id from OPENAI_COMPATIBLE_CATALOG (for re-selecting the entry). */
