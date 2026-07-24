@@ -230,8 +230,8 @@ export interface OnboardingState {
   completed: boolean;
   /** User skipped the automatic first-run wizard */
   skipped: boolean;
-  /** Last wizard step visited, used to resume setup */
-  lastStep?: 'welcome' | 'provider' | 'test' | 'language' | 'done';
+  /** Last wizard step visited, used to resume setup (new ids; legacy normalized on read) */
+  lastStep?: 'welcome' | 'connect' | 'verify' | 'ready';
 }
 
 /** Translation display mode */

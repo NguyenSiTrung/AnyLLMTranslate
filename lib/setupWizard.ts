@@ -7,23 +7,69 @@ import { LANGUAGES, type Language } from '@/lib/languages';
 
 export type WizardStep = NonNullable<OnboardingState['lastStep']>;
 
+/** Legacy ids that may still exist in chrome.storage or deep links. */
+export type LegacyWizardStep = 'provider' | 'test' | 'language' | 'done';
+
+export type WizardStepInput = WizardStep | LegacyWizardStep | string | null | undefined;
+
+export type CatalogFilterId = 'all' | 'cloud' | 'local' | 'custom';
+
 export const WIZARD_STEPS: readonly WizardStep[] = [
   'welcome',
-  'provider',
-  'test',
-  'language',
-  'done',
+  'connect',
+  'verify',
+  'ready',
 ] as const;
 
 export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
   welcome: 'Welcome',
-  provider: 'Provider',
-  test: 'Test',
-  language: 'Language',
-  done: 'Done',
+  connect: 'Connect',
+  verify: 'Verify',
+  ready: 'Ready',
 };
 
-/** Popular target languages shown as quick-pick chips in the language step. */
+const LEGACY_STEP_MAP: Record<LegacyWizardStep, WizardStep> = {
+  provider: 'connect',
+  test: 'verify',
+  language: 'verify',
+  done: 'ready',
+};
+
+/** Normalize new or legacy step ids; invalid input → null. */
+export function normalizeWizardStep(input: WizardStepInput): WizardStep | null {
+  if (input == null || input === '') return null;
+  if ((WIZARD_STEPS as readonly string[]).includes(input)) {
+    return input as WizardStep;
+  }
+  if (input in LEGACY_STEP_MAP) {
+    return LEGACY_STEP_MAP[input as LegacyWizardStep];
+  }
+  return null;
+}
+
+/**
+ * Resolve which wizard step to show when the dialog opens.
+ * - Completed setup reopens at connect (re-configure), not the success screen.
+ * - Skipped / in-progress resumes lastStep (never stuck on "ready" without complete).
+ */
+export function resolveWizardEntryStep(onboarding: OnboardingState): WizardStep {
+  if (onboarding.completed) {
+    return 'connect';
+  }
+
+  // lastStep may still be a legacy id from chrome.storage
+  const last = normalizeWizardStep(onboarding.lastStep as WizardStepInput) ?? 'welcome';
+  if (last === 'ready') {
+    return onboarding.skipped ? 'welcome' : 'verify';
+  }
+  return last;
+}
+
+export function wizardStepIndex(step: WizardStep): number {
+  return WIZARD_STEPS.indexOf(step) + 1;
+}
+
+/** Popular target languages shown as quick-pick chips on the verify step. */
 export const POPULAR_TARGET_LANGUAGE_CODES = [
   'en',
   'vi',
@@ -38,28 +84,6 @@ export const POPULAR_TARGET_LANGUAGE_CODES = [
   'th',
   'id',
 ] as const;
-
-/**
- * Resolve which wizard step to show when the dialog opens.
- * - Completed setup reopens at provider (re-configure), not the success screen.
- * - Skipped / in-progress resumes lastStep (never stuck on "done" without complete).
- */
-export function resolveWizardEntryStep(onboarding: OnboardingState): WizardStep {
-  if (onboarding.completed) {
-    return 'provider';
-  }
-
-  const last = onboarding.lastStep ?? 'welcome';
-  if (last === 'done') {
-    return onboarding.skipped ? 'welcome' : 'language';
-  }
-
-  return last;
-}
-
-export function wizardStepIndex(step: WizardStep): number {
-  return WIZARD_STEPS.indexOf(step) + 1;
-}
 
 export function getPopularTargetLanguages(): Language[] {
   return POPULAR_TARGET_LANGUAGE_CODES.map(
