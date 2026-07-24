@@ -1,28 +1,7 @@
-<!-- conductor-refresh: 2026-07-24 all (705 TCs pass / 2 fail; lint 0; tsc 0; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress; setup-wizard / thinkingDetection / tab-scope / empty-model elevated) -->
+<!-- conductor-refresh: 2026-07-23 all (638 TCs pass / 33 fail; lint 3; tsc 0; 72 archived / 0 active; Beads 7uk open; Google multi-model patterns elevated) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
-
-## Setup wizard 4-step B+C-lite (from: setup-wizard redesign, 2026-07-24)
-- **Step model is fixed:** welcome → connect → verify → ready. Do not reintroduce a 5-step provider/test/language/done split; language lives on **Verify**. (from: `2026-07-24-setup-wizard-redesign`, commits `decc568`…`b920979`)
-- **Shared shell:** `WizardShell` + `WizardProgress` own chrome; step bodies are thin presentational components under `entrypoints/options/components/wizard/steps/`.
-- **Catalog is shared:** `ProviderCatalogRows` (All/Cloud/Local/Custom filters) is used by both the wizard Connect step and Guided Add — one list UX, two hosts.
-- **Legacy normalize:** Storage / deep-link `lastStep` values from older wizards map through pure helpers in `lib/setupWizard.ts` so reopen and links do not crash on unknown steps.
-- **Atomic provider selection:** Persist provider selection with a single storage write so partial mid-wizard state cannot leave a half-selected catalog row.
-- **Completed reopen:** When setup is already completed, re-entry lands on **connect** (not the success/ready screen). Pure entry-step resolution stays in `lib/setupWizard.ts`. (extends: setup wizard redesign `e8b4776`, 2026-07-09)
-
-## Thinking disable probe on connection tests (from: provider-test thinking, 2026-07-24)
-- **Detect, don’t guess:** Pure `lib/thinkingDetection.ts` looks for `message.reasoning_content` and `<think>` tags; verdicts are `disable-success` | `disable-failed` | `controls-rejected` | `not-applicable`.
-- **Apply mode during test:** `providerTester` sends the provider’s configured `thinkingMode` on the sample translate request (same mappers as production via `thinkingMode.ts`).
-- **UI is summary-only:** `ProviderTestResult` / VerifyStep / toasts show the short `summary` string — keep detection logic out of React components. (from: `f6e0180`)
-
-## Popup tab-scoped live updates (from: popup progress scope, 2026-07-24)
-- **Gate by tab id:** Content scripts on every open tab broadcast `statusUpdate` / `pageCategoryUpdate`. Popup must accept only when `fromTabId === activeTabId` via pure `shouldAcceptTabScopedMessage` (`entrypoints/popup/lib/shouldAcceptTabScopedMessage.ts`).
-- **Prefer `sender.tab.id`:** Origin tab comes from the runtime sender (or explicit `tabId` on the payload); never apply a foreign tab’s progress to the open popup strip. (from: `1ae70a2`; closes deferred FR-27 note from web-translate-hardening)
-
-## Pool slots never empty on blank model (from: empty-model fix, 2026-07-24)
-- **Always ≥1 model entry:** `resolveProviderModels` must return at least one entry (empty string allowed) so `DEFAULT_SETTINGS` / incomplete model ids still produce a slot. Returning `[]` skips the provider and yields “pool is empty” on background translate.
-- **No non-null assertion crutches:** Prefer explicit empty-string defaults over `!` on multi-model paths (`googleMultiModel` / `providerPool`) so lint stays clean. (from: `b31f134`)
 
 ## Google AI Studio multi-model pool (from: AnyLLMTranslate-xxq / multi-model pool, 2026-07-23)
 - **Google-only expansion:** Multi-model slots activate only when `catalogId === 'google-ai-studio'` or Gemini OpenAI-compat base URL **and** `models.length ≥ 2`. Other providers always resolve to a single model; `normalizeGoogleModels` strips `models` / `modelStrategy` for non-Google or single-model configs. (from: `lib/googleMultiModel.ts`, 2026-07-23)
@@ -443,7 +422,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - **v1→v2 migration on read:** Detect pre-v2 shapes in storage, map lifetime counters, write dailies to IDB, persist v2 summary — do not require a one-shot migration job. (from: statistics analytics platform ALT-88u, 2026-07-09)
 - **Avoid double-count from paired v1 adapters:** When migrating or bridging legacy increment paths, ensure each logical event maps to one `recordUsage` (paired adapters can inflate characters/apiCalls). (from: statistics analytics platform ALT-88u, 2026-07-09)
 - **Stream path cache split is still incomplete:** Web/PDF stream success may record `cacheHits=0` and all pieces as LLM characters until pre-split mirrors non-stream `handleTranslate` (open Beads `ALT-d41`). (from: statistics analytics platform follow-up, 2026-07-09)
-- **Setup wizard pure helpers:** Entry step, popular languages, and provider-patch invalidation live in pure `lib/setupWizard.ts` (unit-testable without React); completed setup reopens at connect/provider, not the success screen. 2026-07-24 elevates full 4-step shell + catalog share — see **Setup wizard 4-step B+C-lite** above. (from: setup wizard redesign `e8b4776`, 2026-07-09; `b920979`, 2026-07-24)
+- **Setup wizard pure helpers:** Entry step, popular languages, and provider-patch invalidation live in pure `lib/setupWizard.ts` (unit-testable without React); completed setup reopens at provider, not the success screen. (from: setup wizard redesign `e8b4776`, 2026-07-09)
 - **General tab single-concern cards:** Prefer one primary concern per Card (Language / Layout / Style / Advanced) over kitchen-sink Display cards; share theme metadata via `GENERAL_THEME_OPTIONS` in `lib/themes.ts`. (from: General tab restructure ALT-6l9, 2026-07-09)
 
 ## Custom Theme & Context-Aware (2026-04-22)
@@ -844,4 +823,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-24 (setup-wizard 4-step B+C-lite, thinkingDetection, tab-scoped popup, empty-model pool elevated; suite 705 pass / 2 fail / 707; lint 0; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress)
+Last refreshed: 2026-07-23 (Google multi-model pool elevated; suite 638 pass / 33 fail / 671; lint 3; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk open, xxq closed)

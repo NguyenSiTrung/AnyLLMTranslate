@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-24 all (705 TCs pass / 2 fail; lint 0; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress; thinkingDetection pure helpers) -->
+<!-- conductor-refresh: 2026-07-23 all (638 TCs pass / 33 fail; lint 3; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk open; multi-model pure helpers) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -148,11 +148,5 @@
 - Pure `lib/googleMultiModel.ts` + `resolveSlots` expansion keep the pool coordinator free of Gemini-specific npm deps
 - Composite `slotId` (`keyId::model`) scopes circuit breakers and throttle so one model’s 429 does not cool siblings on the same key
 - Non-Google providers strip `models` / `modelStrategy` on normalize — zero schema migration for other catalogs
-- **Empty model ids must not empty the pool:** `resolveProviderModels` always returns at least one entry (may be `""`) so default/blank model configs still yield a dispatchable slot
 
-### Why thinkingDetection is pure helpers, not a new package?
-- Connection-test verdicts need to judge whether Thinking **Off** suppressed reasoning without a vendor SDK
-- Pure `lib/thinkingDetection.ts` inspects `reasoning_content` and `<think>` tags; `providerTester` only wires request shape + UI summary
-- Same pure-lib style as `thinkingMode.ts` / multi-model — unit-testable without chrome or network
-
-- Quality gates snapshot (2026-07-24, post setup-wizard + thinking probe): **705** Vitest TCs passed / **2** fail across **156** test files (**707** TCs total); **eslint 0** errors; `tsc --noEmit` **0** errors; build ≈ **3.6 MB**.
+- Quality gates snapshot (2026-07-23, post multi-model): **638** Vitest TCs passed / **33** fail across **149** test files (**671** TCs total); **eslint 3** errors (`no-non-null-assertion` in multi-model paths); `tsc --noEmit` **0** errors; build ≈ **3.6 MB**.

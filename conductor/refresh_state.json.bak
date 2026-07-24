@@ -1,0 +1,49 @@
+{
+  "lastRefresh": "2026-07-23T17:38:00+07:00",
+  "scope": "all",
+  "changes": [
+    "Scope: full refresh (post Google multi-model pool + quality fix).",
+    "product.md: Google AI Studio multi-model pool (models[], preferred_failover/round_robin, slotId); quality-gate cleanup note; Current State → 638 pass / 33 fail / 671 TCs, tsc 0, lint 3, build ~3.6 MB; Beads xxq closed.",
+    "tech-stack.md: multi-model pure-helpers rationale; quality-gates snapshot 638/33, tsc 0, lint 3, ~3.6 MB.",
+    "patterns.md: elevated Google multi-model section (expansion, slotId, strategies, UI gate, status identity).",
+    "tracks.md: refresh marker only (72 archived / 0 active; multi-model shipped without Conductor track).",
+    "workflow.md: refresh marker only (no content drift).",
+    "beads: Conductor→Beads — no active plan.md tasks; open backlog AnyLLMTranslate-7uk retained; xxq already closed.",
+    "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
+    "verification: vitest 638/671 pass (33 fail background.*); tsc 0; eslint 3 (non-null assertions multi-model); build ~3.6 MB."
+  ],
+  "codebaseHealth": {
+    "tests": 671,
+    "testsPassing": 638,
+    "testsFailing": 33,
+    "testFiles": 149,
+    "buildSize": "~3.6 MB",
+    "lintErrors": 3,
+    "lintErrorsDetail": "3 × @typescript-eslint/no-non-null-assertion — lib/googleMultiModel.ts:79,86; services/providerPool.ts:427.",
+    "tscErrors": 0,
+    "tscErrorsDetail": "Clean — prior 22 errors cleared in 8f4cd80.",
+    "archivedTracks": 72,
+    "activeTracks": 0,
+    "activeTracksDetail": "None. Multi-model pool + selection bubble/TTS/thinkingMode/brand shipped on master without Conductor tracks.",
+    "failingTests": [
+      "services/__tests__/background.selectionDictionary.test.ts (7)",
+      "services/__tests__/background.test.ts (18)",
+      "services/__tests__/background.translate.test.ts (8)"
+    ],
+    "shippedSinceLastRefresh": [
+      "quality gate cleanup (tsc 0, interception fixed, bulk lint)",
+      "Google AI Studio multi-model types + pure helpers",
+      "multi-model resolveSlots expansion (model-major × key)",
+      "preferred_failover + round_robin dispatch",
+      "composite slotId identity in status/dashboard/tests",
+      "Provider edit drawer free-tier multi-model UI",
+      "design + plan docs marked implemented; Beads xxq closed"
+    ]
+  },
+  "beads": {
+    "open": ["AnyLLMTranslate-7uk"],
+    "closedThisRefresh": ["AnyLLMTranslate-xxq"],
+    "syncDirection": "conductor-to-beads",
+    "syncNote": "No active tracks/plan.md checkboxes to close; 7uk remains intentional open backlog; xxq closed by implement session."
+  }
+}

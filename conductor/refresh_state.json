@@ -1,49 +1,48 @@
 {
-  "lastRefresh": "2026-07-23T17:38:00+07:00",
+  "lastRefresh": "2026-07-24T19:03:08+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh (post Google multi-model pool + quality fix).",
-    "product.md: Google AI Studio multi-model pool (models[], preferred_failover/round_robin, slotId); quality-gate cleanup note; Current State → 638 pass / 33 fail / 671 TCs, tsc 0, lint 3, build ~3.6 MB; Beads xxq closed.",
-    "tech-stack.md: multi-model pure-helpers rationale; quality-gates snapshot 638/33, tsc 0, lint 3, ~3.6 MB.",
-    "patterns.md: elevated Google multi-model section (expansion, slotId, strategies, UI gate, status identity).",
-    "tracks.md: refresh marker only (72 archived / 0 active; multi-model shipped without Conductor track).",
+    "Scope: full refresh (post setup-wizard 4-step B+C-lite, thinking probe, tab-scoped popup, empty-model pool fix).",
+    "product.md: Key Features — wizard B+C-lite detail, connection-test thinking probe, tab-scoped popup progress; Completed — empty-model fix, tab-scoped popup, setup-wizard redesign, thinking probe; Current State → 705 pass / 2 fail / 707 TCs, tsc 0, lint 0, build ~3.6 MB; Beads 2 open + 1 in_progress.",
+    "tech-stack.md: empty-model pool note under multi-model; thinkingDetection pure-helpers rationale; quality-gates snapshot 705/2, lint 0, tsc 0, ~3.6 MB.",
+    "patterns.md: elevated Setup wizard 4-step B+C-lite, Thinking disable probe, Popup tab-scoped live updates, Pool slots never empty on blank model; merged older setup-wizard pure-helpers bullet.",
+    "tracks.md: refresh marker only (72 archived / 0 active; post-refresh ship without Conductor tracks).",
     "workflow.md: refresh marker only (no content drift).",
-    "beads: Conductor→Beads — no active plan.md tasks; open backlog AnyLLMTranslate-7uk retained; xxq already closed.",
+    "beads: Conductor→Beads (trust plan.md) — no active tracks/plan.md checkboxes; retained open 7uk + zg4; retained in_progress s3t (no plan close).",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
-    "verification: vitest 638/671 pass (33 fail background.*); tsc 0; eslint 3 (non-null assertions multi-model); build ~3.6 MB."
+    "verification: vitest 705/707 pass (2 fail background subtitle timers); tsc 0; eslint 0; build ~3.6 MB."
   ],
   "codebaseHealth": {
-    "tests": 671,
-    "testsPassing": 638,
-    "testsFailing": 33,
-    "testFiles": 149,
+    "tests": 707,
+    "testsPassing": 705,
+    "testsFailing": 2,
+    "testFiles": 156,
     "buildSize": "~3.6 MB",
-    "lintErrors": 3,
-    "lintErrorsDetail": "3 × @typescript-eslint/no-non-null-assertion — lib/googleMultiModel.ts:79,86; services/providerPool.ts:427.",
+    "lintErrors": 0,
+    "lintErrorsDetail": "Clean — prior multi-model no-non-null-assertion errors cleared in b31f134.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean — prior 22 errors cleared in 8f4cd80.",
+    "tscErrorsDetail": "Clean.",
     "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Multi-model pool + selection bubble/TTS/thinkingMode/brand shipped on master without Conductor tracks.",
+    "activeTracksDetail": "None. Setup wizard redesign + thinking probe + tab-scoped popup + empty-model fix shipped on master without Conductor tracks.",
     "failingTests": [
-      "services/__tests__/background.selectionDictionary.test.ts (7)",
-      "services/__tests__/background.test.ts (18)",
-      "services/__tests__/background.translate.test.ts (8)"
+      "services/__tests__/background.test.ts — emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries (timeout)",
+      "services/__tests__/background.test.ts — does not cache a partial (source-back-filled) translation (hook timeout)"
     ],
     "shippedSinceLastRefresh": [
-      "quality gate cleanup (tsc 0, interception fixed, bulk lint)",
-      "Google AI Studio multi-model types + pure helpers",
-      "multi-model resolveSlots expansion (model-major × key)",
-      "preferred_failover + round_robin dispatch",
-      "composite slotId identity in status/dashboard/tests",
-      "Provider edit drawer free-tier multi-model UI",
-      "design + plan docs marked implemented; Beads xxq closed"
+      "fix(pool): keep default slot when model is empty (b31f134)",
+      "fix(popup): scope translation progress to the active tab (1ae70a2)",
+      "fix(setup-wizard): keep provider selection with atomic storage write (d3a5223)",
+      "feat(setup-wizard): 4-step model and legacy lastStep normalize (decc568)",
+      "feat(setup-wizard): 4-step B+C-lite redesign with shared shell (b920979)",
+      "feat(provider-test): probe thinking disable on connection tests (f6e0180)"
     ]
   },
   "beads": {
-    "open": ["AnyLLMTranslate-7uk"],
-    "closedThisRefresh": ["AnyLLMTranslate-xxq"],
+    "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
+    "inProgress": ["AnyLLMTranslate-s3t"],
+    "closedThisRefresh": [],
     "syncDirection": "conductor-to-beads",
-    "syncNote": "No active tracks/plan.md checkboxes to close; 7uk remains intentional open backlog; xxq closed by implement session."
+    "syncNote": "Trust plan.md: no active Conductor tracks or plan.md checkboxes to create/close. Retained backlog zg4 (P2 seek test), 7uk (P3 OCR), and in_progress s3t (PDF bilingual/text removal — may be partially obsolete after bridge-only reader/compare; left open for human triage)."
   }
 }
