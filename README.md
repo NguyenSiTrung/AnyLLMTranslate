@@ -87,7 +87,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 - **AES-GCM encryption** — API keys encrypted at rest via `lib/crypto.ts`
 - **Rate limiting** — in-process semaphore limiting concurrent translation requests (max 3 for pages/subtitles, max 2 for PDFs)
 - **React error boundaries** — graceful error handling for popup and options pages
-- **Setup wizard** — 5-step first-run onboarding (welcome, provider selection, connection test, language, done) with compact provider catalog picker
+- **Setup wizard** — 4-step first-run onboarding (welcome → connect → verify → ready) with brand Welcome, catalog filters, and language on verify
 
 ---
 
@@ -186,7 +186,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 │   │   └── main.tsx
 │   ├── options/               # Options page React UI (full-screen, sidebar navigation)
 │   │   ├── App.tsx            # Layout: sidebar navigation + tab content
-│   │   ├── SetupWizard.tsx    # 5-step first-run onboarding wizard with provider catalog
+│   │   ├── SetupWizard.tsx    # 4-step first-run onboarding wizard (shell + steps)
 │   │   ├── ThemePreview.tsx   # Live theme preview component
 │   │   ├── CustomThemeEditor.tsx # User-defined custom theme editor
 │   │   ├── components/        # Specialized options components

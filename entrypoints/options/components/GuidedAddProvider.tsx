@@ -2,16 +2,9 @@
  * Three-step guided add-provider flow: Choose → Connect → Verify.
  */
 
-import { useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
-import {
-  filterCatalog,
-  getCatalogEntryById,
-  groupByCategory,
-  type CatalogCategory,
-  type OpenAiCompatibleCatalogEntry,
-  type ProviderAccent,
-} from '@/lib/openAiCompatibleCatalog';
+import { useState } from 'react';
+import { getCatalogEntryById, type OpenAiCompatibleCatalogEntry } from '@/lib/openAiCompatibleCatalog';
+import type { CatalogFilterId } from '@/lib/setupWizard';
 import { buildProviderConfig } from '@/lib/providerPoolHelpers';
 import { testConnection } from '@/services/providerTester';
 import { Modal } from '@/ui/Modal';
@@ -19,26 +12,9 @@ import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { ModelPicker } from './ModelPicker';
-import { ProviderIdentityBadge } from './ProviderIdentityBadge';
 import { ConnectionTestProgressList } from './ConnectionTestProgressList';
+import { ProviderCatalogRows } from './ProviderCatalogRows';
 import type { ConnectionTestStep } from '@/services/providerTester';
-
-const CATEGORY_LABELS: Record<CatalogCategory, string> = {
-  cloud: 'Cloud',
-  local: 'Local',
-  custom: 'Custom',
-};
-
-function resolveIdentityForEntry(entry: OpenAiCompatibleCatalogEntry): {
-  accent: ProviderAccent;
-  monogram: string;
-} {
-  const trimmed = entry.displayName.trim();
-  return {
-    accent: entry.accent ?? 'zinc',
-    monogram: entry.monogram ?? (trimmed.length > 0 ? trimmed.charAt(0).toUpperCase() : '?'),
-  };
-}
 
 interface GuidedAddProviderProps {
   targetLanguage: string;
@@ -66,6 +42,7 @@ export function GuidedAddProvider({
 }: GuidedAddProviderProps) {
   const [step, setStep] = useState<Step>('choose');
   const [query, setQuery] = useState('');
+  const [catalogFilter, setCatalogFilter] = useState<CatalogFilterId>('all');
   const [catalogId, setCatalogId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -76,8 +53,6 @@ export function GuidedAddProvider({
   const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
   const [testError, setTestError] = useState<string | null>(null);
   const [testOk, setTestOk] = useState(false);
-
-  const groups = useMemo(() => groupByCategory(filterCatalog(query)), [query]);
 
   const pickEntry = (entry: OpenAiCompatibleCatalogEntry) => {
     setCatalogId(entry.id);
@@ -133,7 +108,6 @@ export function GuidedAddProvider({
       );
       if (result.overall) {
         setTestOk(true);
-        // auto-commit on success after brief moment
         if (!catalogId) {
           setTestOk(false);
           return;
@@ -166,58 +140,16 @@ export function GuidedAddProvider({
       <p className="text-[11px] uppercase tracking-widest text-zinc-600">{stepLabel}</p>
 
       {step === 'choose' && (
-        <div className="space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search OpenRouter, Groq, Ollama..."
-              className="pl-9"
-              aria-label="Search provider catalog"
-            />
-          </div>
-          <div className="max-h-80 overflow-y-auto space-y-3">
-            {groups.length === 0 && (
-              <p className="p-3 text-xs text-zinc-500">No providers match your search.</p>
-            )}
-            {groups.map((group) => (
-              <div key={group.category}>
-                <p className="text-[10px] uppercase tracking-widest text-zinc-600 px-1 mb-1.5">
-                  {CATEGORY_LABELS[group.category]}
-                </p>
-                <div className="space-y-1.5">
-                  {group.entries.map((entry) => {
-                    const identity = resolveIdentityForEntry(entry);
-                    return (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        onClick={() => pickEntry(entry)}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-zinc-700/60 hover:bg-zinc-800/50 hover:border-zinc-600 transition-colors text-left"
-                      >
-                        <ProviderIdentityBadge
-                          accent={identity.accent}
-                          monogram={identity.monogram}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-zinc-200 truncate">
-                            {entry.displayName}
-                          </p>
-                          <p className="text-xs text-zinc-500 font-mono truncate">
-                            {entry.baseUrl || 'Custom base URL'}
-                          </p>
-                        </div>
-                        <Plus className="w-4 h-4 text-zinc-500 shrink-0" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ProviderCatalogRows
+          query={query}
+          onQueryChange={setQuery}
+          filter={catalogFilter}
+          onFilterChange={setCatalogFilter}
+          selectedCatalogId={catalogId}
+          onSelect={pickEntry}
+          showFilters
+          activeTone="neutral"
+        />
       )}
 
       {step === 'connect' && (

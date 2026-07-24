@@ -339,8 +339,9 @@ export function usePopupTab(
     }));
   }, [activeHostname, categoryInfo, settings.siteRules, updateSetting]);
 
-  const openSetupGuide = useCallback((step?: 'provider' | 'test' | 'language') => {
+  const openSetupGuide = useCallback((step?: string) => {
     const params = new URLSearchParams({ setup: '1' });
+    // Accept new ids (connect/verify/ready) and legacy (provider/test/language/done)
     if (step) params.set('step', step);
     openOptionsWindow(`?${params.toString()}`);
   }, []);

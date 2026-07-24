@@ -232,8 +232,8 @@ export default function App() {
                   action: providerRecoveryMessage.action,
                   canTest: providerReadiness.canTest,
                   onSetup: () =>
-                    tab.openSetupGuide(settings.onboarding.skipped ? undefined : 'provider'),
-                  onTest: () => tab.openSetupGuide('test'),
+                    tab.openSetupGuide(settings.onboarding.skipped ? undefined : 'connect'),
+                  onTest: () => tab.openSetupGuide('verify'),
                   setupLabel: settings.onboarding.skipped ? 'Resume setup' : 'Set up provider',
                 }
               : undefined

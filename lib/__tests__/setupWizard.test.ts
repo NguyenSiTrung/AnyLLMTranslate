@@ -72,7 +72,7 @@ describe('setupWizard steps', () => {
         skipped: false,
         // Storage may still hold legacy ids
         lastStep: 'provider',
-      } as Parameters<typeof resolveWizardEntryStep>[0]),
+      } as unknown as Parameters<typeof resolveWizardEntryStep>[0]),
     ).toBe('connect');
   });
 

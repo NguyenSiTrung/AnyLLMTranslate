@@ -18,9 +18,9 @@ import { StatisticsSection } from './sections/StatisticsSection';
 import { SetupWizard } from './SetupWizard';
 import {
   isTranslatablePageUrl,
+  normalizeWizardStep,
   type TranslatePageResult,
   type WizardStep,
-  WIZARD_STEPS,
 } from '@/lib/setupWizard';
 
 /* ── Grouped Navigation ─────────────────────────────────────── */
@@ -98,8 +98,9 @@ export default function App() {
     const requestedSetup = url.searchParams.get('setup') === '1' || window.location.hash === '#setup';
     const shouldAutoOpen = !settings.onboarding.completed && !settings.onboarding.skipped;
     const stepParam = url.searchParams.get('step');
-    if (stepParam && (WIZARD_STEPS as readonly string[]).includes(stepParam)) {
-      setWizardForceStep(stepParam as WizardStep);
+    const normalizedStep = normalizeWizardStep(stepParam);
+    if (normalizedStep) {
+      setWizardForceStep(normalizedStep);
     }
 
     if (requestedSetup || shouldAutoOpen) {
@@ -144,7 +145,7 @@ export default function App() {
   };
 
   /**
-   * Translate a normal webpage tab — wired to the SetupWizard "done" step.
+   * Translate a normal webpage tab — wired to the SetupWizard "ready" step.
    * Prefer the active tab in the last focused window when it is http(s);
    * otherwise any active http(s) tab (setup may be open in a popup window).
    */
