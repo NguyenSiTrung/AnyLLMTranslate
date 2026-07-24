@@ -40,7 +40,14 @@ export function useConnectionTest(targetLanguage: string): UseConnectionTestResu
       setIsTesting(false);
 
       if (result.overall) {
-        showSuccess(successLabel);
+        const thinkingNote =
+          result.thinking?.verdict === 'disable-failed' ||
+          result.thinking?.verdict === 'controls-rejected'
+            ? ` — ${result.thinking.summary}`
+            : result.thinking?.verdict === 'disable-success'
+              ? ' — thinking disabled OK'
+              : '';
+        showSuccess(`${successLabel}${thinkingNote}`);
       } else {
         const failed = result.steps.find((s) => !s.success);
         const message = getConnectionErrorMessage(failed?.error);

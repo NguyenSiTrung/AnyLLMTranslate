@@ -2,7 +2,7 @@
  * Provider Connection Tester — validates provider connectivity in 3 steps.
  * Step 1: Simple ping (minimal request, check 200)
  * Step 2: Model listing (GET /v1/models)
- * Step 3: Translation test (translate sample, measure latency)
+ * Step 3: Translation test (translate sample, measure latency, probe thinking)
  */
 
 import type { ProviderConfig } from '@/types/config';
@@ -11,6 +11,18 @@ import {
   buildModelsListUrl,
   parseModelsListResponse,
 } from '@/lib/modelListing';
+import {
+  applyThinkingModeToRequest,
+  isThinkingKwargsRejected,
+  normalizeThinkingMode,
+} from '@/lib/thinkingMode';
+import {
+  detectThinkingSignals,
+  evaluateThinkingProbe,
+  stripThinkTags,
+  type ThinkingProbeResult,
+} from '@/lib/thinkingDetection';
+import type { ChatCompletionRequest } from '@/types/translation';
 
 /** Individual test step result */
 export interface ConnectionTestStep {
@@ -28,6 +40,12 @@ export interface ConnectionTestResult {
   models: string[];
   translationSample?: string;
   totalLatencyMs: number;
+  /**
+   * Thinking/reasoning probe from the translation step.
+   * Present when translation ran (success or content parse); absent if
+   * translation never started or failed before a body was available.
+   */
+  thinking?: ThinkingProbeResult;
 }
 
 /** Progress callback for UI updates */
@@ -43,6 +61,7 @@ export async function testConnection(
   const steps: ConnectionTestStep[] = [];
   let models: string[] = [];
   let translationSample: string | undefined;
+  let thinking: ThinkingProbeResult | undefined;
 
   // Step 1: Simple ping
   const pingStep = await testPing(config);
@@ -67,13 +86,15 @@ export async function testConnection(
     models = modelsStep.data as string[];
   }
 
-  // Step 3: Translation test
+  // Step 3: Translation test (applies thinkingMode + probes response)
   const translationStep = await testTranslation(config, targetLanguage);
   steps.push(translationStep);
   onProgress?.(translationStep, 2);
 
-  if (translationStep.success && typeof translationStep.data === 'string') {
-    translationSample = translationStep.data;
+  if (translationStep.data && typeof translationStep.data === 'object') {
+    const payload = translationStep.data as Partial<TranslationStepData>;
+    if (typeof payload.sample === 'string') translationSample = payload.sample;
+    if (payload.thinking) thinking = payload.thinking;
   }
 
   return {
@@ -82,6 +103,7 @@ export async function testConnection(
     models,
     translationSample,
     totalLatencyMs: sumLatency(steps),
+    thinking,
   };
 }
 
@@ -238,10 +260,53 @@ async function testModelListing(config: ProviderConfig): Promise<ConnectionTestS
   }
 }
 
-/** Step 3: Translate a sample sentence and return result + latency */
-async function testTranslation(config: ProviderConfig, targetLanguage?: string): Promise<ConnectionTestStep> {
+/** Payload stored on the translation step's `data` field. */
+export interface TranslationStepData {
+  sample: string;
+  thinking: ThinkingProbeResult;
+}
+
+function buildTranslationRequestBody(
+  config: ProviderConfig,
+  lang: string,
+  includeThinkingControls: boolean,
+): ChatCompletionRequest {
+  const base: ChatCompletionRequest = {
+    model: config.model,
+    messages: [
+      {
+        role: 'system',
+        content: `You are a translator. Translate the following text to ${lang}. Respond only with the translation.`,
+      },
+      { role: 'user', content: 'Hello, how are you today?' },
+    ],
+    max_tokens: 100,
+    temperature: 0.3,
+  };
+
+  if (!includeThinkingControls) return base;
+
+  return applyThinkingModeToRequest(base, config.thinkingMode, {
+    baseUrl: config.baseUrl,
+    thinkingEffort: config.thinkingEffort,
+  });
+}
+
+function requestHasThinkingControls(body: ChatCompletionRequest): boolean {
+  return (
+    body.chat_template_kwargs !== undefined || body.reasoning_effort !== undefined
+  );
+}
+
+/** Step 3: Translate a sample sentence; apply thinkingMode; probe reasoning. */
+async function testTranslation(
+  config: ProviderConfig,
+  targetLanguage?: string,
+): Promise<ConnectionTestStep> {
   const start = performance.now();
   const lang = targetLanguage || 'Vietnamese';
+  const mode = normalizeThinkingMode(config.thinkingMode);
+
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -250,27 +315,45 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    // Apply provider thinkingMode (same rules as real translate).
+    let body = buildTranslationRequestBody(config, lang, true);
+    const controlsAttempted = requestHasThinkingControls(body);
+    let controlsRejected = false;
 
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          {
-            role: 'system',
-            content: `You are a translator. Translate the following text to ${lang}. Respond only with the translation.`,
-          },
-          { role: 'user', content: 'Hello, how are you today?' },
-        ],
-        max_tokens: 100,
-        temperature: 0.3,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
+    const postOnce = async (requestBody: ChatCompletionRequest) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
+      try {
+        return await fetch(`${config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    let response = await postOnce(body);
+
+    // Mirror openaiCompatible: if thinking controls are rejected, retry once without them.
+    if (!response.ok && response.status === 400 && controlsAttempted) {
+      const errorText = await response.text().catch(() => '');
+      if (isThinkingKwargsRejected(errorText)) {
+        controlsRejected = true;
+        body = buildTranslationRequestBody(config, lang, false);
+        response = await postOnce(body);
+      } else {
+        const latencyMs = Math.round(performance.now() - start);
+        return {
+          name: 'translation',
+          success: false,
+          latencyMs,
+          error: `HTTP 400: ${errorText.slice(0, 200) || 'Translation test failed'}`,
+        };
+      }
+    }
 
     const latencyMs = Math.round(performance.now() - start);
 
@@ -283,16 +366,28 @@ async function testTranslation(config: ProviderConfig, targetLanguage?: string):
       };
     }
 
-    const json = await response.json() as {
-      choices?: { message?: { content?: string } }[];
+    const json = (await response.json()) as {
+      choices?: { message?: { content?: string; reasoning_content?: string } }[];
     };
-    const content = json.choices?.[0]?.message?.content ?? '';
+    const message = json.choices?.[0]?.message;
+    const rawContent = message?.content ?? '';
+    const signals = detectThinkingSignals({ content: rawContent, message });
+    const thinkingResult = evaluateThinkingProbe({
+      mode,
+      // True if we successfully forced controls, or attempted and were rejected.
+      controlsSent: controlsAttempted,
+      controlsRejected,
+      thinkingDetected: signals.detected,
+      sources: signals.sources,
+    });
+
+    const sample = stripThinkTags(rawContent);
 
     return {
       name: 'translation',
       success: true,
       latencyMs,
-      data: content.trim(),
+      data: { sample, thinking: thinkingResult } satisfies TranslationStepData,
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {

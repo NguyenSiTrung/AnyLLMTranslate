@@ -129,6 +129,20 @@ export function VerifyStep({
               <p className="mt-0.5 text-xs text-emerald-200/70">
                 Your provider is ready. Finish setup when you are ready.
               </p>
+              {testResult.thinking && (
+                <p
+                  className={`mt-1.5 text-xs ${
+                    testResult.thinking.verdict === 'disable-success'
+                      ? 'text-emerald-200/80'
+                      : testResult.thinking.verdict === 'disable-failed' ||
+                          testResult.thinking.verdict === 'controls-rejected'
+                        ? 'text-amber-200/90'
+                        : 'text-emerald-200/60'
+                  }`}
+                >
+                  {testResult.thinking.summary}
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -1,13 +1,12 @@
 /**
  * Shared connection-test result block (FR-1 dedup).
  *
- * Renders the success line and the failure card. Previously copy-pasted
- * in both `ProviderConnectionTest` and `ProviderKeyRow` (which differed only
- * in the success label). Kept presentational — error-message resolution is
- * the caller's job so this stays free of `providerReadiness` imports.
+ * Renders the success line, thinking/reasoning probe line, and the failure card.
+ * Kept presentational — error-message resolution is the caller's job.
  */
 
 import type { ConnectionTestResult } from '@/services/providerTester';
+import type { ThinkingProbeResult } from '@/lib/thinkingDetection';
 
 interface ProviderTestResultProps {
   testResult: ConnectionTestResult | null;
@@ -19,12 +18,27 @@ interface ProviderTestResultProps {
   successLabel: string;
 }
 
+function thinkingLineClass(thinking: ThinkingProbeResult): string {
+  switch (thinking.verdict) {
+    case 'disable-success':
+      return 'text-emerald-400/90';
+    case 'disable-failed':
+      return 'text-amber-300';
+    case 'controls-rejected':
+      return 'text-amber-300/90';
+    default:
+      return 'text-zinc-400';
+  }
+}
+
 export function ProviderTestResult({
   testResult,
   failureTitle,
   failureAction,
   successLabel,
 }: ProviderTestResultProps) {
+  const thinking = testResult?.thinking;
+
   return (
     <>
       {testResult && !testResult.overall && (
@@ -34,7 +48,16 @@ export function ProviderTestResult({
         </div>
       )}
       {testResult?.overall && (
-        <p className="text-xs text-emerald-400 font-medium">{successLabel}</p>
+        <div className="space-y-1">
+          <p className="text-xs text-emerald-400 font-medium">{successLabel}</p>
+          {thinking && (
+            <p className={`text-xs ${thinkingLineClass(thinking)}`}>{thinking.summary}</p>
+          )}
+        </div>
+      )}
+      {/* Show thinking probe even when overall failed but translation still produced a probe */}
+      {testResult && !testResult.overall && thinking && (
+        <p className={`text-xs mt-1 ${thinkingLineClass(thinking)}`}>{thinking.summary}</p>
       )}
     </>
   );
