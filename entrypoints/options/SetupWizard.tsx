@@ -71,7 +71,6 @@ export function SetupWizard({
 }: SetupWizardProps) {
   const settings = useSettingsStore();
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const updateProvider = useSettingsStore((s) => s.updateProvider);
   const { error: showError, success: showSuccess } = useToast();
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -89,21 +88,23 @@ export function SetupWizard({
   }, []);
 
   /**
-   * Update the legacy provider mirror AND keep providers[0] in sync so the
-   * pool coordinator (which reads settings.providers) sees wizard edits
-   * immediately. The wizard's single-provider flow maps to pool[0].
+   * Atomically update the legacy provider mirror AND providers[0] so the pool
+   * coordinator sees wizard edits. Must be a single storage write — concurrent
+   * updateProvider + updateSettings({providers}) races (load→merge→save) and
+   * the last write can drop the catalog selection (baseUrl/model never stick).
    */
   const updateProviderAndPool = useCallback(
     (patch: Partial<ProviderConfig>) => {
       if (providerPatchInvalidatesTest(patch)) {
         clearTestState();
       }
-      updateProvider(patch);
-      updateSettings({
-        providers: syncProviderToPool(settings.providers ?? [], patch),
+      const { provider, providers } = useSettingsStore.getState();
+      void updateSettings({
+        provider: { ...provider, ...patch },
+        providers: syncProviderToPool(providers ?? [], patch),
       });
     },
-    [updateProvider, updateSettings, settings.providers, clearTestState],
+    [updateSettings, clearTestState],
   );
 
   // Snapshot onboarding/language when dialog opens (avoid re-running mid-flow)
@@ -239,12 +240,13 @@ export function SetupWizard({
 
     setTestResult(result);
     setIsTesting(false);
-    await updateProvider({ connectionStatus: result.overall ? 'success' : 'error' });
-    // Keep pool status in sync with the mirror
-    updateSettings({
-      providers: syncProviderToPool(settings.providers ?? [], {
-        connectionStatus: result.overall ? 'success' : 'error',
-      }),
+    // Single write: connectionStatus lives on the legacy mirror; avoid racing
+    // a second providers-only write that can clobber the just-tested config.
+    const status = result.overall ? 'success' : 'error';
+    const { provider, providers } = useSettingsStore.getState();
+    await updateSettings({
+      provider: { ...provider, connectionStatus: status },
+      providers: syncProviderToPool(providers ?? [], { connectionStatus: status }),
     });
 
     if (result.overall) {
