@@ -500,6 +500,30 @@ function applyNativeCaptionHideForHandler(handler: ReturnType<typeof getHandlerB
 }
 
 /**
+ * Turn off showing HTML5 TextTrack cues (mode "showing" → "hidden").
+ * YouTube mostly uses its own caption DOM, but some embeds / fallbacks use
+ * <track>; leaving them "showing" stacks originals under our overlay.
+ */
+function disableHtml5TextTracks(): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const videos = document.querySelectorAll('video');
+    for (const video of videos) {
+      const tracks = video.textTracks;
+      if (!tracks) continue;
+      for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        if (track && track.mode === 'showing') {
+          track.mode = 'hidden';
+        }
+      }
+    }
+  } catch {
+    /* ignore cross-origin / missing textTracks */
+  }
+}
+
+/**
  * Build resolved page context for subtitle translation.
  * Extracts metadata, applies site rules and tab overrides.
  */
@@ -745,15 +769,21 @@ async function activateOverlayWithParsedCues(options: {
 
   state.interceptOriginalCues = cues;
 
+  // Always (re)apply native hide: proactive YouTube can start overlay while
+  // CC is already painting, and a prior overlay session may have skipped hide.
+  const domSource = handler?.getDomCueSource?.();
+  if (domSource) {
+    hideNativeCaptions(domSource.captionWindowSelector, 'display');
+  } else {
+    applyNativeCaptionHideForHandler(handler);
+  }
+  // Belt-and-suspenders: disable HTML5 text tracks so browser-native cues
+  // cannot stack under the overlay when CSS hide is delayed/recreated.
+  disableHtml5TextTracks();
+
   if (!state.isOverlayMode) {
     console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
     state.isOverlayMode = true;
-    const domSource = handler?.getDomCueSource?.();
-    if (domSource) {
-      hideNativeCaptions(domSource.captionWindowSelector, 'display');
-    } else {
-      applyNativeCaptionHideForHandler(handler);
-    }
 
     const savedPrefs = await initializeControls();
     const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);

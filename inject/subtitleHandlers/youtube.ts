@@ -5,6 +5,16 @@ import {
   type AsrWord,
 } from '@/lib/youtubeAsrResegment';
 
+/** YouTube player caption window nodes (classic + modular player). */
+export const YOUTUBE_NATIVE_CAPTION_HIDE_SELECTOR = [
+  '.ytp-caption-window-container',
+  '.caption-window',
+  '.ytp-caption-segment',
+  // Modular / TVHTML5 player shells still used on some watch pages.
+  '.ytp-player-content .caption-window',
+  'div[id^="ytp-caption-window"]',
+].join(', ');
+
 export class YouTubeHandler implements SubtitleHandler {
   readonly platform = 'youtube';
 
@@ -15,6 +25,16 @@ export class YouTubeHandler implements SubtitleHandler {
 
   isWatchPage(): boolean {
     return window.location.pathname === '/watch';
+  }
+
+  /**
+   * Hide native CC chrome while our overlay owns translation display.
+   * Intercept blanking only affects the timedtext response we rewrite; when
+   * CC was already on (or proactive fetch), the player keeps rendering native
+   * captions unless this CSS hide is applied.
+   */
+  getNativeCaptionHide(): { selector: string; method: 'display' | 'visibility' } {
+    return { selector: YOUTUBE_NATIVE_CAPTION_HIDE_SELECTOR, method: 'display' };
   }
 
   getPatterns(): SubtitleUrlPattern[] {
