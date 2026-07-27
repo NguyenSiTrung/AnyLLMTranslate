@@ -92,4 +92,7 @@ export const STORAGE_KEYS = {
   /** Stats v2 daily dimensional records (IndexedDB) */
   STATS_DB: 'anyllm-stats',
   STATS_STORE: 'daily',
+  /** YouTube ASR AI re-align cue cache (IndexedDB) */
+  ASR_REALIGN_DB: 'anyllm-asr-realign-cache',
+  ASR_REALIGN_STORE: 'entries',
 } as const;
