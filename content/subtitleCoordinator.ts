@@ -26,6 +26,7 @@ import { createRenderer, type SubtitleRenderer } from '@/content/subtitleRendere
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { clearTranslatedSections } from '@/content/sectionTranslate';
 import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
+import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
@@ -60,7 +61,19 @@ import {
   isYoutubeAsrUrl,
   prepareYoutubeAsrAiInput,
 } from '@/lib/youtubeAsrResegment';
-import type { ResegmentYoutubeAsrResult } from '@/types/messages';
+import {
+  buildAsrRealignCacheKey,
+  extractYoutubeVideoIdFromUrl,
+  hashAsrRealignContent,
+  stripYoutubeTitleSuffix,
+  youtubeThumbnailUrl,
+  youtubeWatchUrl,
+} from '@/lib/youtubeAsrRealignCache';
+import type {
+  AsrRealignProgressMessage,
+  GetAsrRealignCacheResult,
+  ResegmentYoutubeAsrResult,
+} from '@/types/messages';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -633,25 +646,120 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       asrEnable && isAsrTrack && platform === 'youtube' ? 'local' : 'off';
 
     if (asrEnable && asrAiEnable && platform === 'youtube' && isAsrTrack && rawCues.length > 0) {
+      const showRealignProgress = (
+        status: 'realigning' | 'realign-cached',
+        current: number,
+        total: number,
+      ) => {
+        updateMiniProgress({
+          translated: current,
+          total: Math.max(total, 1),
+          status,
+          onStop: () => {
+            cancelBackgroundSubtitleSession();
+            hideMiniProgress();
+          },
+        });
+      };
+
+      const onProgressMsg = (msg: unknown) => {
+        const m = msg as AsrRealignProgressMessage | undefined;
+        if (m?.action !== 'ASR_REALIGN_PROGRESS') return;
+        showRealignProgress('realigning', m.current, m.total);
+      };
+      chrome.runtime.onMessage.addListener(onProgressMsg);
+
       try {
         const units = prepareYoutubeAsrAiInput({ body, cues: rawCues });
         if (units.length > 0) {
-          const aiResult = (await chrome.runtime.sendMessage({
-            action: 'RESEGMENT_YOUTUBE_ASR',
-            language: originalLanguage || 'en',
-            units,
-          })) as ResegmentYoutubeAsrResult | undefined;
+          const videoId =
+            trackMeta?.videoId ||
+            state.availableTracks.find((t) => t.videoId)?.videoId ||
+            extractYoutubeVideoIdFromUrl(window.location.href);
 
-          if (aiResult?.success && aiResult.cues && aiResult.cues.length > 0) {
-            cues = aiResult.cues;
-            resegmentMode = 'ai';
+          let usedCache = false;
+          if (videoId) {
+            const contentHash = await hashAsrRealignContent(units);
+            const lang = originalLanguage || 'en';
+            const key = buildAsrRealignCacheKey(videoId, lang, contentHash);
+            const cached = (await chrome.runtime.sendMessage({
+              action: 'GET_ASR_REALIGN_CACHE',
+              key,
+            })) as GetAsrRealignCacheResult | undefined;
+
+            if (cached?.success && cached.entry?.cues && cached.entry.cues.length > 0) {
+              cues = cached.entry.cues;
+              resegmentMode = 'ai';
+              usedCache = true;
+              showRealignProgress('realign-cached', 1, 1);
+            } else {
+              showRealignProgress('realigning', 0, 1);
+              const aiResult = (await chrome.runtime.sendMessage({
+                action: 'RESEGMENT_YOUTUBE_ASR',
+                language: lang,
+                units,
+              })) as ResegmentYoutubeAsrResult | undefined;
+
+              if (aiResult?.success && aiResult.cues && aiResult.cues.length > 0) {
+                cues = aiResult.cues;
+                resegmentMode = 'ai';
+                const title = stripYoutubeTitleSuffix(document.title || '');
+                const now = Date.now();
+                void chrome.runtime.sendMessage({
+                  action: 'SAVE_ASR_REALIGN_CACHE',
+                  entry: {
+                    key,
+                    videoId,
+                    language: lang,
+                    mode: 'ai' as const,
+                    title: title || undefined,
+                    thumbnailUrl: youtubeThumbnailUrl(videoId),
+                    youtubeUrl: youtubeWatchUrl(videoId),
+                    cueCount: cues.length,
+                    byteSize: 0,
+                    contentHash,
+                    createdAt: now,
+                    lastUsedAt: now,
+                    cues,
+                  },
+                });
+              } else {
+                console.warn(
+                  'AnyLLMTranslate: AI ASR resegment failed — using local rules',
+                  aiResult?.error,
+                );
+                showSubtitleToast('AI re-align failed · using local rules');
+              }
+            }
           } else {
-            console.warn('AnyLLMTranslate: AI ASR resegment failed — using local rules', aiResult?.error);
-            // `cues` already holds local resegment output
+            showRealignProgress('realigning', 0, 1);
+            const aiResult = (await chrome.runtime.sendMessage({
+              action: 'RESEGMENT_YOUTUBE_ASR',
+              language: originalLanguage || 'en',
+              units,
+            })) as ResegmentYoutubeAsrResult | undefined;
+
+            if (aiResult?.success && aiResult.cues && aiResult.cues.length > 0) {
+              cues = aiResult.cues;
+              resegmentMode = 'ai';
+            } else {
+              console.warn(
+                'AnyLLMTranslate: AI ASR resegment failed — using local rules',
+                aiResult?.error,
+              );
+              showSubtitleToast('AI re-align failed · using local rules');
+            }
+          }
+
+          if (usedCache) {
+            // Translate path will overwrite mini-progress shortly.
           }
         }
       } catch (err) {
         console.warn('AnyLLMTranslate: AI ASR resegment error — using local rules', err);
+        showSubtitleToast('AI re-align failed · using local rules');
+      } finally {
+        chrome.runtime.onMessage.removeListener(onProgressMsg);
       }
     }
 

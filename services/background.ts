@@ -17,6 +17,11 @@ import type {
   ExtractPdfTermsResult,
   ResegmentYoutubeAsrMessage,
   ResegmentYoutubeAsrResult,
+  GetAsrRealignCacheMessage,
+  SaveAsrRealignCacheMessage,
+  DeleteAsrRealignCacheMessage,
+  AsrRealignProgressMessage,
+  AsrRealignCacheEntryPayload,
   PdfDetectedMessage,
   TranslationResultItem,
   PdfStreamPortMessage,
@@ -162,6 +167,18 @@ import { mergeSuggestionMaps } from '@/lib/namedGlossarySuggestions';
 import { contentHash } from '@/lib/subtitleFilmGlossary';
 import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
 import { preScanNames } from '@/services/subtitleNameScanner';
+import {
+  getAsrRealignEntry,
+  saveAsrRealignEntry,
+  listAsrRealignSummaries,
+  deleteAsrRealignEntry,
+  clearAsrRealignCache,
+  getAsrRealignCacheStats,
+  touchAsrRealignEntry,
+  getOrCreateAsrRealignInflight,
+} from '@/services/youtubeAsrRealignStore';
+import { hashAsrRealignContent } from '@/lib/youtubeAsrRealignCache';
+import type { YoutubeAsrRealignCacheEntry } from '@/lib/youtubeAsrRealignCache';
 import { recordUsage } from '@/services/statsCollector';
 import { normalizeHost } from '@/services/statsCounters';
 import { invalidateDebugCache } from '@/services/debugLog';
@@ -1995,16 +2012,70 @@ async function handleExtractPdfTerms(
   }
 }
 
+function broadcastAsrRealignCacheUpdated(): void {
+  try {
+    chrome.runtime.sendMessage({ action: 'ASR_REALIGN_CACHE_UPDATED' }).catch(() => {});
+  } catch {
+    // no receiver
+  }
+}
+
 /** Handle RESEGMENT_YOUTUBE_ASR — AI/BYOK sentence re-alignment before translate. */
 async function handleResegmentYoutubeAsr(
   message: ResegmentYoutubeAsrMessage,
+  sender?: chrome.runtime.MessageSender,
 ): Promise<ResegmentYoutubeAsrResult> {
   try {
-    const service = await initService();
-    if (!service.resegmentYoutubeAsr) {
-      return { success: false, error: 'Provider does not support YouTube ASR resegment' };
-    }
-    return await service.resegmentYoutubeAsr(message.units, message.language);
+    const contentHash = await hashAsrRealignContent(message.units);
+    const inflightKey = `${message.language}:${contentHash}`;
+
+    return await getOrCreateAsrRealignInflight(inflightKey, async () => {
+      const service = await initService();
+      if (!service.resegmentYoutubeAsr) {
+        return { success: false, error: 'Provider does not support YouTube ASR resegment' };
+      }
+
+      const tabId = message.progressTabId ?? sender?.tab?.id;
+      const onProgress =
+        tabId != null
+          ? (current: number, total: number) => {
+              const payload: AsrRealignProgressMessage = {
+                action: 'ASR_REALIGN_PROGRESS',
+                phase: 'realigning',
+                current,
+                total,
+              };
+              chrome.tabs.sendMessage(tabId, payload).catch(() => {});
+            }
+          : undefined;
+
+      return await service.resegmentYoutubeAsr(message.units, message.language, onProgress);
+    });
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+async function handleGetAsrRealignCache(
+  message: GetAsrRealignCacheMessage,
+): Promise<{ success: boolean; entry?: AsrRealignCacheEntryPayload; error?: string }> {
+  try {
+    const entry = await getAsrRealignEntry(message.key);
+    if (!entry) return { success: true };
+    void touchAsrRealignEntry(message.key);
+    return { success: true, entry: entry as AsrRealignCacheEntryPayload };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+async function handleSaveAsrRealignCache(
+  message: SaveAsrRealignCacheMessage,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await saveAsrRealignEntry(message.entry as YoutubeAsrRealignCacheEntry);
+    broadcastAsrRealignCacheUpdated();
+    return { success: true };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -2227,7 +2298,35 @@ export function handleMessage(
     case 'EXTRACT_PDF_TERMS':
       return handleExtractPdfTerms(message as ExtractPdfTermsMessage);
     case 'RESEGMENT_YOUTUBE_ASR':
-      return handleResegmentYoutubeAsr(message);
+      return handleResegmentYoutubeAsr(message as ResegmentYoutubeAsrMessage, _sender);
+    case 'GET_ASR_REALIGN_CACHE':
+      return handleGetAsrRealignCache(message as GetAsrRealignCacheMessage);
+    case 'SAVE_ASR_REALIGN_CACHE':
+      return handleSaveAsrRealignCache(message as SaveAsrRealignCacheMessage);
+    case 'LIST_ASR_REALIGN_CACHE':
+      return listAsrRealignSummaries()
+        .then((entries) => ({ success: true, entries }))
+        .catch((error) => ({ success: false, error: String(error) }));
+    case 'DELETE_ASR_REALIGN_CACHE': {
+      const key = (message as DeleteAsrRealignCacheMessage).key;
+      return deleteAsrRealignEntry(key)
+        .then(() => {
+          broadcastAsrRealignCacheUpdated();
+          return { success: true };
+        })
+        .catch((error) => ({ success: false, error: String(error) }));
+    }
+    case 'CLEAR_ASR_REALIGN_CACHE':
+      return clearAsrRealignCache()
+        .then(() => {
+          broadcastAsrRealignCacheUpdated();
+          return { success: true };
+        })
+        .catch((error) => ({ success: false, error: String(error) }));
+    case 'ASR_REALIGN_CACHE_STATS':
+      return getAsrRealignCacheStats()
+        .then((stats) => ({ success: true, ...stats }))
+        .catch((error) => ({ success: false, error: String(error) }));
     case 'CLEAR_CACHE':
       // Wipe text-level translation cache + per-URL web resume snapshots so
       // Settings → Advanced → Clear cache fully resets stored page translations.

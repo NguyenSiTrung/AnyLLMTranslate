@@ -8,15 +8,25 @@ const ATTR = 'data-anyllm-role';
 
 let barEl: HTMLElement | null = null;
 
+export type MiniProgressStatus =
+  | 'translating'
+  | 'done'
+  | 'idle'
+  | 'error'
+  | 'realigning'
+  | 'realign-cached';
+
 export interface MiniProgressOptions {
   translated: number;
   total: number;
-  status: 'translating' | 'done' | 'idle' | 'error';
+  status: MiniProgressStatus;
   onStop: () => void;
+  /** Optional override label (e.g. cache hit one-liner) */
+  label?: string;
 }
 
 export function updateMiniProgress(opts: MiniProgressOptions): void {
-  if (opts.status === 'idle' || opts.total === 0) {
+  if (opts.status === 'idle' || (opts.total === 0 && opts.status !== 'realign-cached')) {
     hideMiniProgress();
     return;
   }
@@ -46,7 +56,13 @@ export function updateMiniProgress(opts: MiniProgressOptions): void {
 
   const label = barEl.querySelector('.anyllm-mini-progress-label');
   if (label) {
-    if (opts.status === 'translating') {
+    if (opts.label) {
+      label.textContent = opts.label;
+    } else if (opts.status === 'realigning') {
+      label.textContent = `Re-aligning captions… ${opts.translated}/${opts.total}`;
+    } else if (opts.status === 'realign-cached') {
+      label.textContent = 'Using saved re-align';
+    } else if (opts.status === 'translating') {
       label.textContent = `Translating ${opts.translated}/${opts.total}…`;
     } else if (opts.status === 'done') {
       label.textContent =

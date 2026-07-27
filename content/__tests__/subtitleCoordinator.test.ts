@@ -25,6 +25,12 @@ vi.mock('@/content/subtitleToast', () => ({
   hideSubtitleToast: vi.fn(),
 }));
 
+vi.mock('@/content/miniProgress', () => ({
+  updateMiniProgress: vi.fn(),
+  hideMiniProgress: vi.fn(),
+  isMiniProgressVisible: vi.fn(() => false),
+}));
+
 const mockBuildBilingualVTT = vi.fn();
 const mockBuildTranslationOnlyVTT = vi.fn();
 vi.mock('@/lib/subtitleBuilder', () => ({
@@ -645,6 +651,194 @@ Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello`;
       expect.objectContaining({
         pageContext: expect.objectContaining({ category: 'entertainment' }),
       }),
+    );
+  });
+});
+
+// ============================================================================
+// YouTube ASR AI re-align cache
+// ============================================================================
+
+describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
+  const ASR_URL = 'https://www.youtube.com/api/timedtext?v=test123&kind=asr&lang=en';
+  const AI_CUES = [
+    { startTime: 0, endTime: 4, text: 'Hello World' },
+  ];
+  const CACHED_CUES = [
+    { startTime: 0, endTime: 4, text: 'Cached Hello World' },
+  ];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    vi.resetModules();
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.youtube.com',
+        pathname: '/watch',
+        href: 'https://www.youtube.com/watch?v=test123',
+      },
+      writable: true,
+      configurable: true,
+    });
+    Object.defineProperty(document, 'title', {
+      value: 'Test Video - YouTube',
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        youtubeAsrResegment: { enable: true, aiEnable: true },
+      },
+    });
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockBuildBilingualVTT.mockReturnValue('WEBVTT\n\nbilingual');
+    mockOnMessage.mockReturnValue(() => {});
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockImplementation(async (msg: { action?: string }) => {
+          if (msg?.action === 'GET_ASR_REALIGN_CACHE') {
+            return { success: true };
+          }
+          if (msg?.action === 'RESEGMENT_YOUTUBE_ASR') {
+            return { success: true, cues: AI_CUES };
+          }
+          if (msg?.action === 'SAVE_ASR_REALIGN_CACHE') {
+            return { success: true };
+          }
+          if (msg?.action === 'translateSubtitle') {
+            return { success: true, cues: MOCK_TRANSLATED_CUES };
+          }
+          return { success: true };
+        }),
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.resetModules();
+  });
+
+  it('cache hit uses saved cues and skips RESEGMENT', async () => {
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (msg: { action?: string }) => {
+        if (msg?.action === 'GET_ASR_REALIGN_CACHE') {
+          return { success: true, entry: { cues: CACHED_CUES, key: 'k' } };
+        }
+        if (msg?.action === 'translateSubtitle') {
+          return { success: true, cues: MOCK_TRANSLATED_CUES };
+        }
+        return { success: true };
+      },
+    );
+
+    await capturedInterceptedHandler?.(
+      {
+        url: ASR_URL,
+        body: '{}',
+        contentType: 'application/json',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-asr-hit',
+    );
+
+    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { action?: string }).action,
+    );
+    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(actions).not.toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(actions).not.toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        cues: CACHED_CUES,
+      }),
+    );
+  });
+
+  it('cache miss runs AI, saves entry, translates AI cues', async () => {
+    await capturedInterceptedHandler?.(
+      {
+        url: ASR_URL,
+        body: '{}',
+        contentType: 'application/json',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-asr-miss',
+    );
+
+    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { action?: string }).action,
+    );
+    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(actions).toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(actions).toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'SAVE_ASR_REALIGN_CACHE',
+        entry: expect.objectContaining({
+          videoId: 'test123',
+          mode: 'ai',
+          cues: AI_CUES,
+        }),
+      }),
+    );
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        cues: AI_CUES,
+      }),
+    );
+  });
+
+  it('AI fail does not save and toasts fail-open', async () => {
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (msg: { action?: string }) => {
+        if (msg?.action === 'GET_ASR_REALIGN_CACHE') return { success: true };
+        if (msg?.action === 'RESEGMENT_YOUTUBE_ASR') {
+          return { success: false, error: 'parse failed' };
+        }
+        if (msg?.action === 'translateSubtitle') {
+          return { success: true, cues: MOCK_TRANSLATED_CUES };
+        }
+        return { success: true };
+      },
+    );
+
+    await capturedInterceptedHandler?.(
+      {
+        url: ASR_URL,
+        body: '{}',
+        contentType: 'application/json',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-asr-fail',
+    );
+
+    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { action?: string }).action,
+    );
+    expect(actions).toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(actions).not.toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringMatching(/AI re-align failed/i),
     );
   });
 });

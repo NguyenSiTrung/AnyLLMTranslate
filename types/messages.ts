@@ -48,6 +48,14 @@ export type MessageAction =
   | 'CLASSIFY_PDF_PARAGRAPHS'
   | 'EXTRACT_PDF_TERMS'
   | 'RESEGMENT_YOUTUBE_ASR'
+  | 'GET_ASR_REALIGN_CACHE'
+  | 'SAVE_ASR_REALIGN_CACHE'
+  | 'LIST_ASR_REALIGN_CACHE'
+  | 'DELETE_ASR_REALIGN_CACHE'
+  | 'CLEAR_ASR_REALIGN_CACHE'
+  | 'ASR_REALIGN_CACHE_STATS'
+  | 'ASR_REALIGN_PROGRESS'
+  | 'ASR_REALIGN_CACHE_UPDATED'
   | 'CLEAR_CACHE'
   | 'WEB_RESUME_LOAD'
   | 'WEB_RESUME_SAVE'
@@ -315,6 +323,8 @@ export interface ResegmentYoutubeAsrMessage {
   action: 'RESEGMENT_YOUTUBE_ASR';
   language: string;
   units: Array<{ text: string; startMs: number; endMs: number }>;
+  /** When set, background emits ASR_REALIGN_PROGRESS to this tab (else sender.tab.id). */
+  progressTabId?: number;
 }
 
 /** Response shape for RESEGMENT_YOUTUBE_ASR. */
@@ -322,6 +332,89 @@ export interface ResegmentYoutubeAsrResult {
   success: boolean;
   cues?: SubtitleCue[];
   error?: string;
+}
+
+/** Cached AI re-align entry (mirrors lib/youtubeAsrRealignCache; cues optional on list). */
+export interface AsrRealignCacheEntryPayload {
+  key: string;
+  videoId: string;
+  language: string;
+  mode: 'ai';
+  title?: string;
+  thumbnailUrl?: string;
+  youtubeUrl?: string;
+  cueCount: number;
+  byteSize: number;
+  contentHash: string;
+  createdAt: number;
+  lastUsedAt: number;
+  cues: SubtitleCue[];
+}
+
+export type AsrRealignCacheSummaryPayload = Omit<AsrRealignCacheEntryPayload, 'cues'>;
+
+export interface GetAsrRealignCacheMessage {
+  action: 'GET_ASR_REALIGN_CACHE';
+  key: string;
+}
+
+export interface GetAsrRealignCacheResult {
+  success: boolean;
+  entry?: AsrRealignCacheEntryPayload;
+  error?: string;
+}
+
+export interface SaveAsrRealignCacheMessage {
+  action: 'SAVE_ASR_REALIGN_CACHE';
+  entry: AsrRealignCacheEntryPayload;
+}
+
+export interface SaveAsrRealignCacheResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface ListAsrRealignCacheMessage {
+  action: 'LIST_ASR_REALIGN_CACHE';
+}
+
+export interface ListAsrRealignCacheResult {
+  success: boolean;
+  entries?: AsrRealignCacheSummaryPayload[];
+  error?: string;
+}
+
+export interface DeleteAsrRealignCacheMessage {
+  action: 'DELETE_ASR_REALIGN_CACHE';
+  key: string;
+}
+
+export interface ClearAsrRealignCacheMessage {
+  action: 'CLEAR_ASR_REALIGN_CACHE';
+}
+
+export interface AsrRealignCacheStatsMessage {
+  action: 'ASR_REALIGN_CACHE_STATS';
+}
+
+export interface AsrRealignCacheStatsResult {
+  success: boolean;
+  entryCount?: number;
+  totalBytes?: number;
+  error?: string;
+}
+
+/** Background → content tab during AI resegment batches */
+export interface AsrRealignProgressMessage {
+  action: 'ASR_REALIGN_PROGRESS';
+  phase: 'realigning';
+  current: number;
+  total: number;
+}
+
+/** Background → extension pages after cache mutate */
+export interface AsrRealignCacheUpdatedMessage {
+  action: 'ASR_REALIGN_CACHE_UPDATED';
 }
 
 /** Clear cache request from options page → background */
@@ -612,6 +705,14 @@ export type ExtensionMessage =
   | ClassifyPdfParagraphsMessage
   | ExtractPdfTermsMessage
   | ResegmentYoutubeAsrMessage
+  | GetAsrRealignCacheMessage
+  | SaveAsrRealignCacheMessage
+  | ListAsrRealignCacheMessage
+  | DeleteAsrRealignCacheMessage
+  | ClearAsrRealignCacheMessage
+  | AsrRealignCacheStatsMessage
+  | AsrRealignProgressMessage
+  | AsrRealignCacheUpdatedMessage
   | ClearCacheMessage
   | WebResumeLoadMessage
   | WebResumeSaveMessage

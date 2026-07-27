@@ -978,6 +978,61 @@ describe('OpenAICompatibleService', () => {
       expect(empty.cues).toEqual([]);
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
+
+    it('resegmentYoutubeAsr reports onProgress per batch (1-based)', async () => {
+      const many = Array.from({ length: 130 }, (_, i) => ({
+        text: `w${i}`,
+        startMs: i * 100,
+        endMs: i * 100 + 80,
+      }));
+      // Two batches at AI_ASR_BATCH_SIZE=120
+      globalThis.fetch = mockFetchResponse(
+        JSON.stringify({
+          segments: [{ start: 0, end: 119 }],
+        }),
+      );
+      // Second call needs a valid range relative to batch offset handling —
+      // mock returns global-style ranges; use full-span parse-friendly payload twice.
+      let call = 0;
+      globalThis.fetch = vi.fn().mockImplementation(async () => {
+        call++;
+        const segments =
+          call === 1
+            ? [{ start: 0, end: 119 }]
+            : [{ start: 0, end: 9 }];
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            id: 'chatcmpl-test',
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({ segments }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+          text: async () => '',
+        };
+      });
+
+      const progress: Array<[number, number]> = [];
+      const result = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(
+        many,
+        'en',
+        (current, total) => progress.push([current, total]),
+      );
+      expect(result.success).toBe(true);
+      expect(progress).toEqual([
+        [1, 2],
+        [2, 2],
+      ]);
+    });
   });
 });
 

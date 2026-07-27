@@ -275,6 +275,7 @@ export class ProviderPoolCoordinator implements TranslationService {
   async resegmentYoutubeAsr(
     units: AsrTimedUnit[],
     language: string,
+    onProgress?: (current: number, total: number) => void,
   ): Promise<ResegmentYoutubeAsrResult> {
     try {
       const result = await this.dispatchWithFailover((service) => {
@@ -284,7 +285,7 @@ export class ProviderPoolCoordinator implements TranslationService {
             error: 'resegmentYoutubeAsr not supported',
           });
         }
-        return service.resegmentYoutubeAsr(units, language);
+        return service.resegmentYoutubeAsr(units, language, onProgress);
       });
       return result;
     } catch (error) {

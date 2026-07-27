@@ -21,6 +21,21 @@ vi.stubGlobal('chrome', {
       removeListener: vi.fn(),
     },
   },
+  runtime: {
+    sendMessage: vi.fn(async (msg: { action?: string }) => {
+      if (msg?.action === 'ASR_REALIGN_CACHE_STATS') {
+        return { success: true, entryCount: 0, totalBytes: 0 };
+      }
+      if (msg?.action === 'LIST_ASR_REALIGN_CACHE') {
+        return { success: true, entries: [] };
+      }
+      return { success: true };
+    }),
+    onMessage: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
+  },
 });
 
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -49,7 +64,13 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     expect(screen.getByRole('heading', { name: 'Source track', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Platforms', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Caption quality', level: 3 })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Saved caption re-aligns', level: 3 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Translation style', level: 3 })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('asr-realign-summary')).toHaveTextContent(/No saved re-aligns yet/i);
+    });
     expect(screen.getByTestId('subtitle-preview')).toBeInTheDocument();
     expect(screen.getByTestId('subtitle-preview-summary')).toBeInTheDocument();
 

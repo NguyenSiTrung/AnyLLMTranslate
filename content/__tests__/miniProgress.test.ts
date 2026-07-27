@@ -59,4 +59,29 @@ describe('miniProgress', () => {
     expect(onStop).toHaveBeenCalled();
     expect(isMiniProgressVisible()).toBe(false);
   });
+
+  it('shows realigning batch progress', () => {
+    updateMiniProgress({
+      translated: 2,
+      total: 5,
+      status: 'realigning',
+      onStop: () => {},
+    });
+    expect(isMiniProgressVisible()).toBe(true);
+    expect(
+      document.querySelector('.anyllm-mini-progress-label')?.textContent,
+    ).toBe('Re-aligning captions… 2/5');
+  });
+
+  it('shows saved re-align cache hit label', () => {
+    updateMiniProgress({
+      translated: 1,
+      total: 1,
+      status: 'realign-cached',
+      onStop: () => {},
+    });
+    expect(
+      document.querySelector('.anyllm-mini-progress-label')?.textContent,
+    ).toBe('Using saved re-align');
+  });
 });

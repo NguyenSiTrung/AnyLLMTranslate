@@ -645,6 +645,7 @@ Rules:
   async resegmentYoutubeAsr(
     units: AsrTimedUnit[],
     language: string,
+    onProgress?: (current: number, total: number) => void,
   ): Promise<ResegmentYoutubeAsrResult> {
     if (units.length === 0) {
       return { success: true, cues: [] };
@@ -652,8 +653,13 @@ Rules:
 
     const batches = buildAiAsrResegmentBatches(units, language);
     const allCues: SubtitleCue[] = [];
+    const total = batches.length;
 
-    for (const batch of batches) {
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      if (!batch) continue;
+      onProgress?.(i + 1, total);
+
       const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
         model: this.config.model,
         messages: [

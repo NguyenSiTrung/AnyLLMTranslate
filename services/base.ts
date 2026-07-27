@@ -65,6 +65,7 @@ export interface TranslationService {
   resegmentYoutubeAsr?(
     units: AsrTimedUnit[],
     language: string,
+    onProgress?: (current: number, total: number) => void,
   ): Promise<ResegmentYoutubeAsrResult>;
 }
 
