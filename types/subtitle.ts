@@ -60,7 +60,9 @@ export type BridgeMessageType =
   | 'SUBTITLE_FETCH_REQUEST'
   | 'SUBTITLE_FETCH_RESPONSE'
   | 'SUBTITLE_CONFIG'
-  | 'SUBTITLE_SEEK_RESET';
+  | 'SUBTITLE_SEEK_RESET'
+  /** ISOLATED coordinator → MAIN: bridge may flush early intercept queue. */
+  | 'COORDINATOR_READY';
 
 /** postMessage payload between worlds */
 export interface BridgeMessage<T = unknown> {

@@ -1759,3 +1759,206 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
     }
   });
 });
+
+// ============================================================================
+// YouTube first-load CC-on: AI re-align toast + proactive/unified fetch path
+// ============================================================================
+
+describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
+  let cleanupCoordinator: (() => void) | null = null;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    capturedInterceptedHandler = null;
+    _capturedTracksHandler = null;
+    cleanupCoordinator?.();
+    cleanupCoordinator = null;
+    document.body.innerHTML = '';
+    vi.resetModules();
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.youtube.com',
+        pathname: '/watch',
+        href: 'https://www.youtube.com/watch?v=daXaTug8rL4',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        autoActivateSubtitles: false,
+        youtubeAsrResegment: {
+          enable: true,
+          aiEnable: true,
+        },
+      },
+    });
+    // YouTube has no DOM cue source — ensure play path uses tryAutoActivate,
+    // not tryAutoActivateForDom (truthy getDomCueSource function would steal it).
+    const youtubeHandler = {
+      ...mockHandler,
+      platform: 'youtube',
+      getDomCueSource: undefined as unknown as typeof mockHandler.getDomCueSource,
+      getManifestPatterns: undefined as unknown as (() => unknown[]) | undefined,
+      transformResponse: vi.fn(() => MOCK_CUES),
+    };
+    mockGetHandlerByPlatform.mockReturnValue(youtubeHandler);
+    mockDetectCurrentHandler.mockReturnValue(youtubeHandler);
+    mockBuildBilingualVTT.mockReturnValue('WEBVTT\n\nbilingual');
+    mockOnMessage.mockReturnValue(() => {});
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+    mockExtractPageContext.mockReturnValue({});
+    mockResolveCategory.mockReturnValue('media');
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockImplementation(async (msg: { action?: string }) => {
+          if (msg.action === 'GET_ASR_REALIGN_CACHE') {
+            return {
+              success: true,
+              entry: {
+                key: 'ai:daXaTug8rL4:en:hash',
+                cues: [
+                  { startTime: 0, endTime: 2.5, text: 'Hello world realigned' },
+                ],
+              },
+            };
+          }
+          if (msg.action === 'RESEGMENT_YOUTUBE_ASR') {
+            return {
+              success: true,
+              cues: [{ startTime: 0, endTime: 2.5, text: 'Hello world realigned' }],
+            };
+          }
+          if (msg.action === 'translateSubtitle') {
+            return { success: true, cues: MOCK_TRANSLATED_CUES, sessionId: 7 };
+          }
+          if (msg.action === 'FETCH_SUBTITLE') {
+            return {
+              content:
+                'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n\n00:00:02.000 --> 00:00:04.000\nWorld\n',
+            };
+          }
+          return { success: true };
+        }),
+        onMessage: {
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanupCoordinator = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanupCoordinator?.();
+    cleanupCoordinator = null;
+    document.body.innerHTML = '';
+    vi.clearAllTimers();
+    vi.resetModules();
+  });
+
+  it('shows re-align progress on subtitle toast for AI cache hit', async () => {
+    const payload = {
+      url: 'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr&fmt=json3',
+      body: JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 2000, segs: [{ utf8: 'Hello' }] }] }),
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-realign-toast');
+
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringMatching(/saved re-align|Using saved re-align/i),
+      expect.anything(),
+    );
+    const translateCall = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => (c[0] as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(translateCall).toBeTruthy();
+    expect((translateCall![0] as { cues: Array<{ text: string }> }).cues[0].text).toContain(
+      'realigned',
+    );
+  });
+
+  it('selectSubtitleTrack for YouTube ASR uses intercept pipeline (ASR + translate)', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+
+    // Discover ASR track first
+    expect(_capturedTracksHandler).toBeTruthy();
+    await _capturedTracksHandler!({
+      platform: 'youtube',
+      videoId: 'daXaTug8rL4',
+      tracks: [
+        {
+          language: 'en',
+          label: 'English (auto-generated)',
+          url: 'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr&fmt=json3',
+          isAutoGenerated: true,
+          platform: 'youtube',
+          videoId: 'daXaTug8rL4',
+        },
+      ],
+    });
+
+    // Flush discovery debounce
+    await new Promise((r) => setTimeout(r, 160));
+
+    await mod.selectSubtitleTrack('en');
+
+    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { action?: string }).action,
+    );
+    // Unified path must hit cache/resegment before translate (not bare overlay translate only).
+    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(actions).toContain('translateSubtitle');
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringMatching(/saved re-align|Using saved re-align|Re-aligning/i),
+      expect.anything(),
+    );
+  });
+
+  it('proactively fetches preferred YouTube ASR after play when no intercept session yet', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+
+    await _capturedTracksHandler!({
+      platform: 'youtube',
+      videoId: 'daXaTug8rL4',
+      tracks: [
+        {
+          language: 'en',
+          label: 'English (auto-generated)',
+          url: 'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr&fmt=json3',
+          isAutoGenerated: true,
+          platform: 'youtube',
+          videoId: 'daXaTug8rL4',
+        },
+      ],
+    });
+    await new Promise((r) => setTimeout(r, 160));
+
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+    video.dispatchEvent(new Event('play'));
+
+    // Playback watcher yields 200ms before auto path.
+    await new Promise((r) => setTimeout(r, 450));
+
+    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { action?: string }).action,
+    );
+    // Even with autoActivateSubtitles=false, YouTube watch pages should
+    // safety-net fetch preferred/ASR when play starts and no intercept ran.
+    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(actions).toContain('translateSubtitle');
+    void mod;
+  });
+});
