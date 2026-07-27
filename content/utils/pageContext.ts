@@ -6,15 +6,23 @@
 import type { PageContext, ExtensionSettings } from '@/types/config';
 import {
   getAutoDetectedCategory,
+  isAutoCategoryLocked,
   isCategoryDetectionInFlight,
+  setAutoDetectedCategory,
   setCategoryDetectionInFlight,
+  invalidateCategoryIfUrlChanged,
+  type AutoCategorySource,
 } from '@/content/categoryState';
+import { normalizePredefinedCategory } from '@/lib/categories';
 
 /** Truncate string to max length */
 function truncate(str: string, maxLen: number): string {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + '…';
 }
+
+/** SessionStorage key prefix for short-lived host→category cache. */
+const CATEGORY_SESSION_PREFIX = 'allt:page-category:v1:';
 
 /** Hardcoded domain-to-category map for top domains.
  * Values MUST use Title Case to match PREDEFINED_CATEGORIES in lib/categories.ts. */
@@ -54,7 +62,7 @@ export const DOMAIN_CATEGORY_MAP: Record<string, string> = {
   'nature.com': 'Academic Journal',
   'sciencedirect.com': 'Academic Journal',
   'springer.com': 'Academic Journal',
-  'ieee.org': 'Software Development',
+  'ieee.org': 'Academic Research',
   'acm.org': 'Academic Research',
 
   // Streaming movie/TV platforms
@@ -81,6 +89,61 @@ export const DOMAIN_CATEGORY_MAP: Record<string, string> = {
   'lingoda.com': 'Online Education',
 };
 
+/** Look up a domain-map category (exact host or subdomain). */
+export function lookupDomainCategory(domain: string): string | undefined {
+  const key = Object.keys(DOMAIN_CATEGORY_MAP).find(
+    (k) => domain === k || domain.endsWith('.' + k),
+  );
+  return key ? DOMAIN_CATEGORY_MAP[key] : undefined;
+}
+
+/** Collect schema.org @type values from JSON-LD scripts. */
+function extractSchemaTypes(doc: Document): string[] {
+  const types: string[] = [];
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (const script of scripts) {
+    try {
+      const data = JSON.parse(script.textContent ?? '');
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        const raw = item?.['@type'];
+        if (typeof raw === 'string' && raw.trim()) types.push(raw.trim());
+        else if (Array.isArray(raw)) {
+          for (const t of raw) {
+            if (typeof t === 'string' && t.trim()) types.push(t.trim());
+          }
+        }
+      }
+    } catch {
+      // Invalid JSON-LD — skip
+    }
+  }
+  return types.slice(0, 8);
+}
+
+/** Session-cache helpers (host → category). Fail open when storage is unavailable. */
+export function readCategorySessionCache(hostname: string): string | undefined {
+  if (!hostname || typeof sessionStorage === 'undefined') return undefined;
+  try {
+    const raw = sessionStorage.getItem(CATEGORY_SESSION_PREFIX + hostname.toLowerCase());
+    if (!raw) return undefined;
+    return normalizePredefinedCategory(raw) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function writeCategorySessionCache(hostname: string, category: string): void {
+  if (!hostname || typeof sessionStorage === 'undefined') return;
+  const normalized = normalizePredefinedCategory(category);
+  if (!normalized) return;
+  try {
+    sessionStorage.setItem(CATEGORY_SESSION_PREFIX + hostname.toLowerCase(), normalized);
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 /** Extract page context from a Document */
 export function extractPageContext(doc: Document, enableCategoryDetection = false): PageContext {
   const title = truncate(doc.title, 100);
@@ -89,6 +152,13 @@ export function extractPageContext(doc: Document, enableCategoryDetection = fals
   const description = truncate(metaDescription?.getAttribute('content') ?? '', 200);
 
   const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+  const pathname =
+    typeof window !== 'undefined' ? truncate(window.location.pathname || '/', 200) : undefined;
+  const h1Raw = doc.querySelector('h1')?.textContent?.trim() ?? '';
+  const h1 = h1Raw ? truncate(h1Raw.replace(/\s+/g, ' '), 120) : undefined;
+  const ogType =
+    doc.querySelector('meta[property="og:type"]')?.getAttribute('content')?.trim() || undefined;
+  const schemaTypes = extractSchemaTypes(doc);
 
   let category: string | undefined;
   if (enableCategoryDetection) {
@@ -99,17 +169,22 @@ export function extractPageContext(doc: Document, enableCategoryDetection = fals
     title,
     description,
     domain,
+    ...(pathname ? { pathname } : {}),
+    ...(h1 ? { h1 } : {}),
+    ...(ogType ? { ogType } : {}),
+    ...(schemaTypes.length > 0 ? { schemaTypes } : {}),
     ...(category ? { category } : {}),
   };
 }
 
-/** Detect page category using heuristic rules */
+/**
+ * Detect page category using heuristic rules.
+ * Domain-map hits are high-confidence; other signals are weak heuristics.
+ */
 function detectCategory(doc: Document, domain: string): string | undefined {
   // 1. Check domain map
-  const domainKey = Object.keys(DOMAIN_CATEGORY_MAP).find((key) => domain === key || domain.endsWith('.' + key));
-  if (domainKey) {
-    return DOMAIN_CATEGORY_MAP[domainKey];
-  }
+  const domainHit = lookupDomainCategory(domain);
+  if (domainHit) return domainHit;
 
   // 2. Check meta keywords
   const metaKeywords = doc.querySelector('meta[name="keywords"]');
@@ -155,15 +230,14 @@ function detectCategory(doc: Document, domain: string): string | undefined {
   const ogSiteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content')?.toLowerCase() ?? '';
 
   if (ogType === 'article' || ogType === 'blog') {
-    // Distinguish tech blogs from general news via domain/site name clues
     if (ogSiteName.includes('blog') || ogSiteName.includes('dev') || ogSiteName.includes('tech') || ogSiteName.includes('engineering')) {
       return 'Technology Blog';
     }
     if (ogSiteName.includes('news') || ogSiteName.includes('times') || ogSiteName.includes('post') || ogSiteName.includes('herald')) {
       return 'News';
     }
-    // Generic article — treat as blog
-    return 'Technology Blog';
+    // Generic article — news is safer than assuming tech blog
+    return 'News';
   }
   if (ogType === 'product' || ogType === 'product.group') {
     return 'E-Commerce';
@@ -260,17 +334,28 @@ function detectFromSchemaOrg(doc: Document): string | undefined {
   for (const script of scripts) {
     try {
       const data = JSON.parse(script.textContent ?? '');
-      const type = (data['@type'] ?? '').toLowerCase();
-      if (type === 'newsarticle' || type === 'reportagenewsarticle') return 'News';
-      if (type === 'blogposting' || type === 'technicalarticle') return 'Technology Blog';
-      if (type === 'scholarlyarticle') return 'Academic Research';
-      if (type === 'product' || type === 'offer') return 'E-Commerce';
-      if (type === 'course') return 'Online Education';
-      if (type === 'videoobject') return 'Video Platform';
-      if (type === 'softwareapplication' || type === 'softwaresourcecode') return 'Software Development';
-      if (type === 'discussionforumposting' || type === 'question') return 'Community Discussion';
-      if (type === 'medicalwebpage' || type === 'medicalcondition') return 'Health & Medicine';
-      if (type === 'recipe') return 'Technology Blog'; // food blogs are blog-like
+      const items = Array.isArray(data) ? data : [data];
+      for (const item of items) {
+        const type = String(item?.['@type'] ?? '').toLowerCase();
+        if (type === 'newsarticle' || type === 'reportagenewsarticle') return 'News';
+        if (type === 'blogposting' || type === 'technicalarticle' || type === 'techarticle') {
+          return 'Technology Blog';
+        }
+        if (type === 'scholarlyarticle') return 'Academic Research';
+        if (type === 'product' || type === 'offer') return 'E-Commerce';
+        if (type === 'course') return 'Online Education';
+        if (type === 'videoobject') return 'Video Platform';
+        if (type === 'softwareapplication' || type === 'softwaresourcecode') {
+          return 'Software Development';
+        }
+        if (type === 'discussionforumposting' || type === 'question') {
+          return 'Community Discussion';
+        }
+        if (type === 'medicalwebpage' || type === 'medicalcondition') {
+          return 'Health & Medicine';
+        }
+        if (type === 'recipe') return 'Technology Blog';
+      }
     } catch {
       // Invalid JSON-LD — skip
     }
@@ -292,13 +377,42 @@ export function resolveCategory(
   return tabOverride ?? siteRuleCategory ?? autoDetected;
 }
 
+/** Normalize an LLM/cache category response; drops Other/unknown. */
+function acceptDetectedCategory(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  return normalizePredefinedCategory(raw) ?? undefined;
+}
+
+/**
+ * Run one LLM category request and normalize the result.
+ * Returns the accepted category or undefined.
+ */
+async function requestLlmCategory(pageContext: PageContext): Promise<string | undefined> {
+  try {
+    const res = await chrome.runtime.sendMessage({
+      action: 'DETECT_PAGE_CATEGORY_LLM',
+      pageContext,
+    });
+    return res?.success ? acceptDetectedCategory(res.category) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Perform LLM category detection based on settings mode.
  * - blocking: awaits detection, sets pageContext.category, calls onDetected
- * - async: dispatches detection in background, calls onDetected on completion
+ * - async: starts detection without blocking the caller; still invokes onDetected
+ *   when complete. Returns a settle promise via `options.onSettled` / the
+ *   returned handle so in-flight guards can clear only after the LLM finishes.
  *
- * No longer mutates the override store — the caller decides what to do with
- * the result via the onDetected callback.
+ * When `skipIfExisting` is false, weak existing auto-detect values do not block
+ * the LLM call (used for heuristic refinement). Locked sources still skip via
+ * the caller.
+ *
+ * @returns a promise that resolves when the LLM call has settled (both modes).
+ *   In async mode the outer function still returns that promise so callers that
+ *   care about in-flight can await it, while translatePieces can ignore it.
  */
 export async function detectLLMCategoryIfNeeded(
   pageContext: PageContext,
@@ -306,64 +420,120 @@ export async function detectLLMCategoryIfNeeded(
   manualOverride: string | undefined,
   existingAutoDetected: string | undefined,
   onDetected: (category: string) => void,
+  options?: { skipIfExisting?: boolean },
 ): Promise<void> {
   if (!settings.enableLLMPageCategoryDetection) return;
   if (manualOverride) return;
-  if (existingAutoDetected) return;
+  const skipIfExisting = options?.skipIfExisting !== false;
+  if (skipIfExisting && existingAutoDetected) return;
+
+  const run = async (): Promise<void> => {
+    const category = await requestLlmCategory(pageContext);
+    if (category) {
+      pageContext.category = category;
+      onDetected(category);
+    }
+  };
 
   if (settings.llmCategoryDetectionMode === 'blocking') {
-    try {
-      const res = await chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext });
-      if (res?.success && res.category && res.category !== 'Other') {
-        pageContext.category = res.category;
-        onDetected(res.category);
-      }
-    } catch {
-      return;
-    }
-  } else {
-    // async mode
-    chrome.runtime.sendMessage({ action: 'DETECT_PAGE_CATEGORY_LLM', pageContext }).then((res) => {
-      if (res?.success && res.category && res.category !== 'Other') {
-        onDetected(res.category);
-      }
-    }).catch(() => {});
+    await run();
+    return;
   }
+
+  // async mode: do not block the caller on the LLM round-trip.
+  await run();
 }
 
 /**
- * Trigger an async LLM category detection if all of these hold:
- *  - LLM page-category detection is enabled
- *  - no manual override is set
- *  - no auto-detected value is already cached
- *  - no detection is already in flight
+ * Infer source tag for a freshly extracted heuristic category.
+ */
+export function classifyHeuristicSource(
+  domain: string,
+  category: string | undefined,
+): AutoCategorySource | undefined {
+  if (!category) return undefined;
+  if (lookupDomainCategory(domain) === category) return 'domain';
+  return 'heuristic';
+}
+
+/**
+ * Trigger LLM category detection if allowed.
+ * Guards: setting on, no manual override, not locked (domain/llm/cache),
+ * not already in flight. Weak heuristics do not lock.
  *
- * The in-flight guard is set before dispatching and cleared on completion
- * (success, 'Other' result, or failure) so callers can fire-and-forget without
- * risking duplicate concurrent LLM calls for the same page.
- *
- * `onDetected` is invoked with the detected category (never 'Other').
+ * In-flight flag stays true until the LLM promise settles (async + blocking).
+ * In async mode this function returns immediately after dispatching so
+ * translation is not delayed; the in-flight guard still covers the full call.
+ * Session host cache is checked before spending an LLM call.
  */
 export async function triggerAutoCategoryDetection(
   settings: ExtensionSettings,
   manualOverride: string | undefined,
   onDetected: (category: string) => void,
 ): Promise<void> {
+  invalidateCategoryIfUrlChanged();
   if (!settings.enableLLMPageCategoryDetection) return;
   if (manualOverride) return;
-  if (getAutoDetectedCategory()) return;
+  if (isAutoCategoryLocked()) return;
   if (isCategoryDetectionInFlight()) return;
 
-  setCategoryDetectionInFlight(true);
-  try {
-    const pageContext = extractPageContext(document, settings.enableLLMPageCategoryDetection);
-    await detectLLMCategoryIfNeeded(pageContext, settings, manualOverride, undefined, onDetected);
-  } finally {
-    // async mode resolves detectLLMCategoryIfNeeded before the inner .then runs;
-    // blocking mode awaits it. Either way, by the time we reach here the LLM call
-    // has settled (or no-oped). Clear the guard so a later lazy request can run if
-    // this one produced nothing ('Other' / failure).
-    setCategoryDetectionInFlight(false);
+  const hostname =
+    typeof window !== 'undefined' ? window.location.hostname : '';
+  const cached = readCategorySessionCache(hostname);
+  if (cached) {
+    setAutoDetectedCategory(cached, 'cache');
+    onDetected(cached);
+    return;
   }
+
+  const pageContext = extractPageContext(document, settings.enableContextAwareTranslation);
+  // Prefer domain-map lock without LLM when available.
+  const domainCat = lookupDomainCategory(pageContext.domain);
+  if (domainCat) {
+    setAutoDetectedCategory(domainCat, 'domain');
+    onDetected(domainCat);
+    writeCategorySessionCache(pageContext.domain, domainCat);
+    return;
+  }
+
+  setCategoryDetectionInFlight(true);
+
+  const work = detectLLMCategoryIfNeeded(
+    pageContext,
+    settings,
+    manualOverride,
+    // Weak heuristics must not skip LLM refinement.
+    isAutoCategoryLocked() ? getAutoDetectedCategory() : undefined,
+    (cat) => {
+      setAutoDetectedCategory(cat, 'llm');
+      writeCategorySessionCache(pageContext.domain, cat);
+      onDetected(cat);
+    },
+    { skipIfExisting: false },
+  ).finally(() => {
+    setCategoryDetectionInFlight(false);
+  });
+
+  if (settings.llmCategoryDetectionMode === 'blocking') {
+    await work;
+    return;
+  }
+
+  // async: fire-and-forget for the caller; in-flight clears when work settles.
+  void work;
 }
 
+/** Expose source helper for callers that persist heuristic results. */
+export function persistHeuristicCategory(
+  category: string | undefined,
+  domain: string,
+): void {
+  if (!category) return;
+  // Do not downgrade a stronger locked source.
+  if (isAutoCategoryLocked()) return;
+  const source = classifyHeuristicSource(domain, category) ?? 'heuristic';
+  setAutoDetectedCategory(category, source);
+  if (source === 'domain') {
+    writeCategorySessionCache(domain, category);
+  }
+}

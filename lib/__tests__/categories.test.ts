@@ -7,6 +7,7 @@ import {
   matchesAutoOption,
   matchesCustomOption,
   matchesCategoryQuery,
+  normalizePredefinedCategory,
 } from '../categories';
 import {
   getCategoryPromptSnippet,
@@ -33,17 +34,33 @@ describe('Categories, prompt snippets & glossary settings', () => {
     expect(filtered.some((g) => g.items.includes('News'))).toBe(true);
   });
 
-  it('resolves category prompt snippets and ships default named list settings', () => {
+  it('resolves category prompt snippets for every predefined category', () => {
+    for (const cat of PREDEFINED_CATEGORIES) {
+      expect(getCategoryPromptSnippet(cat), cat).toBeTruthy();
+    }
     expect(getCategoryPromptSnippet('Documentation')).toMatch(/technical/i);
     expect(getCategoryPromptSnippet('news')).toMatch(/journalistic/i);
+    expect(getCategoryPromptSnippet('Health & Medicine')).toMatch(/medical/i);
+    expect(getCategoryPromptSnippet('Software Development')).toMatch(/technical|API|code/i);
+    expect(getCategoryPromptSnippet('Financial News')).toMatch(/ticker|finance|currency/i);
     expect(getCategoryPromptSnippet('totally-unknown-xyz')).toBeNull();
 
-    const block = formatCategorySnippetBlock('documentation');
-    expect(block).toContain('<page_category>documentation</page_category>');
+    const block = formatCategorySnippetBlock('Software Development');
+    expect(block).toContain('<page_category>Software Development</page_category>');
     expect(block).toContain('<category_rules>');
 
     expect(normalizeCategoryKey('  News  ')).toBe('news');
     expect(DEFAULT_SETTINGS.namedGlossaryLists).toEqual([]);
     expect(DEFAULT_SETTINGS.subtitleListBySite).toEqual({});
+  });
+
+  it('normalizes LLM category labels onto the predefined allowlist', () => {
+    expect(normalizePredefinedCategory('software development')).toBe('Software Development');
+    expect(normalizePredefinedCategory('  News  ')).toBe('News');
+    expect(normalizePredefinedCategory('Financial News')).toBe('Financial News');
+    expect(normalizePredefinedCategory('Other')).toBeNull();
+    expect(normalizePredefinedCategory('technology')).toBeNull();
+    expect(normalizePredefinedCategory('')).toBeNull();
+    expect(normalizePredefinedCategory(undefined)).toBeNull();
   });
 });

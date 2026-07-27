@@ -12,12 +12,18 @@ import { ViewportObserver } from '@/content/viewportObserver';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { loadSettingsCached, invalidateSessionSettingsCache } from '@/lib/sessionSettingsCache';
-import { extractPageContext, resolveCategory, detectLLMCategoryIfNeeded, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
+import {
+  extractPageContext,
+  resolveCategory,
+  triggerAutoCategoryDetection,
+  persistHeuristicCategory,
+} from '@/content/utils/pageContext';
 import {
   getAutoDetectedCategory,
-  setAutoDetectedCategory,
   buildCategoryInfo,
   broadcastCategoryInfo,
+  invalidateCategoryIfUrlChanged,
+  isAutoCategoryLocked,
 } from '@/content/categoryState';
 import { startCoordinator } from '@/content/subtitleCoordinator';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
@@ -581,23 +587,19 @@ async function translatePieces(
       ? extractPageContext(document, settings.enableContextAwareTranslation)
       : undefined;
 
-    // Persist heuristic category in the singleton if not yet cached
-    if (pageContext?.category && !getAutoDetectedCategory()) {
-      setAutoDetectedCategory(pageContext.category);
+    invalidateCategoryIfUrlChanged();
+
+    // Persist heuristic category (domain locks; weak heuristics stay refinable)
+    if (pageContext?.category) {
+      persistHeuristicCategory(pageContext.category, pageContext.domain);
       broadcastCategoryInfo(settings, categoryOverride);
     }
 
-    if (pageContext) {
-      await detectLLMCategoryIfNeeded(
-        pageContext,
-        settings,
-        categoryOverride,
-        getAutoDetectedCategory(),
-        (cat) => {
-          setAutoDetectedCategory(cat);
-          broadcastCategoryInfo(settings, categoryOverride);
-        },
-      );
+    if (pageContext && !isAutoCategoryLocked()) {
+      await triggerAutoCategoryDetection(settings, categoryOverride, (cat) => {
+        broadcastCategoryInfo(settings, categoryOverride);
+        pageContext.category = cat;
+      });
     }
 
     // Apply category override if present (FR-4: temp > siteRule > autoDetect)
@@ -1434,31 +1436,29 @@ export function setupMessageListener(): void {
       // Return full category info to popup
       (async () => {
         const catSettings = await loadSettings();
-        // Singleton holds LLM-detected or heuristic results
-        let detected = getAutoDetectedCategory();
+        invalidateCategoryIfUrlChanged();
 
         // If nothing cached yet, run heuristic detection and persist the result.
         // The cheap heuristic (domain map + meta/og) runs whenever context-aware
         // translation is on; it does NOT require the LLM-detection toggle.
-        if (!detected && catSettings.enableContextAwareTranslation) {
-          const heuristic = extractPageContext(document, true).category;
-          if (heuristic) {
-            setAutoDetectedCategory(heuristic);
-            detected = heuristic;
+        if (!getAutoDetectedCategory() && catSettings.enableContextAwareTranslation) {
+          const ctx = extractPageContext(document, true);
+          if (ctx.category) {
+            persistHeuristicCategory(ctx.category, ctx.domain);
           }
         }
 
         const info = buildCategoryInfo(catSettings, categoryOverride);
         sendResponse(info);
 
-        // Lazy LLM detection: when nothing is detected yet, detection is enabled,
-        // and no manual override is set, kick off an async detection so the popup's
-        // pageCategoryUpdate listener fills in the category shortly after open.
-        // The helper's in-flight guard prevents duplicate calls across repeated
-        // popup opens while one detection is pending.
-        if (!detected && catSettings.enableLLMPageCategoryDetection && !categoryOverride) {
-          triggerAutoCategoryDetection(catSettings, categoryOverride, (cat) => {
-            setAutoDetectedCategory(cat);
+        // Lazy LLM detection: refine weak heuristics / fill missing categories.
+        // Locked sources (domain/llm/cache) and in-flight guards skip inside helper.
+        if (
+          catSettings.enableLLMPageCategoryDetection &&
+          !categoryOverride &&
+          !isAutoCategoryLocked()
+        ) {
+          triggerAutoCategoryDetection(catSettings, categoryOverride, () => {
             broadcastCategoryInfo(catSettings, categoryOverride);
           }).catch(() => {});
         }

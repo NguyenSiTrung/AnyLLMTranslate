@@ -24,7 +24,7 @@ import type {
   PdfParagraphLabel,
   ResegmentYoutubeAsrResult,
 } from '@/types/messages';
-import { PREDEFINED_CATEGORIES } from '@/lib/categories';
+import { PREDEFINED_CATEGORIES, normalizePredefinedCategory } from '@/lib/categories';
 import { isDebugLoggingEnabled } from './debugLog';
 import { createRateLimiter, type RateLimiter } from '@/lib/rateLimiter';
 import {
@@ -504,16 +504,27 @@ export class OpenAICompatibleService implements TranslationService {
   async detectPageCategory(pageContext: PageContext): Promise<{ success: boolean; category?: string; error?: string }> {
     const categoryList = PREDEFINED_CATEGORIES.join('\n- ');
     const systemPrompt = `You are an AI that categorizes web pages.
-Based on the page title, description, and domain, determine the most appropriate category from the following list:
+Based on the page title, description, domain, path, headings, and structured metadata, determine the most appropriate category from the following list:
 - ${categoryList}
 - Other
 
 Rules:
 - Respond ONLY with valid JSON in this format: {"category": "category_name"}
-- You MUST choose exactly one category from the list above.
+- You MUST choose exactly one category from the list above (use the exact spelling and capitalization).
 - If you cannot determine the category, return "Other".`;
 
-    const userPrompt = `Title: ${pageContext.title || 'N/A'}\nDescription: ${pageContext.description || 'N/A'}\nDomain: ${pageContext.domain || 'N/A'}`;
+    const userLines = [
+      `Title: ${pageContext.title || 'N/A'}`,
+      `Description: ${pageContext.description || 'N/A'}`,
+      `Domain: ${pageContext.domain || 'N/A'}`,
+    ];
+    if (pageContext.pathname) userLines.push(`Path: ${pageContext.pathname}`);
+    if (pageContext.h1) userLines.push(`H1: ${pageContext.h1}`);
+    if (pageContext.ogType) userLines.push(`OG type: ${pageContext.ogType}`);
+    if (pageContext.schemaTypes?.length) {
+      userLines.push(`Schema types: ${pageContext.schemaTypes.join(', ')}`);
+    }
+    const userPrompt = userLines.join('\n');
 
     const completionRequest: ChatCompletionRequest = this.buildCompletionRequest({
       model: this.config.model,
@@ -546,7 +557,8 @@ Rules:
       }
     }
 
-    return { success: true, category: parsed.category };
+    const normalized = normalizePredefinedCategory(parsed.category);
+    return { success: true, category: normalized ?? 'Other' };
   }
 
   async classifyPdfParagraphs(

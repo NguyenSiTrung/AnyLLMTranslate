@@ -902,9 +902,32 @@ describe('OpenAICompatibleService', () => {
       expect(bad.error).toContain('Failed to parse category');
 
       globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'technology' }));
+      const unknown = await new OpenAICompatibleService(mockConfig).detectPageCategory(ctx);
+      expect(unknown.success).toBe(true);
+      expect(unknown.category).toBe('Other');
+
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'software development' }));
       const ok = await new OpenAICompatibleService(mockConfig).detectPageCategory(ctx);
       expect(ok.success).toBe(true);
-      expect(ok.category).toBe('technology');
+      expect(ok.category).toBe('Software Development');
+
+      // Enriched signals should appear in the user prompt.
+      globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'News' }));
+      const enriched = await new OpenAICompatibleService(mockConfig).detectPageCategory({
+        ...ctx,
+        pathname: '/world/latest',
+        h1: 'Breaking update',
+        ogType: 'article',
+        schemaTypes: ['NewsArticle'],
+      });
+      expect(enriched.success).toBe(true);
+      expect(enriched.category).toBe('News');
+      const body = JSON.parse(String((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body));
+      const userContent = body.messages.find((m: { role: string }) => m.role === 'user').content as string;
+      expect(userContent).toContain('/world/latest');
+      expect(userContent).toContain('Breaking update');
+      expect(userContent).toContain('article');
+      expect(userContent).toContain('NewsArticle');
     });
 
     it('classifyPdfParagraphs: throws on 503, fails empty/parse, succeeds + empty short-circuit', async () => {

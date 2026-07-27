@@ -480,6 +480,14 @@ export interface PageContext {
   description: string;
   domain: string;
   category?: string;
+  /** URL path (for LLM / heuristic signals). */
+  pathname?: string;
+  /** First H1 text (truncated). */
+  h1?: string;
+  /** Open Graph type, when present. */
+  ogType?: string;
+  /** schema.org @type values from JSON-LD. */
+  schemaTypes?: string[];
 }
 
 /** Inline translate settings for key-gesture translation */

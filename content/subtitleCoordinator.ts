@@ -45,7 +45,12 @@ import type {
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
-import { setAutoDetectedCategory, broadcastCategoryInfo, getAutoDetectedCategory } from '@/content/categoryState';
+import {
+  broadcastCategoryInfo,
+  getAutoDetectedCategory,
+  invalidateCategoryIfUrlChanged,
+  _resetCategoryState,
+} from '@/content/categoryState';
 import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
@@ -540,11 +545,11 @@ async function buildSubtitlePageContext(): Promise<PageContext | undefined> {
   // Delegate detection to the shared helper, which guards on disabled detection /
   // existing override / existing autoDetected / in-flight, then writes the result
   // into the shared singleton + broadcasts to the popup via the onDetected callback.
+  invalidateCategoryIfUrlChanged();
   await triggerAutoCategoryDetection(
     settings,
     state.categoryOverride,
-    (cat) => {
-      setAutoDetectedCategory(cat);
+    () => {
       broadcastCategoryInfo(settings, state.categoryOverride);
     },
   );
@@ -2267,8 +2272,8 @@ function scheduleProactiveCategoryDetection(): void {
       if (!settings.enableContextAwareTranslation) return;
       if (!settings.enableLLMPageCategoryDetection) return;
       // state.categoryOverride and the singleton are checked inside the helper.
-      await triggerAutoCategoryDetection(settings, state.categoryOverride, (cat) => {
-        setAutoDetectedCategory(cat);
+      invalidateCategoryIfUrlChanged();
+      await triggerAutoCategoryDetection(settings, state.categoryOverride, () => {
         broadcastCategoryInfo(settings, state.categoryOverride);
       });
     })();
@@ -2521,6 +2526,8 @@ export function resetCoordinatorState(): void {
   state.navigationEpoch++;
   state.videoIsPlaying = false;
   state.categoryOverride = undefined;
+  // SPA navigation must not keep the previous page's auto category.
+  _resetCategoryState();
   state.subtitleKnobOverride = undefined;
   state.activeSubtitleSessionId = null;
   resetActiveSource();

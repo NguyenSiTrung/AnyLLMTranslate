@@ -33,6 +33,27 @@ export const PREDEFINED_CATEGORIES = [
 /** Type for a predefined category value */
 export type PredefinedCategory = (typeof PREDEFINED_CATEGORIES)[number];
 
+/** Case-fold helper shared by allowlist matching. */
+function foldCategoryLabel(value: string): string {
+  return value.trim().toLowerCase().replace(/[_\s]+/g, ' ');
+}
+
+/**
+ * Map a free-form / LLM category label onto a predefined Title-Case value.
+ * Returns null for empty, "Other", or unknown labels.
+ */
+export function normalizePredefinedCategory(
+  category: string | undefined | null,
+): PredefinedCategory | null {
+  if (!category?.trim()) return null;
+  const folded = foldCategoryLabel(category);
+  if (folded === 'other') return null;
+  for (const candidate of PREDEFINED_CATEGORIES) {
+    if (foldCategoryLabel(candidate) === folded) return candidate;
+  }
+  return null;
+}
+
 /** Grouped categories for organized UI (popup picker, etc.). */
 export const CATEGORY_GROUPS: { label: string; items: readonly PredefinedCategory[] }[] = [
   {
