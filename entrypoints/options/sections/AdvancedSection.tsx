@@ -70,6 +70,16 @@ import {
   type ScientificPdfStatus,
 } from '@/lib/scientificPdf';
 import { ScientificPdfWizard } from '@/entrypoints/options/components/ScientificPdfWizard';
+import {
+  ADVANCED_SECTION_IDS,
+  scrollToAdvancedSection,
+} from '@/entrypoints/options/lib/scrollToAdvancedSection';
+
+const SECTION_ANCHOR_CLASS =
+  'animate-stagger scroll-mt-4 rounded-xl outline-none data-[advanced-section-highlight=true]:ring-2 data-[advanced-section-highlight=true]:ring-cyan-500/40 data-[advanced-section-highlight=true]:ring-offset-2 data-[advanced-section-highlight=true]:ring-offset-zinc-950';
+
+const CHIP_BASE_CLASS =
+  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950 hover:brightness-110';
 
 /**
  * FR-11 — portable-settings allowlist. Only these keys are written to the
@@ -501,6 +511,8 @@ export function AdvancedSection() {
   const overviewChips = [
     {
       key: 'prompt',
+      targetId: ADVANCED_SECTION_IDS.prompt,
+      ariaLabel: 'Jump to Translation System Prompt',
       active: isPromptCustom,
       icon: <Braces className="h-3 w-3" />,
       label: isPromptCustom ? 'Custom prompt' : 'Default prompt',
@@ -508,6 +520,8 @@ export function AdvancedSection() {
     },
     {
       key: 'context',
+      targetId: ADVANCED_SECTION_IDS.context,
+      ariaLabel: 'Jump to Context & Intelligence',
       active: settings.enableContextAwareTranslation,
       icon: <BrainCircuit className="h-3 w-3" />,
       label: 'Context',
@@ -515,6 +529,8 @@ export function AdvancedSection() {
     },
     {
       key: 'stream',
+      targetId: ADVANCED_SECTION_IDS.quality,
+      ariaLabel: 'Jump to Translation Quality',
       active: settings.enableStreamingTranslation,
       icon: <Zap className="h-3 w-3" />,
       label: 'Streaming',
@@ -522,6 +538,8 @@ export function AdvancedSection() {
     },
     {
       key: 'debug',
+      targetId: ADVANCED_SECTION_IDS.developer,
+      ariaLabel: 'Jump to Developer',
       active: settings.debugMode,
       icon: <Bug className="h-3 w-3" />,
       label: 'Debug',
@@ -577,38 +595,47 @@ export function AdvancedSection() {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {overviewChips.map((chip) => (
-                <span
+                <button
                   key={chip.key}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  type="button"
+                  aria-label={chip.ariaLabel}
+                  onClick={() => scrollToAdvancedSection(chip.targetId)}
+                  className={`${CHIP_BASE_CLASS} ${
                     chip.active
                       ? chip.activeClass
-                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400'
                   }`}
                 >
                   {chip.icon}
                   {chip.label}
-                </span>
+                </button>
               ))}
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              <button
+                type="button"
+                aria-label="Jump to Performance & Throughput"
+                onClick={() => scrollToAdvancedSection(ADVANCED_SECTION_IDS.performance)}
+                className={`${CHIP_BASE_CLASS} ${
                   maxRpmField.value === 0
-                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400'
                     : 'border-blue-500/30 bg-blue-500/10 text-blue-300'
                 }`}
               >
                 <Gauge className="h-3 w-3" aria-hidden="true" />
                 {maxRpmField.value === 0 ? 'RPM unlimited' : `${maxRpmField.value} RPM`}
-              </span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+              </button>
+              <button
+                type="button"
+                aria-label="Jump to PDF Translator"
+                onClick={() => scrollToAdvancedSection(ADVANCED_SECTION_IDS.pdf)}
+                className={`${CHIP_BASE_CLASS} ${
                   pdfAutoOpen === 'off'
-                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600'
+                    ? 'border-zinc-800 bg-zinc-900/50 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400'
                     : 'border-orange-500/30 bg-orange-500/10 text-orange-300'
                 }`}
               >
                 <FileText className="h-3 w-3" aria-hidden="true" />
                 PDF {pdfAutoOpen}
-              </span>
+              </button>
             </div>
           </div>
         </div>
@@ -616,7 +643,12 @@ export function AdvancedSection() {
 
       <div className="space-y-4">
         {/* Translation System Prompt */}
-        <div className="animate-stagger" style={stagger(0)}>
+        <div
+          id={ADVANCED_SECTION_IDS.prompt}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(0)}
+        >
           <Card
             variant="bordered"
             accent="cyan"
@@ -698,7 +730,12 @@ export function AdvancedSection() {
         </div>
 
         {/* Performance & Throughput */}
-        <div className="animate-stagger" style={stagger(1)}>
+        <div
+          id={ADVANCED_SECTION_IDS.performance}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(1)}
+        >
           <Card
             variant="bordered"
             accent="blue"
@@ -815,7 +852,12 @@ export function AdvancedSection() {
         </div>
 
         {/* Translation Quality */}
-        <div className="animate-stagger" style={stagger(2)}>
+        <div
+          id={ADVANCED_SECTION_IDS.quality}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(2)}
+        >
           <Card
             variant="bordered"
             title="Translation Quality"
@@ -1050,7 +1092,12 @@ export function AdvancedSection() {
         </div>
 
         {/* Context & Intelligence */}
-        <div className="animate-stagger" style={stagger(3)}>
+        <div
+          id={ADVANCED_SECTION_IDS.context}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(3)}
+        >
           <Card
             variant="bordered"
             accent="emerald"
@@ -1117,7 +1164,12 @@ export function AdvancedSection() {
         </div>
 
         {/* PDF Translator — open behavior + Docker bridge */}
-        <div className="animate-stagger" style={stagger(4)}>
+        <div
+          id={ADVANCED_SECTION_IDS.pdf}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(4)}
+        >
           <Card
             variant="bordered"
             accent="amber"
@@ -1387,7 +1439,12 @@ export function AdvancedSection() {
         </div>
 
         {/* Developer */}
-        <div className="animate-stagger" style={stagger(7)}>
+        <div
+          id={ADVANCED_SECTION_IDS.developer}
+          tabIndex={-1}
+          className={SECTION_ANCHOR_CLASS}
+          style={stagger(7)}
+        >
           <Card
             variant="bordered"
             accent={settings.debugMode ? 'amber' : undefined}
