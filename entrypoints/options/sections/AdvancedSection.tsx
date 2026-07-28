@@ -78,6 +78,11 @@ import {
 const SECTION_ANCHOR_CLASS =
   'animate-stagger scroll-mt-4 rounded-xl outline-none data-[advanced-section-highlight=true]:ring-2 data-[advanced-section-highlight=true]:ring-cyan-500/40 data-[advanced-section-highlight=true]:ring-offset-2 data-[advanced-section-highlight=true]:ring-offset-zinc-950';
 
+// Cache anchor lives on a DangerAction <li> inside the overflow-hidden DangerZone,
+// so the highlight uses an inset ring (outer rings would be clipped).
+const CACHE_ANCHOR_CLASS =
+  'scroll-mt-4 outline-none data-[advanced-section-highlight=true]:ring-2 data-[advanced-section-highlight=true]:ring-inset data-[advanced-section-highlight=true]:ring-amber-500/50';
+
 const CHIP_BASE_CLASS =
   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950 hover:brightness-110';
 
@@ -559,34 +564,55 @@ export function AdvancedSection() {
       {/* Overview strip — live cache + feature chips at a glance */}
       <div className="mb-5 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.04] via-zinc-950/40 to-zinc-950/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         <div className="grid gap-0 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <div className="border-b border-white/5 p-4 sm:border-b-0 sm:border-r">
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="border-b border-white/5 sm:border-b-0 sm:border-r">
+            <div className="flex items-center justify-between gap-2 px-4 pt-4">
               <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                 <HardDrive className="h-3.5 w-3.5 text-cyan-500/80" aria-hidden="true" />
                 Translation cache
               </div>
-              <span className="text-[11px] tabular-nums text-zinc-400">
-                {cacheStats.loading ? '…' : `${cacheUsagePct}% of ${cacheLimitMb} MB`}
-              </span>
+              <div className="flex items-center gap-2.5">
+                <span className="text-[11px] tabular-nums text-zinc-400">
+                  {cacheStats.loading ? '…' : `${cacheUsagePct}% of ${cacheLimitMb} MB`}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Clear translation cache"
+                  onClick={() => setShowClearCacheModal(true)}
+                  disabled={
+                    clearStatus === 'clearing' ||
+                    (!cacheStats.loading && cacheStats.entryCount === 0)
+                  }
+                  className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  Clear…
+                </button>
+              </div>
             </div>
-            <p className="text-sm font-semibold tabular-nums text-zinc-100">
-              {cacheStats.loading
-                ? 'Measuring…'
-                : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeLabel}`}
-            </p>
-            <div
-              className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800"
-              role="progressbar"
-              aria-valuenow={cacheUsagePct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Cache usage"
+            <button
+              type="button"
+              aria-label="Jump to Clear translation cache"
+              onClick={() => scrollToAdvancedSection(ADVANCED_SECTION_IDS.cache)}
+              className="mt-2 block w-full px-4 pb-4 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:bg-white/[0.04]"
             >
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${cacheBarTone}`}
-                style={{ width: `${cacheStats.loading ? 8 : Math.max(cacheUsagePct, cacheStats.entryCount > 0 ? 4 : 0)}%` }}
-              />
-            </div>
+              <span className="block text-sm font-semibold tabular-nums text-zinc-100">
+                {cacheStats.loading
+                  ? 'Measuring…'
+                  : `${cacheStats.entryCount.toLocaleString()} entries · ${cacheStats.sizeLabel}`}
+              </span>
+              <span
+                className="mt-3 block h-1.5 overflow-hidden rounded-full bg-zinc-800"
+                role="progressbar"
+                aria-valuenow={cacheUsagePct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Cache usage"
+              >
+                <span
+                  className={`block h-full rounded-full transition-all duration-500 ${cacheBarTone}`}
+                  style={{ width: `${cacheStats.loading ? 8 : Math.max(cacheUsagePct, cacheStats.entryCount > 0 ? 4 : 0)}%` }}
+                />
+              </span>
+            </button>
           </div>
 
           <div className="p-4">
@@ -1477,6 +1503,9 @@ export function AdvancedSection() {
         <div className="animate-stagger" style={stagger(8)}>
           <DangerZone description="Irreversible or costly actions. Export a backup first if you plan to reset.">
             <DangerAction
+              id={ADVANCED_SECTION_IDS.cache}
+              tabIndex={-1}
+              className={CACHE_ANCHOR_CLASS}
               severity="caution"
               icon={<Trash2 />}
               title="Clear translation cache"

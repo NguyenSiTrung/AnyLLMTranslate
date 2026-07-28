@@ -76,6 +76,10 @@ interface DangerActionProps {
   severity?: DangerSeverity;
   /** Primary control — usually a Button. */
   action: ReactNode;
+  /** Optional anchor target for jump-to-section navigation. */
+  id?: string;
+  className?: string;
+  tabIndex?: number;
 }
 
 const severityConfig: Record<
@@ -101,11 +105,18 @@ export function DangerAction({
   meta,
   severity = 'caution',
   action,
+  id,
+  className = '',
+  tabIndex,
 }: DangerActionProps) {
   const config = severityConfig[severity];
 
   return (
-    <li className="group px-5 py-4 transition-colors duration-150 hover:bg-rose-500/[0.04]">
+    <li
+      id={id}
+      tabIndex={tabIndex}
+      className={`group px-5 py-4 transition-colors duration-150 hover:bg-rose-500/[0.04] ${className}`}
+    >
       <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="flex min-w-0 flex-1 gap-3">
           <div

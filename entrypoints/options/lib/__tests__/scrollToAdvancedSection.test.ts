@@ -15,6 +15,7 @@ describe('ADVANCED_SECTION_IDS', () => {
       context: 'advanced-section-context',
       pdf: 'advanced-section-pdf',
       developer: 'advanced-section-developer',
+      cache: 'advanced-section-cache',
     });
   });
 });
