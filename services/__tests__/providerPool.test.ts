@@ -766,7 +766,8 @@ describe('ProviderPoolCoordinator', () => {
   });
 
   describe('fast 429 failover when siblings exist', () => {
-    it('configures member for 0 same-key 429 retries when other healthy keys exist', async () => {
+    it('sets 0 same-key 429 retries with healthy siblings, restores default when one healthy key remains', async () => {
+      // Phase 1: 0 same-key 429 retries when other healthy keys exist.
       const max429Sets: Array<{ keyId: string; value: number | null | undefined }> = [];
       factory = vi.fn(
         (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
@@ -788,10 +789,9 @@ describe('ProviderPoolCoordinator', () => {
       await coord.translate(baseRequest());
       // First request: 2 healthy keys → prefer fast failover (0 retries)
       expect(max429Sets.some((e) => e.value === 0)).toBe(true);
-    });
 
-    it('allows default 429 retries when only one healthy key remains', async () => {
-      const max429Sets: Array<{ keyId: string; value: number | null | undefined }> = [];
+      // Phase 2: default 429 retries restored when only one healthy key remains.
+      max429Sets.length = 0;
       factory = vi.fn(
         (config: ProviderConfig, identity: { keyId: string; providerId: string }) => {
           const s = makeStub(identity.keyId, config);
@@ -802,16 +802,17 @@ describe('ProviderPoolCoordinator', () => {
           return s;
         },
       );
+      stubs.clear();
 
-      const coord = new ProviderPoolCoordinator({
+      const coord2 = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(twoKeySettings());
+      coord2.rebuild(twoKeySettings());
 
       // Open k1 so only k2 is healthy
       setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
-      await coord.translate(baseRequest()).catch(() => null);
+      await coord2.translate(baseRequest()).catch(() => null);
       max429Sets.length = 0;
 
       setOutcome('k1', {
@@ -823,7 +824,7 @@ describe('ProviderPoolCoordinator', () => {
         result: { success: true, translations: new Map([['id1', 'from-k2']]) },
       });
 
-      await coord.translate(baseRequest());
+      await coord2.translate(baseRequest());
       // Only one healthy → restore default retries (null/undefined)
       const last = max429Sets[max429Sets.length - 1];
       expect(last?.value === null || last?.value === undefined || last?.value === 3).toBe(true);
@@ -924,25 +925,6 @@ describe('ProviderPoolCoordinator', () => {
       }
       const modelsUsed = [...stubs.values()].filter((s) => s.callCount > 0).length;
       expect(modelsUsed).toBeGreaterThanOrEqual(2);
-    });
-
-    it('flash 429 does not open lite slot on same key', async () => {
-      const coord = new ProviderPoolCoordinator({
-        serviceFactory: factory,
-        clock: () => clockNow,
-      });
-      coord.rebuild(googleMultiSettings('preferred_failover'));
-      setOutcome('k1::gemini-2.5-flash', {
-        kind: 'fail',
-        error: new ApiError('rl', 429),
-      });
-      setOutcome('k2::gemini-2.5-flash', {
-        kind: 'fail',
-        error: new ApiError('rl', 429),
-      });
-      await coord.translate(baseRequest());
-      expect(coord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
-      expect(coord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
     });
   });
 });

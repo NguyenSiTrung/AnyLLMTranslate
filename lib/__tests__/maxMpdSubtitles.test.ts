@@ -116,11 +116,8 @@ describe('extractSubtitleTracks', () => {
         'https://cdn.example.com/manifest.mpd',
       ),
     ).toEqual([]);
-  });
-});
 
-describe('parseSubtitleContent — TTML parsing', () => {
-  it('parses TTML content', () => {
+    // parseSubtitleContent parses TTML cue bodies
     const ttml = `<?xml version="1.0"?>
 <tt xmlns="http://www.w3.org/ns/ttml">
   <body><div>

@@ -19,19 +19,15 @@ const baseRequest: ChatCompletionRequest = {
 
 const geminiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
 
-describe('normalizeThinkingMode', () => {
-  it('accepts auto/on/off and defaults unknown to auto', () => {
+describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
+  it('accepts known values and defaults unknown to auto/medium', () => {
     expect(normalizeThinkingMode('auto')).toBe('auto');
     expect(normalizeThinkingMode('on')).toBe('on');
     expect(normalizeThinkingMode('off')).toBe('off');
     expect(normalizeThinkingMode(undefined)).toBe('auto');
     expect(normalizeThinkingMode('maybe')).toBe('auto');
     expect(normalizeThinkingMode(null)).toBe('auto');
-  });
-});
 
-describe('normalizeThinkingEffort', () => {
-  it('accepts minimal/low/medium/high and defaults unknown to medium', () => {
     expect(normalizeThinkingEffort('minimal')).toBe('minimal');
     expect(normalizeThinkingEffort('low')).toBe('low');
     expect(normalizeThinkingEffort('medium')).toBe('medium');
@@ -55,7 +51,7 @@ describe('isGeminiOpenAiCompatBaseUrl', () => {
 });
 
 describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
-  it('allows none on 2.5 Flash / Flash-Lite; not on 2.5 Pro or Gemini 3.x', () => {
+  it('allows none only where supported; maps off/on to reasoning_effort per family', () => {
     expect(geminiSupportsThinkingNone('gemini-2.5-flash')).toBe(true);
     expect(geminiSupportsThinkingNone('gemini-2.5-flash-lite')).toBe(true);
     expect(geminiSupportsThinkingNone('models/gemini-2.5-flash')).toBe(true);
@@ -64,9 +60,6 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     expect(geminiSupportsThinkingNone('gemini-3.6-flash')).toBe(false);
     expect(geminiSupportsThinkingNone('gemini-3-flash')).toBe(false);
     expect(geminiSupportsThinkingNone('gemini-3.1-pro')).toBe(false);
-  });
-
-  it('maps off/on to the correct reasoning_effort per model family', () => {
     expect(geminiReasoningEffortForMode('off', 'gemini-2.5-flash')).toBe('none');
     expect(geminiReasoningEffortForMode('off', 'gemini-3.6-flash')).toBe('minimal');
     expect(geminiReasoningEffortForMode('off', 'gemini-2.5-pro')).toBe('minimal');
@@ -92,7 +85,7 @@ describe('applyThinkingModeToRequest', () => {
     ).toBeUndefined();
   });
 
-  it('sets enable_thinking true/false for on/off on non-Gemini providers', () => {
+  it('sets enable_thinking true/false and preserves existing chat_template_kwargs keys', () => {
     expect(applyThinkingModeToRequest(baseRequest, 'on').chat_template_kwargs).toEqual({
       enable_thinking: true,
     });
@@ -100,9 +93,7 @@ describe('applyThinkingModeToRequest', () => {
       enable_thinking: false,
     });
     expect(applyThinkingModeToRequest(baseRequest, 'off').reasoning_effort).toBeUndefined();
-  });
 
-  it('preserves existing chat_template_kwargs keys', () => {
     const withExtra: ChatCompletionRequest = {
       ...baseRequest,
       chat_template_kwargs: { low_effort: true },
@@ -113,7 +104,7 @@ describe('applyThinkingModeToRequest', () => {
     });
   });
 
-  it('uses reasoning_effort for Google AI Studio Gemini 2.x Flash', () => {
+  it('uses reasoning_effort on Gemini and honors thinkingEffort when mode is on', () => {
     const req: ChatCompletionRequest = {
       ...baseRequest,
       model: 'gemini-2.5-flash',
@@ -127,28 +118,26 @@ describe('applyThinkingModeToRequest', () => {
     expect(applyThinkingModeToRequest(req, 'on', { baseUrl: geminiBase })).toMatchObject({
       reasoning_effort: 'medium',
     });
-  });
 
-  it('honors thinkingEffort when Gemini thinkingMode is on', () => {
-    const req: ChatCompletionRequest = {
+    const g36: ChatCompletionRequest = {
       ...baseRequest,
       model: 'gemini-3.6-flash',
     };
     expect(
-      applyThinkingModeToRequest(req, 'on', {
+      applyThinkingModeToRequest(g36, 'on', {
         baseUrl: geminiBase,
         thinkingEffort: 'low',
       }).reasoning_effort,
     ).toBe('low');
     expect(
-      applyThinkingModeToRequest(req, 'on', {
+      applyThinkingModeToRequest(g36, 'on', {
         baseUrl: geminiBase,
         thinkingEffort: 'high',
       }).reasoning_effort,
     ).toBe('high');
     // Effort is ignored when mode is off
     expect(
-      applyThinkingModeToRequest(req, 'off', {
+      applyThinkingModeToRequest(g36, 'off', {
         baseUrl: geminiBase,
         thinkingEffort: 'high',
       }).reasoning_effort,

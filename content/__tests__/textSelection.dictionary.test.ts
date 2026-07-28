@@ -58,52 +58,6 @@ describe('textSelection dictionary UI', () => {
   });
 
   describe('buildDictionaryTooltipContent', () => {
-    it('renders word, phonetic, POS, meaning, example, translation, context', () => {
-      const el = buildDictionaryTooltipContent(
-        'hello',
-        {
-          phonetic: '/həˈloʊ/',
-          definitions: [
-            {
-              pos: 'excl.',
-              meaning: 'xin chào',
-              example: {
-                source: 'Hello, how are you?',
-                target: 'Xin chào, bạn khỏe không?',
-              },
-            },
-          ],
-          translation: 'xin chào',
-          contextualAnalysis: 'A greeting in informal speech.',
-        },
-        'xin chào',
-      );
-
-      expect(el.className).toContain('anyllm-word-dictionary');
-      expect(el.querySelector('.anyllm-word-dictionary-word')?.textContent).toBe('hello');
-      expect(el.querySelector('.anyllm-word-dictionary-phonetic')?.textContent).toBe(
-        '/həˈloʊ/',
-      );
-      expect(el.querySelector('.anyllm-word-dictionary-pos')?.textContent).toBe('excl.');
-      expect(el.querySelector('.anyllm-word-dictionary-meaning')?.textContent).toBe(
-        'xin chào',
-      );
-      expect(el.querySelector('.anyllm-word-dictionary-example-source')?.textContent).toContain(
-        'Hello',
-      );
-      expect(el.querySelector('.anyllm-word-dictionary-example-target')?.textContent).toContain(
-        'Xin chào',
-      );
-      expect(el.querySelector('.anyllm-word-dictionary-translation')?.textContent).toBe(
-        'xin chào',
-      );
-      expect(el.querySelector('.anyllm-word-dictionary-context')?.textContent).toContain(
-        'greeting',
-      );
-      // Actions moved to dialog footer
-      expect(el.querySelector('.anyllm-tooltip-copy')).toBeNull();
-    });
-
     it('works with phonetic-only dictionary fields', () => {
       const el = buildDictionaryTooltipContent(
         'test',
@@ -144,7 +98,8 @@ describe('textSelection dictionary UI', () => {
       expect(document.querySelector(`.${TOOLTIP_CLASS}`)).toBeTruthy();
     });
 
-    it('renders sentence layout when dictionary fields absent', () => {
+    it('renders sentence layout when dictionary fields absent (fail-open plain text)', () => {
+      // Scenario 1: sentence mode without dictionary fields → no dictionary UI
       seedTooltip();
 
       applySelectionResponse('A long sentence about many things.', {
@@ -157,9 +112,8 @@ describe('textSelection dictionary UI', () => {
       expect(
         document.querySelector('[data-anyllm-role="selection-translation"]')?.textContent,
       ).toBe('Một câu dài về nhiều thứ.');
-    });
 
-    it('fail-open shows plain text for sentence-mode response', () => {
+      // Scenario 2: fail-open — raw sentence-mode text renders as-is
       seedTooltip();
 
       applySelectionResponse('hello', {

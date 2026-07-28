@@ -54,7 +54,7 @@ describe('parallelCacheLookup', () => {
     expect(partitioned.cacheCharacters).toBe(3);
   });
 
-  it('runs lookups concurrently (not strictly serial)', async () => {
+  it('runs lookups concurrently and caps concurrency under large piece lists (FR-11)', async () => {
     let concurrent = 0;
     let maxConcurrent = 0;
     const deps = makeDeps({
@@ -84,17 +84,16 @@ describe('parallelCacheLookup', () => {
     );
 
     expect(maxConcurrent).toBeGreaterThanOrEqual(2);
-  });
 
-  it('FR-11: caps concurrent lookups under large piece lists', async () => {
-    let concurrent = 0;
-    let maxConcurrent = 0;
-    const deps = makeDeps({
+    // FR-11: concurrency is capped under large piece lists
+    let concurrent2 = 0;
+    let maxConcurrent2 = 0;
+    const deps2 = makeDeps({
       getCachedTranslation: vi.fn(async () => {
-        concurrent++;
-        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        concurrent2++;
+        maxConcurrent2 = Math.max(maxConcurrent2, concurrent2);
         await new Promise((r) => setTimeout(r, 5));
-        concurrent--;
+        concurrent2--;
         return null;
       }),
     });
@@ -113,10 +112,10 @@ describe('parallelCacheLookup', () => {
         enableFailureCache: false,
         concurrency: 4,
       },
-      deps,
+      deps2,
     );
-    expect(maxConcurrent).toBeLessThanOrEqual(4);
-    expect(maxConcurrent).toBeGreaterThanOrEqual(2);
+    expect(maxConcurrent2).toBeLessThanOrEqual(4);
+    expect(maxConcurrent2).toBeGreaterThanOrEqual(2);
   });
 
   it('skips failure cache and clears entries when skipFailureCache is true', async () => {

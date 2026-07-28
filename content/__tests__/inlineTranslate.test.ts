@@ -358,7 +358,8 @@ describe('gesture detection', () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('triple-space works in ProseMirror chat composers (not treated as code editor)', async () => {
+  it('triple-space works in ProseMirror chat composers, including nested-child keydown targets', async () => {
+    // Scenario 1: keydowns target the ProseMirror host directly (not treated as code editor)
     const prose = document.createElement('div');
     prose.className = 'ProseMirror';
     prose.contentEditable = 'true';
@@ -384,24 +385,22 @@ describe('gesture detection', () => {
         text: 'xin chào',
       }),
     );
-  });
 
-  it('triple-space works when keydown target is a nested child inside ProseMirror', async () => {
-    const prose = document.createElement('div');
-    prose.className = 'ProseMirror';
-    prose.contentEditable = 'true';
+    // Scenario 2: real ProseMirror keydowns often target an inner <p>, not the host
+    const prose2 = document.createElement('div');
+    prose2.className = 'ProseMirror';
+    prose2.contentEditable = 'true';
     const p = document.createElement('p');
     p.textContent = 'xin chào   ';
-    prose.appendChild(p);
-    document.body.appendChild(prose);
-    prose.focus();
+    prose2.appendChild(p);
+    document.body.appendChild(prose2);
+    prose2.focus();
 
     mockSendMessage.mockResolvedValueOnce({
       success: true,
       translatedText: 'hello',
     });
 
-    // Real ProseMirror keydowns often target the inner <p>, not the host
     fireKeydown(p, ' ');
     fireKeydown(p, ' ');
     fireKeydown(p, ' ');
@@ -469,7 +468,7 @@ describe('visual feedback', () => {
     expect(input.classList.contains(PULSING_CLASS)).toBe(false);
   });
 
-  it('shows toast with loading state', async () => {
+  it('shows loading toast during translation, updates to success on completion, and auto-dismisses after 2 seconds', async () => {
     const input = createFocusedInput('hello   ');
 
     let resolveTranslation = (_value: unknown) => {};
@@ -491,23 +490,11 @@ describe('visual feedback', () => {
 
     resolveTranslation({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
-  });
 
-  it('updates toast to success on completion and auto-dismisses after 2 seconds', async () => {
-    const input = createFocusedInput('hello   ');
-    mockSendMessage.mockResolvedValueOnce({
-      success: true,
-      translatedText: 'xin chào',
-    });
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    await vi.advanceTimersByTimeAsync(10);
-
-    const toast = document.querySelector(`.${TOAST_CLASS}`);
-    expect(toast?.getAttribute('data-type')).toBe('success');
-    expect(toast?.textContent).toBe('Translated ✓');
+    // Success state
+    const successToast = document.querySelector(`.${TOAST_CLASS}`);
+    expect(successToast?.getAttribute('data-type')).toBe('success');
+    expect(successToast?.textContent).toBe('Translated ✓');
 
     // Advance 2 seconds for auto-dismiss
     await vi.advanceTimersByTimeAsync(2000);
@@ -560,7 +547,8 @@ describe('error recovery', () => {
     );
   }
 
-  it('stores original text in undo map', async () => {
+  it('stores original text in undo map and restores it on translation error', async () => {
+    // Scenario 1: original text stored in the undo map on success
     const input = createFocusedInput('hello   ');
     mockSendMessage.mockResolvedValueOnce({
       success: true,
@@ -574,19 +562,18 @@ describe('error recovery', () => {
 
     expect(undoMap.has(input)).toBe(true);
     expect(undoMap.get(input)).toBe('hello   ');
-  });
 
-  it('restores original text on translation error', async () => {
-    const input = createFocusedInput('hello   ');
+    // Scenario 2: on error, the original text is restored
+    const input2 = createFocusedInput('hello   ');
     mockSendMessage.mockRejectedValueOnce(new Error('Network error'));
 
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
+    fireKeydown(input2, ' ');
+    fireKeydown(input2, ' ');
+    fireKeydown(input2, ' ');
     await vi.advanceTimersByTimeAsync(10);
 
     // On error, it should restore the original text
-    expect(input.value).toBe('hello   ');
+    expect(input2.value).toBe('hello   ');
   });
 });
 
@@ -647,26 +634,21 @@ describe('debounce', () => {
 /* ── Cleanup ──────────────────────────────────────────────────── */
 
 describe('cleanup', () => {
-  it('removes event listeners on cleanup', () => {
-    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
-    const winRemoveSpy = vi.spyOn(window, 'removeEventListener');
-    const cleanup = initInlineTranslate();
-    cleanup();
-    expect(docRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
-    expect(winRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
-    docRemoveSpy.mockRestore();
-    winRemoveSpy.mockRestore();
-  });
-
-  it('registers keydown listeners on both window and document (capture)', () => {
+  it('registers keydown listeners on window and document (capture) and removes them on cleanup', () => {
     const docAddSpy = vi.spyOn(document, 'addEventListener');
     const winAddSpy = vi.spyOn(window, 'addEventListener');
+    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
+    const winRemoveSpy = vi.spyOn(window, 'removeEventListener');
     const cleanup = initInlineTranslate();
     expect(docAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     expect(winAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     cleanup();
+    expect(docRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    expect(winRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     docAddSpy.mockRestore();
     winAddSpy.mockRestore();
+    docRemoveSpy.mockRestore();
+    winRemoveSpy.mockRestore();
   });
 });
 

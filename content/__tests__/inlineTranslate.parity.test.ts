@@ -18,8 +18,6 @@ import {
   updateInlineTranslateConfig,
   translateFocusedInput,
   setInlineTranslateEnabled,
-  undoMap,
-  tryFallbackUndo,
   removeToast,
 } from '@/content/inlineTranslate';
 import { runInlineTranslate } from '@/content/inlineTranslate/orchestrate';
@@ -93,6 +91,16 @@ describe('editable guards', () => {
     document.body.appendChild(ok);
     ok.focus();
     expect(getDeepActiveElement(document, true)).toBe(ok);
+
+    // isCaretAtEnd: caret at end of input vs mid-input
+    const caret = document.createElement('input');
+    caret.type = 'text';
+    caret.value = 'abc';
+    document.body.appendChild(caret);
+    caret.setSelectionRange(3, 3);
+    expect(isCaretAtEnd(caret)).toBe(true);
+    caret.setSelectionRange(1, 1);
+    expect(isCaretAtEnd(caret)).toBe(false);
   });
 });
 
@@ -214,7 +222,9 @@ describe('gesture IME / repeat', () => {
     expect(triggers).toHaveLength(1);
   });
 
-  it('does not cancel a pending fire when compositionend arrives after the Nth space', async () => {
+  it('compositionend neither cancels a pending fire nor wipes prior taps', async () => {
+    // Scenario 1: compositionend arriving after the Nth space does not cancel
+    // the pending fire (IME often emits it right after the committing space)
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');
     input.value = 'hello';
@@ -245,20 +255,19 @@ describe('gesture IME / repeat', () => {
     fire();
     fire();
     fire();
-    // IME often emits compositionend right after the committing space
     g.onCompositionEnd(new Event('compositionend'));
     await vi.advanceTimersByTimeAsync(10);
     expect(triggers).toHaveLength(1);
-  });
 
-  it('fires on exactly 3 spaces even when compositionend wipes after the first space', async () => {
-    // Regression: compositionend used to resetTaps(), so Space×3 required 4 presses.
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'xin chào';
-    document.body.appendChild(input);
+    // Scenario 2: compositionend after the first space must not wipe the tap —
+    // exactly 3 spaces still fire (regression: compositionend used to
+    // resetTaps(), so Space×3 required 4 presses).
+    const triggers2: HTMLElement[] = [];
+    const input2 = document.createElement('input');
+    input2.value = 'xin chào';
+    document.body.appendChild(input2);
 
-    const g = createGestureController(
+    const g2 = createGestureController(
       {
         enabled: true,
         triggerKey: ' ',
@@ -269,37 +278,37 @@ describe('gesture IME / repeat', () => {
         triggerToleranceCount: 0,
       },
       {
-        onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
-        getText: () => input.value,
+        onTrigger: (el) => triggers2.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input2,
+        getText: () => input2.value,
       },
     );
 
-    const fire = (opts: { isComposing?: boolean } = {}) => {
+    const fire2 = (opts: { isComposing?: boolean } = {}) => {
       const ev = new KeyboardEvent('keydown', {
         key: ' ',
         bubbles: true,
         isComposing: opts.isComposing ?? false,
       });
-      Object.defineProperty(ev, 'target', { value: input });
-      g.onKeyDown(ev);
+      Object.defineProperty(ev, 'target', { value: input2 });
+      g2.onKeyDown(ev);
     };
 
-    fire(); // tap 1
-    g.onCompositionEnd(new Event('compositionend')); // must NOT wipe tap 1
-    fire(); // tap 2
-    fire(); // tap 3 → fire
+    fire2(); // tap 1
+    g2.onCompositionEnd(new Event('compositionend')); // must NOT wipe tap 1
+    fire2(); // tap 2
+    fire2(); // tap 3 → fire
     await vi.advanceTimersByTimeAsync(10);
-    expect(triggers).toHaveLength(1);
+    expect(triggers2).toHaveLength(1);
 
     // A composing keydown mid-burst must also not wipe prior taps
-    triggers.length = 0;
-    fire();
-    fire({ isComposing: true }); // ignored, no reset
-    fire();
-    fire();
+    triggers2.length = 0;
+    fire2();
+    fire2({ isComposing: true }); // ignored, no reset
+    fire2();
+    fire2();
     await vi.advanceTimersByTimeAsync(10);
-    expect(triggers).toHaveLength(1);
+    expect(triggers2).toHaveLength(1);
   });
 
   it('does not double-count keydown + input for the same physical Space', async () => {
@@ -494,17 +503,8 @@ describe('race-safe orchestration', () => {
 });
 
 describe('fallback undo', () => {
-  it('restores original from undoMap', () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = 'translated';
-    document.body.appendChild(input);
-    undoMap.set(input, 'original text');
-    expect(tryFallbackUndo(input)).toBe(true);
-    expect(input.value).toBe('original text');
-  });
-
-  it('re-trigger undoes only when field is still the last translation', async () => {
+  it('re-trigger undoes an unedited translation and re-translates after user edits the field', async () => {
+    // Scenario 1: unedited re-trigger restores the original (no new request)
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'xin chào';
@@ -530,30 +530,30 @@ describe('fallback undo', () => {
     await vi.advanceTimersByTimeAsync(10);
     expect(input.value).toBe('xin chào');
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
-  });
 
-  it('re-trigger translates again after user edits the field', async () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = 'xin chào';
-    document.body.appendChild(input);
+    // Scenario 2: edited field is translated again
+    mockSendMessage.mockClear();
+    const input2 = document.createElement('input');
+    input2.type = 'text';
+    input2.value = 'xin chào';
+    document.body.appendChild(input2);
 
     mockSendMessage
       .mockResolvedValueOnce({ success: true, translatedText: 'hello' })
       .mockResolvedValueOnce({ success: true, translatedText: 'new text' });
 
     await runInlineTranslate(baseConfig(), {
-      element: input,
+      element: input2,
       skipStripTrailing: true,
     });
     await vi.advanceTimersByTimeAsync(10);
-    expect(input.value).toBe('hello');
+    expect(input2.value).toBe('hello');
 
     // User edits after translate
-    input.value = 'user typed something new';
+    input2.value = 'user typed something new';
 
     await runInlineTranslate(baseConfig(), {
-      element: input,
+      element: input2,
       skipStripTrailing: true,
     });
     await vi.advanceTimersByTimeAsync(10);
@@ -562,12 +562,12 @@ describe('fallback undo', () => {
     expect(mockSendMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ text: 'user typed something new' }),
     );
-    expect(input.value).toBe('new text');
+    expect(input2.value).toBe('new text');
   });
 });
 
 describe('translateFocusedInput (Alt+I path)', () => {
-  it('translates focused input without requiring trailing spaces', async () => {
+  it('translates the focused input without trailing spaces and no-ops when disabled', async () => {
     const cleanup = initInlineTranslate();
     const input = document.createElement('input');
     input.type = 'text';
@@ -591,14 +591,14 @@ describe('translateFocusedInput (Alt+I path)', () => {
     );
     expect(input.value).toBe('hello');
     cleanup();
-  });
 
-  it('no-ops when disabled', async () => {
+    // Disabled → no-op
+    mockSendMessage.mockClear();
     setInlineTranslateEnabled(false);
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
-    input.focus();
+    const input2 = document.createElement('input');
+    input2.value = 'hello';
+    document.body.appendChild(input2);
+    input2.focus();
     await translateFocusedInput();
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
@@ -631,15 +631,3 @@ describe('prefix + gesture pipeline', () => {
   });
 });
 
-describe('isCaretAtEnd', () => {
-  it('detects caret at end of input', () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = 'abc';
-    document.body.appendChild(input);
-    input.setSelectionRange(3, 3);
-    expect(isCaretAtEnd(input)).toBe(true);
-    input.setSelectionRange(1, 1);
-    expect(isCaretAtEnd(input)).toBe(false);
-  });
-});

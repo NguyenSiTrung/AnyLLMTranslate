@@ -18,31 +18,24 @@ function baseSettings(over: Partial<ExtensionSettings> = {}): ExtensionSettings 
 }
 
 describe('resolveTtsBackend', () => {
-  it('returns disabled when tts.enabled is false', () => {
+  it('resolves disabled / auto / provider / browser preferences', () => {
+    // disabled when tts.enabled is false
     expect(
       resolveTtsBackend({ ...DEFAULT_TTS_SETTINGS, enabled: false }, true),
     ).toBe('disabled');
-  });
-
-  it('auto prefers provider when available', () => {
+    // auto prefers provider when available
     expect(
       resolveTtsBackend({ ...DEFAULT_TTS_SETTINGS, preferredBackend: 'auto' }, true),
     ).toBe('provider');
-  });
-
-  it('auto falls back to browser without provider', () => {
+    // auto falls back to browser without provider
     expect(
       resolveTtsBackend({ ...DEFAULT_TTS_SETTINGS, preferredBackend: 'auto' }, false),
     ).toBe('browser');
-  });
-
-  it('provider preferred falls open to browser', () => {
+    // provider preferred falls open to browser
     expect(
       resolveTtsBackend({ ...DEFAULT_TTS_SETTINGS, preferredBackend: 'provider' }, false),
     ).toBe('browser');
-  });
-
-  it('browser preferred always browser', () => {
+    // browser preferred always browser
     expect(
       resolveTtsBackend({ ...DEFAULT_TTS_SETTINGS, preferredBackend: 'browser' }, true),
     ).toBe('browser');
@@ -103,13 +96,10 @@ describe('hasProviderTtsCredentials / pickTtsCredentials', () => {
 });
 
 describe('speechEndpointFromBaseUrl', () => {
-  it('appends /audio/speech to /v1 base', () => {
+  it('appends /audio/speech to /v1 base; adds /v1 when base lacks it', () => {
     expect(speechEndpointFromBaseUrl('https://api.openai.com/v1')).toBe(
       'https://api.openai.com/v1/audio/speech',
     );
-  });
-
-  it('adds /v1/audio/speech when base lacks /v1', () => {
     expect(speechEndpointFromBaseUrl('https://example.com')).toBe(
       'https://example.com/v1/audio/speech',
     );
@@ -117,13 +107,11 @@ describe('speechEndpointFromBaseUrl', () => {
 });
 
 describe('clampRate / mergeTtsSettings', () => {
-  it('clamps rate', () => {
+  it('clamps rate and merges partial tts settings', () => {
     expect(clampRate(0.1)).toBe(0.5);
     expect(clampRate(5)).toBe(2);
     expect(clampRate(1.2)).toBe(1.2);
-  });
 
-  it('merges partial tts', () => {
     expect(mergeTtsSettings({ voice: 'nova' }).voice).toBe('nova');
     expect(mergeTtsSettings({ voice: 'nova' }).model).toBe('tts-1');
   });

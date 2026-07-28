@@ -21,7 +21,7 @@ function makeTextTrack(cues: VTTCue[], kind = 'subtitles', language = 'en'): Tex
 }
 
 describe('extractTrackCues', () => {
-  it('extracts cues with voice tags, HTML, and whitespace trim', () => {
+  it('extracts cues with voice tags/HTML/trim; empty for missing cues or non-subtitle kinds; accepts captions', () => {
     const track = makeTextTrack([
       makeVttCue(0, 2, '<v John>Hello there</v>'),
       makeVttCue(2, 4, '<v>Anonymous</v>'),
@@ -34,9 +34,8 @@ describe('extractTrackCues', () => {
     expect(cues[1].voice).toBeUndefined();
     expect(cues[2].text).toBe('Trimmed');
     expect(cues[3].text).toContain('<b>Bold</b>');
-  });
 
-  it('returns empty for missing cues and non-subtitle kinds; accepts captions', () => {
+    // Empty for missing cues and non-subtitle kinds; accepts captions
     expect(extractTrackCues(makeTextTrack([]))).toEqual([]);
     expect(
       extractTrackCues({ kind: 'subtitles', language: 'en', cues: null } as unknown as TextTrack),

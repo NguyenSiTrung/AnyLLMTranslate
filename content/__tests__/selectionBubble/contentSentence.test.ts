@@ -5,7 +5,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildSentenceContent } from '@/content/selectionBubble/contentSentence';
 
 describe('buildSentenceContent', () => {
-  it('shows translation and collapsed original by default', () => {
+  it('shows translation with collapsed original by default and the original when expanded', () => {
+    // Collapsed by default: translation visible, original hidden until toggled
     const onToggle = vi.fn();
     const el = buildSentenceContent({
       translatedText: 'Xin chào',
@@ -23,16 +24,15 @@ describe('buildSentenceContent', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     toggle.click();
     expect(onToggle).toHaveBeenCalledOnce();
-  });
 
-  it('shows original when expanded', () => {
-    const el = buildSentenceContent({
+    // Expanded: original shown
+    const expanded = buildSentenceContent({
       translatedText: 'Xin chào',
       originalText: 'Hello',
       originalExpanded: true,
       onToggleOriginal: () => {},
     });
-    expect(el.querySelector('[data-anyllm-role="selection-original"]')?.textContent).toBe(
+    expect(expanded.querySelector('[data-anyllm-role="selection-original"]')?.textContent).toBe(
       'Hello',
     );
   });

@@ -58,9 +58,8 @@ describe('cacheFingerprint', () => {
         promptVersion: 'sys-v1',
       }),
     );
-  });
 
-  it('hashGlossaryContent is order-insensitive', () => {
+    // hashGlossaryContent is order-insensitive
     const h1 = hashGlossaryContent([
       { source: 'b', target: 'B' },
       { source: 'a', target: 'A' },

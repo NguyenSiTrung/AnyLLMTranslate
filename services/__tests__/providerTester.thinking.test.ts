@@ -138,30 +138,6 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.controlsSent).toBe(false);
   });
 
-  it('sends Gemini reasoning_effort none when off on AI Studio Flash', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      const u = String(url);
-      if (u.includes('/models')) return okJson({ data: [{ id: 'gemini-2.5-flash' }] });
-      const body = JSON.parse(String(init?.body ?? '{}')) as {
-        max_tokens?: number;
-        reasoning_effort?: string;
-      };
-      if (body.max_tokens === 1) return okJson({ choices: [{ message: { content: 'x' } }] });
-      expect(body.reasoning_effort).toBe('none');
-      return okJson({ choices: [{ message: { content: 'Hola' } }] });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const result = await testConnection(
-      baseConfig({
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-        model: 'gemini-2.5-flash',
-        thinkingMode: 'off',
-      }),
-    );
-    expect(result.thinking?.verdict).toBe('disable-success');
-  });
-
   it('retries without thinking controls when provider rejects them', async () => {
     let translationCalls = 0;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

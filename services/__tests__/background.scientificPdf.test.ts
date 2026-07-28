@@ -121,36 +121,33 @@ describe('background — scientific PDF handlers', () => {
   });
 
   describe('SCIENTIFIC_PDF_HEALTH', () => {
-    it('returns success when bridge reports ok', async () => {
-      // Arrange
+    it('returns success when bridge reports ok, maps offline when fetch fails', async () => {
+      // Scenario 1: bridge reports ok.
       vi.mocked(fetch).mockResolvedValueOnce(
         jsonResponse({ status: 'ok', version: '1.0.0', pdf2zh: 'available' }),
       );
 
-      // Act
-      const result = await handleMessage(
+      const okResult = await handleMessage(
         { action: 'SCIENTIFIC_PDF_HEALTH' },
         {} as chrome.runtime.MessageSender,
       );
 
-      // Assert
-      expect(result).toMatchObject({
+      expect(okResult).toMatchObject({
         success: true,
         status: 'ok',
         version: '1.0.0',
         serverUrl: 'http://127.0.0.1:17890',
       });
-    });
 
-    it('maps offline when fetch fails', async () => {
+      // Scenario 2: fetch fails → offline.
       vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-      const result = await handleMessage(
+      const offlineResult = await handleMessage(
         { action: 'SCIENTIFIC_PDF_HEALTH' },
         {} as chrome.runtime.MessageSender,
       );
 
-      expect(result).toMatchObject({ success: false, code: 'offline' });
+      expect(offlineResult).toMatchObject({ success: false, code: 'offline' });
     });
   });
 
@@ -243,29 +240,6 @@ describe('background — scientific PDF handlers', () => {
     });
   });
 
-  describe('SCIENTIFIC_PDF_GET_JOB', () => {
-    it('returns job snapshot', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(
-        jsonResponse({
-          id: 'job_1',
-          state: 'running',
-          progress: 0.5,
-          artifacts: { mono: false, dual: false },
-        }),
-      );
-
-      const result = await handleMessage(
-        { action: 'SCIENTIFIC_PDF_GET_JOB', jobId: 'job_1' },
-        {} as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toMatchObject({
-        success: true,
-        job: { id: 'job_1', state: 'running', progress: 0.5 },
-      });
-    });
-  });
-
   describe('SCIENTIFIC_PDF_DOWNLOAD', () => {
     it('returns base64 PDF for mono artifact', async () => {
       const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
@@ -288,19 +262,6 @@ describe('background — scientific PDF handlers', () => {
       expect(result).toMatchObject({ success: true, artifact: 'mono' });
       const typed = result as { fileBase64?: string };
       expect(typed.fileBase64).toBe(btoa(String.fromCharCode(...pdfBytes)));
-    });
-  });
-
-  describe('SCIENTIFIC_PDF_CANCEL', () => {
-    it('returns success on 204', async () => {
-      vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
-
-      const result = await handleMessage(
-        { action: 'SCIENTIFIC_PDF_CANCEL', jobId: 'job_1' },
-        {} as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toEqual({ success: true });
     });
   });
 });

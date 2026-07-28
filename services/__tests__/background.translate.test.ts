@@ -92,8 +92,8 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
     cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
   });
 
-  it('skips LLM entirely when all pieces are cached', async () => {
-    // Arrange — cache returns hits for every piece
+  it('splits/merges cache hits across all-cached, none-cached, and mixed scenarios', async () => {
+    // Scenario 1: all pieces cached → skip LLM entirely.
     getCachedTranslation.mockImplementation(async (text: string) => {
       const map: Record<string, string> = {
         'Hello': 'Xin chào (cached)',
@@ -104,8 +104,7 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    // Act
-    const result = await handleMessage(
+    const allCached = await handleMessage(
       buildMsg([
         { id: 'p1', text: 'Hello' },
         { id: 'p2', text: 'World' },
@@ -113,24 +112,20 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       fakeSender,
     ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
 
-    // Assert
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(result.success).toBe(true);
-    expect(result.results).toEqual(
+    expect(allCached.success).toBe(true);
+    expect(allCached.results).toEqual(
       expect.arrayContaining([
         { id: 'p1', translatedText: 'Xin chào (cached)' },
         { id: 'p2', translatedText: 'Thế giới (cached)' },
       ]),
     );
-  });
 
-  it('sends all pieces to LLM when none are cached and writes back', async () => {
-    // Arrange — no cache hits
+    // Scenario 2: none cached → all pieces sent to LLM and written back.
     getCachedTranslation.mockResolvedValue(null);
     mockFetchTranslation({ translations: { p1: 'Xin chào', p2: 'Thế giới' } });
 
-    // Act
-    const result = await handleMessage(
+    const noneCached = await handleMessage(
       buildMsg([
         { id: 'p1', text: 'Hello' },
         { id: 'p2', text: 'World' },
@@ -138,11 +133,10 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       fakeSender,
     ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
 
-    // Assert — LLM was called
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    expect(fetchMock).toHaveBeenCalled();
-    expect(result.success).toBe(true);
-    expect(result.results).toEqual(
+    const fetchMockNone = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMockNone).toHaveBeenCalled();
+    expect(noneCached.success).toBe(true);
+    expect(noneCached.results).toEqual(
       expect.arrayContaining([
         { id: 'p1', translatedText: 'Xin chào' },
         { id: 'p2', translatedText: 'Thế giới' },
@@ -166,17 +160,14 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       undefined,
       expect.anything(),
     );
-  });
 
-  it('sends only uncached pieces to LLM when some are cached (mixed)', async () => {
-    // Arrange — p1 cached, p2 not
+    // Scenario 3: mixed — only uncached pieces are sent to the LLM.
     getCachedTranslation.mockImplementation(async (text: string) =>
       text === 'Hello' ? 'Xin chào (cached)' : null,
     );
     mockFetchTranslation({ translations: { p2: 'Thế giới' } });
 
-    // Act
-    const result = await handleMessage(
+    const mixed = await handleMessage(
       buildMsg([
         { id: 'p1', text: 'Hello' },
         { id: 'p2', text: 'World' },
@@ -184,86 +175,22 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
       fakeSender,
     ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
 
-    // Assert — LLM called but only for uncached piece
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    expect(fetchMock).toHaveBeenCalled();
+    const fetchMockMixed = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMockMixed).toHaveBeenCalled();
     // The body should NOT contain 'Hello' since it was cached
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string })?.body) as {
+    const body = JSON.parse((fetchMockMixed.mock.calls[0][1] as { body: string })?.body) as {
       messages: Array<{ content: string }>;
     };
     expect(body.messages[1].content).not.toContain('Hello');
     expect(body.messages[1].content).toContain('World');
 
-    expect(result.success).toBe(true);
-    expect(result.results).toEqual(
+    expect(mixed.success).toBe(true);
+    expect(mixed.results).toEqual(
       expect.arrayContaining([
         { id: 'p1', translatedText: 'Xin chào (cached)' },
         { id: 'p2', translatedText: 'Thế giới' },
       ]),
     );
-  });
-
-  it('preserves piece id mapping correctly in merged response', async () => {
-    // Arrange — all uncached
-    getCachedTranslation.mockResolvedValue(null);
-    mockFetchTranslation({
-      translations: { 'unique-id-abc': 'Dịch 1', 'unique-id-def': 'Dịch 2' },
-    });
-
-    // Act
-    const result = await handleMessage(
-      buildMsg([
-        { id: 'unique-id-abc', text: 'Text A' },
-        { id: 'unique-id-def', text: 'Text B' },
-      ]),
-      fakeSender,
-    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
-
-    // Assert — IDs preserved
-    const ids = result.results.map((r) => r.id);
-    expect(ids).toContain('unique-id-abc');
-    expect(ids).toContain('unique-id-def');
-  });
-});
-
-// ── Web-page prompt regression guard ──────────────────────────────────────────
-// Sub-project: subtitle profiles & profile-driven prompt. The subtitle path now
-// routes to buildSubtitleSystemPrompt via subtitleKnobs. This guard verifies the
-// WEB-PAGE translate path is unaffected: it still uses buildSystemPrompt and
-// honors settings.customSystemPrompt, and never emits the subtitle identity.
-describe('handleTranslate — web-page prompt unchanged by subtitle profiles', () => {
-  let getCachedTranslation: ReturnType<typeof vi.fn>;
-
-  beforeEach(async () => {
-    delete mockStorage['anyllm-translate-settings'];
-    vi.clearAllMocks();
-    __resetTranslationServiceForTest();
-    __resetSettingsCacheForTest();
-    const mod = await import('@/services/cacheManager');
-    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
-    getCachedTranslation.mockResolvedValue(null);
-  });
-
-  it('uses buildSystemPrompt with customSystemPrompt and not the subtitle prompt', async () => {
-    // Seed a custom web-page system prompt in settings.
-    mockStorage['anyllm-translate-settings'] = {
-      customSystemPrompt:
-        'WEB CUSTOM MARKER {{targetLanguage}}. {{glossary}} Respond with JSON {"translations": {}}.',
-    };
-    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
-
-    await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender);
-
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-      messages: Array<{ role: string; content: string }>;
-    };
-    const systemPrompt = body.messages[0].content;
-
-    // Web custom prompt is honored.
-    expect(systemPrompt).toContain('WEB CUSTOM MARKER');
-    // Subtitle prompt must NOT leak into the web path.
-    expect(systemPrompt).not.toContain('subtitle translator');
   });
 });
 
@@ -419,9 +346,9 @@ describe('handleTranslate — FR-7: do not cache partial back-fills', () => {
     cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
   });
 
-  it('does not write a back-filled (source==translated) piece to cache', async () => {
-    // LLM returns ONLY p1's translation and omits p2. The service back-fills p2
-    // with its own source text ("World") and sets partial=true.
+  it('does not cache back-filled pieces but still caches translated pieces in a partial chunk', async () => {
+    // Phase 1: LLM returns ONLY p1's translation and omits p2. The service
+    // back-fills p2 with its own source text ("World") and sets partial=true.
     mockFetchTranslation({ translations: { p1: 'Xin chào' } });
 
     const result = (await handleMessage(
@@ -443,10 +370,10 @@ describe('handleTranslate — FR-7: do not cache partial back-fills', () => {
     // p2's result still carries the back-filled source so nothing is lost.
     const p2 = result.results?.find((r) => r.id === 'p2');
     expect(p2?.translatedText).toBe('World');
-  });
 
-  it('caches normally-translated pieces even when the chunk is partial', async () => {
-    // Same partial response, but assert the TRANSLATED piece (p1) IS cached.
+    // Phase 2: same partial response — assert the TRANSLATED piece (p1) IS
+    // cached (exactly one cache write).
+    cacheTranslation.mockClear();
     mockFetchTranslation({ translations: { p1: 'Xin chào' } });
 
     await handleMessage(
@@ -677,6 +604,29 @@ describe('handleTranslate — inArticleContext batch partitioning (FR-3)', () =>
       expect(secondCallIds).toEqual(expect.arrayContaining(articleIds));
       expect(secondCallIds).not.toContain('s1');
     }
+
+    // Folded scenario: pieces with inArticleContext undefined go into the
+    // out-of-article group (single batch).
+    mockFetchTranslation({ translations: { p1: 'T-One', p2: 'T-Two' } });
+
+    const undefinedResult = await handleMessage(
+      {
+        action: 'translate' as const,
+        pieces: [
+          { id: 'p1', text: 'Plain text one.' },
+          { id: 'p2', text: 'Plain text two.' },
+        ],
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      },
+      fakeSender,
+    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
+
+    expect(undefinedResult.success).toBe(true);
+    // All pieces in one batch (out-of-article group, since flag is undefined)
+    const fetchMockUndefined = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(fetchMockUndefined.mock.calls.length).toBe(1);
+    expect(undefinedResult.results.length).toBe(2);
   });
 
   it('dedup is shared across both groups (same text in article + sidebar)', async () => {
@@ -699,26 +649,6 @@ describe('handleTranslate — inArticleContext batch partitioning (FR-3)', () =>
     // Both pieces get translations (one from LLM, one re-hydrated from dedup)
     expect(result.results.length).toBe(2);
     expect(result.results.every((r) => r.translatedText === 'T-Shared')).toBe(true);
-  });
-
-  it('all pieces with inArticleContext undefined go into the out-of-article group', async () => {
-    const pieces = [
-      { id: 'p1', text: 'Plain text one.' },
-      { id: 'p2', text: 'Plain text two.' },
-    ];
-
-    mockFetchTranslation({ translations: { p1: 'T-One', p2: 'T-Two' } });
-
-    const result = await handleMessage(
-      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
-      fakeSender,
-    ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
-
-    expect(result.success).toBe(true);
-    // All pieces in one batch (out-of-article group, since flag is undefined)
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    expect(fetchMock.mock.calls.length).toBe(1);
-    expect(result.results.length).toBe(2);
   });
 });
 

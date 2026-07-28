@@ -21,15 +21,11 @@ const list = (over: Partial<NamedGlossaryList> = {}): NamedGlossaryList => ({
   ...over,
 });
 
-describe('normalizeSubtitleSiteHost', () => {
-  it('lowercases, strips www and trailing dot', () => {
+describe('normalizeSubtitleSiteHost / resolveActiveSubtitleListId', () => {
+  it('normalizes hosts and resolves site memory when the list exists', () => {
     expect(normalizeSubtitleSiteHost('WWW.Youku.com.')).toBe('youku.com');
     expect(normalizeSubtitleSiteHost('play.hbomax.com')).toBe('play.hbomax.com');
-  });
-});
 
-describe('resolveActiveSubtitleListId', () => {
-  it('returns site memory when list exists, else null', () => {
     const lists = [list()];
     expect(resolveActiveSubtitleListId(lists, { 'youku.com': 'L1' }, 'www.youku.com')).toBe('L1');
     expect(resolveActiveSubtitleListId(lists, { 'youku.com': 'GONE' }, 'youku.com')).toBeNull();

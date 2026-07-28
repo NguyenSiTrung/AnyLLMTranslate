@@ -42,8 +42,8 @@ describe('ScientificJobModal', () => {
     expect(screen.queryByText(/pdf2zh/i)).not.toBeInTheDocument();
   });
 
-  it('done: hides dual card when hasDual is false', () => {
-    render(
+  it('done: hides dual card when hasDual is false and Compare when onOpenCompare omitted', () => {
+    const noDual = render(
       <ScientificJobModal
         progress={baseProgress({ hasDual: false })}
         onCancel={noop}
@@ -56,6 +56,21 @@ describe('ScientificJobModal', () => {
     );
     expect(screen.queryByRole('radio', { name: /bilingual/i })).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /translated only/i })).toBeInTheDocument();
+    noDual.unmount();
+
+    render(
+      <ScientificJobModal
+        progress={baseProgress()}
+        onCancel={noop}
+        onClose={noop}
+        onRetry={noop}
+        onOpenTranslated={noop}
+        onDownloadMono={noop}
+        onDownloadDual={noop}
+        onDownloadSideBySide={noop}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /compare side-by-side/i })).toBeNull();
   });
 
   it('done: selecting mono updates download CTA and downloadMono is called', () => {
@@ -97,22 +112,6 @@ describe('ScientificJobModal', () => {
     expect(onOpenTranslated).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: /compare side-by-side/i }));
     expect(onOpenCompare).toHaveBeenCalledTimes(1);
-  });
-
-  it('done: hides Compare when onOpenCompare omitted', () => {
-    render(
-      <ScientificJobModal
-        progress={baseProgress()}
-        onCancel={noop}
-        onClose={noop}
-        onRetry={noop}
-        onOpenTranslated={noop}
-        onDownloadMono={noop}
-        onDownloadDual={noop}
-        onDownloadSideBySide={noop}
-      />,
-    );
-    expect(screen.queryByRole('button', { name: /compare side-by-side/i })).toBeNull();
   });
 
   it('running: activity log is collapsed by default', () => {

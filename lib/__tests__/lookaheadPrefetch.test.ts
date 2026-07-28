@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { selectLookaheadCandidates, shouldRunLookahead } from '@/lib/lookaheadPrefetch';
 
 describe('lookaheadPrefetch', () => {
-  it('shouldRunLookahead skips on pause/page-off/over-threshold', () => {
+  it('shouldRunLookahead gating and selectLookaheadCandidates below-fold picking', () => {
     expect(
       shouldRunLookahead({ systemicPause: true, pageOff: false, activeRequests: 0 }),
     ).toBe(false);
@@ -25,9 +25,8 @@ describe('lookaheadPrefetch', () => {
         activeThreshold: 1,
       }),
     ).toBe(true);
-  });
 
-  it('selectLookaheadCandidates picks below-fold pieces, caps count, empty when none', () => {
+    // selectLookaheadCandidates picks below-fold pieces, caps count, empty when none
     const ids = selectLookaheadCandidates(
       [
         { id: 'vis', isTranslated: false, inFlight: false, top: 100 },

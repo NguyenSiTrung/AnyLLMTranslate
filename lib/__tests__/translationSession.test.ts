@@ -6,16 +6,12 @@ import {
 } from '../translationSession';
 
 describe('translationSession', () => {
-  describe('isSessionCurrent', () => {
-    it('matches only equal session ids', () => {
+  describe('TranslationSessionRegistry', () => {
+    it('bumps session and aborts previous ports/controllers; isSessionCurrent matches equal ids only; unregister prevents disconnect on later bump', () => {
       expect(isSessionCurrent(1, 1)).toBe(true);
       expect(isSessionCurrent(2, 1)).toBe(false);
       expect(isSessionCurrent(0, 1)).toBe(false);
-    });
-  });
 
-  describe('TranslationSessionRegistry', () => {
-    it('bumps session and aborts previous ports/controllers', () => {
       const reg = new TranslationSessionRegistry();
       expect(reg.current).toBe(0);
 
@@ -31,15 +27,14 @@ describe('translationSession', () => {
       expect(reg.isCurrent(s1)).toBe(true);
       expect(port.disconnect).toHaveBeenCalledTimes(1);
       expect(controller.abort).toHaveBeenCalledTimes(1);
-    });
 
-    it('unregister prevents disconnect on later bump', () => {
-      const reg = new TranslationSessionRegistry();
-      const port = { disconnect: vi.fn() };
-      reg.registerPort(reg.current, port);
-      reg.unregisterPort(reg.current, port);
-      reg.bump();
-      expect(port.disconnect).not.toHaveBeenCalled();
+      // Unregistered ports are not disconnected on a later bump
+      const reg2 = new TranslationSessionRegistry();
+      const port2 = { disconnect: vi.fn() };
+      reg2.registerPort(reg2.current, port2);
+      reg2.unregisterPort(reg2.current, port2);
+      reg2.bump();
+      expect(port2.disconnect).not.toHaveBeenCalled();
     });
 
     it('abortAll disconnects every registered session', () => {

@@ -78,7 +78,8 @@ describe('InlineTranslateSection', () => {
     expect(screen.getByText(/Enable inline translation to preview/i)).toBeInTheDocument();
   });
 
-  it('keeps blocklist draft while typing (newlines/spaces) and commits on blur', async () => {
+  it('keeps blocklist and language-prefix drafts local until blur', async () => {
+    // blocklist: keeps draft while typing (newlines/spaces) and commits on blur
     useSettingsStore.setState({
       inlineTranslate: {
         ...DEFAULT_INLINE_TRANSLATE_SETTINGS,
@@ -86,7 +87,7 @@ describe('InlineTranslateSection', () => {
         blocklistPatterns: ['*.figma.com'],
       },
     });
-    render(<InlineTranslateSection />);
+    const blocklistRender = render(<InlineTranslateSection />);
     const ta = screen.getByLabelText('Blocklist patterns') as HTMLTextAreaElement;
 
     fireEvent.change(ta, { target: { value: '*.figma.com\n' } });
@@ -106,9 +107,9 @@ describe('InlineTranslateSection', () => {
         '*.notion.so',
       ]);
     });
-  });
+    blocklistRender.unmount();
 
-  it('keeps the language-prefix edit local until blur', () => {
+    // language prefix: keeps the edit local until blur
     const updateSettings = vi.fn();
     useSettingsStore.setState({ updateSettings });
     render(<InlineTranslateSection />);

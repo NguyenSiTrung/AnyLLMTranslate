@@ -7,7 +7,7 @@ describe('domUtils', () => {
     __resetMatchCacheForTest();
   });
 
-  it('matchesCached caches results and handles invalid selectors/reset', () => {
+  it('matchesCached caches results; classifyInArticle detects main content vs chrome', () => {
     const el = document.createElement('div');
     el.className = 'foo bar';
 
@@ -32,9 +32,8 @@ describe('domUtils', () => {
     callCount = 0;
     matchesCached(el, '.foo');
     expect(callCount).toBe(1);
-  });
 
-  it('classifyInArticle detects main content vs chrome and deep nesting', () => {
+    // classifyInArticle detects main content vs chrome and deep nesting
     const article = document.createElement('article');
     const p1 = document.createElement('p');
     article.appendChild(p1);

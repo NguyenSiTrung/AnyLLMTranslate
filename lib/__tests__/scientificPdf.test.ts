@@ -29,7 +29,7 @@ describe('scientificPdf helpers', () => {
     );
   });
 
-  it('loopback detection, status resolution, and settings merge', () => {
+  it('loopback detection, status resolution, settings merge, and docker setup commands', () => {
     expect(isLoopbackServerUrl('http://127.0.0.1:17890')).toBe(true);
     expect(isLoopbackServerUrl('http://127.0.0.42:9')).toBe(true);
     expect(isLoopbackServerUrl('http://localhost:17890')).toBe(true);
@@ -69,9 +69,8 @@ describe('scientificPdf helpers', () => {
     expect(merged.setupCompletedAt).toBe('2026-07-17T12:00:00Z');
     expect(merged).not.toHaveProperty('apiKey');
     expect(merged).not.toHaveProperty('preferScientific');
-  });
 
-  it('docker run and setup commands point at helper script', () => {
+    // Docker run and setup commands point at the helper script
     const cmd = scientificPdfDockerRunCommand();
     expect(cmd).toContain(`-p ${DEFAULT_SCIENTIFIC_PDF_PORT}:${DEFAULT_SCIENTIFIC_PDF_PORT}`);
     expect(cmd).toContain('anyllm-scientific-pdf-bridge:latest');

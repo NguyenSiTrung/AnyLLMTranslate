@@ -49,13 +49,12 @@ describe('CategoryPicker', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows Auto chip and detected label when closed', () => {
-    renderPicker({ sourceKind: 'auto', detectedCategory: 'News' });
+  it('shows source chips for auto and tab overrides when closed', () => {
+    const auto = renderPicker({ sourceKind: 'auto', detectedCategory: 'News' });
     expect(screen.getByText('Auto')).toBeTruthy();
     expect(screen.getByText('News')).toBeTruthy();
-  });
+    auto.unmount();
 
-  it('shows This tab chip for tab overrides', () => {
     renderPicker({
       sourceKind: 'tab',
       currentValue: 'Gaming',
@@ -89,12 +88,21 @@ describe('CategoryPicker', () => {
     expect(screen.getByRole('option', { name: 'Software Development' })).toBeTruthy();
   });
 
-  it('selects a category and closes', async () => {
-    const { props } = renderPicker();
+  it('selects a category and closes, and closes on Escape', async () => {
+    const { props, unmount } = renderPicker();
     fireEvent.click(screen.getByRole('button', { name: /category/i }));
     const opt = await screen.findByRole('option', { name: 'News' });
     fireEvent.click(opt);
     expect(props.onCategoryChange).toHaveBeenCalledWith('News');
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+    unmount();
+
+    renderPicker();
+    fireEvent.click(screen.getByRole('button', { name: /category/i }));
+    await screen.findByRole('listbox');
+    fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).toBeNull();
     });
@@ -115,16 +123,6 @@ describe('CategoryPicker', () => {
     expect((draft as HTMLInputElement).value).toBe('My Cat');
     fireEvent.change(draft, { target: { value: 'My Cat edited' } });
     expect(onCustomInputChange).toHaveBeenCalledWith('My Cat edited');
-  });
-
-  it('closes on Escape', async () => {
-    renderPicker();
-    fireEvent.click(screen.getByRole('button', { name: /category/i }));
-    await screen.findByRole('listbox');
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => {
-      expect(screen.queryByRole('listbox')).toBeNull();
-    });
   });
 
   it('shows save-as-rule with truncated host and flash label', async () => {

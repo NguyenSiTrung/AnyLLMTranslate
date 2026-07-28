@@ -8,7 +8,7 @@ describe('computeBubblePosition', () => {
   const viewport = { width: 1000, height: 800 };
   const size = { width: 320, height: 160 };
 
-  it('places above when there is room', () => {
+  it('places above when there is room (adding scroll offsets to document coordinates)', () => {
     const r = computeBubblePosition({
       anchor: { left: 400, top: 300, width: 100, height: 20 },
       size,
@@ -22,6 +22,17 @@ describe('computeBubblePosition', () => {
     expect(r.top).toBeLessThan(300);
     expect(r.left).toBeGreaterThanOrEqual(8);
     expect(r.left + size.width).toBeLessThanOrEqual(viewport.width - 8);
+
+    // Scroll offsets are added to document coordinates
+    const scrolled = computeBubblePosition({
+      anchor: { left: 100, top: 200, width: 50, height: 20 },
+      size,
+      viewport,
+      scrollX: 50,
+      scrollY: 100,
+    });
+    expect(scrolled.left).toBeGreaterThanOrEqual(50);
+    expect(scrolled.top).toBeGreaterThanOrEqual(0);
   });
 
   it('places below when near the top edge', () => {
@@ -48,15 +59,4 @@ describe('computeBubblePosition', () => {
     expect(r.left + size.width).toBeLessThanOrEqual(viewport.width - 8);
   });
 
-  it('adds scroll offsets to document coordinates', () => {
-    const r = computeBubblePosition({
-      anchor: { left: 100, top: 200, width: 50, height: 20 },
-      size,
-      viewport,
-      scrollX: 50,
-      scrollY: 100,
-    });
-    expect(r.left).toBeGreaterThanOrEqual(50);
-    expect(r.top).toBeGreaterThanOrEqual(0);
-  });
 });

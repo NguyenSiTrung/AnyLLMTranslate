@@ -5,14 +5,14 @@ import type { TranslationService } from '@/services/base';
 import type { ExtensionSettings } from '@/types/config';
 
 describe('queryPoolKeyStatuses', () => {
-  it('returns empty statuses when service is not a pool coordinator', async () => {
+  it('handles non-pool services, coordinator statuses, and getService throws', async () => {
+    // Non-pool service → empty statuses.
     const stub = {} as TranslationService;
-    const result = await queryPoolKeyStatuses(async () => stub);
-    expect(result.success).toBe(true);
-    expect(result.statuses).toEqual({});
-  });
+    const empty = await queryPoolKeyStatuses(async () => stub);
+    expect(empty.success).toBe(true);
+    expect(empty.statuses).toEqual({});
 
-  it('returns getAllKeyStatuses from the coordinator', async () => {
+    // Pool coordinator → getAllKeyStatuses surfaced.
     const coord = new ProviderPoolCoordinator({ clock: () => 0 });
     coord.rebuild({
       providers: [
@@ -39,21 +39,20 @@ describe('queryPoolKeyStatuses', () => {
       ],
     } as ExtensionSettings);
 
-    const result = await queryPoolKeyStatuses(async () => coord);
-    expect(result.success).toBe(true);
-    expect(result.statuses?.k1).toMatchObject({
+    const fromCoord = await queryPoolKeyStatuses(async () => coord);
+    expect(fromCoord.success).toBe(true);
+    expect(fromCoord.statuses?.k1).toMatchObject({
       keyId: 'k1',
       providerId: 'p1',
       open: false,
       disabled: false,
     });
-  });
 
-  it('returns success false on getService throw', async () => {
-    const result = await queryPoolKeyStatuses(async () => {
+    // getService throw → success false with the error message.
+    const thrown = await queryPoolKeyStatuses(async () => {
       throw new Error('boom');
     });
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('boom');
+    expect(thrown.success).toBe(false);
+    expect(thrown.error).toBe('boom');
   });
 });

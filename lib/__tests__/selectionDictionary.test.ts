@@ -34,7 +34,7 @@ const FULL_PAYLOAD = {
 };
 
 describe('selection dictionary, cache keys, classification & prompts', () => {
-  it('parses dictionary JSON with fences/think/partial fields, checks fields & fallbacks', () => {
+  it('parses payloads, checks fields & fallbacks, generates cache keys, classifies candidates, and builds prompts', async () => {
     expect(parseSelectionDictionary(JSON.stringify(FULL_PAYLOAD))).toEqual({
       phonetic: '/həˈloʊ/',
       definitions: [
@@ -56,9 +56,7 @@ describe('selection dictionary, cache keys, classification & prompts', () => {
     expect(hasDictionaryFields(onlyTranslation)).toBe(false);
     expect(hasDictionaryFields({ phonetic: '/həˈloʊ/' })).toBe(true);
     expect(extractTranslationFallback('raw junk', { translation: 'xin chào' })).toBe('xin chào');
-  });
 
-  it('generates cache keys, classifies candidates, and builds dictionary prompts', async () => {
     // Cache key
     const plain = await generateCacheKey('hello', 'en', 'vi');
     const dict = await generateSelectionDictionaryCacheKey('hello', 'en', 'vi');

@@ -14,7 +14,7 @@ import {
 } from '@/lib/shortcutDisplay';
 
 describe('shortcutDisplay', () => {
-  it('parses chords/gestures and maps global/page rows without Alt+T/O', () => {
+  it('parses chords/gestures, maps rows, counts/filters/groups, and formats cheatsheet', () => {
     expect(parseShortcutKeys('Alt+A')).toEqual(['Alt', 'A']);
     expect(parseShortcutKeys('Ctrl+Shift+Y')).toEqual(['Ctrl', 'Shift', 'Y']);
     expect(parseShortcutKeys('')).toEqual([]);
@@ -49,16 +49,15 @@ describe('shortcutDisplay', () => {
     const labels = PAGE_SHORTCUT_ROWS.map((r) => r.shortcut);
     expect(labels).toEqual(expect.arrayContaining(['Alt+H', 'Alt+D', 'Alt+Q', 'Escape']));
     expect(PAGE_SHORTCUT_ROWS.every((r) => r.scope === 'page')).toBe(true);
-  });
 
-  it('counts bound globals, filters, groups scopes, and formats cheatsheet', () => {
+    // Counts bound globals, filters, groups scopes, and formats cheatsheet
     const sample = [...buildGlobalRows([]), ...PAGE_SHORTCUT_ROWS, buildGestureRow(3, 800)];
 
-    const rows = buildGlobalRows([
+    const boundRows = buildGlobalRows([
       { name: 'translate-page', shortcut: 'Alt+A' },
       { name: 'translate-input-box', shortcut: '' },
     ]);
-    const { bound, total } = countGlobalBound(rows);
+    const { bound, total } = countGlobalBound(boundRows);
     expect(total).toBe(5);
     expect(bound).toBeGreaterThanOrEqual(1);
     expect(bound).toBeLessThan(total);

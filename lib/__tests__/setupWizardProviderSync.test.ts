@@ -22,24 +22,6 @@ function applyAtomicWizardPatch(
   } as Record<string, unknown>) as unknown as ExtensionSettings;
 }
 
-/** Simulates the OLD buggy dual concurrent partial writes (last write wins). */
-function applyDualPartialWritesRace(
-  current: ExtensionSettings,
-  patch: Partial<ProviderConfig>,
-  lastWrite: 'providers' | 'provider',
-): ExtensionSettings {
-  const providerOnly = deepMerge(current as unknown as Record<string, unknown>, {
-    provider: { ...current.provider, ...patch },
-  } as Record<string, unknown>) as unknown as ExtensionSettings;
-
-  const providersOnly = deepMerge(current as unknown as Record<string, unknown>, {
-    providers: syncProviderToPool(current.providers ?? [], patch),
-  } as Record<string, unknown>) as unknown as ExtensionSettings;
-
-  // Both started from the same snapshot; last save wins entirely.
-  return lastWrite === 'providers' ? providersOnly : providerOnly;
-}
-
 describe('setup wizard provider selection sync', () => {
   const openRouter = getCatalogEntryById('openrouter');
   if (!openRouter) throw new Error('openrouter catalog entry missing');
@@ -47,17 +29,6 @@ describe('setup wizard provider selection sync', () => {
   const selection = resolveCatalogSelection(openRouter, {
     apiKey: '',
     model: '',
-  });
-
-  it('dual concurrent partial writes can drop catalog baseUrl (the race)', () => {
-    const current = { ...DEFAULT_SETTINGS, providers: [] as ExtensionSettings['providers'] };
-    const lost = applyDualPartialWritesRace(current, selection.patch, 'providers');
-
-    // providers[0] got the selection, but legacy mirror stayed empty — wizard UI
-    // reads settings.provider.baseUrl / inferCatalogId, so selection appears to fail.
-    expect(lost.providers[0]?.baseUrl).toBe(openRouter.baseUrl);
-    expect(lost.provider.baseUrl).toBe('');
-    expect(lost.provider.model).toBe('');
   });
 
   it('atomic provider+providers write keeps catalog selection on both mirrors', () => {

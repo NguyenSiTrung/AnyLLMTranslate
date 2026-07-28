@@ -3,17 +3,16 @@ import { render, screen } from '@testing-library/react';
 import { ViewerLayout } from '../ViewerLayout';
 
 describe('ViewerLayout', () => {
-  it('reader mode: one pane, no compare right label', () => {
-    render(
+  it('renders reader mode (one pane) and compare mode (two panes)', () => {
+    const reader = render(
       <ViewerLayout mode="reader" readerLabel="Original" reader={<div>reader-body</div>} />,
     );
     expect(screen.getByText('Original')).toBeTruthy();
     expect(screen.getByText('reader-body')).toBeTruthy();
     expect(screen.queryByText('Translated')).toBeNull();
     expect(document.querySelectorAll('[data-pane]').length).toBe(1);
-  });
+    reader.unmount();
 
-  it('compare mode: two panes with labels', () => {
     render(
       <ViewerLayout
         mode="compare"

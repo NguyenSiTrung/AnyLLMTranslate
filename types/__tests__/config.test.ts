@@ -66,16 +66,14 @@ describe('config defaults', () => {
     expect(merged).not.toHaveProperty('apiKey');
   });
 
-  it('exposes a single custom preset and untasted default pool key', () => {
+  it('exposes a single custom preset with safe throttle defaults for new pool keys (not unlimited 0)', () => {
     expect(PROVIDER_PRESETS).toHaveLength(1);
     expect(PROVIDER_PRESETS[0]!.preset).toBe('custom');
     expect(PROVIDER_PRESETS[0]!.requiresApiKey).toBe(false);
-    const defaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
-    expect(defaultKey).toBeDefined();
-    expect(defaultKey?.lastTestResult).toBeUndefined();
-  });
+    const presetDefaultKey = DEFAULT_SETTINGS.providers[0]?.keys[0];
+    expect(presetDefaultKey).toBeDefined();
+    expect(presetDefaultKey?.lastTestResult).toBeUndefined();
 
-  it('uses safe throttle defaults for new pool keys (not unlimited 0)', () => {
     expect(DEFAULT_KEY_MAX_RPM).toBe(20);
     expect(DEFAULT_KEY_CONCURRENCY_LIMIT).toBe(1);
     expect(DEFAULT_KEY_INTERVAL_MS).toBe(500);

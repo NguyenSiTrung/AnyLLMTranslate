@@ -41,6 +41,11 @@ describe('systemic pause sticky banner', () => {
     expect(bar?.querySelector('.anyllm-systemic-pause-settings')?.textContent).toBe(
       'Open settings',
     );
+
+    // hideSystemicPauseBanner removes the bar
+    hideSystemicPauseBanner();
+    expect(isSystemicPauseBannerVisible()).toBe(false);
+    expect(document.querySelector('[data-anyllm-role="systemic-pause-banner"]')).toBeNull();
   });
 
   it('does not auto-dismiss (sticky until action)', async () => {
@@ -55,7 +60,8 @@ describe('systemic pause sticky banner', () => {
     vi.useRealTimers();
   });
 
-  it('Retry invokes callback and removes banner', () => {
+  it('action buttons invoke callbacks — Retry/Dismiss remove the banner, Open settings does not', () => {
+    // Retry
     const onRetry = vi.fn();
     showSystemicPauseBanner({
       message: 'err',
@@ -68,9 +74,8 @@ describe('systemic pause sticky banner', () => {
     retry.click();
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(isSystemicPauseBannerVisible()).toBe(false);
-  });
 
-  it('Dismiss invokes callback and removes banner', () => {
+    // Dismiss
     const onDismiss = vi.fn();
     showSystemicPauseBanner({
       message: 'err',
@@ -83,9 +88,8 @@ describe('systemic pause sticky banner', () => {
     dismiss.click();
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(isSystemicPauseBannerVisible()).toBe(false);
-  });
 
-  it('Open settings invokes callback without removing banner', () => {
+    // Open settings
     const onOpenSettings = vi.fn();
     showSystemicPauseBanner({
       message: 'err',
@@ -99,17 +103,6 @@ describe('systemic pause sticky banner', () => {
     settings.click();
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(isSystemicPauseBannerVisible()).toBe(true);
-  });
-
-  it('hideSystemicPauseBanner removes the bar', () => {
-    showSystemicPauseBanner({
-      message: 'err',
-      onRetry: () => {},
-      onDismiss: () => {},
-    });
-    hideSystemicPauseBanner();
-    expect(isSystemicPauseBannerVisible()).toBe(false);
-    expect(document.querySelector('[data-anyllm-role="systemic-pause-banner"]')).toBeNull();
   });
 
   it('replaces ephemeral error toast when sticky banner is shown', () => {

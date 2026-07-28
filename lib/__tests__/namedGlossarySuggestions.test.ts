@@ -10,12 +10,9 @@ const activeList: NamedGlossaryList = {
 };
 
 describe('mergeSuggestionMaps', () => {
-  it('does not wipe existing entries when incoming is empty', () => {
+  it('keeps existing on empty incoming; accumulates new names and overwrites same-source targets', () => {
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, {})).toEqual({ Elsa: '艾莎' });
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, { '': 'x', Bob: '' })).toEqual({ Elsa: '艾莎' });
-  });
-
-  it('accumulates new names and overwrites same-source targets', () => {
     expect(
       mergeSuggestionMaps({ Elsa: '艾莎' }, { Anna: '安娜', Elsa: '艾尔莎' }),
     ).toEqual({ Elsa: '艾尔莎', Anna: '安娜' });
@@ -29,13 +26,11 @@ describe('mergeSuggestionMaps', () => {
 });
 
 describe('buildSuggestionRows', () => {
-  it('excludes sources already in the active list case-insensitively', () => {
+  it('excludes active-list sources case-insensitively; sorts stably without mutating input order', () => {
     expect(buildSuggestionRows({ ALICE: '艾丽斯', Bob: '鲍勃' }, activeList)).toEqual([
       { source: 'Bob', target: '鲍勃' },
     ]);
-  });
 
-  it('sorts by source stably without mutating the input record order', () => {
     const auto = { zoe: '佐伊', Amy: '艾米', amy: '阿米' };
 
     expect(buildSuggestionRows(auto, undefined)).toEqual([

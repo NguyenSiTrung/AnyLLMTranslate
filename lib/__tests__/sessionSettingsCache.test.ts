@@ -27,7 +27,7 @@ describe('sessionSettingsCache', () => {
     _resetSessionSettingsCacheForTests();
   });
 
-  it('loads once, reuses cache, and coalesces concurrent first loads', async () => {
+  it('loads once, coalesces concurrent first loads, and reloads after invalidate', async () => {
     const a = await loadSettingsCached();
     const b = await loadSettingsCached();
     expect(a.targetLanguage).toBe('vi');
@@ -51,9 +51,11 @@ describe('sessionSettingsCache', () => {
     expect(c.targetLanguage).toBe('en');
     expect(d).toBe(c);
     expect(loadSettingsMock).toHaveBeenCalledTimes(1);
-  });
 
-  it('reloads after invalidate and clears hasSessionSettingsCache', async () => {
+    // Reloads after invalidate and clears hasSessionSettingsCache
+    _resetSessionSettingsCacheForTests();
+    loadSettingsMock.mockReset();
+    loadSettingsMock.mockResolvedValue({ ...DEFAULT_SETTINGS, targetLanguage: 'vi' });
     await loadSettingsCached();
     invalidateSessionSettingsCache();
     expect(hasSessionSettingsCache()).toBe(false);

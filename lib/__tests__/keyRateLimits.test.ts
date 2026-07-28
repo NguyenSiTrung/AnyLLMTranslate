@@ -16,7 +16,7 @@ import {
 } from '@/types/config';
 
 describe('keyRateLimits', () => {
-  it('formats summary strings for safe, unlimited, and custom', () => {
+  it('formats summaries, matches presets, detects custom, and defines four preset values', () => {
     expect(
       formatKeyRateLimitSummary({ maxRpm: 20, concurrencyLimit: 1, interval: 500 }),
     ).toBe('20/min · 1 at once · 500 ms gap');
@@ -26,9 +26,7 @@ describe('keyRateLimits', () => {
     expect(
       formatKeyRateLimitSummary({ maxRpm: 30, concurrencyLimit: 0, interval: 100 }),
     ).toBe('30/min · No concurrency cap · 100 ms gap');
-  });
 
-  it('matches presets, detects custom, and defines four preset values', () => {
     expect(
       matchKeyRateLimitPreset({
         maxRpm: DEFAULT_KEY_MAX_RPM,

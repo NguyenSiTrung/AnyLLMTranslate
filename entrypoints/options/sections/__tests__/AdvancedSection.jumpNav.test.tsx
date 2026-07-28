@@ -3,15 +3,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
+import type * as ScrollNavModule from '@/entrypoints/options/lib/scrollToAdvancedSection';
 import { ADVANCED_SECTION_IDS } from '@/entrypoints/options/lib/scrollToAdvancedSection';
 import { AdvancedSection } from '../AdvancedSection';
 
 const scrollToAdvancedSection = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('@/entrypoints/options/lib/scrollToAdvancedSection', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/entrypoints/options/lib/scrollToAdvancedSection')
-  >('@/entrypoints/options/lib/scrollToAdvancedSection');
+  const actual = await vi.importActual<typeof ScrollNavModule>(
+    '@/entrypoints/options/lib/scrollToAdvancedSection',
+  );
   return {
     ...actual,
     scrollToAdvancedSection,
@@ -47,13 +48,14 @@ describe('AdvancedSection Active features jump nav', () => {
     });
   });
 
-  it('renders stable section anchors for every jump target', () => {
+  it('renders stable section anchors and a labeled Active features region', () => {
     renderAdvanced();
     for (const id of Object.values(ADVANCED_SECTION_IDS)) {
       const el = document.getElementById(id);
       expect(el).toBeTruthy();
       expect(el).toHaveAttribute('tabindex', '-1');
     }
+    expect(screen.getByText(/active features/i)).toBeInTheDocument();
   });
 
   it('jumps from each Active features chip without mutating settings', () => {
@@ -77,10 +79,5 @@ describe('AdvancedSection Active features jump nav', () => {
     }
 
     expect(updateSettings).not.toHaveBeenCalled();
-  });
-
-  it('keeps Active features region labeled for discovery', () => {
-    renderAdvanced();
-    expect(screen.getByText(/active features/i)).toBeInTheDocument();
   });
 });

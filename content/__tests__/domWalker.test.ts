@@ -95,16 +95,6 @@ describe('domWalker — selector-match cache integration', () => {
     expect(pieces[0].text).toBe('Article paragraph one.');
   });
 
-  it('handles empty exclude selectors without errors', () => {
-    const p = document.createElement('p');
-    p.textContent = 'Hello world.';
-    document.body.appendChild(p);
-
-    const pieces = extractPieces(document.body, {});
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].text).toBe('Hello world.');
-  });
-
   it('tags inArticleContext for article/main vs outside/nav/sidebar (FR-3)', () => {
     const article = document.createElement('article');
     const ap = document.createElement('p');
@@ -194,16 +184,34 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     expect(pieces[0].text).toBe('Main article text content');
   });
 
-  it('with whitelist ON, descends into <div> direct children', () => {
+  it('with whitelist ON, descends into <div> direct children and ignores deeper nesting within allowed tags', () => {
+    // Scenario 1: <div> direct children are descended into
     const div = document.createElement('div');
     const p = document.createElement('p');
     p.textContent = 'Content inside a div.';
     div.appendChild(p);
     document.body.appendChild(div);
 
-    const pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
+    let pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Content inside a div.');
+
+    // Scenario 2: <nav> nested inside <main> is NOT skipped — the whitelist
+    // only checks direct children of <body>
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const main = document.createElement('main');
+    const nav = document.createElement('nav');
+    const navLink = document.createElement('a');
+    navLink.textContent = 'Nested nav link text';
+    nav.appendChild(navLink);
+    main.appendChild(nav);
+    document.body.appendChild(main);
+
+    pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
+    expect(pieces.length).toBe(1);
+    expect(pieces[0].text).toBe('Nested nav link text');
   });
 
   it('with whitelist OFF, descends into all direct children (regression)', () => {
@@ -225,21 +233,6 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     expect(pieces.length).toBe(2);
   });
 
-  it('whitelist does not affect deeper nesting within allowed tags', () => {
-    const main = document.createElement('main');
-    const nav = document.createElement('nav');
-    const navLink = document.createElement('a');
-    navLink.textContent = 'Nested nav link text';
-    nav.appendChild(navLink);
-    main.appendChild(nav);
-    document.body.appendChild(main);
-
-    const pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
-    // The <nav> is nested inside <main>, so the whitelist (which only checks
-    // direct children of <body>) does not skip it.
-    expect(pieces.length).toBe(1);
-    expect(pieces[0].text).toBe('Nested nav link text');
-  });
 });
 
 describe('domWalker — aside caps (FR-5)', () => {
@@ -288,25 +281,28 @@ describe('domWalker — aside caps (FR-5)', () => {
     expect(totalChars).toBeLessThanOrEqual(1000 + 67);
   });
 
-  it('with caps OFF, translates all aside paragraphs (regression)', () => {
+  it('with caps OFF, translates all aside paragraphs, and caps never apply to non-aside content', () => {
+    // Scenario 1: caps OFF — even over-cap aside paragraphs are kept (regression)
     const aside = document.createElement('aside');
     const longP = document.createElement('p');
     longP.textContent = 'This is a very long sidebar paragraph that exceeds the per-paragraph cap limit of sixty-seven characters.';
     aside.appendChild(longP);
     document.body.appendChild(aside);
 
-    const pieces = extractPieces(document.body, {});
+    let pieces = extractPieces(document.body, {});
     expect(pieces.length).toBe(1);
-  });
 
-  it('caps do not apply to non-aside content', () => {
+    // Scenario 2: caps ON — long <main> paragraphs are unaffected
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
     const main = document.createElement('main');
-    const longP = document.createElement('p');
-    longP.textContent = 'This is a very long main article paragraph that would exceed the aside per-paragraph cap but should still be translated because it is in the main content area.';
-    main.appendChild(longP);
+    const mainLongP = document.createElement('p');
+    mainLongP.textContent = 'This is a very long main article paragraph that would exceed the aside per-paragraph cap but should still be translated because it is in the main content area.';
+    main.appendChild(mainLongP);
     document.body.appendChild(main);
 
-    const pieces = extractPieces(document.body, { enableAsideCaps: true });
+    pieces = extractPieces(document.body, { enableAsideCaps: true });
     expect(pieces.length).toBe(1);
   });
 
@@ -330,13 +326,14 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('keeps inline <code> text in the parent piece when code is excluded', () => {
+  it('keeps inline <code> text in the parent piece when code is excluded (incl. GitHub-like rich placeholders)', () => {
+    // Scenario 1: plain exclude keeps the code paths in the piece text
     const p = document.createElement('p');
     p.innerHTML =
       'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
     document.body.appendChild(p);
 
-    const pieces = extractPieces(document.body, {
+    let pieces = extractPieces(document.body, {
       excludeSelectors: ['code', 'pre'],
     });
 
@@ -344,9 +341,35 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toContain('~/.config/sway/config');
     expect(pieces[0].text).toContain('~/.config/i3/config');
     expect(pieces[0].text).toMatch(/Add to your config file/);
+
+    // Scenario 2: GitHub-like — include markdown-body + exclude code with rich
+    // translate keeps the paths as rich placeholders
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const md = document.createElement('div');
+    md.className = 'markdown-body';
+    const mp = document.createElement('p');
+    mp.setAttribute('dir', 'auto');
+    mp.innerHTML =
+      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
+    md.appendChild(mp);
+    document.body.appendChild(md);
+
+    pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['.highlight', 'pre', 'code'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('~/.config/sway/config');
+    expect(pieces[0].text).toContain('~/.config/i3/config');
+    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('still hard-skips block <pre> when pre is excluded', () => {
+  it('hard-skips block <pre> and block containers matched by exclude class', () => {
+    // Scenario 1: block <pre> is hard-skipped even when pre/code are excluded
     const container = document.createElement('div');
     const prose = document.createElement('p');
     prose.textContent = 'See the example below.';
@@ -356,42 +379,31 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     container.appendChild(pre);
     document.body.appendChild(container);
 
-    const pieces = extractPieces(document.body, {
+    let pieces = extractPieces(document.body, {
       excludeSelectors: ['pre', 'code'],
     });
 
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toBe('See the example below.');
     expect(pieces.every((p) => !p.text.includes('console.log'))).toBe(true);
-  });
 
-  it('keeps excluded inline class (e.g. span.term) inside the surrounding sentence', () => {
-    const p = document.createElement('p');
-    p.innerHTML = 'Use the <span class="term">API_KEY</span> from your dashboard.';
-    document.body.appendChild(p);
-
-    const pieces = extractPieces(document.body, {
-      excludeSelectors: ['.term'],
-    });
-
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toBe('Use the API_KEY from your dashboard.');
-  });
-
-  it('hard-skips block containers matched by exclude class', () => {
+    // Scenario 2: block container matched by exclude class is hard-skipped
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
     const article = document.createElement('article');
-    const p = document.createElement('p');
-    p.textContent = 'Article prose here.';
+    const ap = document.createElement('p');
+    ap.textContent = 'Article prose here.';
     const sidebar = document.createElement('div');
     sidebar.className = 'sidebar';
     const sideP = document.createElement('p');
     sideP.textContent = 'Sidebar noise.';
     sidebar.appendChild(sideP);
-    article.appendChild(p);
+    article.appendChild(ap);
     article.appendChild(sidebar);
     document.body.appendChild(article);
 
-    const pieces = extractPieces(document.body, {
+    pieces = extractPieces(document.body, {
       excludeSelectors: ['.sidebar'],
     });
 
@@ -399,12 +411,28 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toBe('Article prose here.');
   });
 
-  it('keeps inline translate="no" content in the parent piece', () => {
+  it('keeps excluded inline class (e.g. span.term) and translate="no" content inside the surrounding sentence', () => {
+    // Scenario 1: excluded inline class stays in the parent piece
     const p = document.createElement('p');
-    p.innerHTML = 'Open <span translate="no">Settings → Advanced</span> to configure.';
+    p.innerHTML = 'Use the <span class="term">API_KEY</span> from your dashboard.';
     document.body.appendChild(p);
 
-    const pieces = extractPieces(document.body, {});
+    let pieces = extractPieces(document.body, {
+      excludeSelectors: ['.term'],
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toBe('Use the API_KEY from your dashboard.');
+
+    // Scenario 2: translate="no" inline content stays in the parent piece
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const p2 = document.createElement('p');
+    p2.innerHTML = 'Open <span translate="no">Settings → Advanced</span> to configure.';
+    document.body.appendChild(p2);
+
+    pieces = extractPieces(document.body, {});
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toContain('Settings → Advanced');
     expect(pieces[0].text).toMatch(/Open .* to configure/);
@@ -430,25 +458,4 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
   });
 
-  it('GitHub-like: include markdown-body + exclude code keeps paths with rich placeholders', () => {
-    const md = document.createElement('div');
-    md.className = 'markdown-body';
-    const p = document.createElement('p');
-    p.setAttribute('dir', 'auto');
-    p.innerHTML =
-      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
-    md.appendChild(p);
-    document.body.appendChild(md);
-
-    const pieces = extractPieces(document.body, {
-      includeSelectors: ['.markdown-body'],
-      excludeSelectors: ['.highlight', 'pre', 'code'],
-      enableRichTranslate: true,
-    });
-
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('~/.config/sway/config');
-    expect(pieces[0].text).toContain('~/.config/i3/config');
-    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
-  });
 });

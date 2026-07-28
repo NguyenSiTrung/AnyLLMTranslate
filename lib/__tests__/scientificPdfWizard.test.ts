@@ -33,6 +33,16 @@ describe('scientificPdfWizard', () => {
     s = reduceScientificPdfWizard(s, { type: 'TEST_OK' });
     expect(s.step).toBe('done');
     expect(s.completed).toBe(true);
+
+    // Entry resolution and setup timestamp
+    expect(resolveScientificPdfWizardEntry({})).toBe('intro');
+    expect(resolveScientificPdfWizardEntry({ enabled: true })).toBe('poll');
+    expect(
+      resolveScientificPdfWizardEntry({ setupCompletedAt: '2026-07-17T00:00:00Z' }),
+    ).toBe('poll');
+    expect(scientificPdfSetupCompletedAt(new Date('2026-07-17T12:00:00.000Z'))).toBe(
+      '2026-07-17T12:00:00.000Z',
+    );
   });
 
   it('test fail/next, back, and reset', () => {
@@ -53,16 +63,5 @@ describe('scientificPdfWizard', () => {
     expect(s.step).toBe('install');
     s = reduceScientificPdfWizard(s, { type: 'RESET' });
     expect(s).toEqual(initialScientificPdfWizardState('intro'));
-  });
-
-  it('entry resolution and setup timestamp', () => {
-    expect(resolveScientificPdfWizardEntry({})).toBe('intro');
-    expect(resolveScientificPdfWizardEntry({ enabled: true })).toBe('poll');
-    expect(
-      resolveScientificPdfWizardEntry({ setupCompletedAt: '2026-07-17T00:00:00Z' }),
-    ).toBe('poll');
-    expect(scientificPdfSetupCompletedAt(new Date('2026-07-17T12:00:00.000Z'))).toBe(
-      '2026-07-17T12:00:00.000Z',
-    );
   });
 });

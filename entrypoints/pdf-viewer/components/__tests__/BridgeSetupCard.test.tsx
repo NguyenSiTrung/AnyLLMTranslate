@@ -17,10 +17,10 @@ describe('BridgeSetupCard', () => {
     expect(screen.queryByText(/fast translation/i)).toBeNull();
   });
 
-  it('wires Set up and Check connection', () => {
+  it('wires Set up, Check connection, and Not now dismiss', () => {
     const onOpenSetup = vi.fn();
     const onRefresh = vi.fn();
-    render(
+    const configured = render(
       <BridgeSetupCard
         status="not_configured"
         onRefresh={onRefresh}
@@ -31,9 +31,8 @@ describe('BridgeSetupCard', () => {
     expect(onOpenSetup).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: /Check connection/i }));
     expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
+    configured.unmount();
 
-  it('calls onDismiss when Not now is clicked', () => {
     const onDismiss = vi.fn();
     render(
       <BridgeSetupCard

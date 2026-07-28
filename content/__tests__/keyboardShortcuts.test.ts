@@ -78,20 +78,16 @@ describe('initKeyboardShortcuts', () => {
     cleanup?.();
   });
 
-  it('toggles hover via event.code when Alt remaps event.key (Linux-style)', () => {
-    // Alt+H often produces a non-"h" event.key on Linux; code stays KeyH
+  it('toggles hover (Alt+H), selection (Alt+D), and section picker (Alt+Q) via event.code when Alt remaps event.key (Linux-style)', () => {
+    // Alt+letter shortcuts often produce a remapped event.key on Linux; code stays Key*
     dispatchKeydown({ key: 'ħ', code: 'KeyH', altKey: true });
     expect(setHoverTranslateEnabled).toHaveBeenCalledWith(true);
     expect(showSubtitleToast).toHaveBeenCalledWith(expect.stringMatching(/hover/i));
-  });
 
-  it('toggles selection with Alt+D via code', () => {
     dispatchKeydown({ key: '∂', code: 'KeyD', altKey: true });
     expect(setTextSelectionEnabled).toHaveBeenCalledWith(true);
     expect(showSubtitleToast).toHaveBeenCalledWith(expect.stringMatching(/selection/i));
-  });
 
-  it('enters section picker with Alt+Q via code', () => {
     dispatchKeydown({ key: 'œ', code: 'KeyQ', altKey: true });
     expect(enterPickerMode).toHaveBeenCalled();
   });

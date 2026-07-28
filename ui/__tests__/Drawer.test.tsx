@@ -23,8 +23,9 @@ describe('Drawer', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('does not steal focus from inputs when onClose identity changes while open', () => {
-    const { rerender } = render(
+  it('handles onClose identity changes: no focus steal, latest callback wins', () => {
+    // does not steal focus from inputs when onClose identity changes while open
+    const focusRender = render(
       <Drawer open title="Edit provider" onClose={() => {}}>
         <input aria-label="Display name" defaultValue="" />
       </Drawer>,
@@ -35,7 +36,7 @@ describe('Drawer', () => {
     expect(document.activeElement).toBe(input);
 
     // Parent re-render with a new inline onClose (e.g. pool status poll every 3s)
-    rerender(
+    focusRender.rerender(
       <Drawer open title="Edit provider" onClose={() => {}}>
         <input aria-label="Display name" defaultValue="" />
       </Drawer>,
@@ -44,9 +45,9 @@ describe('Drawer', () => {
     expect(document.activeElement).toBe(input);
     fireEvent.change(input, { target: { value: 'OpenAI' } });
     expect(input).toHaveValue('OpenAI');
-  });
+    focusRender.unmount();
 
-  it('still calls the latest onClose after parent re-renders with a new callback', () => {
+    // still calls the latest onClose after parent re-renders with a new callback
     const firstClose = vi.fn();
     const secondClose = vi.fn();
     const { rerender } = render(

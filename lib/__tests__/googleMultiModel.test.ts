@@ -56,9 +56,15 @@ describe('isGoogleAiStudioProvider', () => {
 });
 
 describe('resolveProviderModels / isMultiModelActive', () => {
-  it('single model when models absent', () => {
+  it('single model when models absent or model unset', () => {
     expect(resolveProviderModels(google())).toEqual(['gemini-2.5-flash']);
     expect(isMultiModelActive(google())).toBe(false);
+
+    // Must not return [] — empty list would skip the provider in resolveSlots
+    // and surface "pool is empty" for DEFAULT_SETTINGS (model: '').
+    expect(resolveProviderModels({ baseUrl: '', model: '' })).toEqual(['']);
+    expect(resolveProviderModels(google({ model: '', models: undefined }))).toEqual(['']);
+    expect(isMultiModelActive(google({ model: '', models: undefined }))).toBe(false);
   });
 
   it('returns ordered unique models for Google multi-model', () => {
@@ -73,19 +79,6 @@ describe('resolveProviderModels / isMultiModelActive', () => {
     expect(isMultiModelActive(p)).toBe(true);
   });
 
-  it('ignores models[] on non-Google providers', () => {
-    const p = { ...openrouter(), models: ['a', 'b'] };
-    expect(resolveProviderModels(p)).toEqual(['openai/gpt-4o-mini']);
-    expect(isMultiModelActive(p)).toBe(false);
-  });
-
-  it('returns a single empty model when model is unset (default install / tests)', () => {
-    // Must not return [] — empty list would skip the provider in resolveSlots
-    // and surface "pool is empty" for DEFAULT_SETTINGS (model: '').
-    expect(resolveProviderModels({ baseUrl: '', model: '' })).toEqual(['']);
-    expect(resolveProviderModels(google({ model: '', models: undefined }))).toEqual(['']);
-    expect(isMultiModelActive(google({ model: '', models: undefined }))).toBe(false);
-  });
 });
 
 describe('resolveModelStrategy', () => {

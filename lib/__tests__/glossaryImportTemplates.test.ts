@@ -14,27 +14,25 @@ describe('glossary import templates', () => {
     vi.restoreAllMocks();
   });
 
-  it('JSON template parses to the three example terms', () => {
-    const entries = parseGlossaryJSON(GLOSSARY_JSON_TEMPLATE);
-    expect(entries).toHaveLength(3);
-    expect(entries.map((e) => e.source)).toEqual([
+  it('JSON and CSV templates parse to the three example terms', () => {
+    const jsonEntries = parseGlossaryJSON(GLOSSARY_JSON_TEMPLATE);
+    expect(jsonEntries).toHaveLength(3);
+    expect(jsonEntries.map((e) => e.source)).toEqual([
       'React',
       'API',
       'machine learning',
     ]);
-    expect(entries.map((e) => e.target)).toEqual([
+    expect(jsonEntries.map((e) => e.target)).toEqual([
       'React',
       'API',
       'machine learning',
     ]);
-  });
 
-  it('CSV template parses to the three example terms', () => {
-    const entries = parseGlossaryCSV(GLOSSARY_CSV_TEMPLATE);
-    expect(entries).toHaveLength(3);
-    expect(entries[0]).toMatchObject({ source: 'React', target: 'React' });
-    expect(entries[1]).toMatchObject({ source: 'API', target: 'API' });
-    expect(entries[2]).toMatchObject({
+    const csvEntries = parseGlossaryCSV(GLOSSARY_CSV_TEMPLATE);
+    expect(csvEntries).toHaveLength(3);
+    expect(csvEntries[0]).toMatchObject({ source: 'React', target: 'React' });
+    expect(csvEntries[1]).toMatchObject({ source: 'API', target: 'API' });
+    expect(csvEntries[2]).toMatchObject({
       source: 'machine learning',
       target: 'machine learning',
     });

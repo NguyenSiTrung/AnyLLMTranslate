@@ -8,13 +8,13 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     document.documentElement.innerHTML = '<head></head><body></body>';
   });
 
-  it('fires onBodySwapped when <body> is replaced with a new node', async () => {
+  it('fires onBodySwapped when <body> is replaced or removed and re-added', async () => {
+    // Scenario 1: <body> replaced with a new node
     const onMutation = vi.fn();
     const onBodySwapped = vi.fn();
     const watcher = new MutationWatcher(onMutation, 100, onBodySwapped);
     watcher.start(document.body);
 
-    // Replace <body> with a new <body> element
     const oldBody = document.body;
     const newBody = document.createElement('body');
     newBody.innerHTML = '<p>New content</p>';
@@ -25,9 +25,30 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
 
     expect(onBodySwapped).toHaveBeenCalledTimes(1);
     watcher.stop();
+
+    // Scenario 2: body removed and re-added
+    const onMutation2 = vi.fn();
+    const onBodySwapped2 = vi.fn();
+    const watcher2 = new MutationWatcher(onMutation2, 100, onBodySwapped2);
+    watcher2.start(document.body);
+
+    const currentBody = document.body;
+    document.documentElement.removeChild(currentBody);
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const readdedBody = document.createElement('body');
+    readdedBody.innerHTML = '<p>Re-added body</p>';
+    document.documentElement.appendChild(readdedBody);
+
+    // Wait for debounce (100ms) + buffer
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(onBodySwapped2).toHaveBeenCalledTimes(1);
+    watcher2.stop();
   });
 
-  it('does NOT fire onBodySwapped for unrelated mutations under <html>', async () => {
+  it('does NOT fire onBodySwapped for mutations under <html> or inside <body>', async () => {
     const onMutation = vi.fn();
     const onBodySwapped = vi.fn();
     const watcher = new MutationWatcher(onMutation, 100, onBodySwapped);
@@ -41,14 +62,6 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(onBodySwapped).not.toHaveBeenCalled();
-    watcher.stop();
-  });
-
-  it('does NOT fire onBodySwapped for mutations inside <body>', async () => {
-    const onMutation = vi.fn();
-    const onBodySwapped = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 100, onBodySwapped);
-    watcher.start(document.body);
 
     // Add content inside <body> — this is a normal mutation, not a body swap
     const p = document.createElement('p');
@@ -58,30 +71,6 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(onBodySwapped).not.toHaveBeenCalled();
-    watcher.stop();
-  });
-
-  it('fires onBodySwapped when body is removed and re-added', async () => {
-    const onMutation = vi.fn();
-    const onBodySwapped = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 100, onBodySwapped);
-    watcher.start(document.body);
-
-    // Remove body
-    const oldBody = document.body;
-    document.documentElement.removeChild(oldBody);
-
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Re-add a new body
-    const newBody = document.createElement('body');
-    newBody.innerHTML = '<p>Re-added body</p>';
-    document.documentElement.appendChild(newBody);
-
-    // Wait for debounce (100ms) + buffer
-    await new Promise((r) => setTimeout(r, 150));
-
-    expect(onBodySwapped).toHaveBeenCalledTimes(1);
     watcher.stop();
   });
 

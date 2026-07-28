@@ -19,28 +19,24 @@ describe('derivePopupStatus', () => {
     });
   });
 
-  it('prioritizes setup over blocked', () => {
-    const v = derivePopupStatus({ ...base, needsSetup: true, unsupported: true });
-    expect(v.kind).toBe('setup');
-    expect(v.chipLabel).toBe('Setup');
-  });
+  it('prioritizes setup over blocked over error over translating', () => {
+    const setup = derivePopupStatus({ ...base, needsSetup: true, unsupported: true });
+    expect(setup.kind).toBe('setup');
+    expect(setup.chipLabel).toBe('Setup');
 
-  it('prioritizes blocked over error', () => {
-    const v = derivePopupStatus({ ...base, unsupported: true, hasError: true, status: 'error' });
-    expect(v.kind).toBe('blocked');
-    expect(v.chipLabel).toBe('Unavailable');
-  });
+    const blocked = derivePopupStatus({ ...base, unsupported: true, hasError: true, status: 'error' });
+    expect(blocked.kind).toBe('blocked');
+    expect(blocked.chipLabel).toBe('Unavailable');
 
-  it('prioritizes error over translating', () => {
-    const v = derivePopupStatus({
+    const error = derivePopupStatus({
       ...base,
       hasError: true,
       status: 'error',
       isTranslating: true,
     });
-    expect(v.kind).toBe('error');
-    expect(v.chipLabel).toBe('Error');
-    expect(v.showProgress).toBe(false);
+    expect(error.kind).toBe('error');
+    expect(error.chipLabel).toBe('Error');
+    expect(error.showProgress).toBe(false);
   });
 
   it('returns translating when in flight', () => {
@@ -50,17 +46,15 @@ describe('derivePopupStatus', () => {
     expect(v.showProgress).toBe(true);
   });
 
-  it('returns active when done', () => {
-    const v = derivePopupStatus({ ...base, status: 'done' });
-    expect(v.kind).toBe('active');
-    expect(v.chipLabel).toBe('Active');
-    expect(v.showProgress).toBe(true);
-  });
+  it('returns active when done or reading area ready', () => {
+    const done = derivePopupStatus({ ...base, status: 'done' });
+    expect(done.kind).toBe('active');
+    expect(done.chipLabel).toBe('Active');
+    expect(done.showProgress).toBe(true);
 
-  it('returns active when reading area ready', () => {
-    const v = derivePopupStatus({ ...base, status: 'done', readingAreaReady: true });
-    expect(v.kind).toBe('active');
-    expect(v.chipLabel).toBe('Active');
-    expect(v.showProgress).toBe(true);
+    const readingReady = derivePopupStatus({ ...base, status: 'done', readingAreaReady: true });
+    expect(readingReady.kind).toBe('active');
+    expect(readingReady.chipLabel).toBe('Active');
+    expect(readingReady.showProgress).toBe(true);
   });
 });

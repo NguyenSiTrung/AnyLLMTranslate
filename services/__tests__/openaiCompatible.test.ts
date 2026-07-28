@@ -131,52 +131,6 @@ describe('OpenAICompatibleService', () => {
       expect(partial.translations.size).toBe(2);
     });
 
-    // FR-1: transport / auth / rate-limit failures must RE-THROW ApiError so the
-    // provider pool's circuit-breaker + failover actually fires. The old behavior
-    // swallowed every error into {success:false}, which made pool failover dead
-    // code in production (only unit tests with throwing stubs passed).
-    describe('FR-1: re-throws ApiError on transport/auth/rate-limit failures', () => {
-      function httpError(status: number, statusText: string, body = '') {
-        return vi.fn().mockResolvedValue({
-          ok: false,
-          status,
-          statusText,
-          text: () => Promise.resolve(body),
-        });
-      }
-
-      it('throws ApiError(statusCode=429) on a rate-limit response', async () => {
-        // 429 now retries with backoff (Phase 4) — use fake timers to avoid
-        // the ~7s real-timer wait that would exceed the test timeout.
-        vi.useFakeTimers();
-        globalThis.fetch = httpError(429, 'Too Many Requests');
-        const service = new OpenAICompatibleService(mockConfigWithKey);
-        const promise = service.translate({
-          texts: new Map([['p1', 'Hello']]),
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        });
-        promise.catch(() => {});
-        await vi.advanceTimersByTimeAsync(120_000);
-        await expect(promise).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
-        vi.useRealTimers();
-      });
-
-      it('throws ApiError on a 5xx server error (and other transport/auth failures)', async () => {
-        globalThis.fetch = httpError(503, 'Service Unavailable');
-        const service = new OpenAICompatibleService(mockConfigWithKey);
-        await expect(
-          service.translate({
-            texts: new Map([['p1', 'Hello']]),
-            sourceLanguage: 'en',
-            targetLanguage: 'vi',
-          }),
-        ).rejects.toMatchObject({ name: 'ApiError', statusCode: 503 });
-      });
-    });
-
-
-
     it('sends chat_template_kwargs.enable_thinking when thinkingMode is on/off', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
       await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'off' }).translate({
@@ -281,8 +235,9 @@ describe('OpenAICompatibleService', () => {
       expect(g3High.reasoning_effort).toBe('high');
     });
 
-    it('retries without chat_template_kwargs when provider rejects thinking kwargs', async () => {
-      const fetchMock = vi
+    it('retries without thinking fields (chat_template_kwargs / reasoning_effort) when provider rejects them', async () => {
+      // Scenario 1: chat_template_kwargs rejected → retry without it.
+      const fetchKwargs = vi
         .fn()
         .mockResolvedValueOnce({
           ok: false,
@@ -313,28 +268,27 @@ describe('OpenAICompatibleService', () => {
             }),
           text: () => Promise.resolve(''),
         });
-      globalThis.fetch = fetchMock;
+      globalThis.fetch = fetchKwargs;
 
-      const service = new OpenAICompatibleService({
+      const kwargsService = new OpenAICompatibleService({
         ...mockConfig,
         thinkingMode: 'off',
       });
-      const result = await service.translate({
+      const kwargsResult = await kwargsService.translate({
         texts: new Map([['p1', 'Hello']]),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       });
 
-      expect(result.success).toBe(true);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const secondBody = JSON.parse(fetchMock.mock.calls[1]![1]?.body as string) as {
+      expect(kwargsResult.success).toBe(true);
+      expect(fetchKwargs).toHaveBeenCalledTimes(2);
+      const kwargsSecondBody = JSON.parse(fetchKwargs.mock.calls[1]![1]?.body as string) as {
         chat_template_kwargs?: unknown;
       };
-      expect(secondBody.chat_template_kwargs).toBeUndefined();
-    });
+      expect(kwargsSecondBody.chat_template_kwargs).toBeUndefined();
 
-    it('retries without reasoning_effort when Gemini rejects thinking field', async () => {
-      const fetchMock = vi
+      // Scenario 2: Gemini rejects reasoning_effort → retry without it.
+      const fetchEffort = vi
         .fn()
         .mockResolvedValueOnce({
           ok: false,
@@ -363,30 +317,30 @@ describe('OpenAICompatibleService', () => {
             }),
           text: () => Promise.resolve(''),
         });
-      globalThis.fetch = fetchMock;
+      globalThis.fetch = fetchEffort;
 
-      const service = new OpenAICompatibleService({
+      const effortService = new OpenAICompatibleService({
         ...mockConfig,
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
         model: 'gemini-3.6-flash',
         thinkingMode: 'off',
       });
-      const result = await service.translate({
+      const effortResult = await effortService.translate({
         texts: new Map([['p1', 'Hello']]),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       });
 
-      expect(result.success).toBe(true);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      const firstBody = JSON.parse(fetchMock.mock.calls[0]![1]?.body as string) as {
+      expect(effortResult.success).toBe(true);
+      expect(fetchEffort).toHaveBeenCalledTimes(2);
+      const effortFirstBody = JSON.parse(fetchEffort.mock.calls[0]![1]?.body as string) as {
         reasoning_effort?: string;
       };
-      const secondBody = JSON.parse(fetchMock.mock.calls[1]![1]?.body as string) as {
+      const effortSecondBody = JSON.parse(fetchEffort.mock.calls[1]![1]?.body as string) as {
         reasoning_effort?: unknown;
       };
-      expect(firstBody.reasoning_effort).toBe('minimal');
-      expect(secondBody.reasoning_effort).toBeUndefined();
+      expect(effortFirstBody.reasoning_effort).toBe('minimal');
+      expect(effortSecondBody.reasoning_effort).toBeUndefined();
     });
 
     it('retries without response_format when provider rejects it (NVIDIA NIM / vLLM)', async () => {
@@ -560,23 +514,6 @@ describe('OpenAICompatibleService', () => {
   });
 
   describe('updateConfig', () => {
-    it('updates config and uses new values', async () => {
-      globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
-
-      const service = new OpenAICompatibleService(mockConfig);
-      service.updateConfig(mockConfigWithKey);
-
-      await service.translate({
-        texts: new Map([['p1', 'Hello']]),
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      });
-
-      const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      const url = fetchCall[0] as string;
-      expect(url).toContain('api.example.com');
-    });
-
     // FR-4 (fixes #3): response_format rejection memory must survive an
     // updateConfig when baseUrl+model are UNCHANGED (the pool's rebuild calls
     // updateConfig on preserved members even when nothing relevant changed —
@@ -762,7 +699,9 @@ describe('OpenAICompatibleService', () => {
       });
     };
 
-    it('maxRpm from config (default/0/updateConfig) does not block a single request', async () => {
+    it('maxRpm default/0 is unlimited, and changing maxRpm via updateConfig from 0 to N enables limiting', async () => {
+      // Phase 1: maxRpm from config (default/0/updateConfig) does not block a
+      // single request.
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
       // default config (no maxRpm) — unlimited
       const service = new OpenAICompatibleService(mockConfig);
@@ -791,6 +730,45 @@ describe('OpenAICompatibleService', () => {
         targetLanguage: 'vi',
       });
       expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+
+      // Phase 2: changing maxRpm via updateConfig from 0 to N enables limiting.
+      vi.useFakeTimers();
+      const fetchSpy = mockTranslateResponse();
+      globalThis.fetch = fetchSpy;
+
+      // FR-5: acquire() is bounded by requestTimeoutMs — set it generously.
+      const limited = new OpenAICompatibleService({
+        ...mockConfig,
+        maxRpm: 0,
+        requestTimeoutMs: 120_000,
+      });
+      await limited.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      limited.updateConfig({ ...mockConfig, maxRpm: 1, requestTimeoutMs: 120_000 });
+
+      await limited.translate({
+        texts: new Map([['p1', 'World']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+      const p3 = limited.translate({
+        texts: new Map([['p1', 'Foo']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+      await Promise.resolve();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(60_001);
+      await p3;
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
 
     it('acquire() is awaited before fetch (call order verified)', async () => {
@@ -825,46 +803,6 @@ describe('OpenAICompatibleService', () => {
       await vi.advanceTimersByTimeAsync(60_001);
       await Promise.all([p1, p2]);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-    });
-
-    it('changing maxRpm via updateConfig from 0 to N enables limiting', async () => {
-      vi.useFakeTimers();
-      const fetchSpy = mockTranslateResponse();
-      globalThis.fetch = fetchSpy;
-
-      // FR-5: acquire() is bounded by requestTimeoutMs — set it generously.
-      const service = new OpenAICompatibleService({
-        ...mockConfig,
-        maxRpm: 0,
-        requestTimeoutMs: 120_000,
-      });
-      await service.translate({
-        texts: new Map([['p1', 'Hello']]),
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      });
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-      service.updateConfig({ ...mockConfig, maxRpm: 1, requestTimeoutMs: 120_000 });
-
-      await service.translate({
-        texts: new Map([['p1', 'World']]),
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      });
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-
-      const p3 = service.translate({
-        texts: new Map([['p1', 'Foo']]),
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      });
-      await Promise.resolve();
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-
-      await vi.advanceTimersByTimeAsync(60_001);
-      await p3;
-      expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
   });
 

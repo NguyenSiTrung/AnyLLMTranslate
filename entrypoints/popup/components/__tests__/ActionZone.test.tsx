@@ -7,9 +7,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ActionZone } from '../ActionZone';
 
 describe('ActionZone', () => {
-  it('renders Translate Page when ready', () => {
+  it('renders ready, setup-recovery, and progress states', () => {
+    // ready
     const onToggle = vi.fn();
-    render(
+    const ready = render(
       <ActionZone
         kind="ready"
         onTranslateToggle={onToggle}
@@ -25,10 +26,10 @@ describe('ActionZone', () => {
     expect(btn).toBeTruthy();
     fireEvent.click(btn);
     expect(onToggle).toHaveBeenCalled();
-  });
+    ready.unmount();
 
-  it('renders recovery card when setup', () => {
-    render(
+    // setup-recovery
+    const setupRender = render(
       <ActionZone
         kind="setup"
         onTranslateToggle={() => {}}
@@ -51,9 +52,9 @@ describe('ActionZone', () => {
     );
     expect(screen.getByText('Provider not ready')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /translate page/i })).toBeNull();
-  });
+    setupRender.unmount();
 
-  it('shows progress under Restore when active', () => {
+    // progress
     render(
       <ActionZone
         kind="translating"

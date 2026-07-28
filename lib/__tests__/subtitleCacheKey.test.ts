@@ -25,7 +25,7 @@ const KNOBS_B: ProfileKnobs = {
 const EMPTY_GLOSSARY: GlossarySnapshot = { globalEntries: [], properNouns: [] };
 
 describe('hashKnobs / hashGlossary', () => {
-  it('is deterministic, order-independent, and sensitive to content changes', () => {
+  it('is deterministic, order-independent, and sensitive to content and named-list changes', () => {
     expect(hashKnobs(KNOBS_A)).toBe(hashKnobs(KNOBS_A));
     expect(hashKnobs(KNOBS_A)).not.toBe(hashKnobs(KNOBS_B));
 
@@ -47,9 +47,6 @@ describe('hashKnobs / hashGlossary', () => {
     expect(hashGlossary(EMPTY_GLOSSARY)).not.toBe(
       hashGlossary({ globalEntries: [{ source: 'AI', target: 'x' }], properNouns: [] }),
     );
-  });
-
-  it('changes when named list id or entries change', () => {
     const base: GlossarySnapshot = { globalEntries: [], properNouns: [] };
     const withId: GlossarySnapshot = {
       ...base,

@@ -85,13 +85,12 @@ describe('ProviderKeyRow API key field', () => {
     cleanup();
   });
 
-  it('always shows API key input when requiresApiKey is true', () => {
+  it('always shows API key input whether requiresApiKey is true or false (custom/local)', () => {
     renderRow();
     expect(screen.getByLabelText(/^API key$/i)).toBeInTheDocument();
     expect(screen.queryByText(/No key required/i)).not.toBeInTheDocument();
-  });
+    cleanup();
 
-  it('still shows optional API key input when requiresApiKey is false (custom/local)', () => {
     renderRow({
       provider: {
         displayName: 'Custom endpoint',

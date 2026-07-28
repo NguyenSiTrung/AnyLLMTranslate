@@ -20,24 +20,20 @@ describe('ADVANCED_SECTION_IDS', () => {
 });
 
 describe('prefersReducedMotion', () => {
-  it('returns true when matchMedia matches', () => {
-    const win = {
+  it('returns true when matchMedia matches, false otherwise', () => {
+    const matchWin = {
       matchMedia: vi.fn().mockReturnValue({ matches: true }),
     } as unknown as Window;
-    expect(prefersReducedMotion(win)).toBe(true);
-    expect(win.matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
-  });
+    expect(prefersReducedMotion(matchWin)).toBe(true);
+    expect(matchWin.matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
 
-  it('returns false when matchMedia does not match', () => {
-    const win = {
+    const noMatchWin = {
       matchMedia: vi.fn().mockReturnValue({ matches: false }),
     } as unknown as Window;
-    expect(prefersReducedMotion(win)).toBe(false);
-  });
+    expect(prefersReducedMotion(noMatchWin)).toBe(false);
 
-  it('returns false when matchMedia is missing', () => {
-    const win = {} as Window;
-    expect(prefersReducedMotion(win)).toBe(false);
+    const missingWin = {} as Window;
+    expect(prefersReducedMotion(missingWin)).toBe(false);
   });
 });
 
@@ -56,7 +52,7 @@ describe('scrollToAdvancedSection', () => {
     expect(scrollToAdvancedSection('advanced-section-missing')).toBe(false);
   });
 
-  it('smooth-scrolls, focuses, and highlights the target', () => {
+  it('smooth-scrolls, focuses, and highlights the target; uses auto behavior for reduced motion', () => {
     const el = document.createElement('div');
     el.id = ADVANCED_SECTION_IDS.context;
     el.tabIndex = -1;
@@ -79,23 +75,22 @@ describe('scrollToAdvancedSection', () => {
 
     vi.advanceTimersByTime(ADVANCED_SECTION_HIGHLIGHT_MS);
     expect(el.hasAttribute('data-advanced-section-highlight')).toBe(false);
-  });
 
-  it('uses auto scroll behavior when reduced motion is preferred', () => {
-    const el = document.createElement('div');
-    el.id = ADVANCED_SECTION_IDS.prompt;
-    el.tabIndex = -1;
-    const scrollIntoView = vi.fn();
-    el.scrollIntoView = scrollIntoView;
-    el.focus = vi.fn();
-    document.body.appendChild(el);
+    // uses auto scroll behavior when reduced motion is preferred
+    const reducedEl = document.createElement('div');
+    reducedEl.id = ADVANCED_SECTION_IDS.prompt;
+    reducedEl.tabIndex = -1;
+    const reducedScrollIntoView = vi.fn();
+    reducedEl.scrollIntoView = reducedScrollIntoView;
+    reducedEl.focus = vi.fn();
+    document.body.appendChild(reducedEl);
 
-    const win = {
+    const reducedWin = {
       matchMedia: vi.fn().mockReturnValue({ matches: true }),
     } as unknown as Window;
 
-    scrollToAdvancedSection(ADVANCED_SECTION_IDS.prompt, { window: win });
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+    scrollToAdvancedSection(ADVANCED_SECTION_IDS.prompt, { window: reducedWin });
+    expect(reducedScrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
   });
 
   it('replaces highlight on a second jump (single active highlight)', () => {

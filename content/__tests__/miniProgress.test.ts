@@ -60,7 +60,7 @@ describe('miniProgress', () => {
     expect(isMiniProgressVisible()).toBe(false);
   });
 
-  it('shows realigning batch progress', () => {
+  it('shows realigning batch progress and saved re-align cache hit label', () => {
     updateMiniProgress({
       translated: 2,
       total: 5,
@@ -71,9 +71,7 @@ describe('miniProgress', () => {
     expect(
       document.querySelector('.anyllm-mini-progress-label')?.textContent,
     ).toBe('Re-aligning captions… 2/5');
-  });
 
-  it('shows saved re-align cache hit label', () => {
     updateMiniProgress({
       translated: 1,
       total: 1,

@@ -38,31 +38,32 @@ describe('useScientificPdfJob', () => {
     vi.unstubAllGlobals();
   });
 
-  it('refreshHealth sets ready when health ok', async () => {
+  it('refreshHealth sets ready when health ok; startJob fails open with offline when health fails', async () => {
+    // refreshHealth sets ready when health ok
     sendMessage.mockResolvedValueOnce({ success: true, status: 'ok' });
-    const { result } = renderHook(() =>
+    const healthy = renderHook(() =>
       useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
     );
     let ok = false;
     await act(async () => {
-      ok = await result.current.refreshHealth();
+      ok = await healthy.result.current.refreshHealth();
     });
     expect(ok).toBe(true);
-    expect(result.current.healthOk).toBe(true);
-    expect(result.current.bridgeStatus).toBe('ready');
-  });
+    expect(healthy.result.current.healthOk).toBe(true);
+    expect(healthy.result.current.bridgeStatus).toBe('ready');
+    healthy.unmount();
 
-  it('startJob fails open with offline when health fails', async () => {
+    // startJob fails open with offline when health fails
     sendMessage.mockResolvedValueOnce({ success: false, error: 'offline', code: 'offline' });
-    const { result } = renderHook(() =>
+    const offline = renderHook(() =>
       useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
     );
     await act(async () => {
-      await result.current.startJob();
+      await offline.result.current.startJob();
     });
-    expect(result.current.progress.stage).toBe('error');
-    expect(result.current.progress.errorCode).toBe('offline');
-    expect(result.current.isRunning).toBe(false);
+    expect(offline.result.current.progress.stage).toBe('error');
+    expect(offline.result.current.progress.errorCode).toBe('offline');
+    expect(offline.result.current.isRunning).toBe(false);
   });
 
   it('startJob create failure surfaces error', async () => {

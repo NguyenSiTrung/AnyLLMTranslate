@@ -13,9 +13,15 @@ describe('getUnsupportedPageInfo', () => {
     ).toBeNull();
   });
 
-  it('blocks chrome:// pages', () => {
-    const info = getUnsupportedPageInfo({ id: 1, url: 'chrome://extensions' } as chrome.tabs.Tab);
-    expect(info).not.toBeNull();
+  it('blocks chrome:// pages and Chrome Web Store', () => {
+    const chromePage = getUnsupportedPageInfo({ id: 1, url: 'chrome://extensions' } as chrome.tabs.Tab);
+    expect(chromePage).not.toBeNull();
+
+    const webStore = getUnsupportedPageInfo({
+      id: 1,
+      url: 'https://chromewebstore.google.com/detail/foo',
+    } as chrome.tabs.Tab);
+    expect(webStore).not.toBeNull();
   });
 
   it('returns PDF viewer special copy', () => {
@@ -24,13 +30,5 @@ describe('getUnsupportedPageInfo', () => {
       url: 'chrome-extension://abcdef/pdf-viewer.html?file=https%3A%2F%2Fx.com%2Fa.pdf',
     } as chrome.tabs.Tab);
     expect(info?.title).toMatch(/PDF translation is active/i);
-  });
-
-  it('blocks Chrome Web Store', () => {
-    const info = getUnsupportedPageInfo({
-      id: 1,
-      url: 'https://chromewebstore.google.com/detail/foo',
-    } as chrome.tabs.Tab);
-    expect(info).not.toBeNull();
   });
 });

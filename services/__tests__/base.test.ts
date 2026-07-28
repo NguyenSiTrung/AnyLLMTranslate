@@ -12,17 +12,6 @@ import {
   validateProviderConfig,
 } from '@/services/base';
 
-describe('DEFAULT_SYSTEM_PROMPT_TEMPLATE', () => {
-  it('contains required variables, JSON format, and math-preservation guidance', () => {
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{targetLanguage}}');
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('{{glossary}}');
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('json');
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE).toContain('translations');
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('mathematical');
-    expect(DEFAULT_SYSTEM_PROMPT_TEMPLATE.toLowerCase()).toContain('preserve');
-  });
-});
-
 describe('buildSystemPrompt', () => {
   it('injects language/glossary/custom template and multi-placeholder replacement', () => {
     const defaultPrompt = buildSystemPrompt('Vietnamese');

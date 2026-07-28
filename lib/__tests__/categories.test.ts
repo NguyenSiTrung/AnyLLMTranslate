@@ -32,6 +32,15 @@ describe('Categories, prompt snippets & glossary settings', () => {
 
     const filtered = filterCategoryGroups(CATEGORY_GROUPS, 'news');
     expect(filtered.some((g) => g.items.includes('News'))).toBe(true);
+
+    // LLM category labels normalize onto the predefined allowlist
+    expect(normalizePredefinedCategory('software development')).toBe('Software Development');
+    expect(normalizePredefinedCategory('  News  ')).toBe('News');
+    expect(normalizePredefinedCategory('Financial News')).toBe('Financial News');
+    expect(normalizePredefinedCategory('Other')).toBeNull();
+    expect(normalizePredefinedCategory('technology')).toBeNull();
+    expect(normalizePredefinedCategory('')).toBeNull();
+    expect(normalizePredefinedCategory(undefined)).toBeNull();
   });
 
   it('resolves category prompt snippets for every predefined category', () => {
@@ -52,15 +61,5 @@ describe('Categories, prompt snippets & glossary settings', () => {
     expect(normalizeCategoryKey('  News  ')).toBe('news');
     expect(DEFAULT_SETTINGS.namedGlossaryLists).toEqual([]);
     expect(DEFAULT_SETTINGS.subtitleListBySite).toEqual({});
-  });
-
-  it('normalizes LLM category labels onto the predefined allowlist', () => {
-    expect(normalizePredefinedCategory('software development')).toBe('Software Development');
-    expect(normalizePredefinedCategory('  News  ')).toBe('News');
-    expect(normalizePredefinedCategory('Financial News')).toBe('Financial News');
-    expect(normalizePredefinedCategory('Other')).toBeNull();
-    expect(normalizePredefinedCategory('technology')).toBeNull();
-    expect(normalizePredefinedCategory('')).toBeNull();
-    expect(normalizePredefinedCategory(undefined)).toBeNull();
   });
 });

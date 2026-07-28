@@ -10,7 +10,7 @@ import {
 } from '@/lib/openAiCompatibleCatalog';
 
 describe('openAiCompatibleCatalog', () => {
-  it('lists providers, filters, and resolves key URLs', () => {
+  it('lists/filters providers, resolves key URLs, identity fallbacks, and category groups', () => {
     const ids = OPENAI_COMPATIBLE_CATALOG.map((e) => e.id);
     expect(ids).toContain('openrouter');
     expect(ids).toContain('ollama');
@@ -41,9 +41,8 @@ describe('openAiCompatibleCatalog', () => {
     expect(getKeyUrlForProvider('https://openrouter.ai/api/v1/')).toBe('https://openrouter.ai/keys');
     expect(getKeyUrlForProvider('http://localhost:11434/v1')).toBeUndefined();
     expect(getKeyUrlForProvider('')).toBeUndefined();
-  });
 
-  it('resolves identity fallback chain and groups by category', () => {
+    // Identity fallback chain and category grouping
     expect(resolveProviderIdentity('Whatever', 'groq', 'https://example.com').monogram).toBe('GQ');
     expect(
       resolveProviderIdentity('Whatever', 'custom', 'https://api.groq.com/openai/v1').monogram,

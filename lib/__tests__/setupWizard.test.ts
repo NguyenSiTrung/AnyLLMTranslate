@@ -8,12 +8,15 @@ import {
 } from '@/lib/setupWizard';
 
 describe('setupWizard steps', () => {
-  it('exposes four steps in order', () => {
+  it('exposes four steps in order; wizardStepIndex is 1-based', () => {
     expect(WIZARD_STEPS).toEqual(['welcome', 'connect', 'verify', 'ready']);
     expect(WIZARD_STEP_LABELS.welcome).toBe('Welcome');
     expect(WIZARD_STEP_LABELS.connect).toBe('Connect');
     expect(WIZARD_STEP_LABELS.verify).toBe('Verify');
     expect(WIZARD_STEP_LABELS.ready).toBe('Ready');
+
+    expect(wizardStepIndex('welcome')).toBe(1);
+    expect(wizardStepIndex('ready')).toBe(4);
   });
 
   it('normalizeWizardStep maps legacy and new ids', () => {
@@ -29,16 +32,9 @@ describe('setupWizard steps', () => {
     expect(normalizeWizardStep(undefined)).toBeNull();
   });
 
-  it('wizardStepIndex is 1-based', () => {
-    expect(wizardStepIndex('welcome')).toBe(1);
-    expect(wizardStepIndex('ready')).toBe(4);
-  });
-
-  it('resolveWizardEntryStep: first run defaults to welcome', () => {
+  it('resolveWizardEntryStep: first run, completed reopen, and resume lastStep', () => {
     expect(resolveWizardEntryStep({ completed: false, skipped: false })).toBe('welcome');
-  });
 
-  it('resolveWizardEntryStep: completed reopens at connect', () => {
     expect(
       resolveWizardEntryStep({
         completed: true,
@@ -46,9 +42,7 @@ describe('setupWizard steps', () => {
         lastStep: 'ready',
       }),
     ).toBe('connect');
-  });
 
-  it('resolveWizardEntryStep: resumes lastStep when incomplete', () => {
     expect(
       resolveWizardEntryStep({
         completed: false,
@@ -65,7 +59,7 @@ describe('setupWizard steps', () => {
     ).toBe('verify');
   });
 
-  it('resolveWizardEntryStep: normalizes legacy lastStep', () => {
+  it('resolveWizardEntryStep: normalizes legacy lastStep and handles ready-without-complete', () => {
     expect(
       resolveWizardEntryStep({
         completed: false,
@@ -74,9 +68,7 @@ describe('setupWizard steps', () => {
         lastStep: 'provider',
       } as unknown as Parameters<typeof resolveWizardEntryStep>[0]),
     ).toBe('connect');
-  });
 
-  it('resolveWizardEntryStep: lastStep ready without complete', () => {
     expect(
       resolveWizardEntryStep({
         completed: false,

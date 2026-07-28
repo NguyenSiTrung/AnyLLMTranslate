@@ -26,13 +26,11 @@ describe('pdfShellMode', () => {
     });
   });
 
-  it('open compare → compare mode + stores kind', () => {
+  it('open compare → compare mode + stores kind; dual uses bilingual label', () => {
     const next = applyOpenCompare(initialSessionState(), 'mono');
     expect(next.shellMode).toBe('compare');
     expect(next.resultKind).toBe('mono');
-  });
 
-  it('compare with dual uses bilingual label', () => {
     expect(compareRightLabel('dual')).toMatch(/bilingual/i);
     expect(compareRightLabel('mono')).toBe('Translated');
   });

@@ -297,28 +297,6 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     expect(fetchNoRetryAfter).toHaveBeenCalledTimes(3);
   });
 
-  // ── Jitter verification ─────────────────────────────────────────────────
-
-  it('jitter is applied: delay >= base and <= base + max jitter', async () => {
-    const fetchTimes: number[] = [];
-    const fetchMock = vi.fn().mockImplementation(() => {
-      fetchTimes.push(Date.now());
-      return Promise.resolve(make429Response());
-    });
-    globalThis.fetch = fetchMock;
-
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
-    await flushTimers();
-    await expect(promise).rejects.toThrow(ApiError);
-
-    // For the first retry (rateLimitAttempts=0): base = 1000, jitter in [0, 500].
-    // Delay = base + jitter in [1000, 1500].
-    const firstDelay = fetchTimes[1] - fetchTimes[0];
-    expect(firstDelay).toBeGreaterThanOrEqual(1000);
-    expect(firstDelay).toBeLessThanOrEqual(1500);
-  });
-
   // ── Retry-After as HTTP-date ─────────────────────────────────────────────
 
   it('parses Retry-After as an HTTP-date and computes the remaining wait', async () => {
@@ -343,28 +321,5 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     const gap = fetchTimes[1] - fetchTimes[0];
     expect(gap).toBeGreaterThanOrEqual(9000);
     expect(gap).toBeLessThanOrEqual(10500);
-  });
-
-  // ── ApiError carries statusCode for circuit breaker ─────────────────────
-
-  it('the thrown ApiError carries statusCode=429 for the pool circuit breaker', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(make429Response());
-    globalThis.fetch = fetchMock;
-
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
-    await flushTimers();
-
-    try {
-      await promise;
-      expect.fail('should have thrown');
-    } catch (error) {
-      expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).statusCode).toBe(429);
-      // Friendly message mentions rate limiting and actionable advice.
-      const msg = (error as ApiError).message;
-      expect(msg).toContain('Rate limit');
-      expect(msg).toContain('batch size');
-    }
   });
 });

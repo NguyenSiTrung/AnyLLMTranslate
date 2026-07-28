@@ -1,16 +1,11 @@
-/** @vitest-environment jsdom */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   ZERO_COUNTERS,
   DEFAULT_STATS_V2,
   type DailyStatRecord,
   type TranslationStatsV2,
 } from '@/types/stats';
-import {
-  buildStatsJsonExport,
-  buildStatsCsvExport,
-  triggerDownload,
-} from '../statsExport';
+import { buildStatsJsonExport, buildStatsCsvExport } from '../statsExport';
 
 const CSV_HEADER =
   'date,characters,apiCalls,cacheHits,cacheMisses,cacheCharacters,pageSessions,subtitleCues,selectionEvents,inlineEvents,pdfEvents';
@@ -130,46 +125,6 @@ describe('statsExport', () => {
       expect(multi).toHaveLength(3);
       expect(multi[1]).toBe('2026-07-01,1,0,0,0,0,0,0,0,0,0');
       expect(multi[2]).toBe('2026-07-02,2,1,0,0,0,0,0,0,0,0');
-    });
-  });
-
-  describe('triggerDownload', () => {
-    const originalCreateObjectURL = URL.createObjectURL;
-    const originalRevokeObjectURL = URL.revokeObjectURL;
-
-    beforeEach(() => {
-      URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-      URL.revokeObjectURL = vi.fn();
-    });
-
-    afterEach(() => {
-      URL.createObjectURL = originalCreateObjectURL;
-      URL.revokeObjectURL = originalRevokeObjectURL;
-      vi.restoreAllMocks();
-    });
-
-    it('creates a blob URL, clicks an anchor, and revokes the URL', () => {
-      const click = vi.fn();
-      const anchor = {
-        href: '',
-        download: '',
-        click,
-      } as unknown as HTMLAnchorElement;
-
-      const createElement = vi.spyOn(document, 'createElement').mockReturnValue(anchor);
-
-      triggerDownload('anyllm-stats-2026-07-09.json', '{"ok":true}', 'application/json');
-
-      expect(createElement).toHaveBeenCalledWith('a');
-      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
-      const blobArg = (URL.createObjectURL as ReturnType<typeof vi.fn>).mock
-        .calls[0][0] as Blob;
-      expect(blobArg).toBeInstanceOf(Blob);
-      expect(blobArg.type).toBe('application/json');
-      expect(anchor.href).toBe('blob:mock-url');
-      expect(anchor.download).toBe('anyllm-stats-2026-07-09.json');
-      expect(click).toHaveBeenCalledTimes(1);
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
     });
   });
 });

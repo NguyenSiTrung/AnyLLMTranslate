@@ -10,9 +10,10 @@ describe('shouldAcceptTabScopedMessage', () => {
     expect(shouldAcceptTabScopedMessage(42, 99)).toBe(false);
   });
 
-  it('rejects when active tab is unknown (rely on getStatus query instead)', () => {
+  it('rejects when active tab is unknown or both sides are unset', () => {
     expect(shouldAcceptTabScopedMessage(null, 42)).toBe(false);
     expect(shouldAcceptTabScopedMessage(undefined, 42)).toBe(false);
+    expect(shouldAcceptTabScopedMessage(null, null)).toBe(false);
   });
 
   it('rejects placeholder / missing origin tab ids (tabId: 0 legacy)', () => {
@@ -20,9 +21,5 @@ describe('shouldAcceptTabScopedMessage', () => {
     expect(shouldAcceptTabScopedMessage(42, null)).toBe(false);
     expect(shouldAcceptTabScopedMessage(42, undefined)).toBe(false);
     expect(shouldAcceptTabScopedMessage(42, -1)).toBe(false);
-  });
-
-  it('rejects when both sides are unset', () => {
-    expect(shouldAcceptTabScopedMessage(null, null)).toBe(false);
   });
 });

@@ -16,21 +16,19 @@ describe('webTranslateStatus', () => {
     { id: '4', isTranslated: false },
   ];
 
-  it('countVisiblePending unions visible and in-flight without double-counting', () => {
-    const pieces = [
+  it('computeTranslationStatus covers idle / translating / done states; countVisiblePending unions without double-counting', () => {
+    const pendingPieces = [
       { id: 'a', isTranslated: false },
       { id: 'b', isTranslated: false },
       { id: 'c', isTranslated: true },
       { id: 'd', isTranslated: false },
     ];
-    expect(countVisiblePending(pieces, new Set(['a']), new Set(['b']))).toBe(2);
+    expect(countVisiblePending(pendingPieces, new Set(['a']), new Set(['b']))).toBe(2);
     expect(countVisiblePending([{ id: 'a', isTranslated: false }], new Set(['a']), new Set(['a']))).toBe(
       1,
     );
     expect(countVisiblePending([{ id: 'a', isTranslated: true }], new Set(['a']), new Set())).toBe(0);
-  });
 
-  it('computeTranslationStatus covers idle / translating / done states', () => {
     expect(
       computeTranslationStatus({
         pageState: 'off',

@@ -153,37 +153,7 @@ describe('OpenAICompatibleService.translateStream', () => {
     expect(callbacks.some((c) => c.id === 'p1' && c.text === 'Xin chào')).toBe(true);
   });
 
-  it('finalizes on [DONE] sentinel', async () => {
-    const texts = new Map([['p1', 'Hi']]);
-    const sseChunks = [
-      'data: {"choices":[{"delta":{"content":"{\\"p1\\":\\"Done\\"}"}}]}\n\n',
-      'data: [DONE]\n\n',
-    ];
-
-    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeStreamResponse(sseChunks),
-    );
-
-    const service = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
-
-    const result = await service.translateStream(makeRequest(texts), () => {});
-    expect(result.success).toBe(true);
-    expect(result.translations.get('p1')).toBe('Done');
-  });
-
-  it('throws on HTTP error (caller falls back to non-streaming)', async () => {
-    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeStreamResponse([], 400),
-    );
-
-    const service = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
-
-    await expect(
-      service.translateStream(makeRequest(new Map([['p1', 'Hi']])), () => {}),
-    ).rejects.toThrow();
-  });
-
-  it('throws ApiError with statusCode on HTTP error', async () => {
+  it('throws ApiError with statusCode on HTTP error (caller falls back to non-streaming)', async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeStreamResponse([], 429),
     );

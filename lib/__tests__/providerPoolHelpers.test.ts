@@ -38,7 +38,7 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
 }
 
 describe('provider pool UI and operational helpers', () => {
-  it('picks credentials, gates connection tests, and builds provider config', () => {
+  it('picks credentials, gates tests, builds config, and handles cursor/reorder/bulk/status/dashboard helpers', () => {
     const withThinking = makeProvider({ thinkingMode: 'off', thinkingEffort: 'high' });
     const built = buildProviderConfig(withThinking, withThinking.keys[0]!);
     expect(built.thinkingMode).toBe('off');
@@ -70,9 +70,7 @@ describe('provider pool UI and operational helpers', () => {
     expect(cfg.maxRpm).toBe(60);
     expect(cfg.baseUrl).toBe(p.baseUrl);
     expect(cfg.apiKey).toBe('sk-test');
-  });
 
-  it('handles cursor, reordering, bulk slot collection, status changes, and dashboard views', () => {
     // Cursor
     const cursor = createPoolCursor(3);
     expect([cursor.next(), cursor.next(), cursor.next(), cursor.next()]).toEqual([0, 1, 2, 0]);

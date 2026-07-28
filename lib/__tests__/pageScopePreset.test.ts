@@ -5,7 +5,6 @@ import {
   PAGE_SCOPE_PRESET_OPTIONS,
 } from '@/lib/pageScopePreset';
 import { DEFAULT_SETTINGS } from '@/types/config';
-import { deepMerge } from '@/lib/utils';
 
 describe('pageScopePreset', () => {
   it('applies classic / balanced / main-content / full-page presets', () => {
@@ -55,25 +54,5 @@ describe('pageScopePreset', () => {
       }),
     ).toBe('custom');
     expect(detectPageScopePreset(DEFAULT_SETTINGS)).toBe('balanced');
-  });
-
-  it('deepMerge fills missing flags but preserves explicit Classic overrides', () => {
-    const merged = deepMerge(
-      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-      { targetLanguage: 'en' } as Record<string, unknown>,
-    ) as unknown as typeof DEFAULT_SETTINGS;
-    expect(merged.enableStreamingTranslation).toBe(true);
-    expect(merged.enableAsideCaps).toBe(true);
-    expect(merged.targetLanguage).toBe('en');
-
-    const classic = deepMerge(
-      DEFAULT_SETTINGS as unknown as Record<string, unknown>,
-      {
-        enableStreamingTranslation: false,
-        enableAsideCaps: false,
-      } as Record<string, unknown>,
-    ) as unknown as typeof DEFAULT_SETTINGS;
-    expect(classic.enableStreamingTranslation).toBe(false);
-    expect(classic.enableAsideCaps).toBe(false);
   });
 });

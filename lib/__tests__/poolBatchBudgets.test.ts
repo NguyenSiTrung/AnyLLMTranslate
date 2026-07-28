@@ -26,6 +26,40 @@ describe('resolvePoolBatchBudgets', () => {
       maxTextGroupLengthPerRequest: s.maxTextGroupLengthPerRequest,
       maxTextLengthPerRequest: s.maxTextLengthPerRequest,
     });
+
+    // Disabled providers and zero/undefined overrides are ignored
+    const mixed = settingsWithProviders([
+      {
+        id: 'off',
+        displayName: 'Off',
+        baseUrl: 'https://a/v1',
+        model: 'm',
+        requiresApiKey: true,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: false,
+        maxBatchChars: 100,
+        maxTextGroupCount: 1,
+        keys: [{ id: 'k0', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+      },
+      {
+        id: 'on',
+        displayName: 'On',
+        baseUrl: 'https://b/v1',
+        model: 'm',
+        requiresApiKey: true,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        maxBatchChars: 0,
+        maxTextGroupCount: undefined,
+        keys: [{ id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+      },
+    ]);
+    expect(resolvePoolBatchBudgets(mixed)).toEqual({
+      maxTextGroupLengthPerRequest: mixed.maxTextGroupLengthPerRequest,
+      maxTextLengthPerRequest: mixed.maxTextLengthPerRequest,
+    });
   });
 
   it('uses the tightest enabled-provider override (min of positive values)', () => {
@@ -61,41 +95,6 @@ describe('resolvePoolBatchBudgets', () => {
     expect(resolvePoolBatchBudgets(s)).toEqual({
       maxTextGroupLengthPerRequest: 2,
       maxTextLengthPerRequest: 800,
-    });
-  });
-
-  it('ignores disabled providers and zero/undefined overrides', () => {
-    const s = settingsWithProviders([
-      {
-        id: 'off',
-        displayName: 'Off',
-        baseUrl: 'https://a/v1',
-        model: 'm',
-        requiresApiKey: true,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: false,
-        maxBatchChars: 100,
-        maxTextGroupCount: 1,
-        keys: [{ id: 'k0', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
-      },
-      {
-        id: 'on',
-        displayName: 'On',
-        baseUrl: 'https://b/v1',
-        model: 'm',
-        requiresApiKey: true,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: true,
-        maxBatchChars: 0,
-        maxTextGroupCount: undefined,
-        keys: [{ id: 'k1', apiKey: 'sk', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
-      },
-    ]);
-    expect(resolvePoolBatchBudgets(s)).toEqual({
-      maxTextGroupLengthPerRequest: s.maxTextGroupLengthPerRequest,
-      maxTextLengthPerRequest: s.maxTextLengthPerRequest,
     });
   });
 });

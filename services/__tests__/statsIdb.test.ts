@@ -43,7 +43,8 @@ describe('statsIdb', () => {
     vi.clearAllMocks();
   });
 
-  it('round-trips daily records and returns all stored days', async () => {
+  it('CRUD lifecycle: round-trips records, lists all days, deletes before cutoff, and clears the store', async () => {
+    // Round-trip + list all stored days.
     const day = emptyDay('2026-07-01');
     day.totals.characters = 42;
     await setDailyRecord(day);
@@ -57,11 +58,8 @@ describe('statsIdb', () => {
     const all = await getAllDailyRecords();
     expect(all).toHaveLength(2);
     expect(all).toEqual(expect.arrayContaining([a, b]));
-  });
 
-  it('deletes records before cutoff and clearAllDailyRecords empties store', async () => {
-    await setDailyRecord(emptyDay('2026-06-01'));
-    await setDailyRecord(emptyDay('2026-07-01'));
+    // Delete before cutoff + clear-all empties the store.
     const n = await deleteDailyRecordsBefore('2026-06-15');
     expect(n).toBe(1);
     await expect(getDailyRecord('2026-06-01')).resolves.toBeUndefined();

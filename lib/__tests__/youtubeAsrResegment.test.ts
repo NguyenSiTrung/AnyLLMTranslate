@@ -13,7 +13,6 @@ import {
   splitWords,
   mergeHangingGroups,
   mergeEndCompatible,
-  requestAiAsrResegment,
   isYoutubeAsrUrl,
   parseYoutubeJson3Words,
   applyYoutubeAsrResegment,
@@ -261,10 +260,6 @@ describe('resegmentYoutubeAsr entry points', () => {
         { ...lang, splitConfig: { ...lang.splitConfig, maxWords: 10 } },
       ).length,
     ).toBeGreaterThan(1);
-  });
-
-  it('AI hook is a pure-lib stub (network via background)', async () => {
-    expect(await requestAiAsrResegment([], 'en')).toBeNull();
   });
 });
 

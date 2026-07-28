@@ -11,7 +11,7 @@ import {
 } from '@/lib/modelListing';
 
 describe('modelListing', () => {
-  it('parseModelsListResponse extracts ids, pagination, and guards invalid payloads', () => {
+  it('parses model lists, filters ids, and builds pagination URLs', () => {
     expect(
       parseModelsListResponse({
         object: 'list',
@@ -42,9 +42,8 @@ describe('modelListing', () => {
     expect(parseModelsListResponse(null).ids).toEqual([]);
     expect(parseModelsListResponse({}).ids).toEqual([]);
     expect(parseModelsListResponse('nope').ids).toEqual([]);
-  });
 
-  it('filterModelIds and buildModelsListUrl', () => {
+    // filterModelIds and buildModelsListUrl
     const models = ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'meta/llama-3.1-8b'];
     expect(filterModelIds(models, '')).toEqual(models);
     expect(filterModelIds(models, '   ')).toEqual(models);

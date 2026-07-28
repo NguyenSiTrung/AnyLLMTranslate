@@ -33,7 +33,7 @@ describe('listProviderModels', () => {
     expect(headers.Authorization).toBe('Bearer sk-test');
   });
 
-  it('follows has_more pagination via after cursor until complete', async () => {
+  it('follows has_more pagination via after cursor until complete and dedupes ids across pages', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -65,10 +65,9 @@ describe('listProviderModels', () => {
     expect(String(fetchMock.mock.calls[1][0])).toBe(
       'https://api.example.com/v1/models?after=page1-b',
     );
-  });
 
-  it('dedupes model ids across pages', async () => {
-    const fetchMock = vi
+    // Folded scenario: duplicate ids across pages are deduped.
+    const dedupFetch = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -85,14 +84,14 @@ describe('listProviderModels', () => {
           has_more: false,
         }),
       });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', dedupFetch);
 
-    const result = await listProviderModels({
+    const deduped = await listProviderModels({
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'k',
     });
 
-    expect(result.models).toEqual(['shared', 'only-1', 'only-2']);
+    expect(deduped.models).toEqual(['shared', 'only-1', 'only-2']);
   });
 
   it('returns error when first page is not ok', async () => {

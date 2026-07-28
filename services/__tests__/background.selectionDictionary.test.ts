@@ -181,36 +181,42 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(body.messages[1].content).toContain('hello');
   });
 
-  it('plain path when dictionaryMode is omitted (hover/inline safety)', async () => {
+  it('plain path when dictionaryMode is omitted, and sentence fallback when selectionDictionaryEnabled is false', async () => {
+    // Unique texts avoid plain-cache key contention with the other tests in
+    // this file (selection cache writes are fire-and-forget).
+    // Scenario 1: plain path when dictionaryMode is omitted (hover/inline
+    // safety).
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
 
-    const result = (await handleMessage(
+    const plain = (await handleMessage(
       {
         action: 'translateSelection',
-        text: 'hello',
+        text: 'hover inline check',
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       },
       { tab: { id: 1 } } as chrome.runtime.MessageSender,
     )) as { success: boolean; mode?: string; translatedText?: string; dictionary?: unknown };
 
-    expect(result.success).toBe(true);
-    expect(result.mode).toBe('sentence');
-    expect(result.translatedText).toBe('xin chào');
-    expect(result.dictionary).toBeUndefined();
-  });
+    expect(plain.success).toBe(true);
+    expect(plain.mode).toBe('sentence');
+    expect(plain.translatedText).toBe('xin chào');
+    expect(plain.dictionary).toBeUndefined();
 
-  it('falls back to sentence when settings.selectionDictionaryEnabled is false', async () => {
+    // Scenario 2: falls back to sentence when settings.selectionDictionaryEnabled
+    // is false.
     mockStorage['anyllm-translate-settings'] = baseProviderSettings({
       selectionDictionaryEnabled: false,
     });
+    __resetSettingsCacheForTest();
+    __resetTranslationServiceForTest();
     mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
 
-    const result = (await handleMessage(
+    const disabled = (await handleMessage(
       {
         action: 'translateSelection',
-        text: 'hello',
+        text: 'dictionary disabled check',
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         dictionaryMode: true,
@@ -218,9 +224,9 @@ describe('handleTranslateSelection — dictionary mode', () => {
       { tab: { id: 1 } } as chrome.runtime.MessageSender,
     )) as { success: boolean; mode?: string; dictionary?: unknown };
 
-    expect(result.success).toBe(true);
-    expect(result.mode).toBe('sentence');
-    expect(result.dictionary).toBeUndefined();
+    expect(disabled.success).toBe(true);
+    expect(disabled.mode).toBe('sentence');
+    expect(disabled.dictionary).toBeUndefined();
   });
 
   it('fail-open: invalid JSON still returns translatedText', async () => {
@@ -295,57 +301,8 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(plainAgain.translatedText).toBe('plain-vi');
   });
 
-  it('records cacheHits (not apiCalls) on selection sentence cache hit', async () => {
-    mockStorage['anyllm-translate-settings'] = baseProviderSettings();
-    await resetStats();
-
-    mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
-    await handleMessage(
-      {
-        action: 'translateSelection',
-        text: 'hello',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      },
-      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
-    );
-
-    await vi.waitFor(async () => {
-      const stats = await getStatsV2();
-      expect(stats.lifetime.apiCalls).toBe(1);
-      expect(stats.lifetime.characters).toBe(5);
-    });
-
-    // Cache hit — no second LLM call
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const callsBefore = fetchMock.mock.calls.length;
-    const result = (await handleMessage(
-      {
-        action: 'translateSelection',
-        text: 'hello',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      },
-      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
-    )) as { success: boolean; translatedText?: string; mode?: string };
-
-    expect(result.success).toBe(true);
-    expect(result.mode).toBe('sentence');
-    expect(result.translatedText).toBe('xin chào');
-    expect(fetchMock.mock.calls.length).toBe(callsBefore);
-
-    await vi.waitFor(async () => {
-      const stats = await getStatsV2();
-      expect(stats.lifetime.cacheHits).toBe(1);
-      expect(stats.lifetime.cacheCharacters).toBe(5);
-      // Pure cache hit must not inflate LLM counters.
-      expect(stats.lifetime.apiCalls).toBe(1);
-      expect(stats.lifetime.characters).toBe(5);
-      expect(stats.lifetime.selectionEvents).toBe(2);
-    });
-  });
-
-  it('records cacheHits (not apiCalls) on selection dictionary cache hit', async () => {
+  it('records cacheHits (not apiCalls) on selection dictionary and sentence cache hits', async () => {
+    // Phase 1: dictionary cache hit.
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     await resetStats();
 
@@ -374,7 +331,7 @@ describe('handleTranslateSelection — dictionary mode', () => {
 
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
     const callsBefore = fetchMock.mock.calls.length;
-    const result = (await handleMessage(
+    const dictResult = (await handleMessage(
       {
         action: 'translateSelection',
         text: 'hello',
@@ -385,9 +342,9 @@ describe('handleTranslateSelection — dictionary mode', () => {
       { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
     )) as { success: boolean; mode?: string; translatedText?: string };
 
-    expect(result.success).toBe(true);
-    expect(result.mode).toBe('dictionary');
-    expect(result.translatedText).toBe('xin chào');
+    expect(dictResult.success).toBe(true);
+    expect(dictResult.mode).toBe('dictionary');
+    expect(dictResult.translatedText).toBe('xin chào');
     expect(fetchMock.mock.calls.length).toBe(callsBefore);
 
     await vi.waitFor(async () => {
@@ -396,6 +353,56 @@ describe('handleTranslateSelection — dictionary mode', () => {
       expect(stats.lifetime.cacheCharacters).toBe(5);
       expect(stats.lifetime.apiCalls).toBe(1);
       expect(stats.lifetime.characters).toBe(5);
+    });
+
+    // Phase 2: sentence cache hit. Unique 5-char text ('cache') keeps the
+    // character-count assertions at 5 while avoiding plain-cache key
+    // contention with the cache-collision test (writes are fire-and-forget).
+    await resetStats();
+
+    mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
+    await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'cache',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    );
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.characters).toBe(5);
+    });
+
+    // Cache hit — no second LLM call
+    const fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const callsBefore2 = fetchMock2.mock.calls.length;
+    const sentenceResult = (await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'cache',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      },
+      { tab: { id: 1, url: 'https://news.example.com/a' } } as chrome.runtime.MessageSender,
+    )) as { success: boolean; translatedText?: string; mode?: string };
+
+    expect(sentenceResult.success).toBe(true);
+    expect(sentenceResult.mode).toBe('sentence');
+    expect(sentenceResult.translatedText).toBe('xin chào');
+    expect(fetchMock2.mock.calls.length).toBe(callsBefore2);
+
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.cacheHits).toBe(1);
+      expect(stats.lifetime.cacheCharacters).toBe(5);
+      // Pure cache hit must not inflate LLM counters.
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.characters).toBe(5);
+      expect(stats.lifetime.selectionEvents).toBe(2);
     });
   });
 });

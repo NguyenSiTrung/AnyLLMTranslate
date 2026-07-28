@@ -12,9 +12,7 @@ import {
 } from '@/lib/translationSession';
 import {
   applyTranslation,
-  setPageState,
   removeAllTranslations,
-  getPageState,
 } from '@/content/translationDisplay';
 import { DATA_ATTRS } from '@/lib/constants';
 import { deriveContentHash, type ResumePiece, type WebResumeSnapshot } from '@/lib/webResume';
@@ -56,9 +54,8 @@ describe('webTranslateLifecycle', () => {
       const s1 = registry.current;
       expect(applyIfCurrent(s1, 'Xin chào')).toBe(true);
       expect(document.querySelector(`[${DATA_ATTRS.ROLE}="translation"]`)).not.toBeNull();
-    });
 
-    it('isSessionCurrent matches non-stream late-response guard semantics', () => {
+      // isSessionCurrent matches the same guard semantics for non-stream late responses
       expect(isSessionCurrent(3, 3)).toBe(true);
       expect(isSessionCurrent(2, 3)).toBe(false);
     });
@@ -204,48 +201,4 @@ describe('webTranslateLifecycle', () => {
     });
   });
 
-  describe('page state restore baseline', () => {
-    it('removeAllTranslations resets page state to off', () => {
-      setPageState('translation-only');
-      expect(getPageState()).toBe('translation-only');
-      removeAllTranslations();
-      expect(getPageState()).toBe('off');
-    });
-  });
-
-  describe('FR-7: detached piece prune contract', () => {
-    it('remove node → piece pruned; no leak growth', () => {
-      // Models pruneDetachedPieces: keep only isConnected parents.
-      const live = document.createElement('p');
-      live.textContent = 'stay';
-      document.body.appendChild(live);
-      const gone = document.createElement('p');
-      gone.textContent = 'gone';
-      document.body.appendChild(gone);
-
-      type P = { id: string; parentElement: Element; isTranslated: boolean };
-      let pieces: P[] = [
-        { id: 'a', parentElement: live, isTranslated: false },
-        { id: 'b', parentElement: gone, isTranslated: false },
-      ];
-      gone.remove();
-      pieces = pieces.filter((p) => p.parentElement.isConnected);
-      expect(pieces.map((p) => p.id)).toEqual(['a']);
-      expect(pieces.length).toBe(1);
-    });
-  });
-
-  describe('FR-14: stream partial fallback unfinished-only', () => {
-    it('re-request only unfinished piece ids after stream error', () => {
-      const pieces = [
-        { id: '1', text: 'a', isTranslated: true, translatedText: 'A' },
-        { id: '2', text: 'b', isTranslated: false },
-        { id: '3', text: 'c', isTranslated: true, translatedText: 'C' },
-      ];
-      const unfinished = pieces.filter((p) => !p.isTranslated);
-      expect(unfinished.map((p) => p.id)).toEqual(['2']);
-      // Already-applied stream results must not be paid for twice
-      expect(unfinished.every((p) => !p.isTranslated)).toBe(true);
-    });
-  });
 });

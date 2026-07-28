@@ -29,7 +29,7 @@ describe('shell pin', () => {
     removeDialog();
   });
 
-  it('dismisses on outside click when unpinned', () => {
+  it('dismisses on outside click when unpinned but not when pinned', () => {
     showLoading({
       anchor: { left: 100, top: 100, width: 40, height: 20 },
       originalText: 'hi',
@@ -38,16 +38,7 @@ describe('shell pin', () => {
       handlers,
     });
     expect(shouldDismissOnOutsideClick()).toBe(true);
-  });
 
-  it('does not dismiss on outside click when pinned', () => {
-    showLoading({
-      anchor: { left: 100, top: 100, width: 40, height: 20 },
-      originalText: 'hi',
-      sourceLanguage: 'en',
-      targetLanguage: 'vi',
-      handlers,
-    });
     setPinned(true);
     expect(shouldDismissOnOutsideClick()).toBe(false);
     expect(isPinned()).toBe(true);

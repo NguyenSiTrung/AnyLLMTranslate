@@ -225,7 +225,8 @@ describe('translationDisplay', () => {
 
 
   describe('setErrorState', () => {
-    it('adds data-anyllm-error attribute on parent and creates compact error element', () => {
+    it('adds data-anyllm-error attribute and compact error element without embedding long messages in visible text', () => {
+      // Scenario 1: parent marked + compact element, full message only in title
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -238,6 +239,16 @@ describe('translationDisplay', () => {
       expect(errorEl?.textContent).not.toContain('Network error');
       expect((errorEl as HTMLElement).title).toContain('Network error');
       expect((errorEl as HTMLElement).title).toContain('Click to retry');
+
+      // Scenario 2: long pool-failure message stays out of the visible text
+      const parent2 = document.createElement('p');
+      document.body.appendChild(parent2);
+      const long =
+        'All provider pool slots failed during this request.';
+      setErrorState(parent2, 'piece-2', long);
+      const errorEl2 = document.querySelector('[data-anyllm-piece-id="piece-2"]');
+      expect(errorEl2?.textContent).toBe('⚠ Translation failed');
+      expect((errorEl2 as HTMLElement).title).toContain(long);
     });
 
     it('updates placeholder in-place for error state', () => {
@@ -255,16 +266,6 @@ describe('translationDisplay', () => {
       expect((errors[0] as HTMLElement).title).toContain('API error');
     });
 
-    it('does not embed long pool-failure message in visible text', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-      const long =
-        'All provider pool slots failed during this request.';
-      setErrorState(parent, 'piece-1', long);
-      const errorEl = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(errorEl?.textContent).toBe('⚠ Translation failed');
-      expect((errorEl as HTMLElement).title).toContain(long);
-    });
   });
 
   describe('clearErrorState', () => {
@@ -330,16 +331,15 @@ describe('translationDisplay', () => {
   });
 
   describe('page state', () => {
-    it('setPageState updates attribute and getPageState reads it (default off)', () => {
+    it('setPageState/getPageState round-trip and togglePageState cycles (default off)', () => {
       expect(getPageState()).toBe('off');
+      // Toggle from default off: explicit mode request honored, then cycles off
+      expect(togglePageState('translation-only')).toBe('translation-only');
+      expect(togglePageState()).toBe('off');
+      // setPageState writes the attribute; getPageState reads it back
       setPageState('dual');
       expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('dual');
       expect(getPageState()).toBe('dual');
-    });
-
-    it('togglePageState cycles to translation-only when requested, then off', () => {
-      expect(togglePageState('translation-only')).toBe('translation-only');
-      expect(togglePageState()).toBe('off');
     });
   });
 

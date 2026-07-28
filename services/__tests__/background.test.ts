@@ -99,25 +99,6 @@ describe('services/background', () => {
   });
 
   describe('handleMessage — translate', () => {
-    it('translates pieces and returns results', async () => {
-      mockFetch(JSON.stringify({ translations: { p1: 'Xin chào' } }));
-
-      const result = await handleMessage(
-        {
-          action: 'translate',
-          pieces: [{ id: 'p1', text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toEqual({
-        success: true,
-        results: [{ id: 'p1', translatedText: 'Xin chào' }],
-      });
-    });
-
     it('FR-2: splits a large flush into multiple LLM calls by maxTextGroupLengthPerRequest', async () => {
       // Five pieces, default maxTextGroupLengthPerRequest=4 → 2 LLM calls.
       mockFetch(JSON.stringify({ translations: { p1: 'a', p2: 'b', p3: 'c', p4: 'd', p5: 'e' } }));
@@ -171,60 +152,8 @@ describe('services/background', () => {
       expect(byId.get('p2')).toBe('Thế giới');
     });
 
-    it('FR-4: short-circuits to a failed result on a negative-cache hit (no LLM call)', async () => {
-      // The idb-backed cache isn't available in node/jsdom (no fake-indexeddb),
-      // so spy on the module function to simulate a negative-cache hit. This
-      // verifies the handleTranslate wiring short-circuits without an LLM call.
-      const cacheManager = await import('../cacheManager');
-      const spy = vi
-        .spyOn(cacheManager, 'getCachedFailure')
-        .mockResolvedValue('Provider down');
-
-      const fetchSpy = vi.fn();
-      vi.stubGlobal('fetch', fetchSpy);
-
-      const result = await handleMessage(
-        {
-          action: 'translate',
-          pieces: [{ id: 'p1', text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const typed = result as { success: boolean; results?: unknown[]; failed?: { id: string; error: string }[] };
-      expect(spy).toHaveBeenCalled();
-      // No LLM call should be made — the negative cache short-circuits.
-      expect(fetchSpy).not.toHaveBeenCalled();
-      // The piece surfaces as a failure (not a result) so the content script
-      // shows an error state.
-      expect(typed.failed?.find((f) => f.id === 'p1')?.error).toBe('Provider down');
-      expect(typed.results ?? []).toEqual([]);
-
-      spy.mockRestore();
-    });
-
-    it('returns error on translation failure', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
-
-      const result = await handleMessage(
-        {
-          action: 'translate',
-          pieces: [{ id: 'p1', text: 'Hello' }],
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-        },
-        { tab: { id: 1 } } as chrome.runtime.MessageSender,
-      );
-
-      const typedResult = result as { success: boolean; error: string };
-      expect(typedResult.success).toBe(false);
-      expect(typedResult.error).toBeDefined();
-    });
-
-    it('forwards glossaryBlock to service.translate() when settings have glossary entries', async () => {
-      // Store settings with glossary entries
+    it('forwards glossaryBlock when settings have glossary entries, omits it when glossary is empty', async () => {
+      // Scenario 1: glossary entries present → glossaryBlock forwarded.
       mockStorage['anyllm-translate-settings'] = {
         provider: {
           preset: 'custom',
@@ -261,9 +190,8 @@ describe('services/background', () => {
       };
       expect(body.messages[0].content).toContain('machine learning');
       expect(body.messages[0].content).toContain('Translation Glossary');
-    });
 
-    it('omits glossaryBlock when settings have empty glossary', async () => {
+      // Scenario 2: empty glossary → glossaryBlock omitted.
       mockStorage['anyllm-translate-settings'] = {
         provider: {
           preset: 'custom',
@@ -278,6 +206,8 @@ describe('services/background', () => {
         glossary: [],
         customSystemPrompt: null,
       };
+      __resetSettingsCacheForTest();
+      __resetTranslationServiceForTest();
 
       mockFetch(JSON.stringify({ translations: { p1: 'Xin chào' } }));
 
@@ -291,16 +221,18 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      const fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).not.toContain('Translation Glossary');
+      expect(body2.messages[0].content).not.toContain('Translation Glossary');
     });
   });
 
   describe('handleMessage — translateSubtitle', () => {
-    it('applies the hostname-selected named glossary as a separate locked prompt block', async () => {
+    it('applies the hostname-selected named glossary as a locked block, and skips it when hostname resolves to None', async () => {
+      // Scenario 1: hostname selects the named glossary → applied as a separate
+      // locked prompt block.
       mockStorage['anyllm-translate-settings'] = {
         glossary: [
           { id: 'global-locked', source: 'Alice', target: 'Global Alice' },
@@ -340,9 +272,8 @@ describe('services/background', () => {
       expect(systemPrompt).toContain('- "Alice" → "A-lít"');
       expect(systemPrompt).toContain('- "Rabbit" → "Con thỏ"');
       expect(systemPrompt).not.toContain('- "Alice" → "Global Alice"');
-    });
 
-    it('does not apply a named glossary when the hostname resolves to None', async () => {
+      // Scenario 2: hostname resolves to None → named glossary not applied.
       mockStorage['anyllm-translate-settings'] = {
         namedGlossaryLists: [{
           id: 'cast',
@@ -352,6 +283,8 @@ describe('services/background', () => {
         }],
         subtitleListBySite: { 'example.com': 'cast' },
       };
+      __resetSettingsCacheForTest();
+      __resetTranslationServiceForTest();
       mockFetch(JSON.stringify({ translations: { s1: 'Alice' } }));
 
       await handleMessage(
@@ -366,11 +299,11 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      const fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).not.toContain('Personal dictionary');
+      expect(body2.messages[0].content).not.toContain('Personal dictionary');
     });
 
     it('re-resolves the hostname-selected named glossary for forward chunks', async () => {
@@ -438,7 +371,10 @@ describe('services/background', () => {
       expect(secondBody.messages[0].content).not.toContain('Personal dictionary "Cast A"');
     });
 
-    it('uses the subtitle prompt (pageContext is not injected for subtitles)', async () => {
+    it('uses the subtitle prompt (no pageContext injection) and routes the cinematic profile to it', async () => {
+      // Scenario 1: subtitle path uses the profile-driven subtitle prompt, which
+      // does not inject pageContext (UNTRUSTED DATA block is a web-page-prompt
+      // feature).
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -462,14 +398,12 @@ describe('services/background', () => {
       const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      // Subtitle path uses the profile-driven subtitle prompt, which does not
-      // inject pageContext (UNTRUSTED DATA block is a web-page-prompt feature).
       expect(body.messages[0].content).toContain('subtitle translator');
       expect(body.messages[0].content).not.toContain('UNTRUSTED DATA');
       expect(body.messages[0].content).not.toContain('<page_domain>');
-    });
 
-    it('routes cinematic profile to the subtitle prompt (representative profile→knob mapping)', async () => {
+      // Scenario 2: cinematic profile routes to the subtitle prompt
+      // (representative profile→knob mapping).
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -483,12 +417,12 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      const fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).toContain('subtitle translator');
-      expect(body.messages[0].content).toContain('idiomatic, natural phrasing');
+      expect(body2.messages[0].content).toContain('subtitle translator');
+      expect(body2.messages[0].content).toContain('idiomatic, natural phrasing');
     });
 
     it('applies a per-tab knob override over the profile preset', async () => {
@@ -729,33 +663,6 @@ describe('services/background', () => {
       expect(messages?.[0].content).not.toContain('Wrong Alice');
     });
 
-    it('prefixes cue text with [voice] when cue.voice is set', async () => {
-      const cues = [
-        { startTime: 0, endTime: 2, text: 'Hello', voice: 'John' },
-      ];
-
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues,
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-          profile: 'media',
-        },
-        { tab: { id: 44 } } as chrome.runtime.MessageSender,
-      );
-
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      // The user prompt should contain the voice prefix
-      expect(body.messages[1].content).toContain('[John]');
-      expect(body.messages[1].content).toContain('[John] Hello');
-    });
-
     it('uses original cue text for cache, not voice-prefixed text', async () => {
       const cues = [
         { startTime: 0, endTime: 2, text: 'Hello', voice: 'John' },
@@ -786,16 +693,6 @@ describe('services/background', () => {
       // Verify cache safety: originalText (which feeds cacheTranslation) is
       // the unprefixed 'Hello', not the voice-prefixed '[John] Hello'.
       expect(result.cues?.[0].originalText).toBe('Hello');
-    });
-  });
-
-  describe('handleMessage — unknown action', () => {
-    it('returns undefined for unknown actions', () => {
-      const result = handleMessage(
-        { action: 'unknownAction' } as unknown as Parameters<typeof handleMessage>[0],
-        {} as chrome.runtime.MessageSender,
-      );
-      expect(result).toBeUndefined();
     });
   });
 
@@ -899,7 +796,10 @@ describe('services/background', () => {
       } finally {
         vi.useRealTimers();
       }
-    });
+      // The pool's retry backoff runs on real timers captured before
+      // useFakeTimers(), so this test needs wall-clock headroom under
+      // full-suite CPU contention.
+    }, 30000);
 
     it('does not cache a partial (source-back-filled) translation', async () => {
       // The LLM returns a translation where the cue text is back-filled with

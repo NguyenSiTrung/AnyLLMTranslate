@@ -11,7 +11,7 @@ describe('selectionContext', () => {
     document.body.innerHTML = '';
   });
 
-  it('extractSelectionContext: parentText windows, blanks, range preference', () => {
+  it('extractSelectionContext windows text; getSurroundingTextFromRange reads nearest block ancestor', () => {
     expect(SELECTION_CONTEXT_MAX_CHARS).toBe(300);
 
     expect(
@@ -98,15 +98,14 @@ describe('selectionContext', () => {
         range,
       }),
     ).toBe('Range paragraph text with hello here.');
-  });
 
-  it('getSurroundingTextFromRange reads nearest block ancestor and fails open', () => {
-    const p = document.createElement('p');
-    p.textContent = 'Hello from paragraph.';
-    document.body.appendChild(p);
+    // getSurroundingTextFromRange reads nearest block ancestor and fails open
+    const p2 = document.createElement('p');
+    p2.textContent = 'Hello from paragraph.';
+    document.body.appendChild(p2);
     const pRange = document.createRange();
-    pRange.setStart(p.firstChild as Text, 0);
-    pRange.setEnd(p.firstChild as Text, 5);
+    pRange.setStart(p2.firstChild as Text, 0);
+    pRange.setEnd(p2.firstChild as Text, 5);
     expect(getSurroundingTextFromRange(pRange)).toBe('Hello from paragraph.');
 
     const article = document.createElement('article');
