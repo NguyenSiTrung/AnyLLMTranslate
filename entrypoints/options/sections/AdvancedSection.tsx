@@ -46,6 +46,10 @@ import {
   shouldOfferVoiceField,
 } from '@/lib/tts/resolveTtsBackend';
 import { listProviderModels } from '@/services/providerTester';
+import {
+  listTtsVoices,
+  type TtsVoiceChoice,
+} from '@/lib/tts/listTtsVoices';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
@@ -166,6 +170,9 @@ function TtsSettingsGroup({
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelChoices, setModelChoices] = useState<string[]>([]);
   const [modelListError, setModelListError] = useState<string | null>(null);
+  const [loadingVoices, setLoadingVoices] = useState(false);
+  const [voiceChoices, setVoiceChoices] = useState<TtsVoiceChoice[]>([]);
+  const [voiceListError, setVoiceListError] = useState<string | null>(null);
 
   const previewSettings = useMemo(
     (): ExtensionSettings => ({ ...settings, tts: merged }),
@@ -220,6 +227,39 @@ function TtsSettingsGroup({
       }
     } finally {
       setLoadingModels(false);
+    }
+  };
+
+  const handleLoadVoices = async () => {
+    const creds = pickTtsCredentials({ ...settings, tts: merged });
+    if (!creds?.baseUrl) {
+      showError('Configure a pool provider or custom TTS base URL first');
+      return;
+    }
+    setLoadingVoices(true);
+    setVoiceListError(null);
+    try {
+      const result = await listTtsVoices({
+        baseUrl: creds.baseUrl,
+        apiKey: creds.apiKey,
+      });
+      if (!result.success) {
+        setVoiceChoices([]);
+        const err = result.error ?? 'Failed to list voices';
+        setVoiceListError(err);
+        showError(err);
+        return;
+      }
+      setVoiceChoices(result.voices);
+      if (result.voices.length === 0) {
+        showError(
+          'No voices returned. Create a voice in Mistral Console → Audio, or check the API key.',
+        );
+      } else {
+        showSuccess(`Loaded ${result.voices.length} voices`);
+      }
+    } finally {
+      setLoadingVoices(false);
     }
   };
 
@@ -440,21 +480,64 @@ function TtsSettingsGroup({
                 <FieldGroup
                   label="Voice / voice_id"
                   htmlFor="tts-voice"
-                  hint="OpenAI: alloy/nova… · Mistral: paste voice_id from console (required)"
+                  hint="OpenAI: alloy/nova… · Mistral: Load voices or paste voice_id (required)"
                 >
-                  <Input
-                    id="tts-voice"
-                    type="text"
-                    list="tts-voice-suggestions"
-                    value={merged.voice}
-                    onChange={(e) => patch({ voice: e.target.value })}
-                    placeholder="alloy or mistral-voice-id"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="tts-voice"
+                      type="text"
+                      list="tts-voice-suggestions"
+                      value={merged.voice}
+                      onChange={(e) => patch({ voice: e.target.value })}
+                      placeholder="alloy or mistral-voice-id"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={loadingVoices || !previewCreds?.baseUrl}
+                      onClick={() => void handleLoadVoices()}
+                    >
+                      {loadingVoices ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <List className="h-3.5 w-3.5" />
+                      )}
+                      {loadingVoices ? 'Loading…' : 'Load voices'}
+                    </Button>
+                  </div>
                   <datalist id="tts-voice-suggestions">
                     {OPENAI_TTS_VOICE_SUGGESTIONS.map((v) => (
                       <option key={v} value={v} />
                     ))}
+                    {voiceChoices.map((v) => (
+                      <option key={`loaded-${v.id}`} value={v.id}>
+                        {v.label}
+                      </option>
+                    ))}
                   </datalist>
+                  {voiceListError && (
+                    <p className="mt-1 text-xs text-rose-400/90">{voiceListError}</p>
+                  )}
+                  {voiceChoices.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-1">
+                      {voiceChoices.map((v) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`block w-full rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-zinc-800 ${
+                            merged.voice === v.id
+                              ? 'bg-cyan-500/15 text-cyan-200'
+                              : 'text-zinc-300'
+                          }`}
+                          onClick={() => patch({ voice: v.id })}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </FieldGroup>
               )}
             </div>
