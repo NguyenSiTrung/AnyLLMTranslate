@@ -2,7 +2,7 @@
  * Advanced Settings Section — cache, export/import, debug mode, and context features.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   Download,
   Upload,
@@ -23,6 +23,8 @@ import {
   CheckCircle2,
   FlaskConical,
   Volume2,
+  List,
+  Loader2,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -32,11 +34,18 @@ import {
   DEFAULT_PDF_SETTINGS,
   DEFAULT_SCIENTIFIC_PDF_SETTINGS,
   DEFAULT_TTS_SETTINGS,
-  TTS_MODEL_OPTIONS,
-  TTS_VOICE_OPTIONS,
+  OPENAI_TTS_VOICE_SUGGESTIONS,
+  type ExtensionSettings,
+  type TtsCredentialSource,
   type TtsPreferredBackend,
   type TtsSettings,
 } from '@/types/config';
+import {
+  mergeTtsSettings,
+  pickTtsCredentials,
+  shouldOfferVoiceField,
+} from '@/lib/tts/resolveTtsBackend';
+import { listProviderModels } from '@/services/providerTester';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Toggle } from '@/ui/Toggle';
@@ -125,19 +134,93 @@ const TTS_BACKEND_OPTIONS: { value: TtsPreferredBackend; label: string }[] = [
   { value: 'provider', label: 'Provider first (fallback to browser)' },
 ];
 
+const TTS_CREDENTIAL_SOURCE_OPTIONS: { value: TtsCredentialSource; label: string }[] = [
+  { value: 'pool', label: 'Use provider from pool' },
+  { value: 'custom', label: 'Custom TTS endpoint' },
+];
+
+const TTS_ISH_MODEL_RE = /tts|speech|audio|voice/i;
+
+function sortTtsModelChoices(ids: string[]): string[] {
+  const preferred: string[] = [];
+  const rest: string[] = [];
+  for (const id of ids) {
+    if (TTS_ISH_MODEL_RE.test(id)) preferred.push(id);
+    else rest.push(id);
+  }
+  return [...preferred, ...rest];
+}
+
 function TtsSettingsGroup({
   tts,
+  settings,
   onChange,
 }: {
   tts: TtsSettings;
+  settings: ExtensionSettings;
   onChange: (tts: TtsSettings) => void;
 }) {
-  const merged = { ...DEFAULT_TTS_SETTINGS, ...tts };
+  const merged = mergeTtsSettings(tts);
   const { success: showSuccess, error: showError } = useToast();
   const [testing, setTesting] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelChoices, setModelChoices] = useState<string[]>([]);
+  const [modelListError, setModelListError] = useState<string | null>(null);
+
+  const previewSettings = useMemo(
+    (): ExtensionSettings => ({ ...settings, tts: merged }),
+    [settings, merged],
+  );
+  const previewCreds = useMemo(
+    () => pickTtsCredentials(previewSettings),
+    [previewSettings],
+  );
+  const enabledProviders = useMemo(
+    () => (settings.providers ?? []).filter((p) => p.enabled),
+    [settings.providers],
+  );
+  const poolIdMissing =
+    merged.credentialSource === 'pool' &&
+    merged.poolProviderId.trim().length > 0 &&
+    !enabledProviders.some((p) => p.id === merged.poolProviderId);
+  const voiceBaseUrl = previewCreds?.baseUrl ?? '';
+  const showVoice = shouldOfferVoiceField(merged, voiceBaseUrl);
+  const providerBackendDimmed = merged.preferredBackend === 'browser';
 
   const patch = (partial: Partial<TtsSettings>) => {
     onChange({ ...merged, ...partial });
+  };
+
+  const handleLoadModels = async () => {
+    const creds = pickTtsCredentials({ ...settings, tts: merged });
+    if (!creds?.baseUrl) {
+      showError('Configure a pool provider or custom TTS base URL first');
+      return;
+    }
+    setLoadingModels(true);
+    setModelListError(null);
+    try {
+      const result = await listProviderModels({
+        baseUrl: creds.baseUrl,
+        apiKey: creds.apiKey,
+      });
+      if (!result.success) {
+        setModelChoices([]);
+        const err = result.error ?? 'Failed to list models';
+        setModelListError(err);
+        showError(err);
+        return;
+      }
+      const sorted = sortTtsModelChoices(result.models);
+      setModelChoices(sorted);
+      if (sorted.length === 0) {
+        showError('No models returned');
+      } else {
+        showSuccess(`Loaded ${sorted.length} models`);
+      }
+    } finally {
+      setLoadingModels(false);
+    }
   };
 
   const handleTest = async () => {
@@ -186,7 +269,7 @@ function TtsSettingsGroup({
   return (
     <SettingsGroup
       title="Speech (selection Speak)"
-      description="Read selection translations aloud. Provider TTS uses your active pool credentials (OpenAI-compatible /audio/speech); browser voice is free and local."
+      description="Read selection translations aloud. Use a pool provider or a custom OpenAI-compatible TTS endpoint (/audio/speech). Browser voice is free and local."
     >
       <Toggle
         id="tts-enabled-toggle"
@@ -210,34 +293,173 @@ function TtsSettingsGroup({
               }))}
             />
           </FieldGroup>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FieldGroup label="Provider model" htmlFor="tts-model" hint="Used when backend is Auto or Provider">
-              <Select
-                id="tts-model"
-                value={merged.model}
-                onChange={(e) => patch({ model: e.target.value })}
-                options={[
-                  ...TTS_MODEL_OPTIONS.map((m) => ({ value: m, label: m })),
-                  ...(TTS_MODEL_OPTIONS as readonly string[]).includes(merged.model)
-                    ? []
-                    : [{ value: merged.model, label: merged.model }],
-                ]}
+
+          <DisabledDimmer disabled={providerBackendDimmed}>
+            <div className="space-y-4">
+              <FieldGroup
+                label="TTS credentials"
+                htmlFor="tts-credential-source"
+                hint="Custom endpoint fully overrides the pool for Speak only"
+              >
+                <Select
+                  id="tts-credential-source"
+                  value={merged.credentialSource}
+                  onChange={(e) =>
+                    patch({
+                      credentialSource: e.target.value as TtsCredentialSource,
+                    })
+                  }
+                  options={TTS_CREDENTIAL_SOURCE_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                />
+              </FieldGroup>
+
+              {merged.credentialSource === 'pool' ? (
+                <div className="space-y-2">
+                  <FieldGroup label="Pool provider" htmlFor="tts-pool-provider">
+                    <Select
+                      id="tts-pool-provider"
+                      value={merged.poolProviderId}
+                      onChange={(e) => patch({ poolProviderId: e.target.value })}
+                      options={[
+                        { value: '', label: 'First available provider' },
+                        ...enabledProviders.map((p) => ({
+                          value: p.id,
+                          label: `${p.displayName || p.id} · ${p.baseUrl}`,
+                        })),
+                      ]}
+                    />
+                  </FieldGroup>
+                  {enabledProviders.length === 0 && (
+                    <p className="text-xs text-amber-400/90">
+                      No enabled providers — add one in Providers or use Custom TTS endpoint.
+                    </p>
+                  )}
+                  {poolIdMissing && (
+                    <p className="text-xs text-amber-400/90">
+                      Selected TTS provider is missing or disabled.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FieldGroup
+                    label="Custom base URL"
+                    htmlFor="tts-custom-base-url"
+                    hint="OpenAI-compatible …/v1"
+                  >
+                    <Input
+                      id="tts-custom-base-url"
+                      type="url"
+                      value={merged.customBaseUrl}
+                      onChange={(e) => patch({ customBaseUrl: e.target.value })}
+                      placeholder="https://api.example.com/v1"
+                    />
+                  </FieldGroup>
+                  <FieldGroup label="Custom API key" htmlFor="tts-custom-api-key">
+                    <Input
+                      id="tts-custom-api-key"
+                      type="password"
+                      autoComplete="off"
+                      value={merged.customApiKey}
+                      onChange={(e) => patch({ customApiKey: e.target.value })}
+                      placeholder="Optional if host needs no key"
+                    />
+                  </FieldGroup>
+                  {!merged.customBaseUrl.trim() && (
+                    <p className="text-xs text-amber-400/90 sm:col-span-2">
+                      Enter a base URL or switch to pool.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <FieldGroup
+                label="Model"
+                htmlFor="tts-model"
+                hint="Free-text model id for POST /audio/speech"
+              >
+                <div className="flex gap-2">
+                  <Input
+                    id="tts-model"
+                    type="text"
+                    value={merged.model}
+                    onChange={(e) => patch({ model: e.target.value })}
+                    placeholder="e.g. tts-1 or your-host-model-id"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={loadingModels || !previewCreds?.baseUrl}
+                    onClick={() => void handleLoadModels()}
+                  >
+                    {loadingModels ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <List className="h-3.5 w-3.5" />
+                    )}
+                    {loadingModels ? 'Loading…' : 'Load models'}
+                  </Button>
+                </div>
+                {modelListError && (
+                  <p className="mt-1 text-xs text-rose-400/90">{modelListError}</p>
+                )}
+                {modelChoices.length > 0 && (
+                  <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-1">
+                    {modelChoices.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={`block w-full rounded-md px-2 py-1 text-left text-xs transition-colors hover:bg-zinc-800 ${
+                          merged.model === id
+                            ? 'bg-cyan-500/15 text-cyan-200'
+                            : 'text-zinc-300'
+                        }`}
+                        onClick={() => patch({ model: id })}
+                      >
+                        {id}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </FieldGroup>
+
+              <Toggle
+                id="tts-show-voice-toggle"
+                checked={merged.showVoiceField}
+                onChange={(checked) => patch({ showVoiceField: checked })}
+                label="Show voice field"
+                description="Needed for OpenAI-style TTS voices. Hidden by default for other hosts."
               />
-            </FieldGroup>
-            <FieldGroup label="Voice" htmlFor="tts-voice">
-              <Select
-                id="tts-voice"
-                value={merged.voice}
-                onChange={(e) => patch({ voice: e.target.value })}
-                options={[
-                  ...TTS_VOICE_OPTIONS.map((v) => ({ value: v, label: v })),
-                  ...(TTS_VOICE_OPTIONS as readonly string[]).includes(merged.voice)
-                    ? []
-                    : [{ value: merged.voice, label: merged.voice }],
-                ]}
-              />
-            </FieldGroup>
-          </div>
+
+              {showVoice && (
+                <FieldGroup
+                  label="Voice"
+                  htmlFor="tts-voice"
+                  hint="Omitted from the request when empty"
+                >
+                  <Input
+                    id="tts-voice"
+                    type="text"
+                    list="tts-voice-suggestions"
+                    value={merged.voice}
+                    onChange={(e) => patch({ voice: e.target.value })}
+                    placeholder="e.g. alloy"
+                  />
+                  <datalist id="tts-voice-suggestions">
+                    {OPENAI_TTS_VOICE_SUGGESTIONS.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                </FieldGroup>
+              )}
+            </div>
+          </DisabledDimmer>
+
           <FieldGroup
             label="Rate"
             htmlFor="tts-rate"
@@ -911,6 +1133,7 @@ export function AdvancedSection() {
               <div className="border-t border-zinc-800/80 pt-5">
                 <TtsSettingsGroup
                   tts={settings.tts ?? DEFAULT_TTS_SETTINGS}
+                  settings={settings}
                   onChange={(tts) => updateSettings({ tts })}
                 />
               </div>
