@@ -48,24 +48,45 @@ function pickFromProvider(
   return null;
 }
 
-/** OpenAI-compatible speech hosts that commonly expect a `voice` field. */
-export function isOpenAiStyleTtsHost(baseUrl: string): boolean {
+function hostnameOfBaseUrl(baseUrl: string): string {
   try {
-    const host = new URL(baseUrl.includes('://') ? baseUrl : `https://${baseUrl}`)
+    return new URL(baseUrl.includes('://') ? baseUrl : `https://${baseUrl}`)
       .hostname
       .toLowerCase();
-    if (host === 'api.openai.com') return true;
-    if (host === 'openai.com' || host.endsWith('.openai.com')) return true;
-    if (host.endsWith('.openai.azure.com')) return true;
-    return false;
   } catch {
-    return false;
+    return '';
   }
 }
 
+/** OpenAI-compatible speech hosts that commonly expect a `voice` field. */
+export function isOpenAiStyleTtsHost(baseUrl: string): boolean {
+  const host = hostnameOfBaseUrl(baseUrl);
+  if (!host) return false;
+  if (host === 'api.openai.com') return true;
+  if (host === 'openai.com' || host.endsWith('.openai.com')) return true;
+  if (host.endsWith('.openai.azure.com')) return true;
+  return false;
+}
+
+/** Mistral hosts need a `voice_id` (shown in UI as the Voice field). */
+export function isMistralStyleTtsHost(baseUrl: string): boolean {
+  const host = hostnameOfBaseUrl(baseUrl);
+  if (!host) return false;
+  return host === 'api.mistral.ai' || host.endsWith('.mistral.ai');
+}
+
+/**
+ * Show the Voice field when the user opts in, or the host needs a voice id
+ * (OpenAI `voice` or Mistral `voice_id`).
+ */
 export function shouldOfferVoiceField(tts: TtsSettings, baseUrl: string): boolean {
   if (tts.showVoiceField) return true;
-  return isOpenAiStyleTtsHost(baseUrl);
+  if (isOpenAiStyleTtsHost(baseUrl)) return true;
+  if (isMistralStyleTtsHost(baseUrl)) return true;
+  // Voxtral model ids force voice UI even on custom/proxy base URLs.
+  const model = (tts.model || '').toLowerCase();
+  if (model.includes('voxtral')) return true;
+  return false;
 }
 
 /**

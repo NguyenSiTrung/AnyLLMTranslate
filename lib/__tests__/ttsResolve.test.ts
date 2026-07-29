@@ -206,7 +206,7 @@ describe('isOpenAiStyleTtsHost / shouldOfferVoiceField', () => {
     expect(isOpenAiStyleTtsHost('not-a-url')).toBe(false);
   });
 
-  it('offers voice for OpenAI host or showVoiceField', () => {
+  it('offers voice for OpenAI, Mistral, voxtral model, or showVoiceField', () => {
     expect(
       shouldOfferVoiceField(
         { ...DEFAULT_TTS_SETTINGS, showVoiceField: false },
@@ -218,11 +218,23 @@ describe('isOpenAiStyleTtsHost / shouldOfferVoiceField', () => {
         { ...DEFAULT_TTS_SETTINGS, showVoiceField: false },
         'https://api.mistral.ai/v1',
       ),
+    ).toBe(true);
+    expect(
+      shouldOfferVoiceField(
+        { ...DEFAULT_TTS_SETTINGS, showVoiceField: false, model: 'voxtral-mini-tts-2603' },
+        'https://proxy.example/v1',
+      ),
+    ).toBe(true);
+    expect(
+      shouldOfferVoiceField(
+        { ...DEFAULT_TTS_SETTINGS, showVoiceField: false },
+        'https://api.groq.com/openai/v1',
+      ),
     ).toBe(false);
     expect(
       shouldOfferVoiceField(
         { ...DEFAULT_TTS_SETTINGS, showVoiceField: true },
-        'https://api.mistral.ai/v1',
+        'https://api.groq.com/openai/v1',
       ),
     ).toBe(true);
   });

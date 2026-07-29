@@ -2,7 +2,12 @@
  * @vitest-environment node
  */
 import { describe, it, expect, vi } from 'vitest';
-import { fetchProviderSpeech } from '@/lib/tts/providerTts';
+import {
+  detectTtsDialect,
+  fetchProviderSpeech,
+  MISTRAL_VOXTRAL_MINI_TTS_MODEL,
+  normalizeMistralTtsModel,
+} from '@/lib/tts/providerTts';
 
 describe('fetchProviderSpeech', () => {
   it('posts to speech endpoint and returns base64', async () => {
@@ -136,6 +141,79 @@ describe('fetchProviderSpeech', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toMatch(/model/i);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('detects mistral dialect and normalizes voxtral model aliases', () => {
+    expect(detectTtsDialect('https://api.mistral.ai/v1', 'x')).toBe('mistral');
+    expect(detectTtsDialect('https://api.openai.com/v1', 'tts-1')).toBe('openai');
+    expect(detectTtsDialect('https://proxy.example/v1', 'voxtral-mini-tts-latest')).toBe(
+      'mistral',
+    );
+    expect(normalizeMistralTtsModel('voxtral-mini-tts-latest')).toBe(
+      MISTRAL_VOXTRAL_MINI_TTS_MODEL,
+    );
+    expect(normalizeMistralTtsModel('voxtral-mini-tts-lastest')).toBe(
+      MISTRAL_VOXTRAL_MINI_TTS_MODEL,
+    );
+    expect(normalizeMistralTtsModel('voxtral-mini-tts-2603')).toBe(
+      'voxtral-mini-tts-2603',
+    );
+  });
+
+  it('sends Mistral voice_id body and decodes audio_data JSON', async () => {
+    const audioB64 = btoa(String.fromCharCode(9, 8, 7));
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ audio_data: audioB64 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const result = await fetchProviderSpeech(
+      'Bonjour',
+      {
+        baseUrl: 'https://api.mistral.ai/v1',
+        apiKey: 'msk-test',
+        model: 'voxtral-mini-tts-latest',
+        voice: 'voice-abc',
+        rate: 1,
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.audioBase64).toBe(audioB64);
+      expect(result.mimeType).toBe('audio/mpeg');
+    }
+    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(call[0]).toBe('https://api.mistral.ai/v1/audio/speech');
+    const body = JSON.parse(call[1].body as string);
+    expect(body.model).toBe(MISTRAL_VOXTRAL_MINI_TTS_MODEL);
+    expect(body.voice_id).toBe('voice-abc');
+    expect(body).not.toHaveProperty('voice');
+    expect(body).not.toHaveProperty('speed');
+    expect(body.stream).toBe(false);
+  });
+
+  it('requires voice_id for Mistral without calling fetch', async () => {
+    const fetchImpl = vi.fn();
+    const result = await fetchProviderSpeech(
+      'Hi',
+      {
+        baseUrl: 'https://api.mistral.ai/v1',
+        apiKey: 'msk',
+        model: 'voxtral-mini-tts-2603',
+        voice: '',
+        rate: 1,
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/voice_id/i);
     }
     expect(fetchImpl).not.toHaveBeenCalled();
   });

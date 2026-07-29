@@ -379,7 +379,7 @@ function TtsSettingsGroup({
               <FieldGroup
                 label="Model"
                 htmlFor="tts-model"
-                hint="Free-text model id for POST /audio/speech"
+                hint="OpenAI: tts-1 · Mistral: voxtral-mini-tts-2603 (aliases like …-latest are normalized)"
               >
                 <div className="flex gap-2">
                   <Input
@@ -433,14 +433,14 @@ function TtsSettingsGroup({
                 checked={merged.showVoiceField}
                 onChange={(checked) => patch({ showVoiceField: checked })}
                 label="Show voice field"
-                description="Needed for OpenAI-style TTS voices. Hidden by default for other hosts."
+                description="OpenAI uses voice names (alloy…). Mistral Voxtral needs a voice_id from Console → Audio → Voices. Hidden by default for other hosts."
               />
 
               {showVoice && (
                 <FieldGroup
-                  label="Voice"
+                  label="Voice / voice_id"
                   htmlFor="tts-voice"
-                  hint="Omitted from the request when empty"
+                  hint="OpenAI: alloy/nova… · Mistral: paste voice_id from console (required)"
                 >
                   <Input
                     id="tts-voice"
@@ -448,7 +448,7 @@ function TtsSettingsGroup({
                     list="tts-voice-suggestions"
                     value={merged.voice}
                     onChange={(e) => patch({ voice: e.target.value })}
-                    placeholder="e.g. alloy"
+                    placeholder="alloy or mistral-voice-id"
                   />
                   <datalist id="tts-voice-suggestions">
                     {OPENAI_TTS_VOICE_SUGGESTIONS.map((v) => (
