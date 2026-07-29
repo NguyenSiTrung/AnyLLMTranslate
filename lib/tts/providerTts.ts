@@ -46,6 +46,16 @@ export async function fetchProviderSpeech(
     return { success: false, error: 'Nothing to speak' };
   }
 
+  const model = (creds.model ?? '').trim();
+  if (!model) {
+    return {
+      success: false,
+      error: 'TTS model is not set (Settings → Advanced → Speech)',
+    };
+  }
+
+  const voice = (creds.voice ?? '').trim();
+
   const url = speechEndpointFromBaseUrl(creds.baseUrl);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -54,13 +64,15 @@ export async function fetchProviderSpeech(
     headers.Authorization = `Bearer ${creds.apiKey}`;
   }
 
-  const body = {
-    model: creds.model,
+  const body: Record<string, unknown> = {
+    model,
     input,
-    voice: creds.voice,
     speed: creds.rate,
     response_format: 'mp3',
   };
+  if (voice) {
+    body.voice = voice;
+  }
 
   try {
     const res = await fetchImpl(url, {

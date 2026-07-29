@@ -67,4 +67,76 @@ describe('fetchProviderSpeech', () => {
       expect(result.error).toMatch(/bad key/);
     }
   });
+
+  it('omits voice from body when voice is empty', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(new Uint8Array([1]).buffer, {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      }),
+    );
+
+    await fetchProviderSpeech(
+      'Hello',
+      {
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'sk-test',
+        model: 'tts-1',
+        voice: '',
+        rate: 1.2,
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const body = JSON.parse(init.body as string);
+    expect(body.model).toBe('tts-1');
+    expect(body.speed).toBe(1.2);
+    expect(body).not.toHaveProperty('voice');
+  });
+
+  it('includes voice when non-empty', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(new Uint8Array([1]).buffer, {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      }),
+    );
+
+    await fetchProviderSpeech(
+      'Hello',
+      {
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'sk-test',
+        model: 'tts-1',
+        voice: 'alloy',
+        rate: 1,
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const body = JSON.parse(init.body as string);
+    expect(body.voice).toBe('alloy');
+  });
+
+  it('returns error when model is empty without calling fetch', async () => {
+    const fetchImpl = vi.fn();
+    const result = await fetchProviderSpeech(
+      'Hello',
+      {
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'sk-test',
+        model: '  ',
+        voice: 'alloy',
+        rate: 1,
+      },
+      fetchImpl as unknown as typeof fetch,
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toMatch(/model/i);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });
