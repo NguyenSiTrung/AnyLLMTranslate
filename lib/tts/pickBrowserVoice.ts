@@ -75,11 +75,11 @@ export function normalizeSpeechLang(code?: string | null): string | undefined {
 
   if (lower.includes('-')) {
     const [lang, region, ...rest] = lower.split('-');
-    if (!lang) return undefined;
+    if (!lang || !region) return undefined;
     if (rest.length > 0) {
-      return `${lang}-${region!.toUpperCase()}${rest.map((p) => `-${p}`).join('')}`;
+      return `${lang}-${region.toUpperCase()}${rest.map((p) => `-${p}`).join('')}`;
     }
-    return `${lang}-${region!.toUpperCase()}`;
+    return `${lang}-${region.toUpperCase()}`;
   }
 
   return lower;

@@ -33,7 +33,12 @@ import { NamedGlossarySuggestionsModal } from './components/NamedGlossarySuggest
 import { PopupFooter } from './components/PopupFooter';
 
 export default function App() {
-  const { settings, updateSetting, updateSubtitleSetting } = usePopupSettings();
+  const {
+    settings,
+    updateSetting,
+    updateSubtitleSetting,
+    isLoading: settingsLoading,
+  } = usePopupSettings();
   const tab = usePopupTab(settings, updateSetting);
   const { handleToggleTranslation } = useTranslationToggle({
     isTranslating: tab.isTranslating,
@@ -92,7 +97,8 @@ export default function App() {
 
   const providerReadiness = getPoolReadinessStatus(settings);
   const providerRecoveryMessage = getPoolRecoveryMessage(providerReadiness);
-  const shouldShowProviderRecovery = !providerReadiness.canTranslate && !tab.unsupportedPage;
+  const shouldShowProviderRecovery =
+    !settingsLoading && !providerReadiness.canTranslate && !tab.unsupportedPage;
 
   const sourceLanguages = LANGUAGES;
   const targetLanguages = LANGUAGES.filter((l) => l.code !== 'auto');

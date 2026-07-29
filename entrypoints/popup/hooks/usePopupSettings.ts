@@ -6,14 +6,22 @@ import { loadSettings, updateSettings } from '@/lib/config';
 
 export function usePopupSettings() {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     void (async () => {
       try {
         const loaded = await loadSettings();
-        setSettings(loaded);
+        if (mounted) {
+          setSettings(loaded);
+        }
       } catch {
         /* defaults */
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     })();
 
@@ -27,6 +35,7 @@ export function usePopupSettings() {
     };
     chrome.storage.onChanged.addListener(storageListener);
     return () => {
+      mounted = false;
       chrome.storage.onChanged.removeListener(storageListener);
     };
   }, []);
@@ -46,5 +55,5 @@ export function usePopupSettings() {
     [settings],
   );
 
-  return { settings, updateSetting, updateSubtitleSetting };
+  return { settings, updateSetting, updateSubtitleSetting, isLoading };
 }
