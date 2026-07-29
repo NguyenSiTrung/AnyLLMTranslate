@@ -14,7 +14,8 @@ import {
 const handlers = {
   onCopy: () => {},
   onRetry: () => {},
-  onSpeak: () => {},
+  onSpeakOriginal: () => {},
+  onSpeakTranslation: () => {},
   onGlossary: () => {},
   onPin: () => setPinned(!isPinned()),
   onClose: () => removeDialog(),

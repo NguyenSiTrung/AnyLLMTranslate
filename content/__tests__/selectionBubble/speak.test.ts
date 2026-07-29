@@ -10,17 +10,32 @@ vi.mock('@/lib/config', () => ({
 import { loadSettings } from '@/lib/config';
 import { SpeakController } from '@/content/selectionBubble/speak';
 
+function makeVoice(lang: string, name = `Voice ${lang}`): SpeechSynthesisVoice {
+  return {
+    lang,
+    name,
+    localService: true,
+    default: false,
+    voiceURI: name,
+  } as SpeechSynthesisVoice;
+}
+
 describe('SpeakController', () => {
   let speakMock: ReturnType<typeof vi.fn>;
   let cancelMock: ReturnType<typeof vi.fn>;
+  let getVoicesMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     speakMock = vi.fn();
     cancelMock = vi.fn();
+    getVoicesMock = vi.fn(() => [makeVoice('en-US'), makeVoice('vi-VN')]);
     vi.stubGlobal('speechSynthesis', {
       speak: speakMock,
       cancel: cancelMock,
       speaking: false,
+      getVoices: getVoicesMock,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
     });
     vi.stubGlobal(
       'SpeechSynthesisUtterance',
@@ -28,6 +43,7 @@ describe('SpeakController', () => {
         text: string;
         lang = '';
         rate = 1;
+        voice: SpeechSynthesisVoice | null = null;
         onend: (() => void) | null = null;
         onerror: (() => void) | null = null;
         constructor(text: string) {
@@ -42,18 +58,19 @@ describe('SpeakController', () => {
     vi.unstubAllGlobals();
   });
 
-  it('speaks text with lang', () => {
+  it('speaks text with matched voice for lang', async () => {
     const c = new SpeakController();
-    c.speak('hello', 'en');
+    await c.speak('hello', 'en');
     expect(speakMock).toHaveBeenCalledOnce();
     const utt = speakMock.mock.calls[0][0];
     expect(utt.text).toBe('hello');
-    expect(utt.lang).toBe('en');
+    expect(utt.lang).toBe('en-US');
+    expect(utt.voice?.lang).toBe('en-US');
   });
 
-  it('stop cancels synthesis', () => {
+  it('stop cancels synthesis', async () => {
     const c = new SpeakController();
-    c.speak('hello', 'en');
+    await c.speak('hello', 'en');
     c.stop();
     expect(cancelMock).toHaveBeenCalled();
     expect(c.isSpeaking()).toBe(false);
@@ -86,7 +103,10 @@ describe('SpeakController', () => {
     const result = await c.speakSmart('hello', 'vi');
     expect(result).toEqual({ backend: 'browser' });
     expect(speakMock).toHaveBeenCalledOnce();
-    expect(speakMock.mock.calls[0][0].rate).toBe(1.1);
+    const utt = speakMock.mock.calls[0][0];
+    expect(utt.rate).toBe(1.1);
+    expect(utt.lang).toBe('vi-VN');
+    expect(utt.voice?.lang).toBe('vi-VN');
   });
 
   it('speakSmart throws when disabled', async () => {

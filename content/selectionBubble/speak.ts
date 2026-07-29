@@ -10,6 +10,10 @@ import {
   resolveTtsBackend,
   clampRate,
 } from '@/lib/tts/resolveTtsBackend';
+import {
+  applyUtteranceVoice,
+  ensureSpeechVoicesReady,
+} from '@/lib/tts/pickBrowserVoice';
 import type { SynthesizeSpeechResult } from '@/types/messages';
 
 export type SpeakResult =
@@ -37,11 +41,11 @@ export class SpeakController {
     this.onSpeakingChange?.(next);
   }
 
-  /** Sync browser-only speak (tests + legacy). Prefer {@link speakSmart}. */
-  speak(text: string, lang?: string): void {
+  /** Browser-only speak (tests + legacy). Prefer {@link speakSmart}. */
+  async speak(text: string, lang?: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) return;
-    this.speakBrowser(trimmed, lang, 1);
+    await this.speakBrowser(trimmed, lang, 1);
   }
 
   /**
@@ -73,7 +77,7 @@ export class SpeakController {
         const providerError =
           e instanceof Error ? e.message : 'Provider TTS failed';
         try {
-          this.speakBrowser(trimmed, lang, clampRate(tts.rate));
+          await this.speakBrowser(trimmed, lang, clampRate(tts.rate));
           return {
             backend: 'browser',
             fallbackFromProvider: true,
@@ -85,19 +89,25 @@ export class SpeakController {
       }
     }
 
-    this.speakBrowser(trimmed, lang, clampRate(tts.rate));
+    await this.speakBrowser(trimmed, lang, clampRate(tts.rate));
     return { backend: 'browser' };
   }
 
-  private speakBrowser(text: string, lang?: string, rate = 1): void {
+  private async speakBrowser(
+    text: string,
+    lang?: string,
+    rate = 1,
+  ): Promise<void> {
     if (
       typeof speechSynthesis === 'undefined' ||
       typeof SpeechSynthesisUtterance === 'undefined'
     ) {
       throw new Error('Speech not supported in this browser');
     }
+
+    const voices = await ensureSpeechVoicesReady();
     const utt = new SpeechSynthesisUtterance(text);
-    if (lang) utt.lang = lang;
+    applyUtteranceVoice(utt, lang, voices);
     utt.rate = rate;
     utt.onend = () => {
       this.setSpeaking(false);

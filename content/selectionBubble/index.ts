@@ -31,6 +31,7 @@ export {
   getPrimaryText,
   getOriginalText,
   getTargetLanguage,
+  getSourceLanguage,
   __setDialogForTest,
 } from './shell';
 export type { ShellShowLoadingArgs } from './shell';

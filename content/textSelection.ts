@@ -23,6 +23,7 @@ import {
   getDialogEl,
   getOriginalText,
   getPrimaryText,
+  getSourceLanguage,
   getTargetLanguage,
   isPinned,
   removeDialog,
@@ -135,6 +136,30 @@ export function applySelectionResponse(
   });
 }
 
+async function handleSpeak(text: string, lang: string): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  try {
+    if (speakController.isSpeaking()) {
+      speakController.stop();
+      setSpeakingState(false);
+      return;
+    }
+    // When source is auto, omit lang so browser can still try; voice picker skips auto.
+    const speechLang = lang === 'auto' ? undefined : lang;
+    const result = await speakController.speakSmart(trimmed, speechLang);
+    if ('fallbackFromProvider' in result && result.fallbackFromProvider) {
+      showStatus('Using browser voice', 'info');
+    }
+  } catch (e) {
+    setSpeakingState(false);
+    showStatus(
+      e instanceof Error ? e.message : 'Speech not supported',
+      'error',
+    );
+  }
+}
+
 function buildHandlers(): BubbleActionHandlers {
   return {
     onClose: () => {
@@ -160,26 +185,11 @@ function buildHandlers(): BubbleActionHandlers {
       if (!lastSelectedText || !lastAnchor) return;
       await runSelectionTranslation(lastSelectedText, lastAnchor, lastRange);
     },
-    onSpeak: async () => {
-      const text = getPrimaryText();
-      if (!text) return;
-      try {
-        if (speakController.isSpeaking()) {
-          speakController.stop();
-          setSpeakingState(false);
-          return;
-        }
-        const result = await speakController.speakSmart(text, getTargetLanguage());
-        if ('fallbackFromProvider' in result && result.fallbackFromProvider) {
-          showStatus('Using browser voice', 'info');
-        }
-      } catch (e) {
-        setSpeakingState(false);
-        showStatus(
-          e instanceof Error ? e.message : 'Speech not supported',
-          'error',
-        );
-      }
+    onSpeakOriginal: async () => {
+      await handleSpeak(getOriginalText() || lastSelectedText, getSourceLanguage());
+    },
+    onSpeakTranslation: async () => {
+      await handleSpeak(getPrimaryText(), getTargetLanguage());
     },
     onGlossary: async () => {
       const source = getOriginalText() || lastSelectedText;

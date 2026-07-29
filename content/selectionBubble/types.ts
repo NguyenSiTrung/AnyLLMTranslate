@@ -33,12 +33,20 @@ export interface PositionResult {
   placement: BubblePlacement;
 }
 
-export type SelectionActionId = 'copy' | 'retry' | 'speak' | 'glossary';
+export type SelectionActionId =
+  | 'copy'
+  | 'retry'
+  | 'speak-original'
+  | 'speak-translation'
+  | 'glossary';
 
 export interface BubbleActionHandlers {
   onCopy: () => void | Promise<void>;
   onRetry: () => void | Promise<void>;
-  onSpeak: () => void | Promise<void>;
+  /** Speak the original (source) selection text. */
+  onSpeakOriginal: () => void | Promise<void>;
+  /** Speak the translated text. */
+  onSpeakTranslation: () => void | Promise<void>;
   onGlossary: () => void | Promise<void>;
   onPin: () => void;
   onClose: () => void;

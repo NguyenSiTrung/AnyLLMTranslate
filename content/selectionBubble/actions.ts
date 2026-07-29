@@ -8,7 +8,7 @@ import type { BubbleActionHandlers, SelectionActionId } from './types';
 export function buildFooterActions(args: {
   handlers: Pick<
     BubbleActionHandlers,
-    'onCopy' | 'onRetry' | 'onSpeak' | 'onGlossary'
+    'onCopy' | 'onRetry' | 'onSpeakOriginal' | 'onSpeakTranslation' | 'onGlossary'
   >;
   speaking?: boolean;
   disabled?: Partial<Record<SelectionActionId, boolean>>;
@@ -20,6 +20,7 @@ export function buildFooterActions(args: {
   const row = document.createElement('div');
   row.className = 'anyllm-selection-footer-actions';
 
+  const stopOrSpeak = args.speaking;
   const items: Array<{
     id: SelectionActionId;
     label: string;
@@ -29,10 +30,16 @@ export function buildFooterActions(args: {
     { id: 'copy', label: 'Copy', icon: 'copy', handler: args.handlers.onCopy },
     { id: 'retry', label: 'Retry', icon: 'retry', handler: args.handlers.onRetry },
     {
-      id: 'speak',
-      label: args.speaking ? 'Stop' : 'Speak',
-      icon: args.speaking ? 'stop' : 'speak',
-      handler: args.handlers.onSpeak,
+      id: 'speak-original',
+      label: stopOrSpeak ? 'Stop' : 'Speak original',
+      icon: stopOrSpeak ? 'stop' : 'speak',
+      handler: args.handlers.onSpeakOriginal,
+    },
+    {
+      id: 'speak-translation',
+      label: stopOrSpeak ? 'Stop' : 'Speak translation',
+      icon: stopOrSpeak ? 'stop' : 'speak',
+      handler: args.handlers.onSpeakTranslation,
     },
     {
       id: 'glossary',
@@ -53,7 +60,26 @@ export function buildFooterActions(args: {
     if (args.disabled?.[item.id]) {
       btn.disabled = true;
     }
-    btn.appendChild(createIcon(item.icon));
+    // Visual hint so two speak buttons are distinguishable without text labels
+    if (item.id === 'speak-original' && !stopOrSpeak) {
+      btn.setAttribute('data-speak-target', 'original');
+      const badge = document.createElement('span');
+      badge.className = 'anyllm-selection-speak-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = 'A';
+      btn.appendChild(createIcon(item.icon));
+      btn.appendChild(badge);
+    } else if (item.id === 'speak-translation' && !stopOrSpeak) {
+      btn.setAttribute('data-speak-target', 'translation');
+      const badge = document.createElement('span');
+      badge.className = 'anyllm-selection-speak-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      badge.textContent = '文';
+      btn.appendChild(createIcon(item.icon));
+      btn.appendChild(badge);
+    } else {
+      btn.appendChild(createIcon(item.icon));
+    }
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       void item.handler();

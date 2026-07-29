@@ -88,14 +88,18 @@ function rebuildFooter(): void {
     handlers: {
       onCopy: currentHandlers.onCopy,
       onRetry: currentHandlers.onRetry,
-      onSpeak: currentHandlers.onSpeak,
+      onSpeakOriginal: currentHandlers.onSpeakOriginal,
+      onSpeakTranslation: currentHandlers.onSpeakTranslation,
       onGlossary: currentHandlers.onGlossary,
     },
     speaking,
     disabled: {
       copy: lastMode === 'loading' || (!lastTranslatedText && lastMode !== 'error'),
       retry: lastMode === 'loading',
-      speak: lastMode === 'loading' || !lastTranslatedText,
+      'speak-original':
+        lastMode === 'loading' || !lastOriginalText,
+      'speak-translation':
+        lastMode === 'loading' || !lastTranslatedText,
       glossary: lastMode === 'loading' || !lastTranslatedText || !lastOriginalText,
     },
   });
@@ -369,6 +373,10 @@ export function getTargetLanguage(): string {
   return targetLanguage;
 }
 
+export function getSourceLanguage(): string {
+  return sourceLanguage;
+}
+
 /** Test-only: set module dialog reference for applySelectionResponse unit tests. */
 export function __setDialogForTest(el: HTMLElement | null): void {
   dialogEl = el;
@@ -376,7 +384,8 @@ export function __setDialogForTest(el: HTMLElement | null): void {
     currentHandlers = currentHandlers ?? {
       onCopy: () => {},
       onRetry: () => {},
-      onSpeak: () => {},
+      onSpeakOriginal: () => {},
+      onSpeakTranslation: () => {},
       onGlossary: () => {},
       onPin: () => {},
       onClose: () => {},
