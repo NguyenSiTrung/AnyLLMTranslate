@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-07-20 web-translate-hardening_20260720 archived (72 archived / 0 active) -->
-<!-- conductor-refresh: 2026-07-24 all (confirmed 72 archived / 0 active; 705 TCs pass / 2 fail; tsc 0; lint 0; Beads 7uk+zg4 open, s3t in_progress; setup-wizard 4-step + thinking probe + tab-scoped popup + empty-model fix shipped without Conductor tracks) -->
+<!-- conductor-refresh: 2026-07-29 all (confirmed 72 archived / 0 active; 620 pass / 0 fail; tsc 0; lint 2; Beads zg4+7uk open, 0 in_progress; TTS hybrid/per-lang/dual-speak + ASR re-align cache + Active-features jump shipped without Conductor tracks) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.

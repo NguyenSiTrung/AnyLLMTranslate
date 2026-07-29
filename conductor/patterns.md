@@ -1,7 +1,28 @@
-<!-- conductor-refresh: 2026-07-24 all (705 TCs pass / 2 fail; lint 0; tsc 0; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress; setup-wizard / thinkingDetection / tab-scope / empty-model elevated) -->
+<!-- conductor-refresh: 2026-07-29 all (620 pass / 0 fail; lint 2; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; elevated TTS hybrid/per-lang/dual-speak, Voxtral, ASR re-align cache, Advanced jump nav) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## TTS hybrid credentials, dual Speak, per-language stacks (from: TTS wave, 2026-07-29)
+- **Credentials never enter the page:** content calls background `SYNTHESIZE_SPEECH`; provider fetch stays in SW (`lib/tts/providerTts.ts`). (extends Phase B `34bb4c2`)
+- **Hybrid source is product law:** `credentialSource: 'pool' | 'custom'` — pool uses selected `poolProviderId` (empty = first usable enabled provider); custom uses `customBaseUrl`/`customApiKey` for Speak only. Free-text `model`; empty `voice` omitted from body; model required on provider path. (from: `2026-07-29-tts-hybrid-credentials-ux`, commits `682d052`…`c4d931d`)
+- **Dual Speak buttons:** selection bubble exposes original + translation Speak; browser path picks voice via pure `pickBrowserVoice` matching the speak language (translation vs source). Prefer language match over default system voice. (from: `54206bb`, `9e6334f`)
+- **Per-language stacks:** `languageOverrides[]` match exact normalized code, then base language, else inherit global `tts.*` via `mergeTtsSettings` / resolve stack. Missing override fields inherit — do not send sentinels. (from: `6b19b49`, `2026-07-29-tts-per-language-stacks`)
+- **Voxtral dialect:** Mistral speech uses `voice_id` + `audio_data` shape; **Load voices** via `listTtsVoices` — do not assume OpenAI voice enum only. (from: `bdb0eaa`, `2d9edc8`)
+- **Settings snapshot rule:** `tts` is top-level `ExtensionSettings` — every `extractSettings` / `toSettings` / export path **must** include full hybrid + `languageOverrides` fields or persist/export silently breaks.
+- **Lint gotcha:** avoid `!` on optional split segments in `pickBrowserVoice` lang normalize (2 open eslint errors as of 2026-07-29 refresh) — prefer early-return / empty-string defaults.
+
+## YouTube ASR AI re-align cache (from: ASR realign cache, 2026-07-27)
+- **Extension-origin IDB only:** never open the re-align store from content/page origin. Pure keys/LRU in `lib/youtubeAsrRealignCache.ts`; store in `services/youtubeAsrRealignStore.ts`. Key `ai:{videoId}:{lang}:{contentHash}`; GET bumps `lastUsedAt`; SAVE only on full AI success; LIST summaries without cues; Clear all does not touch translation cache.
+- **Progress is staged:** `ASR_REALIGN_PROGRESS` to the tab (stage, batch i/n, “Using saved re-align” on hit). Options **Saved caption re-aligns** manager for list/delete/clear/force re-run.
+- **YouTube CC first-load:** recover CC-on intercepts and unify ASR path; hide native CC under bilingual overlay so double-draw does not flash. (from: `e05a5b2`, `1ab54e2`, `1b672ed`)
+
+## Advanced Active features jump nav (from: Advanced jump nav, 2026-07-27)
+- **Pure scroll helper owns targeting:** `scrollToAdvancedSection` maps chip ids → section anchors; UI chips stay dumb. Cache overview panel is actionable (clear / jump), not display-only. (from: `55e557d`, `adecd7a`, `889708f`)
+
+## Connection test empty-content failure (from: e513fdd, 2026-07-2x)
+- **HTTP 200 + empty message is failure:** `providerTester` / OpenAI-compatible path must fail connection tests when LLM content is blank — “test OK but translate empty” is a product bug class.
+- **Popup footer from pool keys:** readiness chips/footer derive from pool key test status helpers, not legacy single-provider readiness alone. (from: `7beefc4`)
 
 ## Setup wizard 4-step B+C-lite (from: setup-wizard redesign, 2026-07-24)
 - **Step model is fixed:** welcome → connect → verify → ready. Do not reintroduce a 5-step provider/test/language/done split; language lives on **Verify**. (from: `2026-07-24-setup-wizard-redesign`, commits `decc568`…`b920979`)
@@ -40,10 +61,10 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Actions are pure-ish controllers:** Copy / Retry / Speak / Glossary / Pin wire through `actions.ts`; glossary target is **global** `settings.glossary` only (named lists stay subtitle-scoped).
 - **A11y:** real `<button>`s, focus rings, dialog semantics (not `role="tooltip"` with interactive children). (from: selection-bubble-full-redesign, 2026-07-23)
 
-## Selection Speak / TTS (from: selection TTS Phase B, 2026-07-23)
-- **Credentials never enter the page:** content calls background `SYNTHESIZE_SPEECH`; OpenAI-compatible `/audio/speech` fetch lives in SW (`lib/tts/providerTts.ts`).
-- **Resolve then fail-open:** pure `resolveTtsBackend` / `hasProviderTtsCredentials` — `preferredBackend: auto` → provider if pool has baseUrl+usable key else browser; provider error → browser + user-visible “Using browser voice” status (`speakSmart`).
-- **Settings snapshot rule:** `tts` is a top-level `ExtensionSettings` key — every `extractSettings` / `toSettings` / export path **must** include it or TypeScript and persist/export silently break. (from: 34bb4c2 + settingsStore TSC, 2026-07-23)
+## Selection Speak / TTS (from: selection TTS Phase B, 2026-07-23; extended 2026-07-29)
+- **Credentials never enter the page:** content calls background `SYNTHESIZE_SPEECH`; provider fetch lives in SW (`lib/tts/providerTts.ts`).
+- **Resolve then fail-open:** pure `resolveTtsBackend` — `preferredBackend: auto` → provider when hybrid credentials resolve else browser; provider error → browser + user-visible “Using browser voice” status (`speakSmart`).
+- **See also top section** “TTS hybrid credentials, dual Speak, per-language stacks” for 2026-07-29 product law (pool|custom, dual buttons, languageOverrides, Voxtral).
 
 ## thinkingMode / Gemini effort (from: thinkingMode + Google AI Studio, 2026-07-22/23)
 - **`auto` means omit:** do not send thinking fields when mode is auto so the model keeps server defaults (`lib/thinkingMode.ts`).

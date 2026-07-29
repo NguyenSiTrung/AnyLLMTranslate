@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-24 all (705 TCs pass / 2 fail; lint 0; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress; thinkingDetection pure helpers) -->
+<!-- conductor-refresh: 2026-07-29 all (620 pass / 0 fail; lint 2 pickBrowserVoice; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads zg4+7uk open; TTS hybrid/per-lang + listTtsVoices) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -134,9 +134,10 @@
 - Production extension build (`.output/chrome-mv3`) is ≈ **3.5 MB** total (`du`); bridge is external
 
 ### Why no dedicated TTS / speech package?
-- Selection **Speak** uses the browser **Web Speech API** (`speechSynthesis`) for zero-dependency offline voices
-- Optional **OpenAI-compatible** TTS hits provider `/audio/speech` from the **background** service worker only (keys never enter content scripts)
-- Pure resolve helpers in `lib/tts/` — no new npm deps
+- Selection **Speak** uses the browser **Web Speech API** (`speechSynthesis`) for zero-dependency offline voices, with pure `pickBrowserVoice` matching speak language
+- Optional provider TTS hits OpenAI-compatible `/audio/speech` (plus Mistral Voxtral dialect) from the **background** service worker only (keys never enter content scripts)
+- **Hybrid credentials** (`pool` | `custom`) and **per-language stacks** (`languageOverrides`) are pure settings + resolve helpers — no second credential store UI and no new npm deps
+- Pure modules in `lib/tts/`: `resolveTtsBackend`, `providerTts`, `pickBrowserVoice`, `listTtsVoices`
 
 ### Why thinkingMode is request-shape, not a new SDK?
 - Hosted models differ: NIM/vLLM style `chat_template_kwargs.enable_thinking` vs Google AI Studio `reasoning_effort`
@@ -155,4 +156,4 @@
 - Pure `lib/thinkingDetection.ts` inspects `reasoning_content` and `<think>` tags; `providerTester` only wires request shape + UI summary
 - Same pure-lib style as `thinkingMode.ts` / multi-model — unit-testable without chrome or network
 
-- Quality gates snapshot (2026-07-24, post setup-wizard + thinking probe): **705** Vitest TCs passed / **2** fail across **156** test files (**707** TCs total); **eslint 0** errors; `tsc --noEmit` **0** errors; build ≈ **3.6 MB**.
+- Quality gates snapshot (2026-07-29, post TTS hybrid/per-lang + ASR re-align cache + suite trim): **620** Vitest TCs passed / **0** fail across **163** test files; **eslint 2** errors (`lib/tts/pickBrowserVoice.ts` non-null assertions); `tsc --noEmit` **0** errors; build ≈ **3.6 MB** (3.68 MB reported).

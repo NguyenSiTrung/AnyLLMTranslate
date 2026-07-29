@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-24 all (no workflow content drift; quality gates + setup-wizard/thinking/tab-scope documented in product/tech-stack/patterns) -->
+<!-- conductor-refresh: 2026-07-29 all (no workflow content drift; quality gates + TTS/ASR ships documented in product/tech-stack/patterns) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
