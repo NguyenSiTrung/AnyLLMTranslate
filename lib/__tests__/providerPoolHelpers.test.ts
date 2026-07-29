@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProviderConfig,
   canRunConnectionTest,
+  derivePopupConnectionStatus,
   getCredentialKey,
+  getProviderTestStatus,
+  toPopupConnectionStatus,
 } from '../providerPoolHelpers';
 import { createPoolCursor } from '../poolCursor';
 import { reorderByIndex, moveProviderById } from '../poolReorder';
@@ -101,5 +104,45 @@ describe('provider pool UI and operational helpers', () => {
       state: 'not-ready',
       canTranslate: false,
     });
+  });
+
+  it('maps pool lastTestResult to popup footer connection status (not legacy only)', () => {
+    const successfulKey = makeProvider({
+      keys: [
+        {
+          id: 'k1',
+          apiKey: 'sk-test',
+          maxRpm: 60,
+          concurrencyLimit: 0,
+          interval: 0,
+          enabled: true,
+          lastTestResult: { success: true, at: 1, latencyMs: 120 },
+        },
+      ],
+    });
+    expect(getProviderTestStatus(successfulKey).state).toBe('healthy');
+    // Legacy mirror still red/error must not win over a successful pool key test.
+    expect(derivePopupConnectionStatus(successfulKey, 'error')).toBe('success');
+    expect(toPopupConnectionStatus('healthy', 'error')).toBe('success');
+
+    const failedKey = makeProvider({
+      keys: [
+        {
+          id: 'k1',
+          apiKey: 'sk-bad',
+          maxRpm: 60,
+          concurrencyLimit: 0,
+          interval: 0,
+          enabled: true,
+          lastTestResult: { success: false, at: 1, error: '401' },
+        },
+      ],
+    });
+    expect(derivePopupConnectionStatus(failedKey, 'success')).toBe('error');
+
+    const untested = makeProvider();
+    expect(getProviderTestStatus(untested).state).toBe('untested');
+    expect(derivePopupConnectionStatus(untested, 'error')).toBe('error');
+    expect(derivePopupConnectionStatus(undefined, 'success')).toBe('success');
   });
 });

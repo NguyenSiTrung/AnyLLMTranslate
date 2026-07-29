@@ -4,6 +4,7 @@ import type { ThemeName, DisplayMode } from '@/types/config';
 import { LANGUAGES } from '@/lib/languages';
 import { PREDEFINED_CATEGORIES, resolveCategorySource } from '@/lib/categories';
 import { getPoolReadinessStatus, getPoolRecoveryMessage } from '@/lib/providerReadiness';
+import { derivePopupConnectionStatus } from '@/lib/providerPoolHelpers';
 import {
   getNamedListById,
   pushEntriesIntoList,
@@ -84,7 +85,10 @@ export default function App() {
   const activeModel = activePoolProvider?.model || settings.provider.model;
   const activeDisplayName =
     activePoolProvider?.displayName || providerPreset?.displayName || settings.provider.displayName;
-  const connectionStatus = settings.provider.connectionStatus ?? 'unknown';
+  const connectionStatus = derivePopupConnectionStatus(
+    activePoolProvider,
+    settings.provider.connectionStatus ?? 'unknown',
+  );
 
   const providerReadiness = getPoolReadinessStatus(settings);
   const providerRecoveryMessage = getPoolRecoveryMessage(providerReadiness);

@@ -81,3 +81,29 @@ export function getProviderTestStatus(provider: PoolProvider): {
   const failures = results.slice().sort((a, b) => b.at - a.at);
   return { state: 'failed', result: failures[0] };
 }
+
+export type PopupConnectionStatus = 'unknown' | 'success' | 'error';
+
+/**
+ * Map pool test status to the popup footer connection-dot values.
+ * Pool key tests persist `lastTestResult` only; they do not update legacy
+ * `settings.provider.connectionStatus`. Prefer pool results, fall back to
+ * legacy when the active provider has never been tested.
+ */
+export function toPopupConnectionStatus(
+  testState: 'healthy' | 'failed' | 'untested',
+  legacyFallback: PopupConnectionStatus = 'unknown',
+): PopupConnectionStatus {
+  if (testState === 'healthy') return 'success';
+  if (testState === 'failed') return 'error';
+  return legacyFallback;
+}
+
+/** Resolve footer connection status for the active pool provider. */
+export function derivePopupConnectionStatus(
+  provider: PoolProvider | undefined,
+  legacyFallback: PopupConnectionStatus = 'unknown',
+): PopupConnectionStatus {
+  if (!provider) return legacyFallback;
+  return toPopupConnectionStatus(getProviderTestStatus(provider).state, legacyFallback);
+}
