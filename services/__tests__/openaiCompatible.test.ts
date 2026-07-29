@@ -69,6 +69,39 @@ describe('OpenAICompatibleService', () => {
       expect(result.translations.get('p2')).toBe('Tạm biệt');
     });
 
+    it('returns a diagnostic empty-response error when content is null', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () =>
+          Promise.resolve({
+            id: 'chatcmpl-empty',
+            choices: [
+              {
+                message: { role: 'assistant', content: null },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 42, completion_tokens: 0, total_tokens: 42 },
+          }),
+        text: () => Promise.resolve(''),
+      });
+
+      const service = new OpenAICompatibleService(mockConfigWithKey);
+      const result = await service.translate({
+        texts: new Map([['p1', 'Hello']]),
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Empty response from LLM/i);
+      expect(result.error).toMatch(/content=null/);
+      expect(result.error).toMatch(/completion_tokens=0/);
+      expect(result.error).toMatch(/model id is correct/i);
+    });
+
     it('sets Authorization only when an API key is provided', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
       await new OpenAICompatibleService(mockConfig).translate({

@@ -367,10 +367,11 @@ async function testTranslation(
     }
 
     const json = (await response.json()) as {
-      choices?: { message?: { content?: string; reasoning_content?: string } }[];
+      choices?: { message?: { content?: string | null; reasoning_content?: string } }[];
+      usage?: { completion_tokens?: number };
     };
     const message = json.choices?.[0]?.message;
-    const rawContent = message?.content ?? '';
+    const rawContent = typeof message?.content === 'string' ? message.content : '';
     const signals = detectThinkingSignals({ content: rawContent, message });
     const thinkingResult = evaluateThinkingProbe({
       mode,
@@ -382,6 +383,24 @@ async function testTranslation(
     });
 
     const sample = stripThinkTags(rawContent);
+
+    // HTTP 200 with null/empty content is a common proxy failure mode (e.g. model
+    // listed but not actually serving tokens). Treat as translation failure so
+    // the settings test does not report OK when live translate would fail.
+    if (!sample.trim()) {
+      const completionTokens = json.usage?.completion_tokens;
+      const hint =
+        completionTokens === 0
+          ? ' Provider returned 0 completion tokens — the model may be unavailable or misconfigured on this endpoint.'
+          : ' Try another model from the list, or verify the proxy/account can serve this model.';
+      return {
+        name: 'translation',
+        success: false,
+        latencyMs,
+        error: `Empty response from LLM.${hint}`,
+        data: { sample: '', thinking: thinkingResult } satisfies TranslationStepData,
+      };
+    }
 
     return {
       name: 'translation',

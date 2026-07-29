@@ -148,7 +148,10 @@ export interface ChatCompletionResponse {
   choices: Array<{
     message: {
       role: string;
-      content: string;
+      /** Some proxies return `null` when the model produces no tokens. */
+      content: string | null;
+      /** DeepSeek-R1 / Qwen2API-style separate reasoning channel. */
+      reasoning_content?: string | null;
     };
     finish_reason: string;
   }>;

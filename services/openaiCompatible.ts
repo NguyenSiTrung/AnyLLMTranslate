@@ -187,19 +187,38 @@ export class OpenAICompatibleService implements TranslationService {
     // We deliberately do NOT wrap it in try/catch — those errors must propagate
     // to the pool's failover layer (FR-1).
     const response = await this.fetchCompletion(completionRequest);
-    let responseText = response.choices[0]?.message?.content ?? '';
+    const rawMessageContent = response.choices[0]?.message?.content;
+    let responseText = typeof rawMessageContent === 'string' ? rawMessageContent : '';
 
     if (isDebugLoggingEnabled()) {
-      console.log('AnyLLMTranslate: LLM Response', { responseText });
+      console.log('AnyLLMTranslate: LLM Response', {
+        responseText,
+        finishReason: response.choices[0]?.finish_reason,
+        usage: response.usage,
+        contentType: rawMessageContent === null ? 'null' : typeof rawMessageContent,
+      });
     }
 
     // --- Content problems below: these return {success:false} (no failover) ---
 
     if (!responseText.trim()) {
+      const completionTokens = response.usage?.completion_tokens;
+      const finishReason = response.choices[0]?.finish_reason;
+      const details: string[] = [];
+      if (rawMessageContent === null) details.push('content=null');
+      if (typeof completionTokens === 'number') {
+        details.push(`completion_tokens=${completionTokens}`);
+      }
+      if (finishReason) details.push(`finish_reason=${finishReason}`);
+      const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
       return {
         success: false,
         translations: new Map(),
-        error: 'Empty response from LLM',
+        error:
+          `Empty response from LLM${suffix}. ` +
+          'The endpoint accepted the request but returned no text. ' +
+          'Check that the model id is correct and that this provider actually serves that model ' +
+          '(try another model from Settings → Test connection).',
       };
     }
 

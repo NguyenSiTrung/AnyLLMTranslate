@@ -163,4 +163,31 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.verdict).toBe('controls-rejected');
     expect(translationCalls).toBe(2);
   });
+
+  it('fails translation step when HTTP 200 returns null/empty content', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/models')) return okJson({ data: [{ id: 'qwen3.8-max-preview' }] });
+      const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
+      if (body.max_tokens === 1) {
+        // Ping may still be 200 with empty body on broken proxy models.
+        return okJson({
+          choices: [{ message: { content: null } }],
+          usage: { completion_tokens: 0 },
+        });
+      }
+      return okJson({
+        choices: [{ message: { role: 'assistant', content: null }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 36, completion_tokens: 0, total_tokens: 36 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await testConnection(baseConfig({ model: 'qwen3.8-max-preview' }));
+    expect(result.overall).toBe(false);
+    const translation = result.steps.find((s) => s.name === 'translation');
+    expect(translation?.success).toBe(false);
+    expect(translation?.error).toMatch(/Empty response from LLM/i);
+    expect(translation?.error).toMatch(/0 completion tokens/i);
+  });
 });
