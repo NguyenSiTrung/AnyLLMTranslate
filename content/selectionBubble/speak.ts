@@ -13,13 +13,20 @@ import {
 import {
   applyUtteranceVoice,
   ensureSpeechVoicesReady,
+  normalizeSpeechLang,
+  pickBrowserVoice,
 } from '@/lib/tts/pickBrowserVoice';
 import type { SynthesizeSpeechResult } from '@/types/messages';
 
 export type SpeakResult =
   | { backend: 'browser' }
   | { backend: 'provider' }
-  | { backend: 'browser'; fallbackFromProvider: true; providerError: string };
+  | { backend: 'browser'; fallbackFromProvider: true; providerError: string }
+  | {
+      backend: 'browser';
+      preferredOverProvider: true;
+      reason: 'matched-browser-voice';
+    };
 
 export class SpeakController {
   private speaking = false;
@@ -69,7 +76,25 @@ export class SpeakController {
       throw new Error('Speech is disabled in Settings → Advanced');
     }
 
+    // Provider TTS (OpenAI/Mistral) uses a single configured voice and does not
+    // switch language by BCP-47. When the caller passes a concrete lang and the
+    // browser has a matching installed voice, prefer browser so Speak original
+    // vs Speak translation can use different languages.
     if (backend === 'provider') {
+      const speechLang = normalizeSpeechLang(lang);
+      if (speechLang) {
+        const voices = await ensureSpeechVoicesReady();
+        const matched = pickBrowserVoice(voices, speechLang);
+        if (matched) {
+          await this.speakBrowser(trimmed, speechLang, clampRate(tts.rate));
+          return {
+            backend: 'browser',
+            preferredOverProvider: true,
+            reason: 'matched-browser-voice',
+          };
+        }
+      }
+
       try {
         await this.speakProvider(trimmed, lang);
         return { backend: 'provider' };

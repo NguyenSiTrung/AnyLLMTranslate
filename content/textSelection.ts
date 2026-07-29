@@ -150,6 +150,11 @@ async function handleSpeak(text: string, lang: string): Promise<void> {
     const result = await speakController.speakSmart(trimmed, speechLang);
     if ('fallbackFromProvider' in result && result.fallbackFromProvider) {
       showStatus('Using browser voice', 'info');
+    } else if (
+      'preferredOverProvider' in result &&
+      result.preferredOverProvider
+    ) {
+      showStatus('Using browser voice for this language', 'info');
     }
   } catch (e) {
     setSpeakingState(false);

@@ -125,4 +125,73 @@ describe('SpeakController', () => {
     const c = new SpeakController();
     await expect(c.speakSmart('hello')).rejects.toThrow(/disabled/i);
   });
+
+  it('speakSmart prefers browser voice matching lang over provider TTS', async () => {
+    const sendMessage = vi.fn();
+    vi.stubGlobal('chrome', {
+      runtime: { sendMessage },
+    });
+
+    vi.mocked(loadSettings).mockResolvedValue({
+      tts: {
+        enabled: true,
+        preferredBackend: 'provider',
+        model: 'voxtral-mini-tts-2603',
+        voice: 'en-voice-id',
+        rate: 1,
+        credentialSource: 'pool',
+        poolProviderId: '',
+        customBaseUrl: '',
+        customApiKey: '',
+        showVoiceField: true,
+      },
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'Mistral',
+          baseUrl: 'https://api.mistral.ai/v1',
+          model: 'mistral-small',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'msk',
+              maxRpm: 0,
+              concurrencyLimit: 1,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+      provider: {
+        preset: 'custom',
+        baseUrl: 'https://api.mistral.ai/v1',
+        apiKey: 'msk',
+        model: '',
+        temperature: 0.3,
+        maxTokens: 4096,
+        displayName: 'Mistral',
+        connectionStatus: 'unknown',
+        requiresApiKey: true,
+      },
+    } as never);
+
+    const c = new SpeakController();
+    const result = await c.speakSmart('Xin chào', 'vi');
+    expect(result).toEqual({
+      backend: 'browser',
+      preferredOverProvider: true,
+      reason: 'matched-browser-voice',
+    });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(speakMock).toHaveBeenCalledOnce();
+    const utt = speakMock.mock.calls[0][0];
+    expect(utt.text).toBe('Xin chào');
+    expect(utt.lang).toBe('vi-VN');
+    expect(utt.voice?.lang).toBe('vi-VN');
+  });
 });
