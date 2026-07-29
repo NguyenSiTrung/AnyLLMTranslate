@@ -37,6 +37,7 @@ import {
   OPENAI_TTS_VOICE_SUGGESTIONS,
   type ExtensionSettings,
   type TtsCredentialSource,
+  type TtsLanguageOverride,
   type TtsPreferredBackend,
   type TtsSettings,
 } from '@/types/config';
@@ -45,6 +46,7 @@ import {
   pickTtsCredentials,
   shouldOfferVoiceField,
 } from '@/lib/tts/resolveTtsBackend';
+import { getTargetLanguages } from '@/lib/languages';
 import { listProviderModels } from '@/services/providerTester';
 import {
   listTtsVoices,
@@ -143,6 +145,15 @@ const TTS_CREDENTIAL_SOURCE_OPTIONS: { value: TtsCredentialSource; label: string
   { value: 'custom', label: 'Custom TTS endpoint' },
 ];
 
+const TTS_OVERRIDE_CREDENTIAL_OPTIONS: {
+  value: '' | TtsCredentialSource;
+  label: string;
+}[] = [
+  { value: '', label: 'Inherit global' },
+  { value: 'pool', label: 'Pool provider' },
+  { value: 'custom', label: 'Custom TTS endpoint' },
+];
+
 const TTS_ISH_MODEL_RE = /tts|speech|audio|voice/i;
 
 function sortTtsModelChoices(ids: string[]): string[] {
@@ -153,6 +164,186 @@ function sortTtsModelChoices(ids: string[]): string[] {
     else rest.push(id);
   }
   return [...preferred, ...rest];
+}
+
+function normalizedOverrideLang(code: string): string {
+  return code.trim().toLowerCase().replace(/_/g, '-');
+}
+
+function isDuplicateLanguage(
+  rows: TtsLanguageOverride[],
+  index: number,
+  language: string,
+): boolean {
+  const n = normalizedOverrideLang(language);
+  if (!n) return false;
+  return rows.some(
+    (r, i) => i !== index && normalizedOverrideLang(r.language) === n,
+  );
+}
+
+function TtsLanguageOverrideRow({
+  row,
+  index,
+  rows,
+  globalModel,
+  globalVoice,
+  enabledProviders,
+  onChange,
+  onRemove,
+}: {
+  row: TtsLanguageOverride;
+  index: number;
+  rows: TtsLanguageOverride[];
+  globalModel: string;
+  globalVoice: string;
+  enabledProviders: ExtensionSettings['providers'];
+  onChange: (next: TtsLanguageOverride) => void;
+  onRemove: () => void;
+}) {
+  const languageOptions = useMemo(
+    () =>
+      getTargetLanguages().map((l) => ({
+        value: l.code,
+        label: `${l.name} (${l.code})`,
+      })),
+    [],
+  );
+
+  const credSource = row.credentialSource ?? '';
+  const duplicate = isDuplicateLanguage(rows, index, row.language);
+  const langInList = languageOptions.some((o) => o.value === row.language);
+  const selectOptions = langInList
+    ? languageOptions
+    : row.language
+      ? [{ value: row.language, label: row.language }, ...languageOptions]
+      : languageOptions;
+
+  const patchRow = (partial: Partial<TtsLanguageOverride>) => {
+    const next = { ...row, ...partial };
+    if (partial.language != null && isDuplicateLanguage(rows, index, partial.language)) {
+      return;
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <FieldGroup label="Language" htmlFor={`tts-lang-${index}`}>
+            <Select
+              id={`tts-lang-${index}`}
+              value={row.language}
+              onChange={(e) => {
+                const language = e.target.value;
+                if (isDuplicateLanguage(rows, index, language)) return;
+                patchRow({ language });
+              }}
+              options={selectOptions}
+            />
+            {duplicate && (
+              <p className="mt-1 text-xs text-rose-400/90">
+                This language is already configured in another row.
+              </p>
+            )}
+          </FieldGroup>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-6 shrink-0 text-zinc-400 hover:text-rose-300"
+          onClick={onRemove}
+        >
+          Remove
+        </Button>
+      </div>
+
+      <FieldGroup label="Credentials" htmlFor={`tts-lang-cred-${index}`}>
+        <Select
+          id={`tts-lang-cred-${index}`}
+          value={credSource}
+          onChange={(e) => {
+            const v = e.target.value as '' | TtsCredentialSource;
+            if (!v) {
+              const { credentialSource: _c, poolProviderId: _p, customBaseUrl: _u, customApiKey: _k, ...rest } =
+                row;
+              onChange({ ...rest, language: row.language });
+              return;
+            }
+            patchRow({ credentialSource: v });
+          }}
+          options={TTS_OVERRIDE_CREDENTIAL_OPTIONS.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
+        />
+      </FieldGroup>
+
+      {credSource === 'pool' && (
+        <FieldGroup label="Pool provider" htmlFor={`tts-lang-pool-${index}`}>
+          <Select
+            id={`tts-lang-pool-${index}`}
+            value={row.poolProviderId ?? ''}
+            onChange={(e) => patchRow({ poolProviderId: e.target.value })}
+            options={[
+              { value: '', label: 'First available provider' },
+              ...enabledProviders.map((p) => ({
+                value: p.id,
+                label: `${p.displayName || p.id} · ${p.baseUrl}`,
+              })),
+            ]}
+          />
+        </FieldGroup>
+      )}
+
+      {credSource === 'custom' && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FieldGroup label="Custom base URL" htmlFor={`tts-lang-url-${index}`}>
+            <Input
+              id={`tts-lang-url-${index}`}
+              type="url"
+              value={row.customBaseUrl ?? ''}
+              onChange={(e) => patchRow({ customBaseUrl: e.target.value })}
+              placeholder="https://api.example.com/v1"
+            />
+          </FieldGroup>
+          <FieldGroup label="Custom API key" htmlFor={`tts-lang-key-${index}`}>
+            <Input
+              id={`tts-lang-key-${index}`}
+              type="password"
+              autoComplete="off"
+              value={row.customApiKey ?? ''}
+              onChange={(e) => patchRow({ customApiKey: e.target.value })}
+              placeholder="Optional if host needs no key"
+            />
+          </FieldGroup>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <FieldGroup label="Model" htmlFor={`tts-lang-model-${index}`}>
+          <Input
+            id={`tts-lang-model-${index}`}
+            type="text"
+            value={row.model ?? ''}
+            onChange={(e) => patchRow({ model: e.target.value })}
+            placeholder={globalModel.trim() || 'Inherit global model'}
+          />
+        </FieldGroup>
+        <FieldGroup label="Voice / voice_id" htmlFor={`tts-lang-voice-${index}`}>
+          <Input
+            id={`tts-lang-voice-${index}`}
+            type="text"
+            value={row.voice ?? ''}
+            onChange={(e) => patchRow({ voice: e.target.value })}
+            placeholder={globalVoice.trim() || 'Inherit global voice'}
+          />
+        </FieldGroup>
+      </div>
+    </div>
+  );
 }
 
 function TtsSettingsGroup({
@@ -542,6 +733,74 @@ function TtsSettingsGroup({
               )}
             </div>
           </DisabledDimmer>
+
+          <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Per-language voices</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                When Speak original/translation uses this language, use this stack instead
+                of the defaults above. Empty fields inherit globals.
+              </p>
+            </div>
+
+            {merged.languageOverrides.length === 0 && (
+              <p className="text-xs text-zinc-500">No language overrides yet.</p>
+            )}
+
+            <div className="space-y-3">
+              {merged.languageOverrides.map((row, index) => (
+                <TtsLanguageOverrideRow
+                  key={`tts-lang-${index}-${row.language}`}
+                  row={row}
+                  index={index}
+                  rows={merged.languageOverrides}
+                  globalModel={merged.model}
+                  globalVoice={merged.voice}
+                  enabledProviders={enabledProviders}
+                  onChange={(next) => {
+                    const list = [...merged.languageOverrides];
+                    list[index] = next;
+                    patch({ languageOverrides: list });
+                  }}
+                  onRemove={() => {
+                    patch({
+                      languageOverrides: merged.languageOverrides.filter(
+                        (_, i) => i !== index,
+                      ),
+                    });
+                  }}
+                />
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const used = new Set(
+                  merged.languageOverrides
+                    .map((r) => normalizedOverrideLang(r.language))
+                    .filter(Boolean),
+                );
+                const defaultLang =
+                  getTargetLanguages().find((l) => !used.has(l.code.toLowerCase()))
+                    ?.code ?? 'en';
+                if (used.has(normalizedOverrideLang(defaultLang))) {
+                  showError('Every listed language already has an override');
+                  return;
+                }
+                patch({
+                  languageOverrides: [
+                    ...merged.languageOverrides,
+                    { language: defaultLang },
+                  ],
+                });
+              }}
+            >
+              Add language
+            </Button>
+          </div>
 
           <FieldGroup
             label="Rate"

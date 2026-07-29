@@ -2,16 +2,25 @@
  * Pure TTS backend resolution for selection Speak.
  */
 
-import type { ExtensionSettings, PoolProvider, TtsSettings } from '@/types/config';
+import type {
+  ExtensionSettings,
+  PoolProvider,
+  TtsLanguageOverride,
+  TtsSettings,
+} from '@/types/config';
 import { DEFAULT_TTS_SETTINGS } from '@/types/config';
 
 export type ResolvedTtsBackend = 'browser' | 'provider' | 'disabled';
 
 export function mergeTtsSettings(partial?: Partial<TtsSettings> | null): TtsSettings {
-  return {
+  const merged: TtsSettings = {
     ...DEFAULT_TTS_SETTINGS,
     ...(partial ?? {}),
   };
+  if (!Array.isArray(merged.languageOverrides)) {
+    merged.languageOverrides = [];
+  }
+  return merged;
 }
 
 export interface TtsCredentialPick {
@@ -164,4 +173,121 @@ export function speechEndpointFromBaseUrl(baseUrl: string): string {
   if (trimmed.endsWith('/audio/speech')) return trimmed;
   if (trimmed.endsWith('/v1')) return `${trimmed}/audio/speech`;
   return `${trimmed}/v1/audio/speech`;
+}
+
+/** Normalize a language code for override matching (lowercase, underscore→dash). */
+export function normalizeTtsOverrideLang(
+  code?: string | null,
+): string | undefined {
+  if (code == null) return undefined;
+  const raw = code.trim().toLowerCase().replace(/_/g, '-');
+  if (!raw || raw === 'auto') return undefined;
+  return raw;
+}
+
+function baseLanguageTag(normalized: string): string {
+  const i = normalized.indexOf('-');
+  return i === -1 ? normalized : normalized.slice(0, i);
+}
+
+/**
+ * First matching override: exact normalized language, else base language.
+ */
+export function findTtsLanguageOverride(
+  overrides: readonly TtsLanguageOverride[],
+  lang?: string | null,
+): TtsLanguageOverride | null {
+  const target = normalizeTtsOverrideLang(lang);
+  if (!target || !overrides?.length) return null;
+
+  for (const row of overrides) {
+    const rowLang = normalizeTtsOverrideLang(row.language);
+    if (rowLang && rowLang === target) return row;
+  }
+
+  const base = baseLanguageTag(target);
+  for (const row of overrides) {
+    const rowLang = normalizeTtsOverrideLang(row.language);
+    if (rowLang && rowLang === base) return row;
+  }
+
+  return null;
+}
+
+function pickFromOverrideCredentials(
+  settings: ExtensionSettings,
+  override: TtsLanguageOverride,
+  model: string,
+  voice: string,
+  rate: number,
+): TtsCredentialPick | null {
+  const tts = mergeTtsSettings(settings.tts);
+  const source = override.credentialSource;
+  if (source === 'custom') {
+    const baseUrl = (override.customBaseUrl ?? '').trim().replace(/\/+$/, '');
+    if (!baseUrl) return null;
+    return {
+      baseUrl,
+      apiKey: (override.customApiKey ?? '').trim(),
+      model,
+      voice,
+      rate,
+    };
+  }
+
+  if (source === 'pool') {
+    const providers = settings.providers ?? [];
+    const explicitId = (override.poolProviderId ?? '').trim();
+    const ttsForPick: TtsSettings = { ...tts, model, voice, rate };
+    if (explicitId) {
+      const match = providers.find((p) => p.id === explicitId);
+      if (!match || !match.enabled) return null;
+      return pickFromProvider(match, ttsForPick);
+    }
+    for (const p of providers) {
+      if (!p.enabled) continue;
+      const picked = pickFromProvider(p, ttsForPick);
+      if (picked) return picked;
+    }
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve effective TTS credentials/model/voice for a speak language.
+ * matchedOverride true when a language row matched (even if pick falls back to global creds).
+ */
+export function resolveTtsStack(
+  settings: ExtensionSettings,
+  lang?: string | null,
+): { matchedOverride: boolean; pick: TtsCredentialPick | null } {
+  const tts = mergeTtsSettings(settings.tts);
+  const override = findTtsLanguageOverride(tts.languageOverrides, lang);
+
+  if (!override) {
+    return { matchedOverride: false, pick: pickTtsCredentials(settings) };
+  }
+
+  const model = (override.model ?? '').trim() || (tts.model || '').trim();
+  const voice = (override.voice ?? '').trim() || (tts.voice || '').trim();
+  const rate = clampRate(tts.rate);
+
+  let pick: TtsCredentialPick | null = null;
+  if (override.credentialSource === 'custom' || override.credentialSource === 'pool') {
+    pick = pickFromOverrideCredentials(settings, override, model, voice, rate);
+  }
+
+  if (!pick) {
+    const global = pickTtsCredentials(settings);
+    if (!global) {
+      return { matchedOverride: true, pick: null };
+    }
+    pick = { ...global, model, voice, rate };
+  } else {
+    pick = { ...pick, model, voice, rate };
+  }
+
+  return { matchedOverride: true, pick };
 }

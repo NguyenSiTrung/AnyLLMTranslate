@@ -8,6 +8,7 @@ import {
   hasProviderTtsCredentials,
   mergeTtsSettings,
   resolveTtsBackend,
+  resolveTtsStack,
   clampRate,
 } from '@/lib/tts/resolveTtsBackend';
 import {
@@ -57,6 +58,7 @@ export class SpeakController {
 
   /**
    * Resolve backend from settings: provider TTS when configured, else browser.
+   * Language overrides prefer provider stack; otherwise browser-match may win.
    * Provider failure fails open to browser.
    */
   async speakSmart(text: string, lang?: string): Promise<SpeakResult> {
@@ -69,32 +71,23 @@ export class SpeakController {
 
     const settings = await loadSettings();
     const tts = mergeTtsSettings(settings.tts);
-    const providerAvailable = hasProviderTtsCredentials(settings);
+    const stack = resolveTtsStack(settings, lang);
+    const providerAvailable =
+      hasProviderTtsCredentials(settings) ||
+      (stack.matchedOverride && stack.pick !== null);
     const backend = resolveTtsBackend(tts, providerAvailable);
 
     if (backend === 'disabled') {
       throw new Error('Speech is disabled in Settings → Advanced');
     }
 
-    // Provider TTS (OpenAI/Mistral) uses a single configured voice and does not
-    // switch language by BCP-47. When the caller passes a concrete lang and the
-    // browser has a matching installed voice, prefer browser so Speak original
-    // vs Speak translation can use different languages.
-    if (backend === 'provider') {
-      const speechLang = normalizeSpeechLang(lang);
-      if (speechLang) {
-        const voices = await ensureSpeechVoicesReady();
-        const matched = pickBrowserVoice(voices, speechLang);
-        if (matched) {
-          await this.speakBrowser(trimmed, speechLang, clampRate(tts.rate));
-          return {
-            backend: 'browser',
-            preferredOverProvider: true,
-            reason: 'matched-browser-voice',
-          };
-        }
-      }
+    if (backend === 'browser') {
+      await this.speakBrowser(trimmed, lang, clampRate(tts.rate));
+      return { backend: 'browser' };
+    }
 
+    // Language override: prefer that provider stack (user intent).
+    if (stack.matchedOverride && stack.pick) {
       try {
         await this.speakProvider(trimmed, lang);
         return { backend: 'provider' };
@@ -114,8 +107,38 @@ export class SpeakController {
       }
     }
 
-    await this.speakBrowser(trimmed, lang, clampRate(tts.rate));
-    return { backend: 'browser' };
+    // No override: prefer matching browser voice over single global provider voice.
+    const speechLang = normalizeSpeechLang(lang);
+    if (speechLang) {
+      const voices = await ensureSpeechVoicesReady();
+      const matched = pickBrowserVoice(voices, speechLang);
+      if (matched) {
+        await this.speakBrowser(trimmed, speechLang, clampRate(tts.rate));
+        return {
+          backend: 'browser',
+          preferredOverProvider: true,
+          reason: 'matched-browser-voice',
+        };
+      }
+    }
+
+    try {
+      await this.speakProvider(trimmed, lang);
+      return { backend: 'provider' };
+    } catch (e) {
+      const providerError =
+        e instanceof Error ? e.message : 'Provider TTS failed';
+      try {
+        await this.speakBrowser(trimmed, lang, clampRate(tts.rate));
+        return {
+          backend: 'browser',
+          fallbackFromProvider: true,
+          providerError,
+        };
+      } catch {
+        throw new Error(providerError);
+      }
+    }
   }
 
   private async speakBrowser(

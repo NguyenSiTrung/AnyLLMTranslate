@@ -144,6 +144,7 @@ describe('SpeakController', () => {
         customBaseUrl: '',
         customApiKey: '',
         showVoiceField: true,
+        languageOverrides: [],
       },
       providers: [
         {
@@ -193,5 +194,153 @@ describe('SpeakController', () => {
     expect(utt.text).toBe('Xin chào');
     expect(utt.lang).toBe('vi-VN');
     expect(utt.voice?.lang).toBe('vi-VN');
+  });
+
+  it('speakSmart with language override uses provider even when browser voice matches', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({
+      success: true,
+      audioBase64: btoa('fake'),
+      mimeType: 'audio/mpeg',
+    });
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    vi.stubGlobal(
+      'Audio',
+      class {
+        onended: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        src = '';
+        play() {
+          queueMicrotask(() => this.onended?.());
+          return Promise.resolve();
+        }
+        pause() {}
+      },
+    );
+    const createObjectURL = vi.fn(() => 'blob:test');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', {
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    vi.mocked(loadSettings).mockResolvedValue({
+      tts: {
+        enabled: true,
+        preferredBackend: 'provider',
+        model: 'voxtral-mini-tts-2603',
+        voice: 'global-voice',
+        rate: 1,
+        credentialSource: 'pool',
+        poolProviderId: '',
+        customBaseUrl: '',
+        customApiKey: '',
+        showVoiceField: true,
+        languageOverrides: [{ language: 'vi', voice: 'vi-voice-id' }],
+      },
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'Mistral',
+          baseUrl: 'https://api.mistral.ai/v1',
+          model: 'mistral-small',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'msk',
+              maxRpm: 0,
+              concurrencyLimit: 1,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+      provider: {
+        preset: 'custom',
+        baseUrl: 'https://api.mistral.ai/v1',
+        apiKey: 'msk',
+        model: '',
+        temperature: 0.3,
+        maxTokens: 4096,
+        displayName: 'Mistral',
+        connectionStatus: 'unknown',
+        requiresApiKey: true,
+      },
+    } as never);
+
+    const c = new SpeakController();
+    const result = await c.speakSmart('Xin chào', 'vi');
+    expect(result).toEqual({ backend: 'provider' });
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'SYNTHESIZE_SPEECH',
+        text: 'Xin chào',
+        lang: 'vi',
+      }),
+    );
+    expect(speakMock).not.toHaveBeenCalled();
+  });
+
+  it('speakSmart ignores language override when preferredBackend is browser', async () => {
+    const sendMessage = vi.fn();
+    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    vi.mocked(loadSettings).mockResolvedValue({
+      tts: {
+        enabled: true,
+        preferredBackend: 'browser',
+        model: 'tts-1',
+        voice: 'alloy',
+        rate: 1,
+        credentialSource: 'pool',
+        poolProviderId: '',
+        customBaseUrl: '',
+        customApiKey: '',
+        showVoiceField: false,
+        languageOverrides: [{ language: 'en', voice: 'should-not-use' }],
+      },
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'OAI',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk',
+              maxRpm: 0,
+              concurrencyLimit: 1,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+      provider: {
+        preset: 'custom',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'sk',
+        model: '',
+        temperature: 0.3,
+        maxTokens: 4096,
+        displayName: 'OAI',
+        connectionStatus: 'unknown',
+        requiresApiKey: true,
+      },
+    } as never);
+
+    const c = new SpeakController();
+    const result = await c.speakSmart('hello', 'en');
+    expect(result).toEqual({ backend: 'browser' });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(speakMock).toHaveBeenCalledOnce();
   });
 });

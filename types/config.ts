@@ -304,6 +304,24 @@ export type TtsPreferredBackend = 'auto' | 'browser' | 'provider';
 /** Where Speak gets OpenAI-compatible TTS base URL + API key. */
 export type TtsCredentialSource = 'pool' | 'custom';
 
+/**
+ * Optional per-language full-stack override for selection Speak.
+ * Empty/omitted fields inherit the global tts.* defaults.
+ */
+export interface TtsLanguageOverride {
+  /** ISO 639-1 or BCP-47, e.g. "vi", "zh-CN". Matched after normalize. */
+  language: string;
+  /** When set, overrides global credential source for this language. */
+  credentialSource?: TtsCredentialSource;
+  poolProviderId?: string;
+  customBaseUrl?: string;
+  customApiKey?: string;
+  /** Non-empty overrides global model; empty/omit inherits. */
+  model?: string;
+  /** Non-empty overrides global voice / voice_id; empty/omit inherits. */
+  voice?: string;
+}
+
 export interface TtsSettings {
   /** Master switch for Speak (default true). */
   enabled: boolean;
@@ -334,6 +352,11 @@ export interface TtsSettings {
   customApiKey: string;
   /** User forced the voice field visible for non-OpenAI-style hosts. */
   showVoiceField: boolean;
+  /**
+   * Per-language stacks for Speak. Match: exact normalized code, then base
+   * language, else none. Missing/empty fields inherit global tts.*.
+   */
+  languageOverrides: TtsLanguageOverride[];
 }
 
 export const DEFAULT_TTS_SETTINGS: TtsSettings = {
@@ -347,6 +370,7 @@ export const DEFAULT_TTS_SETTINGS: TtsSettings = {
   customBaseUrl: '',
   customApiKey: '',
   showVoiceField: false,
+  languageOverrides: [],
 };
 
 /** Suggestion-only OpenAI voices for datalist when voice field is shown. */

@@ -53,7 +53,7 @@ import {
 } from '@/lib/selectionDictionaryPrompt';
 import { generateSelectionDictionaryCacheKey } from '@/lib/selectionCacheKey';
 import { getLanguageName } from '@/lib/languages';
-import { pickTtsCredentials } from '@/lib/tts/resolveTtsBackend';
+import { resolveTtsStack } from '@/lib/tts/resolveTtsBackend';
 import { fetchProviderSpeech } from '@/lib/tts/providerTts';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue } from '@/types/subtitle';
@@ -2417,7 +2417,7 @@ async function handleSynthesizeSpeech(
     if (!ttsEnabled) {
       return { success: false, error: 'Speech is disabled in Settings' };
     }
-    const creds = pickTtsCredentials(settings);
+    const { pick: creds } = resolveTtsStack(settings, message.lang);
     if (!creds) {
       return { success: false, error: 'No provider credentials configured for TTS' };
     }
