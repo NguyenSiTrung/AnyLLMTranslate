@@ -295,38 +295,62 @@ export interface GlossaryEntry {
 
 /**
  * Selection-bubble Speak (TTS) settings.
- * Provider path uses OpenAI-compatible POST /audio/speech on the active pool
- * credentials; browser path uses speechSynthesis. Keys never leave background.
+ * Provider path uses OpenAI-compatible POST /audio/speech with hybrid
+ * credentials (selected pool provider or custom TTS endpoint full override);
+ * browser path uses speechSynthesis. Keys never leave background.
  */
 export type TtsPreferredBackend = 'auto' | 'browser' | 'provider';
+
+/** Where Speak gets OpenAI-compatible TTS base URL + API key. */
+export type TtsCredentialSource = 'pool' | 'custom';
 
 export interface TtsSettings {
   /** Master switch for Speak (default true). */
   enabled: boolean;
   /**
-   * auto = provider when pool credentials exist, else browser;
+   * auto = provider when TTS credentials resolve, else browser;
    * browser = always local speechSynthesis;
    * provider = try OpenAI-compatible TTS, fail-open to browser.
    */
   preferredBackend: TtsPreferredBackend;
-  /** TTS model id (e.g. tts-1, tts-1-hd). */
+  /** Free-text TTS model id. Empty = unset. */
   model: string;
-  /** Voice id for provider TTS (e.g. alloy, nova). */
+  /**
+   * Optional voice id. Empty = omit from provider request body.
+   * May remain stored while the voice field is hidden in UI.
+   */
   voice: string;
   /** Playback rate 0.5–2 (browser utterance rate; provider `speed` when supported). */
   rate: number;
+  /** pool (default) | custom full override for Speak only. */
+  credentialSource: TtsCredentialSource;
+  /**
+   * PoolProvider.id when credentialSource === 'pool'.
+   * Empty = first usable enabled provider (migration / default).
+   */
+  poolProviderId: string;
+  /** Used only when credentialSource === 'custom'. */
+  customBaseUrl: string;
+  customApiKey: string;
+  /** User forced the voice field visible for non-OpenAI-style hosts. */
+  showVoiceField: boolean;
 }
 
 export const DEFAULT_TTS_SETTINGS: TtsSettings = {
   enabled: true,
   preferredBackend: 'auto',
-  model: 'tts-1',
-  voice: 'alloy',
+  model: '',
+  voice: '',
   rate: 1,
+  credentialSource: 'pool',
+  poolProviderId: '',
+  customBaseUrl: '',
+  customApiKey: '',
+  showVoiceField: false,
 };
 
-/** Common OpenAI-compatible TTS voices for Options UI. */
-export const TTS_VOICE_OPTIONS = [
+/** Suggestion-only OpenAI voices for datalist when voice field is shown. */
+export const OPENAI_TTS_VOICE_SUGGESTIONS = [
   'alloy',
   'ash',
   'ballad',
@@ -340,7 +364,10 @@ export const TTS_VOICE_OPTIONS = [
   'verse',
 ] as const;
 
-/** Common OpenAI-compatible TTS models for Options UI. */
+/** @deprecated Use free-text model + Load models. Kept briefly for any stray imports. */
+export const TTS_VOICE_OPTIONS = OPENAI_TTS_VOICE_SUGGESTIONS;
+
+/** @deprecated Use free-text model + Load models. */
 export const TTS_MODEL_OPTIONS = ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'] as const;
 
 /** User-owned named glossary pack (subtitle-scoped in v1). */
