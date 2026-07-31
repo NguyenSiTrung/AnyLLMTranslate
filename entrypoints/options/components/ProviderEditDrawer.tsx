@@ -38,8 +38,8 @@ import type {
 } from '@/types/config';
 import { DEFAULT_THINKING_EFFORT, DEFAULT_THINKING_MODE } from '@/types/config';
 import {
-  isDeepSeekOfficialBaseUrl,
   isGeminiOpenAiCompatBaseUrl,
+  usesDeepSeekThinkingApi,
 } from '@/lib/thinkingMode';
 
 type DrawerSection = 'connection' | 'keys' | 'advanced' | 'danger';
@@ -327,7 +327,7 @@ export function ProviderEditDrawer({
           />
           <FieldGroup
             label="Thinking mode"
-            description="Force reasoning on or off when the provider supports it (NVIDIA NIM: enable_thinking; Google AI Studio Gemini: reasoning_effort; DeepSeek Official: thinking type + reasoning_effort). Gemini 3.x and 2.5 Pro cannot fully disable thinking — Off uses the lowest effort. Auto keeps the provider default. Off is recommended for bulk translation."
+            description="Force reasoning on or off when the provider supports it (NVIDIA NIM: enable_thinking; Google AI Studio Gemini: reasoning_effort; DeepSeek Official / OpenCode Zen DeepSeek models: thinking type + reasoning_effort). Gemini 3.x and 2.5 Pro cannot fully disable thinking — Off uses the lowest effort. Auto keeps the provider default. Off is recommended for bulk translation."
             htmlFor={`ptm-${provider.id}`}
           >
             <SegmentedControl
@@ -365,11 +365,11 @@ export function ProviderEditDrawer({
                 />
               </FieldGroup>
             )}
-          {isDeepSeekOfficialBaseUrl(provider.baseUrl) &&
+          {usesDeepSeekThinkingApi(provider.baseUrl, provider.model) &&
             (provider.thinkingMode ?? DEFAULT_THINKING_MODE) === 'on' && (
               <FieldGroup
                 label="Reasoning effort"
-                description="DeepSeek thinking effort when Thinking mode is On (reasoning_effort: low / high / max). Higher effort can improve quality but adds latency and tokens. DeepSeek defaults to high when thinking is enabled."
+                description="DeepSeek thinking effort when Thinking mode is On (reasoning_effort: low / high / max). Applies on DeepSeek Official and on OpenCode Zen when the selected model is a DeepSeek model. Higher effort can improve quality but adds latency and tokens. DeepSeek defaults to high when thinking is enabled."
                 htmlFor={`ptde-${provider.id}`}
               >
                 <SegmentedControl

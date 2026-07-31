@@ -215,6 +215,36 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.thinkingDetected).toBe(true);
   });
 
+  it('sends DeepSeek thinking params on OpenCode Zen for DeepSeek models only', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash-free' }] });
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        max_tokens?: number;
+        thinking?: { type?: string };
+        reasoning_effort?: string;
+        enable_thinking?: unknown;
+      };
+      if (body.max_tokens === 1) return okJson({ choices: [{ message: { content: 'x' } }] });
+      expect(body.thinking).toEqual({ type: 'enabled' });
+      expect(body.reasoning_effort).toBe('low');
+      expect(body.enable_thinking).toBeUndefined();
+      return okJson({ choices: [{ message: { content: 'Xin chào' } }] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await testConnection(
+      baseConfig({
+        baseUrl: 'https://opencode.ai/zen/v1',
+        model: 'deepseek-v4-flash-free',
+        thinkingMode: 'on',
+        thinkingEffort: 'low',
+      }),
+    );
+    expect(result.overall).toBe(true);
+    expect(result.thinking?.controlsSent).toBe(true);
+  });
+
   it('retries without thinking controls when provider rejects them', async () => {
     let translationCalls = 0;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

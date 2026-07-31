@@ -32,8 +32,9 @@ export interface KeyTestResult {
  *   (`none` / `minimal` / `low` / `medium` / `high`). Gemini 3.x and 2.5 Pro
  *   cannot fully disable thinking; `off` uses the lowest allowed effort
  *   (`minimal`). When `on`, level comes from {@link ThinkingEffort}.
- * - **DeepSeek Official**: `thinking: { type: "enabled" | "disabled" }` plus
- *   `reasoning_effort` (`low` / `high` / `max`) when on. See
+ * - **DeepSeek thinking API** (DeepSeek Official host, or OpenCode Zen when the
+ *   model id contains `deepseek`): `thinking: { type: "enabled" | "disabled" }`
+ *   plus `reasoning_effort` (`low` / `high` / `max`) when on. See
  *   https://api-docs.deepseek.com/guides/thinking_mode
  *
  * - `auto` — omit thinking fields; use the provider/model default (safest)

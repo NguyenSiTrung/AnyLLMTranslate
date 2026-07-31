@@ -4,11 +4,14 @@ import {
   deepseekReasoningEffort,
   geminiReasoningEffortForMode,
   geminiSupportsThinkingNone,
+  isDeepSeekModelId,
   isDeepSeekOfficialBaseUrl,
   isGeminiOpenAiCompatBaseUrl,
+  isOpenCodeZenBaseUrl,
   isThinkingKwargsRejected,
   normalizeThinkingEffort,
   normalizeThinkingMode,
+  usesDeepSeekThinkingApi,
 } from '@/lib/thinkingMode';
 import type { ChatCompletionRequest } from '@/types/translation';
 
@@ -21,6 +24,7 @@ const baseRequest: ChatCompletionRequest = {
 
 const geminiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const deepseekBase = 'https://api.deepseek.com';
+const openCodeZenBase = 'https://opencode.ai/zen/v1';
 
 describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
   it('accepts known values and defaults unknown to auto/medium', () => {
@@ -41,8 +45,8 @@ describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
   });
 });
 
-describe('isGeminiOpenAiCompatBaseUrl / isDeepSeekOfficialBaseUrl', () => {
-  it('detects Google AI Studio and DeepSeek Official hosts', () => {
+describe('host / model detectors for thinking strategies', () => {
+  it('detects Google AI Studio, DeepSeek Official, OpenCode Zen, and DeepSeek models', () => {
     expect(isGeminiOpenAiCompatBaseUrl(geminiBase)).toBe(true);
     expect(isGeminiOpenAiCompatBaseUrl(`${geminiBase}/`)).toBe(true);
     expect(
@@ -58,6 +62,32 @@ describe('isGeminiOpenAiCompatBaseUrl / isDeepSeekOfficialBaseUrl', () => {
     expect(isDeepSeekOfficialBaseUrl('https://openrouter.ai/api/v1')).toBe(false);
     expect(isDeepSeekOfficialBaseUrl('https://opencode.ai/zen/v1')).toBe(false);
     expect(isDeepSeekOfficialBaseUrl('')).toBe(false);
+
+    expect(isOpenCodeZenBaseUrl(openCodeZenBase)).toBe(true);
+    expect(isOpenCodeZenBaseUrl('https://opencode.ai/zen/v1/')).toBe(true);
+    expect(isOpenCodeZenBaseUrl('https://opencode.ai/api/v1')).toBe(false);
+    expect(isOpenCodeZenBaseUrl(deepseekBase)).toBe(false);
+    expect(isOpenCodeZenBaseUrl('')).toBe(false);
+
+    // Any DeepSeek family id — not pinned to v4.
+    expect(isDeepSeekModelId('deepseek-v4-flash')).toBe(true);
+    expect(isDeepSeekModelId('deepseek-v4-flash-free')).toBe(true);
+    expect(isDeepSeekModelId('deepseek-chat')).toBe(true);
+    expect(isDeepSeekModelId('DeepSeek-Reasoner')).toBe(true);
+    expect(isDeepSeekModelId('big-pickle')).toBe(false);
+    expect(isDeepSeekModelId('gemini-2.5-flash')).toBe(false);
+    expect(isDeepSeekModelId('')).toBe(false);
+
+    // Strategy gate: Official always; Zen only with DeepSeek model.
+    expect(usesDeepSeekThinkingApi(deepseekBase, 'deepseek-v4-pro')).toBe(true);
+    expect(usesDeepSeekThinkingApi(deepseekBase, 'anything')).toBe(true);
+    expect(usesDeepSeekThinkingApi(openCodeZenBase, 'deepseek-v4-flash')).toBe(true);
+    expect(usesDeepSeekThinkingApi(openCodeZenBase, 'deepseek-chat')).toBe(true);
+    expect(usesDeepSeekThinkingApi(openCodeZenBase, 'big-pickle')).toBe(false);
+    expect(usesDeepSeekThinkingApi(openCodeZenBase, 'grok-4.5')).toBe(false);
+    expect(usesDeepSeekThinkingApi('https://openrouter.ai/api/v1', 'deepseek/deepseek-chat')).toBe(
+      false,
+    );
   });
 });
 
@@ -216,6 +246,48 @@ describe('applyThinkingModeToRequest', () => {
 
     // auto still no-ops
     expect(applyThinkingModeToRequest(req, 'auto', { baseUrl: deepseekBase })).toBe(req);
+  });
+
+  it('uses DeepSeek thinking API on OpenCode Zen only for DeepSeek models', () => {
+    const deepseekReq: ChatCompletionRequest = {
+      ...baseRequest,
+      model: 'deepseek-v4-flash-free',
+    };
+    const otherReq: ChatCompletionRequest = {
+      ...baseRequest,
+      model: 'big-pickle',
+    };
+
+    expect(
+      applyThinkingModeToRequest(deepseekReq, 'off', { baseUrl: openCodeZenBase }),
+    ).toMatchObject({ thinking: { type: 'disabled' } });
+    expect(
+      applyThinkingModeToRequest(deepseekReq, 'on', {
+        baseUrl: openCodeZenBase,
+        thinkingEffort: 'max',
+      }),
+    ).toMatchObject({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'max',
+    });
+    // Non-v4 DeepSeek ids also qualify (substring match).
+    expect(
+      applyThinkingModeToRequest(
+        { ...baseRequest, model: 'deepseek-chat' },
+        'on',
+        { baseUrl: openCodeZenBase, thinkingEffort: 'low' },
+      ),
+    ).toMatchObject({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'low',
+    });
+
+    // Non-DeepSeek Zen models stay on the generic enable_thinking path.
+    const otherOn = applyThinkingModeToRequest(otherReq, 'on', { baseUrl: openCodeZenBase });
+    expect(otherOn.enable_thinking).toBe(true);
+    expect(otherOn.chat_template_kwargs).toEqual({ enable_thinking: true });
+    expect(otherOn.thinking).toBeUndefined();
+    expect(otherOn.reasoning_effort).toBeUndefined();
   });
 });
 

@@ -7,9 +7,13 @@
  *    (nested chat_template_kwargs alone is ignored by StepFun step_plan)
  * 3. **Google AI Studio (Gemini)** — top-level `reasoning_effort`
  *    (`none` | `minimal` | `low` | `medium` | `high`)
- * 4. **DeepSeek Official** — `thinking: { type: "enabled" | "disabled" }` and,
+ * 4. **DeepSeek thinking API** — `thinking: { type: "enabled" | "disabled" }` and,
  *    when on, `reasoning_effort` (`low` | `high` | `max`)
  *    https://api-docs.deepseek.com/guides/thinking_mode
+ *    Applied for:
+ *    - DeepSeek Official host (`api.deepseek.com`) — any model
+ *    - OpenCode Zen (`opencode.ai/zen/...`) — only when the model id contains
+ *      `deepseek` (any DeepSeek family, not a specific version)
  *
  * Non-Gemini/DeepSeek on|off sends both (1) and (2). Providers that reject
  * unknown fields get a one-shot strip + retry in the fetch layer.
@@ -75,6 +79,48 @@ export function isDeepSeekOfficialBaseUrl(baseUrl: string): boolean {
   } catch {
     return raw.toLowerCase().includes('api.deepseek.com');
   }
+}
+
+/**
+ * True when baseUrl is OpenCode Zen's gateway (`opencode.ai` + `/zen` path).
+ */
+export function isOpenCodeZenBaseUrl(baseUrl: string): boolean {
+  const raw = baseUrl.trim();
+  if (!raw) return false;
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+    const isOpenCodeHost = host === 'opencode.ai' || host.endsWith('.opencode.ai');
+    return isOpenCodeHost && path.includes('/zen');
+  } catch {
+    const lower = raw.toLowerCase();
+    return lower.includes('opencode.ai') && lower.includes('/zen');
+  }
+}
+
+/**
+ * True when the model id is a DeepSeek family model.
+ * Match is substring `deepseek` (case-insensitive) so any generation works
+ * (`deepseek-chat`, `deepseek-v4-flash`, `deepseek-v4-flash-free`, etc.).
+ * Not pinned to a specific version like v4.
+ */
+export function isDeepSeekModelId(model: string): boolean {
+  return model.trim().toLowerCase().includes('deepseek');
+}
+
+/**
+ * Whether this (baseUrl, model) should use DeepSeek's thinking API shape:
+ * `thinking: { type }` + optional `reasoning_effort`.
+ *
+ * - DeepSeek Official host: always (all models on that API).
+ * - OpenCode Zen: only when the selected model is a DeepSeek model.
+ * - Everything else: no.
+ */
+export function usesDeepSeekThinkingApi(baseUrl: string, model: string): boolean {
+  if (isDeepSeekOfficialBaseUrl(baseUrl)) return true;
+  if (isOpenCodeZenBaseUrl(baseUrl) && isDeepSeekModelId(model)) return true;
+  return false;
 }
 
 /**
@@ -160,7 +206,8 @@ export interface ApplyThinkingModeOptions {
  * Returns the same object reference when mode is auto (no-op).
  *
  * - Gemini AI Studio → `reasoning_effort`
- * - DeepSeek Official → `thinking: { type }` + `reasoning_effort` when on
+ * - DeepSeek Official, or OpenCode Zen + DeepSeek model → `thinking: { type }`
+ *   + `reasoning_effort` when on
  * - Other OpenAI-compatible hosts → top-level `enable_thinking` (StepFun) and
  *   nested `chat_template_kwargs.enable_thinking` (NIM/vLLM/Qwen3)
  */
@@ -185,7 +232,7 @@ export function applyThinkingModeToRequest(
     };
   }
 
-  if (isDeepSeekOfficialBaseUrl(baseUrl)) {
+  if (usesDeepSeekThinkingApi(baseUrl, request.model)) {
     if (resolved === 'off') {
       return {
         ...request,
