@@ -10,7 +10,7 @@ export default defineConfig({
   manifest: {
     name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
-    permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms'],
+    permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms', 'tabs'],
     host_permissions: [
       '*://*.prd.media.max.com/*',
       '*://*.media.max.com/*',

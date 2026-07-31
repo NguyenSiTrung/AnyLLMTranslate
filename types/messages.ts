@@ -70,7 +70,9 @@ export type MessageAction =
   | 'SCIENTIFIC_PDF_GET_JOB'
   | 'SCIENTIFIC_PDF_DOWNLOAD'
   | 'SCIENTIFIC_PDF_CANCEL'
-  | 'SYNTHESIZE_SPEECH';
+  | 'SYNTHESIZE_SPEECH'
+  | 'SUGGEST_SITE_RULE'
+  | 'GET_DOM_OUTLINE';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -677,6 +679,31 @@ export interface SynthesizeSpeechResult {
   error?: string;
 }
 
+/** Options → Background: suggest a site rule from a page URL. */
+export interface SuggestSiteRuleMessage {
+  action: 'SUGGEST_SITE_RULE';
+  url: string;
+}
+
+/** Background → Options: draft site rule (or error). */
+export interface SuggestSiteRuleResult {
+  success: boolean;
+  draft?: import('@/lib/siteRuleSuggest/types').SuggestSiteRuleDraft;
+  error?: string;
+}
+
+/** Background → Content: request a capped DOM outline of the current page. */
+export interface GetDomOutlineMessage {
+  action: 'GET_DOM_OUTLINE';
+}
+
+/** Content → Background: DOM outline payload. */
+export interface GetDomOutlineResult {
+  success: boolean;
+  outline?: import('@/lib/siteRuleSuggest/types').DomOutline;
+  error?: string;
+}
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -726,7 +753,9 @@ export type ExtensionMessage =
   | ScientificPdfGetJobMessage
   | ScientificPdfDownloadMessage
   | ScientificPdfCancelMessage
-  | SynthesizeSpeechMessage;
+  | SynthesizeSpeechMessage
+  | SuggestSiteRuleMessage
+  | GetDomOutlineMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

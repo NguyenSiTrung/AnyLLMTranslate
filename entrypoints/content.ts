@@ -18,6 +18,7 @@ import {
   triggerAutoCategoryDetection,
   persistHeuristicCategory,
 } from '@/content/utils/pageContext';
+import { getDomOutlineFromDocument } from '@/content/utils/getDomOutline';
 import {
   getAutoDetectedCategory,
   buildCategoryInfo,
@@ -1476,6 +1477,11 @@ export function setupMessageListener(): void {
       // button works for extensionless URLs (e.g. https://arxiv.org/pdf/2606.20543)
       // that the URL-only heuristic in the popup misses.
       sendResponse({ isPdf: document.contentType === 'application/pdf' });
+      return false; // synchronous
+    } else if (message.action === 'GET_DOM_OUTLINE') {
+      // Options/background AI site-rule suggest: capped structural outline only.
+      const result = getDomOutlineFromDocument(document, location.href);
+      sendResponse(result);
       return false; // synchronous
     }
   });

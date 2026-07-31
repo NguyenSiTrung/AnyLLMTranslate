@@ -40,6 +40,8 @@ import { EmptyState } from '@/ui/EmptyState';
 import { Modal } from '@/ui/Modal';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { DOMAIN_CATEGORY_MAP } from '@/content/utils/pageContext';
+import { mergeSuggestDraftIntoRuleForm } from '@/lib/siteRuleSuggest/mergeForm';
+import type { SuggestSiteRuleResult } from '@/types/messages';
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -842,6 +844,12 @@ function RuleEditForm({
     categoryValue: rule.category ?? '__none__',
     customCategory: '',
   });
+  const [suggestUrl, setSuggestUrl] = useState('');
+  const [suggestStatus, setSuggestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle',
+  );
+  const [suggestMessage, setSuggestMessage] = useState<string | null>(null);
+  const [suggestRationale, setSuggestRationale] = useState<string | null>(null);
 
   const translateMode: TranslateMode = form.alwaysTranslate
     ? 'always'
@@ -868,6 +876,62 @@ function RuleEditForm({
       neverTranslate: mode === 'never',
     });
   };
+
+  const handleSuggest = useCallback(async () => {
+    setSuggestStatus('loading');
+    setSuggestMessage('Analyzing page…');
+    setSuggestRationale(null);
+    try {
+      const result = (await chrome.runtime.sendMessage({
+        action: 'SUGGEST_SITE_RULE',
+        url: suggestUrl.trim(),
+      })) as SuggestSiteRuleResult;
+
+      if (!result?.success || !result.draft) {
+        setSuggestStatus('error');
+        setSuggestMessage(result?.error ?? 'Could not suggest a rule');
+        return;
+      }
+
+      const d = result.draft;
+      setForm((prev) => {
+        const merged = mergeSuggestDraftIntoRuleForm(
+          {
+            hostname: prev.hostname,
+            includeSelectors: prev.includeSelectors,
+            excludeSelectors: prev.excludeSelectors,
+            alwaysTranslate: prev.alwaysTranslate,
+            neverTranslate: prev.neverTranslate,
+            categoryValue: prev.categoryValue,
+          },
+          d,
+          isNew,
+        );
+        return {
+          ...prev,
+          ...merged,
+        };
+      });
+
+      setSuggestStatus('success');
+      const bits: string[] = [];
+      if (d.source === 'tab') bits.push('Using open tab');
+      else if (d.warnings?.includes('loaded_in_temp_tab')) {
+        bits.push('Loaded page in background (may differ from logged-in view)');
+      } else {
+        bits.push('Fetched URL (may miss dynamic content)');
+      }
+      if (d.warnings?.includes('heuristic_only')) {
+        bits.push('Basic draft (LLM unavailable)');
+      }
+      bits.push('Draft applied — review before save');
+      setSuggestMessage(bits.join(' · '));
+      setSuggestRationale(d.rationale ?? null);
+    } catch (e) {
+      setSuggestStatus('error');
+      setSuggestMessage(e instanceof Error ? e.message : 'Could not suggest a rule');
+    }
+  }, [suggestUrl, isNew]);
 
   const handleSave = () => {
     const resolvedCategory =
@@ -908,6 +972,56 @@ function RuleEditForm({
       </div>
 
       <div className="space-y-5 p-4">
+        {/* Suggest from URL */}
+        <section className="space-y-2 rounded-lg border border-teal-500/15 bg-teal-500/[0.04] p-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-teal-400" />
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Suggest from URL
+            </h4>
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            Uses your translation provider. Prefer having the page open in a tab for better
+            selectors.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id="rule-suggest-url"
+              type="url"
+              placeholder="https://example.com/article"
+              value={suggestUrl}
+              onChange={(e) => setSuggestUrl(e.target.value)}
+              disabled={suggestStatus === 'loading'}
+              className="flex-1 font-mono text-sm"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={suggestStatus === 'loading' || !suggestUrl.trim()}
+              onClick={() => void handleSuggest()}
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+            >
+              {suggestStatus === 'loading' ? 'Analyzing…' : 'Suggest with AI'}
+            </Button>
+          </div>
+          {suggestMessage && (
+            <p
+              className={
+                suggestStatus === 'error'
+                  ? 'text-[11px] text-rose-400'
+                  : 'text-[11px] text-teal-300/90'
+              }
+              role={suggestStatus === 'error' ? 'alert' : 'status'}
+            >
+              {suggestMessage}
+            </p>
+          )}
+          {suggestRationale && suggestStatus === 'success' && (
+            <p className="text-[11px] text-zinc-500">{suggestRationale}</p>
+          )}
+        </section>
+
         {/* Match */}
         <section className="space-y-3">
           <SectionLabel step={1} title="Match" />

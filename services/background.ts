@@ -40,7 +40,16 @@ import type {
   ScientificPdfCancelResult,
   SynthesizeSpeechMessage,
   SynthesizeSpeechResult,
+  SuggestSiteRuleMessage,
+  SuggestSiteRuleResult,
+  GetDomOutlineResult,
 } from '@/types/messages';
+import {
+  buildSuggestSiteRuleDraft,
+  tabUrlMatchesHostname,
+  buildSiteRuleSuggestSystemPrompt,
+  buildSiteRuleSuggestUserPrompt,
+} from '@/lib/siteRuleSuggest';
 import {
   parseSelectionDictionary,
   hasDictionaryFields,
@@ -1938,6 +1947,102 @@ async function handleTranslateSelection(
   }
 }
 
+/** Wait until a tab reports status complete, or timeout. */
+function waitForTabComplete(tabId: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = (err?: Error) => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve();
+    };
+    const timer = setTimeout(() => finish(new Error('Page load timed out')), timeoutMs);
+    const onUpdated = (id: number, info: chrome.tabs.TabChangeInfo) => {
+      if (id === tabId && info.status === 'complete') finish();
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === 'complete') finish();
+    }).catch(() => {
+      /* onUpdated will resolve or timeout */
+    });
+  });
+}
+
+/** Handle SUGGEST_SITE_RULE — AI/heuristic draft for Site Rules settings. */
+async function handleSuggestSiteRule(
+  message: SuggestSiteRuleMessage,
+): Promise<SuggestSiteRuleResult> {
+  return buildSuggestSiteRuleDraft({
+    urlInput: message.url,
+    findOpenTabOutline: async (hostname) => {
+      const tabs = await chrome.tabs.query({});
+      const matches = tabs.filter(
+        (t) => t.id != null && tabUrlMatchesHostname(t.url, hostname),
+      );
+      matches.sort((a, b) => Number(b.active) - Number(a.active));
+      for (const tab of matches) {
+        try {
+          const res = (await chrome.tabs.sendMessage(tab.id!, {
+            action: 'GET_DOM_OUTLINE',
+          })) as GetDomOutlineResult;
+          if (res?.success && res.outline) return res.outline;
+        } catch {
+          /* try next tab */
+        }
+      }
+      return null;
+    },
+    loadUrlOutline: async (pageUrl) => {
+      const tab = await chrome.tabs.create({
+        url: pageUrl.toString(),
+        active: false,
+      });
+      try {
+        const tabId = tab.id;
+        if (tabId == null) throw new Error('Could not open page');
+        await waitForTabComplete(tabId, 15_000);
+        await new Promise((r) => setTimeout(r, 500));
+        const res = (await chrome.tabs.sendMessage(tabId, {
+          action: 'GET_DOM_OUTLINE',
+        })) as GetDomOutlineResult;
+        if (!res?.success || !res.outline) {
+          throw new Error(res?.error ?? 'Could not read page structure');
+        }
+        return { outline: res.outline, warnings: ['loaded_in_temp_tab'] };
+      } finally {
+        if (tab.id != null) {
+          try {
+            await chrome.tabs.remove(tab.id);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    },
+    runLlm: async (outline) => {
+      try {
+        const service = await initService();
+        const result = await service.translate({
+          texts: new Map([['suggest', 'site-rule']]),
+          sourceLanguage: 'auto',
+          targetLanguage: 'en',
+          preScanSystemPrompt: buildSiteRuleSuggestSystemPrompt(),
+          customUserPrompt: buildSiteRuleSuggestUserPrompt(outline),
+          returnRawResponse: true,
+        });
+        if (!result.success) return null;
+        return result.translations.get('suggest') ?? null;
+      } catch {
+        return null;
+      }
+    },
+  });
+}
+
 /** Handle DETECT_PAGE_CATEGORY_LLM message */
 async function handleDetectPageCategoryLLM(
   message: DetectPageCategoryLlmMessage,
@@ -2291,6 +2396,8 @@ export function handleMessage(
       const override = fetchCategoryOverride(tabId);
       return Promise.resolve({ override });
     }
+    case 'SUGGEST_SITE_RULE':
+      return handleSuggestSiteRule(message as SuggestSiteRuleMessage);
     case 'DETECT_PAGE_CATEGORY_LLM':
       return handleDetectPageCategoryLLM(message);
     case 'CLASSIFY_PDF_PARAGRAPHS':
