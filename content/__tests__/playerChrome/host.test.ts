@@ -55,7 +55,11 @@ describe('playerChrome host', () => {
     expect(getFullscreenMountParent(document)).toBe(shell);
   });
 
-  it('getPlayerChromeAdapter returns null when no adapters registered (phase 1)', () => {
+  it('getPlayerChromeAdapter returns null for unknown hosts', () => {
     expect(getPlayerChromeAdapter('www.example.com')).toBeNull();
+  });
+
+  it('getPlayerChromeAdapter matches youtube', () => {
+    expect(getPlayerChromeAdapter('www.youtube.com')?.id).toBe('youtube');
   });
 });

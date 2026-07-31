@@ -44,6 +44,7 @@ AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bil
 - **Progressive chunked translation** with seek-aware priority queue for instant feedback
 - **Bilingual builder** generates merged or translation-only VTT output
 - **Custom overlay** with keyboard controls, resize, and position settings, including **Popover API Top Layer support** for native fullscreen
+- **In-player mini studio** — control-bar icon (native on YouTube/Udemy/Coursera when selectors match, else floating) opens enable/appearance/style/glossary controls; soft-hides with player chrome, including fullscreen
 - **Interactive drag-and-drop repositioning** with session and fullscreen persistence
 - **Subtitle coordinator** orchestrates parsing, translation, fallback, and cleanup
 - **Preferred subtitle language** with auto-activation when matching tracks are available

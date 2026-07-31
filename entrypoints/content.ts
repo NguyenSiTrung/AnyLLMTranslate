@@ -27,6 +27,7 @@ import {
   isAutoCategoryLocked,
 } from '@/content/categoryState';
 import { startCoordinator } from '@/content/subtitleCoordinator';
+import { startPlayerChrome } from '@/content/playerChrome';
 import { initTextSelection, setTextSelectionEnabled, translateSelectedTextViaContextMenu } from '@/content/textSelection';
 import { initHoverTranslate, setHoverTranslateEnabled, setHoverDelay, clearHoverCache } from '@/content/hoverTranslate';
 import { initKeyboardShortcuts } from '@/content/keyboardShortcuts';
@@ -138,6 +139,7 @@ let allPieces: TranslationPiece[] = [];
  *  pagehide snapshot writer can record it without re-reading settings. */
 let currentTargetLanguage = 'vi';
 let coordinatorCleanup: (() => void) | null = null;
+let playerChromeCleanup: (() => void) | null = null;
 let _beforeUnloadCleanup: (() => void) | null = null;
 let activeRequests = 0;
 /**
@@ -1502,6 +1504,10 @@ function destroyZombie(): void {
     try { coordinatorCleanup(); } catch { /* noop */ }
     coordinatorCleanup = null;
   }
+  if (playerChromeCleanup) {
+    try { playerChromeCleanup(); } catch { /* noop */ }
+    playerChromeCleanup = null;
+  }
   if (_beforeUnloadCleanup) {
     try { _beforeUnloadCleanup(); } catch { /* noop */ }
     _beforeUnloadCleanup = null;
@@ -1569,6 +1575,7 @@ export default defineContentScript({
 
     setupMessageListener();
     coordinatorCleanup = startCoordinator();
+    playerChromeCleanup = startPlayerChrome();
 
     // Attach inline-translate key listeners immediately (defaults), then apply
     // stored settings. Waiting on loadSettings() first delayed gesture capture.
@@ -1630,6 +1637,10 @@ export default defineContentScript({
       if (coordinatorCleanup) {
         coordinatorCleanup();
         coordinatorCleanup = null;
+      }
+      if (playerChromeCleanup) {
+        playerChromeCleanup();
+        playerChromeCleanup = null;
       }
       if (_textSelectionCleanup) {
         _textSelectionCleanup();

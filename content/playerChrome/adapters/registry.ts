@@ -1,7 +1,14 @@
 import type { PlayerChromeAdapter } from './types';
+import { youtubePlayerChromeAdapter } from './youtube';
+import { udemyPlayerChromeAdapter } from './udemy';
+import { courseraPlayerChromeAdapter } from './coursera';
 
-/** Phase 1 starts empty; Phase 2+ register youtube/udemy/coursera adapters. */
-const ADAPTERS: PlayerChromeAdapter[] = [];
+/** Site adapters (first match wins). Floating fallback when native mount is null. */
+const ADAPTERS: PlayerChromeAdapter[] = [
+  youtubePlayerChromeAdapter,
+  udemyPlayerChromeAdapter,
+  courseraPlayerChromeAdapter,
+];
 
 export function getPlayerChromeAdapter(hostname: string): PlayerChromeAdapter | null {
   const host = hostname.toLowerCase();

@@ -2448,11 +2448,11 @@ export function startCoordinator(): () => void {
     // Handle per-tab subtitle knob override from popup (set/clear)
     if (msg.action === 'setSubtitleKnobOverride') {
       const o = (message as { knobOverrides?: Partial<ProfileKnobs> | null }).knobOverrides;
-      state.subtitleKnobOverride = o ?? undefined; // null clears → undefined
+      applySubtitleKnobOverride(o);
     }
     // Popup queries the current tab override on open
     if (msg.action === 'getSubtitleKnobOverride') {
-      _sendResponse({ knobOverrides: state.subtitleKnobOverride ?? {} });
+      _sendResponse({ knobOverrides: getSubtitleKnobOverride() });
     }
   };
   chrome.runtime.onMessage.addListener(handleExtensionMessage);
@@ -3272,4 +3272,16 @@ export async function manualActivateSubtitles(): Promise<void> {
  */
 export function getAvailableTracks(): AvailableSubtitleTrack[] {
   return [...state.availableTracks];
+}
+
+/** Apply per-tab subtitle style knob overrides (popup + in-player mini studio). */
+export function applySubtitleKnobOverride(
+  knobs: Partial<ProfileKnobs> | null | undefined,
+): void {
+  state.subtitleKnobOverride = knobs ?? undefined;
+}
+
+/** Read current per-tab knob overrides. */
+export function getSubtitleKnobOverride(): Partial<ProfileKnobs> {
+  return state.subtitleKnobOverride ?? {};
 }
