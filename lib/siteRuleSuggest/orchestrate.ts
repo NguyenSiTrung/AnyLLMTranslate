@@ -24,6 +24,39 @@ export interface BuildSuggestSiteRuleDeps {
   runLlm: (outline: DomOutline) => Promise<string | null>;
 }
 
+async function captureOutline(
+  deps: BuildSuggestSiteRuleDeps,
+  hostname: string,
+  pageUrl: URL,
+): Promise<
+  | { ok: true; outline: DomOutline; source: SiteRuleSuggestSource; warnings: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const fromTab = await deps.findOpenTabOutline(hostname, pageUrl);
+    if (fromTab) {
+      return { ok: true, outline: fromTab, source: 'tab', warnings: [] };
+    }
+  } catch {
+    /* fall through to loadUrl */
+  }
+
+  try {
+    const loaded = await deps.loadUrlOutline(pageUrl);
+    return {
+      ok: true,
+      outline: loaded.outline,
+      source: 'fetch',
+      warnings: loaded.warnings ?? [],
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Could not load page',
+    };
+  }
+}
+
 export async function buildSuggestSiteRuleDraft(
   deps: BuildSuggestSiteRuleDeps,
 ): Promise<SuggestSiteRuleResult> {
@@ -35,37 +68,15 @@ export async function buildSuggestSiteRuleDraft(
   const pageUrl = parsed.url;
   const hostname = hostnameFromUrl(pageUrl);
 
-  let outline: DomOutline | null = null;
-  let source: SiteRuleSuggestSource = 'tab';
-  let captureWarnings: string[] = [];
-
-  try {
-    outline = await deps.findOpenTabOutline(hostname, pageUrl);
-  } catch {
-    outline = null;
+  const captured = await captureOutline(deps, hostname, pageUrl);
+  if (!captured.ok) {
+    return { success: false, error: captured.error };
   }
 
-  if (!outline) {
-    source = 'fetch';
-    try {
-      const loaded = await deps.loadUrlOutline(pageUrl);
-      outline = loaded.outline;
-      captureWarnings = loaded.warnings ?? [];
-    } catch (e) {
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : 'Could not load page',
-      };
-    }
-  }
-
-  if (!outline) {
-    return { success: false, error: 'Could not read page structure' };
-  }
-
+  const { outline, source, warnings: captureWarnings } = captured;
   const base = heuristicDraftFromOutline(outline, source, captureWarnings);
 
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = await deps.runLlm(outline);
   } catch {
@@ -95,8 +106,6 @@ export async function buildSuggestSiteRuleDraft(
     (draft.excludeSelectors?.length ?? 0) > 0;
 
   // If LLM produced usable selectors, drop heuristic_only.
-  // sanitizeDraft may have filled includes from fallback — check whether
-  // LLM itself contributed any valid selectors.
   const llmIncludes = Array.isArray(llmPartial.includeSelectors)
     ? llmPartial.includeSelectors.length
     : 0;

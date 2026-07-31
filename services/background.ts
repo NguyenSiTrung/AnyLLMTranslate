@@ -1985,8 +1985,10 @@ async function handleSuggestSiteRule(
       );
       matches.sort((a, b) => Number(b.active) - Number(a.active));
       for (const tab of matches) {
+        const tabId = tab.id;
+        if (tabId == null) continue;
         try {
-          const res = (await chrome.tabs.sendMessage(tab.id!, {
+          const res = (await chrome.tabs.sendMessage(tabId, {
             action: 'GET_DOM_OUTLINE',
           })) as GetDomOutlineResult;
           if (res?.success && res.outline) return res.outline;

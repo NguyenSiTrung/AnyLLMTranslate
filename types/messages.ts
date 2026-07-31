@@ -6,6 +6,7 @@
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { PageContext } from './config';
 import type { SubtitleProfile, ProfileKnobs } from '@/lib/subtitleProfiles';
+import type { DomOutline, SuggestSiteRuleDraft } from '@/lib/siteRuleSuggest/types';
 
 /** Category resolution info returned to popup */
 export interface CategoryInfo {
@@ -688,7 +689,7 @@ export interface SuggestSiteRuleMessage {
 /** Background → Options: draft site rule (or error). */
 export interface SuggestSiteRuleResult {
   success: boolean;
-  draft?: import('@/lib/siteRuleSuggest/types').SuggestSiteRuleDraft;
+  draft?: SuggestSiteRuleDraft;
   error?: string;
 }
 
@@ -700,7 +701,7 @@ export interface GetDomOutlineMessage {
 /** Content → Background: DOM outline payload. */
 export interface GetDomOutlineResult {
   success: boolean;
-  outline?: import('@/lib/siteRuleSuggest/types').DomOutline;
+  outline?: DomOutline;
   error?: string;
 }
 

@@ -56,7 +56,7 @@ export function sanitizeSelectorList(
 
 function sanitizeHostname(raw: unknown, fallback: string): string {
   if (typeof raw !== 'string') return fallback;
-  let h = raw.trim().toLowerCase().replace(/\.$/, '');
+  const h = raw.trim().toLowerCase().replace(/\.$/, '');
   if (!h) return fallback;
   if (!HOSTNAME_RE.test(h)) return fallback;
   // Reject bare "*"
