@@ -105,49 +105,7 @@ describe('editable guards', () => {
 });
 
 describe('gesture IME / repeat', () => {
-  it('ignores isComposing and repeat keydowns', () => {
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
-
-    const g = createGestureController(
-      {
-        enabled: true,
-        triggerKey: ' ',
-        tapCount: 3,
-        timeWindowMs: 500,
-        idleMs: 0,
-        triggerGapMs: 0,
-        triggerToleranceCount: 0,
-      },
-      {
-        onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement,
-      },
-    );
-
-    for (let i = 0; i < 3; i++) {
-      g.onKeyDown(
-        new KeyboardEvent('keydown', { key: ' ', bubbles: true, isComposing: true }),
-      );
-    }
-    expect(triggers).toHaveLength(0);
-
-    for (let i = 0; i < 3; i++) {
-      g.onKeyDown(
-        new KeyboardEvent('keydown', { key: ' ', bubbles: true, repeat: true }),
-      );
-    }
-    expect(triggers).toHaveLength(0);
-
-    g.onKeyDown(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    g.onKeyDown(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    g.onKeyDown(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    // fire via setTimeout(0)
-  });
-
-  it('counts Space via event.code (IME remapped key) and via input insertText (dual path)', async () => {
+  it('ignores composing/repeat input and counts Space via keyboard or input paths', async () => {
     // Scenario 1: event.code=Space when event.key is "Process" (IME remap)
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');
@@ -170,6 +128,20 @@ describe('gesture IME / repeat', () => {
         getText: () => input.value,
       },
     );
+
+    for (let i = 0; i < 3; i++) {
+      g.onKeyDown(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true, isComposing: true }),
+      );
+    }
+    expect(triggers).toHaveLength(0);
+
+    for (let i = 0; i < 3; i++) {
+      g.onKeyDown(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true, repeat: true }),
+      );
+    }
+    expect(triggers).toHaveLength(0);
 
     const fire = (key: string, code: string) => {
       const ev = new KeyboardEvent('keydown', { key, code, bubbles: true });
@@ -309,6 +281,41 @@ describe('gesture IME / repeat', () => {
     fire2();
     await vi.advanceTimersByTimeAsync(10);
     expect(triggers2).toHaveLength(1);
+
+    // Idle debounce defers the trigger until the configured quiet period.
+    const idleTriggers: HTMLElement[] = [];
+    const idleInput = document.createElement('input');
+    idleInput.value = 'hello';
+    document.body.appendChild(idleInput);
+    const idleController = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        timeWindowMs: 500,
+        idleMs: 100,
+        triggerGapMs: 0,
+        triggerToleranceCount: 0,
+      },
+      {
+        onTrigger: (el) => idleTriggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === idleInput,
+        getText: () => idleInput.value,
+      },
+    );
+    const fireIdle = () => {
+      const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true });
+      Object.defineProperty(ev, 'target', { value: idleInput });
+      idleController.onKeyDown(ev);
+    };
+    fireIdle();
+    fireIdle();
+    fireIdle();
+    expect(idleTriggers).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(idleTriggers).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(idleTriggers).toHaveLength(1);
   });
 
   it('does not double-count keydown+input and recovers when compositionstart is stuck', async () => {
@@ -394,46 +401,6 @@ describe('gesture IME / repeat', () => {
     fire();
     fire();
     await vi.advanceTimersByTimeAsync(10);
-    expect(triggers).toHaveLength(1);
-  });
-
-  it('fires after idle debounce when idleMs > 0', async () => {
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
-
-    const g = createGestureController(
-      {
-        enabled: true,
-        triggerKey: ' ',
-        tapCount: 3,
-        timeWindowMs: 500,
-        idleMs: 100,
-        triggerGapMs: 0,
-        triggerToleranceCount: 0,
-      },
-      {
-        onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement =>
-          el instanceof HTMLElement && el === input,
-        getText: () => input.value,
-      },
-    );
-
-    // Dispatch with target so shouldAccept sees input
-    const fire = () => {
-      const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true });
-      Object.defineProperty(ev, 'target', { value: input });
-      g.onKeyDown(ev);
-    };
-    fire();
-    fire();
-    fire();
-    expect(triggers).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(50);
-    expect(triggers).toHaveLength(0);
-    await vi.advanceTimersByTimeAsync(60);
     expect(triggers).toHaveLength(1);
   });
 });

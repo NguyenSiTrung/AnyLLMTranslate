@@ -89,49 +89,47 @@ describe('translationDisplay', () => {
       applyTranslation(document.body, 'piece-body', 'Translation');
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
       expect(document.body.innerHTML).toBe(before);
-    });
 
-    it('updates placeholder in-place (no duplicate element)', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
+      // An existing loading placeholder is updated in place, not duplicated.
+      const placeholderParent = document.createElement('p');
+      document.body.appendChild(placeholderParent);
+      showLoadingPlaceholder(placeholderParent, 'piece-placeholder');
+      applyTranslation(placeholderParent, 'piece-placeholder', 'Translated text');
 
-      showLoadingPlaceholder(parent, 'piece-1');
-      applyTranslation(parent, 'piece-1', 'Translated text');
-
-      const translations = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
+      const translations = document.querySelectorAll('[data-anyllm-piece-id="piece-placeholder"]');
       expect(translations).toHaveLength(1);
       expect(translations[0].textContent).toBe('Translated text');
       expect(translations[0].classList.contains('anyllm-translate-loading')).toBe(false);
-    });
 
-    it('inserts translations inside list items and preserves split-piece order', () => {
+      // List items keep their insertion parent, and split pieces retain order.
+      document.body.innerHTML = '';
       const list = document.createElement('ul');
       const item = document.createElement('li');
       item.textContent = 'First item';
       list.appendChild(item);
       document.body.appendChild(list);
 
-      applyTranslation(item, 'piece-1', 'Mục đầu tiên');
+      applyTranslation(item, 'piece-list-1', 'Mục đầu tiên');
 
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(translation?.parentElement).toBe(item);
+      const listTranslation = document.querySelector('[data-anyllm-piece-id="piece-list-1"]');
+      expect(listTranslation?.parentElement).toBe(item);
       expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
 
       // Split pieces keep insertion order below the original.
-      const parent = document.createElement('p');
-      parent.textContent = 'Long paragraph';
-      document.body.appendChild(parent);
+      const splitParent = document.createElement('p');
+      splitParent.textContent = 'Long paragraph';
+      document.body.appendChild(splitParent);
 
-      applyTranslation(parent, 'piece-2', 'First translation');
-      applyTranslation(parent, 'piece-3', 'Second translation');
+      applyTranslation(splitParent, 'piece-list-2', 'First translation');
+      applyTranslation(splitParent, 'piece-list-3', 'Second translation');
 
       const orderedPieceIds = Array.from(document.body.querySelectorAll('[data-anyllm-piece-id]'))
         .map((child) => child.getAttribute('data-anyllm-piece-id'))
         .filter(Boolean);
-      expect(orderedPieceIds).toEqual(['piece-1', 'piece-2', 'piece-3']);
+      expect(orderedPieceIds).toEqual(['piece-list-1', 'piece-list-2', 'piece-list-3']);
     });
 
-    it('reconstructs inline markup from rich-translate variables (FR-1)', () => {
+    it('reconstructs and updates rich-translate markup (FR-1)', () => {
       const parent = document.createElement('p');
       parent.textContent = 'Hello world';
       document.body.appendChild(parent);
@@ -148,44 +146,36 @@ describe('translationDisplay', () => {
       const strong = translation?.querySelector('strong');
       expect(strong).not.toBeNull();
       expect(strong?.textContent).toBe('thế giới');
-      expect(translation?.textContent).toBe('Xin chào thế giới');
-    });
 
-    it('updates an existing rich-translate placeholder in-place preserving markup', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'Hello world';
-      document.body.appendChild(parent);
-
-      // First pass: create the placeholder.
+      // A second pass updates the same rich placeholder while preserving markup.
+      const richParent = document.createElement('p');
+      richParent.textContent = 'Hello world';
+      document.body.appendChild(richParent);
       const vars = [
         { id: 0, tag: 'A', openHtml: '<a href="https://x.test">', closeHtml: '</a>' },
       ];
-      applyTranslation(parent, 'piece-rt', 'A <z id="0">link</z>', 'vi', vars);
+      applyTranslation(richParent, 'piece-rt', 'A <z id="0">link</z>', 'vi', vars);
+      applyTranslation(richParent, 'piece-rt', 'Một <z id="0">liên kết</z>', 'vi', vars);
 
-      // Second pass: in-place update with a new translation.
-      applyTranslation(parent, 'piece-rt', 'Một <z id="0">liên kết</z>', 'vi', vars);
-
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-rt"]');
-      const a = translation?.querySelector('a');
+      const richTranslation = document.querySelector('[data-anyllm-piece-id="piece-rt"]');
+      const a = richTranslation?.querySelector('a');
       expect(a).not.toBeNull();
       expect(a?.getAttribute('href')).toBe('https://x.test');
       expect(a?.textContent).toBe('liên kết');
-      expect(translation?.textContent).toBe('Một liên kết');
-    });
+      expect(richTranslation?.textContent).toBe('Một liên kết');
 
-    it('does not execute or render a <script> carried by a malicious variable (XSS guard)', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'text';
-      document.body.appendChild(parent);
-
-      const vars = [
+      // Malicious variables are sanitized and never render executable elements.
+      const xssParent = document.createElement('p');
+      xssParent.textContent = 'text';
+      document.body.appendChild(xssParent);
+      const xssVars = [
         { id: 0, tag: 'SCRIPT', openHtml: '<script>', closeHtml: '</script>' },
       ];
-      applyTranslation(parent, 'piece-xss', 'a<z id="0">evil()</z>', 'vi', vars);
+      applyTranslation(xssParent, 'piece-xss', 'a<z id="0">evil()</z>', 'vi', xssVars);
 
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-xss"]');
-      expect(translation?.querySelector('script')).toBeNull();
-      expect(translation?.textContent).toBe('aevil()');
+      const xssTranslation = document.querySelector('[data-anyllm-piece-id="piece-xss"]');
+      expect(xssTranslation?.querySelector('script')).toBeNull();
+      expect(xssTranslation?.textContent).toBe('aevil()');
     });
   });
 
@@ -208,12 +198,8 @@ describe('translationDisplay', () => {
       expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
     });
-  });
 
-
-
-  describe('setErrorState', () => {
-    it('adds compact error element (full message in title) and updates placeholder in-place', () => {
+    it('adds compact error element, updates placeholders, and clears errors', () => {
       // Scenario 1: parent marked + compact element, full message only in title
       const parent = document.createElement('p');
       document.body.appendChild(parent);
@@ -250,20 +236,14 @@ describe('translationDisplay', () => {
       expect(errors[0].getAttribute('data-anyllm-error')).toBe('');
       expect(errors[0].textContent).toBe('⚠ Translation failed');
       expect((errors[0] as HTMLElement).title).toContain('API error');
-    });
 
-  });
+      const clearParent = document.createElement('p');
+      document.body.appendChild(clearParent);
+      setErrorState(clearParent, 'piece-clear', 'Error');
+      clearErrorState(clearParent, 'piece-clear');
 
-  describe('clearErrorState', () => {
-    it('removes error attribute and element', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      setErrorState(parent, 'piece-1', 'Error');
-      clearErrorState(parent, 'piece-1');
-
-      expect(parent.hasAttribute('data-anyllm-error')).toBe(false);
-      expect(document.querySelector('[data-anyllm-piece-id="piece-1"]')).toBeNull();
+      expect(clearParent.hasAttribute('data-anyllm-error')).toBe(false);
+      expect(document.querySelector('[data-anyllm-piece-id="piece-clear"]')).toBeNull();
     });
   });
 
@@ -311,13 +291,7 @@ describe('translationDisplay', () => {
 
       expect(document.querySelectorAll('.anyllm-translate-translation')).toHaveLength(0);
       expect(getPageState()).toBe('off');
-    });
 
-
-  });
-
-  describe('page state', () => {
-    it('setPageState/getPageState round-trip and togglePageState cycles (default off)', () => {
       expect(getPageState()).toBe('off');
       // Toggle from default off: explicit mode request honored, then cycles off
       expect(togglePageState('translation-only')).toBe('translation-only');

@@ -9,7 +9,7 @@ describe('domWalker — selector-match cache integration', () => {
     __resetMatchCacheForTest();
   });
 
-  it('reduces .matches() calls vs node count when many elements share selectors', () => {
+  it('preserves cached selector matching and extraction results', () => {
     // Build a tree with 10 <p> elements, all sharing class "sidebar".
     // Exclude selector ".sidebar" should cache after the first match.
     const container = document.createElement('div');
@@ -63,10 +63,12 @@ describe('domWalker — selector-match cache integration', () => {
     } finally {
       Element.prototype.matches = originalMatches;
     }
-  });
 
-  it('produces identical results with and without cache (regression)', () => {
-    const container = document.createElement('div');
+    // Article-context tagging covers article/main and outside/nav/sidebar regions.
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const regressionContainer = document.createElement('div');
     const article = document.createElement('article');
     const p1 = document.createElement('p');
     p1.textContent = 'Article paragraph one.';
@@ -75,15 +77,15 @@ describe('domWalker — selector-match cache integration', () => {
     p2.textContent = 'Advertisement text.';
     article.appendChild(p1);
     article.appendChild(p2);
-    container.appendChild(article);
+    regressionContainer.appendChild(article);
 
     const nav = document.createElement('nav');
     const navLink = document.createElement('a');
     navLink.textContent = 'Home';
     nav.appendChild(navLink);
-    container.appendChild(nav);
+    regressionContainer.appendChild(nav);
 
-    document.body.appendChild(container);
+    document.body.appendChild(regressionContainer);
 
     __resetMatchCacheForTest();
     const pieces = extractPieces(document.body, {
@@ -217,6 +219,10 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
   });
 
   it('with whitelist OFF, descends into all direct children (regression)', () => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+
     const nav = document.createElement('nav');
     const navLink = document.createElement('a');
     navLink.textContent = 'Navigation link text';
@@ -230,9 +236,9 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     document.body.appendChild(nav);
     document.body.appendChild(main);
 
-    const pieces = extractPieces(document.body, {});
+    const offPieces = extractPieces(document.body, {});
     // Both nav and main are walked when whitelist is off
-    expect(pieces.length).toBe(2);
+    expect(offPieces.length).toBe(2);
   });
 
 });

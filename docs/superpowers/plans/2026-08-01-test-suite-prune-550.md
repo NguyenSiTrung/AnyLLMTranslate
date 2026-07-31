@@ -8,6 +8,8 @@
 
 **Tech Stack:** Vitest 3, TypeScript, React Testing Library/jsdom for UI and content tests, Node test environment for pure/service tests, npm scripts, Git, and Beads.
 
+> **Verified final:** 560 passing Vitest tests across 182 files, with compile, lint, and production build passing.
+
 ## Global Constraints
 
 - Count only the Vitest suite using the runner's `numTotalTests` value.
@@ -31,7 +33,7 @@
 **Interfaces:**
 - Produces: a verified `numTotalTests: 631` baseline and a per-file count ledger used to measure each batch.
 
-- [ ] **Step 1: Run the baseline reporter**
+- [x] **Step 1: Run the baseline reporter**
 
 Run:
 
@@ -41,7 +43,7 @@ Run:
 
 Expected: all 631 tests pass and the report contains `numTotalTests: 631`.
 
-- [ ] **Step 2: Save a readable count ledger**
+- [x] **Step 2: Save a readable count ledger**
 
 Run:
 
@@ -62,7 +64,7 @@ NODE
 
 Expected: the ledger identifies the high-count suites without changing tracked files.
 
-- [ ] **Step 3: Confirm the worktree before editing**
+- [x] **Step 3: Confirm the worktree before editing**
 
 Run:
 
@@ -88,7 +90,7 @@ Expected: only the already committed design change is ahead of `origin/master`; 
 - Consumes: the existing pure helper functions and fixtures in each file.
 - Produces: the same assertions and test coverage with fewer Vitest `it()` blocks.
 
-- [ ] **Step 1: Merge TTS credential and stack scenarios**
+- [x] **Step 1: Merge TTS credential and stack scenarios**
 
 In `lib/__tests__/ttsResolve.test.ts`, retain the existing helper fixtures and combine only compatible cases:
 
@@ -110,7 +112,7 @@ it('resolves language-specific TTS stacks with inherited and overridden credenti
 
 Delete only the duplicated missing/disabled assertions that are represented in the retained combined scenario. Keep the no-base-url assertion because it covers a distinct guard.
 
-- [ ] **Step 2: Merge pure parser and model-option matrices**
+- [x] **Step 2: Merge pure parser and model-option matrices**
 
 In `manifestParser.test.ts`, combine the URI/track-format cases into behavior groups while retaining assertions for media filtering, relative and absolute URLs, segment templates, timelines, MIME types, and invalid input. In `thinkingMode.test.ts` and `googleMultiModel.test.ts`, combine adjacent provider/model matrix cases into scenario tests that still assert every supported family and fallback.
 
@@ -122,13 +124,13 @@ it('resolves supported model families and preserves unsupported/fallback behavio
 });
 ```
 
-- [ ] **Step 3: Merge URL, ASR, provider-TTS, and browser-voice matrices**
+- [x] **Step 3: Merge URL, ASR, provider-TTS, and browser-voice matrices**
 
 In `siteRuleSuggest.url.test.ts`, combine normalization acceptance/rejection into one test and hostname pattern behavior into another. In `youtubeAsrResegment.test.ts`, group pure parsing/resegmentation inputs separately from URL/gating behavior. In `providerTts.test.ts` and `tts/pickBrowserVoice.test.ts`, group request-body/credential guards and language/voice selection matrices respectively.
 
 Do not remove assertions for Mistral `voice_id`, empty-model no-fetch behavior, ASR fail-open behavior, or voice-language matching.
 
-- [ ] **Step 4: Run the changed helper suites**
+- [x] **Step 4: Run the changed helper suites**
 
 Run:
 
@@ -146,7 +148,7 @@ Run:
 
 Expected: all selected tests pass with zero failures.
 
-- [ ] **Step 5: Recount the full suite and stop if target is reached**
+- [x] **Step 5: Recount the full suite and stop if target is reached**
 
 Run:
 
@@ -157,7 +159,7 @@ node -e "const r=require('/tmp/anyllm-vitest-after-helpers.json'); console.log({
 
 Expected: zero failures. If the total is 540–560, skip Tasks 3–4 and continue with Task 5.
 
-- [ ] **Step 6: Commit the helper batch**
+- [x] **Step 6: Commit the helper batch**
 
 ```bash
 git add lib/__tests__/ttsResolve.test.ts \
@@ -186,7 +188,7 @@ git commit -m "test: consolidate helper matrix cases"
 - Consumes: existing service fixtures, mock fetch responses, pool reset helpers, and per-test setup.
 - Produces: unchanged provider, retry, failover, cache, and prompt assertions with fewer scenario blocks.
 
-- [ ] **Step 1: Consolidate OpenAI-compatible request matrices**
+- [x] **Step 1: Consolidate OpenAI-compatible request matrices**
 
 In `services/__tests__/openaiCompatible.test.ts`, merge only tests with the same `OpenAICompatibleService` lifecycle:
 
@@ -204,19 +206,19 @@ it('covers provider-specific thinking and response-format fallbacks', async () =
 
 Keep subtitle/web prompt routing, RPM behavior, acquire-before-fetch order, and each specialized page/PDF/ASR path distinct unless they already share all setup and lifecycle. Do not merge away any assertion that verifies a thrown error versus a returned failed result.
 
-- [ ] **Step 2: Consolidate provider tester and pool behavior**
+- [x] **Step 2: Consolidate provider tester and pool behavior**
 
 In `providerTester.thinking.test.ts`, merge the equivalent disable-detection cases while retaining distinct assertions for `reasoning_content`, `<think>` stripping, auto mode, DeepSeek Official, OpenCode Zen model gating, rejected controls, empty content, reasoning-budget diagnostics, and the minimum token budget.
 
 In `providerPool.test.ts`, combine only adjacent state-matrix cases with the same coordinator setup. Preserve empty-pool errors, 429/5xx/401 failover, cooldown rejoin, all-open diagnostics, targeted connection testing, throttle/concurrency, busy-key selection, same-key retry policy, and preferred/round-robin behavior.
 
-- [ ] **Step 3: Consolidate background translation and retry matrices**
+- [x] **Step 3: Consolidate background translation and retry matrices**
 
 In `background.test.ts` and `background.translate.test.ts`, merge scenarios that use the same mock storage and reset lifecycle. Preserve named-glossary resolution, prompt/profile routing, context seeding, rolling glossary, cache behavior, pool failover, retry failure signaling, partial back-fill cache protection, hot-path rebuild tracking, negative-cache bypass, article/sidebar partitioning, deduplication, and concurrent batches.
 
 In `openaiCompatibleRetry.test.ts`, group Retry-After parsing variants separately from retry policy behavior. In `base.test.ts`, group prompt construction and validation/parser matrices without dropping invalid-input or logging assertions.
 
-- [ ] **Step 4: Run the changed service suites**
+- [x] **Step 4: Run the changed service suites**
 
 Run:
 
@@ -233,7 +235,7 @@ Run:
 
 Expected: all selected tests pass with zero failures and no real retry sleep introduced.
 
-- [ ] **Step 5: Recount the full suite and stop if target is reached**
+- [x] **Step 5: Recount the full suite and stop if target is reached**
 
 Run:
 
@@ -244,7 +246,7 @@ node -e "const r=require('/tmp/anyllm-vitest-after-services.json'); console.log(
 
 Expected: zero failures. If the total is 540–560, skip Task 4 and continue with Task 5.
 
-- [ ] **Step 6: Commit the service batch**
+- [x] **Step 6: Commit the service batch**
 
 ```bash
 git add services/__tests__/openaiCompatible.test.ts \
@@ -271,7 +273,7 @@ git commit -m "test: consolidate provider and service scenarios"
 - Consumes: existing DOM fixtures, fake-timer setup, coordinator module resets, and message mocks.
 - Produces: unchanged content behavior and regression coverage with fewer test cases.
 
-- [ ] **Step 1: Consolidate inline translation guards and feedback**
+- [x] **Step 1: Consolidate inline translation guards and feedback**
 
 In `inlineTranslate.test.ts`, merge compatible pure DOM guard cases, gesture configuration cases, visual feedback cases, and cleanup/listener cases. Keep separate recognizable coverage for:
 
@@ -284,13 +286,13 @@ In `inlineTranslate.test.ts`, merge compatible pure DOM guard cases, gesture con
 
 In `inlineTranslate.parity.test.ts`, merge only adjacent IME/input-event matrices and write-back/configuration matrices. Preserve `isComposing`, repeat, `event.code`, composition lifecycle, dual input/keydown de-duplication, idle debounce, write abort, undo/retranslate, language prefix, blocklist, and disabled behavior.
 
-- [ ] **Step 2: Consolidate translation display and DOM walker matrices**
+- [x] **Step 2: Consolidate translation display and DOM walker matrices**
 
 In `translationDisplay.test.ts`, combine style/placeholder insertion cases and state cleanup cases while retaining the XSS assertion and P0 protection against unmarking unrelated translations.
 
 In `domWalker.test.ts`, combine the selector-cache and article-context matrices, and combine whitelist/cap variants only where every on/off assertion remains in the same behavior test. Keep excluded-inline handling, block skips, and rich-placeholder extraction assertions.
 
-- [ ] **Step 3: Consolidate subtitle coordinator and mutation watcher scenarios**
+- [x] **Step 3: Consolidate subtitle coordinator and mutation watcher scenarios**
 
 In `subtitleCoordinator.test.ts`, merge only scenarios that share the same coordinator reset and message fixture:
 
@@ -306,7 +308,7 @@ Keep these independently recognizable and independently asserted: stale/matching
 
 In `mutationWatcher.test.ts`, combine normal mutation queueing cases and body-swap deduplication cases only when observer setup and teardown remain isolated.
 
-- [ ] **Step 4: Run the changed content suites**
+- [x] **Step 4: Run the changed content suites**
 
 Run:
 
@@ -322,7 +324,7 @@ Run:
 
 Expected: all selected tests pass with zero failures, fake timers are restored, and no cross-test singleton state leaks.
 
-- [ ] **Step 5: Recount the full suite and stop within the target range**
+- [x] **Step 5: Recount the full suite and stop within the target range**
 
 Run:
 
@@ -333,7 +335,7 @@ node -e "const r=require('/tmp/anyllm-vitest-after-content.json'); console.log({
 
 Expected: zero failures and `540 <= total <= 560`. If the count is below 540, restore the least valuable merge from the last batch rather than deleting more coverage.
 
-- [ ] **Step 6: Commit the content batch**
+- [x] **Step 6: Commit the content batch**
 
 ```bash
 git add content/__tests__/inlineTranslate.test.ts \
@@ -357,7 +359,7 @@ git commit -m "test: consolidate content behavior scenarios"
 - Consumes: the final Vitest JSON report and quality-gate output.
 - Produces: accurate project history, a closed Beads issue, and a pushed green branch.
 
-- [ ] **Step 1: Run the complete final Vitest suite**
+- [x] **Step 1: Run the complete final Vitest suite**
 
 Run:
 
@@ -380,7 +382,7 @@ NODE
 
 Expected: zero failures and a total between 540 and 560.
 
-- [ ] **Step 2: Run compile, lint, and build**
+- [x] **Step 2: Run compile, lint, and build**
 
 Run:
 
@@ -392,11 +394,11 @@ npm run build
 
 Expected: TypeScript exits 0, ESLint reports 0 errors, and the production build completes successfully.
 
-- [ ] **Step 3: Update the project count documentation**
+- [x] **Step 3: Update the project count documentation**
 
 In `conductor/product.md`, update the current-state count and the latest suite-history entry to the exact final Vitest count, preserving the historical 682/631 entries as history. Do not rewrite unrelated product history.
 
-- [ ] **Step 4: Review the final diff**
+- [x] **Step 4: Review the final diff**
 
 Run:
 
@@ -410,7 +412,7 @@ git diff "$BASE_REF"...HEAD --name-only
 
 Expected: only the design/plan documentation, selected test consolidation, and count documentation are changed. No production source, Vitest configuration, or unrelated user work is present.
 
-- [ ] **Step 5: Update and close the Beads issue**
+- [x] **Step 5: Update and close the Beads issue**
 
 Run:
 
@@ -424,7 +426,7 @@ bd close AnyLLMTranslate-5kb --reason="Test suite consolidated to ${FINAL_COUNT}
 
 Expected: the issue title and closure reason contain the exact count read from the final JSON report.
 
-- [ ] **Step 6: Commit documentation and final changes**
+- [x] **Step 6: Commit documentation and final changes**
 
 ```bash
 git add conductor/product.md \
@@ -432,7 +434,7 @@ git add conductor/product.md \
 git commit -m "docs: record final consolidated test count"
 ```
 
-- [ ] **Step 7: Push and verify**
+- [x] **Step 7: Push and verify**
 
 Run:
 

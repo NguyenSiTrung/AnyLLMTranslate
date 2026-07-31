@@ -232,7 +232,7 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     let result = (await handleMessage(
       buildMsg([{ id: 'p1', text: 'Hello' }]),
       fakeSender,
-    )) as { success: boolean; error?: string };
+    )) as { success: boolean; error?: string; retryAfter?: number };
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();

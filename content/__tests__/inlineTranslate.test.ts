@@ -66,7 +66,7 @@ afterEach(() => {
 /* ── isEditableElement ────────────────────────────────────────── */
 
 describe('isEditableElement', () => {
-  it('returns true for editable elements and false for non-editable/passwords/null', () => {
+  it('classifies editable and code-editor controls correctly', () => {
     const input = document.createElement('input');
     input.type = 'text';
     expect(isEditableElement(input)).toBe(true);
@@ -87,13 +87,8 @@ describe('isEditableElement', () => {
     expect(isEditableElement(password)).toBe(false);
 
     expect(isEditableElement(null)).toBe(false);
-  });
-});
 
-/* ── isCodeEditor ─────────────────────────────────────────────── */
-
-describe('isCodeEditor', () => {
-  it('detects known code-editor wrappers (incl. Monaco role=textbox+data-mode-id) and rejects regular inputs', () => {
+    // Known code-editor wrappers are excluded from inline translation.
     for (const cls of ['monaco-editor', 'CodeMirror', 'ace_editor', 'cm-editor']) {
       const el = document.createElement('div');
       el.className = cls;
@@ -114,13 +109,11 @@ describe('isCodeEditor', () => {
     expect(isCodeEditor(mChild)).toBe(true);
     monaco.remove();
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    document.body.appendChild(input);
-    expect(isCodeEditor(input)).toBe(false);
-  });
+    const regularInput = document.createElement('input');
+    regularInput.type = 'text';
+    document.body.appendChild(regularInput);
+    expect(isCodeEditor(regularInput)).toBe(false);
 
-  it('does NOT treat chat/rich-text composers as code editors (ProseMirror, Quill, role=textbox)', () => {
     // ChatGPT / Claude / many chat UIs use ProseMirror contenteditable
     const prose = document.createElement('div');
     prose.className = 'ProseMirror';
@@ -150,31 +143,12 @@ describe('isCodeEditor', () => {
 /* ── getElementText ───────────────────────────────────────────── */
 
 describe('getElementText', () => {
-  it('reads value from inputs/textareas and textContent from contentEditable', () => {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = 'hello world';
-    expect(getElementText(input)).toBe('hello world');
-
-    const textarea = document.createElement('textarea');
-    textarea.value = 'some text';
-    expect(getElementText(textarea)).toBe('some text');
-
-    const div = document.createElement('div');
-    div.contentEditable = 'true';
-    div.textContent = 'editable text';
-    expect(getElementText(div)).toBe('editable text');
-  });
-});
-
-/* ── replaceElementText ───────────────────────────────────────── */
-
-describe('replaceElementText', () => {
-  it('dispatches input/change events on inputs and textareas', () => {
+  it('reads and replaces text in inputs, textareas, and contentEditable elements', () => {
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'original';
     document.body.appendChild(input);
+    expect(getElementText(input)).toBe('original');
 
     const inputHandler = vi.fn();
     const changeHandler = vi.fn();
@@ -189,6 +163,7 @@ describe('replaceElementText', () => {
     const textarea = document.createElement('textarea');
     textarea.value = 'original';
     document.body.appendChild(textarea);
+    expect(getElementText(textarea)).toBe('original');
 
     const taInputHandler = vi.fn();
     textarea.addEventListener('input', taInputHandler);
@@ -196,6 +171,11 @@ describe('replaceElementText', () => {
     replaceElementText(textarea, 'replaced');
 
     expect(taInputHandler).toHaveBeenCalledTimes(1);
+
+    const div = document.createElement('div');
+    div.contentEditable = 'true';
+    div.textContent = 'editable text';
+    expect(getElementText(div)).toBe('editable text');
   });
 });
 
@@ -278,6 +258,24 @@ describe('gesture detection', () => {
     fireKeydown(slow, ' ');
     await vi.advanceTimersByTimeAsync(10);
     expect(mockSendMessage).not.toHaveBeenCalled();
+
+    // A custom trigger key/count still routes the cleaned field text.
+    updateInlineTranslateConfig({ triggerKey: 'Enter', tapCount: 2 });
+    mockSendMessage.mockReset();
+    const custom = createFocusedInput('hello');
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'xin chào',
+    });
+    fireKeydown(custom, 'Enter');
+    fireKeydown(custom, 'Enter');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSelection',
+        text: 'hello',
+      }),
+    );
   });
 
   it('ignores non-editable, password, code-editor, empty fields, and when disabled', async () => {
@@ -329,27 +327,6 @@ describe('gesture detection', () => {
     fireKeydown(disabledInput, ' ');
     await vi.advanceTimersByTimeAsync(10);
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
-
-  it('respects configurable key and count', async () => {
-    updateInlineTranslateConfig({ triggerKey: 'Enter', tapCount: 2 });
-
-    const input = createFocusedInput('hello');
-    mockSendMessage.mockResolvedValueOnce({
-      success: true,
-      translatedText: 'xin chào',
-    });
-
-    fireKeydown(input, 'Enter');
-    fireKeydown(input, 'Enter');
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(mockSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'translateSelection',
-        text: 'hello',
-      }),
-    );
   });
 
   it('triple-space works in ProseMirror chat composers, including nested-child keydown targets', async () => {
@@ -437,31 +414,6 @@ describe('visual feedback', () => {
     );
   }
 
-  it('adds pulsing class during translation, removes after', async () => {
-    const input = createFocusedInput('hello   ');
-
-    let resolveTranslation = (_value: unknown) => {};
-    const translationPromise = new Promise((resolve) => {
-      resolveTranslation = resolve;
-    });
-    mockSendMessage.mockReturnValueOnce(translationPromise);
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    await vi.advanceTimersByTimeAsync(10);
-
-    // Pulsing should be active
-    expect(input.classList.contains(PULSING_CLASS)).toBe(true);
-
-    // Resolve the translation
-    resolveTranslation({ success: true, translatedText: 'xin chào' });
-    await vi.advanceTimersByTimeAsync(10);
-
-    // Pulsing should be removed
-    expect(input.classList.contains(PULSING_CLASS)).toBe(false);
-  });
-
   it('shows loading toast during translation, updates to success on completion, and auto-dismisses after 2 seconds', async () => {
     const input = createFocusedInput('hello   ');
 
@@ -493,23 +445,39 @@ describe('visual feedback', () => {
     // Advance 2 seconds for auto-dismiss
     await vi.advanceTimersByTimeAsync(2000);
     expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
-  });
 
-  it('shows error toast on failure', async () => {
-    const input = createFocusedInput('hello   ');
+    // The same request lifecycle applies the pulsing class while pending.
+    mockSendMessage.mockReset();
+    const pulseInput = createFocusedInput('hello   ');
+    let resolvePulse = (_value: unknown) => {};
+    mockSendMessage.mockReturnValueOnce(new Promise((resolve) => {
+      resolvePulse = resolve;
+    }));
+    fireKeydown(pulseInput, ' ');
+    fireKeydown(pulseInput, ' ');
+    fireKeydown(pulseInput, ' ');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(pulseInput.classList.contains(PULSING_CLASS)).toBe(true);
+    resolvePulse({ success: true, translatedText: 'xin chào' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(pulseInput.classList.contains(PULSING_CLASS)).toBe(false);
+
+    // A failed request replaces the loading state with a compact error toast.
+    mockSendMessage.mockReset();
+    const failedInput = createFocusedInput('hello   ');
     mockSendMessage.mockResolvedValueOnce({
       success: false,
       error: 'API error',
     });
 
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
+    fireKeydown(failedInput, ' ');
+    fireKeydown(failedInput, ' ');
+    fireKeydown(failedInput, ' ');
     await vi.advanceTimersByTimeAsync(10);
 
-    const toast = document.querySelector(`.${TOAST_CLASS}`);
-    expect(toast?.getAttribute('data-type')).toBe('error');
-    expect(toast?.textContent).toBe('⚠ Translation failed');
+    const errorToast = document.querySelector(`.${TOAST_CLASS}`);
+    expect(errorToast?.getAttribute('data-type')).toBe('error');
+    expect(errorToast?.textContent).toBe('⚠ Translation failed');
   });
 });
 
@@ -622,21 +590,16 @@ describe('debounce', () => {
     // Resolve first
     resolveFirst({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
-  });
-});
 
-/* ── Cleanup ──────────────────────────────────────────────────── */
-
-describe('cleanup', () => {
-  it('registers keydown listeners on window and document (capture) and removes them on cleanup', () => {
+    cleanup();
     const docAddSpy = vi.spyOn(document, 'addEventListener');
     const winAddSpy = vi.spyOn(window, 'addEventListener');
     const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
     const winRemoveSpy = vi.spyOn(window, 'removeEventListener');
-    const cleanup = initInlineTranslate();
+    const cleanupListeners = initInlineTranslate();
     expect(docAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     expect(winAddSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
-    cleanup();
+    cleanupListeners();
     expect(docRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     expect(winRemoveSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
     docAddSpy.mockRestore();
@@ -729,7 +692,7 @@ describe('active-element re-acquisition', () => {
     cleanup();
   });
 
-  it('falls back to document.activeElement when original target is detached', async () => {
+  it('falls back to document.activeElement when original target is detached or empty', async () => {
     const original = document.createElement('input');
     original.type = 'text';
     original.value = 'hello   ';
@@ -764,21 +727,20 @@ describe('active-element re-acquisition', () => {
         text: 'hello',
       }),
     );
-  });
 
-  it('shows "Type something first" toast when gesture fires but active element is empty', async () => {
-    const original = document.createElement('input');
-    original.type = 'text';
-    original.value = 'hello   ';
-    document.body.appendChild(original);
-    original.focus();
+    mockSendMessage.mockClear();
+    const emptyOriginal = document.createElement('input');
+    emptyOriginal.type = 'text';
+    emptyOriginal.value = 'hello   ';
+    document.body.appendChild(emptyOriginal);
+    emptyOriginal.focus();
 
-    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    original.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    emptyOriginal.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    emptyOriginal.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    emptyOriginal.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
 
     // Detach original and focus an empty replacement
-    original.remove();
+    emptyOriginal.remove();
     const empty = document.createElement('input');
     empty.type = 'text';
     empty.value = '';

@@ -253,9 +253,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         sessionId: expect.any(Number),
       }),
     );
-  });
 
-  it('includes the resolved profile and knobOverrides on the translateSubtitle payload', async () => {
     // Override the beforeEach hostname stub to a bare mapped domain so the
     // resolved profile is concretely verifiable (youtube.com → media), not a
     // tautology against whatever the coordinator computed. Keep platform
@@ -273,6 +271,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       const l = call[0] as (m: { action: string; knobOverrides?: Partial<ProfileKnobs> | null }) => void;
       try { l({ action: 'setSubtitleKnobOverride', knobOverrides: { faithfulness: 'literal' } }); } catch { /* ignore */ }
     }
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
 
     if (capturedInterceptedHandler) {
       await capturedInterceptedHandler(
@@ -293,10 +292,10 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     if (!sent) throw new Error('Expected translateSubtitle message');
     expect((sent[0] as { profile?: string }).profile).toBe('media');
     expect((sent[0] as { knobOverrides?: Partial<ProfileKnobs> }).knobOverrides).toEqual({ faithfulness: 'literal' });
-  });
 
-  it('falls back to settings.sourceLanguage when payload.originalLanguage is empty', async () => {
-    const payload = {
+    vi.clearAllMocks();
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    const fallbackPayload = {
       url: 'https://udemy.com/subtitles.vtt',
       body: 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello',
       contentType: 'text/vtt',
@@ -304,16 +303,15 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       originalLanguage: '',
     };
 
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-003');
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(fallbackPayload, 'req-003');
 
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceLanguage: 'en', // settings.sourceLanguage fallback
       }),
     );
-  });
 
-  it('calls sendTranslatedSubtitle with correct requestId and empty VTT to disable native player', async () => {
+    mockSendTranslatedSubtitle.mockClear();
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://youtube.com/timedtext',
@@ -492,9 +490,13 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect(mockUpdateCues).not.toHaveBeenCalled();
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
-  });
 
-  it('calls updateTranslatedCues when background responds successfully', async () => {
+    mockUpdateCues.mockClear();
+    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockReset();
+    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      cues: MOCK_TRANSLATED_CUES,
+    });
     if (capturedInterceptedHandler) await capturedInterceptedHandler(
       {
         url: 'https://youtube.com/timedtext',
@@ -655,7 +657,7 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
     vi.resetModules();
   });
 
-  it('cache hit uses saved cues and skips RESEGMENT', async () => {
+  it('covers ASR cache hit, miss, and fail-open re-alignment paths', async () => {
     (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(
       async (msg: { action?: string }) => {
         if (msg?.action === 'GET_ASR_REALIGN_CACHE') {
@@ -679,21 +681,32 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
       'req-asr-hit',
     );
 
-    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+    const hitActions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => (c[0] as { action?: string }).action,
     );
-    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
-    expect(actions).not.toContain('RESEGMENT_YOUTUBE_ASR');
-    expect(actions).not.toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(hitActions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(hitActions).not.toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(hitActions).not.toContain('SAVE_ASR_REALIGN_CACHE');
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'translateSubtitle',
         cues: CACHED_CUES,
       }),
     );
-  });
 
-  it('cache miss runs AI, saves entry, translates AI cues', async () => {
+    // Cache miss runs AI, saves the realigned entry, and translates AI cues.
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>)
+      .mockClear()
+      .mockImplementation(async (msg: { action?: string }) => {
+        if (msg?.action === 'GET_ASR_REALIGN_CACHE') return { success: true };
+        if (msg?.action === 'RESEGMENT_YOUTUBE_ASR') {
+          return { success: true, cues: AI_CUES };
+        }
+        if (msg?.action === 'translateSubtitle') {
+          return { success: true, cues: MOCK_TRANSLATED_CUES };
+        }
+        return { success: true };
+      });
     await capturedInterceptedHandler?.(
       {
         url: ASR_URL,
@@ -705,12 +718,12 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
       'req-asr-miss',
     );
 
-    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+    const missActions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => (c[0] as { action?: string }).action,
     );
-    expect(actions).toContain('GET_ASR_REALIGN_CACHE');
-    expect(actions).toContain('RESEGMENT_YOUTUBE_ASR');
-    expect(actions).toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(missActions).toContain('GET_ASR_REALIGN_CACHE');
+    expect(missActions).toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(missActions).toContain('SAVE_ASR_REALIGN_CACHE');
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'SAVE_ASR_REALIGN_CACHE',
@@ -727,9 +740,8 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
         cues: AI_CUES,
       }),
     );
-  });
 
-  it('AI fail does not save and toasts fail-open', async () => {
+    // AI failure does not save and falls back to the original translation path.
     (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(
       async (msg: { action?: string }) => {
         if (msg?.action === 'GET_ASR_REALIGN_CACHE') return { success: true };
@@ -742,6 +754,7 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
         return { success: true };
       },
     );
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
 
     await capturedInterceptedHandler?.(
       {
@@ -754,11 +767,11 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
       'req-asr-fail',
     );
 
-    const actions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+    const failActions = (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => (c[0] as { action?: string }).action,
     );
-    expect(actions).toContain('RESEGMENT_YOUTUBE_ASR');
-    expect(actions).not.toContain('SAVE_ASR_REALIGN_CACHE');
+    expect(failActions).toContain('RESEGMENT_YOUTUBE_ASR');
+    expect(failActions).not.toContain('SAVE_ASR_REALIGN_CACHE');
     expect(mockShowSubtitleToast).toHaveBeenCalledWith(
       expect.stringMatching(/AI re-align failed/i),
     );
@@ -809,7 +822,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
   });
 
   it('sends translateSubtitle after parsing cues and initializes the overlay with translated (not original) cues on success', async () => {
-    const { forceOverlayMode, resetCoordinatorState } = await import(
+    const { forceOverlayMode, resetCoordinatorState, isInOverlayMode } = await import(
       '@/content/subtitleCoordinator'
     );
     resetCoordinatorState(); // ensure isOverlayMode = false
@@ -835,9 +848,9 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       }),
     );
     expect(mockInitializeOverlay).not.toHaveBeenCalledWith(MOCK_CUES, expect.anything());
-  });
 
-  it('does not force overlay mode when subtitle settings are disabled', async () => {
+    mockInitializeOverlay.mockClear();
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       subtitleSettings: {
@@ -846,30 +859,21 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       },
     });
 
-    const { forceOverlayMode, resetCoordinatorState, isInOverlayMode } = await import(
-      '@/content/subtitleCoordinator'
-    );
     resetCoordinatorState();
 
-    const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
     await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
 
     expect(isInOverlayMode()).toBe(false);
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
-  });
 
-  it('gracefully falls back to original cues when translation rejects', async () => {
-    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Service unavailable'),
-    );
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>)
+      .mockReset()
+      .mockRejectedValue(new Error('Service unavailable'));
 
-    const { forceOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
     resetCoordinatorState();
 
-    const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
     await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
 
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
@@ -954,22 +958,9 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
 
     // Stale chunk should be dropped — updateCues NOT called
     expect(mockUpdateCues).not.toHaveBeenCalled();
-  });
 
-  it('accepts SUBTITLE_CHUNK_TRANSLATED with a matching sessionId (full-array and chunk-delta forms)', async () => {
-    // Establish session 42
-    const payload = {
-      url: 'https://youtube.com/timedtext',
-      body: '<transcript>...</transcript>',
-      contentType: 'application/json',
-      platform: 'youtube',
-      originalLanguage: 'en',
-    };
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-match-1');
-
+    // Matching full-array and chunk-delta forms are accepted.
     mockUpdateCues.mockClear();
-
-    // Scenario 1: full-array chunk with matching sessionId is accepted
     extensionMessageHandler(
       { action: 'SUBTITLE_CHUNK_TRANSLATED', cues: MOCK_TRANSLATED_CUES, sessionId: 42 },
       {} as chrome.runtime.MessageSender,
@@ -977,7 +968,7 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     );
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
 
-    // Scenario 2: chunk-delta form with a valid session id is also accepted.
+    // A chunk-delta form with a valid session id is also accepted.
     // Defense-in-depth: a cleared/null active session must NOT treat every
     // late-or-racing chunk as stale.
     mockUpdateCues.mockClear();
@@ -992,18 +983,18 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
       () => {},
     );
     expect(mockUpdateCues).toHaveBeenCalled();
-  });
 
-  it('P0 regression: chunk delta merges onto full-array translatedCues (not a fresh array)', async () => {
+    // P0 regression: a delta merges onto the retained full-array state.
+    mockUpdateCues.mockClear();
     // Establish session 42 with a full-array update (updateTranslatedCues path)
-    const payload = {
+    const mergePayload = {
       url: 'https://youtube.com/timedtext',
       body: '<transcript>...</transcript>',
       contentType: 'application/json',
       platform: 'youtube',
       originalLanguage: 'en',
     };
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-merge-1');
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(mergePayload, 'req-merge-1');
 
     mockUpdateCues.mockClear();
 
@@ -1316,14 +1307,11 @@ describe('subtitleCoordinator – proactive category detection', () => {
     vi.resetModules();
   });
 
-  it('fires triggerAutoCategoryDetection on startCoordinator when on a watch page', async () => {
-    // Advance past the 1500ms debounce. await vi.advanceTimersByTimeAsync so any
-    // microtasks scheduled inside the timer callback (loadSettings) also flush.
+  it('does NOT fire proactive detection on a non-watch page, when LLM detection is disabled, or with a category override', async () => {
+    // On a watch page, the debounced detector fires after startup.
     await vi.advanceTimersByTimeAsync(1700);
     expect(mockTriggerAutoCategoryDetection).toHaveBeenCalled();
-  });
 
-  it('does NOT fire proactive detection on a non-watch page, when LLM detection is disabled, or with a category override', async () => {
     // Scenario 1: non-watch page (YouTube home)
     stopCoordinator();
     vi.resetModules();
