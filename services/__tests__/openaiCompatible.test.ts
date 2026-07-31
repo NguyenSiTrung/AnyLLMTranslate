@@ -51,25 +51,23 @@ describe('OpenAICompatibleService', () => {
   });
 
   describe('translate', () => {
-    it('translates a batch of texts successfully', async () => {
+    it('covers successful batches, empty responses, auth headers, and partial back-fill', async () => {
       const responseContent = JSON.stringify({
         translations: { p1: 'Xin chào', p2: 'Tạm biệt' },
       });
       globalThis.fetch = mockFetchResponse(responseContent);
 
       const service = new OpenAICompatibleService(mockConfig);
-      const result = await service.translate({
+      const batchResult = await service.translate({
         texts: new Map([['p1', 'Hello'], ['p2', 'Goodbye']]),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.translations.get('p1')).toBe('Xin chào');
-      expect(result.translations.get('p2')).toBe('Tạm biệt');
-    });
+      expect(batchResult.success).toBe(true);
+      expect(batchResult.translations.get('p1')).toBe('Xin chào');
+      expect(batchResult.translations.get('p2')).toBe('Tạm biệt');
 
-    it('returns a diagnostic empty-response error when content is null', async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -88,21 +86,19 @@ describe('OpenAICompatibleService', () => {
         text: () => Promise.resolve(''),
       });
 
-      const service = new OpenAICompatibleService(mockConfigWithKey);
-      const result = await service.translate({
+      const emptyService = new OpenAICompatibleService(mockConfigWithKey);
+      const emptyResult = await emptyService.translate({
         texts: new Map([['p1', 'Hello']]),
         sourceLanguage: 'en',
         targetLanguage: 'vi',
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toMatch(/Empty response from LLM/i);
-      expect(result.error).toMatch(/content=null/);
-      expect(result.error).toMatch(/completion_tokens=0/);
-      expect(result.error).toMatch(/model id is correct/i);
-    });
+      expect(emptyResult.success).toBe(false);
+      expect(emptyResult.error).toMatch(/Empty response from LLM/i);
+      expect(emptyResult.error).toMatch(/content=null/);
+      expect(emptyResult.error).toMatch(/completion_tokens=0/);
+      expect(emptyResult.error).toMatch(/model id is correct/i);
 
-    it('sets Authorization only when an API key is provided', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
       await new OpenAICompatibleService(mockConfig).translate({
         texts: new Map([['p1', 'Hello']]),
@@ -126,9 +122,7 @@ describe('OpenAICompatibleService', () => {
           'Authorization'
         ],
       ).toBe('Bearer sk-test-key');
-    });
 
-    it('handles empty/malformed responses and partial ID back-fill', async () => {
       globalThis.fetch = mockFetchResponse('   ');
       const empty = await new OpenAICompatibleService(mockConfig).translate({
         texts: new Map([['p1', 'Hello']]),
@@ -164,7 +158,7 @@ describe('OpenAICompatibleService', () => {
       expect(partial.translations.size).toBe(2);
     });
 
-    it('sends enable_thinking (top-level + kwargs) when thinkingMode is on/off', async () => {
+    it('covers generic and Gemini thinking request fields', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
       await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'off' }).translate({
         texts: new Map([['p1', 'Hello']]),
@@ -206,9 +200,7 @@ describe('OpenAICompatibleService', () => {
       ) as { enable_thinking?: unknown; chat_template_kwargs?: unknown };
       expect(autoBody.enable_thinking).toBeUndefined();
       expect(autoBody.chat_template_kwargs).toBeUndefined();
-    });
 
-    it('sends reasoning_effort for Google AI Studio Gemini (2.x none, 3.x minimal)', async () => {
       const geminiConfig = {
         ...mockConfig,
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
@@ -595,28 +587,26 @@ describe('OpenAICompatibleService', () => {
         expect(lastBody).toBe(false);
         // Exactly one fetch for the second translate (flag remembered).
         expect(fetchMock.mock.calls.length).toBe(3); // 2 (first) + 1 (second)
-      });
 
-      it('resets response_format memory when model or baseUrl changes', async () => {
         for (const patch of [
           { model: 'different-model' },
           { baseUrl: 'https://other/v1' },
         ] as const) {
           globalThis.fetch = rejectingThenOkFetch();
-          const service = new OpenAICompatibleService(mockConfigWithKey);
-          await service.translate({
+          const resetService = new OpenAICompatibleService(mockConfigWithKey);
+          await resetService.translate({
             texts: new Map([['p1', 'Hello']]),
             sourceLanguage: 'en',
             targetLanguage: 'vi',
           });
-          service.updateConfig({ ...mockConfigWithKey, ...patch });
-          await service.translate({
+          resetService.updateConfig({ ...mockConfigWithKey, ...patch });
+          await resetService.translate({
             texts: new Map([['p1', 'World']]),
             sourceLanguage: 'en',
             targetLanguage: 'vi',
           });
-          const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-          const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+          const resetFetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+          const lastCall = resetFetchMock.mock.calls[resetFetchMock.mock.calls.length - 1];
           expect(bodyHasResponseFormat(lastCall)).toBe(true);
         }
       });
@@ -948,9 +938,7 @@ describe('OpenAICompatibleService', () => {
       expect(empty.success).toBe(true);
       expect(empty.cues).toEqual([]);
       expect(globalThis.fetch).not.toHaveBeenCalled();
-    });
 
-    it('resegmentYoutubeAsr reports onProgress per batch (1-based)', async () => {
       const many = Array.from({ length: 130 }, (_, i) => ({
         text: `w${i}`,
         startMs: i * 100,

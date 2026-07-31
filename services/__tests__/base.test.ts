@@ -13,7 +13,7 @@ import {
 } from '@/services/base';
 
 describe('buildSystemPrompt', () => {
-  it('injects language/glossary/custom template and multi-placeholder replacement', () => {
+  it('builds language, glossary, custom-template, and page-context prompts safely', () => {
     const defaultPrompt = buildSystemPrompt('Vietnamese');
     expect(defaultPrompt).toContain('Vietnamese');
     expect(defaultPrompt).not.toContain('{{targetLanguage}}');
@@ -39,9 +39,7 @@ describe('buildSystemPrompt', () => {
     expect(fromNull).toContain('French');
     expect(fromNull).toContain('JSON');
     expect(fromEmpty).toContain('French');
-  });
 
-  it('appends page context selectively and caps long fields (prompt-injection guard)', () => {
     const full = buildSystemPrompt('Vietnamese', null, undefined, {
       title: 'Python Tutorial',
       description: 'Learn Python basics',
@@ -122,7 +120,7 @@ describe('buildUserPrompt', () => {
 });
 
 describe('parseTranslationResponse', () => {
-  it('parses standard JSON and common LLM wrappers (fence, think, prose, trailing commas)', () => {
+  it('parses standard/wrapped JSON and rejects invalid or malformed values', () => {
     expect(
       parseTranslationResponse(
         '{"translations": {"id1": "Xin chào", "id2": "Thế giới"}}',
@@ -156,9 +154,7 @@ describe('parseTranslationResponse', () => {
         ['id1'],
       ).get('id1'),
     ).toBe('Hello');
-  });
 
-  it('throws on invalid JSON (and logs), preserves expected ID order, skips bad values', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(() => parseTranslationResponse('not json', ['id1'])).toThrow();
     expect(warnSpy).toHaveBeenCalledWith(

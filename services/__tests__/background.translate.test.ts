@@ -423,11 +423,13 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
     expect(rebuildsAfterSecond).toBe(rebuildsAfterFirst);
 
     rebuildSpy.mockRestore();
-  });
 
-  it('rebuilds when a pool-relevant setting changes between translates', async () => {
+    mockStorage['anyllm-translate-settings'] = {};
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     mockFetchTranslation({ translations: { p1: 'Xin chào' } });
-    const rebuildSpy = vi.spyOn(ProviderPoolCoordinator.prototype, 'rebuild');
+    const changedRebuildSpy = vi.spyOn(ProviderPoolCoordinator.prototype, 'rebuild');
 
     // First translate with one provider.
     mockStorage['anyllm-translate-settings'] = {
@@ -440,7 +442,7 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
       ],
     };
     await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender);
-    const rebuildsAfterFirst = rebuildSpy.mock.calls.length;
+    const changedRebuildsAfterFirst = changedRebuildSpy.mock.calls.length;
 
     // Change a pool-relevant field (maxRpm) → invalidate + rebuild.
     __resetSettingsCacheForTest(); // simulate onSettingsChange invalidation
@@ -454,10 +456,10 @@ describe('handleTranslate — FR-6: hot-path dirty tracking', () => {
       ],
     };
     await handleMessage(buildMsg([{ id: 'p1', text: 'World' }]), fakeSender);
-    const rebuildsAfterSecond = rebuildSpy.mock.calls.length;
-    expect(rebuildsAfterSecond).toBeGreaterThan(rebuildsAfterFirst);
+    const changedRebuildsAfterSecond = changedRebuildSpy.mock.calls.length;
+    expect(changedRebuildsAfterSecond).toBeGreaterThan(changedRebuildsAfterFirst);
 
-    rebuildSpy.mockRestore();
+    changedRebuildSpy.mockRestore();
   });
 });
 
@@ -495,15 +497,16 @@ describe('handleTranslate — FR-4 negative-cache + forced-retry bypass', () => 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(getCachedFailure).toHaveBeenCalledTimes(1);
     expect(result.failed).toEqual([{ id: 'p1', error: 'Failed to parse translation response as JSON' }]);
-  });
 
-  it('bypasses + clears the failure cache on a forced retry (skipFailureCache: true)', async () => {
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     // Even though a failure is cached, the retry must ignore it.
     getCachedFailure.mockResolvedValue('Failed to parse translation response as JSON');
     // Provide a valid LLM response so the retry succeeds.
     mockFetchTranslation({ translations: { p1: 'Xin chào' } });
 
-    const result = await handleMessage(
+    const retryResult = await handleMessage(
       { ...buildMsg([{ id: 'p1', text: 'Hello' }]), skipFailureCache: true },
       fakeSender,
     ) as { success: boolean; results?: Array<{ id: string; translatedText: string }>; failed?: unknown[] };
@@ -520,9 +523,9 @@ describe('handleTranslate — FR-4 negative-cache + forced-retry bypass', () => 
       expect.anything(),
     );
     // The LLM is actually called and the retry succeeds.
-    expect(result.success).toBe(true);
-    expect(result.results).toEqual([{ id: 'p1', translatedText: 'Xin chào' }]);
-    expect(result.failed ?? []).toEqual([]);
+    expect(retryResult.success).toBe(true);
+    expect(retryResult.results).toEqual([{ id: 'p1', translatedText: 'Xin chào' }]);
+    expect(retryResult.failed ?? []).toEqual([]);
   });
 });
 
@@ -628,28 +631,32 @@ describe('handleTranslate — inArticleContext batch partitioning (FR-3)', () =>
     const fetchMockUndefined = globalThis.fetch as ReturnType<typeof vi.fn>;
     expect(fetchMockUndefined.mock.calls.length).toBe(1);
     expect(undefinedResult.results.length).toBe(2);
-  });
 
-  it('dedup is shared across both groups (same text in article + sidebar)', async () => {
-    const pieces = [
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    getCachedTranslation.mockResolvedValue(null);
+    getCachedFailure.mockResolvedValue(null);
+
+    const dedupPieces = [
       { id: 'a1', text: 'Shared text.', inArticleContext: true },
       { id: 's1', text: 'Shared text.', inArticleContext: false },
     ];
 
     mockFetchTranslation({ translations: { a1: 'T-Shared' } });
 
-    const result = await handleMessage(
-      { action: 'translate' as const, pieces, sourceLanguage: 'en', targetLanguage: 'vi' },
+    const dedupResult = await handleMessage(
+      { action: 'translate' as const, pieces: dedupPieces, sourceLanguage: 'en', targetLanguage: 'vi' },
       fakeSender,
     ) as { success: boolean; results: Array<{ id: string; translatedText: string }> };
 
-    expect(result.success).toBe(true);
+    expect(dedupResult.success).toBe(true);
     // Only 1 LLM call — dedup removed the duplicate before partitioning
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    expect(fetchMock.mock.calls.length).toBe(1);
+    const dedupFetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    expect(dedupFetchMock.mock.calls.length).toBe(1);
     // Both pieces get translations (one from LLM, one re-hydrated from dedup)
-    expect(result.results.length).toBe(2);
-    expect(result.results.every((r) => r.translatedText === 'T-Shared')).toBe(true);
+    expect(dedupResult.results.length).toBe(2);
+    expect(dedupResult.results.every((r) => r.translatedText === 'T-Shared')).toBe(true);
   });
 });
 

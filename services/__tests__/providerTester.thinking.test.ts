@@ -45,7 +45,7 @@ describe('testConnection thinking probe', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends enable_thinking false when thinkingMode is off and reports disable-success', async () => {
+  it('covers generic thinking controls, detection, and auto-mode behavior', async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith('/models') || u.includes('/models?')) {
@@ -75,10 +75,8 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.verdict).toBe('disable-success');
     expect(result.thinking?.thinkingDetected).toBe(false);
     expect(result.translationSample).toBe('Xin chào, bạn khỏe không?');
-  });
 
-  it('detects reasoning_content as disable-failed when mode is off', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const reasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -94,16 +92,14 @@ describe('testConnection thinking probe', () => {
         ],
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', reasoningFetch);
 
-    const result = await testConnection(baseConfig({ thinkingMode: 'off' }));
-    expect(result.overall).toBe(true);
-    expect(result.thinking?.verdict).toBe('disable-failed');
-    expect(result.thinking?.sources).toContain('reasoning_content');
-  });
+    const reasoningResult = await testConnection(baseConfig({ thinkingMode: 'off' }));
+    expect(reasoningResult.overall).toBe(true);
+    expect(reasoningResult.thinking?.verdict).toBe('disable-failed');
+    expect(reasoningResult.thinking?.sources).toContain('reasoning_content');
 
-  it('detects <think> tags as disable-failed and strips them from sample', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const tagFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -112,16 +108,14 @@ describe('testConnection thinking probe', () => {
         choices: [{ message: { content: '<think>plan</think>\nXin chào' } }],
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', tagFetch);
 
-    const result = await testConnection(baseConfig({ thinkingMode: 'off' }));
-    expect(result.thinking?.verdict).toBe('disable-failed');
-    expect(result.thinking?.sources).toContain('think_tags');
-    expect(result.translationSample).toBe('Xin chào');
-  });
+    const tagResult = await testConnection(baseConfig({ thinkingMode: 'off' }));
+    expect(tagResult.thinking?.verdict).toBe('disable-failed');
+    expect(tagResult.thinking?.sources).toContain('think_tags');
+    expect(tagResult.translationSample).toBe('Xin chào');
 
-  it('omits thinking fields when mode is auto', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const autoFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -138,11 +132,11 @@ describe('testConnection thinking probe', () => {
       expect(body.thinking).toBeUndefined();
       return okJson({ choices: [{ message: { content: 'Hi' } }] });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', autoFetch);
 
-    const result = await testConnection(baseConfig({ thinkingMode: 'auto' }));
-    expect(result.thinking?.verdict).toBe('not-applicable');
-    expect(result.thinking?.controlsSent).toBe(false);
+    const autoResult = await testConnection(baseConfig({ thinkingMode: 'auto' }));
+    expect(autoResult.thinking?.verdict).toBe('not-applicable');
+    expect(autoResult.thinking?.controlsSent).toBe(false);
   });
 
   it('sends DeepSeek thinking.type disabled (off) and enabled+effort (on) on DeepSeek Official', async () => {
