@@ -147,7 +147,8 @@ describe('gesture IME / repeat', () => {
     // fire via setTimeout(0)
   });
 
-  it('counts Space via event.code when event.key is not a plain space character', async () => {
+  it('counts Space via event.code (IME remapped key) and via input insertText (dual path)', async () => {
+    // Scenario 1: event.code=Space when event.key is "Process" (IME remap)
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');
     input.value = 'hello';
@@ -181,15 +182,14 @@ describe('gesture IME / repeat', () => {
     fire('Process', 'Space');
     await vi.advanceTimersByTimeAsync(10);
     expect(triggers).toHaveLength(1);
-  });
 
-  it('counts Space via input insertText when keydown is missing (dual path)', async () => {
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
+    // Scenario 2: input insertText when keydown is missing (dual path)
+    triggers.length = 0;
+    const input2 = document.createElement('input');
+    input2.value = 'hello';
+    document.body.appendChild(input2);
 
-    const g = createGestureController(
+    const g2 = createGestureController(
       {
         enabled: true,
         triggerKey: ' ',
@@ -201,8 +201,8 @@ describe('gesture IME / repeat', () => {
       },
       {
         onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
-        getText: () => input.value,
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input2,
+        getText: () => input2.value,
       },
     );
 
@@ -212,8 +212,8 @@ describe('gesture IME / repeat', () => {
         inputType: 'insertText',
         data: ' ',
       });
-      Object.defineProperty(ev, 'target', { value: input });
-      g.onInput(ev);
+      Object.defineProperty(ev, 'target', { value: input2 });
+      g2.onInput(ev);
     };
     fireInput();
     fireInput();
@@ -311,7 +311,8 @@ describe('gesture IME / repeat', () => {
     expect(triggers2).toHaveLength(1);
   });
 
-  it('does not double-count keydown + input for the same physical Space', async () => {
+  it('does not double-count keydown+input and recovers when compositionstart is stuck', async () => {
+    // Scenario 1: keydown + input for the same physical Space does not double-count
     const triggers: HTMLElement[] = [];
     const input = document.createElement('input');
     input.value = 'hello';
@@ -354,15 +355,15 @@ describe('gesture IME / repeat', () => {
     press();
     await vi.advanceTimersByTimeAsync(10);
     expect(triggers).toHaveLength(1);
-  });
 
-  it('recovers when compositionstart stuck without compositionend', async () => {
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
+    // Scenario 2: compositionstart stuck without compositionend — next keydown
+    // with isComposing:false must recover
+    triggers.length = 0;
+    const input2 = document.createElement('input');
+    input2.value = 'hello';
+    document.body.appendChild(input2);
 
-    const g = createGestureController(
+    const g2 = createGestureController(
       {
         enabled: true,
         triggerKey: ' ',
@@ -374,21 +375,20 @@ describe('gesture IME / repeat', () => {
       },
       {
         onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
-        getText: () => input.value,
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input2,
+        getText: () => input2.value,
       },
     );
 
-    g.onCompositionStart(new Event('compositionstart'));
-    // Missed compositionend — next keydown has isComposing:false and must recover
+    g2.onCompositionStart(new Event('compositionstart'));
     const fire = () => {
       const ev = new KeyboardEvent('keydown', {
         key: ' ',
         bubbles: true,
         isComposing: false,
       });
-      Object.defineProperty(ev, 'target', { value: input });
-      g.onKeyDown(ev);
+      Object.defineProperty(ev, 'target', { value: input2 });
+      g2.onKeyDown(ev);
     };
     fire();
     fire();

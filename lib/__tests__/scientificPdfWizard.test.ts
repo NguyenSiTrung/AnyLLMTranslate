@@ -9,7 +9,7 @@ import {
 } from '@/lib/scientificPdfWizard';
 
 describe('scientificPdfWizard', () => {
-  it('steps, navigation, health gate, and completion', () => {
+  it('steps, navigation, health gate, completion, test fail/next, back, and reset', () => {
     expect(SCIENTIFIC_PDF_WIZARD_STEPS).toEqual(['intro', 'install', 'poll', 'test', 'done']);
     expect(scientificPdfWizardStepIndex('intro')).toBe(1);
     expect(scientificPdfWizardStepIndex('done')).toBe(5);
@@ -40,13 +40,12 @@ describe('scientificPdfWizard', () => {
     expect(
       resolveScientificPdfWizardEntry({ setupCompletedAt: '2026-07-17T00:00:00Z' }),
     ).toBe('poll');
-    expect(scientificPdfSetupCompletedAt(new Date('2026-07-17T12:00:00.000Z'))).toBe(
+        expect(scientificPdfSetupCompletedAt(new Date('2026-07-17T12:00:00.000Z'))).toBe(
       '2026-07-17T12:00:00.000Z',
     );
-  });
 
-  it('test fail/next, back, and reset', () => {
-    let s = initialScientificPdfWizardState('test');
+    // test fail/next, back, and reset
+    s = initialScientificPdfWizardState('test');
     s = reduceScientificPdfWizard(s, { type: 'TEST_FAIL' });
     expect(s.step).toBe('test');
     expect(s.lastError).toMatch(/failed/i);

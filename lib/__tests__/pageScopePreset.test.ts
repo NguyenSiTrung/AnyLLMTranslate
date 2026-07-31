@@ -7,7 +7,7 @@ import {
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 describe('pageScopePreset', () => {
-  it('applies classic / balanced / main-content / full-page presets', () => {
+  it('applies all presets, detects named presets/custom mix, and DEFAULT_SETTINGS as balanced', () => {
     expect(applyPageScopePreset('classic')).toEqual({
       enableStreamingTranslation: false,
       enableAsideCaps: false,
@@ -39,9 +39,8 @@ describe('pageScopePreset', () => {
       enableBodyTagWhitelist: false,
       enableSmartExcludes: false,
     });
-  });
 
-  it('detects named presets, custom mix, and DEFAULT_SETTINGS as balanced', () => {
+    // detects named presets, custom mix, and DEFAULT_SETTINGS as balanced
     for (const { value } of PAGE_SCOPE_PRESET_OPTIONS) {
       expect(detectPageScopePreset(applyPageScopePreset(value))).toBe(value);
     }

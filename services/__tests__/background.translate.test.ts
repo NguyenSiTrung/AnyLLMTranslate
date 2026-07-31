@@ -209,8 +209,8 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     getCachedTranslation.mockResolvedValue(null); // force LLM path
   });
 
-  it('surfaces a { success: false } result when the pool is empty (no fetch attempted)', async () => {
-    // Seed settings with an empty providers pool (all keys disabled).
+  it('surfaces failures when pool is empty, all slots 401, or all slots 429', async () => {
+    // Scenario 1: empty pool → { success: false } with no fetch attempted.
     mockStorage['anyllm-translate-settings'] = {
       providers: [
         {
@@ -229,7 +229,7 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    const result = (await handleMessage(
+    let result = (await handleMessage(
       buildMsg([{ id: 'p1', text: 'Hello' }]),
       fakeSender,
     )) as { success: boolean; error?: string };
@@ -237,10 +237,10 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
 
-  it('surfaces an error when all slots return auth failures (all-open)', async () => {
-    // Two keys, both 401 → the coordinator exhausts the pool and throws.
+    // Scenario 2: all slots return auth failures (all-open).
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     mockStorage['anyllm-translate-settings'] = {
       providers: [
         {
@@ -269,7 +269,7 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
       }),
     );
 
-    const result = (await handleMessage(
+    result = (await handleMessage(
       buildMsg([{ id: 'p1', text: 'Hello' }]),
       fakeSender,
     )) as { success: boolean; error?: string; retryAfter?: number };
@@ -279,9 +279,10 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     // Auth opens for 1h — surface absolute openUntil so UI can countdown.
     expect(result.retryAfter).toBeTypeOf('number');
     expect(result.retryAfter!).toBeGreaterThan(Date.now());
-  });
 
-  it('surfaces retryAfter when all slots are rate-limited (429 cooling)', async () => {
+    // Scenario 3: all slots are rate-limited (429 cooling).
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
     const { OpenAICompatibleService } = await import('@/services/openaiCompatible');
     OpenAICompatibleService.__set429DelaysForTest(true);
     try {
@@ -313,7 +314,7 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
         }),
       );
 
-      const result = (await handleMessage(
+      result = (await handleMessage(
         buildMsg([{ id: 'p1', text: 'Hello' }]),
         fakeSender,
       )) as { success: boolean; error?: string; retryAfter?: number };

@@ -10,7 +10,7 @@ describe('createRateLimiter', () => {
     vi.useRealTimers();
   });
 
-  it('unlimited path, cap wait, prune, and live reconfigure', async () => {
+  it('unlimited path, cap wait, prune, live reconfigure, serializes concurrent acquires, and honors timeouts', async () => {
     const unlimited = createRateLimiter(0);
     await unlimited.acquire();
     expect(unlimited.__stateForTest?.window).toHaveLength(0);
@@ -48,13 +48,12 @@ describe('createRateLimiter', () => {
     await second;
     reconfig.setMaxRpm(0);
     await reconfig.acquire();
-  });
 
-  it('serializes concurrent acquires and honors acquire timeouts (FR-5)', async () => {
-    const limiter = createRateLimiter(1);
-    await limiter.acquire();
-    const p2 = limiter.acquire();
-    const p3 = limiter.acquire();
+    // serializes concurrent acquires and honors acquire timeouts (FR-5)
+    const limiter2 = createRateLimiter(1);
+    await limiter2.acquire();
+    const p2 = limiter2.acquire();
+    const p3 = limiter2.acquire();
     await vi.advanceTimersByTimeAsync(120_002);
     await Promise.all([p2, p3]);
 

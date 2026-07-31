@@ -158,7 +158,8 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('with whitelist ON, skips direct-child <nav> and <aside> under <body>', () => {
+  it('with whitelist ON, skips direct-child nav/aside, descends into div, ignores deeper nesting', () => {
+    // Scenario 1: direct-child <nav> and <aside> under <body> are skipped
     const nav = document.createElement('nav');
     const navLink = document.createElement('a');
     navLink.textContent = 'Navigation link text';
@@ -178,36 +179,37 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     document.body.appendChild(aside);
     document.body.appendChild(main);
 
-    const pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
+    let pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
     // Only the <main> subtree is walked; nav and aside are skipped
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Main article text content');
-  });
 
-  it('with whitelist ON, descends into <div> direct children and ignores deeper nesting within allowed tags', () => {
-    // Scenario 1: <div> direct children are descended into
+    // Scenario 2: <div> direct children are descended into
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
     const div = document.createElement('div');
     const p = document.createElement('p');
     p.textContent = 'Content inside a div.';
     div.appendChild(p);
     document.body.appendChild(div);
 
-    let pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
+    pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Content inside a div.');
 
-    // Scenario 2: <nav> nested inside <main> is NOT skipped — the whitelist
+    // Scenario 3: <nav> nested inside <main> is NOT skipped — the whitelist
     // only checks direct children of <body>
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
-    const main = document.createElement('main');
-    const nav = document.createElement('nav');
-    const navLink = document.createElement('a');
-    navLink.textContent = 'Nested nav link text';
-    nav.appendChild(navLink);
-    main.appendChild(nav);
-    document.body.appendChild(main);
+    const main2 = document.createElement('main');
+    const nav2 = document.createElement('nav');
+    const navLink2 = document.createElement('a');
+    navLink2.textContent = 'Nested nav link text';
+    nav2.appendChild(navLink2);
+    main2.appendChild(nav2);
+    document.body.appendChild(main2);
 
     pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
     expect(pieces.length).toBe(1);
@@ -242,7 +244,8 @@ describe('domWalker — aside caps (FR-5)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('with caps ON, skips aside paragraphs longer than ASIDE_MAX_TEXT_PER_PARAGRAPH', () => {
+  it('with caps ON, skips long aside paragraphs and stops after per-region cap', () => {
+    // Scenario 1: per-paragraph cap — long aside paragraph is skipped
     const aside = document.createElement('aside');
     const shortP = document.createElement('p');
     shortP.textContent = 'Short sidebar text.'; // 18 chars < 67
@@ -254,24 +257,25 @@ describe('domWalker — aside caps (FR-5)', () => {
     aside.appendChild(longP);
     document.body.appendChild(aside);
 
-    const pieces = extractPieces(document.body, { enableAsideCaps: true });
+    let pieces = extractPieces(document.body, { enableAsideCaps: true });
     // Only the short paragraph is kept; the long one is skipped
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Short sidebar text.');
-  });
 
-  it('with caps ON, stops translating an aside region after per-region cap', () => {
-    const aside = document.createElement('aside');
-    // Add many short paragraphs that cumulatively exceed 1000 chars
+    // Scenario 2: per-region cap — many short paragraphs stop after 1000 chars
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const aside2 = document.createElement('aside');
     for (let i = 0; i < 30; i++) {
       const p = document.createElement('p');
       // Each paragraph is 50 chars (under the 67 per-paragraph cap)
       p.textContent = `Sidebar link number ${String(i).padStart(2, '0')} with some extra text.`;
-      aside.appendChild(p);
+      aside2.appendChild(p);
     }
-    document.body.appendChild(aside);
+    document.body.appendChild(aside2);
 
-    const pieces = extractPieces(document.body, { enableAsideCaps: true });
+    pieces = extractPieces(document.body, { enableAsideCaps: true });
     // 30 × ~53 chars ≈ 1590 chars total, but cap is 1000.
     // Should stop after ~18-19 paragraphs (1000/53 ≈ 18.8).
     expect(pieces.length).toBeLessThan(30);
@@ -281,7 +285,7 @@ describe('domWalker — aside caps (FR-5)', () => {
     expect(totalChars).toBeLessThanOrEqual(1000 + 67);
   });
 
-  it('with caps OFF, translates all aside paragraphs, and caps never apply to non-aside content', () => {
+  it('with caps OFF, translates all aside paragraphs; caps never apply to non-aside or complementary without caps', () => {
     // Scenario 1: caps OFF — even over-cap aside paragraphs are kept (regression)
     const aside = document.createElement('aside');
     const longP = document.createElement('p');

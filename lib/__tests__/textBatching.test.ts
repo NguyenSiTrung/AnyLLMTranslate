@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { splitPiecesIntoBatches, dedupPiecesByText } from '../textBatching';
 
 describe('textBatching', () => {
-  describe('splitPiecesIntoBatches', () => {
-    it('splits by count and char budgets; emits oversized singles; empty → []', () => {
+  it('splits by count/char budgets (incl. oversized singles, empty) and dedups case-sensitively', () => {
       const byCount = splitPiecesIntoBatches(
         [
           { id: '1', text: 'a' },
@@ -48,10 +47,9 @@ describe('textBatching', () => {
         }),
       ).toEqual([]);
     });
-  });
 
-  describe('dedupPiecesByText', () => {
     it('dedups case-sensitively and maps dupes to the first id', () => {
+      // dedupPiecesByText: dedups case-sensitively and maps dupes to the first id
       const { deduped, dupes } = dedupPiecesByText([
         { id: '1', text: 'hello' },
         { id: '2', text: 'hello' },
@@ -62,5 +60,4 @@ describe('textBatching', () => {
       expect(dupes.get('2')).toBe('1');
       expect(dedupPiecesByText([]).deduped).toEqual([]);
     });
-  });
 });

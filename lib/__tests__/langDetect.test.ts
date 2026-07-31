@@ -6,7 +6,7 @@ import {
 } from '../langDetect';
 
 describe('langDetect', () => {
-  it('detects scripts/n-grams, handles empty/ambiguous, and compares language tags', () => {
+  it('detects scripts/n-grams, handles empty/ambiguous, compares tags, and FR-13 edge cases', () => {
     expect(detectLanguage('你好世界，今天天气真好').lang).toBe('zh');
     expect(detectLanguage('これは日本語のテストです').lang).toBe('ja');
     expect(detectLanguage('The quick brown fox jumps over the lazy dog').lang).toBe('en');
@@ -29,10 +29,8 @@ describe('langDetect', () => {
     expect(isSameLanguage('en', 'vi')).toBe(false);
     expect(isSameLanguage('auto', 'en')).toBe(false);
     expect(isSameLanguage(null, 'en')).toBe(false);
-  });
 
-  it('FR-13: Ukrainian is not skipped as Russian; JP kanji-heavy not skipped as zh', () => {
-    // Ukrainian with і/ї/є/ґ
+    // FR-13: Ukrainian is not skipped as Russian; JP kanji-heavy not skipped as zh
     const uk = detectLanguage('Це український текст про свободу і незалежність країни');
     expect(uk.lang).toBe('uk');
     expect(uk.confidence).toBeGreaterThanOrEqual(0.7);

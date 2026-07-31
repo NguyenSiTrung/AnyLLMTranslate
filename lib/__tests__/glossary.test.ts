@@ -23,7 +23,7 @@ const sampleEntries: GlossaryEntry[] = [
 ];
 
 describe('glossary utilities', () => {
-  it('formats, CSV/JSON round-trips, and validates shapes', () => {
+  it('formats, CSV/JSON round-trips, validates shapes, and checks mismatches/duplicates/filter/sort', () => {
     expect(formatGlossary([])).toBe('');
     const formatted = formatGlossary(sampleEntries);
     expect(formatted).toContain('Translation Glossary');
@@ -53,9 +53,8 @@ describe('glossary utilities', () => {
     expect(
       parseGlossaryJSON('[{"id": "custom-id", "source": "hello", "target": "xin chào"}]')[0]!.id,
     ).not.toBe('custom-id');
-  });
 
-  it('checks mismatches, duplicates, filter, and sort helpers', () => {
+    // mismatches, duplicates, filter, and sort helpers
     const entries: GlossaryEntry[] = [
       { id: '1', source: 'machine learning', target: 'học máy' },
       { id: '2', source: 'API', target: 'API' },

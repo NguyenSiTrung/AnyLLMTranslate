@@ -145,7 +145,8 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.controlsSent).toBe(false);
   });
 
-  it('sends DeepSeek thinking.type disabled when thinkingMode is off', async () => {
+  it('sends DeepSeek thinking.type disabled (off) and enabled+effort (on) on DeepSeek Official', async () => {
+    // Scenario 1: thinkingMode off → thinking.type=disabled, no effort
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash' }] });
@@ -165,7 +166,7 @@ describe('testConnection thinking probe', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await testConnection(
+    let result = await testConnection(
       baseConfig({
         baseUrl: 'https://api.deepseek.com',
         model: 'deepseek-v4-flash',
@@ -175,10 +176,10 @@ describe('testConnection thinking probe', () => {
     expect(result.overall).toBe(true);
     expect(result.thinking?.verdict).toBe('disable-success');
     expect(result.thinking?.controlsSent).toBe(true);
-  });
 
-  it('sends DeepSeek thinking enabled + reasoning_effort when mode is on', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    // Scenario 2: thinkingMode on → thinking.type=enabled + reasoning_effort
+    vi.unstubAllGlobals();
+    const fetchMockOn = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-pro' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -200,9 +201,9 @@ describe('testConnection thinking probe', () => {
         ],
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', fetchMockOn);
 
-    const result = await testConnection(
+    result = await testConnection(
       baseConfig({
         baseUrl: 'https://api.deepseek.com/v1',
         model: 'deepseek-v4-pro',

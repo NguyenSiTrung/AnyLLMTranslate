@@ -4,8 +4,8 @@ import {
   shouldNegativeCacheFailure,
 } from '../translationErrors';
 
-describe('isTransientTranslationError', () => {
-  it('classifies pool/rate/network/auth failures as transient and content blocks as not', () => {
+describe('translationErrors', () => {
+  it('classifies transient failures and negative-caches only content/moderation failures', () => {
     const transient = [
       'All provider pool slots failed during this request.',
       'All provider pool slots are currently open (rate-limited or errored).',
@@ -24,11 +24,8 @@ describe('isTransientTranslationError', () => {
       expect(isTransientTranslationError(msg), msg).toBe(true);
     }
     expect(isTransientTranslationError('Content blocked by safety filter')).toBe(false);
-  });
-});
 
-describe('shouldNegativeCacheFailure', () => {
-  it('negative-caches only content/moderation failures (never pool/rate/unknown)', () => {
+    // shouldNegativeCacheFailure: negative-caches only content/moderation failures
     expect(
       shouldNegativeCacheFailure('All provider pool slots failed during this request.'),
     ).toBe(false);

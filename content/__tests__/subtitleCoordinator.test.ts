@@ -398,7 +398,8 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
   });
 
-  it('passes original subtitle content through and skips translation when subtitles are disabled', async () => {
+  it('passes original content through (no background call) when subtitles disabled, cues empty, or no handler matches', async () => {
+    // Scenario 1: subtitles disabled
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       subtitleSettings: {
@@ -424,10 +425,9 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect(mockHandler.transformResponse).not.toHaveBeenCalled();
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
-  });
 
-  it('passes original content through without a background call when cues are empty or no handler matches', async () => {
-    // Scenario 1: transformResponse yields zero cues — no background call made
+    // Scenario 2: transformResponse yields zero cues — no background call made
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
     mockHandler.transformResponse.mockReturnValue([]);
 
     const emptyBody = 'WEBVTT\n\n';
@@ -448,7 +448,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       vttContent: emptyBody,
     });
 
-    // Scenario 2: getHandlerByPlatform returns null
+    // Scenario 3: getHandlerByPlatform returns null
     mockGetHandlerByPlatform.mockReturnValue(null);
 
     const body = '...';
@@ -1323,7 +1323,7 @@ describe('subtitleCoordinator – proactive category detection', () => {
     expect(mockTriggerAutoCategoryDetection).toHaveBeenCalled();
   });
 
-  it('does NOT fire proactive detection on a non-watch page or when LLM detection is disabled', async () => {
+  it('does NOT fire proactive detection on a non-watch page, when LLM detection is disabled, or with a category override', async () => {
     // Scenario 1: non-watch page (YouTube home)
     stopCoordinator();
     vi.resetModules();
@@ -1371,9 +1371,7 @@ describe('subtitleCoordinator – proactive category detection', () => {
       try { l({ action: 'categoryChanged', category: 'Gaming' }); } catch { /* ignore */ }
     }
     await vi.advanceTimersByTimeAsync(1700);
-    // The scheduler always invokes the helper; the override no-op guard lives inside
-    // the real triggerAutoCategoryDetection (covered by its own unit tests). Here we
-    // verify the override is propagated as the manualOverride argument so the guard
+    // The override is propagated as the manualOverride argument so the guard
     // will short-circuit in production.
     expect(mockTriggerAutoCategoryDetection).toHaveBeenCalledWith(
       expect.anything(),

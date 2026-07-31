@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { parseSSEBuffer, extractDeltaContent, extractCompletedPieces } from '../sseStreamParser';
 
 describe('sseStreamParser', () => {
-  it('parseSSEBuffer and extractDeltaContent cover events, [DONE], remainder, noise, and deltas', () => {
+  it('parseSSEBuffer, extractDeltaContent, and extractCompletedPieces cover all scenarios', () => {
     const multi =
       'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n' +
       'data: {"choices":[{"delta":{"content":" world"}}]}\n\n';
@@ -33,16 +33,15 @@ describe('sseStreamParser', () => {
     expect(
       extractDeltaContent('{"choices":[{"delta":{"content":"héllo \\"wörld\\" 日本語"}}]}'),
     ).toBe('héllo "wörld" 日本語');
-  });
 
-  it('extractCompletedPieces handles full/partial buffers, escaping, knownIds, and empty', () => {
+    // extractCompletedPieces handles full/partial buffers, escaping, knownIds, and empty
     const full = extractCompletedPieces('{"p1":"Hello","p2":"World"}', ['p1', 'p2']);
     expect(full.get('p1')).toBe('Hello');
     expect(full.get('p2')).toBe('World');
 
-    const partial = extractCompletedPieces('{"p1":"Hello","p2":"Wor', ['p1', 'p2']);
-    expect(partial.get('p1')).toBe('Hello');
-    expect(partial.has('p2')).toBe(false);
+        const partialPieces = extractCompletedPieces('{"p1":"Hello","p2":"Wor', ['p1', 'p2']);
+    expect(partialPieces.get('p1')).toBe('Hello');
+    expect(partialPieces.has('p2')).toBe(false);
 
     expect(extractCompletedPieces('{\n  "p1": "Value"\n}', ['p1']).get('p1')).toBe('Value');
     expect(extractCompletedPieces('{"p1":"He said \\"hi\\""}', ['p1']).get('p1')).toBe(

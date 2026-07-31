@@ -99,7 +99,7 @@ describe('services/background', () => {
   });
 
   describe('handleMessage — translate', () => {
-    it('FR-2: splits a large flush into multiple LLM calls by maxTextGroupLengthPerRequest', async () => {
+    it('FR-2: splits large flushes into multiple LLM calls and dedups identical texts', async () => {
       // Five pieces, default maxTextGroupLengthPerRequest=4 → 2 LLM calls.
       mockFetch(JSON.stringify({ translations: { p1: 'a', p2: 'b', p3: 'c', p4: 'd', p5: 'e' } }));
 
@@ -124,12 +124,11 @@ describe('services/background', () => {
       expect(typed.results?.map((r) => r.id)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
       // Two sub-batches (4-piece cap → batch of 4 + batch of 1) → 2 fetch calls.
       expect(fetch).toHaveBeenCalledTimes(2);
-    });
 
-    it('FR-2: dedups identical texts and re-hydrates them from the canonical result', async () => {
+      // Dedup identical texts and re-hydrate them from the canonical result.
       mockFetch(JSON.stringify({ translations: { p1: 'Xin chào', p2: 'Thế giới' } }));
 
-      const result = await handleMessage(
+      const result2 = await handleMessage(
         {
           action: 'translate',
           pieces: [
@@ -143,9 +142,9 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const typed = result as { success: boolean; results: { id: string; translatedText: string }[] };
-      expect(typed.success).toBe(true);
-      const byId = new Map(typed.results.map((r) => [r.id, r.translatedText]));
+      const typed2 = result2 as { success: boolean; results: { id: string; translatedText: string }[] };
+      expect(typed2.success).toBe(true);
+      const byId = new Map(typed2.results.map((r) => [r.id, r.translatedText]));
       expect(byId.get('p1')).toBe('Xin chào');
       // The dup adopts the canonical translation — no extra LLM piece sent.
       expect(byId.get('p1dup')).toBe('Xin chào');
@@ -425,7 +424,8 @@ describe('services/background', () => {
       expect(body2.messages[0].content).toContain('idiomatic, natural phrasing');
     });
 
-    it('applies a per-tab knob override over the profile preset', async () => {
+    it('applies per-tab knob overrides over the profile preset and persisted global overrides otherwise', async () => {
+      // Per-tab override wins over the profile preset.
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -440,17 +440,15 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      let fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      let body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
       // literal line present, idiomatic line absent (overridden).
       expect(body.messages[0].content).toContain('precise, faithful translation');
       expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
-    });
 
-    it('applies a persisted global knob override when no per-tab override is set', async () => {
-      // Seed global override in settings storage.
+      // Persisted global override applies when no per-tab override is set.
       mockStorage['anyllm-translate-settings'] = {
         subtitleSettings: { knobOverrides: { profanity: 'remove' } },
       };
@@ -467,8 +465,8 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+      body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body.messages[0].content).toContain('Remove strong profanity entirely');

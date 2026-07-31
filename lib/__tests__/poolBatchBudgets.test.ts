@@ -8,7 +8,7 @@ function settingsWithProviders(providers: PoolProvider[]): ExtensionSettings {
 }
 
 describe('resolvePoolBatchBudgets', () => {
-  it('uses global defaults when no provider override is set', () => {
+  it('uses global defaults, ignores disabled/zero overrides, and picks tightest enabled override (min)', () => {
     const s = settingsWithProviders([
       {
         id: 'p1',
@@ -60,10 +60,9 @@ describe('resolvePoolBatchBudgets', () => {
       maxTextGroupLengthPerRequest: mixed.maxTextGroupLengthPerRequest,
       maxTextLengthPerRequest: mixed.maxTextLengthPerRequest,
     });
-  });
 
-  it('uses the tightest enabled-provider override (min of positive values)', () => {
-    const s = settingsWithProviders([
+    // uses the tightest enabled-provider override (min of positive values)
+    const s2 = settingsWithProviders([
       {
         id: 'p1',
         displayName: 'P1',
@@ -92,7 +91,7 @@ describe('resolvePoolBatchBudgets', () => {
       },
     ]);
     // Global is 4 / 2000; overrides tighten to min(800,1200)=800 and min(2,6)=2
-    expect(resolvePoolBatchBudgets(s)).toEqual({
+    expect(resolvePoolBatchBudgets(s2)).toEqual({
       maxTextGroupLengthPerRequest: 2,
       maxTextLengthPerRequest: 800,
     });

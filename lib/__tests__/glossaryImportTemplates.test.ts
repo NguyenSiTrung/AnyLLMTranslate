@@ -14,7 +14,7 @@ describe('glossary import templates', () => {
     vi.restoreAllMocks();
   });
 
-  it('JSON and CSV templates parse to the three example terms', () => {
+  it('JSON and CSV templates parse to example terms and downloadGlossaryTemplate creates blob downloads', () => {
     const jsonEntries = parseGlossaryJSON(GLOSSARY_JSON_TEMPLATE);
     expect(jsonEntries).toHaveLength(3);
     expect(jsonEntries.map((e) => e.source)).toEqual([
@@ -36,9 +36,8 @@ describe('glossary import templates', () => {
       source: 'machine learning',
       target: 'machine learning',
     });
-  });
 
-  it('downloadGlossaryTemplate creates a blob download with the right name', () => {
+    // downloadGlossaryTemplate creates a blob download with the right name
     const createObjectURL = vi.fn((blob: Blob) => {
       expect(blob).toBeInstanceOf(Blob);
       return 'blob:template';

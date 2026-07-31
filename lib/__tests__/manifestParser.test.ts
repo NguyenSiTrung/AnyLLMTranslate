@@ -136,10 +136,10 @@ describe('parseHlsSubtitlePlaylist', () => {
       '#EXT-X-ENDLIST',
     ].join('\n');
     expect(parseHlsSubtitlePlaylist(discontinuityBody, 'https://cdn.example.com/subs/en.m3u8')).toHaveLength(2);
-  });
 
-  it('handles EXT-X-MAP initialization segment', () => {
-    const body = [
+    // EXT-X-MAP initialization segments are not media segments — only EXTINF
+    // segments are returned.
+    const mapBody = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
       '#EXT-X-MAP:URI="init.vtt"',
@@ -148,12 +148,9 @@ describe('parseHlsSubtitlePlaylist', () => {
       '#EXTINF:10.0,',
       'segment2.vtt',
     ].join('\n');
-
-    const result = parseHlsSubtitlePlaylist(body, 'https://cdn.example.com/subs/en.m3u8');
-
-    // EXT-X-MAP is not a media segment — only EXTINF segments are returned
-    expect(result).toHaveLength(2);
-    expect(result[0].url).toBe('https://cdn.example.com/subs/segment1.vtt');
+    const mapResult = parseHlsSubtitlePlaylist(mapBody, 'https://cdn.example.com/subs/en.m3u8');
+    expect(mapResult).toHaveLength(2);
+    expect(mapResult[0].url).toBe('https://cdn.example.com/subs/segment1.vtt');
   });
 
 });
@@ -195,10 +192,9 @@ describe('parseDashManifest', () => {
     expect(textResult).toHaveLength(1);
     expect(textResult[0].language).toBe('es');
     expect(textResult[0].url).toBe('https://cdn.example.com/subs_es.mp4');
-  });
 
-  it('extracts tracks with Role caption/subtitle', () => {
-    const xml = `<?xml version="1.0"?>
+    // Role caption/subtitle AdaptationSets are also accepted.
+    const roleXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="text/vtt" lang="fr">
@@ -210,12 +206,11 @@ describe('parseDashManifest', () => {
   </Period>
 </MPD>`;
 
-    const result = parseDashManifest(xml, 'https://cdn.example.com/manifest.mpd');
+    const roleResult = parseDashManifest(roleXml, 'https://cdn.example.com/manifest.mpd');
+    expect(roleResult).toHaveLength(1);
+    expect(roleResult[0].language).toBe('fr');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].language).toBe('fr');
-
-    // Multiple subtitle AdaptationSets
+    // Multiple subtitle AdaptationSets are all extracted.
     const multiXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -266,10 +261,10 @@ describe('parseDashManifest', () => {
       'https://cdn.example.com/subs_de_5.vtt',
       'https://cdn.example.com/subs_de_6.vtt',
     ]);
-  });
 
-  it('preserves SegmentTemplate progressive fetch metadata when segment count is unknown', () => {
-    const xml = `<?xml version="1.0"?>
+    // Without a SegmentTimeline, segment count is unknown → progressive fetch
+    // metadata is preserved (media template + startNumber).
+    const unknownXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="text/vtt" lang="en-US">
@@ -280,11 +275,15 @@ describe('parseDashManifest', () => {
   </Period>
 </MPD>`;
 
-    const result = parseDashManifest(xml, 'https://cdn.example.com/dash.mpd?manifest-params=token');
-
-    expect(result).toHaveLength(1);
-    expect(result[0].url).toBe('https://cdn.example.com/t/t6/8.vtt?manifest-params=token');
-    expect((result[0] as { segmentFetch?: { media: string; startNumber: number } }).segmentFetch).toEqual(
+    const unknownResult = parseDashManifest(
+      unknownXml,
+      'https://cdn.example.com/dash.mpd?manifest-params=token',
+    );
+    expect(unknownResult).toHaveLength(1);
+    expect(unknownResult[0].url).toBe('https://cdn.example.com/t/t6/8.vtt?manifest-params=token');
+    expect(
+      (unknownResult[0] as { segmentFetch?: { media: string; startNumber: number } }).segmentFetch,
+    ).toEqual(
       expect.objectContaining({
         media: 't/t6/$Number$.vtt',
         startNumber: 8,

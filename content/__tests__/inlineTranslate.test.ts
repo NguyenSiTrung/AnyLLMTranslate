@@ -66,7 +66,7 @@ afterEach(() => {
 /* ── isEditableElement ────────────────────────────────────────── */
 
 describe('isEditableElement', () => {
-  it('returns true for editable elements (input, textarea, contentEditable)', () => {
+  it('returns true for editable elements and false for non-editable/passwords/null', () => {
     const input = document.createElement('input');
     input.type = 'text';
     expect(isEditableElement(input)).toBe(true);
@@ -78,11 +78,9 @@ describe('isEditableElement', () => {
     div.contentEditable = 'true';
     document.body.appendChild(div);
     expect(isEditableElement(div)).toBe(true);
-  });
 
-  it('returns false for non-editable elements, passwords, and null', () => {
-    const div = document.createElement('div');
-    expect(isEditableElement(div)).toBe(false);
+    const nonEditable = document.createElement('div');
+    expect(isEditableElement(nonEditable)).toBe(false);
 
     const password = document.createElement('input');
     password.type = 'password';
@@ -95,7 +93,7 @@ describe('isEditableElement', () => {
 /* ── isCodeEditor ─────────────────────────────────────────────── */
 
 describe('isCodeEditor', () => {
-  it('detects known code-editor wrappers and rejects regular inputs', () => {
+  it('detects known code-editor wrappers (incl. Monaco role=textbox+data-mode-id) and rejects regular inputs', () => {
     for (const cls of ['monaco-editor', 'CodeMirror', 'ace_editor', 'cm-editor']) {
       const el = document.createElement('div');
       el.className = cls;
@@ -105,6 +103,16 @@ describe('isCodeEditor', () => {
       expect(isCodeEditor(child)).toBe(true);
       el.remove();
     }
+
+    // Monaco-style role=textbox with data-mode-id is still a code editor
+    const monaco = document.createElement('div');
+    monaco.setAttribute('role', 'textbox');
+    monaco.setAttribute('data-mode-id', 'javascript');
+    const mChild = document.createElement('textarea');
+    monaco.appendChild(mChild);
+    document.body.appendChild(monaco);
+    expect(isCodeEditor(mChild)).toBe(true);
+    monaco.remove();
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -136,15 +144,6 @@ describe('isCodeEditor', () => {
     ariaBox.contentEditable = 'true';
     document.body.appendChild(ariaBox);
     expect(isCodeEditor(ariaBox)).toBe(false);
-  });
-
-  it('still treats Monaco-style role=textbox with data-mode-id as a code editor', () => {
-    const monacoLike = document.createElement('div');
-    monacoLike.setAttribute('role', 'textbox');
-    monacoLike.setAttribute('aria-multiline', 'true');
-    monacoLike.setAttribute('data-mode-id', 'typescript');
-    document.body.appendChild(monacoLike);
-    expect(isCodeEditor(monacoLike)).toBe(true);
   });
 });
 
@@ -248,7 +247,7 @@ describe('gesture detection', () => {
     );
   }
 
-  it('triple-space within window triggers translation request', async () => {
+  it('triple-space within window triggers translation request; keys outside window do not', async () => {
     const input = createFocusedInput('xin chào   ');
     mockSendMessage.mockResolvedValueOnce({
       success: true,
@@ -268,22 +267,20 @@ describe('gesture detection', () => {
         text: 'xin chào',
       }),
     );
-  });
 
-  it('does NOT trigger when keys exceed time window', async () => {
-    const input = createFocusedInput('text   ');
-
-    fireKeydown(input, ' ');
+    // Keys separated by more than the time window do NOT trigger.
+    mockSendMessage.mockClear();
+    const slow = createFocusedInput('text   ');
+    fireKeydown(slow, ' ');
     await vi.advanceTimersByTimeAsync(300);
-    fireKeydown(input, ' ');
+    fireKeydown(slow, ' ');
     await vi.advanceTimersByTimeAsync(300);
-    fireKeydown(input, ' ');
+    fireKeydown(slow, ' ');
     await vi.advanceTimersByTimeAsync(10);
-
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('ignores non-editable, password, code-editor, and empty fields', async () => {
+  it('ignores non-editable, password, code-editor, empty fields, and when disabled', async () => {
     const div = document.createElement('div');
     document.body.appendChild(div);
     div.focus();
@@ -323,6 +320,15 @@ describe('gesture detection', () => {
     fireKeydown(empty, ' ');
     await vi.advanceTimersByTimeAsync(10);
     expect(mockSendMessage).not.toHaveBeenCalled();
+
+    // Disabled feature → no-op.
+    setInlineTranslateEnabled(false);
+    const disabledInput = createFocusedInput('text   ');
+    fireKeydown(disabledInput, ' ');
+    fireKeydown(disabledInput, ' ');
+    fireKeydown(disabledInput, ' ');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   it('respects configurable key and count', async () => {
@@ -344,18 +350,6 @@ describe('gesture detection', () => {
         text: 'hello',
       }),
     );
-  });
-
-  it('does not trigger when disabled', async () => {
-    setInlineTranslateEnabled(false);
-    const input = createFocusedInput('text   ');
-
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   it('triple-space works in ProseMirror chat composers, including nested-child keydown targets', async () => {

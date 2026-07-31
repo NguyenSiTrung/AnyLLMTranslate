@@ -10,7 +10,7 @@ import {
 } from '../richTranslate';
 
 describe('richTranslate', () => {
-  it('encodes inline markup and round-trips decode with LLM text swap', () => {
+  it('encodes inline markup, round-trips decode with LLM text swap, and defends against XSS/injection', () => {
     for (const tag of ['A', 'B', 'STRONG', 'EM', 'CODE', 'SPAN', 'MARK']) {
       expect(INLINE_ELEMENTS).toContain(tag);
     }
@@ -82,10 +82,9 @@ describe('richTranslate', () => {
     expect(frag.querySelector('a')?.getAttribute('href')).toBe('https://x.test');
     expect(frag.querySelector('strong')?.textContent).toBe('bold');
     expect(frag.querySelector('em')?.textContent).toBe('italic');
-    expect(frag.querySelector('code')?.textContent).toBe('code()');
-  });
+        expect(frag.querySelector('code')?.textContent).toBe('code()');
 
-  it('defends against unknown placeholders, HTML injection, and XSS attrs/tags', () => {
+    // defends against unknown placeholders, HTML injection, and XSS attrs/tags
     const unknown = decodeInlineHtml('text <z id="99">x</z>', []);
     expect(unknown.textContent).toContain('x');
     expect(unknown.querySelectorAll('*')).toHaveLength(0);

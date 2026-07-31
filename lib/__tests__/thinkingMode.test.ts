@@ -186,12 +186,10 @@ describe('applyThinkingModeToRequest', () => {
         thinkingEffort: 'high',
       }).reasoning_effort,
     ).toBe('minimal');
-  });
 
-  it('uses minimal for Gemini 3.x and 2.5 Pro when thinkingMode is off', () => {
-    const g3: ChatCompletionRequest = { ...baseRequest, model: 'gemini-3.6-flash' };
+    // 3.x and 2.5 Pro always map off → minimal (no thinking=none support).
     const pro: ChatCompletionRequest = { ...baseRequest, model: 'gemini-2.5-pro' };
-    expect(applyThinkingModeToRequest(g3, 'off', { baseUrl: geminiBase }).reasoning_effort).toBe(
+    expect(applyThinkingModeToRequest(g36, 'off', { baseUrl: geminiBase }).reasoning_effort).toBe(
       'minimal',
     );
     expect(applyThinkingModeToRequest(pro, 'off', { baseUrl: geminiBase }).reasoning_effort).toBe(

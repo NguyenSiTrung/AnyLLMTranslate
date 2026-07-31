@@ -8,7 +8,7 @@ import { applySegmentOffset } from '@/lib/applySegmentOffset';
 import type { SubtitleCue } from '@/types/subtitle';
 
 describe('Subtitle parsers, segment concatenation and offset helpers', () => {
-  it('parses ASS timestamps/cues and TTML times/cues with linebreaks', () => {
+  it('parses ASS/TTML cues, concatenates VTT segments, maps DASH offsets, and applies time offsets', () => {
     expect(parseAssTimestamp('0:00:01.50')).toBeCloseTo(1.5);
     expect(stripAssTags('{\\an8}Hello\\NWorld')).toBe('Hello\nWorld');
 
@@ -19,9 +19,8 @@ describe('Subtitle parsers, segment concatenation and offset helpers', () => {
     expect(parseTtmlTime('00:00:12.340')).toBeCloseTo(12.34, 3);
     const ttml = `<?xml version="1.0"?><tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:00:12.340" end="00:00:15.670">Hello there</p></div></body></tt>`;
     expect(parseTTML(ttml)[0]!.text).toBe('Hello there');
-  });
 
-  it('concatenates VTT segments, maps DASH offsets, and applies segment time offsets', () => {
+    // concatenates VTT segments, maps DASH offsets, and applies segment time offsets
     const concatenated = concatVttSegments([
       'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nFirst',
       'WEBVTT\n\n00:00:02.000 --> 00:00:04.000\nSecond',

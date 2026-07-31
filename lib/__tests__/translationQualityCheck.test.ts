@@ -9,7 +9,7 @@ import {
 } from '@/lib/translationQualityCheck';
 
 describe('translationQualityCheck', () => {
-  it('counts z tags, detects echo/dropped tags, and batch-scans pieces', () => {
+  it('counts z tags, detects echo/dropped tags, batch-scans, and validates rich token balance/ids/tags', () => {
     expect(countZTags('Hello <z id="1">world</z> and <z id="2">x</z>')).toBe(2);
 
     expect(
@@ -55,9 +55,8 @@ describe('translationQualityCheck', () => {
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]!.id).toBe('a');
-  });
 
-  it('FR-16: validates rich token balance, ids, allowed tags, incomplete maps', () => {
+    // FR-16: validates rich token balance, ids, allowed tags, incomplete maps
     expect(areZTagsBalanced('<z id="1">a</z>')).toBe(true);
     expect(areZTagsBalanced('<z id="1">a')).toBe(false);
 

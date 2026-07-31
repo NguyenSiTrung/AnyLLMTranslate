@@ -14,7 +14,7 @@ import {
 } from '@/lib/inlineTranslatePreview';
 
 describe('InlineTranslate settings, prefix & preview helpers', () => {
-  it('defaults, deep-merge partial storage, and loadSettings fill missing nested fields', async () => {
+    it('defaults, deep-merge partial storage, loadSettings fill, language prefixes, and preview projections', async () => {
     const d = DEFAULT_INLINE_TRANSLATE_SETTINGS;
     expect(d).toMatchObject({
       enabled: true,
@@ -69,10 +69,9 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
     const settings = await loadSettings();
     expect(settings.inlineTranslate.tapCount).toBe(2);
     expect(settings.inlineTranslate.idleMs).toBe(DEFAULT_INLINE_TRANSLATE_SETTINGS.idleMs);
-    expect(settings.inlineTranslate.enableLanguagePrefix).toBe(true);
-  });
+        expect(settings.inlineTranslate.enableLanguagePrefix).toBe(true);
 
-  it('parses language prefixes, resolves preview samples, and builds projections', () => {
+    // parses language prefixes, resolves preview samples, and builds projections
     expect(parseLanguagePrefix('/en hello world')).toMatchObject({
       targetLang: 'en',
       body: 'hello world',

@@ -70,7 +70,7 @@ describe('translationDisplay', () => {
   });
 
   describe('applyTranslation', () => {
-    it('creates translation element after parent and marks parent as original', () => {
+    it('creates translation element after parent and marks parent as original; refuses body/html', () => {
       const parent = document.createElement('p');
       parent.textContent = 'Hello world';
       document.body.appendChild(parent);
@@ -83,6 +83,12 @@ describe('translationDisplay', () => {
       expect(translation?.className).toContain('anyllm-translate-translation');
       expect(parent.getAttribute('data-anyllm-role')).toBe('original');
       expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
+
+      // body/html are never marked as original and nothing is inserted.
+      const before = document.body.innerHTML;
+      applyTranslation(document.body, 'piece-body', 'Translation');
+      expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(document.body.innerHTML).toBe(before);
     });
 
     it('updates placeholder in-place (no duplicate element)', () => {
@@ -98,14 +104,7 @@ describe('translationDisplay', () => {
       expect(translations[0].classList.contains('anyllm-translate-loading')).toBe(false);
     });
 
-    it('refuses to mark body or html as original', () => {
-      const before = document.body.innerHTML;
-      applyTranslation(document.body, 'piece-1', 'Translation');
-      expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
-      expect(document.body.innerHTML).toBe(before);
-    });
-
-    it('inserts translations inside list items to preserve valid list DOM', () => {
+    it('inserts translations inside list items and preserves split-piece order', () => {
       const list = document.createElement('ul');
       const item = document.createElement('li');
       item.textContent = 'First item';
@@ -117,20 +116,19 @@ describe('translationDisplay', () => {
       const translation = document.querySelector('[data-anyllm-piece-id="piece-1"]');
       expect(translation?.parentElement).toBe(item);
       expect(Array.from(list.children).map((child) => child.tagName)).toEqual(['LI']);
-    });
 
-    it('preserves split-piece translation order below the original', () => {
+      // Split pieces keep insertion order below the original.
       const parent = document.createElement('p');
       parent.textContent = 'Long paragraph';
       document.body.appendChild(parent);
 
-      applyTranslation(parent, 'piece-1', 'First translation');
-      applyTranslation(parent, 'piece-2', 'Second translation');
+      applyTranslation(parent, 'piece-2', 'First translation');
+      applyTranslation(parent, 'piece-3', 'Second translation');
 
-      const orderedPieceIds = Array.from(document.body.children)
+      const orderedPieceIds = Array.from(document.body.querySelectorAll('[data-anyllm-piece-id]'))
         .map((child) => child.getAttribute('data-anyllm-piece-id'))
         .filter(Boolean);
-      expect(orderedPieceIds).toEqual(['piece-1', 'piece-2']);
+      expect(orderedPieceIds).toEqual(['piece-1', 'piece-2', 'piece-3']);
     });
 
     it('reconstructs inline markup from rich-translate variables (FR-1)', () => {
@@ -192,21 +190,7 @@ describe('translationDisplay', () => {
   });
 
   describe('showLoadingPlaceholder', () => {
-    it('inserts placeholder element after parent with spinner classes and marks parent original', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
-
-      showLoadingPlaceholder(parent, 'piece-1');
-
-      const placeholder = document.querySelector('[data-anyllm-piece-id="piece-1"]');
-      expect(placeholder).not.toBeNull();
-      expect(placeholder?.classList.contains('anyllm-translate-loading')).toBe(true);
-      expect(placeholder?.classList.contains('anyllm-translate-translation')).toBe(true);
-      expect(placeholder?.getAttribute('data-anyllm-role')).toBe('translation');
-      expect(parent.getAttribute('data-anyllm-role')).toBe('original');
-    });
-
-    it('is idempotent and refuses body/html', () => {
+    it('inserts placeholder after parent with spinner classes; idempotent; refuses body/html', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -215,6 +199,10 @@ describe('translationDisplay', () => {
 
       const placeholders = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
       expect(placeholders).toHaveLength(1);
+      expect(placeholders[0].classList.contains('anyllm-translate-loading')).toBe(true);
+      expect(placeholders[0].classList.contains('anyllm-translate-translation')).toBe(true);
+      expect(placeholders[0].getAttribute('data-anyllm-role')).toBe('translation');
+      expect(parent.getAttribute('data-anyllm-role')).toBe('original');
 
       showLoadingPlaceholder(document.body, 'piece-body');
       expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
@@ -225,7 +213,7 @@ describe('translationDisplay', () => {
 
 
   describe('setErrorState', () => {
-    it('adds data-anyllm-error attribute and compact error element without embedding long messages in visible text', () => {
+    it('adds compact error element (full message in title) and updates placeholder in-place', () => {
       // Scenario 1: parent marked + compact element, full message only in title
       const parent = document.createElement('p');
       document.body.appendChild(parent);
@@ -249,16 +237,14 @@ describe('translationDisplay', () => {
       const errorEl2 = document.querySelector('[data-anyllm-piece-id="piece-2"]');
       expect(errorEl2?.textContent).toBe('⚠ Translation failed');
       expect((errorEl2 as HTMLElement).title).toContain(long);
-    });
 
-    it('updates placeholder in-place for error state', () => {
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
+      // Scenario 3: loading placeholder is converted to error state in-place
+      const parent3 = document.createElement('p');
+      document.body.appendChild(parent3);
+      showLoadingPlaceholder(parent3, 'piece-3');
+      setErrorState(parent3, 'piece-3', 'API error');
 
-      showLoadingPlaceholder(parent, 'piece-1');
-      setErrorState(parent, 'piece-1', 'API error');
-
-      const errors = document.querySelectorAll('[data-anyllm-piece-id="piece-1"]');
+      const errors = document.querySelectorAll('[data-anyllm-piece-id="piece-3"]');
       expect(errors).toHaveLength(1);
       expect(errors[0].classList.contains('anyllm-translate-loading')).toBe(false);
       expect(errors[0].getAttribute('data-anyllm-error')).toBe('');

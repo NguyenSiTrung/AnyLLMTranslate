@@ -152,7 +152,7 @@ describe('pickTtsCredentials hybrid', () => {
     expect(pickTtsCredentials(disabled)).toBeNull();
   });
 
-  it('custom source fully overrides pool when base URL set', () => {
+  it('custom source fully overrides pool when base URL set; empty base URL returns null', () => {
     const s = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
@@ -170,10 +170,9 @@ describe('pickTtsCredentials hybrid', () => {
     expect(pick?.apiKey).toBe('sk-custom');
     expect(pick?.model).toBe('custom-model');
     expect(pick?.voice).toBe('');
-  });
 
-  it('custom source with empty base URL returns null (does not fall back to pool)', () => {
-    const s = baseSettings({
+    // Custom source with empty base URL returns null (does not fall back to pool)
+    const empty = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         credentialSource: 'custom',
@@ -182,11 +181,31 @@ describe('pickTtsCredentials hybrid', () => {
       },
       providers: [poolProvider({ id: 'p1' })],
     });
-    expect(pickTtsCredentials(s)).toBeNull();
+    expect(pickTtsCredentials(empty)).toBeNull();
   });
 
-  it('returns false when no base URL', () => {
+  it('returns null when explicit poolProviderId is missing, disabled, or no base URL', () => {
     const s = baseSettings({
+      tts: {
+        ...DEFAULT_TTS_SETTINGS,
+        credentialSource: 'pool',
+        poolProviderId: 'gone',
+      },
+      providers: [poolProvider({ id: 'p1' })],
+    });
+    expect(pickTtsCredentials(s)).toBeNull();
+    expect(hasProviderTtsCredentials(s)).toBe(false);
+
+    const disabled = baseSettings({
+      tts: {
+        ...DEFAULT_TTS_SETTINGS,
+        poolProviderId: 'p1',
+      },
+      providers: [poolProvider({ id: 'p1', enabled: false })],
+    });
+    expect(pickTtsCredentials(disabled)).toBeNull();
+
+    const noBase = baseSettings({
       providers: [
         {
           ...DEFAULT_SETTINGS.providers[0],
@@ -196,20 +215,18 @@ describe('pickTtsCredentials hybrid', () => {
       ],
       provider: { ...DEFAULT_SETTINGS.provider, baseUrl: '', apiKey: '' },
     });
-    expect(hasProviderTtsCredentials(s)).toBe(false);
-    expect(pickTtsCredentials(s)).toBeNull();
+    expect(hasProviderTtsCredentials(noBase)).toBe(false);
+    expect(pickTtsCredentials(noBase)).toBeNull();
   });
 });
 
 describe('isOpenAiStyleTtsHost / shouldOfferVoiceField', () => {
-  it('detects OpenAI hosts only', () => {
+  it('detects OpenAI hosts only; offers voice for OpenAI, Mistral, voxtral, or showVoiceField', () => {
     expect(isOpenAiStyleTtsHost('https://api.openai.com/v1')).toBe(true);
     expect(isOpenAiStyleTtsHost('https://east.openai.azure.com/openai/v1')).toBe(true);
     expect(isOpenAiStyleTtsHost('https://api.mistral.ai/v1')).toBe(false);
     expect(isOpenAiStyleTtsHost('not-a-url')).toBe(false);
-  });
 
-  it('offers voice for OpenAI, Mistral, voxtral model, or showVoiceField', () => {
     expect(
       shouldOfferVoiceField(
         { ...DEFAULT_TTS_SETTINGS, showVoiceField: false },
@@ -272,15 +289,13 @@ describe('clampRate / mergeTtsSettings', () => {
 });
 
 describe('normalizeTtsOverrideLang / findTtsLanguageOverride', () => {
-  it('normalizes case and underscore; rejects empty/auto', () => {
+  it('normalizes case/underscore, rejects empty/auto, matches exact then base (first wins)', () => {
     expect(normalizeTtsOverrideLang('VI')).toBe('vi');
     expect(normalizeTtsOverrideLang('vi_VN')).toBe('vi-vn');
     expect(normalizeTtsOverrideLang('auto')).toBeUndefined();
     expect(normalizeTtsOverrideLang('')).toBeUndefined();
     expect(normalizeTtsOverrideLang(null)).toBeUndefined();
-  });
 
-  it('matches exact then base language; first wins', () => {
     const rows: TtsLanguageOverride[] = [
       { language: 'vi', voice: 'vi-base' },
       { language: 'vi-VN', voice: 'vi-exact' },

@@ -871,8 +871,9 @@ describe('ProviderPoolCoordinator', () => {
       return { ...DEFAULT_SETTINGS, providers };
     }
 
-    it('preferred: always uses primary model when healthy (order A)', async () => {
-      const coord = new ProviderPoolCoordinator({
+    it('preferred uses primary model when healthy, fails over to lite on 429; round_robin spreads', async () => {
+      // preferred: always uses primary model when healthy (order A)
+      let coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
@@ -888,10 +889,9 @@ describe('ProviderPoolCoordinator', () => {
         (stubs.get('k2::gemini-2.5-flash-lite')?.callCount ?? 0);
       expect(flashCalls).toBe(4);
       expect(liteCalls).toBe(0);
-    });
 
-    it('preferred: fails over to lite when flash slots 429', async () => {
-      const coord = new ProviderPoolCoordinator({
+      // preferred: fails over to lite when flash slots 429
+      coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
@@ -912,10 +912,9 @@ describe('ProviderPoolCoordinator', () => {
       expect(liteUsed).toBeGreaterThan(0);
       expect(coord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
       expect(coord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
-    });
 
-    it('round_robin: spreads across models', async () => {
-      const coord = new ProviderPoolCoordinator({
+      // round_robin: spreads across models
+      coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });

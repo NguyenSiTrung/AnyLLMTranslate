@@ -17,7 +17,7 @@ import {
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 describe('Categories, prompt snippets & glossary settings', () => {
-  it('covers predefined categories, resolves category source, and searches groups', () => {
+  it('covers predefined categories, resolves sources, searches groups, and resolves prompt snippets', () => {
     const flat = CATEGORY_GROUPS.flatMap((g) => [...g.items]);
     expect(new Set(flat).size).toBe(flat.length);
     expect(new Set(flat)).toEqual(new Set(PREDEFINED_CATEGORIES));
@@ -41,9 +41,8 @@ describe('Categories, prompt snippets & glossary settings', () => {
     expect(normalizePredefinedCategory('technology')).toBeNull();
     expect(normalizePredefinedCategory('')).toBeNull();
     expect(normalizePredefinedCategory(undefined)).toBeNull();
-  });
 
-  it('resolves category prompt snippets for every predefined category', () => {
+    // resolves category prompt snippets for every predefined category
     for (const cat of PREDEFINED_CATEGORIES) {
       expect(getCategoryPromptSnippet(cat), cat).toBeTruthy();
     }

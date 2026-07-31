@@ -21,7 +21,7 @@ function makeSiteRule(overrides: Partial<SiteRule> & { hostname: string }): Site
 }
 
 describe('siteRules', () => {
-  it('hostname matching, rule lookup, built-ins, and exclude merge', () => {
+  it('hostname matching, rule lookup, built-ins, exclude merge, and most-specific match wins', () => {
     expect(matchHostname('Example.COM', 'example.com')).toBe(true);
     expect(matchHostname('sub.example.com', '*.example.com')).toBe(true);
     expect(matchHostname('example.com', '*.example.com')).toBe(false);
@@ -69,16 +69,15 @@ describe('siteRules', () => {
     ]);
     expect(mergeExcludeSelectors([], undefined)).toEqual([]);
     expect(mergeExcludeSelectors(['PRE'], ['pre'])).toEqual(['PRE', 'pre']);
-  });
 
-  it('FR-28: most-specific hostname match wins', () => {
-    const rules: SiteRule[] = [
+    // FR-28: most-specific hostname match wins
+    const specificRules: SiteRule[] = [
       makeSiteRule({ id: 'broad', hostname: '*.example.com' }),
       makeSiteRule({ id: 'exact', hostname: 'docs.example.com' }),
       makeSiteRule({ id: 'mid', hostname: '*.docs.example.com' }),
     ];
-    expect(findMatchingRule('docs.example.com', rules)?.id).toBe('exact');
-    expect(findMatchingRule('api.docs.example.com', rules)?.id).toBe('mid');
-    expect(findMatchingRule('www.example.com', rules)?.id).toBe('broad');
+    expect(findMatchingRule('docs.example.com', specificRules)?.id).toBe('exact');
+    expect(findMatchingRule('api.docs.example.com', specificRules)?.id).toBe('mid');
+    expect(findMatchingRule('www.example.com', specificRules)?.id).toBe('broad');
   });
 });

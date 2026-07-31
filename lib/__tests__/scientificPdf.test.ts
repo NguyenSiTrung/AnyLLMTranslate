@@ -14,7 +14,7 @@ import {
 import { DEFAULT_SCIENTIFIC_PDF_SETTINGS } from '@/types/config';
 
 describe('scientificPdf helpers', () => {
-  it('normalizeScientificPdfServerUrl handles empty, protocol, path, and non-http', () => {
+  it('normalizeScientificPdfServerUrl, loopback detection, status, settings merge, and docker commands', () => {
     expect(normalizeScientificPdfServerUrl('')).toBe(DEFAULT_SCIENTIFIC_PDF_SERVER_URL);
     expect(normalizeScientificPdfServerUrl('   ')).toBe(DEFAULT_SCIENTIFIC_PDF_SERVER_URL);
     expect(normalizeScientificPdfServerUrl(null)).toBe(DEFAULT_SCIENTIFIC_PDF_SERVER_URL);
@@ -27,9 +27,8 @@ describe('scientificPdf helpers', () => {
     expect(normalizeScientificPdfServerUrl('ftp://127.0.0.1:17890')).toBe(
       DEFAULT_SCIENTIFIC_PDF_SERVER_URL,
     );
-  });
 
-  it('loopback detection, status resolution, settings merge, and docker setup commands', () => {
+    // loopback detection, status resolution, settings merge, and docker setup commands
     expect(isLoopbackServerUrl('http://127.0.0.1:17890')).toBe(true);
     expect(isLoopbackServerUrl('http://127.0.0.42:9')).toBe(true);
     expect(isLoopbackServerUrl('http://localhost:17890')).toBe(true);
