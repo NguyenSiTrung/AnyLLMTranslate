@@ -1,63 +1,59 @@
 {
-  "lastRefresh": "2026-07-29T00:02:39+07:00",
+  "lastRefresh": "2026-07-31T12:01:54+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh (post TTS hybrid credentials + dual Speak + per-language stacks + Mistral Voxtral + ASR AI re-align cache + Active-features jump + YouTube CC + empty-content connection test + suite trim).",
-    "product.md: Key Features — TTS hybrid/per-lang/dual-speak/Voxtral/Load voices; ASR re-align cache manager + YouTube CC; Active-features jump + actionable cache; connection test empty-content fail; popup footer pool-key readiness. Completed bullets for 2026-07-27…29 ships. Current State → 620 pass / 0 fail / 163 files, tsc 0, lint 2, build ~3.6 MB; Beads 2 open / 0 in_progress.",
-    "tech-stack.md: TTS rationale expanded (hybrid + pickBrowserVoice + listTtsVoices + languageOverrides, no new npm deps); quality-gates snapshot 620/0, lint 2, tsc 0, ~3.6 MB.",
-    "patterns.md: elevated TTS hybrid/dual Speak/per-lang/Voxtral, YouTube ASR AI re-align cache, Advanced jump nav, connection-test empty-content + popup footer pool keys; merged Phase B Speak section pointer.",
-    "tracks.md: refresh marker only (72 archived / 0 active; post-refresh ships without Conductor tracks).",
-    "workflow.md: refresh marker only (no content drift).",
-    "beads: sync skipped (option C) — retained open zg4 + 7uk; s3t no longer in_progress.",
+    "Scope: full refresh after the 2026-07-29 context snapshot.",
+    "product.md: documented LLM-assisted Site Rule suggestions and the popup settings-loading recovery fix; Current State updated to 648/648 tests across 174 files, tsc 0, eslint 0, build 3.7 MB, 72 archived / 0 active tracks, and Beads zg4+7uk open.",
+    "tech-stack.md: installed WXT updated to 0.20.22 and bundled Vite to 8.x; chrome.tabs usage expanded for Site Rule outline capture; structural-outline rationale and current quality gates added. No package.json dependency declarations changed.",
+    "patterns.md: elevated the Site Rule structure-not-page-dump, live-tab-first, heuristic fail-open, untrusted-output sanitization, review-before-save, and Chrome-free orchestration pattern; marked the pickBrowserVoice lint gotcha resolved.",
+    "tracks.md: refresh marker only; confirmed 72 archived / 0 active and documented post-refresh ships without Conductor tracks.",
+    "workflow.md: corrected the stable default branch from main to master.",
+    "beads: user selected Skip because there are no active Conductor plan checkboxes; retained open zg4 + 7uk and recorded closed feature 6ui.",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
-    "verification: vitest 620/620 pass; tsc 0; eslint 2 (pickBrowserVoice non-null assertions, noted not fixed); build ~3.6 MB."
+    "verification: vitest 648/648 pass across 174 files; tsc 0; eslint 0; production build 3.7 MB."
   ],
   "codebaseHealth": {
-    "tests": 620,
-    "testsPassing": 620,
+    "tests": 648,
+    "testsPassing": 648,
     "testsFailing": 0,
-    "testFiles": 163,
-    "buildSize": "~3.6 MB",
-    "lintErrors": 2,
-    "lintErrorsDetail": "lib/tts/pickBrowserVoice.ts lines ~80/82 — @typescript-eslint/no-non-null-assertion on region casing after split; noted, not fixed in this refresh.",
+    "testFiles": 174,
+    "buildSize": "3.7 MB",
+    "lintErrors": 0,
+    "lintErrorsDetail": "Clean. The two pickBrowserVoice non-null assertions recorded on 2026-07-29 were removed in d35d98f.",
     "tscErrors": 0,
     "tscErrorsDetail": "Clean.",
     "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None. TTS hybrid/per-lang/dual-speak, ASR re-align cache, Active-features jump, YouTube CC, empty-content test, suite trim shipped on master without Conductor tracks.",
+    "activeTracksDetail": "None. Popup settings-loading recovery and LLM-assisted Site Rule suggestions shipped on master through Beads and superpowers specs/plans without Conductor tracks.",
     "failingTests": [],
+    "installedTooling": {
+      "wxt": "0.20.22",
+      "vite": "8.0.8",
+      "vitest": "3.2.4",
+      "typescript": "5.9.3",
+      "eslint": "10.2.0",
+      "react": "19.2.5"
+    },
     "shippedSinceLastRefresh": [
-      "feat(options): Advanced Active features jump navigation (55e557d…adecd7a)",
-      "feat(asr): YouTube ASR AI re-align cache, progress, manager UI (db339e8…e05a5b2)",
-      "fix(youtube): first-load CC-on recover + hide native CC (1ab54e2, 1b672ed)",
-      "feat(category): harden LLM page category detection (ed04189)",
-      "test(suite): trim 765→575 TCs (8123dae); green count later 620",
-      "feat(advanced): actionable cache overview (889708f)",
-      "fix(popup): footer from pool key tests (7beefc4)",
-      "fix(provider): fail connection test on empty LLM content (e513fdd)",
-      "feat(tts): dual Speak + browser voice match (54206bb, 9e6334f)",
-      "feat(tts): hybrid credentials + free-text model UI (682d052…c4d931d)",
-      "fix(tts): Mistral Voxtral dialect + Load voices (bdb0eaa…2d9edc8)",
-      "feat(tts): per-language voice/model/credential stacks (6b19b49)"
+      "fix(popup): prevent translate button orange setup flash while loading settings (d35d98f)",
+      "feat(site-rules): LLM-assisted URL-to-rule suggestions with live/temporary-tab outline capture, heuristic fallback, sanitization, background/content messaging, and review UI (2946a33…9d6929c)",
+      "chore: restore Scientific PDF bridge smoke test after accidental deletion during the feature merge (09213ba)"
     ]
   },
   "beads": {
     "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
     "inProgress": [],
-    "closedThisRefresh": [],
+    "closedFeature": ["AnyLLMTranslate-6ui"],
+    "refreshIssue": "AnyLLMTranslate-58c",
     "syncDirection": "skip",
-    "syncNote": "User chose C) Skip. No active Conductor tracks/plan.md checkboxes. Retained backlog zg4 (P2 seek test) and 7uk (P3 OCR). Prior s3t in_progress already cleared before this refresh."
+    "syncNote": "User selected Skip. No active Conductor tracks or plan.md checkboxes exist, so either directional synchronization would be a no-op."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
+    "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [
-      "TTS hybrid credentials, dual Speak, per-language stacks",
-      "YouTube ASR AI re-align cache",
-      "Advanced Active features jump nav",
-      "Connection test empty-content failure + popup footer pool keys"
+      "LLM-assisted Site Rule suggestions: capped outlines, live-tab-first capture, heuristic fail-open, sanitization, review-before-save, and injectable orchestration"
     ],
-    "duplicatesMerged": [
-      "Selection Speak / TTS Phase B section now points at 2026-07-29 top section"
-    ]
+    "duplicatesMerged": []
   }
 }

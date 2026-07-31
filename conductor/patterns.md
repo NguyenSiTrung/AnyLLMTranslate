@@ -1,7 +1,13 @@
-<!-- conductor-refresh: 2026-07-31 all (648 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; elevated Site Rule AI outline/fail-open/sanitize/review pattern) -->
+<!-- conductor-refresh: 2026-08-01 all (682 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; elevated player-chrome hybrid-mount/soft-mirror/shadow-DOM/single-authority patterns) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Player Subtitle Chrome — in-player mini studio (from: player subtitle chrome, 2026-07-31)
+- **Hybrid mount, floating-first:** native control-bar injection (per-site adapters) is always an *upgrade path*, never a requirement. A rect-tracked floating fallback anchored to the player shell must exist so selector fragility or site DOM churn can never remove the feature; when a native node disappears (SPA remount), debounce and prefer native again, else floating.
+- **Soft-mirror visibility state machine:** extension chrome mirrors player control visibility (adapter `isControlsVisible()` signal → activity heuristic on the player root), with explicit states `hidden / shown / shownForced` and a sticky exception while the panel is open; idle hide ~2.5s; closing the panel resets the idle timer only if the pointer is still over the player. Keep it a pure function of input signals (`content/playerChrome/visibility.ts`) so it is unit-testable without chrome APIs.
+- **Shadow-DOM chrome with scoped hit targets:** host-page chrome (players, selection UI) is shadow-DOM isolated so site CSS cannot restyle it, and pointer-events are limited to the chrome's own hit targets so it never blocks the scrubber or native controls; focusable icon with Enter/Space/Escape + light focus management.
+- **No second settings authority:** the mini studio reuses existing prefs/message/store paths (overlay config + `subtitleControls`, `resolveEffectiveKnobs`, named glossary lists + `subtitleListBySite`, coordinator status signals). Inventing a parallel prefs blob guarantees divergence — new control surfaces must write through the same paths as the popup/options.
 
 ## LLM-assisted Site Rule suggestions (from: AnyLLMTranslate-6ui, 2026-07-31)
 - **Send structure, not page dumps:** build a capped `DomOutline` with semantic nodes, bounded class/id lists, short text samples, and aggregate text lengths. Never send full HTML or article content when the model only needs selector evidence (`lib/siteRuleSuggest/outline.ts`).

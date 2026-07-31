@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-31 all (648 pass / 0 fail; lint 0; tsc 0; build 3.7 MB; 72 archived / 0 active; Beads zg4+7uk open; Site Rule suggestions + popup loading fix) -->
+<!-- conductor-refresh: 2026-08-01 all (682 pass / 0 fail; lint 0; tsc 0; build 3.72 MB; 72 archived / 0 active; Beads zg4+7uk open; Player Subtitle Chrome + DeepSeek/OpenCode Zen thinking) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -156,10 +156,15 @@
 - Pure `lib/thinkingDetection.ts` inspects `reasoning_content` and `<think>` tags; `providerTester` only wires request shape + UI summary
 - Same pure-lib style as `thinkingMode.ts` / multi-model — unit-testable without chrome or network
 
+### Why player chrome is plain DOM, not React
+- In-player chrome (`content/playerChrome/`) injects into host video players where React would fight site CSP/event systems; it uses lightweight shadow-DOM DOM builders and reuses existing subtitle prefs/message paths instead of a second settings blob.
+- **Hybrid mount:** per-site adapters (YouTube/Udemy/Coursera) inject into native control bars when selectors match; a rect-tracked **floating fallback** keeps the feature on every other player, including fullscreen via reparenting. Native failure never removes the feature.
+- **Soft-mirror visibility** is a pure state machine (`visibility.ts`) driven by adapter signals or an activity heuristic on the player root, with a sticky open-panel exception — unit-testable without chrome APIs.
+
 ### Why Site Rule suggestions use structural outlines?
 - Full HTML and article bodies are unnecessary and privacy-expensive for selector inference. `lib/siteRuleSuggest/outline.ts` emits a capped semantic outline with bounded text samples.
 - The background prefers a matching open tab, then loads a temporary inactive tab so SPA/login-aware pages can still provide rendered structure without granting broad remote fetch logic.
 - Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
 - The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
 
-- Quality gates snapshot (2026-07-31, post Site Rule suggestions): **648** Vitest TCs passed / **0** fail across **174** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.7 MB**.
+- Quality gates snapshot (2026-08-01, post player chrome + DeepSeek/OpenCode Zen thinking): **682** Vitest TCs passed / **0** fail across **182** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.72 MB**.

@@ -1,30 +1,30 @@
 {
-  "lastRefresh": "2026-07-31T12:01:54+07:00",
+  "lastRefresh": "2026-08-01T01:24:38+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh after the 2026-07-29 context snapshot.",
-    "product.md: documented LLM-assisted Site Rule suggestions and the popup settings-loading recovery fix; Current State updated to 648/648 tests across 174 files, tsc 0, eslint 0, build 3.7 MB, 72 archived / 0 active tracks, and Beads zg4+7uk open.",
-    "tech-stack.md: installed WXT updated to 0.20.22 and bundled Vite to 8.x; chrome.tabs usage expanded for Site Rule outline capture; structural-outline rationale and current quality gates added. No package.json dependency declarations changed.",
-    "patterns.md: elevated the Site Rule structure-not-page-dump, live-tab-first, heuristic fail-open, untrusted-output sanitization, review-before-save, and Chrome-free orchestration pattern; marked the pickBrowserVoice lint gotcha resolved.",
-    "tracks.md: refresh marker only; confirmed 72 archived / 0 active and documented post-refresh ships without Conductor tracks.",
-    "workflow.md: corrected the stable default branch from main to master.",
-    "beads: user selected Skip because there are no active Conductor plan checkboxes; retained open zg4 + 7uk and recorded closed feature 6ui.",
+    "Scope: full refresh after the 2026-07-31 12:01 refresh; 13 new commits on master since then.",
+    "product.md: documented Player Subtitle Chrome (in-player mini studio, hybrid mount + soft-mirror visibility + single-authority mini studio), DeepSeek Official thinking mode/effort, OpenCode Zen DeepSeek thinking, OpenCode Zen + DeepSeek Official catalog presets, StepFun reasoning-only empty-content fix; Current State updated to 682/682 tests across 182 files, tsc 0, eslint 0, build 3.72 MB, 72 archived / 0 active tracks, Beads zg4+7uk open.",
+    "tech-stack.md: added 'Why player chrome is plain DOM, not React' architecture decision (hybrid mount, soft-mirror pure state machine); quality gates snapshot updated to 682/182/0 and build 3.72 MB. No package.json dependency changes.",
+    "patterns.md: elevated 4 player-chrome patterns — hybrid mount floating-first, soft-mirror visibility state machine, shadow-DOM chrome with scoped hit targets, no second settings authority.",
+    "tracks.md: refresh marker only; confirmed 72 archived / 0 active; player chrome + DeepSeek/OpenCode Zen provider work shipped via superpowers specs/plans + Beads without Conductor tracks.",
+    "workflow.md: refresh marker only.",
+    "beads: user selected Skip — no active Conductor plan checkboxes, so directional sync is a no-op; retained open zg4 + 7uk; recorded features closed in window (player subtitle chrome, DeepSeek catalog, DeepSeek Official thinking, OpenCode Zen DeepSeek thinking).",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
-    "verification: vitest 648/648 pass across 174 files; tsc 0; eslint 0; production build 3.7 MB."
+    "verification: vitest 682/682 pass across 182 files; tsc 0; eslint 0; production build 3.72 MB."
   ],
   "codebaseHealth": {
-    "tests": 648,
-    "testsPassing": 648,
+    "tests": 682,
+    "testsPassing": 682,
     "testsFailing": 0,
-    "testFiles": 174,
-    "buildSize": "3.7 MB",
+    "testFiles": 182,
+    "buildSize": "3.72 MB",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean. The two pickBrowserVoice non-null assertions recorded on 2026-07-29 were removed in d35d98f.",
+    "lintErrorsDetail": "Clean.",
     "tscErrors": 0,
     "tscErrorsDetail": "Clean.",
     "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Popup settings-loading recovery and LLM-assisted Site Rule suggestions shipped on master through Beads and superpowers specs/plans without Conductor tracks.",
+    "activeTracksDetail": "None. Player Subtitle Chrome and the DeepSeek/OpenCode Zen provider work shipped on master through superpowers specs/plans and Beads without Conductor tracks.",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -35,16 +35,22 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "fix(popup): prevent translate button orange setup flash while loading settings (d35d98f)",
-      "feat(site-rules): LLM-assisted URL-to-rule suggestions with live/temporary-tab outline capture, heuristic fallback, sanitization, background/content messaging, and review UI (2946a33…9d6929c)",
-      "chore: restore Scientific PDF bridge smoke test after accidental deletion during the feature merge (09213ba)"
+      "feat(player-chrome): in-player mini studio with hybrid mount — spec/plan (75a9135, 4371f10), soft-mirror visibility (61fe5f8), host targeting + adapter registry (3b6e1ce), full module + YouTube/Udemy/Coursera adapters (7830026), beads close (8ad383f)",
+      "fix(providers): handle StepFun reasoning-only empty content (b05d261)",
+      "feat(providers): add OpenCode Zen and DeepSeek Official catalog presets (dbc1c81)",
+      "feat(providers): DeepSeek Official thinking mode and effort (e94138f)",
+      "feat(providers): DeepSeek thinking API on OpenCode Zen DeepSeek models (f7d621b)"
     ]
   },
   "beads": {
     "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
     "inProgress": [],
-    "closedFeature": ["AnyLLMTranslate-6ui"],
-    "refreshIssue": "AnyLLMTranslate-58c",
+    "closedInWindow": [
+      "player subtitle chrome",
+      "OpenCode Zen + DeepSeek Official catalog",
+      "DeepSeek Official thinking mode and effort",
+      "OpenCode Zen DeepSeek thinking"
+    ],
     "syncDirection": "skip",
     "syncNote": "User selected Skip. No active Conductor tracks or plan.md checkboxes exist, so either directional synchronization would be a no-op."
   },
@@ -52,7 +58,7 @@
     "activeTrackLearnings": 0,
     "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [
-      "LLM-assisted Site Rule suggestions: capped outlines, live-tab-first capture, heuristic fail-open, sanitization, review-before-save, and injectable orchestration"
+      "Player Subtitle Chrome: hybrid mount floating-first, soft-mirror visibility state machine, shadow-DOM chrome with scoped hit targets, no second settings authority"
     ],
     "duplicatesMerged": []
   }

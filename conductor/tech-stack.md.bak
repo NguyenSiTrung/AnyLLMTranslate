@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-29 all (620 pass / 0 fail; lint 2 pickBrowserVoice; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads zg4+7uk open; TTS hybrid/per-lang + listTtsVoices) -->
+<!-- conductor-refresh: 2026-07-31 all (648 pass / 0 fail; lint 0; tsc 0; build 3.7 MB; 72 archived / 0 active; Beads zg4+7uk open; Site Rule suggestions + popup loading fix) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -12,9 +12,9 @@
 
 | Technology | Version | Rationale |
 |-----------|---------|-----------|
-| **WXT** | 0.20.20 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
+| **WXT** | 0.20.22 | Modern Chrome Extension framework with Manifest V3 native support, multi-entry builds, hot reload |
 | **@wxt-dev/module-react** | 1.x | WXT React integration module for React entrypoints |
-| **Vite** | 6.x | Bundled with WXT — fast builds, HMR, ESBuild-powered |
+| **Vite** | 8.x | Bundled with WXT — fast builds, HMR, ESBuild-powered |
 | **pnpm** | 9.x | Fast, disk-efficient package manager |
 
 ## UI Layer
@@ -34,7 +34,7 @@
 |-----|-------|
 | **chrome.storage.local** | Settings persistence, provider config |
 | **chrome.runtime** | Message passing between background ↔ content ↔ popup |
-| **chrome.tabs** | Tab-level translation state management |
+| **chrome.tabs** | Tab-level translation state, live DOM-outline capture, and temporary-tab fallback for Site Rule suggestions |
 | **chrome.sidePanel** | Side panel reading view |
 | **chrome.contextMenus** | Right-click translation actions |
 | **chrome.commands** | Keyboard shortcuts |
@@ -156,4 +156,10 @@
 - Pure `lib/thinkingDetection.ts` inspects `reasoning_content` and `<think>` tags; `providerTester` only wires request shape + UI summary
 - Same pure-lib style as `thinkingMode.ts` / multi-model — unit-testable without chrome or network
 
-- Quality gates snapshot (2026-07-29, post TTS hybrid/per-lang + ASR re-align cache + suite trim): **620** Vitest TCs passed / **0** fail across **163** test files; **eslint 2** errors (`lib/tts/pickBrowserVoice.ts` non-null assertions); `tsc --noEmit` **0** errors; build ≈ **3.6 MB** (3.68 MB reported).
+### Why Site Rule suggestions use structural outlines?
+- Full HTML and article bodies are unnecessary and privacy-expensive for selector inference. `lib/siteRuleSuggest/outline.ts` emits a capped semantic outline with bounded text samples.
+- The background prefers a matching open tab, then loads a temporary inactive tab so SPA/login-aware pages can still provide rendered structure without granting broad remote fetch logic.
+- Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
+- The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
+
+- Quality gates snapshot (2026-07-31, post Site Rule suggestions): **648** Vitest TCs passed / **0** fail across **174** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.7 MB**.

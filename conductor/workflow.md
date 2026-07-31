@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-07-31 all (default branch corrected to master; quality gates + Site Rule suggestions documented in product/tech-stack/patterns) -->
+<!-- conductor-refresh: 2026-08-01 all (quality gates updated to 682/182/0; player chrome + DeepSeek/OpenCode Zen thinking documented in product/tech-stack/patterns) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
