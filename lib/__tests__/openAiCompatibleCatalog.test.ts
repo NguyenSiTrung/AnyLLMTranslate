@@ -16,6 +16,8 @@ describe('openAiCompatibleCatalog', () => {
     expect(ids).toContain('ollama');
     expect(ids).toContain('groq');
     expect(ids).toContain('google-ai-studio');
+    expect(ids).toContain('opencode-zen');
+    expect(ids).toContain('deepseek');
     expect(getCatalogEntryById('openrouter')?.baseUrl).toBe('https://openrouter.ai/api/v1');
     expect(getCatalogEntryById('openrouter')?.requiresApiKey).toBe(true);
     expect(getCatalogEntryById('google-ai-studio')?.baseUrl).toBe(
@@ -25,13 +27,31 @@ describe('openAiCompatibleCatalog', () => {
     expect(getCatalogEntryById('google-ai-studio')?.getKeyUrl).toBe(
       'https://aistudio.google.com/apikey',
     );
+    expect(getCatalogEntryById('opencode-zen')?.baseUrl).toBe('https://opencode.ai/zen/v1');
+    expect(getCatalogEntryById('opencode-zen')?.requiresApiKey).toBe(true);
+    expect(getCatalogEntryById('opencode-zen')?.getKeyUrl).toBe('https://opencode.ai/auth');
+    expect(getCatalogEntryById('opencode-zen')?.defaultModel).toBe('deepseek-v4-flash-free');
+    expect(getCatalogEntryById('deepseek')?.baseUrl).toBe('https://api.deepseek.com');
+    expect(getCatalogEntryById('deepseek')?.requiresApiKey).toBe(true);
+    expect(getCatalogEntryById('deepseek')?.getKeyUrl).toBe(
+      'https://platform.deepseek.com/api_keys',
+    );
+    expect(getCatalogEntryById('deepseek')?.defaultModel).toBe('deepseek-v4-flash');
     expect(filterCatalog('gemini').some((e) => e.id === 'google-ai-studio')).toBe(true);
+    expect(filterCatalog('opencode').some((e) => e.id === 'opencode-zen')).toBe(true);
+    expect(filterCatalog('deepseek').some((e) => e.id === 'deepseek')).toBe(true);
     expect(getKeyUrlForProvider('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
       'https://aistudio.google.com/apikey',
+    );
+    expect(getKeyUrlForProvider('https://opencode.ai/zen/v1')).toBe('https://opencode.ai/auth');
+    expect(getKeyUrlForProvider('https://api.deepseek.com')).toBe(
+      'https://platform.deepseek.com/api_keys',
     );
     expect(inferCatalogId('https://generativelanguage.googleapis.com/v1beta/openai/')).toBe(
       'google-ai-studio',
     );
+    expect(inferCatalogId('https://opencode.ai/zen/v1/')).toBe('opencode-zen');
+    expect(inferCatalogId('https://api.deepseek.com/')).toBe('deepseek');
 
     expect(filterCatalog('')).toHaveLength(OPENAI_COMPATIBLE_CATALOG.length);
     expect(filterCatalog('router').some((e) => e.id === 'openrouter')).toBe(true);

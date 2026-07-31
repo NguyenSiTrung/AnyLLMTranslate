@@ -148,6 +148,40 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     category: 'cloud',
   },
   {
+    id: 'opencode-zen',
+    displayName: 'OpenCode Zen',
+    keywords: ['opencode', 'zen', 'opencode.ai', 'opencode zen'],
+    // OpenAI-compatible chat/completions + models gateway.
+    // Callers append /chat/completions and /models.
+    baseUrl: 'https://opencode.ai/zen/v1',
+    requiresApiKey: true,
+    placeholder: '...',
+    // Fast free-tier default suited to translation latency.
+    defaultModel: 'deepseek-v4-flash-free',
+    supportsModelListing: true,
+    getKeyUrl: 'https://opencode.ai/auth',
+    accent: 'teal',
+    monogram: 'OZ',
+    category: 'cloud',
+  },
+  {
+    id: 'deepseek',
+    displayName: 'DeepSeek Official',
+    keywords: ['deepseek', 'deep seek', 'api.deepseek'],
+    // Official OpenAI-compatible base (docs use https://api.deepseek.com +
+    // /chat/completions). /v1 is also accepted by DeepSeek as an alias.
+    baseUrl: 'https://api.deepseek.com',
+    requiresApiKey: true,
+    placeholder: 'sk-...',
+    // Flash is the latency-friendly default for translation.
+    defaultModel: 'deepseek-v4-flash',
+    supportsModelListing: true,
+    getKeyUrl: 'https://platform.deepseek.com/api_keys',
+    accent: 'cyan',
+    monogram: 'DS',
+    category: 'cloud',
+  },
+  {
     id: 'ollama',
     displayName: 'Ollama',
     keywords: ['ollama', 'local', 'localhost'],
