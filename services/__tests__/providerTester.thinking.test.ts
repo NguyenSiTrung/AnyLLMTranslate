@@ -129,11 +129,13 @@ describe('testConnection thinking probe', () => {
         enable_thinking?: unknown;
         chat_template_kwargs?: unknown;
         reasoning_effort?: unknown;
+        thinking?: unknown;
       };
       if (body.max_tokens === 1) return okJson({ choices: [{ message: { content: 'x' } }] });
       expect(body.enable_thinking).toBeUndefined();
       expect(body.chat_template_kwargs).toBeUndefined();
       expect(body.reasoning_effort).toBeUndefined();
+      expect(body.thinking).toBeUndefined();
       return okJson({ choices: [{ message: { content: 'Hi' } }] });
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -141,6 +143,76 @@ describe('testConnection thinking probe', () => {
     const result = await testConnection(baseConfig({ thinkingMode: 'auto' }));
     expect(result.thinking?.verdict).toBe('not-applicable');
     expect(result.thinking?.controlsSent).toBe(false);
+  });
+
+  it('sends DeepSeek thinking.type disabled when thinkingMode is off', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash' }] });
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        max_tokens?: number;
+        thinking?: { type?: string };
+        reasoning_effort?: string;
+        enable_thinking?: unknown;
+        chat_template_kwargs?: unknown;
+      };
+      if (body.max_tokens === 1) return okJson({ choices: [{ message: { content: 'x' } }] });
+      expect(body.thinking).toEqual({ type: 'disabled' });
+      expect(body.reasoning_effort).toBeUndefined();
+      expect(body.enable_thinking).toBeUndefined();
+      expect(body.chat_template_kwargs).toBeUndefined();
+      return okJson({ choices: [{ message: { content: 'Xin chào' } }] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await testConnection(
+      baseConfig({
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-v4-flash',
+        thinkingMode: 'off',
+      }),
+    );
+    expect(result.overall).toBe(true);
+    expect(result.thinking?.verdict).toBe('disable-success');
+    expect(result.thinking?.controlsSent).toBe(true);
+  });
+
+  it('sends DeepSeek thinking enabled + reasoning_effort when mode is on', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-pro' }] });
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        max_tokens?: number;
+        thinking?: { type?: string };
+        reasoning_effort?: string;
+      };
+      if (body.max_tokens === 1) return okJson({ choices: [{ message: { content: 'x' } }] });
+      expect(body.thinking).toEqual({ type: 'enabled' });
+      expect(body.reasoning_effort).toBe('max');
+      return okJson({
+        choices: [
+          {
+            message: {
+              content: 'Hello',
+              reasoning_content: 'thinking carefully',
+            },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await testConnection(
+      baseConfig({
+        baseUrl: 'https://api.deepseek.com/v1',
+        model: 'deepseek-v4-pro',
+        thinkingMode: 'on',
+        thinkingEffort: 'max',
+      }),
+    );
+    expect(result.overall).toBe(true);
+    expect(result.thinking?.controlsSent).toBe(true);
+    expect(result.thinking?.thinkingDetected).toBe(true);
   });
 
   it('retries without thinking controls when provider rejects them', async () => {

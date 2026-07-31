@@ -37,7 +37,10 @@ import type {
   ThinkingMode,
 } from '@/types/config';
 import { DEFAULT_THINKING_EFFORT, DEFAULT_THINKING_MODE } from '@/types/config';
-import { isGeminiOpenAiCompatBaseUrl } from '@/lib/thinkingMode';
+import {
+  isDeepSeekOfficialBaseUrl,
+  isGeminiOpenAiCompatBaseUrl,
+} from '@/lib/thinkingMode';
 
 type DrawerSection = 'connection' | 'keys' | 'advanced' | 'danger';
 
@@ -324,7 +327,7 @@ export function ProviderEditDrawer({
           />
           <FieldGroup
             label="Thinking mode"
-            description="Force reasoning on or off when the provider supports it (NVIDIA NIM: enable_thinking; Google AI Studio Gemini: reasoning_effort). Gemini 3.x and 2.5 Pro cannot fully disable thinking — Off uses the lowest effort. Auto keeps the provider default. Off is recommended for bulk translation."
+            description="Force reasoning on or off when the provider supports it (NVIDIA NIM: enable_thinking; Google AI Studio Gemini: reasoning_effort; DeepSeek Official: thinking type + reasoning_effort). Gemini 3.x and 2.5 Pro cannot fully disable thinking — Off uses the lowest effort. Auto keeps the provider default. Off is recommended for bulk translation."
             htmlFor={`ptm-${provider.id}`}
           >
             <SegmentedControl
@@ -358,6 +361,35 @@ export function ProviderEditDrawer({
                     { value: 'low', label: 'Low' },
                     { value: 'medium', label: 'Medium' },
                     { value: 'high', label: 'High' },
+                  ]}
+                />
+              </FieldGroup>
+            )}
+          {isDeepSeekOfficialBaseUrl(provider.baseUrl) &&
+            (provider.thinkingMode ?? DEFAULT_THINKING_MODE) === 'on' && (
+              <FieldGroup
+                label="Reasoning effort"
+                description="DeepSeek thinking effort when Thinking mode is On (reasoning_effort: low / high / max). Higher effort can improve quality but adds latency and tokens. DeepSeek defaults to high when thinking is enabled."
+                htmlFor={`ptde-${provider.id}`}
+              >
+                <SegmentedControl
+                  id={`ptde-${provider.id}`}
+                  label="Reasoning effort"
+                  size="sm"
+                  value={
+                    provider.thinkingEffort === 'low' ||
+                    provider.thinkingEffort === 'high' ||
+                    provider.thinkingEffort === 'max'
+                      ? provider.thinkingEffort
+                      : provider.thinkingEffort === 'minimal'
+                        ? 'low'
+                        : 'high'
+                  }
+                  onChange={(v: ThinkingEffort) => onUpdateProvider({ thinkingEffort: v })}
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'high', label: 'High' },
+                    { value: 'max', label: 'Max' },
                   ]}
                 />
               </FieldGroup>

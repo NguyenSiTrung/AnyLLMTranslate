@@ -103,12 +103,25 @@ export interface TranslationService {
 }
 
 /**
- * OpenAI-style reasoning effort. Google AI Studio (Gemini) OpenAI-compat maps
- * this to thinking level/budget. `"none"` fully disables thinking only on
- * models that allow it (e.g. Gemini 2.5 Flash); Gemini 3.x / 2.5 Pro use
- * `"minimal"` as the lowest supported setting.
+ * OpenAI-style reasoning effort.
+ * - Google AI Studio (Gemini): `none` | `minimal` | `low` | `medium` | `high`
+ *   (`none` fully disables only where supported; Gemini 3.x / 2.5 Pro lowest is
+ *   `minimal`).
+ * - DeepSeek Official: `low` | `high` | `max` (and aliases the API maps).
+ *   Used together with {@link ChatCompletionRequest.thinking}.
  */
-export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high';
+export type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'max';
+
+/** DeepSeek Official OpenAI-compat thinking toggle body. */
+export type DeepSeekThinkingParam = {
+  type: 'enabled' | 'disabled';
+};
 
 /** OpenAI-compatible chat completion request */
 export interface ChatCompletionRequest {
@@ -121,10 +134,18 @@ export interface ChatCompletionRequest {
    *  response body as a ReadableStream of SSE deltas (Phase 2 streaming path). */
   stream?: boolean;
   /**
-   * Gemini OpenAI-compat thinking control. Set from provider `thinkingMode`
-   * when baseUrl is Google AI Studio. Omitted when thinkingMode is `auto`.
+   * Thinking-level control.
+   * - Gemini AI Studio: set from provider `thinkingMode` / `thinkingEffort`.
+   * - DeepSeek Official: set with {@link thinking} when mode is `on`
+   *   (`low` / `high` / `max`). Omitted when thinkingMode is `auto`.
    */
   reasoning_effort?: ReasoningEffort;
+  /**
+   * DeepSeek Official thinking toggle (`{"type":"enabled"|"disabled"}`).
+   * Omitted when thinkingMode is `auto` or the host is not DeepSeek Official.
+   * See https://api-docs.deepseek.com/guides/thinking_mode
+   */
+  thinking?: DeepSeekThinkingParam;
   /**
    * Top-level thinking switch used by some OpenAI-compatible hosts (e.g.
    * StepFun `step_plan`). NIM/vLLM usually want the same flag nested under

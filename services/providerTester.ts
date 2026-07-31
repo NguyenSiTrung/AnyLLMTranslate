@@ -306,7 +306,8 @@ function requestHasThinkingControls(body: ChatCompletionRequest): boolean {
   return (
     body.chat_template_kwargs !== undefined ||
     body.enable_thinking !== undefined ||
-    body.reasoning_effort !== undefined
+    body.reasoning_effort !== undefined ||
+    body.thinking !== undefined
   );
 }
 

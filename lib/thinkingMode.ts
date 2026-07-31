@@ -7,13 +7,16 @@
  *    (nested chat_template_kwargs alone is ignored by StepFun step_plan)
  * 3. **Google AI Studio (Gemini)** — top-level `reasoning_effort`
  *    (`none` | `minimal` | `low` | `medium` | `high`)
+ * 4. **DeepSeek Official** — `thinking: { type: "enabled" | "disabled" }` and,
+ *    when on, `reasoning_effort` (`low` | `high` | `max`)
+ *    https://api-docs.deepseek.com/guides/thinking_mode
  *
- * Non-Gemini on|off sends both (1) and (2). Providers that reject unknown
- * fields get a one-shot strip + retry in the fetch layer.
+ * Non-Gemini/DeepSeek on|off sends both (1) and (2). Providers that reject
+ * unknown fields get a one-shot strip + retry in the fetch layer.
  *
  * When the user leaves mode at `auto`, we omit thinking fields so the model
- * keeps its server default. When mode is `on` for Gemini, the level comes
- * from `thinkingEffort` (default medium).
+ * keeps its server default. When mode is `on` for Gemini/DeepSeek, the level
+ * comes from `thinkingEffort` (default medium → DeepSeek high).
  */
 
 import type { ThinkingEffort, ThinkingMode } from '@/types/config';
@@ -28,7 +31,13 @@ export function normalizeThinkingMode(value: unknown): ThinkingMode {
 
 /** Normalize stored/partial values to a valid ThinkingEffort. */
 export function normalizeThinkingEffort(value: unknown): ThinkingEffort {
-  if (value === 'minimal' || value === 'low' || value === 'medium' || value === 'high') {
+  if (
+    value === 'minimal' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'max'
+  ) {
     return value;
   }
   return DEFAULT_THINKING_EFFORT;
@@ -49,6 +58,22 @@ export function isGeminiOpenAiCompatBaseUrl(baseUrl: string): boolean {
     );
   } catch {
     return raw.toLowerCase().includes('generativelanguage.googleapis.com');
+  }
+}
+
+/**
+ * True when baseUrl points at DeepSeek Official
+ * (`api.deepseek.com`, with or without `/v1`).
+ * Does not match third-party hosts that merely proxy DeepSeek models.
+ */
+export function isDeepSeekOfficialBaseUrl(baseUrl: string): boolean {
+  const raw = baseUrl.trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === 'api.deepseek.com' || host.endsWith('.api.deepseek.com');
+  } catch {
+    return raw.toLowerCase().includes('api.deepseek.com');
   }
 }
 
@@ -87,7 +112,7 @@ export function geminiSupportsThinkingNone(model: string): boolean {
  * Map thinkingMode → Gemini `reasoning_effort`.
  *
  * - `off` → `none` when supported; else `minimal` (Gemini 3.x / 2.5 Pro)
- * - `on`  → user-selected {@link ThinkingEffort} (default medium)
+ * - `on`  → user-selected {@link ThinkingEffort} (default medium; `max`→`high`)
  * - `auto` → omit (caller handles)
  */
 export function geminiReasoningEffortForMode(
@@ -95,15 +120,36 @@ export function geminiReasoningEffortForMode(
   model: string,
   effortWhenOn: ThinkingEffort = DEFAULT_THINKING_EFFORT,
 ): ReasoningEffort {
-  if (mode === 'on') return normalizeThinkingEffort(effortWhenOn);
+  if (mode === 'on') {
+    const effort = normalizeThinkingEffort(effortWhenOn);
+    // Gemini has no `max`; clamp to the highest Gemini-supported level.
+    return effort === 'max' ? 'high' : effort;
+  }
   return geminiSupportsThinkingNone(model) ? 'none' : 'minimal';
 }
 
+/**
+ * Map stored {@link ThinkingEffort} → DeepSeek Official `reasoning_effort`.
+ * DeepSeek accepts `low` | `high` | `max` (plus aliases it maps server-side).
+ * Shared UI values `minimal`/`medium` collapse to the nearest DeepSeek rung.
+ */
+export function deepseekReasoningEffort(effortWhenOn: ThinkingEffort = DEFAULT_THINKING_EFFORT):
+  | 'low'
+  | 'high'
+  | 'max' {
+  const effort = normalizeThinkingEffort(effortWhenOn);
+  if (effort === 'minimal' || effort === 'low') return 'low';
+  if (effort === 'max') return 'max';
+  // medium + high → high (DeepSeek default when thinking is on)
+  return 'high';
+}
+
 export interface ApplyThinkingModeOptions {
-  /** Provider base URL — used to pick Gemini vs NIM/vLLM strategy. */
+  /** Provider base URL — used to pick Gemini / DeepSeek / NIM strategy. */
   baseUrl?: string;
   /**
-   * Gemini effort when mode is `on`. Ignored for non-Gemini and for off/auto.
+   * Effort when mode is `on` for Gemini or DeepSeek Official.
+   * Ignored for NIM/StepFun-style hosts and for off/auto.
    * Defaults to {@link DEFAULT_THINKING_EFFORT}.
    */
   thinkingEffort?: ThinkingEffort;
@@ -113,9 +159,10 @@ export interface ApplyThinkingModeOptions {
  * Attach thinking control fields when mode is on|off.
  * Returns the same object reference when mode is auto (no-op).
  *
- * Gemini AI Studio uses `reasoning_effort`. Other OpenAI-compatible hosts get
- * both top-level `enable_thinking` (StepFun) and nested
- * `chat_template_kwargs.enable_thinking` (NIM/vLLM/Qwen3).
+ * - Gemini AI Studio → `reasoning_effort`
+ * - DeepSeek Official → `thinking: { type }` + `reasoning_effort` when on
+ * - Other OpenAI-compatible hosts → top-level `enable_thinking` (StepFun) and
+ *   nested `chat_template_kwargs.enable_thinking` (NIM/vLLM/Qwen3)
  */
 export function applyThinkingModeToRequest(
   request: ChatCompletionRequest,
@@ -135,6 +182,20 @@ export function applyThinkingModeToRequest(
     return {
       ...request,
       reasoning_effort: effort,
+    };
+  }
+
+  if (isDeepSeekOfficialBaseUrl(baseUrl)) {
+    if (resolved === 'off') {
+      return {
+        ...request,
+        thinking: { type: 'disabled' },
+      };
+    }
+    return {
+      ...request,
+      thinking: { type: 'enabled' },
+      reasoning_effort: deepseekReasoningEffort(options?.thinkingEffort),
     };
   }
 
@@ -159,6 +220,15 @@ export function isThinkingKwargsRejected(errorMessage: string): boolean {
     lower.includes('enable_thinking') ||
     lower.includes('enable thinking') ||
     lower.includes('reasoning_effort') ||
-    lower.includes('reasoning effort')
+    lower.includes('reasoning effort') ||
+    // DeepSeek Official thinking toggle body — keep narrow to avoid matching
+    // generic prose that merely mentions "thinking".
+    lower.includes('thinking.type') ||
+    lower.includes('unknown field: thinking') ||
+    lower.includes('unknown field thinking') ||
+    lower.includes('extra field: thinking') ||
+    lower.includes('extra field thinking') ||
+    lower.includes('unexpected field thinking') ||
+    lower.includes('"thinking"')
   );
 }

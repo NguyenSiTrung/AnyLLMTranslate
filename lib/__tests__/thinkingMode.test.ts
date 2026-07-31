@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyThinkingModeToRequest,
+  deepseekReasoningEffort,
   geminiReasoningEffortForMode,
   geminiSupportsThinkingNone,
+  isDeepSeekOfficialBaseUrl,
   isGeminiOpenAiCompatBaseUrl,
   isThinkingKwargsRejected,
   normalizeThinkingEffort,
@@ -18,6 +20,7 @@ const baseRequest: ChatCompletionRequest = {
 };
 
 const geminiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
+const deepseekBase = 'https://api.deepseek.com';
 
 describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
   it('accepts known values and defaults unknown to auto/medium', () => {
@@ -32,13 +35,14 @@ describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
     expect(normalizeThinkingEffort('low')).toBe('low');
     expect(normalizeThinkingEffort('medium')).toBe('medium');
     expect(normalizeThinkingEffort('high')).toBe('high');
+    expect(normalizeThinkingEffort('max')).toBe('max');
     expect(normalizeThinkingEffort(undefined)).toBe('medium');
-    expect(normalizeThinkingEffort('max')).toBe('medium');
+    expect(normalizeThinkingEffort('xhigh')).toBe('medium');
   });
 });
 
-describe('isGeminiOpenAiCompatBaseUrl', () => {
-  it('detects Google AI Studio OpenAI-compat hosts', () => {
+describe('isGeminiOpenAiCompatBaseUrl / isDeepSeekOfficialBaseUrl', () => {
+  it('detects Google AI Studio and DeepSeek Official hosts', () => {
     expect(isGeminiOpenAiCompatBaseUrl(geminiBase)).toBe(true);
     expect(isGeminiOpenAiCompatBaseUrl(`${geminiBase}/`)).toBe(true);
     expect(
@@ -47,6 +51,13 @@ describe('isGeminiOpenAiCompatBaseUrl', () => {
     expect(isGeminiOpenAiCompatBaseUrl('https://api.openai.com/v1')).toBe(false);
     expect(isGeminiOpenAiCompatBaseUrl('https://openrouter.ai/api/v1')).toBe(false);
     expect(isGeminiOpenAiCompatBaseUrl('')).toBe(false);
+
+    expect(isDeepSeekOfficialBaseUrl(deepseekBase)).toBe(true);
+    expect(isDeepSeekOfficialBaseUrl('https://api.deepseek.com/')).toBe(true);
+    expect(isDeepSeekOfficialBaseUrl('https://api.deepseek.com/v1')).toBe(true);
+    expect(isDeepSeekOfficialBaseUrl('https://openrouter.ai/api/v1')).toBe(false);
+    expect(isDeepSeekOfficialBaseUrl('https://opencode.ai/zen/v1')).toBe(false);
+    expect(isDeepSeekOfficialBaseUrl('')).toBe(false);
   });
 });
 
@@ -157,15 +168,67 @@ describe('applyThinkingModeToRequest', () => {
       'minimal',
     );
   });
+
+  it('uses DeepSeek thinking.type + reasoning_effort (on) and omits effort when off', () => {
+    const req: ChatCompletionRequest = {
+      ...baseRequest,
+      model: 'deepseek-v4-flash',
+    };
+
+    expect(deepseekReasoningEffort('minimal')).toBe('low');
+    expect(deepseekReasoningEffort('low')).toBe('low');
+    expect(deepseekReasoningEffort('medium')).toBe('high');
+    expect(deepseekReasoningEffort('high')).toBe('high');
+    expect(deepseekReasoningEffort('max')).toBe('max');
+    expect(deepseekReasoningEffort(undefined)).toBe('high');
+
+    const offReq = applyThinkingModeToRequest(req, 'off', { baseUrl: deepseekBase });
+    expect(offReq.thinking).toEqual({ type: 'disabled' });
+    expect(offReq.reasoning_effort).toBeUndefined();
+    expect(offReq.enable_thinking).toBeUndefined();
+    expect(offReq.chat_template_kwargs).toBeUndefined();
+
+    const onDefault = applyThinkingModeToRequest(req, 'on', { baseUrl: deepseekBase });
+    expect(onDefault.thinking).toEqual({ type: 'enabled' });
+    expect(onDefault.reasoning_effort).toBe('high');
+
+    expect(
+      applyThinkingModeToRequest(req, 'on', {
+        baseUrl: deepseekBase,
+        thinkingEffort: 'low',
+      }).reasoning_effort,
+    ).toBe('low');
+    expect(
+      applyThinkingModeToRequest(req, 'on', {
+        baseUrl: deepseekBase,
+        thinkingEffort: 'max',
+      }).reasoning_effort,
+    ).toBe('max');
+    expect(
+      applyThinkingModeToRequest(req, 'on', {
+        baseUrl: 'https://api.deepseek.com/v1',
+        thinkingEffort: 'medium',
+      }),
+    ).toMatchObject({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    });
+
+    // auto still no-ops
+    expect(applyThinkingModeToRequest(req, 'auto', { baseUrl: deepseekBase })).toBe(req);
+  });
 });
 
 describe('isThinkingKwargsRejected', () => {
-  it('detects known rejection phrases for NIM and Gemini', () => {
+  it('detects known rejection phrases for NIM, Gemini, and DeepSeek', () => {
     expect(isThinkingKwargsRejected('Unknown field: chat_template_kwargs')).toBe(true);
     expect(isThinkingKwargsRejected('extra field enable_thinking not permitted')).toBe(true);
     expect(isThinkingKwargsRejected('Invalid enable thinking flag')).toBe(true);
     expect(isThinkingKwargsRejected('Unknown field: reasoning_effort')).toBe(true);
     expect(isThinkingKwargsRejected('Invalid reasoning effort value')).toBe(true);
+    expect(isThinkingKwargsRejected('Unknown field: thinking')).toBe(true);
+    expect(isThinkingKwargsRejected('Invalid value for thinking.type')).toBe(true);
     expect(isThinkingKwargsRejected('rate limit exceeded')).toBe(false);
+    expect(isThinkingKwargsRejected('model spent budget on thinking')).toBe(false);
   });
 });

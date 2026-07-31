@@ -32,21 +32,28 @@ export interface KeyTestResult {
  *   (`none` / `minimal` / `low` / `medium` / `high`). Gemini 3.x and 2.5 Pro
  *   cannot fully disable thinking; `off` uses the lowest allowed effort
  *   (`minimal`). When `on`, level comes from {@link ThinkingEffort}.
+ * - **DeepSeek Official**: `thinking: { type: "enabled" | "disabled" }` plus
+ *   `reasoning_effort` (`low` / `high` / `max`) when on. See
+ *   https://api-docs.deepseek.com/guides/thinking_mode
  *
  * - `auto` — omit thinking fields; use the provider/model default (safest)
- * - `on`  — force thinking on (NIM: enable_thinking true; Gemini: effort)
+ * - `on`  — force thinking on (NIM: enable_thinking; Gemini/DeepSeek: effort)
  * - `off` — force thinking off / lowest (recommended for bulk translation)
  */
 export type ThinkingMode = 'auto' | 'on' | 'off';
 
 /**
- * Reasoning effort when {@link ThinkingMode} is `on` for Google AI Studio
- * (Gemini OpenAI-compat). Maps 1:1 to `reasoning_effort` (except `none`,
- * which is reserved for Thinking mode Off on Flash models).
+ * Reasoning effort when {@link ThinkingMode} is `on`.
  *
- * Ignored for non-Gemini providers (they only support boolean enable_thinking).
+ * - **Gemini**: `minimal` | `low` | `medium` | `high` (maps 1:1 to
+ *   `reasoning_effort`; `none` is reserved for Thinking mode Off on Flash).
+ * - **DeepSeek Official**: `low` | `high` | `max` (API values). Stored
+ *   `minimal`/`medium` are mapped at request time (`minimal`→`low`,
+ *   `medium`→`high`) so a shared picker can reuse Gemini options plus Max.
+ *
+ * Ignored for NIM/vLLM/StepFun-style hosts (boolean enable_thinking only).
  */
-export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high';
+export type ThinkingEffort = 'minimal' | 'low' | 'medium' | 'high' | 'max';
 
 /**
  * Multi-model rotation strategy for Google AI Studio free-tier stacking.

@@ -113,7 +113,11 @@ export class OpenAICompatibleService implements TranslationService {
   private buildCompletionRequest(
     base: Omit<
       ChatCompletionRequest,
-      'response_format' | 'chat_template_kwargs' | 'reasoning_effort'
+      | 'response_format'
+      | 'chat_template_kwargs'
+      | 'reasoning_effort'
+      | 'thinking'
+      | 'enable_thinking'
     >,
   ): ChatCompletionRequest {
     let request: ChatCompletionRequest = this.responseFormatDisabled
@@ -908,12 +912,14 @@ Rules:
         // - NIM/vLLM: chat_template_kwargs / enable_thinking
         // - StepFun-style: top-level enable_thinking
         // - Gemini OpenAI-compat: reasoning_effort (or unsupported values)
+        // - DeepSeek Official: thinking + reasoning_effort
         // When the user forced on|off, retry once without those fields and
         // remember so later requests fall back to auto for this baseUrl+model.
         if (
           (request.chat_template_kwargs ||
             request.enable_thinking !== undefined ||
-            request.reasoning_effort !== undefined) &&
+            request.reasoning_effort !== undefined ||
+            request.thinking !== undefined) &&
           response.status === 400 &&
           isThinkingKwargsRejected(errorMessage)
         ) {
@@ -926,6 +932,7 @@ Rules:
           delete strippedRequest.chat_template_kwargs;
           delete strippedRequest.enable_thinking;
           delete strippedRequest.reasoning_effort;
+          delete strippedRequest.thinking;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
         }
 
