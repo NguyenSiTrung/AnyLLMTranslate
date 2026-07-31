@@ -1,10 +1,15 @@
 /**
  * Helpers for provider thinkingMode → OpenAI-compatible request fields.
  *
- * Two strategies:
+ * Strategies:
  * 1. **NIM / Nemotron / Qwen3 (vLLM)** — `chat_template_kwargs.enable_thinking`
- * 2. **Google AI Studio (Gemini)** — top-level `reasoning_effort`
+ * 2. **StepFun / some OpenAI-compat hosts** — top-level `enable_thinking`
+ *    (nested chat_template_kwargs alone is ignored by StepFun step_plan)
+ * 3. **Google AI Studio (Gemini)** — top-level `reasoning_effort`
  *    (`none` | `minimal` | `low` | `medium` | `high`)
+ *
+ * Non-Gemini on|off sends both (1) and (2). Providers that reject unknown
+ * fields get a one-shot strip + retry in the fetch layer.
  *
  * When the user leaves mode at `auto`, we omit thinking fields so the model
  * keeps its server default. When mode is `on` for Gemini, the level comes
@@ -108,8 +113,9 @@ export interface ApplyThinkingModeOptions {
  * Attach thinking control fields when mode is on|off.
  * Returns the same object reference when mode is auto (no-op).
  *
- * Gemini AI Studio uses `reasoning_effort`; other OpenAI-compatible hosts use
- * `chat_template_kwargs.enable_thinking`.
+ * Gemini AI Studio uses `reasoning_effort`. Other OpenAI-compatible hosts get
+ * both top-level `enable_thinking` (StepFun) and nested
+ * `chat_template_kwargs.enable_thinking` (NIM/vLLM/Qwen3).
  */
 export function applyThinkingModeToRequest(
   request: ChatCompletionRequest,
@@ -132,11 +138,15 @@ export function applyThinkingModeToRequest(
     };
   }
 
+  const enableThinking = resolved === 'on';
   return {
     ...request,
+    // StepFun step_plan (and similar) only honor the top-level flag.
+    enable_thinking: enableThinking,
+    // NIM / vLLM / Qwen3 chat templates read the nested kwargs form.
     chat_template_kwargs: {
       ...request.chat_template_kwargs,
-      enable_thinking: resolved === 'on',
+      enable_thinking: enableThinking,
     },
   };
 }

@@ -76,6 +76,7 @@ describe('applyThinkingModeToRequest', () => {
     expect(applyThinkingModeToRequest(baseRequest, 'auto')).toBe(baseRequest);
     expect(applyThinkingModeToRequest(baseRequest, undefined)).toBe(baseRequest);
     expect(applyThinkingModeToRequest(baseRequest, 'auto').chat_template_kwargs).toBeUndefined();
+    expect(applyThinkingModeToRequest(baseRequest, 'auto').enable_thinking).toBeUndefined();
     expect(
       applyThinkingModeToRequest(
         { ...baseRequest, model: 'gemini-2.5-flash' },
@@ -85,14 +86,15 @@ describe('applyThinkingModeToRequest', () => {
     ).toBeUndefined();
   });
 
-  it('sets enable_thinking true/false and preserves existing chat_template_kwargs keys', () => {
-    expect(applyThinkingModeToRequest(baseRequest, 'on').chat_template_kwargs).toEqual({
-      enable_thinking: true,
-    });
-    expect(applyThinkingModeToRequest(baseRequest, 'off').chat_template_kwargs).toEqual({
-      enable_thinking: false,
-    });
-    expect(applyThinkingModeToRequest(baseRequest, 'off').reasoning_effort).toBeUndefined();
+  it('sets enable_thinking true/false (top-level + kwargs) and preserves existing kwargs keys', () => {
+    const onReq = applyThinkingModeToRequest(baseRequest, 'on');
+    expect(onReq.enable_thinking).toBe(true);
+    expect(onReq.chat_template_kwargs).toEqual({ enable_thinking: true });
+
+    const offReq = applyThinkingModeToRequest(baseRequest, 'off');
+    expect(offReq.enable_thinking).toBe(false);
+    expect(offReq.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(offReq.reasoning_effort).toBeUndefined();
 
     const withExtra: ChatCompletionRequest = {
       ...baseRequest,
@@ -102,6 +104,7 @@ describe('applyThinkingModeToRequest', () => {
       low_effort: true,
       enable_thinking: false,
     });
+    expect(applyThinkingModeToRequest(withExtra, 'off').enable_thinking).toBe(false);
   });
 
   it('uses reasoning_effort on Gemini and honors thinkingEffort when mode is on', () => {

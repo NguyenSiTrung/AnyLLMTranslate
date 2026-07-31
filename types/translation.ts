@@ -126,6 +126,13 @@ export interface ChatCompletionRequest {
    */
   reasoning_effort?: ReasoningEffort;
   /**
+   * Top-level thinking switch used by some OpenAI-compatible hosts (e.g.
+   * StepFun `step_plan`). NIM/vLLM usually want the same flag nested under
+   * `chat_template_kwargs` instead; we may send both. Omitted when
+   * thinkingMode is `auto`.
+   */
+  enable_thinking?: boolean;
+  /**
    * NIM / vLLM chat-template kwargs. Used to force thinking on/off via
    * `enable_thinking` when the user sets provider `thinkingMode` to on|off.
    * Omitted entirely when thinkingMode is `auto`.
@@ -152,6 +159,8 @@ export interface ChatCompletionResponse {
       content: string | null;
       /** DeepSeek-R1 / Qwen2API-style separate reasoning channel. */
       reasoning_content?: string | null;
+      /** StepFun / some hosts duplicate reasoning under `reasoning`. */
+      reasoning?: string | null;
     };
     finish_reason: string;
   }>;

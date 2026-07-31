@@ -164,7 +164,7 @@ describe('OpenAICompatibleService', () => {
       expect(partial.translations.size).toBe(2);
     });
 
-    it('sends chat_template_kwargs.enable_thinking when thinkingMode is on/off', async () => {
+    it('sends enable_thinking (top-level + kwargs) when thinkingMode is on/off', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
       await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'off' }).translate({
         texts: new Map([['p1', 'Hello']]),
@@ -173,7 +173,11 @@ describe('OpenAICompatibleService', () => {
       });
       const offBody = JSON.parse(
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
-      ) as { chat_template_kwargs?: { enable_thinking?: boolean } };
+      ) as {
+        enable_thinking?: boolean;
+        chat_template_kwargs?: { enable_thinking?: boolean };
+      };
+      expect(offBody.enable_thinking).toBe(false);
       expect(offBody.chat_template_kwargs).toEqual({ enable_thinking: false });
 
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
@@ -184,7 +188,11 @@ describe('OpenAICompatibleService', () => {
       });
       const onBody = JSON.parse(
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
-      ) as { chat_template_kwargs?: { enable_thinking?: boolean } };
+      ) as {
+        enable_thinking?: boolean;
+        chat_template_kwargs?: { enable_thinking?: boolean };
+      };
+      expect(onBody.enable_thinking).toBe(true);
       expect(onBody.chat_template_kwargs).toEqual({ enable_thinking: true });
 
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
@@ -195,7 +203,8 @@ describe('OpenAICompatibleService', () => {
       });
       const autoBody = JSON.parse(
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
-      ) as { chat_template_kwargs?: unknown };
+      ) as { enable_thinking?: unknown; chat_template_kwargs?: unknown };
+      expect(autoBody.enable_thinking).toBeUndefined();
       expect(autoBody.chat_template_kwargs).toBeUndefined();
     });
 
@@ -216,9 +225,11 @@ describe('OpenAICompatibleService', () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
       ) as {
         reasoning_effort?: string;
+        enable_thinking?: unknown;
         chat_template_kwargs?: unknown;
       };
       expect(flashOff.reasoning_effort).toBe('none');
+      expect(flashOff.enable_thinking).toBeUndefined();
       expect(flashOff.chat_template_kwargs).toBeUndefined();
 
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
@@ -316,9 +327,11 @@ describe('OpenAICompatibleService', () => {
       expect(kwargsResult.success).toBe(true);
       expect(fetchKwargs).toHaveBeenCalledTimes(2);
       const kwargsSecondBody = JSON.parse(fetchKwargs.mock.calls[1]![1]?.body as string) as {
+        enable_thinking?: unknown;
         chat_template_kwargs?: unknown;
       };
       expect(kwargsSecondBody.chat_template_kwargs).toBeUndefined();
+      expect(kwargsSecondBody.enable_thinking).toBeUndefined();
 
       // Scenario 2: Gemini rejects reasoning_effort → retry without it.
       const fetchEffort = vi

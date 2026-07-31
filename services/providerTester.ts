@@ -266,6 +266,14 @@ export interface TranslationStepData {
   thinking: ThinkingProbeResult;
 }
 
+/**
+ * Connection-test completion budget. Reasoning models (StepFun step-3.x,
+ * DeepSeek-R1, etc.) often spend the first hundreds of tokens on a separate
+ * reasoning channel and only then emit `message.content`. A 100-token cap
+ * commonly finishes with empty content + finish_reason=length.
+ */
+const CONNECTION_TEST_MAX_TOKENS = 1024;
+
 function buildTranslationRequestBody(
   config: ProviderConfig,
   lang: string,
@@ -280,7 +288,9 @@ function buildTranslationRequestBody(
       },
       { role: 'user', content: 'Hello, how are you today?' },
     ],
-    max_tokens: 100,
+    // Prefer a healthy test budget over the user's production maxTokens so
+    // reasoning-first models can still emit visible content during Test.
+    max_tokens: Math.max(config.maxTokens || 0, CONNECTION_TEST_MAX_TOKENS),
     temperature: 0.3,
   };
 
@@ -294,7 +304,9 @@ function buildTranslationRequestBody(
 
 function requestHasThinkingControls(body: ChatCompletionRequest): boolean {
   return (
-    body.chat_template_kwargs !== undefined || body.reasoning_effort !== undefined
+    body.chat_template_kwargs !== undefined ||
+    body.enable_thinking !== undefined ||
+    body.reasoning_effort !== undefined
   );
 }
 
@@ -367,10 +379,18 @@ async function testTranslation(
     }
 
     const json = (await response.json()) as {
-      choices?: { message?: { content?: string | null; reasoning_content?: string } }[];
+      choices?: {
+        message?: {
+          content?: string | null;
+          reasoning_content?: string;
+          reasoning?: string;
+        };
+        finish_reason?: string;
+      }[];
       usage?: { completion_tokens?: number };
     };
     const message = json.choices?.[0]?.message;
+    const finishReason = json.choices?.[0]?.finish_reason;
     const rawContent = typeof message?.content === 'string' ? message.content : '';
     const signals = detectThinkingSignals({ content: rawContent, message });
     const thinkingResult = evaluateThinkingProbe({
@@ -387,12 +407,26 @@ async function testTranslation(
     // HTTP 200 with null/empty content is a common proxy failure mode (e.g. model
     // listed but not actually serving tokens). Treat as translation failure so
     // the settings test does not report OK when live translate would fail.
+    //
+    // Reasoning-first hosts (StepFun step-3.x, etc.) often return empty content
+    // while filling reasoning/reasoning_content and finishing with "length" when
+    // the completion budget was spent entirely on thinking. Surface that case
+    // with a concrete fix instead of a generic "try another model" hint.
     if (!sample.trim()) {
       const completionTokens = json.usage?.completion_tokens;
-      const hint =
-        completionTokens === 0
-          ? ' Provider returned 0 completion tokens — the model may be unavailable or misconfigured on this endpoint.'
-          : ' Try another model from the list, or verify the proxy/account can serve this model.';
+      let hint: string;
+      if (completionTokens === 0) {
+        hint =
+          ' Provider returned 0 completion tokens — the model may be unavailable or misconfigured on this endpoint.';
+      } else if (signals.detected && (finishReason === 'length' || mode !== 'off')) {
+        hint =
+          ' Model spent the token budget on reasoning and returned empty content.' +
+          ' Set Thinking mode to Off (Settings → provider → Thinking), or raise Max tokens,' +
+          ' then test again.';
+      } else {
+        hint =
+          ' Try another model from the list, or verify the proxy/account can serve this model.';
+      }
       return {
         name: 'translation',
         success: false,

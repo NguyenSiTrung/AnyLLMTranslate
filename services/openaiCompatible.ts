@@ -204,21 +204,29 @@ export class OpenAICompatibleService implements TranslationService {
     if (!responseText.trim()) {
       const completionTokens = response.usage?.completion_tokens;
       const finishReason = response.choices[0]?.finish_reason;
+      const message = response.choices[0]?.message;
+      const reasoningText =
+        (typeof message?.reasoning_content === 'string' && message.reasoning_content.trim()) ||
+        (typeof message?.reasoning === 'string' && message.reasoning.trim()) ||
+        '';
       const details: string[] = [];
       if (rawMessageContent === null) details.push('content=null');
       if (typeof completionTokens === 'number') {
         details.push(`completion_tokens=${completionTokens}`);
       }
       if (finishReason) details.push(`finish_reason=${finishReason}`);
+      if (reasoningText) details.push('reasoning_only');
       const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+      const reasoningHint = reasoningText
+        ? ' The model only returned reasoning text and no final answer — set Thinking mode to Off ' +
+          'or raise Max tokens for this provider, then retry.'
+        : ' The endpoint accepted the request but returned no text. ' +
+          'Check that the model id is correct and that this provider actually serves that model ' +
+          '(try another model from Settings → Test connection).';
       return {
         success: false,
         translations: new Map(),
-        error:
-          `Empty response from LLM${suffix}. ` +
-          'The endpoint accepted the request but returned no text. ' +
-          'Check that the model id is correct and that this provider actually serves that model ' +
-          '(try another model from Settings → Test connection).',
+        error: `Empty response from LLM${suffix}.${reasoningHint}`,
       };
     }
 
@@ -898,11 +906,14 @@ Rules:
 
         // Some endpoints reject thinking controls:
         // - NIM/vLLM: chat_template_kwargs / enable_thinking
+        // - StepFun-style: top-level enable_thinking
         // - Gemini OpenAI-compat: reasoning_effort (or unsupported values)
         // When the user forced on|off, retry once without those fields and
         // remember so later requests fall back to auto for this baseUrl+model.
         if (
-          (request.chat_template_kwargs || request.reasoning_effort !== undefined) &&
+          (request.chat_template_kwargs ||
+            request.enable_thinking !== undefined ||
+            request.reasoning_effort !== undefined) &&
           response.status === 400 &&
           isThinkingKwargsRejected(errorMessage)
         ) {
@@ -913,6 +924,7 @@ Rules:
           };
           const strippedRequest = { ...request };
           delete strippedRequest.chat_template_kwargs;
+          delete strippedRequest.enable_thinking;
           delete strippedRequest.reasoning_effort;
           return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
         }
