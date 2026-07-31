@@ -1,0 +1,63 @@
+{
+  "lastRefresh": "2026-07-29T00:02:39+07:00",
+  "scope": "all",
+  "changes": [
+    "Scope: full refresh (post TTS hybrid credentials + dual Speak + per-language stacks + Mistral Voxtral + ASR AI re-align cache + Active-features jump + YouTube CC + empty-content connection test + suite trim).",
+    "product.md: Key Features — TTS hybrid/per-lang/dual-speak/Voxtral/Load voices; ASR re-align cache manager + YouTube CC; Active-features jump + actionable cache; connection test empty-content fail; popup footer pool-key readiness. Completed bullets for 2026-07-27…29 ships. Current State → 620 pass / 0 fail / 163 files, tsc 0, lint 2, build ~3.6 MB; Beads 2 open / 0 in_progress.",
+    "tech-stack.md: TTS rationale expanded (hybrid + pickBrowserVoice + listTtsVoices + languageOverrides, no new npm deps); quality-gates snapshot 620/0, lint 2, tsc 0, ~3.6 MB.",
+    "patterns.md: elevated TTS hybrid/dual Speak/per-lang/Voxtral, YouTube ASR AI re-align cache, Advanced jump nav, connection-test empty-content + popup footer pool keys; merged Phase B Speak section pointer.",
+    "tracks.md: refresh marker only (72 archived / 0 active; post-refresh ships without Conductor tracks).",
+    "workflow.md: refresh marker only (no content drift).",
+    "beads: sync skipped (option C) — retained open zg4 + 7uk; s3t no longer in_progress.",
+    "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
+    "verification: vitest 620/620 pass; tsc 0; eslint 2 (pickBrowserVoice non-null assertions, noted not fixed); build ~3.6 MB."
+  ],
+  "codebaseHealth": {
+    "tests": 620,
+    "testsPassing": 620,
+    "testsFailing": 0,
+    "testFiles": 163,
+    "buildSize": "~3.6 MB",
+    "lintErrors": 2,
+    "lintErrorsDetail": "lib/tts/pickBrowserVoice.ts lines ~80/82 — @typescript-eslint/no-non-null-assertion on region casing after split; noted, not fixed in this refresh.",
+    "tscErrors": 0,
+    "tscErrorsDetail": "Clean.",
+    "archivedTracks": 72,
+    "activeTracks": 0,
+    "activeTracksDetail": "None. TTS hybrid/per-lang/dual-speak, ASR re-align cache, Active-features jump, YouTube CC, empty-content test, suite trim shipped on master without Conductor tracks.",
+    "failingTests": [],
+    "shippedSinceLastRefresh": [
+      "feat(options): Advanced Active features jump navigation (55e557d…adecd7a)",
+      "feat(asr): YouTube ASR AI re-align cache, progress, manager UI (db339e8…e05a5b2)",
+      "fix(youtube): first-load CC-on recover + hide native CC (1ab54e2, 1b672ed)",
+      "feat(category): harden LLM page category detection (ed04189)",
+      "test(suite): trim 765→575 TCs (8123dae); green count later 620",
+      "feat(advanced): actionable cache overview (889708f)",
+      "fix(popup): footer from pool key tests (7beefc4)",
+      "fix(provider): fail connection test on empty LLM content (e513fdd)",
+      "feat(tts): dual Speak + browser voice match (54206bb, 9e6334f)",
+      "feat(tts): hybrid credentials + free-text model UI (682d052…c4d931d)",
+      "fix(tts): Mistral Voxtral dialect + Load voices (bdb0eaa…2d9edc8)",
+      "feat(tts): per-language voice/model/credential stacks (6b19b49)"
+    ]
+  },
+  "beads": {
+    "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
+    "inProgress": [],
+    "closedThisRefresh": [],
+    "syncDirection": "skip",
+    "syncNote": "User chose C) Skip. No active Conductor tracks/plan.md checkboxes. Retained backlog zg4 (P2 seek test) and 7uk (P3 OCR). Prior s3t in_progress already cleared before this refresh."
+  },
+  "learningsConsolidation": {
+    "activeTrackLearnings": 0,
+    "newPatternsElevated": [
+      "TTS hybrid credentials, dual Speak, per-language stacks",
+      "YouTube ASR AI re-align cache",
+      "Advanced Active features jump nav",
+      "Connection test empty-content failure + popup footer pool keys"
+    ],
+    "duplicatesMerged": [
+      "Selection Speak / TTS Phase B section now points at 2026-07-29 top section"
+    ]
+  }
+}

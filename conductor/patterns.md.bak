@@ -1,15 +1,7 @@
-<!-- conductor-refresh: 2026-07-31 all (648 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; elevated Site Rule AI outline/fail-open/sanitize/review pattern) -->
+<!-- conductor-refresh: 2026-07-29 all (620 pass / 0 fail; lint 2; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; elevated TTS hybrid/per-lang/dual-speak, Voxtral, ASR re-align cache, Advanced jump nav) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
-
-## LLM-assisted Site Rule suggestions (from: AnyLLMTranslate-6ui, 2026-07-31)
-- **Send structure, not page dumps:** build a capped `DomOutline` with semantic nodes, bounded class/id lists, short text samples, and aggregate text lengths. Never send full HTML or article content when the model only needs selector evidence (`lib/siteRuleSuggest/outline.ts`).
-- **Prefer live DOM, then isolate fallback capture:** query matching open tabs first (active tab wins), otherwise load a temporary inactive tab, request the same `GET_DOM_OUTLINE` contract, and always remove the temporary tab in `finally`.
-- **Heuristics are the fail-open baseline:** create a deterministic draft before the provider call; missing credentials, transport failure, empty output, or malformed JSON must still return an editable basic draft instead of breaking the workflow.
-- **Treat model output as untrusted:** sanitize hostname, selector length/count/characters/bracket balance, booleans, category, rationale, and warnings before merging. Never execute suggested selectors during suggestion generation (`lib/siteRuleSuggest/sanitize.ts`).
-- **Review before persistence:** merge into the existing Add/Edit form with field-specific preservation rules, show capture/fallback warnings, and require the normal explicit Save path. LLM helpers must not auto-create settings.
-- **Keep orchestration Chrome-free:** `buildSuggestSiteRuleDraft` receives tab capture, fallback capture, and LLM callbacks so source selection and failure behavior remain unit-testable without extension APIs.
 
 ## TTS hybrid credentials, dual Speak, per-language stacks (from: TTS wave, 2026-07-29)
 - **Credentials never enter the page:** content calls background `SYNTHESIZE_SPEECH`; provider fetch stays in SW (`lib/tts/providerTts.ts`). (extends Phase B `34bb4c2`)
@@ -18,7 +10,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - **Per-language stacks:** `languageOverrides[]` match exact normalized code, then base language, else inherit global `tts.*` via `mergeTtsSettings` / resolve stack. Missing override fields inherit — do not send sentinels. (from: `6b19b49`, `2026-07-29-tts-per-language-stacks`)
 - **Voxtral dialect:** Mistral speech uses `voice_id` + `audio_data` shape; **Load voices** via `listTtsVoices` — do not assume OpenAI voice enum only. (from: `bdb0eaa`, `2d9edc8`)
 - **Settings snapshot rule:** `tts` is top-level `ExtensionSettings` — every `extractSettings` / `toSettings` / export path **must** include full hybrid + `languageOverrides` fields or persist/export silently breaks.
-- **Lint gotcha resolved:** avoid `!` on optional split segments in `pickBrowserVoice` language normalization; guard both `lang` and `region` before casing. This cleared the two errors recorded in the 2026-07-29 refresh (`d35d98f`).
+- **Lint gotcha:** avoid `!` on optional split segments in `pickBrowserVoice` lang normalize (2 open eslint errors as of 2026-07-29 refresh) — prefer early-return / empty-string defaults.
 
 ## YouTube ASR AI re-align cache (from: ASR realign cache, 2026-07-27)
 - **Extension-origin IDB only:** never open the re-align store from content/page origin. Pure keys/LRU in `lib/youtubeAsrRealignCache.ts`; store in `services/youtubeAsrRealignStore.ts`. Key `ai:{videoId}:{lang}:{contentHash}`; GET bumps `lastUsedAt`; SAVE only on full AI success; LIST summaries without cues; Clear all does not touch translation cache.
@@ -168,7 +160,7 @@ Reusable patterns discovered during development. Read this before starting new w
 - Background service worker is stateless per-session (tab states in memory Map, recreated on service worker restart). Cache is persistent via IndexedDB. (from: phase1-foundation_20260409, archived 2026-04-09)
 - Use a mutable array queue (e.g., `queue: number[]`) instead of a `for` loop for async background processing loops. This allows other components to re-prioritize processing order dynamically (e.g., handling video `seeked` events). (from: progressive-chunking_20260417, archived 2026-04-17)
 - Per-tab session tracking via `Set<number>` for counters like `totalPagesTranslated` — cleared on `restore` action to avoid double-counting. (from: ux-power-features_20260422, archived 2026-04-22)
-- WXT build produces ~744KB total for chrome-mv3 output (grew from ~346KB after settings overhaul, subtitles, UI library, and 
+- WXT build produces ~744KB total for chrome-mv3 output (grew from ~346KB after settings overhaul, subtitles, UI library, and
 ## Gotchas
 - WXT `init` refuses to run in non-empty directories — init in temp dir, then copy. (from: phase1-foundation_20260409, archived 2026-04-09)
 - `pnpm approve-builds` is interactive — must select & confirm esbuild + spawn-sync. (from: phase1-foundation_20260409, archived 2026-04-09)

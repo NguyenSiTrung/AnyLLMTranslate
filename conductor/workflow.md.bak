@@ -1,9 +1,9 @@
-<!-- conductor-refresh: 2026-07-31 all (default branch corrected to master; quality gates + Site Rule suggestions documented in product/tech-stack/patterns) -->
+<!-- conductor-refresh: 2026-07-29 all (no workflow content drift; quality gates + TTS/ASR ships documented in product/tech-stack/patterns) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
 
-- **master**: Stable, releasable default branch
+- **main**: Stable, releasable code
 - **feat/<track-id>**: Feature branches per track
 - **fix/<description>**: Hotfix branches
 
