@@ -10,16 +10,16 @@ import {
 } from '@/lib/tts/providerTts';
 
 describe('fetchProviderSpeech', () => {
-  it('posts to speech endpoint and returns base64', async () => {
+  it('returns audio for successful speech requests and diagnostics for failures', async () => {
     const audio = new Uint8Array([1, 2, 3, 4]).buffer;
-    const fetchImpl = vi.fn(async () =>
+    const successFetch = vi.fn(async () =>
       new Response(audio, {
         status: 200,
         headers: { 'content-type': 'audio/mpeg' },
       }),
     );
 
-    const result = await fetchProviderSpeech(
+    const successResult = await fetchProviderSpeech(
       'Hello world',
       {
         baseUrl: 'https://api.openai.com/v1',
@@ -28,33 +28,31 @@ describe('fetchProviderSpeech', () => {
         voice: 'alloy',
         rate: 1,
       },
-      fetchImpl as unknown as typeof fetch,
+      successFetch as unknown as typeof fetch,
     );
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.mimeType).toBe('audio/mpeg');
-      expect(result.audioBase64).toBe(btoa(String.fromCharCode(1, 2, 3, 4)));
+    expect(successResult.success).toBe(true);
+    if (successResult.success) {
+      expect(successResult.mimeType).toBe('audio/mpeg');
+      expect(successResult.audioBase64).toBe(btoa(String.fromCharCode(1, 2, 3, 4)));
     }
-    expect(fetchImpl).toHaveBeenCalledOnce();
-    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(successFetch).toHaveBeenCalledOnce();
+    const call = successFetch.mock.calls[0] as unknown as [string, RequestInit];
     const [url, init] = call;
     expect(url).toBe('https://api.openai.com/v1/audio/speech');
     expect(init.method).toBe('POST');
     const body = JSON.parse(init.body as string);
     expect(body.input).toBe('Hello world');
     expect(body.voice).toBe('alloy');
-  });
 
-  it('returns error on non-ok response', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const errorFetch = vi.fn(async () =>
       new Response(JSON.stringify({ error: { message: 'bad key' } }), {
         status: 401,
         headers: { 'content-type': 'application/json' },
       }),
     );
 
-    const result = await fetchProviderSpeech(
+    const errorResult = await fetchProviderSpeech(
       'Hi',
       {
         baseUrl: 'https://api.openai.com/v1',
@@ -63,18 +61,18 @@ describe('fetchProviderSpeech', () => {
         voice: 'alloy',
         rate: 1,
       },
-      fetchImpl as unknown as typeof fetch,
+      errorFetch as unknown as typeof fetch,
     );
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toMatch(/401/);
-      expect(result.error).toMatch(/bad key/);
+    expect(errorResult.success).toBe(false);
+    if (!errorResult.success) {
+      expect(errorResult.error).toMatch(/401/);
+      expect(errorResult.error).toMatch(/bad key/);
     }
   });
 
-  it('omits voice from body when voice is empty', async () => {
-    const fetchImpl = vi.fn(async () =>
+  it('builds OpenAI request bodies with optional voice fields', async () => {
+    const optionalVoiceFetch = vi.fn(async () =>
       new Response(new Uint8Array([1]).buffer, {
         status: 200,
         headers: { 'content-type': 'audio/mpeg' },
@@ -90,18 +88,16 @@ describe('fetchProviderSpeech', () => {
         voice: '',
         rate: 1.2,
       },
-      fetchImpl as unknown as typeof fetch,
+      optionalVoiceFetch as unknown as typeof fetch,
     );
 
-    const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const init = (optionalVoiceFetch.mock.calls[0] as unknown as [string, RequestInit])[1];
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe('tts-1');
     expect(body.speed).toBe(1.2);
     expect(body).not.toHaveProperty('voice');
-  });
 
-  it('includes voice when non-empty', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const requiredVoiceFetch = vi.fn(async () =>
       new Response(new Uint8Array([1]).buffer, {
         status: 200,
         headers: { 'content-type': 'audio/mpeg' },
@@ -117,15 +113,15 @@ describe('fetchProviderSpeech', () => {
         voice: 'alloy',
         rate: 1,
       },
-      fetchImpl as unknown as typeof fetch,
+      requiredVoiceFetch as unknown as typeof fetch,
     );
 
-    const init = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1];
-    const body = JSON.parse(init.body as string);
-    expect(body.voice).toBe('alloy');
+    const voiceInit = (requiredVoiceFetch.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const voiceBody = JSON.parse(voiceInit.body as string);
+    expect(voiceBody.voice).toBe('alloy');
   });
 
-  it('returns error when model is empty without calling fetch', async () => {
+  it('rejects missing models and Mistral voice IDs before making a request', async () => {
     const fetchImpl = vi.fn();
     const result = await fetchProviderSpeech(
       'Hello',
@@ -143,9 +139,27 @@ describe('fetchProviderSpeech', () => {
       expect(result.error).toMatch(/model/i);
     }
     expect(fetchImpl).not.toHaveBeenCalled();
+
+    const mistralFetch = vi.fn();
+    const mistralResult = await fetchProviderSpeech(
+      'Hi',
+      {
+        baseUrl: 'https://api.mistral.ai/v1',
+        apiKey: 'msk',
+        model: 'voxtral-mini-tts-2603',
+        voice: '',
+        rate: 1,
+      },
+      mistralFetch as unknown as typeof fetch,
+    );
+    expect(mistralResult.success).toBe(false);
+    if (!mistralResult.success) {
+      expect(mistralResult.error).toMatch(/voice_id/i);
+    }
+    expect(mistralFetch).not.toHaveBeenCalled();
   });
 
-  it('detects mistral dialect and normalizes voxtral model aliases', () => {
+  it('detects Mistral dialects and normalizes Voxtral model aliases', () => {
     expect(detectTtsDialect('https://api.mistral.ai/v1', 'x')).toBe('mistral');
     expect(detectTtsDialect('https://api.openai.com/v1', 'tts-1')).toBe('openai');
     expect(detectTtsDialect('https://proxy.example/v1', 'voxtral-mini-tts-latest')).toBe(
@@ -196,25 +210,5 @@ describe('fetchProviderSpeech', () => {
     expect(body).not.toHaveProperty('voice');
     expect(body).not.toHaveProperty('speed');
     expect(body.stream).toBe(false);
-  });
-
-  it('requires voice_id for Mistral without calling fetch', async () => {
-    const fetchImpl = vi.fn();
-    const result = await fetchProviderSpeech(
-      'Hi',
-      {
-        baseUrl: 'https://api.mistral.ai/v1',
-        apiKey: 'msk',
-        model: 'voxtral-mini-tts-2603',
-        voice: '',
-        rate: 1,
-      },
-      fetchImpl as unknown as typeof fetch,
-    );
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toMatch(/voice_id/i);
-    }
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

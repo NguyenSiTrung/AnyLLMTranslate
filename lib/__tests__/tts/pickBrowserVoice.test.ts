@@ -19,7 +19,7 @@ function voice(
 }
 
 describe('normalizeSpeechLang', () => {
-  it('returns undefined for empty/auto and maps codes/region tags to BCP-47', () => {
+  it('normalizes empty, language-code, and region-tag speech languages', () => {
     expect(normalizeSpeechLang(undefined)).toBeUndefined();
     expect(normalizeSpeechLang('')).toBeUndefined();
     expect(normalizeSpeechLang('auto')).toBeUndefined();
@@ -37,7 +37,7 @@ describe('normalizeSpeechLang', () => {
 });
 
 describe('scoreVoiceForLang', () => {
-  it('scores exact higher than primary-only and -1 for unrelated languages', () => {
+  it('scores exact and primary-language matches above unrelated languages', () => {
     expect(scoreVoiceForLang('vi-VN', 'vi-VN')).toBeGreaterThan(
       scoreVoiceForLang('vi', 'vi-VN'),
     );
@@ -49,25 +49,21 @@ describe('scoreVoiceForLang', () => {
 });
 
 describe('pickBrowserVoice', () => {
-  it('returns null when no lang, no voices, or no matching language', () => {
+  it('returns null for unusable languages and picks the best matching voice', () => {
     expect(pickBrowserVoice([], 'vi')).toBeNull();
     expect(pickBrowserVoice([voice('vi-VN')], 'auto')).toBeNull();
     expect(pickBrowserVoice([voice('vi-VN')], undefined)).toBeNull();
 
     const voices = [voice('en-US'), voice('fr-FR')];
     expect(pickBrowserVoice(voices, 'vi')).toBeNull();
-  });
 
-  it('picks exact lang match (incl. zh-CN for zh and zh-TW for zh-TW)', () => {
-    const voices = [voice('en-US'), voice('vi-VN'), voice('ja-JP')];
-    expect(pickBrowserVoice(voices, 'vi')?.lang).toBe('vi-VN');
+    const matchingVoices = [voice('en-US'), voice('vi-VN'), voice('ja-JP')];
+    expect(pickBrowserVoice(matchingVoices, 'vi')?.lang).toBe('vi-VN');
 
     const zhVoices = [voice('zh-CN'), voice('zh-TW'), voice('en-US')];
     expect(pickBrowserVoice(zhVoices, 'zh')?.lang).toBe('zh-CN');
     expect(pickBrowserVoice(zhVoices, 'zh-TW')?.lang).toBe('zh-TW');
-  });
 
-  it('prefers localService on tie and falls back to same primary language', () => {
     const tied = [
       voice('vi-VN', { name: 'remote', localService: false }),
       voice('vi-VN', { name: 'local', localService: true }),

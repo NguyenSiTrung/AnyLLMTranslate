@@ -69,8 +69,8 @@ describe('resolveTtsBackend', () => {
 });
 
 describe('pickTtsCredentials hybrid', () => {
-  it('uses first usable pool provider when poolProviderId is empty', () => {
-    const s = baseSettings({
+  it('uses the first usable or explicitly selected pool provider', () => {
+    const implicitSettings = baseSettings({
       tts: { ...DEFAULT_TTS_SETTINGS, model: 'tts-1', voice: 'nova' },
       providers: [
         poolProvider({ id: 'p1', baseUrl: 'https://api.openai.com/v1' }),
@@ -90,16 +90,14 @@ describe('pickTtsCredentials hybrid', () => {
         }),
       ],
     });
-    const pick = pickTtsCredentials(s);
+    const pick = pickTtsCredentials(implicitSettings);
     expect(pick?.baseUrl).toBe('https://api.openai.com/v1');
     expect(pick?.apiKey).toBe('sk-test');
     expect(pick?.model).toBe('tts-1');
     expect(pick?.voice).toBe('nova');
-    expect(hasProviderTtsCredentials(s)).toBe(true);
-  });
+    expect(hasProviderTtsCredentials(implicitSettings)).toBe(true);
 
-  it('uses explicit poolProviderId', () => {
-    const s = baseSettings({
+    const explicitSettings = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         credentialSource: 'pool',
@@ -124,67 +122,13 @@ describe('pickTtsCredentials hybrid', () => {
         }),
       ],
     });
-    const pick = pickTtsCredentials(s);
-    expect(pick?.baseUrl).toBe('https://tts.example/v1');
-    expect(pick?.apiKey).toBe('sk-p2');
-    expect(pick?.model).toBe('my-tts');
+    const explicitPick = pickTtsCredentials(explicitSettings);
+    expect(explicitPick?.baseUrl).toBe('https://tts.example/v1');
+    expect(explicitPick?.apiKey).toBe('sk-p2');
+    expect(explicitPick?.model).toBe('my-tts');
   });
 
-  it('returns null when explicit poolProviderId is missing or disabled', () => {
-    const s = baseSettings({
-      tts: {
-        ...DEFAULT_TTS_SETTINGS,
-        credentialSource: 'pool',
-        poolProviderId: 'gone',
-      },
-      providers: [poolProvider({ id: 'p1' })],
-    });
-    expect(pickTtsCredentials(s)).toBeNull();
-    expect(hasProviderTtsCredentials(s)).toBe(false);
-
-    const disabled = baseSettings({
-      tts: {
-        ...DEFAULT_TTS_SETTINGS,
-        poolProviderId: 'p1',
-      },
-      providers: [poolProvider({ id: 'p1', enabled: false })],
-    });
-    expect(pickTtsCredentials(disabled)).toBeNull();
-  });
-
-  it('custom source fully overrides pool when base URL set; empty base URL returns null', () => {
-    const s = baseSettings({
-      tts: {
-        ...DEFAULT_TTS_SETTINGS,
-        credentialSource: 'custom',
-        customBaseUrl: 'https://custom-tts.example/v1',
-        customApiKey: 'sk-custom',
-        model: 'custom-model',
-        voice: '',
-        poolProviderId: 'p1',
-      },
-      providers: [poolProvider({ id: 'p1' })],
-    });
-    const pick = pickTtsCredentials(s);
-    expect(pick?.baseUrl).toBe('https://custom-tts.example/v1');
-    expect(pick?.apiKey).toBe('sk-custom');
-    expect(pick?.model).toBe('custom-model');
-    expect(pick?.voice).toBe('');
-
-    // Custom source with empty base URL returns null (does not fall back to pool)
-    const empty = baseSettings({
-      tts: {
-        ...DEFAULT_TTS_SETTINGS,
-        credentialSource: 'custom',
-        customBaseUrl: '  ',
-        customApiKey: 'sk-custom',
-      },
-      providers: [poolProvider({ id: 'p1' })],
-    });
-    expect(pickTtsCredentials(empty)).toBeNull();
-  });
-
-  it('returns null when explicit poolProviderId is missing, disabled, or no base URL', () => {
+  it('returns null for missing, disabled, or base-less pool providers', () => {
     const s = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
@@ -217,6 +161,37 @@ describe('pickTtsCredentials hybrid', () => {
     });
     expect(hasProviderTtsCredentials(noBase)).toBe(false);
     expect(pickTtsCredentials(noBase)).toBeNull();
+  });
+
+  it('custom source overrides pool and rejects an empty custom base URL', () => {
+    const s = baseSettings({
+      tts: {
+        ...DEFAULT_TTS_SETTINGS,
+        credentialSource: 'custom',
+        customBaseUrl: 'https://custom-tts.example/v1',
+        customApiKey: 'sk-custom',
+        model: 'custom-model',
+        voice: '',
+        poolProviderId: 'p1',
+      },
+      providers: [poolProvider({ id: 'p1' })],
+    });
+    const pick = pickTtsCredentials(s);
+    expect(pick?.baseUrl).toBe('https://custom-tts.example/v1');
+    expect(pick?.apiKey).toBe('sk-custom');
+    expect(pick?.model).toBe('custom-model');
+    expect(pick?.voice).toBe('');
+
+    const empty = baseSettings({
+      tts: {
+        ...DEFAULT_TTS_SETTINGS,
+        credentialSource: 'custom',
+        customBaseUrl: '  ',
+        customApiKey: 'sk-custom',
+      },
+      providers: [poolProvider({ id: 'p1' })],
+    });
+    expect(pickTtsCredentials(empty)).toBeNull();
   });
 });
 

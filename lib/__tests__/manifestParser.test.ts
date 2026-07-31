@@ -8,7 +8,7 @@ import {
 // ─── HLS Multivariant Manifest ──────────────────────────────────────────────
 
 describe('parseHlsManifest', () => {
-  it('parses EXT-X-MEDIA SUBTITLES entries with all attributes', () => {
+  it('parses subtitle media entries, URI variants, defaults, and media filtering', () => {
     const body = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
@@ -33,9 +33,7 @@ describe('parseHlsManifest', () => {
       label: 'Spanish',
       isDefault: false,
     });
-  });
 
-  it('resolves absolute/path-relative URIs; handles defaults, empty/no-track inputs, non-subtitle media, and multi groups', () => {
     const absBody = [
       '#EXTM3U',
       '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",LANGUAGE="fr",URI="https://other.cdn.com/fr.vtt"',
@@ -72,11 +70,11 @@ describe('parseHlsManifest', () => {
       '#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",NAME="English",LANGUAGE="en",URI="cc/en.m3u8"',
       '#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs2",NAME="Vietnamese",LANGUAGE="vi",URI="vi.m3u8"',
     ].join('\n');
-    const result = parseHlsManifest(mixed, 'https://cdn.example.com/master.m3u8');
-    expect(result).toHaveLength(2);
-    expect(result[0]!.language).toBe('en');
-    expect(result[0]!.url).toBe('https://cdn.example.com/subs/en.m3u8');
-    expect(result[1]!.language).toBe('vi');
+    const mixedResult = parseHlsManifest(mixed, 'https://cdn.example.com/master.m3u8');
+    expect(mixedResult).toHaveLength(2);
+    expect(mixedResult[0]!.language).toBe('en');
+    expect(mixedResult[0]!.url).toBe('https://cdn.example.com/subs/en.m3u8');
+    expect(mixedResult[1]!.language).toBe('vi');
   });
 });
 
@@ -158,7 +156,7 @@ describe('parseHlsSubtitlePlaylist', () => {
 // ─── DASH Manifest Parser ───────────────────────────────────────────────────
 
 describe('parseDashManifest', () => {
-  it('extracts TTML mimeType and contentType=text AdaptationSets', () => {
+  it('extracts subtitle adaptation sets and segment-template metadata', () => {
     const ttmlXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -227,9 +225,7 @@ describe('parseDashManifest', () => {
     expect(multiResult).toHaveLength(2);
     expect(multiResult[0].language).toBe('en');
     expect(multiResult[1].language).toBe('es');
-  });
 
-  it('handles SegmentTemplate', () => {
     const xml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -291,7 +287,7 @@ describe('parseDashManifest', () => {
     );
   });
 
-  it('resolves relative/absolute BaseURLs; defaults missing lang to empty string', () => {
+  it('resolves BaseURLs and filters non-subtitle or invalid manifests', () => {
     const relXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -333,9 +329,7 @@ describe('parseDashManifest', () => {
     const noLangResult = parseDashManifest(noLangXml, 'https://cdn.example.com/manifest.mpd');
     expect(noLangResult).toHaveLength(1);
     expect(noLangResult[0].language).toBe('');
-  });
 
-  it('skips video/audio AdaptationSets; returns empty for invalid XML or no subtitle tracks', () => {
     const xml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>

@@ -27,7 +27,7 @@ const deepseekBase = 'https://api.deepseek.com';
 const openCodeZenBase = 'https://opencode.ai/zen/v1';
 
 describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
-  it('accepts known values and defaults unknown to auto/medium', () => {
+  it('normalizes thinking modes/efforts and detects supported hosts/models', () => {
     expect(normalizeThinkingMode('auto')).toBe('auto');
     expect(normalizeThinkingMode('on')).toBe('on');
     expect(normalizeThinkingMode('off')).toBe('off');
@@ -42,11 +42,7 @@ describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
     expect(normalizeThinkingEffort('max')).toBe('max');
     expect(normalizeThinkingEffort(undefined)).toBe('medium');
     expect(normalizeThinkingEffort('xhigh')).toBe('medium');
-  });
-});
 
-describe('host / model detectors for thinking strategies', () => {
-  it('detects Google AI Studio, DeepSeek Official, OpenCode Zen, and DeepSeek models', () => {
     expect(isGeminiOpenAiCompatBaseUrl(geminiBase)).toBe(true);
     expect(isGeminiOpenAiCompatBaseUrl(`${geminiBase}/`)).toBe(true);
     expect(
@@ -92,7 +88,7 @@ describe('host / model detectors for thinking strategies', () => {
 });
 
 describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
-  it('allows none only where supported; maps off/on to reasoning_effort per family', () => {
+  it('maps Gemini thinking support and reasoning request fields by model family', () => {
     expect(geminiSupportsThinkingNone('gemini-2.5-flash')).toBe(true);
     expect(geminiSupportsThinkingNone('gemini-2.5-flash-lite')).toBe(true);
     expect(geminiSupportsThinkingNone('models/gemini-2.5-flash')).toBe(true);
@@ -109,11 +105,7 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     expect(geminiReasoningEffortForMode('on', 'gemini-3.6-flash', 'low')).toBe('low');
     expect(geminiReasoningEffortForMode('on', 'gemini-3.6-flash', 'high')).toBe('high');
     expect(geminiReasoningEffortForMode('on', 'gemini-2.5-flash', 'minimal')).toBe('minimal');
-  });
-});
 
-describe('applyThinkingModeToRequest', () => {
-  it('omits thinking fields for auto or undefined', () => {
     expect(applyThinkingModeToRequest(baseRequest, 'auto')).toBe(baseRequest);
     expect(applyThinkingModeToRequest(baseRequest, undefined)).toBe(baseRequest);
     expect(applyThinkingModeToRequest(baseRequest, 'auto').chat_template_kwargs).toBeUndefined();
@@ -125,9 +117,7 @@ describe('applyThinkingModeToRequest', () => {
         { baseUrl: geminiBase },
       ).reasoning_effort,
     ).toBeUndefined();
-  });
 
-  it('sets enable_thinking true/false (top-level + kwargs) and preserves existing kwargs keys', () => {
     const onReq = applyThinkingModeToRequest(baseRequest, 'on');
     expect(onReq.enable_thinking).toBe(true);
     expect(onReq.chat_template_kwargs).toEqual({ enable_thinking: true });
@@ -244,9 +234,7 @@ describe('applyThinkingModeToRequest', () => {
 
     // auto still no-ops
     expect(applyThinkingModeToRequest(req, 'auto', { baseUrl: deepseekBase })).toBe(req);
-  });
 
-  it('uses DeepSeek thinking API on OpenCode Zen only for DeepSeek models', () => {
     const deepseekReq: ChatCompletionRequest = {
       ...baseRequest,
       model: 'deepseek-v4-flash-free',

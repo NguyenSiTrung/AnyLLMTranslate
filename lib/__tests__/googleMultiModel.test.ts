@@ -41,7 +41,7 @@ function openrouter(): PoolProvider {
 }
 
 describe('isGoogleAiStudioProvider', () => {
-  it('detects catalogId and Gemini baseUrl', () => {
+  it('detects Google providers and resolves single-model defaults', () => {
     expect(isGoogleAiStudioProvider(google())).toBe(true);
     expect(
       isGoogleAiStudioProvider(
@@ -52,11 +52,7 @@ describe('isGoogleAiStudioProvider', () => {
       ),
     ).toBe(true);
     expect(isGoogleAiStudioProvider(openrouter())).toBe(false);
-  });
-});
 
-describe('resolveProviderModels / isMultiModelActive', () => {
-  it('single model when models absent or model unset', () => {
     expect(resolveProviderModels(google())).toEqual(['gemini-2.5-flash']);
     expect(isMultiModelActive(google())).toBe(false);
 
@@ -78,11 +74,10 @@ describe('resolveProviderModels / isMultiModelActive', () => {
     ]);
     expect(isMultiModelActive(p)).toBe(true);
   });
-
 });
 
-describe('resolveModelStrategy', () => {
-  it('defaults to preferred_failover; honors round_robin when multi-model active', () => {
+describe('resolveModelStrategy / normalizeGoogleModels', () => {
+  it('selects model strategy and normalizes Google/non-Google providers', () => {
     const multi = google({
       models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
     });
@@ -90,15 +85,10 @@ describe('resolveModelStrategy', () => {
     expect(resolveModelStrategy({ ...multi, modelStrategy: 'round_robin' })).toBe(
       'round_robin',
     );
-    // Inactive multi-model: always preferred_failover
     expect(resolveModelStrategy(google({ modelStrategy: 'round_robin' }))).toBe(
       'preferred_failover',
     );
-  });
-});
 
-describe('normalizeGoogleModels', () => {
-  it('syncs model to models[0], strips multi-model for non-Google', () => {
     const n = normalizeGoogleModels(
       google({
         model: 'old',
@@ -116,10 +106,8 @@ describe('normalizeGoogleModels', () => {
     expect(stripped.models).toBeUndefined();
     expect(stripped.modelStrategy).toBeUndefined();
   });
-});
 
-describe('makeSlotId', () => {
-  it('uses keyId alone for single-model; composite for multi-model', () => {
+  it('uses keyId alone for single-model slots and composite IDs for multi-model slots', () => {
     expect(makeSlotId('k1', 'm', false)).toBe('k1');
     expect(makeSlotId('k1', 'gemini-2.5-flash', true)).toBe('k1::gemini-2.5-flash');
   });
