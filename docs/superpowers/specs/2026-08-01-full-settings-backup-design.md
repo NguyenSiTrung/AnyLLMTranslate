@@ -130,8 +130,11 @@ Node ≥ 18 for tests):
    - Shows: format (plain/encrypted), recognized count, ignored unknown keys.
    - Checkbox **"Replace all current settings"** — default **off (merge)**.
 4. **Apply**:
-   - Merge (off): `{ ...DEFAULT_SETTINGS, ...recognized }` merged into current
-     state (today's behavior — absent keys keep current values).
+   - Merge (off): only the file's recognized keys are applied via the store's
+     existing `updateSettings` deep-merge — absent keys keep their current
+     values. (Note: today's code spreads `DEFAULT_SETTINGS` into the partial,
+     which actually RESETS absent keys; the true merge below is the behavior
+     the user chose in brainstorming and differs from today's import.)
    - Replace (on): `saveSettings({ ...DEFAULT_SETTINGS, ...recognized })` then
      reload the store — absent keys reset to defaults (true clone).
    - `recognized` values that are not full objects (e.g. a partial
