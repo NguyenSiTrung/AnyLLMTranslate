@@ -102,7 +102,9 @@ describe('AdvancedSection Data Portability', () => {
     storeWith(settings);
     renderAdvanced();
 
-    fireEvent.click(screen.getByRole('button', { name: /export json/i }));
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(await screen.findByRole('radio', { name: /plain json/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     const payload = await readLastDownload();
     expect(payload['providers']).toEqual(settings.providers);
@@ -116,7 +118,9 @@ describe('AdvancedSection Data Portability', () => {
     storeWith({ targetLanguage: 'ja' });
     renderAdvanced();
 
-    fireEvent.click(screen.getByRole('button', { name: /encrypted backup/i }));
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    // Encrypted backup is pre-selected in the chooser.
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByLabelText('Passphrase'), { target: { value: 'password123' } });
     fireEvent.change(screen.getByLabelText('Confirm passphrase'), {
       target: { value: 'password123' },
@@ -193,5 +197,48 @@ describe('AdvancedSection Data Portability', () => {
     await waitFor(() => expect(updateSettings).toHaveBeenCalled());
     const arg = (updateSettings as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
     expect(arg['targetLanguage']).toBe('fr');
+  });
+
+  it('warns inside the chooser before plain export, then shows a success toast (no error toast)', async () => {
+    const settings: ExtensionSettings = {
+      ...DEFAULT_SETTINGS,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P',
+          baseUrl: 'https://x/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk-abc',
+              maxRpm: 20,
+              concurrencyLimit: 1,
+              interval: 500,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+    };
+    storeWith(settings);
+    renderAdvanced();
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    // Warning is shown BEFORE anything is downloaded.
+    expect(
+      await screen.findByText(/will contain your api keys in cleartext/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByText(/settings exported successfully/i)).toBeInTheDocument();
+    // The old post-hoc error toast is gone.
+    expect(screen.queryByText(/keep it private/i)).not.toBeInTheDocument();
   });
 });

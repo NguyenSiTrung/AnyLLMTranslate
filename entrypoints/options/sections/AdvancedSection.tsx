@@ -25,7 +25,6 @@ import {
   Volume2,
   List,
   Loader2,
-  Lock,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -95,6 +94,7 @@ import {
 } from '@/lib/backup';
 import {
   BackupPasswordDialog,
+  ExportFormatDialog,
   ImportSummaryDialog,
 } from '@/entrypoints/options/components/BackupDialogs';
 import {
@@ -850,6 +850,7 @@ export function AdvancedSection() {
   const { success: showSuccess, error: showError } = useToast();
   const cacheStats = useCacheStats();
   const replaceSettings = useSettingsStore((s) => s.replaceSettings);
+  const [showExportChooser, setShowExportChooser] = useState(false);
   const [showExportPassword, setShowExportPassword] = useState(false);
   const [showImportPassword, setShowImportPassword] = useState(false);
   const [pendingEncryptedText, setPendingEncryptedText] = useState<string | null>(null);
@@ -920,13 +921,10 @@ export function AdvancedSection() {
       blob,
       `anyllm-translate-settings-${new Date().toISOString().slice(0, 10)}.json`,
     );
-    // P2 security: the full export carries every API key in cleartext.
-    if (hasApiKeys) {
-      showError('Exported file contains your API keys in cleartext — keep it private!');
-    } else {
-      showSuccess('Settings exported successfully');
-    }
-  }, [settings, hasApiKeys, showSuccess, showError]);
+    // Cleartext-keys warning lives in the export chooser (before download),
+    // so a successful export always gets a success toast.
+    showSuccess('Settings exported successfully');
+  }, [settings, showSuccess]);
 
   const handleExportEncrypted = useCallback(
     async (password: string) => {
@@ -2032,21 +2030,12 @@ export function AdvancedSection() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     id="export-settings-btn"
-                    variant="secondary"
+                    variant="primary"
                     size="sm"
-                    onClick={handleExportPlain}
+                    onClick={() => setShowExportChooser(true)}
                     icon={<Download className="w-3.5 h-3.5" />}
                   >
-                    Export JSON
-                  </Button>
-                  <Button
-                    id="export-encrypted-btn"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowExportPassword(true)}
-                    icon={<Lock className="w-3.5 h-3.5" />}
-                  >
-                    Encrypted backup…
+                    Export…
                   </Button>
                 </div>
               </div>
@@ -2070,7 +2059,7 @@ export function AdvancedSection() {
                   icon={<Upload className="w-3.5 h-3.5" />}
                   className="w-full sm:w-auto"
                 >
-                  Import JSON
+                  Import…
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -2101,8 +2090,8 @@ export function AdvancedSection() {
               )}
               <span>
                 {hasApiKeys
-                  ? 'Plain JSON exports include ALL your API keys in cleartext. Treat the file as a secret. Use "Encrypted backup" to move keys safely between devices.'
-                  : 'Plain JSON exports include provider configuration. Once API keys are added, they appear as cleartext in plain JSON exports — prefer "Encrypted backup" for moving devices.'}
+                  ? 'A plain JSON export includes ALL your API keys in cleartext. Treat the file as a secret — choose Encrypted backup in the export dialog to move keys safely between devices.'
+                  : 'Plain JSON exports include provider configuration. Once API keys are added, they appear in cleartext — choose Encrypted backup in the export dialog when moving devices.'}
               </span>
             </div>
           </Card>
@@ -2277,6 +2266,22 @@ export function AdvancedSection() {
           cancelLabel="Keep settings"
           onConfirm={handleReset}
           onCancel={() => setShowResetModal(false)}
+        />
+      )}
+
+      {/* Export Format Chooser Modal */}
+      {showExportChooser && (
+        <ExportFormatDialog
+          hasApiKeys={hasApiKeys}
+          onSelect={(format) => {
+            setShowExportChooser(false);
+            if (format === 'encrypted') {
+              setShowExportPassword(true);
+            } else {
+              handleExportPlain();
+            }
+          }}
+          onCancel={() => setShowExportChooser(false)}
         />
       )}
 
