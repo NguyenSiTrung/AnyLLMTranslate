@@ -23,6 +23,8 @@ interface SettingsState extends ExtensionSettings {
   updateSetting: (partial: Partial<ExtensionSettings>) => Promise<void>;
   /** Update provider config (merges and persists) */
   updateProvider: (partial: Partial<ProviderConfig>) => Promise<void>;
+  /** Exact-restore import: reset to defaults, then apply `partial` on top. */
+  replaceSettings: (partial: Partial<ExtensionSettings>) => Promise<void>;
   /** Reset to default settings */
   resetToDefaults: () => Promise<void>;
 }
@@ -65,6 +67,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     };
     await saveSettings(defaults);
     set({ ...defaults, isLoaded: true });
+  },
+
+  replaceSettings: async (partial) => {
+    const defaults = {
+      ...DEFAULT_SETTINGS,
+      siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
+    };
+    const merged = deepMerge(
+      defaults as unknown as Record<string, unknown>,
+      partial as unknown as Record<string, unknown>,
+    ) as unknown as ExtensionSettings;
+    await saveSettings(merged);
+    set({ ...merged, isLoaded: true });
   },
 }));
 

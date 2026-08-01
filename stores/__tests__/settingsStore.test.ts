@@ -242,4 +242,34 @@ describe('useSettingsStore', () => {
       expect(useSettingsStore.getState().providers).toEqual([]);
     });
   });
+
+  describe('replaceSettings', () => {
+    it('resets to defaults then applies the partial (exact restore)', async () => {
+      // Simulate a machine with existing settings.
+      mockStorageData['anyllm-translate-settings'] = {
+        theme: 'bubble',
+        targetLanguage: 'ja',
+        maxRpm: 60,
+      };
+      await useSettingsStore.getState().loadFromStorage();
+      expect(useSettingsStore.getState().theme).toBe('bubble');
+      expect(useSettingsStore.getState().maxRpm).toBe(60);
+
+      // File contains only these keys — absent keys must reset to defaults.
+      await useSettingsStore.getState().replaceSettings({
+        theme: 'paper',
+        targetLanguage: 'ko',
+      });
+
+      const state = useSettingsStore.getState();
+      expect(state.theme).toBe('paper');
+      expect(state.targetLanguage).toBe('ko');
+      // Absent keys reset to defaults (NOT preserved from the loaded state).
+      expect(state.maxRpm).toBe(DEFAULT_SETTINGS.maxRpm);
+      expect(state.subtitleSettings.fontFamily).toBe('system');
+      // Built-in site rules still seeded, like resetToDefaults.
+      expect(state.siteRules.length).toBeGreaterThan(0);
+      expect(state.isLoaded).toBe(true);
+    });
+  });
 });
