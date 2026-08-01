@@ -80,6 +80,66 @@ describe('BackupPasswordDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancel).toHaveBeenCalled();
   });
+
+  it('shows a live strength hint in export mode', () => {
+    render(
+      <BackupPasswordDialog
+        title="Encrypt backup"
+        message="x"
+        confirmLabel="OK"
+        requireConfirm
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    const field = screen.getByLabelText(/passphrase \(min/i);
+    expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: 'abc' } });
+    expect(screen.getByText('Strength: Weak')).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: 'abcd1234' } });
+    expect(screen.getByText('Strength: Fair')).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: 'Abcdefg12345' } });
+    expect(screen.getByText('Strength: Strong')).toBeInTheDocument();
+  });
+
+  it('hides the strength hint in import mode', () => {
+    render(
+      <BackupPasswordDialog
+        title="Unlock backup"
+        message="x"
+        confirmLabel="Unlock"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Passphrase'), {
+      target: { value: 'Abcdefg12345' },
+    });
+    expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
+  });
+
+  it('passphrase field can be revealed via the built-in show/hide toggle', () => {
+    render(
+      <BackupPasswordDialog
+        title="Unlock backup"
+        message="x"
+        confirmLabel="Unlock"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    const field = screen.getByLabelText('Passphrase') as HTMLInputElement;
+    expect(field.type).toBe('password');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(field.type).toBe('text');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(field.type).toBe('password');
+  });
 });
 
 describe('ImportSummaryDialog', () => {

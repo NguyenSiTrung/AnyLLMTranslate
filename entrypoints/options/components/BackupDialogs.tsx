@@ -8,6 +8,16 @@ import { KeyRound, ShieldCheck } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Toggle } from '@/ui/Toggle';
+import { passphraseStrength, type PassphraseStrength } from '@/lib/passphraseStrength';
+
+const STRENGTH_META: Record<
+  PassphraseStrength,
+  { label: string; width: string; bar: string; text: string }
+> = {
+  weak: { label: 'Weak', width: '33%', bar: 'bg-rose-500', text: 'text-rose-400/90' },
+  fair: { label: 'Fair', width: '66%', bar: 'bg-amber-500', text: 'text-amber-400/90' },
+  strong: { label: 'Strong', width: '100%', bar: 'bg-emerald-500', text: 'text-emerald-400/90' },
+};
 
 interface BackupPasswordDialogProps {
   title: string;
@@ -59,6 +69,8 @@ export function BackupPasswordDialog({
   const canSubmit =
     password.length >= 8 &&
     (!requireConfirm || (confirm.length > 0 && confirm === password));
+  const strength =
+    requireConfirm && password.length > 0 ? passphraseStrength(password) : null;
 
   const submit = () => {
     if (!canSubmit || busy) return;
@@ -106,6 +118,19 @@ export function BackupPasswordDialog({
                 }}
               />
             </div>
+            {strength && (
+              <div aria-live="polite">
+                <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${STRENGTH_META[strength].bar}`}
+                    style={{ width: STRENGTH_META[strength].width }}
+                  />
+                </div>
+                <p className={`mt-1 text-[11px] font-medium ${STRENGTH_META[strength].text}`}>
+                  Strength: {STRENGTH_META[strength].label}
+                </p>
+              </div>
+            )}
             {requireConfirm && (
               <div>
                 <label htmlFor="backup-password-confirm" className="text-xs font-medium text-zinc-400">
