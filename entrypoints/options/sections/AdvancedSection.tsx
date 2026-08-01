@@ -31,7 +31,6 @@ import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
-  DEFAULT_SETTINGS,
   DEFAULT_PDF_SETTINGS,
   DEFAULT_SCIENTIFIC_PDF_SETTINGS,
   DEFAULT_TTS_SETTINGS,

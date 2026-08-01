@@ -72,7 +72,7 @@ describe('AdvancedSection Data Portability', () => {
   });
 
   it('plain export downloads the FULL settings object (providers, pdf, toggles)', async () => {
-    const settings = {
+    const settings: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
       targetLanguage: 'ja',
       theme: 'bubble',
