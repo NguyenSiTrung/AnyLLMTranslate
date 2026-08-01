@@ -176,7 +176,7 @@ export function useProvider(): ProviderConfig {
 }
 
 /** Extract plain ExtensionSettings from store state (strips store methods) */
-function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSettings {
+export function extractSettings(state: SettingsState | ExtensionSettings): ExtensionSettings {
   return {
     provider: state.provider,
     onboarding: state.onboarding,

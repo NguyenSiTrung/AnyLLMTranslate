@@ -25,6 +25,7 @@ import {
   Volume2,
   List,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
@@ -86,9 +87,22 @@ import {
 } from '@/lib/scientificPdf';
 import { ScientificPdfWizard } from '@/entrypoints/options/components/ScientificPdfWizard';
 import {
+  BackupDecryptError,
+  decryptBackup,
+  detectFormat,
+  encryptBackup,
+  sanitizeImportObject,
+  serializeSettings,
+} from '@/lib/backup';
+import {
+  BackupPasswordDialog,
+  ImportSummaryDialog,
+} from '@/entrypoints/options/components/BackupDialogs';
+import {
   ADVANCED_SECTION_IDS,
   scrollToAdvancedSection,
 } from '@/entrypoints/options/lib/scrollToAdvancedSection';
+import { extractSettings } from '@/stores/settingsStore';
 
 const SECTION_ANCHOR_CLASS =
   'animate-stagger scroll-mt-4 rounded-xl outline-none data-[advanced-section-highlight=true]:ring-2 data-[advanced-section-highlight=true]:ring-cyan-500/40 data-[advanced-section-highlight=true]:ring-offset-2 data-[advanced-section-highlight=true]:ring-offset-zinc-950';
@@ -101,24 +115,14 @@ const CACHE_ANCHOR_CLASS =
 const CHIP_BASE_CLASS =
   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-950 hover:brightness-110';
 
-/**
- * FR-11 — portable-settings allowlist. Only these keys are written to the
- * export file. Derived (not hand-listed inline) so the payload can't silently
- * drift from the settings shape; keep this list equal to the keys exported
- * historically to preserve byte-identical JSON for existing keys (NFR-1).
- */
-const PORTABLE_KEYS = [
-  'provider', 'sourceLanguage', 'targetLanguage', 'displayMode', 'theme',
-  'translationPosition', 'darkMode', 'siteRules', 'glossary',
-  'namedGlossaryLists', 'subtitleListBySite', 'subtitleSettings',
-  'customSystemPrompt', 'maxBatchChars', 'cacheTTLDays', 'maxCacheSizeMB',
-  'debugMode', 'customTheme', 'enableContextAwareTranslation',
-  'enableLLMPageCategoryDetection', 'llmCategoryDetectionMode',
-  'textSelectionEnabled', 'selectionDictionaryEnabled', 'hoverTranslateEnabled', 'hoverDelay',
-  'inlineTranslate', 'enableSmartExcludes', 'maxRpm',
-  'enableCompactInlineForShortText',
-  'tts',
-] as const;
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function scientificStatusBadge(status: ScientificPdfStatus): {
   variant: 'info' | 'success' | 'warning' | 'danger';
@@ -846,6 +850,18 @@ export function AdvancedSection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success: showSuccess, error: showError } = useToast();
   const cacheStats = useCacheStats();
+  const replaceSettings = useSettingsStore((s) => s.replaceSettings);
+  const [showExportPassword, setShowExportPassword] = useState(false);
+  const [showImportPassword, setShowImportPassword] = useState(false);
+  const [pendingEncryptedText, setPendingEncryptedText] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importMeta, setImportMeta] = useState<{
+    recognized: Record<string, unknown>;
+    ignored: string[];
+    source: 'plain' | 'encrypted';
+  } | null>(null);
 
   // Cache configuration — commit-on-blur via useDeferredCommit (FR-9).
   // onCommit is just the store write; range validation + error state live in
@@ -894,65 +910,117 @@ export function AdvancedSection() {
     updateSettings({ customSystemPrompt: next });
   };
 
-  const handleExportSettings = useCallback(() => {
-    const exportData = Object.fromEntries(
-      PORTABLE_KEYS.map((k) => [k, settings[k]]),
-    );
+  const hasApiKeys =
+    Boolean(settings.provider?.apiKey) ||
+    (settings.providers ?? []).some((p) => (p.keys ?? []).some((k) => Boolean(k.apiKey)));
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `anyllm-translate-settings-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    // P2 security: warn the user that the export contains their API key in
-    // cleartext (the provider object is decrypted at load) so they treat the
-    // file as a secret.
-    if (settings.provider?.apiKey) {
-      showError('Exported file contains your API key in cleartext — keep it private!');
+  const handleExportPlain = useCallback(() => {
+    const full = extractSettings(settings);
+    const blob = new Blob([serializeSettings(full)], { type: 'application/json' });
+    downloadBlob(
+      blob,
+      `anyllm-translate-settings-${new Date().toISOString().slice(0, 10)}.json`,
+    );
+    // P2 security: the full export carries every API key in cleartext.
+    if (hasApiKeys) {
+      showError('Exported file contains your API keys in cleartext — keep it private!');
     } else {
       showSuccess('Settings exported successfully');
     }
-  }, [settings, showSuccess, showError]);
+  }, [settings, hasApiKeys, showSuccess, showError]);
 
-  const handleImportSettings = useCallback(async (file: File) => {
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      // P2 security: guard against prototype pollution. JSON.parse alone does NOT
-      // set __proto__ on a plain object literal, but a crafted payload with a
-      // "__proto__"/"constructor"/"prototype" key survives the spread below and
-      // can pollute Object.prototype. Strip them (silently) before merging.
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('Settings file must be a JSON object');
-      }
-      const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-      const knownKeys = new Set(Object.keys(DEFAULT_SETTINGS));
-      const recognized: Record<string, unknown> = {};
-      const ignored: string[] = [];
-      for (const [key, value] of Object.entries(parsed)) {
-        if (FORBIDDEN_KEYS.has(key)) continue;
-        if (knownKeys.has(key)) {
-          recognized[key] = value;
-        } else {
-          ignored.push(key);
-        }
-      }
-      const merged = { ...DEFAULT_SETTINGS, ...recognized };
-      await updateSettings(merged);
-      // FR-11: surface unknown keys so users notice a partial/partially-stale import.
-      if (ignored.length > 0) {
-        showSuccess(
-          `Imported ${Object.keys(recognized).length} settings; ignored ${ignored.length} unknown key(s): ${ignored.join(', ')}`,
+  const handleExportEncrypted = useCallback(
+    async (password: string) => {
+      setPasswordBusy(true);
+      setPasswordError(null);
+      try {
+        const full = extractSettings(settings);
+        const envelope = await encryptBackup(full, password);
+        downloadBlob(
+          new Blob([envelope], { type: 'application/json' }),
+          `anyllm-translate-backup-${new Date().toISOString().slice(0, 10)}.json`,
         );
-      } else {
-        showSuccess('Settings imported successfully!');
+        setShowExportPassword(false);
+        showSuccess('Encrypted backup exported — keep the passphrase safe!');
+      } catch {
+        setPasswordError('Encryption failed — try again.');
+      } finally {
+        setPasswordBusy(false);
       }
-    } catch {
-      showError('Failed to import settings. Invalid JSON file.');
-    }
-  }, [updateSettings, showSuccess, showError]);
+    },
+    [settings, showSuccess],
+  );
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        if (detectFormat(text) === 'encrypted') {
+          setPendingEncryptedText(text);
+          setPasswordError(null);
+          setShowImportPassword(true);
+          return;
+        }
+        const { recognized, ignored } = sanitizeImportObject(JSON.parse(text));
+        setImportMeta({ recognized, ignored, source: 'plain' });
+      } catch {
+        showError('Failed to import settings. Invalid JSON file.');
+      }
+    },
+    [showError],
+  );
+
+  const handleImportPassword = useCallback(
+    async (password: string) => {
+      if (!pendingEncryptedText) return;
+      setPasswordBusy(true);
+      setPasswordError(null);
+      try {
+        const decrypted = await decryptBackup(pendingEncryptedText, password);
+        const { recognized, ignored } = sanitizeImportObject(decrypted);
+        setShowImportPassword(false);
+        setPendingEncryptedText(null);
+        setImportMeta({ recognized, ignored, source: 'encrypted' });
+      } catch (err) {
+        setPasswordError(
+          err instanceof BackupDecryptError
+            ? err.message
+            : 'Wrong password or corrupted file',
+        );
+      } finally {
+        setPasswordBusy(false);
+      }
+    },
+    [pendingEncryptedText],
+  );
+
+  const handleImportApply = useCallback(
+    async (replaceAll: boolean) => {
+      if (!importMeta || importBusy) return;
+      setImportBusy(true);
+      try {
+        if (replaceAll) {
+          await replaceSettings(importMeta.recognized);
+        } else {
+          await updateSettings(importMeta.recognized);
+        }
+        // Surface unknown keys so users notice a partial/partially-stale import.
+        if (importMeta.ignored.length > 0) {
+          showSuccess(
+            `Imported ${Object.keys(importMeta.recognized).length} settings; ignored ${importMeta.ignored.length} unknown key(s): ${importMeta.ignored.join(', ')}`,
+          );
+        } else {
+          showSuccess('Settings imported successfully!');
+        }
+      } catch {
+        showError('Failed to import settings.');
+      } finally {
+        setImportBusy(false);
+        setImportMeta(null);
+      }
+    },
+    [importMeta, importBusy, replaceSettings, updateSettings, showSuccess, showError],
+  );
 
   const handleClearCache = useCallback(async () => {
     setShowClearCacheModal(false);
@@ -1948,7 +2016,7 @@ export function AdvancedSection() {
           <Card
             variant="bordered"
             title="Data Portability"
-            description="Back up or restore settings as JSON. Useful before resets or when moving browsers."
+            description="Back up or restore all settings as plain JSON or a password-encrypted backup. Useful before resets or when moving browsers."
             icon={<Database className="w-3.5 h-3.5" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1962,16 +2030,26 @@ export function AdvancedSection() {
                     Download a JSON backup of providers, rules, glossary, and preferences.
                   </p>
                 </div>
-                <Button
-                  id="export-settings-btn"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleExportSettings}
-                  icon={<Download className="w-3.5 h-3.5" />}
-                  className="w-full sm:w-auto"
-                >
-                  Export JSON
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    id="export-settings-btn"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleExportPlain}
+                    icon={<Download className="w-3.5 h-3.5" />}
+                  >
+                    Export JSON
+                  </Button>
+                  <Button
+                    id="export-encrypted-btn"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowExportPassword(true)}
+                    icon={<Lock className="w-3.5 h-3.5" />}
+                  >
+                    Encrypted backup…
+                  </Button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-white/15 hover:bg-white/[0.03]">
@@ -1981,7 +2059,8 @@ export function AdvancedSection() {
                 <div className="flex-1">
                   <p className="text-sm font-medium text-zinc-100">Import settings</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
-                    Merge a previous export. Unknown keys are ignored safely.
+                    Restore a plain JSON export or a password-encrypted backup. Choose merge or
+                    exact replace before applying.
                   </p>
                 </div>
                 <Button
@@ -1996,12 +2075,13 @@ export function AdvancedSection() {
                 </Button>
                 <input
                   ref={fileInputRef}
+                  data-testid="import-settings-file"
                   type="file"
                   accept=".json"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleImportSettings(file);
+                    if (file) void handleImportFile(file);
                     e.target.value = '';
                   }}
                 />
@@ -2010,20 +2090,20 @@ export function AdvancedSection() {
 
             <div
               className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs ${
-                settings.provider?.apiKey
+                hasApiKeys
                   ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
                   : 'border-zinc-800 bg-zinc-900/40 text-zinc-500'
               }`}
             >
-              {settings.provider?.apiKey ? (
+              {hasApiKeys ? (
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               ) : (
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-600" aria-hidden="true" />
               )}
               <span>
-                {settings.provider?.apiKey
-                  ? 'Export includes your provider API key in cleartext. Treat the file as a secret and never share it.'
-                  : 'Exports include provider configuration. Add an API key and it will be stored in the file as cleartext — keep backups private.'}
+                {hasApiKeys
+                  ? 'Plain JSON exports include ALL your API keys in cleartext. Treat the file as a secret. Use "Encrypted backup" to move keys safely between devices.'
+                  : 'Plain JSON exports include provider configuration. Once API keys are added, they appear as cleartext in plain JSON exports — prefer "Encrypted backup" for moving devices.'}
               </span>
             </div>
           </Card>
@@ -2198,6 +2278,58 @@ export function AdvancedSection() {
           cancelLabel="Keep settings"
           onConfirm={handleReset}
           onCancel={() => setShowResetModal(false)}
+        />
+      )}
+
+      {/* Encrypted Export Password Modal */}
+      {showExportPassword && (
+        <BackupPasswordDialog
+          title="Encrypt backup"
+          message={
+            <p>
+              The file is encrypted with your passphrase (PBKDF2 + AES-256-GCM). Anyone with the
+              file and this passphrase can restore it on any device. If you forget the passphrase,
+              the backup is unrecoverable.
+            </p>
+          }
+          confirmLabel="Encrypt & download"
+          requireConfirm
+          error={passwordError}
+          busy={passwordBusy}
+          onConfirm={(password) => void handleExportEncrypted(password)}
+          onCancel={() => {
+            setShowExportPassword(false);
+            setPasswordError(null);
+          }}
+        />
+      )}
+
+      {/* Encrypted Import Password Modal */}
+      {showImportPassword && (
+        <BackupPasswordDialog
+          title="Unlock backup"
+          message="Enter the passphrase that was used when this backup was exported."
+          confirmLabel="Unlock"
+          error={passwordError}
+          busy={passwordBusy}
+          onConfirm={(password) => void handleImportPassword(password)}
+          onCancel={() => {
+            setShowImportPassword(false);
+            setPendingEncryptedText(null);
+            setPasswordError(null);
+          }}
+        />
+      )}
+
+      {/* Import Summary Modal */}
+      {importMeta && (
+        <ImportSummaryDialog
+          source={importMeta.source}
+          recognizedCount={Object.keys(importMeta.recognized).length}
+          ignored={importMeta.ignored}
+          busy={importBusy}
+          onConfirm={(replaceAll) => void handleImportApply(replaceAll)}
+          onCancel={() => setImportMeta(null)}
         />
       )}
     </div>
