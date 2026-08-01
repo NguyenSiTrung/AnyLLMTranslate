@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { BackupPasswordDialog, ImportSummaryDialog } from '../BackupDialogs';
+import { BackupPasswordDialog, ExportFormatDialog, ImportSummaryDialog } from '../BackupDialogs';
 
 describe('BackupPasswordDialog', () => {
   const onConfirm = vi.fn();
@@ -180,5 +180,78 @@ describe('ImportSummaryDialog', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Replace & import' }));
     expect(onConfirm).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('ExportFormatDialog', () => {
+  const onSelect = vi.fn();
+  const onCancel = vi.fn();
+
+  beforeEach(() => {
+    onSelect.mockClear();
+    onCancel.mockClear();
+  });
+
+  it('pre-selects encrypted (recommended) and continues with it by default', () => {
+    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
+
+    const encrypted = screen.getByRole('radio', { name: /encrypted backup/i });
+    expect(encrypted).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Recommended')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onSelect).toHaveBeenCalledWith('encrypted');
+  });
+
+  it('warns about cleartext keys on Plain JSON only when keys exist', () => {
+    const { rerender } = render(
+      <ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />,
+    );
+    expect(screen.queryByText(/cleartext/i)).not.toBeInTheDocument();
+
+    rerender(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
+    expect(
+      screen.getByText(/will contain your api keys in cleartext/i),
+    ).toBeInTheDocument();
+  });
+
+  it('selects Plain JSON on click and continues with it', () => {
+    render(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onSelect).toHaveBeenCalledWith('plain');
+  });
+
+  it('supports arrow-key navigation between formats', () => {
+    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
+    const group = screen.getByRole('radiogroup', { name: 'Export format' });
+
+    fireEvent.keyDown(group, { key: 'ArrowDown' });
+    expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+
+    fireEvent.keyDown(group, { key: 'ArrowUp' });
+    expect(screen.getByRole('radio', { name: /encrypted backup/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('closes on Escape and Cancel', () => {
+    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    onCancel.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
