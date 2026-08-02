@@ -172,6 +172,39 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.hasAttribute('popover')).toBe(false);
     expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
   });
+
+  it('keeps the overlay on body with fixed viewport positioning when the document root is fullscreen (Youku)', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    expect(overlay.parentElement).toBe(document.body);
+
+    Object.defineProperty(document, 'fullscreenElement', {
+      value: document.documentElement,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('fullscreenchange'));
+
+    // Overlay must NOT be reparented into <html>: width/height:100% there
+    // resolve against the full document, pushing the flex-end subtitle text
+    // below the viewport (Youku fullscreens document.documentElement).
+    expect(overlay.parentElement).toBe(document.body);
+    expect(overlay.style.position).toBe('fixed');
+    expect(overlay.style.top).toBe('0px');
+    expect(overlay.style.left).toBe('0px');
+    expect(overlay.style.width).toBe('800px');
+    expect(overlay.style.height).toBe('600px');
+    // Must not mutate the root element's position (would change
+    // fixed-position containing-block semantics for the whole page).
+    expect(document.documentElement.style.position).toBe('');
+
+    Object.defineProperty(document, 'fullscreenElement', {
+      value: null,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event('fullscreenchange'));
+    expect(overlay.parentElement).toBe(document.body);
+    expect(overlay.style.position).toBe('fixed');
+  });
 });
 
 // ============================================================================

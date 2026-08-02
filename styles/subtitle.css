@@ -116,8 +116,15 @@
 
 /* Fullscreen-specific overrides — when the overlay is inside a :fullscreen
    container (e.g. HBO Max player), ensure it covers the fullscreen area
-   and stays above all other player UI elements. */
-:fullscreen .anyllm-translate-subtitle-overlay {
+   and stays above all other player UI elements.
+
+   :not(:root) scopes these to PLAYER containers. Some players (Youku's KUI
+   player) fullscreen `document.documentElement`; when the root is the
+   fullscreen element, the overlay stays on body with fixed viewport
+   positioning (see syncOverlayHost), and `width/height: 100%` would resolve
+   against the root's full-document box — pushing subtitles below the
+   viewport. */
+:fullscreen:not(:root) .anyllm-translate-subtitle-overlay {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
@@ -129,11 +136,11 @@
   opacity: 0;
 }
 
-:fullscreen .anyllm-translate-subtitle-overlay.anyllm-translate-subtitle-visible {
+:fullscreen:not(:root) .anyllm-translate-subtitle-overlay.anyllm-translate-subtitle-visible {
   opacity: 1 !important;
 }
 
-:fullscreen .anyllm-translate-subtitle-text {
+:fullscreen:not(:root) .anyllm-translate-subtitle-text {
   z-index: 2147483647 !important;
   pointer-events: auto !important;
 }

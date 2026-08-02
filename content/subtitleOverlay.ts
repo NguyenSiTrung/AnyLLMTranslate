@@ -154,6 +154,21 @@ function ensureContainerPositioning(container: HTMLElement): void {
   }
 }
 
+/**
+ * Whether the active fullscreen element is the document root (html/body).
+ * Some players (Youku's KUI player) fullscreen `document.documentElement`
+ * rather than a player container. Reparenting the overlay into the root is
+ * wrong there: `width/height: 100%` then resolve against the root's box —
+ * which is the FULL DOCUMENT, not the viewport — so the flex-end subtitle
+ * text lands below the visible screen and appears hidden. Keep the overlay on
+ * body with fixed viewport positioning instead: the video fills the viewport
+ * in fullscreen, so the fixed rect still tracks it (and the `:fullscreen:not(:root)`
+ * CSS overrides below skip the root case for the same reason).
+ */
+function isDocumentRootFullscreen(el: Element): boolean {
+  return el === document.documentElement || el === document.body;
+}
+
 function syncOverlayHost(overlay: HTMLElement, video: HTMLVideoElement): HTMLElement | null {
   const fullscreenEl = getActiveFullscreenElement();
 
@@ -167,7 +182,7 @@ function syncOverlayHost(overlay: HTMLElement, video: HTMLVideoElement): HTMLEle
     }
 
     hideManualPopover(overlay);
-    if (fullscreenEl instanceof HTMLElement) {
+    if (fullscreenEl instanceof HTMLElement && !isDocumentRootFullscreen(fullscreenEl)) {
       if (overlay.parentElement !== fullscreenEl) {
         fullscreenEl.appendChild(overlay);
       }
