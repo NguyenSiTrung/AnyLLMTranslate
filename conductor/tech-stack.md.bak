@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (598 pass / 0 fail; lint 0; tsc 0; build 3.74 MB; 72 archived / 0 active; Beads zg4+7uk open; full-settings backup + export chooser + Youku fullscreen fix) -->
+<!-- conductor-refresh: 2026-08-01 all (560 pass / 0 fail; lint 0; tsc 0; build 3.72 MB; 72 archived / 0 active; Beads zg4+7uk open; suite prune; Player Subtitle Chrome + DeepSeek/OpenCode Zen thinking) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -167,4 +167,4 @@
 - Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
 - The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
 
-- Quality gates snapshot (2026-08-03, after full-settings backup + export chooser + Youku fullscreen fix): **598** Vitest TCs passed / **0** fail across **186** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.74 MB**.
+- Quality gates snapshot (2026-08-01, after assertion-preserving suite prune): **560** Vitest TCs passed / **0** fail across **182** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.72 MB**.

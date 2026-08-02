@@ -1,30 +1,30 @@
 {
-  "lastRefresh": "2026-08-01T03:25:04+07:00",
+  "lastRefresh": "2026-08-03T01:22:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh after the 2026-08-01 01:24 refresh; six test-suite commits on master since then.",
-    "product.md: refreshed marker and retained the assertion-preserving suite-prune entry; current state is 560/560 tests across 182 files, tsc 0, eslint 0, build 3.72 MB, 72 archived / 0 active tracks, Beads zg4+7uk open.",
-    "tech-stack.md: refreshed quality-gate snapshot to 560/182/0 and build 3.72 MB. No package.json or lockfile dependency changes.",
-    "patterns.md: no new cross-track patterns; retained the existing player-chrome hybrid-mount, soft-mirror, shadow-DOM, and single-authority patterns.",
+    "Scope: full refresh per user selection (quality gates re-run + learnings consolidation) on top of the 2026-08-01 01:24 refresh; 21 commits on master since then across three clusters.",
+    "product.md: refreshed marker; added timeline entries for full-settings backup with encryption (2026-08-01, Beads 8ms closed), data portability export chooser (2026-08-01/02, Beads 1z1 closed), and Youku fullscreen overlay fix (2026-08-02/03, Beads gjk closed); updated Current State (598/186, build 3.74 MB) and test-suite history.",
+    "tech-stack.md: refreshed marker and quality-gate snapshot to 598/186/0 and build 3.74 MB. No package.json or lockfile dependency changes.",
+    "patterns.md: no new cross-track patterns; 70 archived learnings files scanned (0 active tracks, no learnings files changed since last refresh); retained the existing player-chrome hybrid-mount, soft-mirror, shadow-DOM, and single-authority patterns.",
     "tracks.md: refresh marker only; confirmed 72 archived / 0 active with no track or learning drift.",
     "workflow.md: refreshed marker; no CI, tooling, or workflow drift.",
-    "beads: user selected Skip — no active Conductor plan checkboxes, so directional sync is a no-op; retained open zg4 + 7uk.",
+    "beads: user selected Skip — no active Conductor plan checkboxes, so directional sync is a no-op; retained open zg4 + 7uk; closed in window: 8ms (backup), 1z1 (export chooser), gjk (Youku fullscreen).",
     "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
-    "verification: vitest 560/560 pass across 182 files; tsc 0; eslint 0; production build artifact remains 3.72 MB."
+    "verification: vitest 598/598 pass across 186 files; tsc 0; eslint 0; production build artifact 3.74 MB."
   ],
   "codebaseHealth": {
-    "tests": 560,
-    "testsPassing": 560,
+    "tests": 598,
+    "testsPassing": 598,
     "testsFailing": 0,
-    "testFiles": 182,
-    "buildSize": "3.72 MB",
+    "testFiles": 186,
+    "buildSize": "3.74 MB",
     "lintErrors": 0,
     "lintErrorsDetail": "Clean.",
     "tscErrors": 0,
     "tscErrorsDetail": "Clean.",
     "archivedTracks": 72,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Player Subtitle Chrome and the DeepSeek/OpenCode Zen provider work shipped on master through superpowers specs/plans and Beads without Conductor tracks.",
+    "activeTracksDetail": "None. Player Subtitle Chrome, DeepSeek/OpenCode Zen provider work, full-settings backup, export chooser, and the Youku fullscreen fix shipped on master through superpowers specs/plans and Beads without Conductor tracks.",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -35,13 +35,15 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "test: assertion-preserving suite prune and scenario consolidation (1c2093e, f14aa21, 96d61ba, 03b5083) — 682 → 560 TCs; no production dependency changes"
+      "feat: full-settings backup with encryption (bac73c9..4890385) — lib/backup.ts crypto module, lib/passphraseStrength.ts, replaceSettings exact-restore, BackupDialogs, Advanced tab wiring; Beads 8ms closed",
+      "feat: data portability export chooser (ee12ab0..0199f6a) — ExportFormatDialog encrypted-recommended chooser; Beads 1z1 closed",
+      "fix: Youku fullscreen overlay visibility (f83e732, cbba3a4) — subtitleOverlay.ts + subtitle.css; Beads gjk closed"
     ]
   },
   "beads": {
     "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
     "inProgress": [],
-    "closedInWindow": [],
+    "closedInWindow": ["AnyLLMTranslate-8ms", "AnyLLMTranslate-1z1", "AnyLLMTranslate-gjk"],
     "syncDirection": "skip",
     "syncNote": "User selected Skip. No active Conductor tracks or plan.md checkboxes exist, so either directional synchronization would be a no-op."
   },

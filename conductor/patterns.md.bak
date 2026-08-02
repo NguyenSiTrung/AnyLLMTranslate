@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (598 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; no new cross-track patterns; player-chrome hybrid-mount/soft-mirror/shadow-DOM/single-authority patterns retained) -->
+<!-- conductor-refresh: 2026-08-01 all (560 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; no new patterns; player-chrome hybrid-mount/soft-mirror/shadow-DOM/single-authority patterns retained) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.

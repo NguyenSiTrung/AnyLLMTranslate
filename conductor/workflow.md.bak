@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (quality gates updated to 598/186/0; no workflow/tooling drift) -->
+<!-- conductor-refresh: 2026-08-01 all (quality gates updated to 560/182/0; no workflow/tooling drift; suite prune documented) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
