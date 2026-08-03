@@ -41,3 +41,6 @@ __pycache__
 
 # Reference / vendored extension code (not part of this repo)
 ImmersiveTransalteExtensionCode/
+
+# Beads / Dolt files (added by bd init)
+.beads/proxieddb/
