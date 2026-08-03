@@ -89,4 +89,34 @@ describe('openAiCompatibleCatalog', () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0]!.category).toBe('local');
   });
+
+  it('includes the OpenCode Go catalog entry', () => {
+    const entry = getCatalogEntryById('opencode-go');
+
+    expect(entry).toMatchObject({
+      id: 'opencode-go',
+      displayName: 'OpenCode Go',
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      requiresApiKey: true,
+      getKeyUrl: 'https://opencode.ai/auth',
+      defaultModel: 'deepseek-v4-flash',
+      supportsModelListing: true,
+      category: 'cloud',
+      monogram: 'OG',
+    });
+    expect(filterCatalog('go').map((provider) => provider.id)).toContain('opencode-go');
+    expect(filterCatalog('opencode')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'opencode-zen' }),
+        expect.objectContaining({ id: 'opencode-go' }),
+      ]),
+    );
+    expect(inferCatalogId('https://opencode.ai/zen/go/v1/')).toBe('opencode-go');
+    expect(getKeyUrlForProvider('https://opencode.ai/zen/go/v1')).toBe(
+      'https://opencode.ai/auth',
+    );
+    expect(getCatalogEntryById('opencode-zen')?.baseUrl).toBe(
+      'https://opencode.ai/zen/v1',
+    );
+  });
 });
