@@ -1,0 +1,1 @@
+{"id":"int-83bde3c073777f2f44c578891ce06027","kind":"field_change","created_at":"2026-08-03T05:05:34.946558037Z","actor":"ubuntu","issue_id":"AnyLLMTranslate-yqr","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Feature implemented per spec 2026-08-03-import-overwrite-warning-rollback-design"}}
