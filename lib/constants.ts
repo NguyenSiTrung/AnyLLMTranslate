@@ -95,4 +95,6 @@ export const STORAGE_KEYS = {
   /** YouTube ASR AI re-align cue cache (IndexedDB) */
   ASR_REALIGN_DB: 'anyllm-asr-realign-cache',
   ASR_REALIGN_STORE: 'entries',
+  /** Pre-import settings snapshot for one-shot rollback after an import. */
+  PRE_IMPORT_SNAPSHOT: 'anyllm-translate-preimport-snapshot',
 } as const;

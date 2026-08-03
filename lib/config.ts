@@ -384,6 +384,44 @@ export async function saveSettings(settings: ExtensionSettings): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: encrypted });
 }
 
+/** Snapshot full settings to the single pre-import slot (keys encrypted at rest). */
+export async function savePreImportSnapshot(settings: ExtensionSettings): Promise<void> {
+  const encryptedProviders = await encryptPoolKeys(settings.providers ?? []);
+  const encrypted = {
+    ...settings,
+    provider: {
+      ...settings.provider,
+      apiKey: await encryptApiKey(settings.provider.apiKey),
+    },
+    providers: encryptedProviders,
+  };
+  await chrome.storage.local.set({ [STORAGE_KEYS.PRE_IMPORT_SNAPSHOT]: encrypted });
+}
+
+/** Read the pre-import snapshot; returns null when absent or unreadable. Keys are decrypted. */
+export async function loadPreImportSnapshot(): Promise<ExtensionSettings | null> {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.PRE_IMPORT_SNAPSHOT);
+    const stored = result[STORAGE_KEYS.PRE_IMPORT_SNAPSHOT] as ExtensionSettings | undefined;
+    if (!stored) return null;
+    const decrypted: ExtensionSettings = { ...stored };
+    const legacy = await decryptApiKeyResult(decrypted.provider?.apiKey ?? '');
+    if (decrypted.provider) {
+      decrypted.provider = { ...decrypted.provider, apiKey: legacy.ok ? legacy.value : '' };
+    }
+    // Freshly deserialized object — in-place decryption is safe (matches loadSettings).
+    await decryptPoolKeys(decrypted);
+    return decrypted;
+  } catch {
+    return null;
+  }
+}
+
+/** Remove the pre-import snapshot (called after a successful rollback). */
+export async function clearPreImportSnapshot(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.PRE_IMPORT_SNAPSHOT);
+}
+
 /** Update partial settings (merges with existing) */
 export async function updateSettings(
   partial: Partial<ExtensionSettings>,
