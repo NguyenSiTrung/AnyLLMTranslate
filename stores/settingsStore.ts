@@ -25,6 +25,8 @@ interface SettingsState extends ExtensionSettings {
   updateProvider: (partial: Partial<ProviderConfig>) => Promise<void>;
   /** Exact-restore import: reset to defaults, then apply `partial` on top. */
   replaceSettings: (partial: Partial<ExtensionSettings>) => Promise<void>;
+  /** Exact restore of a full settings object (used by import rollback). */
+  restoreSettings: (full: ExtensionSettings) => Promise<void>;
   /** Reset to default settings */
   resetToDefaults: () => Promise<void>;
 }
@@ -80,6 +82,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     ) as unknown as ExtensionSettings;
     await saveSettings(merged);
     set({ ...merged, isLoaded: true });
+  },
+
+  restoreSettings: async (full) => {
+    await saveSettings(full);
+    set({ ...full, isLoaded: true });
   },
 }));
 

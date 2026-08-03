@@ -272,4 +272,46 @@ describe('useSettingsStore', () => {
       expect(state.isLoaded).toBe(true);
     });
   });
+
+  describe('restoreSettings', () => {
+    it('persists the full object and sets store state', async () => {
+      const restored: ExtensionSettings = {
+        ...DEFAULT_SETTINGS,
+        theme: 'bubble',
+        targetLanguage: 'ko',
+        safeKeyThrottleMigrated: true,
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'OpenAI',
+            baseUrl: 'https://api.openai.com/v1',
+            model: 'gpt-4o-mini',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [
+              {
+                id: 'k1',
+                apiKey: 'sk-restored',
+                maxRpm: 20,
+                concurrencyLimit: 1,
+                interval: 500,
+                enabled: true,
+              },
+            ],
+          },
+        ],
+      };
+      await useSettingsStore.getState().restoreSettings(restored);
+      const state = useSettingsStore.getState();
+      expect(state.theme).toBe('bubble');
+      expect(state.targetLanguage).toBe('ko');
+      expect(state.safeKeyThrottleMigrated).toBe(true);
+      expect(state.providers[0]?.keys[0]?.apiKey).toBe('sk-restored');
+      expect(state.isLoaded).toBe(true);
+      const data = (chrome.storage.local.set as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      expect(data['anyllm-translate-settings']).toBeTruthy();
+    });
+  });
 });
