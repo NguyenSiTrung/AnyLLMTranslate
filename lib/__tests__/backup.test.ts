@@ -7,6 +7,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   BACKUP_FORMAT,
   BackupDecryptError,
+  computeImportImpact,
   deepEqual,
   decryptBackup,
   detectFormat,
@@ -15,6 +16,7 @@ import {
   serializeSettings,
 } from '@/lib/backup';
 import { DEFAULT_SETTINGS, type ExtensionSettings } from '@/types/config';
+import { BUILT_IN_RULES } from '@/lib/siteRules';
 
 const PASSWORD = 'correct horse battery staple';
 
@@ -227,6 +229,73 @@ describe('deepEqual', () => {
     const o = Object.create({ inherited: 1 }) as Record<string, unknown>;
     o.own = 1;
     expect(deepEqual(o, { own: 1 })).toBe(true);
+  });
+});
+
+describe('computeImportImpact', () => {
+  const customized = (): ExtensionSettings => ({
+    ...DEFAULT_SETTINGS,
+    targetLanguage: 'ja',
+    theme: 'bubble',
+    // Untouched built-in site rules — how a real loaded store looks.
+    siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
+  });
+
+  it('merge: lists recognized keys whose imported value differs from current', () => {
+    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
+    expect(impact.changed).toEqual(['targetLanguage']);
+    expect(impact.resetToDefaults).toEqual([]);
+  });
+
+  it('merge: omits keys whose imported value equals current', () => {
+    const impact = computeImportImpact(customized(), { targetLanguage: 'ja' }, 'merge');
+    expect(impact.changed).toEqual([]);
+  });
+
+  it('merge: a partial nested object that changes a nested field is listed as changed', () => {
+    const current = customized();
+    current.pdfSettings = { ...DEFAULT_SETTINGS.pdfSettings, openMode: 'same-tab' };
+    const impact = computeImportImpact(current, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
+    expect(impact.changed).toEqual(['pdfSettings']);
+  });
+
+  it('merge: undefined file values are no-ops', () => {
+    const current = customized();
+    const impact = computeImportImpact(current, { targetLanguage: undefined }, 'merge');
+    expect(impact.changed).toEqual([]);
+  });
+
+  it('replace: lists changed recognized keys against the defaults baseline', () => {
+    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
+    expect(impact.changed).toEqual(['targetLanguage']);
+  });
+
+  it('replace: lists customized keys absent from the file as resetToDefaults', () => {
+    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
+    expect(impact.resetToDefaults).toContain('theme');
+    expect(impact.resetToDefaults).not.toContain('targetLanguage');
+  });
+
+  it('replace: untouched built-in site rules are NOT listed as resetToDefaults', () => {
+    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
+    expect(impact.resetToDefaults).not.toContain('siteRules');
+  });
+
+  it('replace: empty recognized file warns every customized key; merge is a no-op', () => {
+    const current = customized();
+    expect(computeImportImpact(current, {}, 'merge')).toEqual({
+      changed: [],
+      resetToDefaults: [],
+    });
+    const replace = computeImportImpact(current, {}, 'replace');
+    expect(replace.changed).toEqual([]);
+    expect(replace.resetToDefaults).toContain('theme');
+    expect(replace.resetToDefaults).toContain('targetLanguage');
+  });
+
+  it('replace: nothing customized means no reset warnings', () => {
+    const current = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
+    expect(computeImportImpact(current, {}, 'replace').resetToDefaults).toEqual([]);
   });
 });
 

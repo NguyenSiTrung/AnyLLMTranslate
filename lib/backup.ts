@@ -10,6 +10,8 @@
 
 import type { ExtensionSettings } from '@/types/config';
 import { DEFAULT_SETTINGS } from '@/types/config';
+import { deepMerge } from '@/lib/utils';
+import { BUILT_IN_RULES } from '@/lib/siteRules';
 
 export const BACKUP_FORMAT = 'anyllm-translate-backup';
 export const BACKUP_VERSION = 1;
@@ -64,6 +66,64 @@ export function deepEqual(a: unknown, b: unknown): boolean {
     );
   }
   return false;
+}
+
+export interface ImportImpact {
+  /** Recognized keys whose post-import value differs from the current value. */
+  changed: string[];
+  /** Replace mode only: customized keys absent from the file that reset to defaults. */
+  resetToDefaults: string[];
+}
+
+/**
+ * Compute what an import would change before it is applied, mirroring the
+ * store's real semantics (lib/utils deepMerge: arrays overwritten, empty
+ * source objects replace). Merge deep-merges onto current; replace resets to
+ * defaults — with built-in site rules injected exactly like
+ * settingsStore.replaceSettings — then applies the file.
+ *
+ * The `current` argument must be a loaded store state (site rules injected),
+ * i.e. what pickKnownSettings produces.
+ */
+export function computeImportImpact(
+  current: ExtensionSettings,
+  recognized: Record<string, unknown>,
+  mode: 'merge' | 'replace',
+): ImportImpact {
+  const baseline: ExtensionSettings =
+    mode === 'replace'
+      ? { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) }
+      : current;
+
+  const currentRecord = current as unknown as Record<string, unknown>;
+  const baselineRecord = baseline as unknown as Record<string, unknown>;
+
+  const changed: string[] = [];
+  for (const [key, fileValue] of Object.entries(recognized)) {
+    const currentValue = currentRecord[key];
+    const baseValue = baselineRecord[key];
+    let postImportValue: unknown;
+    if (fileValue === undefined) {
+      // deepMerge skips undefined source values: merge keeps current, replace keeps default.
+      postImportValue = mode === 'merge' ? currentValue : baseValue;
+    } else if (isPlainObject(baseValue) && isPlainObject(fileValue)) {
+      postImportValue = deepMerge(baseValue, fileValue);
+    } else {
+      postImportValue = fileValue;
+    }
+    if (!deepEqual(currentValue, postImportValue)) changed.push(key);
+  }
+
+  let resetToDefaults: string[] = [];
+  if (mode === 'replace') {
+    resetToDefaults = Object.keys(DEFAULT_SETTINGS).filter(
+      (key) =>
+        !Object.prototype.hasOwnProperty.call(recognized, key) &&
+        !deepEqual(currentRecord[key], baselineRecord[key]),
+    );
+  }
+
+  return { changed, resetToDefaults };
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
