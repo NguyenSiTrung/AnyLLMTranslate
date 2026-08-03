@@ -10,6 +10,12 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
 import { AdvancedSection } from '../AdvancedSection';
 import { encryptBackup } from '@/lib/backup';
+import { BUILT_IN_RULES } from '@/lib/siteRules';
+import {
+  clearPreImportSnapshot,
+  loadPreImportSnapshot,
+  savePreImportSnapshot,
+} from '@/lib/config';
 
 // jsdom's crypto lacks subtle; use Node's webcrypto for the real crypto paths.
 Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
@@ -26,6 +32,16 @@ const cacheStatsState = vi.hoisted(() => ({
 vi.mock('@/entrypoints/options/hooks/useCacheStats', () => ({
   useCacheStats: () => cacheStatsState,
 }));
+
+vi.mock('@/lib/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/config')>();
+  return {
+    ...actual,
+    savePreImportSnapshot: vi.fn(async () => {}),
+    loadPreImportSnapshot: vi.fn(async () => null),
+    clearPreImportSnapshot: vi.fn(async () => {}),
+  };
+});
 
 const blobUrl = vi.hoisted(() => vi.fn(() => 'blob:mock'));
 const revokeUrl = vi.hoisted(() => vi.fn());
@@ -69,6 +85,9 @@ describe('AdvancedSection Data Portability', () => {
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeUrl, configurable: true });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(anchorClick);
     storeWith({});
+    vi.mocked(savePreImportSnapshot).mockClear();
+    vi.mocked(clearPreImportSnapshot).mockClear();
+    vi.mocked(loadPreImportSnapshot).mockResolvedValue(null);
   });
 
   it('plain export downloads the FULL settings object (providers, pdf, toggles)', async () => {
@@ -240,5 +259,106 @@ describe('AdvancedSection Data Portability', () => {
     expect(await screen.findByText(/settings exported successfully/i)).toBeInTheDocument();
     // The old post-hoc error toast is gone.
     expect(screen.queryByText(/keep it private/i)).not.toBeInTheDocument();
+  });
+
+  it('shows which settings will be overwritten in the import summary (merge)', async () => {
+    storeWith({ targetLanguage: 'ja', theme: 'bubble' });
+    renderAdvanced();
+
+    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+
+    await screen.findByRole('dialog', { name: 'Import settings' });
+    expect(screen.getByText(/1 setting will be overwritten/i)).toBeInTheDocument();
+    expect(screen.getByText('targetLanguage')).toBeInTheDocument();
+  });
+
+  it('replace toggle reveals the reset-to-defaults list', async () => {
+    storeWith({
+      targetLanguage: 'ja',
+      theme: 'bubble',
+      siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
+    });
+    renderAdvanced();
+
+    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+
+    await screen.findByRole('dialog', { name: 'Import settings' });
+    expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
+    expect(
+      screen.getByText(/customized setting.*will reset to defaults/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('theme')).toBeInTheDocument();
+    expect(screen.queryByText('siteRules')).not.toBeInTheDocument();
+  });
+
+  it('saves a pre-import snapshot before applying the import', async () => {
+    storeWith({ targetLanguage: 'ja' });
+    renderAdvanced();
+
+    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+
+    await screen.findByRole('dialog', { name: 'Import settings' });
+    fireEvent.click(screen.getByRole('button', { name: 'Merge & import' }));
+
+    await waitFor(() => expect(savePreImportSnapshot).toHaveBeenCalled());
+    const arg = vi.mocked(savePreImportSnapshot).mock.calls.at(-1)?.[0] as ExtensionSettings;
+    expect(arg.targetLanguage).toBe('ja');
+  });
+
+  it('undo toast restores the pre-import snapshot and consumes it', async () => {
+    const snapshot = { ...DEFAULT_SETTINGS, theme: 'bubble', targetLanguage: 'ja' } as ExtensionSettings;
+    vi.mocked(loadPreImportSnapshot).mockResolvedValue(snapshot);
+    storeWith({ targetLanguage: 'ja' });
+    renderAdvanced();
+
+    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
+      type: 'application/json',
+    });
+    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+    await screen.findByRole('dialog', { name: 'Import settings' });
+    fireEvent.click(screen.getByRole('button', { name: 'Merge & import' }));
+
+    await screen.findByText('Settings imported successfully!');
+    fireEvent.click(screen.getByRole('button', { name: 'Undo import' }));
+
+    await waitFor(() => expect(useSettingsStore.getState().theme).toBe('bubble'));
+    expect(useSettingsStore.getState().targetLanguage).toBe('ja');
+    expect(clearPreImportSnapshot).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Restore previous settings' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('persistent restore button rolls back and consumes the snapshot', async () => {
+    const snapshot = { ...DEFAULT_SETTINGS, theme: 'paper', targetLanguage: 'fr' } as ExtensionSettings;
+    vi.mocked(loadPreImportSnapshot).mockResolvedValue(snapshot);
+    storeWith({ targetLanguage: 'ja' });
+    renderAdvanced();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Restore previous settings' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(useSettingsStore.getState().theme).toBe('paper'));
+    expect(useSettingsStore.getState().targetLanguage).toBe('fr');
+    expect(clearPreImportSnapshot).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Restore previous settings' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DEFAULT_SETTINGS } from '@/types/config';
+import { DEFAULT_SETTINGS, type ExtensionSettings } from '@/types/config';
 
 // Mock chrome.storage before importing the store
 const mockStorageData: Record<string, unknown> = {};

@@ -86,12 +86,20 @@ import {
 import { ScientificPdfWizard } from '@/entrypoints/options/components/ScientificPdfWizard';
 import {
   BackupDecryptError,
+  computeImportImpact,
   decryptBackup,
   detectFormat,
   encryptBackup,
+  pickKnownSettings,
   sanitizeImportObject,
   serializeSettings,
+  type ImportImpact,
 } from '@/lib/backup';
+import {
+  clearPreImportSnapshot,
+  loadPreImportSnapshot,
+  savePreImportSnapshot,
+} from '@/lib/config';
 import {
   BackupPasswordDialog,
   ExportFormatDialog,
@@ -847,9 +855,10 @@ export function AdvancedSection() {
   const [showScientificWizard, setShowScientificWizard] = useState(false);
   const [scientificHealthOk, setScientificHealthOk] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { success: showSuccess, error: showError } = useToast();
+  const { success: showSuccess, error: showError, successWithAction } = useToast();
   const cacheStats = useCacheStats();
   const replaceSettings = useSettingsStore((s) => s.replaceSettings);
+  const restoreSettings = useSettingsStore((s) => s.restoreSettings);
   const [showExportChooser, setShowExportChooser] = useState(false);
   const [showExportPassword, setShowExportPassword] = useState(false);
   const [showImportPassword, setShowImportPassword] = useState(false);
@@ -861,7 +870,11 @@ export function AdvancedSection() {
     recognized: Record<string, unknown>;
     ignored: string[];
     source: 'plain' | 'encrypted';
+    mergeImpact: ImportImpact;
+    replaceImpact: ImportImpact;
   } | null>(null);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
 
   // Cache configuration — commit-on-blur via useDeferredCommit (FR-9).
   // onCommit is just the store write; range validation + error state live in
@@ -959,7 +972,14 @@ export function AdvancedSection() {
           return;
         }
         const { recognized, ignored } = sanitizeImportObject(JSON.parse(text));
-        setImportMeta({ recognized, ignored, source: 'plain' });
+        const current = pickKnownSettings(useSettingsStore.getState());
+        setImportMeta({
+          recognized,
+          ignored,
+          source: 'plain',
+          mergeImpact: computeImportImpact(current, recognized, 'merge'),
+          replaceImpact: computeImportImpact(current, recognized, 'replace'),
+        });
       } catch {
         showError('Failed to import settings. Invalid JSON file.');
       }
@@ -975,9 +995,16 @@ export function AdvancedSection() {
       try {
         const decrypted = await decryptBackup(pendingEncryptedText, password);
         const { recognized, ignored } = sanitizeImportObject(decrypted);
+        const current = pickKnownSettings(useSettingsStore.getState());
         setShowImportPassword(false);
         setPendingEncryptedText(null);
-        setImportMeta({ recognized, ignored, source: 'encrypted' });
+        setImportMeta({
+          recognized,
+          ignored,
+          source: 'encrypted',
+          mergeImpact: computeImportImpact(current, recognized, 'merge'),
+          replaceImpact: computeImportImpact(current, recognized, 'replace'),
+        });
       } catch (err) {
         setPasswordError(
           err instanceof BackupDecryptError
@@ -991,23 +1018,59 @@ export function AdvancedSection() {
     [pendingEncryptedText],
   );
 
+  const handleRestoreSnapshot = useCallback(async () => {
+    setShowRestoreModal(false);
+    setImportBusy(true);
+    try {
+      const snapshot = await loadPreImportSnapshot();
+      if (!snapshot) {
+        setHasSnapshot(false);
+        showError('No previous settings to restore.');
+        return;
+      }
+      await restoreSettings(snapshot);
+      await clearPreImportSnapshot();
+      setHasSnapshot(false);
+      showSuccess('Previous settings restored.');
+    } catch {
+      await clearPreImportSnapshot().catch(() => {});
+      setHasSnapshot(false);
+      showError('Failed to restore previous settings.');
+    } finally {
+      setImportBusy(false);
+    }
+  }, [restoreSettings, showSuccess, showError]);
+
   const handleImportApply = useCallback(
     async (replaceAll: boolean) => {
       if (!importMeta || importBusy) return;
       setImportBusy(true);
       try {
+        // Best-effort snapshot: import proceeds even if saving it fails.
+        try {
+          await savePreImportSnapshot(pickKnownSettings(useSettingsStore.getState()));
+        } catch {
+          // Snapshot unavailable — import still applies, no Undo action.
+        }
         if (replaceAll) {
           await replaceSettings(importMeta.recognized);
         } else {
           await updateSettings(importMeta.recognized);
         }
-        // Surface unknown keys so users notice a partial/partially-stale import.
-        if (importMeta.ignored.length > 0) {
-          showSuccess(
-            `Imported ${Object.keys(importMeta.recognized).length} settings; ignored ${importMeta.ignored.length} unknown key(s): ${importMeta.ignored.join(', ')}`,
-          );
+        // Re-read storage so the toast Undo and the persistent button agree.
+        const snapshotNow = await loadPreImportSnapshot();
+        setHasSnapshot(snapshotNow !== null);
+        const message =
+          importMeta.ignored.length > 0
+            ? `Imported ${Object.keys(importMeta.recognized).length} settings; ignored ${importMeta.ignored.length} unknown key(s): ${importMeta.ignored.join(', ')}`
+            : 'Settings imported successfully!';
+        if (snapshotNow) {
+          successWithAction(message, {
+            label: 'Undo import',
+            onClick: () => void handleRestoreSnapshot(),
+          });
         } else {
-          showSuccess('Settings imported successfully!');
+          showSuccess(message);
         }
       } catch {
         showError('Failed to import settings.');
@@ -1016,7 +1079,16 @@ export function AdvancedSection() {
         setImportMeta(null);
       }
     },
-    [importMeta, importBusy, replaceSettings, updateSettings, showSuccess, showError],
+    [
+      importMeta,
+      importBusy,
+      replaceSettings,
+      updateSettings,
+      showSuccess,
+      showError,
+      successWithAction,
+      handleRestoreSnapshot,
+    ],
   );
 
   const handleClearCache = useCallback(async () => {
@@ -1138,6 +1210,13 @@ export function AdvancedSection() {
     }
     void refreshScientificHealth();
   }, [scientificPdf.enabled, scientificPdf.setupCompletedAt, scientificPdf.serverUrl, refreshScientificHealth]);
+
+  // Show the persistent restore button when a pre-import snapshot exists.
+  useEffect(() => {
+    void loadPreImportSnapshot()
+      .then((snap) => setHasSnapshot(snap !== null))
+      .catch(() => setHasSnapshot(false));
+  }, []);
   const isPromptCustom = promptField.value !== DEFAULT_SYSTEM_PROMPT_TEMPLATE;
   const promptWarnings =
     promptValidation && !promptValidation.valid ? promptValidation.warnings : [];
@@ -2061,6 +2140,17 @@ export function AdvancedSection() {
                 >
                   Import…
                 </Button>
+                {hasSnapshot && (
+                  <Button
+                    id="restore-previous-settings-btn"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowRestoreModal(true)}
+                    icon={<RotateCcw className="w-3.5 h-3.5" />}
+                  >
+                    Restore previous settings
+                  </Button>
+                )}
                 <input
                   ref={fileInputRef}
                   data-testid="import-settings-file"
@@ -2331,9 +2421,24 @@ export function AdvancedSection() {
           source={importMeta.source}
           recognizedCount={Object.keys(importMeta.recognized).length}
           ignored={importMeta.ignored}
+          mergeImpact={importMeta.mergeImpact}
+          replaceImpact={importMeta.replaceImpact}
           busy={importBusy}
           onConfirm={(replaceAll) => void handleImportApply(replaceAll)}
           onCancel={() => setImportMeta(null)}
+        />
+      )}
+
+      {/* Restore Previous Settings Confirmation Modal */}
+      {showRestoreModal && (
+        <Modal
+          title="Restore previous settings?"
+          message="Replaces your current settings with the state before your last import. After this, the saved snapshot is consumed."
+          variant="danger"
+          confirmLabel="Restore"
+          cancelLabel="Keep current"
+          onConfirm={() => void handleRestoreSnapshot()}
+          onCancel={() => setShowRestoreModal(false)}
         />
       )}
     </div>
