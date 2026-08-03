@@ -29,6 +29,43 @@ export type BackupFormat = 'plain' | 'encrypted';
 
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/** True for plain JSON-shaped objects (settings data is JSON-shaped). */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    !Array.isArray(v) &&
+    !(v instanceof Date) &&
+    !(v instanceof RegExp) &&
+    !(v instanceof Map) &&
+    !(v instanceof Set)
+  );
+}
+
+/**
+ * Structural equality for JSON-shaped settings values. Arrays compare
+ * element-wise in order (deepMerge replaces arrays wholesale, so order
+ * matters); plain objects compare own keys only (prototype-pollution safe).
+ * Scalars use Object.is; anything non-JSON falls back to reference equality.
+ */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((value, index) => deepEqual(value, b[index]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(b, key) && deepEqual(a[key], b[key]),
+    );
+  }
+  return false;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunkSize = 8192;

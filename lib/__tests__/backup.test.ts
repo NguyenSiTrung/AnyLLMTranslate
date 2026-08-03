@@ -7,6 +7,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   BACKUP_FORMAT,
   BackupDecryptError,
+  deepEqual,
   decryptBackup,
   detectFormat,
   encryptBackup,
@@ -195,6 +196,37 @@ describe('serializeSettings', () => {
     expect(parsed['pdfSettings']).toBeTruthy();
     expect(parsed['scientificPdf']).toBeTruthy();
     expect(text).toContain('\n  ');
+  });
+});
+
+describe('deepEqual', () => {
+  it('compares scalars with Object.is semantics', () => {
+    expect(deepEqual(1, 1)).toBe(true);
+    expect(deepEqual(1, 2)).toBe(false);
+    expect(deepEqual('a', 'a')).toBe(true);
+    expect(deepEqual(null, null)).toBe(true);
+    expect(deepEqual(null, undefined)).toBe(false);
+    expect(deepEqual(0, -0)).toBe(false);
+    expect(deepEqual(NaN, NaN)).toBe(true);
+  });
+
+  it('compares arrays element-wise, order-sensitive', () => {
+    expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true);
+    expect(deepEqual([1, 2], [2, 1])).toBe(false);
+    expect(deepEqual([{ a: 1 }], [{ a: 1 }])).toBe(true);
+  });
+
+  it('compares nested plain objects by own keys', () => {
+    expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } })).toBe(true);
+    expect(deepEqual({ a: { b: 1 } }, { a: { b: 2 } })).toBe(false);
+    expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
+    expect(deepEqual({ a: 1 }, { b: 1 })).toBe(false);
+  });
+
+  it('never compares inherited properties', () => {
+    const o = Object.create({ inherited: 1 }) as Record<string, unknown>;
+    o.own = 1;
+    expect(deepEqual(o, { own: 1 })).toBe(true);
   });
 });
 
