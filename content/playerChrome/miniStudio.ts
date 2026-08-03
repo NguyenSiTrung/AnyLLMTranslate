@@ -124,19 +124,36 @@ export interface MiniStudioControllers {
 }
 
 function openFullSubtitleStudio(): void {
+  let url: string;
   try {
-    if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
-      void chrome.runtime.openOptionsPage();
-      return;
-    }
+    // Deep-link straight to the Subtitles section (the Subtitle Studio) so the
+    // options page opens there, not on the default General tab.
+    url = chrome.runtime.getURL('options.html?section=subtitles');
   } catch {
-    /* fall through */
+    return; // no extension context
   }
   try {
-    const url = chrome.runtime.getURL('options.html');
-    window.open(url, '_blank', 'noopener,noreferrer');
+    // Route through the background, which uses chrome.tabs.create — that reliably
+    // renders the extension page. window.open-ing a chrome-extension:// URL from a
+    // content script opens a blank (about:blank) tab for non-web-accessible pages,
+    // so we avoid it here.
+    chrome.runtime.sendMessage({ action: 'OPEN_OPTIONS', url }).catch(() => {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+          void chrome.runtime.openOptionsPage();
+        }
+      } catch {
+        /* ignore */
+      }
+    });
   } catch {
-    /* ignore */
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.openOptionsPage) {
+        void chrome.runtime.openOptionsPage();
+      }
+    } catch {
+      /* ignore */
+    }
   }
 }
 

@@ -73,7 +73,8 @@ export type MessageAction =
   | 'SCIENTIFIC_PDF_CANCEL'
   | 'SYNTHESIZE_SPEECH'
   | 'SUGGEST_SITE_RULE'
-  | 'GET_DOM_OUTLINE';
+  | 'GET_DOM_OUTLINE'
+  | 'OPEN_OPTIONS';
 
 /** Translation request from content script → background */
 export interface TranslateMessage {
@@ -705,6 +706,18 @@ export interface GetDomOutlineResult {
   error?: string;
 }
 
+/** Content → Background: open the options/settings page, deep-linked to a
+ *  section (e.g. `options.html?section=subtitles`). Routing through the
+ *  background lets us use `chrome.tabs.create`, which reliably renders an
+ *  extension page, unlike `window.open` from a content script (which opens a
+ *  blank tab for non-web-accessible extension pages). */
+export interface OpenOptionsMessage {
+  action: 'OPEN_OPTIONS';
+  /** Absolute extension URL to open (chrome-extension://.../options.html?…). */
+  url: string;
+}
+
+
 /** Union type for all messages */
 export type ExtensionMessage =
   | TranslateMessage
@@ -756,7 +769,8 @@ export type ExtensionMessage =
   | ScientificPdfCancelMessage
   | SynthesizeSpeechMessage
   | SuggestSiteRuleMessage
-  | GetDomOutlineMessage;
+  | GetDomOutlineMessage
+  | OpenOptionsMessage;
 
 /** Translation result from background → content script */
 export interface TranslationResultMessage {

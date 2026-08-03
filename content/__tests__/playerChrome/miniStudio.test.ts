@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/content/playerChrome/prefs', () => ({
   loadMiniStudioSnapshot: vi.fn(async () => ({
@@ -33,6 +33,10 @@ describe('attachMiniStudio', () => {
     document.body.innerHTML = '';
   });
 
+  afterEach(() => {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
   it('opens panel, wires enable, closes on Escape', async () => {
     const host = document.createElement('div');
     const shadow = host.attachShadow({ mode: 'open' });
@@ -55,6 +59,38 @@ describe('attachMiniStudio', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(studio.isOpen()).toBe(false);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+    studio.destroy();
+  });
+
+  it('“Open full Subtitle Studio” deep-links through the background to the subtitles section', async () => {
+    const sendMessage = vi.fn(async () => ({ success: true }));
+    const getURL = vi.fn((p: string) => `chrome-extension://abc/${p}`);
+    (globalThis as { chrome?: unknown }).chrome = {
+      runtime: { getURL, sendMessage },
+    } as never;
+
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    document.body.appendChild(host);
+    const btn = document.createElement('button');
+    shadow.appendChild(btn);
+    const studio = attachMiniStudio({ shadow, anchorButton: btn, onOpenChange: vi.fn() });
+    await studio.open();
+
+    const optionsBtn = shadow.querySelector(
+      '[data-action="open-options"]',
+    ) as HTMLButtonElement;
+    expect(optionsBtn).toBeTruthy();
+    optionsBtn.click();
+
+    // Opens via the background (chrome.tabs.create) so the page actually renders,
+    // deep-linked to the Subtitles section rather than the default General tab.
+    expect(getURL).toHaveBeenCalledWith('options.html?section=subtitles');
+    expect(sendMessage).toHaveBeenCalledWith({
+      action: 'OPEN_OPTIONS',
+      url: 'chrome-extension://abc/options.html?section=subtitles',
+    });
+
     studio.destroy();
   });
 });

@@ -103,6 +103,16 @@ export default function App() {
       setWizardForceStep(normalizedStep);
     }
 
+    // Honor deep links (e.g. `options.html?section=subtitles` from the in-player
+    // mini studio) so the options page opens on the requested section. Providers
+    // is also supported for parity with the content-script settings deep link.
+    const sectionParam = url.searchParams.get('section');
+    if (sectionParam === 'subtitles') {
+      setActiveTab('subtitles');
+    } else if (sectionParam === 'providers') {
+      setActiveTab('providers');
+    }
+
     if (requestedSetup || shouldAutoOpen) {
       setShowSetupWizard(true);
     }

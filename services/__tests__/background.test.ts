@@ -840,3 +840,30 @@ describe('services/background', () => {
     });
   });
 });
+
+describe('services/background — OPEN_OPTIONS handler', () => {
+  it('opens the deep-linked options URL via chrome.tabs.create', async () => {
+    const createSpy = vi.fn(async () => ({ id: 999 }));
+    vi.stubGlobal('chrome', {
+      storage: {
+        local: { get: vi.fn(async () => ({})), set: vi.fn(async () => {}) },
+        onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      runtime: { sendMessage: vi.fn().mockResolvedValue(undefined) },
+      tabs: { create: createSpy },
+      alarms: { create: vi.fn(), get: vi.fn(), clear: vi.fn(), onAlarm: { addListener: vi.fn(), removeListener: vi.fn() } },
+    });
+
+    const url = 'chrome-extension://abc/options.html?section=subtitles';
+    const res = await handleMessage(
+      { action: 'OPEN_OPTIONS', url },
+      {} as chrome.runtime.MessageSender,
+    );
+
+    // Routed through the background so the extension page renders (avoids the
+    // blank-tab problem of window.open-ing a chrome-extension:// URL).
+    expect(createSpy).toHaveBeenCalledWith({ url });
+    expect(res).toEqual({ success: true });
+  });
+});
+

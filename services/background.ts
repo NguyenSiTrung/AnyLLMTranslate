@@ -43,6 +43,7 @@ import type {
   SuggestSiteRuleMessage,
   SuggestSiteRuleResult,
   GetDomOutlineResult,
+  OpenOptionsMessage,
 } from '@/types/messages';
 import {
   buildSuggestSiteRuleDraft,
@@ -2363,6 +2364,23 @@ export function handleMessage(
       const cancelTabId = message.tabId ?? _sender.tab?.id;
       if (cancelTabId) stopSubtitleSession(cancelTabId);
       return undefined;
+    }
+    case 'OPEN_OPTIONS': {
+      const openUrl = (message as OpenOptionsMessage).url;
+      if (openUrl) {
+        // chrome.tabs.create reliably renders the extension options page — even
+        // when deep-linked (?section=…). window.open from a content script opens
+        // a blank tab for non-web-accessible extension pages, so we route through
+        // the background instead.
+        return chrome.tabs
+          .create({ url: openUrl })
+          .then(() => ({ success: true }))
+          .catch((err: unknown) => ({
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+          }));
+      }
+      return Promise.resolve({ success: false, error: 'Missing url' });
     }
     case 'statusUpdate':
       handleStatusUpdate(message, _sender.tab?.id);
