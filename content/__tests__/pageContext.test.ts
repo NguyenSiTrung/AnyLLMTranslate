@@ -146,23 +146,24 @@ describe('pageContext category detection helpers', () => {
     expect(categoryState.getAutoDetectedSource()).toBe('llm');
   });
 
-  it('skips LLM when domain-map or prior LLM category is already locked', async () => {
+  it('skips the LLM when a domain-map/prior-LLM category is locked or the session cache has the host', async () => {
     vi.stubGlobal('chrome', {
       runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
     });
     const { categoryState, pageContext } = await loadModules();
 
+    // Scenario 1: domain-map lock → no LLM call.
     categoryState.setAutoDetectedCategory('Video Platform', 'domain');
     await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 
+    // Scenario 2: prior LLM category lock → no LLM call.
     categoryState._resetCategoryState();
     categoryState.setAutoDetectedCategory('News', 'llm');
     await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
-  });
 
-  it('uses session host cache before calling the LLM', async () => {
+    // Scenario 3: session host cache → cached category wins, no LLM call.
     const store = new Map<string, string>();
     vi.stubGlobal('sessionStorage', {
       getItem: (k: string) => store.get(k) ?? null,
@@ -173,11 +174,7 @@ describe('pageContext category detection helpers', () => {
         store.delete(k);
       },
     });
-    vi.stubGlobal('chrome', {
-      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Gaming' }) },
-    });
-
-    const { categoryState, pageContext } = await loadModules();
+    categoryState._resetCategoryState();
     pageContext.writeCategorySessionCache(window.location.hostname, 'Academic Research');
 
     const onDetected = vi.fn();

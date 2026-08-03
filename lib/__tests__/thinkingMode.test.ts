@@ -88,7 +88,7 @@ describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
 });
 
 describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
-  it('maps Gemini thinking support and reasoning request fields by model family', () => {
+  it('maps Gemini thinking support and reasoning request fields by model family, and honors thinkingEffort when mode is on', () => {
     expect(geminiSupportsThinkingNone('gemini-2.5-flash')).toBe(true);
     expect(geminiSupportsThinkingNone('gemini-2.5-flash-lite')).toBe(true);
     expect(geminiSupportsThinkingNone('models/gemini-2.5-flash')).toBe(true);
@@ -136,9 +136,8 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
       enable_thinking: false,
     });
     expect(applyThinkingModeToRequest(withExtra, 'off').enable_thinking).toBe(false);
-  });
 
-  it('uses reasoning_effort on Gemini and honors thinkingEffort when mode is on', () => {
+    // Gemini request-field application with thinkingEffort honored when on.
     const req: ChatCompletionRequest = {
       ...baseRequest,
       model: 'gemini-2.5-flash',

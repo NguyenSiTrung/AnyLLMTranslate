@@ -38,7 +38,7 @@ function googleMulti(): PoolProvider {
 }
 
 describe('resolveSlots multi-model', () => {
-  it('expands model-major × key-major with composite slotId', () => {
+  it('expands model-major × key-major with composite slotIds and keeps slotId === keyId for single-model', () => {
     const slots = resolveSlots([googleMulti()]);
     expect(slots.map((s) => s.slotId)).toEqual([
       'k1::gemini-2.5-flash',
@@ -55,15 +55,13 @@ describe('resolveSlots multi-model', () => {
     expect(slots[0]!.keyId).toBe('k1');
     expect(slots[0]!.model).toBe('gemini-2.5-flash');
     expect(slots[0]!.multiModel).toBe(true);
-  });
 
-  it('keeps slotId === keyId for single-model', () => {
     const p = googleMulti();
     delete p.models;
-    const slots = resolveSlots([p]);
-    expect(slots).toHaveLength(2);
-    expect(slots.map((s) => s.slotId)).toEqual(['k1', 'k2']);
-    expect(slots.every((s) => !s.multiModel)).toBe(true);
+    const single = resolveSlots([p]);
+    expect(single).toHaveLength(2);
+    expect(single.map((s) => s.slotId)).toEqual(['k1', 'k2']);
+    expect(single.every((s) => !s.multiModel)).toBe(true);
   });
 
   it('still yields a slot when model is empty and key not required (DEFAULT_SETTINGS)', () => {

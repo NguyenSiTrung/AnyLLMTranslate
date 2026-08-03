@@ -79,7 +79,7 @@ describe('OpenAICompatibleService.translateStream', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('sends stream:true and invokes per-piece callbacks as deltas arrive', async () => {
+  it('sends stream:true and invokes per-piece callbacks as deltas arrive (incremental or single-shot)', async () => {
     const texts = new Map([
       ['p1', 'Hello'],
       ['p2', 'World'],
@@ -126,61 +126,57 @@ describe('OpenAICompatibleService.translateStream', () => {
     // The final callback for each should carry the complete text.
     expect(p1Callbacks[p1Callbacks.length - 1].text).toBe('Xin chào');
     expect(p2Callbacks[p2Callbacks.length - 1].text).toBe('Thế giới');
-  });
 
-  it('handles a single-shot response (all content in one chunk)', async () => {
-    const texts = new Map([['p1', 'Hi']]);
+    // A single-shot response (all content in one chunk) works too.
+    const singleTexts = new Map([['p1', 'Hi']]);
     const fullJson = '{"p1":"Xin chào"}';
-    const sseChunks = [
+    const singleChunks = [
       `data: {"choices":[{"delta":{"content":${JSON.stringify(fullJson)}}}]}\n\n`,
       'data: [DONE]\n\n',
     ];
 
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeStreamResponse(sseChunks),
+      makeStreamResponse(singleChunks),
     );
 
-    const service = new OpenAICompatibleService(makeConfig({ apiKey: 'test-key', model: 'gpt-4' }));
-
+    const singleService = new OpenAICompatibleService(makeConfig({ apiKey: 'test-key', model: 'gpt-4' }));
     const callbacks: Array<{ id: string; text: string }> = [];
-    const result = await service.translateStream(
-      makeRequest(texts),
+    const singleResult = await singleService.translateStream(
+      makeRequest(singleTexts),
       (id, text) => callbacks.push({ id, text }),
     );
 
-    expect(result.success).toBe(true);
-    expect(result.translations.get('p1')).toBe('Xin chào');
+    expect(singleResult.success).toBe(true);
+    expect(singleResult.translations.get('p1')).toBe('Xin chào');
     expect(callbacks.some((c) => c.id === 'p1' && c.text === 'Xin chào')).toBe(true);
   });
 
-  it('throws ApiError with statusCode on HTTP error (caller falls back to non-streaming)', async () => {
+  it('throws ApiError with statusCode on HTTP error and handles an empty stream body gracefully', async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeStreamResponse([], 429),
     );
 
-    const service = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
+    const errorService = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
 
     try {
-      await service.translateStream(makeRequest(new Map([['p1', 'Hi']])), () => {});
+      await errorService.translateStream(makeRequest(new Map([['p1', 'Hi']])), () => {});
       expect.fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(ApiError);
       expect((err as ApiError).statusCode).toBe(429);
     }
-  });
 
-  it('handles empty stream body gracefully', async () => {
+    // An empty stream body is a content problem, not a failover — graceful fail.
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeStreamResponse(['data: [DONE]\n\n']),
     );
 
-    const service = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
+    const emptyService = new OpenAICompatibleService(makeConfig({ apiKey: 'k', model: 'm' }));
 
-    const result = await service.translateStream(
+    const result = await emptyService.translateStream(
       makeRequest(new Map([['p1', 'Hi']])),
       () => {},
     );
-    // No content arrived → success:false with empty map (content problem, no failover).
     expect(result.success).toBe(false);
   });
 

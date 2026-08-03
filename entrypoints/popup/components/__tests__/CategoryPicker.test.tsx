@@ -64,8 +64,8 @@ describe('CategoryPicker', () => {
     expect(screen.getByText('Gaming')).toBeTruthy();
   });
 
-  it('opens a portaled listbox with Auto and groups', async () => {
-    renderPicker();
+  it('opens a portaled listbox with Auto/groups and filters with correct search direction', async () => {
+    const { unmount } = renderPicker();
     fireEvent.click(screen.getByRole('button', { name: /category/i }));
     await waitFor(() => {
       expect(screen.getByRole('listbox', { name: /page category/i })).toBeTruthy();
@@ -73,12 +73,8 @@ describe('CategoryPicker', () => {
     expect(screen.getByRole('option', { name: /auto detect/i })).toBeTruthy();
     expect(screen.getByText('Development')).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Software Development' })).toBeTruthy();
-  });
 
-  it('filters with correct Auto search direction', async () => {
-    renderPicker();
-    fireEvent.click(screen.getByRole('button', { name: /category/i }));
-    const input = await screen.findByPlaceholderText(/filter categories/i);
+    const input = screen.getByPlaceholderText(/filter categories/i);
     // Old inverted check was `'auto'.includes(q)` — "detect" failed that; label.includes works.
     fireEvent.change(input, { target: { value: 'detect' } });
     expect(screen.getByRole('option', { name: /auto detect/i })).toBeTruthy();
@@ -86,6 +82,7 @@ describe('CategoryPicker', () => {
     expect(screen.queryByRole('option', { name: /auto detect/i })).toBeNull();
     fireEvent.change(input, { target: { value: 'soft' } });
     expect(screen.getByRole('option', { name: 'Software Development' })).toBeTruthy();
+    unmount();
   });
 
   it('selects a category and closes, and closes on Escape', async () => {

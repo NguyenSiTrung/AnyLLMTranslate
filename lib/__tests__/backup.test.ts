@@ -95,39 +95,37 @@ describe('encryptBackup / decryptBackup', () => {
     );
   });
 
-  it('throws on tampered ciphertext', async () => {
-    const envelope = JSON.parse(
+  it('rejects tampered ciphertext, tampered AAD format marker, unknown version, and non-envelope plain JSON', async () => {
+    // Tampered ciphertext must fail authentication.
+    const tampered = JSON.parse(
       await encryptBackup(fullSettings(), PASSWORD),
     ) as Record<string, string>;
-    const last = envelope['ciphertext'];
+    const last = tampered['ciphertext'];
     const flipped = last.slice(0, -1) + (last.endsWith('A') ? 'B' : 'A');
-    envelope['ciphertext'] = flipped;
-    await expect(decryptBackup(JSON.stringify(envelope), PASSWORD)).rejects.toThrow(
+    tampered['ciphertext'] = flipped;
+    await expect(decryptBackup(JSON.stringify(tampered), PASSWORD)).rejects.toThrow(
       BackupDecryptError,
     );
-  });
 
-  it('throws when the format marker is tampered (AAD)', async () => {
-    const envelope = JSON.parse(
+    // AAD: format marker is bound to the ciphertext.
+    const badFormat = JSON.parse(
       await encryptBackup(fullSettings(), PASSWORD),
     ) as Record<string, unknown>;
-    envelope['format'] = 'other-format';
-    await expect(decryptBackup(JSON.stringify(envelope), PASSWORD)).rejects.toThrow(
+    badFormat['format'] = 'other-format';
+    await expect(decryptBackup(JSON.stringify(badFormat), PASSWORD)).rejects.toThrow(
       BackupDecryptError,
     );
-  });
 
-  it('throws on unknown version', async () => {
-    const envelope = JSON.parse(
+    // Unknown version is refused rather than guessed.
+    const badVersion = JSON.parse(
       await encryptBackup(fullSettings(), PASSWORD),
     ) as Record<string, unknown>;
-    envelope['version'] = 99;
-    await expect(decryptBackup(JSON.stringify(envelope), PASSWORD)).rejects.toThrow(
+    badVersion['version'] = 99;
+    await expect(decryptBackup(JSON.stringify(badVersion), PASSWORD)).rejects.toThrow(
       BackupDecryptError,
     );
-  });
 
-  it('throws on non-envelope plain JSON', async () => {
+    // Plain settings JSON is not an envelope.
     await expect(decryptBackup('{"targetLanguage":"ja"}', PASSWORD)).rejects.toThrow(
       BackupDecryptError,
     );
@@ -141,7 +139,7 @@ describe('encryptBackup / decryptBackup', () => {
 });
 
 describe('detectFormat', () => {
-  it('detects the encrypted envelope', () => {
+  it('detects the encrypted envelope and treats plain settings, foreign formats, and non-JSON as plain', () => {
     expect(
       detectFormat(
         JSON.stringify({
@@ -153,9 +151,6 @@ describe('detectFormat', () => {
         }),
       ),
     ).toBe('encrypted');
-  });
-
-  it('treats plain settings JSON as plain', () => {
     expect(detectFormat(JSON.stringify({ targetLanguage: 'ja' }))).toBe('plain');
     expect(detectFormat('{"format":"not-ours","ciphertext":"x"}')).toBe('plain');
     expect(detectFormat('not json at all')).toBe('plain');
@@ -178,13 +173,11 @@ describe('sanitizeImportObject', () => {
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
-  it('rejects non-object payloads', () => {
+  it('rejects non-object payloads and accepts a full settings object untouched', () => {
     expect(() => sanitizeImportObject(null)).toThrow(/JSON object/);
     expect(() => sanitizeImportObject([1, 2])).toThrow(/JSON object/);
     expect(() => sanitizeImportObject('string')).toThrow(/JSON object/);
-  });
 
-  it('accepts a full settings object untouched', () => {
     const { recognized, ignored } = sanitizeImportObject(fullSettings());
     expect(ignored).toEqual([]);
     expect(recognized['providers']).toEqual(fullSettings().providers);
@@ -203,7 +196,7 @@ describe('serializeSettings', () => {
 });
 
 describe('deepEqual', () => {
-  it('compares scalars with Object.is semantics', () => {
+  it('compares scalars with Object.is semantics and arrays element-wise, order-sensitive', () => {
     expect(deepEqual(1, 1)).toBe(true);
     expect(deepEqual(1, 2)).toBe(false);
     expect(deepEqual('a', 'a')).toBe(true);
@@ -211,22 +204,18 @@ describe('deepEqual', () => {
     expect(deepEqual(null, undefined)).toBe(false);
     expect(deepEqual(0, -0)).toBe(false);
     expect(deepEqual(NaN, NaN)).toBe(true);
-  });
 
-  it('compares arrays element-wise, order-sensitive', () => {
     expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true);
     expect(deepEqual([1, 2], [2, 1])).toBe(false);
     expect(deepEqual([{ a: 1 }], [{ a: 1 }])).toBe(true);
   });
 
-  it('compares nested plain objects by own keys', () => {
+  it('compares nested plain objects by own keys and never compares inherited properties', () => {
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } })).toBe(true);
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 2 } })).toBe(false);
     expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
     expect(deepEqual({ a: 1 }, { b: 1 })).toBe(false);
-  });
 
-  it('never compares inherited properties', () => {
     const o = Object.create({ inherited: 1 }) as Record<string, unknown>;
     o.own = 1;
     expect(deepEqual(o, { own: 1 })).toBe(true);
@@ -242,48 +231,36 @@ describe('computeImportImpact', () => {
     siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
   });
 
-  it('merge: lists recognized keys whose imported value differs from current', () => {
+  it('merge: lists recognized keys whose imported value differs and omits unchanged keys', () => {
     const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
     expect(impact.changed).toEqual(['targetLanguage']);
     expect(impact.resetToDefaults).toEqual([]);
+
+    const same = computeImportImpact(customized(), { targetLanguage: 'ja' }, 'merge');
+    expect(same.changed).toEqual([]);
   });
 
-  it('merge: omits keys whose imported value equals current', () => {
-    const impact = computeImportImpact(customized(), { targetLanguage: 'ja' }, 'merge');
-    expect(impact.changed).toEqual([]);
-  });
-
-  it('merge: a partial nested object that changes a nested field is listed as changed', () => {
+  it('merge: a partial nested object that changes a nested field is listed as changed; undefined file values are no-ops', () => {
     const current = customized();
     current.pdfSettings = { ...DEFAULT_SETTINGS.pdfSettings, openMode: 'same-tab' };
     const impact = computeImportImpact(current, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
     expect(impact.changed).toEqual(['pdfSettings']);
+
+    const noop = computeImportImpact(current, { targetLanguage: undefined }, 'merge');
+    expect(noop.changed).toEqual([]);
   });
 
-  it('merge: undefined file values are no-ops', () => {
-    const current = customized();
-    const impact = computeImportImpact(current, { targetLanguage: undefined }, 'merge');
-    expect(impact.changed).toEqual([]);
-  });
-
-  it('replace: lists changed recognized keys against the defaults baseline', () => {
+  it('replace: lists changed recognized keys against the defaults baseline and customized keys absent from the file as resetToDefaults', () => {
     const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
     expect(impact.changed).toEqual(['targetLanguage']);
-  });
-
-  it('replace: lists customized keys absent from the file as resetToDefaults', () => {
-    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
     expect(impact.resetToDefaults).toContain('theme');
     expect(impact.resetToDefaults).not.toContain('targetLanguage');
   });
 
-  it('replace: untouched built-in site rules are NOT listed as resetToDefaults', () => {
-    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
-    expect(impact.resetToDefaults).not.toContain('siteRules');
-  });
-
-  it('replace: empty recognized file warns every customized key; merge is a no-op', () => {
+  it('replace: untouched built-in site rules are excluded; empty file warns every customized key (merge is a no-op); nothing customized means no warnings', () => {
     const current = customized();
+    expect(computeImportImpact(current, { targetLanguage: 'ko' }, 'replace').resetToDefaults).not.toContain('siteRules');
+
     expect(computeImportImpact(current, {}, 'merge')).toEqual({
       changed: [],
       resetToDefaults: [],
@@ -292,16 +269,14 @@ describe('computeImportImpact', () => {
     expect(replace.changed).toEqual([]);
     expect(replace.resetToDefaults).toContain('theme');
     expect(replace.resetToDefaults).toContain('targetLanguage');
-  });
 
-  it('replace: nothing customized means no reset warnings', () => {
-    const current = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
-    expect(computeImportImpact(current, {}, 'replace').resetToDefaults).toEqual([]);
+    const untouched = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
+    expect(computeImportImpact(untouched, {}, 'replace').resetToDefaults).toEqual([]);
   });
 });
 
 describe('pickKnownSettings', () => {
-  it('picks every DEFAULT_SETTINGS key and excludes store internals', () => {
+  it('picks every DEFAULT_SETTINGS key, excludes store internals, and falls back to DEFAULT_SETTINGS for missing keys', () => {
     const state = {
       ...DEFAULT_SETTINGS,
       safeKeyThrottleMigrated: true,
@@ -318,13 +293,11 @@ describe('pickKnownSettings', () => {
     expect(keys).not.toContain('updateSettings');
     expect(keys).not.toContain('replaceSettings');
     expect(picked.safeKeyThrottleMigrated).toBe(true);
-  });
 
-  it('falls back to DEFAULT_SETTINGS values for missing keys', () => {
-    const picked = pickKnownSettings({} as Record<string, unknown>);
-    expect(picked.targetLanguage).toBe('vi');
-    expect(picked.theme).toBe('blockquote');
-    expect(picked.siteRules).toEqual([]);
+    const fallback = pickKnownSettings({} as Record<string, unknown>);
+    expect(fallback.targetLanguage).toBe('vi');
+    expect(fallback.theme).toBe('blockquote');
+    expect(fallback.siteRules).toEqual([]);
   });
 });
 

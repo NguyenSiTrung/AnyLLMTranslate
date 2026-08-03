@@ -128,7 +128,7 @@ describe('pickTtsCredentials hybrid', () => {
     expect(explicitPick?.model).toBe('my-tts');
   });
 
-  it('returns null for missing, disabled, or base-less pool providers', () => {
+  it('returns null for missing, disabled, or base-less pool providers and for an empty custom base URL; a valid custom source overrides the pool', () => {
     const s = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
@@ -161,10 +161,9 @@ describe('pickTtsCredentials hybrid', () => {
     });
     expect(hasProviderTtsCredentials(noBase)).toBe(false);
     expect(pickTtsCredentials(noBase)).toBeNull();
-  });
 
-  it('custom source overrides pool and rejects an empty custom base URL', () => {
-    const s = baseSettings({
+    // Valid custom source overrides the pool entirely.
+    const custom = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         credentialSource: 'custom',
@@ -176,13 +175,14 @@ describe('pickTtsCredentials hybrid', () => {
       },
       providers: [poolProvider({ id: 'p1' })],
     });
-    const pick = pickTtsCredentials(s);
+    const pick = pickTtsCredentials(custom);
     expect(pick?.baseUrl).toBe('https://custom-tts.example/v1');
     expect(pick?.apiKey).toBe('sk-custom');
     expect(pick?.model).toBe('custom-model');
     expect(pick?.voice).toBe('');
 
-    const empty = baseSettings({
+    // An empty (whitespace-only) custom base URL is rejected.
+    const emptyCustom = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         credentialSource: 'custom',
@@ -191,7 +191,7 @@ describe('pickTtsCredentials hybrid', () => {
       },
       providers: [poolProvider({ id: 'p1' })],
     });
-    expect(pickTtsCredentials(empty)).toBeNull();
+    expect(pickTtsCredentials(emptyCustom)).toBeNull();
   });
 });
 
@@ -300,7 +300,7 @@ describe('mergeTtsSettings languageOverrides', () => {
 });
 
 describe('resolveTtsStack', () => {
-  it('returns global pick with matchedOverride false when no row', () => {
+  it('returns a global pick with matchedOverride false when no row, and inherits global creds with model/voice override when a row lacks creds', () => {
     const s = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
@@ -314,10 +314,8 @@ describe('resolveTtsStack', () => {
     expect(stack.matchedOverride).toBe(false);
     expect(stack.pick?.voice).toBe('alloy');
     expect(stack.pick?.model).toBe('tts-1');
-  });
 
-  it('inherits global creds and overrides model/voice when row has no creds', () => {
-    const s = baseSettings({
+    const inherited = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         model: 'tts-1',
@@ -326,16 +324,17 @@ describe('resolveTtsStack', () => {
       },
       providers: [poolProvider({ id: 'p1', baseUrl: 'https://api.mistral.ai/v1' })],
     });
-    const stack = resolveTtsStack(s, 'vi-VN');
-    expect(stack.matchedOverride).toBe(true);
-    expect(stack.pick?.baseUrl).toBe('https://api.mistral.ai/v1');
-    expect(stack.pick?.model).toBe('voxtral-mini-tts-2603');
-    expect(stack.pick?.voice).toBe('vi-id');
-    expect(stack.pick?.apiKey).toBe('sk-test');
+    const inheritedStack = resolveTtsStack(inherited, 'vi-VN');
+    expect(inheritedStack.matchedOverride).toBe(true);
+    expect(inheritedStack.pick?.baseUrl).toBe('https://api.mistral.ai/v1');
+    expect(inheritedStack.pick?.model).toBe('voxtral-mini-tts-2603');
+    expect(inheritedStack.pick?.voice).toBe('vi-id');
+    expect(inheritedStack.pick?.apiKey).toBe('sk-test');
   });
 
-  it('uses override custom credentials when valid', () => {
-    const s = baseSettings({
+  it('uses override custom credentials when valid, falls back to global when the override custom URL is empty, and uses the override poolProviderId when credentialSource is pool', () => {
+    // Override custom credentials win when valid; global model is retained.
+    const custom = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         model: 'global-model',
@@ -353,16 +352,15 @@ describe('resolveTtsStack', () => {
       },
       providers: [poolProvider({ id: 'p1' })],
     });
-    const stack = resolveTtsStack(s, 'en');
-    expect(stack.matchedOverride).toBe(true);
-    expect(stack.pick?.baseUrl).toBe('https://custom-tts.example/v1');
-    expect(stack.pick?.apiKey).toBe('sk-lang');
-    expect(stack.pick?.voice).toBe('en-voice');
-    expect(stack.pick?.model).toBe('global-model');
-  });
+    const customStack = resolveTtsStack(custom, 'en');
+    expect(customStack.matchedOverride).toBe(true);
+    expect(customStack.pick?.baseUrl).toBe('https://custom-tts.example/v1');
+    expect(customStack.pick?.apiKey).toBe('sk-lang');
+    expect(customStack.pick?.voice).toBe('en-voice');
+    expect(customStack.pick?.model).toBe('global-model');
 
-  it('falls back to global credentials when override custom URL empty', () => {
-    const s = baseSettings({
+    // Empty override custom URL falls back to global credentials.
+    const fallback = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         model: 'tts-1',
@@ -378,14 +376,13 @@ describe('resolveTtsStack', () => {
       },
       providers: [poolProvider({ id: 'p1' })],
     });
-    const stack = resolveTtsStack(s, 'ja');
-    expect(stack.matchedOverride).toBe(true);
-    expect(stack.pick?.baseUrl).toBe('https://api.openai.com/v1');
-    expect(stack.pick?.voice).toBe('ja-voice');
-  });
+    const fallbackStack = resolveTtsStack(fallback, 'ja');
+    expect(fallbackStack.matchedOverride).toBe(true);
+    expect(fallbackStack.pick?.baseUrl).toBe('https://api.openai.com/v1');
+    expect(fallbackStack.pick?.voice).toBe('ja-voice');
 
-  it('uses override poolProviderId when credentialSource pool', () => {
-    const s = baseSettings({
+    // Override poolProviderId wins when the override credentialSource is pool.
+    const poolOverride = baseSettings({
       tts: {
         ...DEFAULT_TTS_SETTINGS,
         model: 'tts-1',
@@ -418,10 +415,10 @@ describe('resolveTtsStack', () => {
         }),
       ],
     });
-    const stack = resolveTtsStack(s, 'ko');
-    expect(stack.matchedOverride).toBe(true);
-    expect(stack.pick?.baseUrl).toBe('https://tts-ko.example/v1');
-    expect(stack.pick?.apiKey).toBe('sk-ko');
-    expect(stack.pick?.voice).toBe('ko-v');
+    const poolStack = resolveTtsStack(poolOverride, 'ko');
+    expect(poolStack.matchedOverride).toBe(true);
+    expect(poolStack.pick?.baseUrl).toBe('https://tts-ko.example/v1');
+    expect(poolStack.pick?.apiKey).toBe('sk-ko');
+    expect(poolStack.pick?.voice).toBe('ko-v');
   });
 });

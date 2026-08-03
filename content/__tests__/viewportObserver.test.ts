@@ -159,26 +159,7 @@ describe('ViewportObserver', () => {
     observer.disconnect();
   });
 
-  it('when paused, does not dispatch intersecting pieces', () => {
-    const onVisible = vi.fn();
-    const observer = new ViewportObserver(onVisible, 50);
-    const p = document.createElement('p');
-    document.body.appendChild(p);
-    const piece = makePiece('a', p);
-    observer.observe(piece);
-    observer.setPaused(true);
-
-    const mock = MockIntersectionObserver.instances[0];
-    mock.fire(p, true);
-    vi.advanceTimersByTime(50);
-
-    expect(onVisible).not.toHaveBeenCalled();
-    // Still tracked
-    expect(mock.observed.has(p)).toBe(true);
-    observer.disconnect();
-  });
-
-  it('on unpause, redispatches currently visible tracked pieces', () => {
+  it('when paused does not dispatch; on unpause redispatch currently visible tracked pieces', () => {
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50);
     const p = document.createElement('p');
@@ -192,7 +173,10 @@ describe('ViewportObserver', () => {
     const mock = MockIntersectionObserver.instances[0];
     mock.fire(p, true);
     vi.advanceTimersByTime(50);
+
     expect(onVisible).not.toHaveBeenCalled();
+    // Still tracked
+    expect(mock.observed.has(p)).toBe(true);
 
     observer.setPaused(false);
     vi.advanceTimersByTime(50);

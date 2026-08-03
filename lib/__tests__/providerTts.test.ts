@@ -159,7 +159,7 @@ describe('fetchProviderSpeech', () => {
     expect(mistralFetch).not.toHaveBeenCalled();
   });
 
-  it('detects Mistral dialects and normalizes Voxtral model aliases', () => {
+  it('detects Mistral dialects, normalizes Voxtral model aliases, and sends Mistral voice_id bodies with audio_data decoding', async () => {
     expect(detectTtsDialect('https://api.mistral.ai/v1', 'x')).toBe('mistral');
     expect(detectTtsDialect('https://api.openai.com/v1', 'tts-1')).toBe('openai');
     expect(detectTtsDialect('https://proxy.example/v1', 'voxtral-mini-tts-latest')).toBe(
@@ -174,9 +174,7 @@ describe('fetchProviderSpeech', () => {
     expect(normalizeMistralTtsModel('voxtral-mini-tts-2603')).toBe(
       'voxtral-mini-tts-2603',
     );
-  });
 
-  it('sends Mistral voice_id body and decodes audio_data JSON', async () => {
     const audioB64 = btoa(String.fromCharCode(9, 8, 7));
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ audio_data: audioB64 }), {

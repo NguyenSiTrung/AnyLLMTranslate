@@ -63,11 +63,11 @@ afterEach(() => {
 });
 
 describe('YouTube metadata discovery', () => {
-  it('emits caption tracks from ytInitialPlayerResponse', () => {
+  it('emits caption tracks from ytInitialPlayerResponse, raw_player_response, or falls back when the initial response has no captions', () => {
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       embeddedResponse();
 
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    let cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
 
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_TRACKS_DISCOVERED',
@@ -85,31 +85,27 @@ describe('YouTube metadata discovery', () => {
     );
 
     cleanup();
-  });
 
-  it('reads raw_player_response when the initial global is unavailable', () => {
+    // raw_player_response is read when the initial global is unavailable.
+    bridge.send.mockClear();
+    (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
+      undefined;
     (window as Window & { ytplayer?: unknown }).ytplayer = {
       config: { args: { raw_player_response: JSON.stringify(embeddedResponse()) } },
     };
-
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
 
     expect(bridge.send).toHaveBeenCalledWith(
       'SUBTITLE_TRACKS_DISCOVERED',
       expect.objectContaining({ videoId: 'ltJukPGSqEg' }),
     );
-
     cleanup();
-  });
 
-  it('falls back to raw_player_response when the initial response has no captions', () => {
+    // Falls back to raw_player_response when the initial response has no captions.
+    bridge.send.mockClear();
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       responseWithoutCaptions();
-    (window as Window & { ytplayer?: unknown }).ytplayer = {
-      config: { args: { raw_player_response: JSON.stringify(embeddedResponse()) } },
-    };
-
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
 
     expect(bridge.send).toHaveBeenCalledTimes(1);
     expect(bridge.send).toHaveBeenCalledWith(
@@ -119,37 +115,23 @@ describe('YouTube metadata discovery', () => {
     cleanup();
   });
 
-  it('retries discovery and emits once when metadata appears later', () => {
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
-
+  it('retries discovery and emits once when metadata appears later, including after navigation to a new video', () => {
+    // No metadata at start; discovery keeps polling.
+    let cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
     vi.advanceTimersByTime(250);
     expect(bridge.send).not.toHaveBeenCalled();
 
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       embeddedResponse();
     vi.advanceTimersByTime(250);
-
     expect(bridge.send).toHaveBeenCalledTimes(1);
     cleanup();
-  });
 
-  it('does not emit duplicate metadata for the same video response', () => {
-    (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
-      embeddedResponse();
-
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
-    window.dispatchEvent(new Event('yt-navigate-finish'));
-    vi.advanceTimersByTime(250);
-
-    expect(bridge.send).toHaveBeenCalledTimes(1);
-    cleanup();
-  });
-
-  it('keeps retrying after navigation until delayed metadata has a new key', () => {
+    // After navigation, delayed metadata with a new key is emitted once.
+    bridge.send.mockClear();
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       embeddedResponseForVideo('old-video');
-
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
     expect(bridge.send).toHaveBeenCalledTimes(1);
 
     window.dispatchEvent(new Event('yt-navigate-finish'));
@@ -173,11 +155,24 @@ describe('YouTube metadata discovery', () => {
     cleanup();
   });
 
-  it('does not re-emit stale metadata after discovering a newer response', () => {
+  it('does not re-emit duplicate or stale metadata after discovering a newer response', () => {
+    // Same response re-discovered (yt-navigate-finish) is not re-emitted.
+    (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
+      embeddedResponse();
+    let cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    window.dispatchEvent(new Event('yt-navigate-finish'));
+    vi.advanceTimersByTime(250);
+
+    expect(bridge.send).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    // Stale metadata is not re-emitted after a newer response is discovered.
+    bridge.send.mockClear();
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       embeddedResponseForVideo('old-video');
+    cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    expect(bridge.send).toHaveBeenCalledTimes(1);
 
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
     (window as Window & { ytplayer?: unknown }).ytplayer = {
       config: {
         args: {
@@ -220,26 +215,20 @@ describe('native caption fallback', () => {
     return button;
   }
 
-  it('clicks the YouTube caption button once when captions are off', () => {
-    const button = addButton('false');
+  it('clicks the YouTube caption button only when captions are off, and restores only what the extension enabled', () => {
+    // Captions off → button is pressed.
+    const offButton = addButton('false');
     requestYoutubeNativeCaptions();
-    expect(button.getAttribute('aria-pressed')).toBe('true');
-  });
+    expect(offButton.getAttribute('aria-pressed')).toBe('true');
 
-  it('does not click the caption button when captions are already on', () => {
-    const button = addButton('true');
-    const click = vi.spyOn(button, 'click');
+    // Captions already on → no click.
+    const onButton = addButton('true');
+    const click = vi.spyOn(onButton, 'click');
     requestYoutubeNativeCaptions();
     expect(click).not.toHaveBeenCalled();
-  });
 
-  it('restores captions only after the extension enabled them', () => {
-    const button = addButton('false');
-    requestYoutubeNativeCaptions();
-    expect(button.getAttribute('aria-pressed')).toBe('true');
-
+    // The extension-enabled press is restored.
     restoreYoutubeNativeCaptions();
-
-    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(offButton.getAttribute('aria-pressed')).toBe('false');
   });
 });

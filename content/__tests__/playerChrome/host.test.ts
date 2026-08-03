@@ -18,12 +18,10 @@ describe('playerChrome host', () => {
     });
   });
 
-  it('resolvePlayerTargets returns null video when none', () => {
-    const r = resolvePlayerTargets(document);
-    expect(r.video).toBeNull();
-  });
+  it('resolvePlayerTargets returns null video when none, and picks primary video with optional player root', () => {
+    const none = resolvePlayerTargets(document);
+    expect(none.video).toBeNull();
 
-  it('resolvePlayerTargets picks primary video and optional player root', () => {
     const v = document.createElement('video');
     Object.defineProperty(v, 'readyState', { configurable: true, value: 2 });
     Object.defineProperty(v, 'getBoundingClientRect', {
@@ -55,11 +53,8 @@ describe('playerChrome host', () => {
     expect(getFullscreenMountParent(document)).toBe(shell);
   });
 
-  it('getPlayerChromeAdapter returns null for unknown hosts', () => {
+  it('getPlayerChromeAdapter returns null for unknown hosts and matches youtube', () => {
     expect(getPlayerChromeAdapter('www.example.com')).toBeNull();
-  });
-
-  it('getPlayerChromeAdapter matches youtube', () => {
     expect(getPlayerChromeAdapter('www.youtube.com')?.id).toBe('youtube');
   });
 });

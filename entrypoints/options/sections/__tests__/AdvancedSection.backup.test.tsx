@@ -90,7 +90,7 @@ describe('AdvancedSection Data Portability', () => {
     vi.mocked(loadPreImportSnapshot).mockResolvedValue(null);
   });
 
-  it('plain export downloads the FULL settings object (providers, pdf, toggles)', async () => {
+  it('plain export warns about cleartext keys, downloads the FULL settings object, and shows a success toast', async () => {
     const settings: ExtensionSettings = {
       ...DEFAULT_SETTINGS,
       targetLanguage: 'ja',
@@ -119,10 +119,15 @@ describe('AdvancedSection Data Portability', () => {
       ],
     };
     storeWith(settings);
-    renderAdvanced();
+    const { unmount } = renderAdvanced();
 
     fireEvent.click(screen.getByRole('button', { name: /export/i }));
-    fireEvent.click(await screen.findByRole('radio', { name: /plain json/i }));
+    // Warning is shown BEFORE anything is downloaded.
+    expect(
+      await screen.findByText(/will contain your api keys in cleartext/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     const payload = await readLastDownload();
@@ -131,6 +136,11 @@ describe('AdvancedSection Data Portability', () => {
     expect(payload['scientificPdf']).toBeTruthy();
     expect(payload['enableShadowDomWalk']).toBe(false);
     expect(anchorClick).toHaveBeenCalled();
+
+    expect(await screen.findByText(/settings exported successfully/i)).toBeInTheDocument();
+    // The old post-hoc error toast is gone.
+    expect(screen.queryByText(/keep it private/i)).not.toBeInTheDocument();
+    unmount();
   });
 
   it('encrypted export asks for a matching password and downloads an envelope', async () => {
@@ -152,10 +162,10 @@ describe('AdvancedSection Data Portability', () => {
     expect(payload['ciphertext']).toBeTruthy();
   });
 
-  it('plain import merges by default — only the file keys are passed to updateSettings', async () => {
+  it('plain import merges by default and can exact-restore via the replace toggle', async () => {
     const updateSettings = vi.fn();
     storeWith({ updateSettings });
-    renderAdvanced();
+    const { unmount } = renderAdvanced();
 
     const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 'settings.json', {
       type: 'application/json',
@@ -167,17 +177,18 @@ describe('AdvancedSection Data Portability', () => {
 
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({ targetLanguage: 'ko' }));
     expect(screen.getByText(/settings imported successfully/i)).toBeInTheDocument();
-  });
 
-  it('plain import can exact-restore via the replace toggle', async () => {
+    // Exact restore via the replace toggle.
+    unmount();
     const replaceSettings = vi.fn();
     storeWith({ replaceSettings });
     renderAdvanced();
-
-    const file = new File([JSON.stringify({ targetLanguage: 'ko', theme: 'paper' })], 's.json', {
+    const replaceFile = new File([JSON.stringify({ targetLanguage: 'ko', theme: 'paper' })], 's.json', {
       type: 'application/json',
     });
-    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+    fireEvent.change(screen.getByTestId('import-settings-file'), {
+      target: { files: [replaceFile] },
+    });
 
     await screen.findByRole('dialog', { name: 'Import settings' });
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
@@ -186,6 +197,7 @@ describe('AdvancedSection Data Portability', () => {
     await waitFor(() =>
       expect(replaceSettings).toHaveBeenCalledWith({ targetLanguage: 'ko', theme: 'paper' }),
     );
+    unmount();
   });
 
   it('encrypted import asks for the password, rejects wrong ones, then proceeds', async () => {
@@ -218,52 +230,9 @@ describe('AdvancedSection Data Portability', () => {
     expect(arg['targetLanguage']).toBe('fr');
   });
 
-  it('warns inside the chooser before plain export, then shows a success toast (no error toast)', async () => {
-    const settings: ExtensionSettings = {
-      ...DEFAULT_SETTINGS,
-      providers: [
-        {
-          id: 'p1',
-          displayName: 'P',
-          baseUrl: 'https://x/v1',
-          model: 'm',
-          requiresApiKey: true,
-          temperature: 0.3,
-          maxTokens: 4096,
-          enabled: true,
-          keys: [
-            {
-              id: 'k1',
-              apiKey: 'sk-abc',
-              maxRpm: 20,
-              concurrencyLimit: 1,
-              interval: 500,
-              enabled: true,
-            },
-          ],
-        },
-      ],
-    };
-    storeWith(settings);
-    renderAdvanced();
-
-    fireEvent.click(screen.getByRole('button', { name: /export/i }));
-    // Warning is shown BEFORE anything is downloaded.
-    expect(
-      await screen.findByText(/will contain your api keys in cleartext/i),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    expect(await screen.findByText(/settings exported successfully/i)).toBeInTheDocument();
-    // The old post-hoc error toast is gone.
-    expect(screen.queryByText(/keep it private/i)).not.toBeInTheDocument();
-  });
-
-  it('shows which settings will be overwritten in the import summary (merge)', async () => {
+  it('import summary shows overwritten settings and reveals reset-to-defaults on replace toggle', async () => {
     storeWith({ targetLanguage: 'ja', theme: 'bubble' });
-    renderAdvanced();
+    const { unmount } = renderAdvanced();
 
     const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
       type: 'application/json',
@@ -273,9 +242,9 @@ describe('AdvancedSection Data Portability', () => {
     await screen.findByRole('dialog', { name: 'Import settings' });
     expect(screen.getByText(/1 setting will be overwritten/i)).toBeInTheDocument();
     expect(screen.getByText('targetLanguage')).toBeInTheDocument();
-  });
 
-  it('replace toggle reveals the reset-to-defaults list', async () => {
+    // Replace toggle reveals the reset-to-defaults list, excluding built-in site rules.
+    unmount();
     storeWith({
       targetLanguage: 'ja',
       theme: 'bubble',
@@ -283,11 +252,7 @@ describe('AdvancedSection Data Portability', () => {
     });
     renderAdvanced();
 
-    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
-      type: 'application/json',
-    });
     fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
-
     await screen.findByRole('dialog', { name: 'Import settings' });
     expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
@@ -296,6 +261,7 @@ describe('AdvancedSection Data Portability', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('theme')).toBeInTheDocument();
     expect(screen.queryByText('siteRules')).not.toBeInTheDocument();
+    unmount();
   });
 
   it('saves a pre-import snapshot before applying the import', async () => {
@@ -315,11 +281,12 @@ describe('AdvancedSection Data Portability', () => {
     expect(arg.targetLanguage).toBe('ja');
   });
 
-  it('undo toast restores the pre-import snapshot and consumes it', async () => {
+  it('undo toast and the persistent restore button both roll back the pre-import snapshot and consume it', async () => {
+    // Undo-toast path.
     const snapshot = { ...DEFAULT_SETTINGS, theme: 'bubble', targetLanguage: 'ja' } as ExtensionSettings;
     vi.mocked(loadPreImportSnapshot).mockResolvedValue(snapshot);
     storeWith({ targetLanguage: 'ja' });
-    renderAdvanced();
+    const { unmount } = renderAdvanced();
 
     const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
       type: 'application/json',
@@ -339,11 +306,12 @@ describe('AdvancedSection Data Portability', () => {
         screen.queryByRole('button', { name: 'Restore previous settings' }),
       ).not.toBeInTheDocument(),
     );
-  });
 
-  it('persistent restore button rolls back and consumes the snapshot', async () => {
-    const snapshot = { ...DEFAULT_SETTINGS, theme: 'paper', targetLanguage: 'fr' } as ExtensionSettings;
-    vi.mocked(loadPreImportSnapshot).mockResolvedValue(snapshot);
+    // Persistent-restore-button path.
+    unmount();
+    vi.mocked(clearPreImportSnapshot).mockClear();
+    const snapshot2 = { ...DEFAULT_SETTINGS, theme: 'paper', targetLanguage: 'fr' } as ExtensionSettings;
+    vi.mocked(loadPreImportSnapshot).mockResolvedValue(snapshot2);
     storeWith({ targetLanguage: 'ja' });
     renderAdvanced();
 
@@ -360,5 +328,6 @@ describe('AdvancedSection Data Portability', () => {
         screen.queryByRole('button', { name: 'Restore previous settings' }),
       ).not.toBeInTheDocument(),
     );
+    unmount();
   });
 });

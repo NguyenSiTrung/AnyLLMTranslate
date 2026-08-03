@@ -139,7 +139,7 @@ describe('scientificPdfClient', () => {
     ).rejects.toBeInstanceOf(ScientificPdfClientError);
   });
 
-  it('getJob: progress, 404, failed state payload, parse error', async () => {
+  it('getJob progress/error handling and download/cancel paths', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse({ id: 'job_1', state: 'running', progress: 0.4, message: 'translating' }),
     );
@@ -171,9 +171,8 @@ describe('scientificPdfClient', () => {
       new Response('not-json', { status: 200, headers: { 'Content-Type': 'text/plain' } }),
     );
     await expect(getJob(BASE, 'job_x')).rejects.toMatchObject({ code: 'parse' });
-  });
 
-  it('download mono/dual and cancel job paths', async () => {
+    // Download and cancel paths.
     const monoBytes = new Uint8Array([1, 2, 3, 4]);
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(monoBytes, {

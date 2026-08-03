@@ -91,12 +91,10 @@ describe('pre-import snapshot', () => {
     expect(snapshot?.providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
   });
 
-  it('returns null when nothing is stored', async () => {
+  it('returns null when nothing is stored or when the storage read fails', async () => {
     mockGet.mockResolvedValue({});
     expect(await loadPreImportSnapshot()).toBeNull();
-  });
 
-  it('returns null when storage read fails', async () => {
     mockGet.mockRejectedValue(new Error('storage gone'));
     expect(await loadPreImportSnapshot()).toBeNull();
   });

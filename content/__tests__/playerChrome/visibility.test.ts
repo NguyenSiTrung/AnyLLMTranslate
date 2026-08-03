@@ -55,7 +55,8 @@ describe('reduceVisibility', () => {
     expect(s.visual).toBe('shownForced');
   });
 
-  it('panel close with pointer over player returns to shown and resets activity', () => {
+  it('panel close with pointer over player returns to shown; without pointer hides', () => {
+    // With pointer over the player: back to shown and activity reset.
     let s = createVisibilityState(0);
     s = reduceVisibility(s, { type: 'panelOpened' });
     s = reduceVisibility(s, {
@@ -65,10 +66,9 @@ describe('reduceVisibility', () => {
     });
     expect(s.visual).toBe('shown');
     expect(s.lastActivityMs).toBe(5000);
-  });
 
-  it('panel close without pointer hides', () => {
-    let s = createVisibilityState(0);
+    // Without pointer: panel close hides.
+    s = createVisibilityState(0);
     s = reduceVisibility(s, { type: 'panelOpened' });
     s = reduceVisibility(s, {
       type: 'panelClosed',

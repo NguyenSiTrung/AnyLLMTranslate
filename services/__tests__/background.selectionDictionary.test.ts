@@ -138,7 +138,7 @@ describe('handleTranslateSelection — dictionary mode', () => {
     __resetSettingsCacheForTest();
   });
 
-  it('returns dictionary payload when dictionaryMode is true and model returns JSON', async () => {
+  it('returns dictionary payload when dictionaryMode is true and model returns JSON, and fails open to sentence on invalid JSON', async () => {
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     const dictJson = JSON.stringify({
       phonetic: '/həˈloʊ/',
@@ -179,6 +179,28 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(body.messages[0].content).toContain('dictionary');
     expect(body.messages[0].content).toContain('She said hello to me.');
     expect(body.messages[1].content).toContain('hello');
+
+    // Fail-open: invalid JSON still returns a sentence translation (unique
+    // text avoids a dictionary-cache hit from the scenario above).
+    __resetSettingsCacheForTest();
+    __resetTranslationServiceForTest();
+    mockFetch('not valid json at all — just a freeform translation: chào');
+
+    const failOpen = (await handleMessage(
+      {
+        action: 'translateSelection',
+        text: 'fail-open check',
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        dictionaryMode: true,
+      },
+      { tab: { id: 1 } } as chrome.runtime.MessageSender,
+    )) as { success: boolean; mode?: string; translatedText?: string; dictionary?: unknown };
+
+    expect(failOpen.success).toBe(true);
+    expect(failOpen.mode).toBe('sentence');
+    expect(failOpen.translatedText).toBeTruthy();
+    expect(failOpen.dictionary).toBeUndefined();
   });
 
   it('plain path when dictionaryMode is omitted, and sentence fallback when selectionDictionaryEnabled is false', async () => {
@@ -227,27 +249,6 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(disabled.success).toBe(true);
     expect(disabled.mode).toBe('sentence');
     expect(disabled.dictionary).toBeUndefined();
-  });
-
-  it('fail-open: invalid JSON still returns translatedText', async () => {
-    mockStorage['anyllm-translate-settings'] = baseProviderSettings();
-    mockFetch('not valid json at all — just a freeform translation: chào');
-
-    const result = (await handleMessage(
-      {
-        action: 'translateSelection',
-        text: 'hello',
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-        dictionaryMode: true,
-      },
-      { tab: { id: 1 } } as chrome.runtime.MessageSender,
-    )) as { success: boolean; mode?: string; translatedText?: string; dictionary?: unknown };
-
-    expect(result.success).toBe(true);
-    expect(result.mode).toBe('sentence');
-    expect(result.translatedText).toBeTruthy();
-    expect(result.dictionary).toBeUndefined();
   });
 
   it('dictionary and plain cache keys do not collide', async () => {

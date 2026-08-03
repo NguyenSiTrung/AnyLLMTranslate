@@ -6,19 +6,18 @@ describe('passphraseStrength', () => {
     expect(passphraseStrength('')).toBeNull();
   });
 
-  it('weak: under 8 chars, or 8+ with a single class below 12 chars', () => {
+  it('classifies weak, fair, and strong passphrases by length and character classes', () => {
+    // weak: under 8 chars, or 8+ with a single class below 12 chars
     expect(passphraseStrength('abc')).toBe('weak');
     expect(passphraseStrength('abcdefgh')).toBe('weak');
-  });
 
-  it('fair: 8+ with two classes, or 12+ with fewer than three classes', () => {
+    // fair: 8+ with two classes, or 12+ with fewer than three classes
     expect(passphraseStrength('abcd1234')).toBe('fair');
     expect(passphraseStrength('Abcdefgh')).toBe('fair');
     expect(passphraseStrength('abcdefghijkl')).toBe('fair');
     expect(passphraseStrength('abcdefghij12')).toBe('fair');
-  });
 
-  it('strong: 12+ chars with three or more classes', () => {
+    // strong: 12+ chars with three or more classes
     expect(passphraseStrength('Abcdefg12345')).toBe('strong');
     expect(passphraseStrength('abcd1234!@#$')).toBe('strong');
   });

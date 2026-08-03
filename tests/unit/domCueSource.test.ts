@@ -100,7 +100,8 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeUndefined();
   });
 
-  it('caps open cue on pause and reseeds a fresh cue after a backward seek', async () => {
+  it('caps open cue on pause, reseeds after a backward seek, and re-samples on the seek-reset bridge message', async () => {
+    // Scenario 1: pause caps the open cue; a backward seek emits a fresh cue.
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
 
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 20 });
@@ -133,10 +134,11 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     });
 
     cleanup();
-  });
 
-  it('resets and re-samples on the coordinator seek-reset bridge message', async () => {
-    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+    // Scenario 2: the coordinator's seek-reset bridge message triggers a
+    // re-sample at the new position.
+    sentMessages.length = 0;
+    const cleanup2 = startDomCueSource(makeHandler(makeDomSource()), bridge);
 
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 2 });
     cueEl.textContent = 'Bridge reset caption';
@@ -154,16 +156,16 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     }));
     await flushObservers();
 
-    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
-    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
-    expect(cues).toHaveLength(1);
-    expect(cues[0]).toMatchObject({
+    const resetMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    const resetCues = ((resetMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
+    expect(resetCues).toHaveLength(1);
+    expect(resetCues[0]).toMatchObject({
       startTime: 8,
       endTime: OPEN_CUE_END_SENTINEL,
       text: 'Bridge reset caption',
     });
 
-    cleanup();
+    cleanup2();
   });
 
   it('late video attach; no-op without getDomCueSource', async () => {

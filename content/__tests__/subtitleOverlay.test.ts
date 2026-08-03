@@ -54,24 +54,7 @@ beforeEach(() => {
 });
 
 describe('subtitleOverlay — fontFamily / displayMode wiring', () => {
-  it('applies and updates font-family CSS var and data-display-mode', () => {
-    initializeOverlay(MOCK_CUES, { fontFamily: 'Georgia, serif', displayMode: 'translation-only' });
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay).not.toBeNull();
-    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('Georgia, serif');
-    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
-
-    updateConfig({ fontFamily: 'monospace', displayMode: 'bilingual' });
-    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('monospace');
-    expect(overlay.getAttribute('data-display-mode')).toBe('bilingual');
-
-    updateConfig({ displayMode: 'translation-only' });
-    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
-  });
-});
-
-describe('subtitleOverlay — positioning', () => {
-  it('uses position: fixed and uses viewport coordinates without scroll offsets', () => {
+  it('applies and updates font-family CSS var and data-display-mode, and uses fixed viewport positioning', () => {
     const video = document.querySelector('video') as HTMLVideoElement;
     vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
       top: 100,
@@ -85,9 +68,20 @@ describe('subtitleOverlay — positioning', () => {
       toJSON: () => {}
     });
 
-    initializeOverlay(MOCK_CUES);
-
+    initializeOverlay(MOCK_CUES, { fontFamily: 'Georgia, serif', displayMode: 'translation-only' });
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    expect(overlay).not.toBeNull();
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('Georgia, serif');
+    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
+
+    updateConfig({ fontFamily: 'monospace', displayMode: 'bilingual' });
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-font-family')).toBe('monospace');
+    expect(overlay.getAttribute('data-display-mode')).toBe('bilingual');
+
+    updateConfig({ displayMode: 'translation-only' });
+    expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
+
+    // Positioning uses fixed viewport coordinates without scroll offsets.
     expect(overlay.style.position).toBe('fixed');
     expect(overlay.style.top).toBe('100px');
     expect(overlay.style.left).toBe('50px');
@@ -148,10 +142,11 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     });
   });
 
-  it('uses popover while video is fullscreen and reverts on exit', () => {
+  it('uses popover while the video is fullscreen and reverts on exit; keeps fixed viewport positioning when the document root is fullscreen (Youku)', () => {
     initializeOverlay(MOCK_CUES, {}, video);
     const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
 
+    // Video fullscreen → popover reparenting.
     Object.defineProperty(document, 'fullscreenElement', {
       value: video,
       configurable: true,
@@ -171,12 +166,13 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     expect(overlay.parentElement).toBe(document.body);
     expect(overlay.hasAttribute('popover')).toBe(false);
     expect(HTMLElement.prototype.hidePopover).toHaveBeenCalled();
-  });
 
-  it('keeps the overlay on body with fixed viewport positioning when the document root is fullscreen (Youku)', () => {
+    // DocumentElement fullscreen (Youku): overlay stays on body with fixed
+    // viewport positioning and the root element is not mutated.
+    resetOverlayState();
     initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.parentElement).toBe(document.body);
+    const overlay2 = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    expect(overlay2.parentElement).toBe(document.body);
 
     Object.defineProperty(document, 'fullscreenElement', {
       value: document.documentElement,
@@ -187,12 +183,12 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
     // Overlay must NOT be reparented into <html>: width/height:100% there
     // resolve against the full document, pushing the flex-end subtitle text
     // below the viewport (Youku fullscreens document.documentElement).
-    expect(overlay.parentElement).toBe(document.body);
-    expect(overlay.style.position).toBe('fixed');
-    expect(overlay.style.top).toBe('0px');
-    expect(overlay.style.left).toBe('0px');
-    expect(overlay.style.width).toBe('800px');
-    expect(overlay.style.height).toBe('600px');
+    expect(overlay2.parentElement).toBe(document.body);
+    expect(overlay2.style.position).toBe('fixed');
+    expect(overlay2.style.top).toBe('0px');
+    expect(overlay2.style.left).toBe('0px');
+    expect(overlay2.style.width).toBe('800px');
+    expect(overlay2.style.height).toBe('600px');
     // Must not mutate the root element's position (would change
     // fixed-position containing-block semantics for the whole page).
     expect(document.documentElement.style.position).toBe('');
@@ -202,8 +198,8 @@ describe('subtitleOverlay — fullscreen reparenting', () => {
       configurable: true,
     });
     document.dispatchEvent(new Event('fullscreenchange'));
-    expect(overlay.parentElement).toBe(document.body);
-    expect(overlay.style.position).toBe('fixed');
+    expect(overlay2.parentElement).toBe(document.body);
+    expect(overlay2.style.position).toBe('fixed');
   });
 });
 

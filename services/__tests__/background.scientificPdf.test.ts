@@ -189,7 +189,7 @@ describe('background — scientific PDF handlers', () => {
       });
     });
 
-    it('gates on empty pool (no dispatchable credentials)', async () => {
+    it('gates on empty pool (no dispatchable credentials) and rejects missing fileBase64', async () => {
       seedSettings({
         providers: [],
         provider: {
@@ -213,7 +213,7 @@ describe('background — scientific PDF handlers', () => {
       };
       __resetSettingsCacheForTest();
 
-      const result = await handleMessage(
+      const emptyPoolResult = await handleMessage(
         {
           action: 'SCIENTIFIC_PDF_CREATE_JOB',
           fileBase64: btoa('x'),
@@ -221,13 +221,12 @@ describe('background — scientific PDF handlers', () => {
         {} as chrome.runtime.MessageSender,
       );
 
-      expect(result).toMatchObject({ success: false });
-      expect((result as { code?: string }).code).toMatch(/pool|empty|not-configured|key/i);
+      expect(emptyPoolResult).toMatchObject({ success: false });
+      expect((emptyPoolResult as { code?: string }).code).toMatch(/pool|empty|not-configured|key/i);
       expect(fetch).not.toHaveBeenCalled();
-    });
 
-    it('rejects missing fileBase64', async () => {
-      const result = await handleMessage(
+      // Missing fileBase64 is a distinct invalid-request gate.
+      const missingFileResult = await handleMessage(
         {
           action: 'SCIENTIFIC_PDF_CREATE_JOB',
           fileBase64: '',
@@ -235,7 +234,7 @@ describe('background — scientific PDF handlers', () => {
         {} as chrome.runtime.MessageSender,
       );
 
-      expect(result).toMatchObject({ success: false, code: 'invalid_request' });
+      expect(missingFileResult).toMatchObject({ success: false, code: 'invalid_request' });
       expect(fetch).not.toHaveBeenCalled();
     });
   });

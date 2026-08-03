@@ -378,7 +378,7 @@ describe('URL / JSON3 parse + coordinator gate', () => {
     { startTime: 1.6, endTime: 3.1, text: 'the store.' },
   ];
 
-  it('detects ASR URLs and parses JSON3 words (fail-open empty)', () => {
+  it('detects ASR URLs, parses JSON3 words fail-open, and gates resegment application by platform/flags', () => {
     expect(isYoutubeAsrUrl(asrUrl)).toBe(true);
     expect(isYoutubeAsrUrl(humanUrl)).toBe(false);
 
@@ -405,9 +405,7 @@ describe('URL / JSON3 parse + coordinator gate', () => {
     expect(words[1]).toMatchObject({ text: 'world', startMs: 500 });
     expect(parseYoutubeJson3Words('')).toEqual([]);
     expect(parseYoutubeJson3Words('not-json')).toEqual([]);
-  });
 
-  it('applyYoutubeAsrResegment gates on enable/platform/ASR flags and never throws', () => {
     const enabled = applyYoutubeAsrResegment({
       platform: 'youtube',
       url: asrUrl,

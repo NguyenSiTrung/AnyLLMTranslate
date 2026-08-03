@@ -20,7 +20,7 @@ describe('voicesEndpointFromBaseUrl', () => {
 });
 
 describe('parseTtsVoicesResponse', () => {
-  it('parses Mistral items shape', () => {
+  it('parses Mistral items, string arrays, and data arrays', () => {
     const voices = parseTtsVoicesResponse({
       items: [
         { id: 'voice-1', name: 'Neutral Male' },
@@ -35,9 +35,7 @@ describe('parseTtsVoicesResponse', () => {
       { id: 'voice-1', label: 'Neutral Male · voice-1' },
       { id: 'voice-2', label: 'voice-2' },
     ]);
-  });
 
-  it('parses string arrays and data arrays', () => {
     expect(parseTtsVoicesResponse(['alloy', 'nova']).map((v) => v.id)).toEqual([
       'alloy',
       'nova',
@@ -49,7 +47,7 @@ describe('parseTtsVoicesResponse', () => {
 });
 
 describe('listTtsVoices', () => {
-  it('GETs voices endpoint and returns choices', async () => {
+  it('GETs voices endpoint and returns choices on ok, error on non-ok', async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(
         JSON.stringify({
@@ -75,21 +73,19 @@ describe('listTtsVoices', () => {
     expect(url).toContain('type=all');
     expect(init.method).toBe('GET');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer msk');
-  });
 
-  it('returns error on non-ok', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const failImpl = vi.fn(async () =>
       new Response(JSON.stringify({ detail: 'Unauthorized' }), {
         status: 401,
         headers: { 'content-type': 'application/json' },
       }),
     );
-    const result = await listTtsVoices(
+    const failResult = await listTtsVoices(
       { baseUrl: 'https://api.mistral.ai/v1', apiKey: 'bad' },
-      fetchImpl as unknown as typeof fetch,
+      failImpl as unknown as typeof fetch,
     );
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/401/);
-    expect(result.error).toMatch(/Unauthorized/);
+    expect(failResult.success).toBe(false);
+    expect(failResult.error).toMatch(/401/);
+    expect(failResult.error).toMatch(/Unauthorized/);
   });
 });

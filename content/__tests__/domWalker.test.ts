@@ -160,7 +160,7 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('with whitelist ON, skips direct-child nav/aside, descends into div, ignores deeper nesting', () => {
+  it('with whitelist ON, skips direct-child nav/aside, descends into div, ignores deeper nesting; OFF descends into all direct children', () => {
     // Scenario 1: direct-child <nav> and <aside> under <body> are skipped
     const nav = document.createElement('nav');
     const navLink = document.createElement('a');
@@ -216,25 +216,21 @@ describe('domWalker — body-tag whitelist (FR-4)', () => {
     pieces = extractPieces(document.body, { enableBodyTagWhitelist: true });
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Nested nav link text');
-  });
 
-  it('with whitelist OFF, descends into all direct children (regression)', () => {
+    // Scenario 4 (regression): whitelist OFF descends into all direct children.
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
-
-    const nav = document.createElement('nav');
-    const navLink = document.createElement('a');
-    navLink.textContent = 'Navigation link text';
-    nav.appendChild(navLink);
-
-    const main = document.createElement('main');
-    const mainP = document.createElement('p');
-    mainP.textContent = 'Main article text content';
-    main.appendChild(mainP);
-
-    document.body.appendChild(nav);
-    document.body.appendChild(main);
+    const nav3 = document.createElement('nav');
+    const navLink3 = document.createElement('a');
+    navLink3.textContent = 'Navigation link text';
+    nav3.appendChild(navLink3);
+    const main3 = document.createElement('main');
+    const mainP3 = document.createElement('p');
+    mainP3.textContent = 'Main article text content';
+    main3.appendChild(mainP3);
+    document.body.appendChild(nav3);
+    document.body.appendChild(main3);
 
     const offPieces = extractPieces(document.body, {});
     // Both nav and main are walked when whitelist is off
@@ -291,7 +287,7 @@ describe('domWalker — aside caps (FR-5)', () => {
     expect(totalChars).toBeLessThanOrEqual(1000 + 67);
   });
 
-  it('with caps OFF, translates all aside paragraphs; caps never apply to non-aside or complementary without caps', () => {
+  it('with caps OFF, translates all aside paragraphs; caps never apply to non-aside; caps DO apply to [role=complementary]', () => {
     // Scenario 1: caps OFF — even over-cap aside paragraphs are kept (regression)
     const aside = document.createElement('aside');
     const longP = document.createElement('p');
@@ -314,17 +310,19 @@ describe('domWalker — aside caps (FR-5)', () => {
 
     pieces = extractPieces(document.body, { enableAsideCaps: true });
     expect(pieces.length).toBe(1);
-  });
 
-  it('caps apply to [role="complementary"] regions', () => {
+    // Scenario 3: caps ON — long [role="complementary"] paragraphs ARE capped
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
     const div = document.createElement('div');
     div.setAttribute('role', 'complementary');
-    const longP = document.createElement('p');
-    longP.textContent = 'This is a very long complementary paragraph that exceeds the per-paragraph cap of sixty-seven characters limit.';
-    div.appendChild(longP);
+    const longC = document.createElement('p');
+    longC.textContent = 'This is a very long complementary paragraph that exceeds the per-paragraph cap of sixty-seven characters limit.';
+    div.appendChild(longC);
     document.body.appendChild(div);
 
-    const pieces = extractPieces(document.body, { enableAsideCaps: true });
+    pieces = extractPieces(document.body, { enableAsideCaps: true });
     expect(pieces.length).toBe(0); // skipped due to per-paragraph cap
   });
 });
@@ -336,7 +334,7 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('keeps inline <code> text in the parent piece when code is excluded (incl. GitHub-like rich placeholders)', () => {
+  it('keeps inline <code> text in the parent piece when code is excluded, including GitHub-like rich placeholders and nested rich extraction', () => {
     // Scenario 1: plain exclude keeps the code paths in the piece text
     const p = document.createElement('p');
     p.innerHTML =
@@ -376,6 +374,28 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toContain('~/.config/sway/config');
     expect(pieces[0].text).toContain('~/.config/i3/config');
     expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
+
+    // Scenario 3: nested rich extraction emits placeholder tags + CODE variables
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const md2 = document.createElement('div');
+    md2.className = 'markdown-body';
+    const p2 = document.createElement('p');
+    p2.innerHTML = 'Run <code>npm install</code> first.';
+    md2.appendChild(p2);
+    document.body.appendChild(md2);
+
+    pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['code', 'pre'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('<z id=');
+    expect(pieces[0].text).toContain('npm install');
+    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
   });
 
   it('hard-skips block <pre> and block containers matched by exclude class', () => {
@@ -447,25 +467,4 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toContain('Settings → Advanced');
     expect(pieces[0].text).toMatch(/Open .* to configure/);
   });
-
-  it('passes enableRichTranslate through includeSelectors nested extraction', () => {
-    const md = document.createElement('div');
-    md.className = 'markdown-body';
-    const p = document.createElement('p');
-    p.innerHTML = 'Run <code>npm install</code> first.';
-    md.appendChild(p);
-    document.body.appendChild(md);
-
-    const pieces = extractPieces(document.body, {
-      includeSelectors: ['.markdown-body'],
-      excludeSelectors: ['code', 'pre'],
-      enableRichTranslate: true,
-    });
-
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('<z id=');
-    expect(pieces[0].text).toContain('npm install');
-    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
-  });
-
 });

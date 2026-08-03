@@ -269,7 +269,8 @@ describe('testConnection thinking probe', () => {
     expect(translationCalls).toBe(2);
   });
 
-  it('fails translation step when HTTP 200 returns null/empty content', async () => {
+  it('fails the translation step with actionable errors when content is null/empty (incl. reasoning-burned budget)', async () => {
+    // Scenario 1: HTTP 200 with null content and 0 completion tokens.
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'qwen3.8-max-preview' }] });
@@ -288,16 +289,17 @@ describe('testConnection thinking probe', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await testConnection(baseConfig({ model: 'qwen3.8-max-preview' }));
-    expect(result.overall).toBe(false);
-    const translation = result.steps.find((s) => s.name === 'translation');
+    const nullResult = await testConnection(baseConfig({ model: 'qwen3.8-max-preview' }));
+    expect(nullResult.overall).toBe(false);
+    let translation = nullResult.steps.find((s) => s.name === 'translation');
     expect(translation?.success).toBe(false);
     expect(translation?.error).toMatch(/Empty response from LLM/i);
     expect(translation?.error).toMatch(/0 completion tokens/i);
-  });
 
-  it('explains empty content when reasoning burned the completion budget', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    // Scenario 2: reasoning burned the completion budget — empty content with
+    // a reasoning field and finish_reason length hints at disabling thinking.
+    vi.unstubAllGlobals();
+    const reasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'step-3.7-flash' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -320,17 +322,17 @@ describe('testConnection thinking probe', () => {
         usage: { prompt_tokens: 42, completion_tokens: 200, total_tokens: 242 },
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', reasoningFetch);
 
-    const result = await testConnection(
+    const budgetResult = await testConnection(
       baseConfig({
         model: 'step-3.7-flash',
         baseUrl: 'https://api.stepfun.ai/step_plan/v1',
         thinkingMode: 'auto',
       }),
     );
-    expect(result.overall).toBe(false);
-    const translation = result.steps.find((s) => s.name === 'translation');
+    expect(budgetResult.overall).toBe(false);
+    translation = budgetResult.steps.find((s) => s.name === 'translation');
     expect(translation?.success).toBe(false);
     expect(translation?.error).toMatch(/Empty response from LLM/i);
     expect(translation?.error).toMatch(/reasoning/i);

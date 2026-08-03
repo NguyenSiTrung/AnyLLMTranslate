@@ -609,9 +609,9 @@ describe('debounce', () => {
   });
 });
 
-/* ── Dedup (Window + Document) ────────────────────────────────── */
+/* ── Dedup + Empty-field Guard ───────────────────────────────── */
 
-describe('event dedup', () => {
+describe('event dedup and empty-field guard', () => {
   let cleanup: () => void;
 
   beforeEach(() => {
@@ -622,7 +622,10 @@ describe('event dedup', () => {
     cleanup();
   });
 
-  it('processes each keydown event exactly once across window + document listeners', async () => {
+  it('processes each keydown event exactly once across window + document listeners, and never counts taps on empty fields', async () => {
+    // Without dedup, three keydown events reaching both window AND document
+    // capture listeners would reach tapCount after ~2 events (6 counts),
+    // producing multiple translation calls.
     const input = document.createElement('input');
     input.type = 'text';
     input.value = 'hello   ';
@@ -634,48 +637,32 @@ describe('event dedup', () => {
       translatedText: 'xin chào',
     });
 
-    // Dispatch three keydown events — each propagates through window AND
-    // document capture phase. Without dedup, tapCount would be reached
-    // after ~2 events (6 counts), producing multiple translation calls.
     input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     await vi.advanceTimersByTimeAsync(10);
 
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
-  });
-});
+    mockSendMessage.mockClear();
+    removeToast();
 
-/* ── Empty-field Guard & Re-acquisition ───────────────────────── */
-
-describe('empty field guard', () => {
-  let cleanup: () => void;
-
-  beforeEach(() => {
-    cleanup = initInlineTranslate();
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('does not count taps on empty or whitespace-only field (prevents swallowed gestures)', async () => {
+    // Empty or whitespace-only fields never trigger (prevents swallowed
+    // gestures) regardless of tap count.
     for (const value of ['', '     ']) {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = value;
-      document.body.appendChild(input);
-      input.focus();
+      const emptyInput = document.createElement('input');
+      emptyInput.type = 'text';
+      emptyInput.value = value;
+      document.body.appendChild(emptyInput);
+      emptyInput.focus();
 
-      // Fire many more than tapCount — should never trigger because field is empty.
       for (let i = 0; i < 6; i++) {
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        emptyInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
       }
       await vi.advanceTimersByTimeAsync(10);
 
       expect(mockSendMessage).not.toHaveBeenCalled();
       expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
-      input.remove();
+      emptyInput.remove();
       removeToast();
     }
   });

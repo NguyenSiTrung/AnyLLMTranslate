@@ -19,8 +19,8 @@ function baseProgress(over: Partial<ScientificJobProgress> = {}): ScientificJobP
 const noop = () => {};
 
 describe('ScientificJobModal', () => {
-  it('done: defaults to side-by-side and shows recommended badge', () => {
-    render(
+  it('done: defaults to side-by-side, and hides cards/actions conditionally', () => {
+    const renderResult = render(
       <ScientificJobModal
         progress={baseProgress()}
         onCancel={noop}
@@ -40,10 +40,10 @@ describe('ScientificJobModal', () => {
     expect(screen.getByText(/recommended/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download side-by-side/i })).toBeInTheDocument();
     expect(screen.queryByText(/pdf2zh/i)).not.toBeInTheDocument();
-  });
+    renderResult.unmount();
 
-  it('done: hides dual card when hasDual is false and Compare when onOpenCompare omitted', () => {
-    const noDual = render(
+    // hasDual=false hides the bilingual card; translated-only stays.
+    const duallessView = render(
       <ScientificJobModal
         progress={baseProgress({ hasDual: false })}
         onCancel={noop}
@@ -56,8 +56,9 @@ describe('ScientificJobModal', () => {
     );
     expect(screen.queryByRole('radio', { name: /bilingual/i })).not.toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /translated only/i })).toBeInTheDocument();
-    noDual.unmount();
+    duallessView.unmount();
 
+    // onOpenCompare omitted → no Compare button.
     render(
       <ScientificJobModal
         progress={baseProgress()}

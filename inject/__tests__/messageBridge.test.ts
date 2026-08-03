@@ -32,7 +32,7 @@ describe('messageBridge early coordinator queue', () => {
     vi.resetModules();
   });
 
-  it('queues SUBTITLE_INTERCEPTED and SUBTITLE_TRACKS_DISCOVERED until COORDINATOR_READY', async () => {
+  it('queues SUBTITLE_INTERCEPTED / SUBTITLE_TRACKS_DISCOVERED until COORDINATOR_READY, then posts immediately (no double queue)', async () => {
     const bridge = await import('@/inject/messageBridge');
     bridge.__resetMessageBridgeForTests();
 
@@ -98,28 +98,9 @@ describe('messageBridge early coordinator queue', () => {
 
     expect(posted).toHaveLength(1);
     expect((posted[0] as { type: string }).type).toBe('SUBTITLE_TRACKS_DISCOVERED');
-  });
 
-  it('posts immediately after coordinator is ready (no double queue)', async () => {
-    const bridge = await import('@/inject/messageBridge');
-    bridge.__resetMessageBridgeForTests();
-    // Re-install ready listener after test reset
-    bridge.sendMessage('SUBTITLE_CONFIG', { translationTimeoutMs: 1000 });
+    // After ready, subsequent messages post immediately — no double queue.
     posted.length = 0;
-
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        origin: window.location.origin,
-        data: {
-          channel: 'anyllm-translate',
-          type: 'COORDINATOR_READY',
-          requestId: 'ready-1',
-          payload: {},
-        },
-      }),
-    );
-    posted.length = 0;
-
     bridge.sendMessage('SUBTITLE_INTERCEPTED', {
       url: 'https://www.youtube.com/api/timedtext?lang=en&kind=asr',
       body: '{}',

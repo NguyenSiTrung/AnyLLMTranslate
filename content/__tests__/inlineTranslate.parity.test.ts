@@ -194,7 +194,7 @@ describe('gesture IME / repeat', () => {
     expect(triggers).toHaveLength(1);
   });
 
-  it('compositionend neither cancels a pending fire nor wipes prior taps', async () => {
+  it('compositionend does not cancel pending fires or wipe prior taps; keydown+input pairs are not double-counted; stuck compositionstart recovers', async () => {
     // Scenario 1: compositionend arriving after the Nth space does not cancel
     // the pending fire (IME often emits it right after the committing space)
     const triggers: HTMLElement[] = [];
@@ -316,16 +316,15 @@ describe('gesture IME / repeat', () => {
     expect(idleTriggers).toHaveLength(0);
     await vi.advanceTimersByTimeAsync(60);
     expect(idleTriggers).toHaveLength(1);
-  });
 
-  it('does not double-count keydown+input and recovers when compositionstart is stuck', async () => {
-    // Scenario 1: keydown + input for the same physical Space does not double-count
-    const triggers: HTMLElement[] = [];
-    const input = document.createElement('input');
-    input.value = 'hello';
-    document.body.appendChild(input);
+    // Scenario 3: keydown + input for the same physical Space does not
+    // double-count — exactly 3 physical presses must fire once.
+    const triggers3: HTMLElement[] = [];
+    const input3 = document.createElement('input');
+    input3.value = 'hello';
+    document.body.appendChild(input3);
 
-    const g = createGestureController(
+    const g3 = createGestureController(
       {
         enabled: true,
         triggerKey: ' ',
@@ -336,41 +335,40 @@ describe('gesture IME / repeat', () => {
         triggerToleranceCount: 0,
       },
       {
-        onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input,
-        getText: () => input.value,
+        onTrigger: (el) => triggers3.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input3,
+        getText: () => input3.value,
       },
     );
 
     const press = () => {
       const kd = new KeyboardEvent('keydown', { key: ' ', bubbles: true });
-      Object.defineProperty(kd, 'target', { value: input });
-      g.onKeyDown(kd);
+      Object.defineProperty(kd, 'target', { value: input3 });
+      g3.onKeyDown(kd);
       const inp = new InputEvent('input', {
         bubbles: true,
         inputType: 'insertText',
         data: ' ',
       });
-      Object.defineProperty(inp, 'target', { value: input });
-      g.onInput(inp);
+      Object.defineProperty(inp, 'target', { value: input3 });
+      g3.onInput(inp);
     };
 
-    // Exactly 3 physical presses (each keydown+input pair) must fire once
     press();
     press();
-    expect(triggers).toHaveLength(0);
+    expect(triggers3).toHaveLength(0);
     press();
     await vi.advanceTimersByTimeAsync(10);
-    expect(triggers).toHaveLength(1);
+    expect(triggers3).toHaveLength(1);
 
-    // Scenario 2: compositionstart stuck without compositionend — next keydown
-    // with isComposing:false must recover
-    triggers.length = 0;
-    const input2 = document.createElement('input');
-    input2.value = 'hello';
-    document.body.appendChild(input2);
+    // Scenario 4: compositionstart stuck without compositionend — next keydown
+    // with isComposing:false must recover.
+    const triggers4: HTMLElement[] = [];
+    const input4 = document.createElement('input');
+    input4.value = 'hello';
+    document.body.appendChild(input4);
 
-    const g2 = createGestureController(
+    const g4 = createGestureController(
       {
         enabled: true,
         triggerKey: ' ',
@@ -381,27 +379,27 @@ describe('gesture IME / repeat', () => {
         triggerToleranceCount: 0,
       },
       {
-        onTrigger: (el) => triggers.push(el),
-        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input2,
-        getText: () => input2.value,
+        onTrigger: (el) => triggers4.push(el),
+        shouldAccept: (el): el is HTMLElement => el instanceof HTMLElement && el === input4,
+        getText: () => input4.value,
       },
     );
 
-    g2.onCompositionStart(new Event('compositionstart'));
-    const fire = () => {
+    g4.onCompositionStart(new Event('compositionstart'));
+    const fire4 = () => {
       const ev = new KeyboardEvent('keydown', {
         key: ' ',
         bubbles: true,
         isComposing: false,
       });
-      Object.defineProperty(ev, 'target', { value: input2 });
-      g2.onKeyDown(ev);
+      Object.defineProperty(ev, 'target', { value: input4 });
+      g4.onKeyDown(ev);
     };
-    fire();
-    fire();
-    fire();
+    fire4();
+    fire4();
+    fire4();
     await vi.advanceTimersByTimeAsync(10);
-    expect(triggers).toHaveLength(1);
+    expect(triggers4).toHaveLength(1);
   });
 });
 

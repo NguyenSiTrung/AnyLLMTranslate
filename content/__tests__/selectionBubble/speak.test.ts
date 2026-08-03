@@ -58,7 +58,7 @@ describe('SpeakController', () => {
     vi.unstubAllGlobals();
   });
 
-  it('speaks text with matched voice for lang', async () => {
+  it('speaks text with matched voice for lang, and stop cancels synthesis', async () => {
     const c = new SpeakController();
     await c.speak('hello', 'en');
     expect(speakMock).toHaveBeenCalledOnce();
@@ -66,11 +66,7 @@ describe('SpeakController', () => {
     expect(utt.text).toBe('hello');
     expect(utt.lang).toBe('en-US');
     expect(utt.voice?.lang).toBe('en-US');
-  });
 
-  it('stop cancels synthesis', async () => {
-    const c = new SpeakController();
-    await c.speak('hello', 'en');
     c.stop();
     expect(cancelMock).toHaveBeenCalled();
     expect(c.isSpeaking()).toBe(false);

@@ -81,8 +81,8 @@ describe('BackupPasswordDialog', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  it('shows a live strength hint in export mode', () => {
-    render(
+  it('shows a live strength hint in export mode but not in import mode', () => {
+    const { unmount } = render(
       <BackupPasswordDialog
         title="Encrypt backup"
         message="x"
@@ -103,9 +103,9 @@ describe('BackupPasswordDialog', () => {
 
     fireEvent.change(field, { target: { value: 'Abcdefg12345' } });
     expect(screen.getByText('Strength: Strong')).toBeInTheDocument();
-  });
 
-  it('hides the strength hint in import mode', () => {
+    // Import mode never surfaces the strength hint.
+    unmount();
     render(
       <BackupPasswordDialog
         title="Unlock backup"
@@ -151,8 +151,8 @@ describe('ImportSummaryDialog', () => {
     onCancel.mockClear();
   });
 
-  it('defaults to merge and reports recognized/ignored counts', () => {
-    render(
+  it('defaults to merge, reports recognized/ignored counts, and hides both lists when empty', () => {
+    const { unmount } = render(
       <ImportSummaryDialog
         source="plain"
         recognizedCount={42}
@@ -167,6 +167,22 @@ describe('ImportSummaryDialog', () => {
     expect(screen.getByText(/1 unknown key ignored: oldKey/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Merge & import' }));
     expect(onConfirm).toHaveBeenCalledWith(false);
+
+    // Empty impacts hide both the overwrite and reset-to-defaults lists.
+    unmount();
+    render(
+      <ImportSummaryDialog
+        source="plain"
+        recognizedCount={0}
+        ignored={[]}
+        mergeImpact={{ changed: [], resetToDefaults: [] }}
+        replaceImpact={{ changed: [], resetToDefaults: [] }}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.queryByText(/will be overwritten/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
   });
 
   it('exact restore when the replace toggle is on', () => {
@@ -186,7 +202,7 @@ describe('ImportSummaryDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith(true);
   });
 
-  it('shows the overwrite list from the active (merge) impact by default', () => {
+  it('shows the overwrite list in merge mode by default and reveals reset-to-defaults only when replace is toggled on', () => {
     render(
       <ImportSummaryDialog
         source="plain"
@@ -201,42 +217,13 @@ describe('ImportSummaryDialog', () => {
     expect(screen.getByText(/1 setting will be overwritten/i)).toBeInTheDocument();
     expect(screen.getByText('targetLanguage')).toBeInTheDocument();
     expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
-  });
 
-  it('reveals the reset-to-defaults list only when replace is toggled on', () => {
-    render(
-      <ImportSummaryDialog
-        source="plain"
-        recognizedCount={1}
-        ignored={[]}
-        mergeImpact={{ changed: ['targetLanguage'], resetToDefaults: [] }}
-        replaceImpact={{ changed: ['targetLanguage'], resetToDefaults: ['theme', 'glossary'] }}
-        onConfirm={onConfirm}
-        onCancel={onCancel}
-      />,
-    );
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
     expect(
       screen.getByText(/2 customized settings not in the file will reset to defaults/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/theme/)).toBeInTheDocument();
     expect(screen.getByText(/glossary/)).toBeInTheDocument();
-  });
-
-  it('hides both lists when they are empty', () => {
-    render(
-      <ImportSummaryDialog
-        source="plain"
-        recognizedCount={0}
-        ignored={[]}
-        mergeImpact={{ changed: [], resetToDefaults: [] }}
-        replaceImpact={{ changed: [], resetToDefaults: [] }}
-        onConfirm={onConfirm}
-        onCancel={onCancel}
-      />,
-    );
-    expect(screen.queryByText(/will be overwritten/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
   });
 });
 
@@ -249,8 +236,10 @@ describe('ExportFormatDialog', () => {
     onCancel.mockClear();
   });
 
-  it('pre-selects encrypted (recommended) and continues with it by default', () => {
-    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
+  it('pre-selects encrypted (recommended) by default and continues with the selected format', () => {
+    const { unmount } = render(
+      <ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />,
+    );
 
     const encrypted = screen.getByRole('radio', { name: /encrypted backup/i });
     expect(encrypted).toHaveAttribute('aria-checked', 'true');
@@ -262,6 +251,14 @@ describe('ExportFormatDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(onSelect).toHaveBeenCalledWith('encrypted');
+
+    // Switching to Plain JSON changes what Continue submits.
+    onSelect.mockClear();
+    unmount();
+    render(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onSelect).toHaveBeenCalledWith('plain');
   });
 
   it('warns about cleartext keys on Plain JSON only when keys exist', () => {
@@ -276,15 +273,7 @@ describe('ExportFormatDialog', () => {
     ).toBeInTheDocument();
   });
 
-  it('selects Plain JSON on click and continues with it', () => {
-    render(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
-
-    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onSelect).toHaveBeenCalledWith('plain');
-  });
-
-  it('supports arrow-key navigation between formats', () => {
+  it('supports arrow-key navigation and closes on Escape and Cancel', () => {
     render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
     const group = screen.getByRole('radiogroup', { name: 'Export format' });
 
@@ -299,10 +288,6 @@ describe('ExportFormatDialog', () => {
       'aria-checked',
       'true',
     );
-  });
-
-  it('closes on Escape and Cancel', () => {
-    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onCancel).toHaveBeenCalledTimes(1);

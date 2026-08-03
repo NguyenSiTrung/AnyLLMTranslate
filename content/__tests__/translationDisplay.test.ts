@@ -180,7 +180,7 @@ describe('translationDisplay', () => {
   });
 
   describe('showLoadingPlaceholder', () => {
-    it('inserts placeholder after parent with spinner classes; idempotent; refuses body/html', () => {
+    it('inserts placeholders idempotently, then transitions through error/clear lifecycle', () => {
       const parent = document.createElement('p');
       document.body.appendChild(parent);
 
@@ -197,34 +197,31 @@ describe('translationDisplay', () => {
       showLoadingPlaceholder(document.body, 'piece-body');
       expect(document.querySelector('[data-anyllm-piece-id="piece-body"]')).toBeNull();
       expect(document.body.hasAttribute('data-anyllm-role')).toBe(false);
-    });
 
-    it('adds compact error element, updates placeholders, and clears errors', () => {
-      // Scenario 1: parent marked + compact element, full message only in title
-      const parent = document.createElement('p');
-      document.body.appendChild(parent);
+      // Error state: parent marked + compact element, full message only in title.
+      const errorParent = document.createElement('p');
+      document.body.appendChild(errorParent);
 
-      setErrorState(parent, 'piece-1', 'Network error');
+      setErrorState(errorParent, 'piece-err', 'Network error');
 
-      expect(parent.hasAttribute('data-anyllm-error')).toBe(true);
-      const errorEl = document.querySelector('[data-anyllm-piece-id="piece-1"]');
+      expect(errorParent.hasAttribute('data-anyllm-error')).toBe(true);
+      const errorEl = document.querySelector('[data-anyllm-piece-id="piece-err"]');
       // Visible label stays compact so batch/pool failures do not spam long copy.
       expect(errorEl?.textContent).toBe('⚠ Translation failed');
       expect(errorEl?.textContent).not.toContain('Network error');
       expect((errorEl as HTMLElement).title).toContain('Network error');
       expect((errorEl as HTMLElement).title).toContain('Click to retry');
 
-      // Scenario 2: long pool-failure message stays out of the visible text
+      // Long pool-failure message stays out of the visible text.
       const parent2 = document.createElement('p');
       document.body.appendChild(parent2);
-      const long =
-        'All provider pool slots failed during this request.';
+      const long = 'All provider pool slots failed during this request.';
       setErrorState(parent2, 'piece-2', long);
       const errorEl2 = document.querySelector('[data-anyllm-piece-id="piece-2"]');
       expect(errorEl2?.textContent).toBe('⚠ Translation failed');
       expect((errorEl2 as HTMLElement).title).toContain(long);
 
-      // Scenario 3: loading placeholder is converted to error state in-place
+      // Loading placeholder is converted to error state in-place.
       const parent3 = document.createElement('p');
       document.body.appendChild(parent3);
       showLoadingPlaceholder(parent3, 'piece-3');
@@ -237,6 +234,7 @@ describe('translationDisplay', () => {
       expect(errors[0].textContent).toBe('⚠ Translation failed');
       expect((errors[0] as HTMLElement).title).toContain('API error');
 
+      // Clearing removes the marker and element.
       const clearParent = document.createElement('p');
       document.body.appendChild(clearParent);
       setErrorState(clearParent, 'piece-clear', 'Error');

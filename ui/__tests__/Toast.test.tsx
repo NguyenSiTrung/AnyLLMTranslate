@@ -19,9 +19,9 @@ function Harness({ action, message }: { action?: ToastAction; message: string })
 }
 
 describe('Toast action', () => {
-  it('renders an action button, invokes onClick, and dismisses after click', async () => {
+  it('renders an action button, invokes onClick and dismisses; no-action toasts stay plain', async () => {
     const onClick = vi.fn();
-    render(
+    const view = render(
       <ToastProvider>
         <Harness action={{ label: 'Undo import', onClick }} message="Imported 2 settings" />
       </ToastProvider>,
@@ -33,9 +33,9 @@ describe('Toast action', () => {
     await waitFor(() =>
       expect(screen.queryByText('Imported 2 settings')).not.toBeInTheDocument(),
     );
-  });
 
-  it('no-action toasts render no action button and behave as before', () => {
+    // No-action toasts render no action button and behave as before.
+    view.unmount();
     render(
       <ToastProvider>
         <Harness message="Plain success" />
