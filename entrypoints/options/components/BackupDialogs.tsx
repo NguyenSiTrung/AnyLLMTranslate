@@ -10,6 +10,7 @@ import { Button } from '@/ui/Button';
 import { Input } from '@/ui/Input';
 import { Toggle } from '@/ui/Toggle';
 import { passphraseStrength, type PassphraseStrength } from '@/lib/passphraseStrength';
+import type { ImportImpact } from '@/lib/backup';
 
 const STRENGTH_META: Record<
   PassphraseStrength,
@@ -189,6 +190,8 @@ interface ImportSummaryDialogProps {
   source: 'plain' | 'encrypted';
   recognizedCount: number;
   ignored: string[];
+  mergeImpact: ImportImpact;
+  replaceImpact: ImportImpact;
   busy?: boolean;
   onConfirm: (replaceAll: boolean) => void;
   onCancel: () => void;
@@ -198,6 +201,8 @@ export function ImportSummaryDialog({
   source,
   recognizedCount,
   ignored,
+  mergeImpact,
+  replaceImpact,
   busy = false,
   onConfirm,
   onCancel,
@@ -206,6 +211,7 @@ export function ImportSummaryDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
+  const impact = replaceAll ? replaceImpact : mergeImpact;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -265,6 +271,35 @@ export function ImportSummaryDialog({
               </li>
             )}
           </ul>
+
+          {impact.changed.length > 0 && (
+            <div
+              role="alert"
+              className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-xs"
+            >
+              <p className="font-medium text-amber-300">
+                {impact.changed.length} setting{impact.changed.length === 1 ? '' : 's'} will be
+                overwritten:
+              </p>
+              <p className="mt-1 break-words text-amber-200/80">{impact.changed.join(', ')}</p>
+            </div>
+          )}
+
+          {replaceAll && impact.resetToDefaults.length > 0 && (
+            <div
+              role="alert"
+              className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2.5 text-xs"
+            >
+              <p className="font-medium text-rose-300">
+                {impact.resetToDefaults.length} customized setting
+                {impact.resetToDefaults.length === 1 ? '' : 's'} not in the file will reset to
+                defaults:
+              </p>
+              <p className="mt-1 break-words text-rose-200/80">
+                {impact.resetToDefaults.join(', ')}
+              </p>
+            </div>
+          )}
 
           <div className="mt-4">
             <Toggle

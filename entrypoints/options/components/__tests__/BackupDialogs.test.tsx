@@ -157,6 +157,8 @@ describe('ImportSummaryDialog', () => {
         source="plain"
         recognizedCount={42}
         ignored={['oldKey']}
+        mergeImpact={{ changed: [], resetToDefaults: [] }}
+        replaceImpact={{ changed: [], resetToDefaults: [] }}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -173,6 +175,8 @@ describe('ImportSummaryDialog', () => {
         source="encrypted"
         recognizedCount={3}
         ignored={[]}
+        mergeImpact={{ changed: [], resetToDefaults: [] }}
+        replaceImpact={{ changed: [], resetToDefaults: [] }}
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
@@ -180,6 +184,59 @@ describe('ImportSummaryDialog', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Replace & import' }));
     expect(onConfirm).toHaveBeenCalledWith(true);
+  });
+
+  it('shows the overwrite list from the active (merge) impact by default', () => {
+    render(
+      <ImportSummaryDialog
+        source="plain"
+        recognizedCount={1}
+        ignored={[]}
+        mergeImpact={{ changed: ['targetLanguage'], resetToDefaults: [] }}
+        replaceImpact={{ changed: ['targetLanguage'], resetToDefaults: ['theme', 'glossary'] }}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.getByText(/1 setting will be overwritten/i)).toBeInTheDocument();
+    expect(screen.getByText('targetLanguage')).toBeInTheDocument();
+    expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
+  });
+
+  it('reveals the reset-to-defaults list only when replace is toggled on', () => {
+    render(
+      <ImportSummaryDialog
+        source="plain"
+        recognizedCount={1}
+        ignored={[]}
+        mergeImpact={{ changed: ['targetLanguage'], resetToDefaults: [] }}
+        replaceImpact={{ changed: ['targetLanguage'], resetToDefaults: ['theme', 'glossary'] }}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
+    expect(
+      screen.getByText(/2 customized settings not in the file will reset to defaults/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/theme/)).toBeInTheDocument();
+    expect(screen.getByText(/glossary/)).toBeInTheDocument();
+  });
+
+  it('hides both lists when they are empty', () => {
+    render(
+      <ImportSummaryDialog
+        source="plain"
+        recognizedCount={0}
+        ignored={[]}
+        mergeImpact={{ changed: [], resetToDefaults: [] }}
+        replaceImpact={{ changed: [], resetToDefaults: [] }}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    expect(screen.queryByText(/will be overwritten/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
   });
 });
 
