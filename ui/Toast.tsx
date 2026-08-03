@@ -7,11 +7,17 @@ import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
 
 export type ToastVariant = 'success' | 'error' | 'info';
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastData {
   id: string;
   variant: ToastVariant;
   message: string;
   duration?: number;
+  action?: ToastAction;
 }
 
 interface ToastProps extends ToastData {
@@ -36,16 +42,18 @@ const iconColors: Record<ToastVariant, string> = {
   info: 'text-blue-400',
 };
 
-export function Toast({ id, variant, message, duration = 4000, onDismiss }: ToastProps) {
+export function Toast({ id, variant, message, duration, action, onDismiss }: ToastProps) {
   const [isExiting, setIsExiting] = useState(false);
   const Icon = icons[variant];
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Action toasts linger so the Undo is discoverable; plain toasts keep 4s.
+  const timeoutMs = action ? (duration ?? 8000) : (duration ?? 4000);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsExiting(true);
       dismissTimerRef.current = setTimeout(() => onDismiss(id), 200);
-    }, duration);
+    }, timeoutMs);
     return () => {
       clearTimeout(timer);
       if (dismissTimerRef.current) {
@@ -53,7 +61,7 @@ export function Toast({ id, variant, message, duration = 4000, onDismiss }: Toas
         dismissTimerRef.current = undefined;
       }
     };
-  }, [id, duration, onDismiss]);
+  }, [id, timeoutMs, onDismiss]);
 
   const handleManualDismiss = () => {
     if (dismissTimerRef.current) {
@@ -72,6 +80,17 @@ export function Toast({ id, variant, message, duration = 4000, onDismiss }: Toas
     >
       <Icon className={`w-4 h-4 shrink-0 ${iconColors[variant]}`} />
       <p className="text-sm text-zinc-200 flex-1">{message}</p>
+      {action && (
+        <button
+          onClick={() => {
+            action.onClick();
+            handleManualDismiss();
+          }}
+          className="shrink-0 rounded-md border border-zinc-700 bg-zinc-800/80 px-2 py-1 text-xs font-semibold text-zinc-100 transition-colors hover:bg-zinc-700"
+        >
+          {action.label}
+        </button>
+      )}
       <button
         onClick={handleManualDismiss}
         className="p-0.5 text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
