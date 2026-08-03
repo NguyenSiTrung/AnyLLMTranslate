@@ -341,6 +341,8 @@ interface CoordinatorState {
   activeTrackIdentity: string | null;
   /** URLs already fetched via selectSubtitleTrack (dedup with interceptor flow) */
   fetchedTrackUrls: Set<string>;
+  /** YouTube timedtext URLs for which the native-player fallback was requested. */
+  youtubeCaptionFallbackUrls: Set<string>;
   /** True while MAIN-world Max MPD processor is fetching/parsing */
   mpdProcessingInFlight: boolean;
   /** DOM tier deferred until this timestamp (ms) while MPD may still succeed */
@@ -382,6 +384,7 @@ const state: CoordinatorState = {
   cachedSettings: null,
   activeTrackIdentity: null,
   fetchedTrackUrls: new Set(),
+  youtubeCaptionFallbackUrls: new Set(),
   mpdProcessingInFlight: false,
   mpdGraceUntil: 0,
   mpdProcessingStartedAt: 0,
@@ -764,10 +767,28 @@ async function activateOverlayWithParsedCues(options: {
   sourceLanguage: string;
   settings: Awaited<ReturnType<typeof loadSettings>>;
   platform?: string;
+  /** Navigation epoch captured before the async YouTube pipeline started. */
+  navigationEpoch?: number;
   /** When set, blank native track after successful translation (intercept path). */
   intercept?: { requestId: string; originalBody: string };
 }): Promise<boolean> {
-  const { cues, sourceLanguage, settings, intercept } = options;
+  const {
+    cues,
+    sourceLanguage,
+    settings,
+    intercept,
+    navigationEpoch,
+  } = options;
+  const isStaleNavigation = () =>
+    navigationEpoch !== undefined && state.navigationEpoch !== navigationEpoch;
+  const unblockStaleIntercept = (): false => {
+    if (intercept) {
+      sendTranslatedSubtitle({ requestId: intercept.requestId, vttContent: intercept.originalBody });
+    }
+    return false;
+  };
+  if (isStaleNavigation()) return unblockStaleIntercept();
+
   const handler =
     (options.platform ? getHandlerByPlatform(options.platform) : null) ??
     detectCurrentHandler();
@@ -788,15 +809,16 @@ async function activateOverlayWithParsedCues(options: {
 
   if (!state.isOverlayMode) {
     console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
-    state.isOverlayMode = true;
-
     const savedPrefs = await initializeControls();
+    if (isStaleNavigation()) return unblockStaleIntercept();
+    state.isOverlayMode = true;
     const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
     await ensureRenderer().initialize(
       cues,
       overlayConfig,
       document.querySelector('video') as HTMLVideoElement,
     );
+    if (isStaleNavigation()) return unblockStaleIntercept();
 
     const textContainer = getOverlayTextContainer();
     if (textContainer) {
@@ -808,6 +830,7 @@ async function activateOverlayWithParsedCues(options: {
 
   showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
   const pageContext = await buildSubtitlePageContext();
+  if (isStaleNavigation()) return unblockStaleIntercept();
   const sessionId = allocateSubtitleSessionId();
   state.activeSubtitleSessionId = sessionId;
 
@@ -824,6 +847,7 @@ async function activateOverlayWithParsedCues(options: {
       sessionId,
     })) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
+    if (isStaleNavigation()) return unblockStaleIntercept();
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
       if (intercept) {
@@ -866,6 +890,9 @@ async function activateOverlayWithParsedCues(options: {
  */
 async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId: string): Promise<void> {
   const { url, body, contentType, platform, originalLanguage } = payload;
+  const youtubeNavigationEpoch = platform === 'youtube' ? state.navigationEpoch : undefined;
+  const isStaleYoutubeRequest = () =>
+    youtubeNavigationEpoch !== undefined && state.navigationEpoch !== youtubeNavigationEpoch;
 
   // Guard: only activate on actual watch pages.
   // On listing/search/home pages (e.g. YouTube /results, /), pass the original
@@ -874,6 +901,24 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     console.log('AnyLLMTranslate: Skipping subtitle interception — not a watch page', { url });
     sendTranslatedSubtitle({ requestId, vttContent: body });
     return;
+  }
+
+  if (platform === 'youtube') {
+    const currentVideoId = extractYoutubeVideoIdFromUrl(window.location.href);
+    const interceptedVideoId = extractYoutubeVideoIdFromUrl(url);
+    if (
+      !currentVideoId ||
+      !interceptedVideoId ||
+      currentVideoId !== interceptedVideoId
+    ) {
+      console.log('AnyLLMTranslate: Passing through stale or unidentified YouTube subtitle interception', {
+        currentVideoId,
+        interceptedVideoId,
+        url,
+      });
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
   }
 
   // Task 6.3: Deduplicate with auto-activate (fetch) flow
@@ -886,6 +931,10 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
   try {
     // Task 6.1: Use cached settings in hot path, fall back to loadSettings
     const settings = state.cachedSettings ?? await loadSettings();
+    if (isStaleYoutubeRequest()) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
     if (!state.cachedSettings) state.cachedSettings = settings;
     if (!settings.subtitleSettings.enabled) {
       cleanupActiveOverlay();
@@ -944,6 +993,10 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       originalLanguage,
       settings,
     });
+    if (isStaleYoutubeRequest()) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
 
     if (resegmentMode !== 'off') {
       console.log('AnyLLMTranslate: YouTube ASR resegment', {
@@ -966,12 +1019,14 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       sourceLanguage,
       settings,
       platform,
+      navigationEpoch: youtubeNavigationEpoch,
       intercept: { requestId, originalBody: body },
     });
   } catch (error) {
     console.warn('AnyLLMTranslate: handleIntercepted error', error);
     // Task 6.4: Restore native subtitles on error — send original body back
     sendTranslatedSubtitle({ requestId, vttContent: body });
+    if (isStaleYoutubeRequest()) return;
     cleanupActiveOverlay();
     hideSubtitleToast();
     showSubtitleToast('Subtitle translation error.');
@@ -2198,6 +2253,19 @@ function cancelBackgroundSubtitleSession(): void {
   }
 }
 
+function requestYoutubeCaptionFallback(track: AvailableSubtitleTrack): void {
+  if (!track.url || state.youtubeCaptionFallbackUrls.has(track.url)) return;
+  state.youtubeCaptionFallbackUrls.add(track.url);
+  sendMessage('YOUTUBE_REQUEST_CAPTIONS', {
+    url: track.url,
+    language: track.language,
+  });
+}
+
+function restoreYoutubeCaptionFallback(): void {
+  sendMessage('YOUTUBE_RESTORE_CAPTIONS', {});
+}
+
 /**
  * Hook into SPA navigation events to reset state when the user navigates away
  * from a watch page (e.g. YouTube home → /watch or /watch → home).
@@ -2495,6 +2563,10 @@ export function startCoordinator(): () => void {
     if (state.isOverlayMode) {
       destroyRenderer();
     }
+    if (state.youtubeCaptionFallbackUrls.size > 0) {
+      restoreYoutubeCaptionFallback();
+      state.youtubeCaptionFallbackUrls.clear();
+    }
     restoreNativeCaptions();
   };
 }
@@ -2533,6 +2605,10 @@ export function resetCoordinatorState(): void {
   resetActiveSource();
   state.activeTrackIdentity = null;
   state.fetchedTrackUrls.clear();
+  if (state.youtubeCaptionFallbackUrls.size > 0) {
+    restoreYoutubeCaptionFallback();
+  }
+  state.youtubeCaptionFallbackUrls.clear();
   state.mpdProcessingInFlight = false;
   state.mpdGraceUntil = 0;
   state.mpdProcessingStartedAt = 0;
@@ -3146,8 +3222,10 @@ async function activateYoutubeTrackViaPipeline(track: AvailableSubtitleTrack): P
 
 async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrack): Promise<void> {
   if (!track.url) return;
+  const epochAtStart = state.navigationEpoch;
 
   const settings = state.cachedSettings ?? (await loadSettings());
+  if (state.navigationEpoch !== epochAtStart) return;
   if (!state.cachedSettings) state.cachedSettings = settings;
   if (!settings.subtitleSettings.enabled) {
     cleanupActiveOverlay();
@@ -3159,8 +3237,11 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
     body = await fetchSubtitleContent(track.url);
   } catch (error) {
     console.error('AnyLLMTranslate: Failed to fetch YouTube timedtext', error);
+    if (state.navigationEpoch !== epochAtStart) return;
+    requestYoutubeCaptionFallback(track);
     return;
   }
+  if (state.navigationEpoch !== epochAtStart) return;
 
   const platform = 'youtube';
   const ytHandler = getHandlerByPlatform(platform) ?? detectCurrentHandler();
@@ -3180,6 +3261,7 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
     const parsed = parseSubtitles(body);
     if (parsed.length === 0) {
       console.warn('AnyLLMTranslate: No cues in YouTube timedtext');
+      requestYoutubeCaptionFallback(track);
       return;
     }
     rawCues = parsed;
@@ -3205,6 +3287,7 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
     originalLanguage,
     settings,
   });
+  if (state.navigationEpoch !== epochAtStart) return;
 
   if (resegmentMode !== 'off') {
     console.log('AnyLLMTranslate: YouTube ASR resegment (proactive)', {
@@ -3225,6 +3308,7 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
     sourceLanguage,
     settings,
     platform,
+    navigationEpoch: epochAtStart,
   });
 }
 

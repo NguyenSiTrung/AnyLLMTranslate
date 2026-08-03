@@ -29,6 +29,11 @@ import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { startTextTrackDiscovery } from '@/inject/textTrackDiscovery';
 import { onMessage } from '@/inject/messageBridge';
 import { startMaxVttPerformanceCapture, resetMaxVttPerformanceCapture, resetMaxVttCaptureForSeek } from '@/inject/maxVttPerformanceCapture';
+import {
+  requestYoutubeNativeCaptions,
+  restoreYoutubeNativeCaptions,
+  startYoutubeMetadataDiscovery,
+} from '@/inject/youtubePlayer';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -38,8 +43,9 @@ export default defineContentScript({
     console.log('[AnyLLMTranslate] MAIN world script injected');
 
     // Register platform handlers
+    const youtubeHandler = new YouTubeHandler();
     registerSubtitleHandlers([
-       new YouTubeHandler(),
+       youtubeHandler,
        new UdemyHandler(),
        new CourseraHandler(),
        new LinkedInHandler(),
@@ -74,6 +80,11 @@ export default defineContentScript({
     // responses on otherwise-extensionless URLs are still caught). URL
     // patterns take precedence — content-type is consulted only on URL miss.
     registry.registerContentTypePatterns(getContentTypePatternsForCurrentHost());
+
+    let youtubeMetadataCleanup: (() => void) | null = null;
+    if (youtubeHandler.detect()) {
+      youtubeMetadataCleanup = startYoutubeMetadataDiscovery(youtubeHandler, bridge);
+    }
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
     const fetchInterceptor = new FetchInterceptor(registry, bridge);
@@ -110,6 +121,14 @@ export default defineContentScript({
       console.log('[AnyLLMTranslate] Max VTT capture reset for seek');
     });
 
+    onMessage('YOUTUBE_REQUEST_CAPTIONS', () => {
+      requestYoutubeNativeCaptions();
+    });
+
+    onMessage('YOUTUBE_RESTORE_CAPTIONS', () => {
+      restoreYoutubeNativeCaptions();
+    });
+
     // Performance-API VTT capture lifecycle (Max). Started only for hbomax;
     // stored so BFCache teardown/restore can stop and restart it.
     let perfCaptureCleanup: (() => void) | null = null;
@@ -121,6 +140,8 @@ export default defineContentScript({
       resetMaxVttPerformanceCapture();
       perfCaptureCleanup?.();
       perfCaptureCleanup = null;
+      youtubeMetadataCleanup?.();
+      youtubeMetadataCleanup = null;
       xhrInterceptor.disable();
       fetchInterceptor.disable();
       mseInterceptor.disable();
@@ -139,6 +160,9 @@ export default defineContentScript({
         mseInterceptor.enable();
         if (perfCaptureCleanup === null && detectCurrentHandler()?.platform === 'hbomax') {
           perfCaptureCleanup = startMaxVttPerformanceCapture(bridge);
+        }
+        if (youtubeMetadataCleanup === null && youtubeHandler.detect()) {
+          youtubeMetadataCleanup = startYoutubeMetadataDiscovery(youtubeHandler, bridge);
         }
         console.log('[AnyLLMTranslate] Interceptors re-enabled after BFCache restore');
       }

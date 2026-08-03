@@ -61,6 +61,10 @@ export type BridgeMessageType =
   | 'SUBTITLE_FETCH_RESPONSE'
   | 'SUBTITLE_CONFIG'
   | 'SUBTITLE_SEEK_RESET'
+  /** ISOLATED coordinator → MAIN: request YouTube to fetch captions. */
+  | 'YOUTUBE_REQUEST_CAPTIONS'
+  /** ISOLATED coordinator → MAIN: restore captions changed by the extension. */
+  | 'YOUTUBE_RESTORE_CAPTIONS'
   /** ISOLATED coordinator → MAIN: bridge may flush early intercept queue. */
   | 'COORDINATOR_READY';
 
