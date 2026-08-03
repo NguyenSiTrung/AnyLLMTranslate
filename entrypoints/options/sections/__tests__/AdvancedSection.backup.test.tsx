@@ -34,7 +34,7 @@ vi.mock('@/entrypoints/options/hooks/useCacheStats', () => ({
 }));
 
 vi.mock('@/lib/config', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/config')>();
+  const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
     savePreImportSnapshot: vi.fn(async () => {}),
