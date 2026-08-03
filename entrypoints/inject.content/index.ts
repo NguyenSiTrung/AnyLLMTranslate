@@ -103,9 +103,8 @@ export default defineContentScript({
     });
 
     // Seek reset: coordinator (ISOLATED world) signals that the user seeked
-    // to a new playback position. Clear the capture buffer + seenUrls so
-    // segments re-fetched for the new position are captured (not skipped)
-    // and the next SUBTITLE_MANIFEST_CUES carries only the new cues.
+    // to a new playback position. Clear capture buffers so segments/cues
+    // re-fetched for the new position are captured without stale data.
     onMessage('SUBTITLE_SEEK_RESET', () => {
       resetMaxVttCaptureForSeek();
       console.log('[AnyLLMTranslate] Max VTT capture reset for seek');
@@ -188,4 +187,3 @@ export default defineContentScript({
     }
   },
 });
-

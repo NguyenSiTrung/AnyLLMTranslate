@@ -11,6 +11,7 @@
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import { OPEN_CUE_END_SENTINEL } from '@/lib/subtitleTiming';
 import { resetMaxVttPerformanceCaptureLock } from '@/inject/maxVttPerformanceCapture';
+import { onMessage } from '@/inject/messageBridge';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import type { SubtitleHandler } from '@/inject/subtitleHandlers/registry';
 import type { SubtitleCue, SubtitleDomCuesPayload } from '@/types/subtitle';
@@ -126,6 +127,27 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
   };
 
+  /**
+   * A seek starts a new rolling timeline. Re-sampling after clearing lastText
+   * is important when the caption at the destination is identical to the
+   * caption before the seek; it is still a new cue at a new playback time.
+   */
+  const resetAndSample = (video: HTMLVideoElement): void => {
+    resetBuffer();
+    sampleCue(video);
+  };
+
+  // The coordinator clears its isolated-world overlay after a debounced seek
+  // reset. Re-seed the source after that clear so a paused/repeated caption is
+  // not lost when no further DOM mutation occurs.
+  const cleanupSeekResetMessage = onMessage('SUBTITLE_SEEK_RESET', () => {
+    if (attached) {
+      resetAndSample(attached.video);
+    } else {
+      resetBuffer();
+    }
+  });
+
   /** Attach the cue observer to a video + caption-overlay pair. Idempotent. */
   const attach = (video: HTMLVideoElement, rootEl: HTMLElement) => {
     // Detach any prior attachment (e.g. player re-mounted).
@@ -144,19 +166,12 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
     };
     video.addEventListener('pause', pauseHandler);
 
-    // On seek, finalize the currently-open cue at the NEW currentTime so its
-    // endTime reflects real playback. A forward seek (e.g. 10s→5min) gives the
-    // cue an honest span ending at 5min; a backward seek clamps to
-    // startTime + 0.1s so the cue is a tiny sliver that vanishes immediately
-    // rather than spanning the jump or lingering as stale text.
-    // (Pre-fix this set endTime = startTime, producing a zero-duration cue that
-    // vanished as if it had never existed — losing the just-displayed caption.)
+    // A seek starts a new timeline. Retaining the old open cue would leave
+    // stale cues in the rolling buffer and, after a backward seek, append cues
+    // out of start-time order. The overlay uses binary search, so discard the
+    // old buffer and sample the destination immediately instead.
     const seekedHandler = () => {
-      if (openCue) {
-        openCue.endTime = Math.max(video.currentTime, openCue.startTime + 0.1);
-        emit(domSource.readActiveLanguage(), domSource.videoIdExtractor?.());
-        openCue = null;
-      }
+      resetAndSample(video);
     };
     video.addEventListener('seeked', seekedHandler);
 
@@ -233,6 +248,7 @@ export function startDomCueSource(handler: SubtitleHandler, bridge: MessageBridg
   }
 
   return () => {
+    cleanupSeekResetMessage();
     documentObserver.disconnect();
     trackObserver?.disconnect();
     detach();

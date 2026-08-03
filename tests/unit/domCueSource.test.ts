@@ -100,11 +100,11 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeUndefined();
   });
 
-  it('caps open cue on pause; seeked finalizes without zero/negative span', async () => {
+  it('caps open cue on pause and reseeds a fresh cue after a backward seek', async () => {
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
 
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 20 });
-    cueEl.textContent = 'Open cue';
+    cueEl.textContent = 'Repeated caption';
     await flushObservers();
 
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 24 });
@@ -113,38 +113,55 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
 
     let lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
     let cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
-    const paused = cues.find((c) => c.text === 'Open cue');
+    const paused = cues.find((c) => c.text === 'Repeated caption');
     expect(paused).toBeDefined();
     expect((paused ?? { endTime: -1 }).endTime).toBe(24);
 
-    // Forward seek
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 30 });
-    cueEl.textContent = 'Open before seek';
-    await flushObservers();
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 35 });
-    video.dispatchEvent(new Event('seeked'));
-    await flushObservers();
-
-    lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
-    cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
-    const forward = cues.find((c) => c.text === 'Open before seek') as SubtitleCue;
-    expect(forward.startTime).toBe(30);
-    expect(forward.endTime).toBe(35);
-    expect(forward.endTime).toBeGreaterThan(forward.startTime);
-
-    // Backward seek
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 40 });
-    cueEl.textContent = 'Open then jump back';
-    await flushObservers();
+    // The caption text remains unchanged after a backward seek. The source must
+    // still emit a new cue at the destination rather than retaining the old cue.
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
     video.dispatchEvent(new Event('seeked'));
     await flushObservers();
 
     lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
     cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
-    const backward = cues.find((c) => c.text === 'Open then jump back') as SubtitleCue;
-    expect(backward.endTime).toBeGreaterThanOrEqual(backward.startTime);
-    expect(backward.endTime - backward.startTime).toBeLessThanOrEqual(1);
+    expect(cues).toHaveLength(1);
+    expect(cues[0]).toMatchObject({
+      startTime: 5,
+      endTime: OPEN_CUE_END_SENTINEL,
+      text: 'Repeated caption',
+    });
+
+    cleanup();
+  });
+
+  it('resets and re-samples on the coordinator seek-reset bridge message', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 2 });
+    cueEl.textContent = 'Bridge reset caption';
+    await flushObservers();
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 8 });
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_SEEK_RESET',
+        requestId: 'seek-reset-1',
+        payload: {},
+      },
+    }));
+    await flushObservers();
+
+    const lastMsg = sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop();
+    const cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
+    expect(cues).toHaveLength(1);
+    expect(cues[0]).toMatchObject({
+      startTime: 8,
+      endTime: OPEN_CUE_END_SENTINEL,
+      text: 'Bridge reset caption',
+    });
 
     cleanup();
   });
