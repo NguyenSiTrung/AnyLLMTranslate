@@ -126,6 +126,28 @@ export function computeImportImpact(
   return { changed, resetToDefaults };
 }
 
+/**
+ * Pick every top-level key of DEFAULT_SETTINGS from a settings-like record
+ * (the zustand store state). Used to capture the exact pre-import config for
+ * the rollback snapshot — includes safeKeyThrottleMigrated, which
+ * extractSettings deliberately omits, and never copies store internals
+ * (isLoaded, zustand methods). Missing keys fall back to defaults so the
+ * result is always a complete ExtensionSettings.
+ */
+export function pickKnownSettings(
+  state: ExtensionSettings | Record<string, unknown>,
+): ExtensionSettings {
+  const source = state as Record<string, unknown>;
+  const defaults = DEFAULT_SETTINGS as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    out[key] = Object.prototype.hasOwnProperty.call(source, key)
+      ? source[key]
+      : defaults[key];
+  }
+  return out as unknown as ExtensionSettings;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunkSize = 8192;

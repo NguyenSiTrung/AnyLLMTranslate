@@ -12,6 +12,7 @@ import {
   decryptBackup,
   detectFormat,
   encryptBackup,
+  pickKnownSettings,
   sanitizeImportObject,
   serializeSettings,
 } from '@/lib/backup';
@@ -296,6 +297,34 @@ describe('computeImportImpact', () => {
   it('replace: nothing customized means no reset warnings', () => {
     const current = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
     expect(computeImportImpact(current, {}, 'replace').resetToDefaults).toEqual([]);
+  });
+});
+
+describe('pickKnownSettings', () => {
+  it('picks every DEFAULT_SETTINGS key and excludes store internals', () => {
+    const state = {
+      ...DEFAULT_SETTINGS,
+      safeKeyThrottleMigrated: true,
+      isLoaded: true,
+      updateSettings: () => {},
+      replaceSettings: () => {},
+    };
+    const picked = pickKnownSettings(state as unknown as Record<string, unknown>);
+    const keys = Object.keys(picked);
+    for (const k of Object.keys(DEFAULT_SETTINGS)) {
+      expect(keys).toContain(k);
+    }
+    expect(keys).not.toContain('isLoaded');
+    expect(keys).not.toContain('updateSettings');
+    expect(keys).not.toContain('replaceSettings');
+    expect(picked.safeKeyThrottleMigrated).toBe(true);
+  });
+
+  it('falls back to DEFAULT_SETTINGS values for missing keys', () => {
+    const picked = pickKnownSettings({} as Record<string, unknown>);
+    expect(picked.targetLanguage).toBe('vi');
+    expect(picked.theme).toBe('blockquote');
+    expect(picked.siteRules).toEqual([]);
   });
 });
 
