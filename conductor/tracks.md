@@ -89,6 +89,7 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(none)*
+## [ ] Track: YouTube Link AI Pre-Align from Settings — paste a YouTube URL in Subtitle Studio to run AI caption re-alignment ahead of playback, without translating (pre-warm the AI re-align cache)
+*Link: [./conductor/tracks/youtube-link-prealign_20260804/](./conductor/tracks/youtube-link-prealign_20260804/)*
 
 ---
