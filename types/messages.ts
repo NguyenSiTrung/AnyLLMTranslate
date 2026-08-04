@@ -56,7 +56,9 @@ export type MessageAction =
   | 'CLEAR_ASR_REALIGN_CACHE'
   | 'ASR_REALIGN_CACHE_STATS'
   | 'ASR_REALIGN_PROGRESS'
+  | 'ASR_REALIGN_PROGRESS_BROADCAST'
   | 'ASR_REALIGN_CACHE_UPDATED'
+  | 'REALIGN_YOUTUBE_URL'
   | 'CLEAR_CACHE'
   | 'WEB_RESUME_LOAD'
   | 'WEB_RESUME_SAVE'
@@ -421,6 +423,47 @@ export interface AsrRealignCacheUpdatedMessage {
   action: 'ASR_REALIGN_CACHE_UPDATED';
 }
 
+/**
+ * Pre-align YouTube ASR captions from a pasted watch URL (Options → Subtitle
+ * Studio → Re-align from link). Runs the AI re-align pipeline ahead of
+ * playback and saves to the AI re-align cache. Never translates.
+ */
+export interface RealignYoutubeUrlMessage {
+  action: 'REALIGN_YOUTUBE_URL';
+  url: string;
+}
+
+/** Typed error codes for the pre-align flow (UI must not parse English strings). */
+export type RealignYoutubeUrlErrorCode =
+  | 'invalid-url'
+  | 'video-unavailable'
+  | 'no-captions'
+  | 'no-asr'
+  | 'fetch-blocked'
+  | 'provider-not-configured'
+  | 'llm-failure';
+
+/** Response shape for REALIGN_YOUTUBE_URL. */
+export interface RealignYoutubeUrlResult {
+  success: boolean;
+  /** 'already-saved' = cache hit, zero LLM calls; 'realigned' = new entry saved. */
+  outcome?: 'already-saved' | 'realigned';
+  errorCode?: RealignYoutubeUrlErrorCode;
+  error?: string;
+}
+
+/**
+ * Background → extension pages (runtime broadcast) with pre-align batch
+ * progress. Tab-less counterpart of ASR_REALIGN_PROGRESS for senders without
+ * a tab id (options page); carries videoId so cards can correlate.
+ */
+export interface AsrRealignProgressBroadcastMessage {
+  action: 'ASR_REALIGN_PROGRESS_BROADCAST';
+  videoId: string;
+  current: number;
+  total: number;
+}
+
 /** Clear cache request from options page → background */
 export interface ClearCacheMessage {
   action: 'CLEAR_CACHE';
@@ -753,7 +796,9 @@ export type ExtensionMessage =
   | ClearAsrRealignCacheMessage
   | AsrRealignCacheStatsMessage
   | AsrRealignProgressMessage
+  | AsrRealignProgressBroadcastMessage
   | AsrRealignCacheUpdatedMessage
+  | RealignYoutubeUrlMessage
   | ClearCacheMessage
   | WebResumeLoadMessage
   | WebResumeSaveMessage

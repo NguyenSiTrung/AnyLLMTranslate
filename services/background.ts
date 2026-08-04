@@ -17,6 +17,7 @@ import type {
   ExtractPdfTermsResult,
   ResegmentYoutubeAsrMessage,
   ResegmentYoutubeAsrResult,
+  RealignYoutubeUrlMessage,
   GetAsrRealignCacheMessage,
   SaveAsrRealignCacheMessage,
   DeleteAsrRealignCacheMessage,
@@ -189,6 +190,7 @@ import {
 } from '@/services/youtubeAsrRealignStore';
 import { hashAsrRealignContent } from '@/lib/youtubeAsrRealignCache';
 import type { YoutubeAsrRealignCacheEntry } from '@/lib/youtubeAsrRealignCache';
+import { runYoutubeLinkPrealign } from '@/services/youtubeLinkPrealign';
 import { recordUsage } from '@/services/statsCollector';
 import { normalizeHost } from '@/services/statsCounters';
 import { invalidateDebugCache } from '@/services/debugLog';
@@ -2426,6 +2428,10 @@ export function handleMessage(
       return handleExtractPdfTerms(message as ExtractPdfTermsMessage);
     case 'RESEGMENT_YOUTUBE_ASR':
       return handleResegmentYoutubeAsr(message as ResegmentYoutubeAsrMessage, _sender);
+    case 'REALIGN_YOUTUBE_URL':
+      return runYoutubeLinkPrealign((message as RealignYoutubeUrlMessage).url, {
+        resolveService: initService,
+      });
     case 'GET_ASR_REALIGN_CACHE':
       return handleGetAsrRealignCache(message as GetAsrRealignCacheMessage);
     case 'SAVE_ASR_REALIGN_CACHE':

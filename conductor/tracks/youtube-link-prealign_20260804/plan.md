@@ -3,17 +3,19 @@
 ## Phase 1: Pure Watch-Page Extraction & Track Selection (TDD)
 <!-- execution: sequential -->
 
-- [ ] Task 1: Failing tests for new pure lib `lib/youtubeWatchPage.ts`
+- [x] Task 1: Failing tests for new pure lib `lib/youtubeWatchPage.ts`
   `extractPlayerResponseFromWatchHtml(html)` (handles `ytInitialPlayerResponse = {…};`
   variants; null on consent/bot/malformed), `selectAsrTrack(tracks)` with typed miss
   reasons (`no-tracks` | `no-asr`), `buildJson3TimedtextUrl(baseUrl)` (append fmt=json3).
 
-- [ ] Task 2: Implement the pure module to green.
+- [x] Task 2: Implement the pure module to green.
 
-- [ ] Task 3: Adapter test — extracted player response feeds the existing
+- [x] Task 3: Adapter test — extracted player response feeds the existing
   `YouTubeHandler.extractAvailableTracks` (no duplicated track parsing).
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+  — Pure lib only; automated gates (19 tests, lint, tsc) green. UI-level manual
+  verification deferred to Phase 5 smoke.
 
 ## Phase 2: Background Orchestration & Permissions (TDD)
 <!-- execution: sequential -->
