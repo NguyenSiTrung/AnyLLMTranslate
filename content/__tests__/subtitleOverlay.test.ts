@@ -338,6 +338,13 @@ describe('content/subtitleOverlay — lifecycle', () => {
     expect(getConfig().fontSize).toBe(20);
   });
 
+  it('reports false when no target video is available', () => {
+    document.body.innerHTML = '';
+
+    expect(initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }])).toBe(false);
+    expect(isOverlayActive()).toBe(false);
+  });
+
   it('syncs active cue by time, hides between cues, mutates in place, and targets videoNode', () => {
     const video = document.createElement('video');
     video.src = 'test.mp4';

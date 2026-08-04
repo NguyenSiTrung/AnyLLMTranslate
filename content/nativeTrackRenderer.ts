@@ -27,13 +27,14 @@ export class NativeTrackRenderer implements SubtitleRenderer {
     cues: SubtitleCue[],
     config: SubtitleDisplayConfig,
     _video: HTMLVideoElement,
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.displayMode = config.displayMode ?? 'bilingual';
     // If re-initialized, clear any prior state first.
     this.destroyInternal();
     this.createTracks(_video);
     this.seenKeys.clear();
     this.addCues(cues);
+    return true;
   }
 
   private createTracks(video: HTMLVideoElement): void {

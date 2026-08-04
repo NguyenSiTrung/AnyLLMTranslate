@@ -31,7 +31,7 @@ export interface SubtitleRenderer {
     cues: SubtitleCue[],
     config: SubtitleDisplayConfig,
     video: HTMLVideoElement,
-  ): Promise<void>;
+  ): Promise<boolean>;
   updateCues(cues: SubtitleCue[]): void;
   destroy(): void;
 }
@@ -41,12 +41,9 @@ export class OverlayRenderer implements SubtitleRenderer {
   async initialize(
     cues: SubtitleCue[],
     config: SubtitleDisplayConfig,
-    // The legacy overlay finds its own <video> internally (findVideoElement),
-    // so video is accepted to satisfy the interface but intentionally not
-    // forwarded — keeps the overlay's 2-arg call contract stable.
-    _video: HTMLVideoElement,
-  ): Promise<void> {
-    initializeOverlay(cues, config);
+    video: HTMLVideoElement,
+  ): Promise<boolean> {
+    return initializeOverlay(cues, config, video);
   }
 
   updateCues(cues: SubtitleCue[]): void {

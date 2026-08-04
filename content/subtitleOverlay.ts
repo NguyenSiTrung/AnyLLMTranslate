@@ -549,12 +549,16 @@ function cleanupResizeObserver(): void {
 /**
  * Initialize the subtitle overlay with subtitle cues.
  */
-export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayConfig>, videoNode?: HTMLVideoElement): void {
+export function initializeOverlay(
+  cues: SubtitleCue[],
+  config?: Partial<OverlayConfig>,
+  videoNode?: HTMLVideoElement,
+): boolean {
   // Use provided video element or find one
   const video = videoNode || findVideoElement();
   if (!video) {
     console.warn('AnyLLMTranslate: No video element found for subtitle overlay');
-    return;
+    return false;
   }
 
   // Clean up existing overlay if any
@@ -578,6 +582,7 @@ export function initializeOverlay(cues: SubtitleCue[], config?: Partial<OverlayC
   setupResizeObserver(video);
 
   overlayState.isAttached = true;
+  return true;
 
   // Apply fullscreen logic immediately if already in fullscreen
   if (getActiveFullscreenElement()) {
