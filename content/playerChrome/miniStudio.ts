@@ -1,9 +1,12 @@
 /**
- * On-player mini studio panel — richer subtitle controls in shadow DOM.
+ * On-player mini studio panel — glass UI, sectioned layout, live preview.
+ * Presentation rewired onto miniStudioView; all writes still flow through prefs.ts.
  */
 
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
-import { PLAYER_CHROME_PANEL_CLASS } from './types';
+import { onSettingsChange } from '@/lib/config';
+import { isContextInvalidated } from '@/lib/utils';
+import type { ChromeButtonState } from './button';
 import type { MiniStudioSnapshot } from './prefs';
 import {
   hydrateLocalKnobs,
@@ -13,107 +16,12 @@ import {
   setSubtitlesEnabled,
   setTabKnob,
 } from './prefs';
-
-const PANEL_CSS = `
-.${PLAYER_CHROME_PANEL_CLASS} {
-  pointer-events: auto;
-  width: 280px;
-  max-height: min(70vh, 420px);
-  overflow: auto;
-  box-sizing: border-box;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(63,63,70,0.9);
-  background: rgba(9,9,11,0.94);
-  color: #e4e4e7;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-  font: 12px/1.4 system-ui, -apple-system, sans-serif;
-}
-.${PLAYER_CHROME_PANEL_CLASS}[hidden] { display: none !important; }
-.${PLAYER_CHROME_PANEL_CLASS} h2 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fafafa;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .row-inline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.${PLAYER_CHROME_PANEL_CLASS} label {
-  color: #a1a1aa;
-  font-size: 11px;
-  font-weight: 500;
-}
-.${PLAYER_CHROME_PANEL_CLASS} select,
-.${PLAYER_CHROME_PANEL_CLASS} input[type="range"] {
-  width: 100%;
-  box-sizing: border-box;
-}
-.${PLAYER_CHROME_PANEL_CLASS} select {
-  background: #18181b;
-  color: #e4e4e7;
-  border: 1px solid #3f3f46;
-  border-radius: 8px;
-  padding: 6px 8px;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .knobs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .status {
-  min-height: 16px;
-  color: #67e8f9;
-  font-size: 11px;
-  margin-bottom: 10px;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .footer-btn {
-  width: 100%;
-  pointer-events: auto;
-  border: 1px solid #3f3f46;
-  background: #27272a;
-  color: #f4f4f5;
-  border-radius: 8px;
-  padding: 8px 10px;
-  cursor: pointer;
-  font: 600 11px/1 system-ui, sans-serif;
-}
-.${PLAYER_CHROME_PANEL_CLASS} .footer-btn:hover {
-  border-color: #0ea5e9;
-  color: #fff;
-}
-.${PLAYER_CHROME_PANEL_CLASS} input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: #0ea5e9;
-}
-`;
-
-const KNOB_OPTIONS: { knob: keyof ProfileKnobs; opts: string[] }[] = [
-  { knob: 'faithfulness', opts: ['auto', 'literal', 'balanced', 'idiomatic'] },
-  { knob: 'brevity', opts: ['auto', 'relaxed', 'moderate', 'terse'] },
-  { knob: 'register', opts: ['auto', 'formal', 'neutral', 'casual'] },
-  { knob: 'profanity', opts: ['auto', 'preserve', 'soften', 'remove'] },
-];
-
-const STATUS_LABEL: Record<string, string> = {
-  idle: 'Ready',
-  waiting: 'Waiting for captions…',
-  translating: 'Translating…',
-  error: 'Translation error',
-  disabled: 'Subtitles off',
-};
+import {
+  buildMiniStudioView,
+  setStatusPill,
+  updatePreview,
+  type MiniStudioView,
+} from './miniStudioView';
 
 export interface MiniStudioControllers {
   open(): Promise<void>;
@@ -122,6 +30,10 @@ export interface MiniStudioControllers {
   refresh(): Promise<void>;
   destroy(): void;
 }
+
+/** Slightly longer than the 160ms panel transition so the close fade completes
+ *  before `hidden` is applied. */
+const CLOSE_HIDE_MS = 170;
 
 function openFullSubtitleStudio(): void {
   let url: string;
@@ -157,15 +69,9 @@ function openFullSubtitleStudio(): void {
   }
 }
 
-function fillSelect(select: HTMLSelectElement, values: string[], current: string): void {
-  select.innerHTML = '';
-  for (const value of values) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = value;
-    select.appendChild(opt);
-  }
-  select.value = values.includes(current) ? current : values[0] ?? '';
+function buttonStateFromSnapshot(snap: MiniStudioSnapshot): ChromeButtonState {
+  if (!snap.enabled) return 'off';
+  return snap.status === 'translating' ? 'translating' : 'enabled';
 }
 
 export function attachMiniStudio(args: {
@@ -173,114 +79,66 @@ export function attachMiniStudio(args: {
   anchorButton: HTMLButtonElement;
   panelSlot?: HTMLElement | null;
   onOpenChange: (open: boolean) => void;
+  setButtonState?: (state: ChromeButtonState) => void;
 }): MiniStudioControllers {
-  const style = document.createElement('style');
-  style.setAttribute('data-anyllm-mini-studio', '1');
-  style.textContent = PANEL_CSS;
-
-  const panel = document.createElement('div');
-  panel.className = PLAYER_CHROME_PANEL_CLASS;
-  panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Subtitle mini studio');
-  panel.hidden = true;
-  panel.innerHTML = `
-    <h2>Subtitle studio</h2>
-    <div class="row-inline">
-      <label for="anyllm-ms-enable">Enable subtitles</label>
-      <input id="anyllm-ms-enable" data-action="enable" type="checkbox" />
-    </div>
-    <div class="row">
-      <label for="anyllm-ms-display">Display</label>
-      <select id="anyllm-ms-display" data-action="displayMode">
-        <option value="bilingual">Bilingual</option>
-        <option value="translation-only">Translation only</option>
-      </select>
-    </div>
-    <div class="row">
-      <label for="anyllm-ms-font">Font size <span data-role="fontValue">18</span>px</label>
-      <input id="anyllm-ms-font" data-action="fontSize" type="range" min="12" max="36" step="1" />
-    </div>
-    <div class="row">
-      <label for="anyllm-ms-position">Position</label>
-      <select id="anyllm-ms-position" data-action="position">
-        <option value="bottom">Bottom</option>
-        <option value="top">Top</option>
-      </select>
-    </div>
-    <div class="row">
-      <label for="anyllm-ms-opacity">Background <span data-role="opacityValue">70</span>%</label>
-      <input id="anyllm-ms-opacity" data-action="opacity" type="range" min="0" max="100" step="5" />
-    </div>
-    <div class="knobs" data-role="knobs"></div>
-    <div class="row">
-      <label for="anyllm-ms-list">Glossary list</label>
-      <select id="anyllm-ms-list" data-action="glossary"></select>
-    </div>
-    <div class="status" data-role="status" aria-live="polite"></div>
-    <button type="button" class="footer-btn" data-action="open-options">Open full Subtitle Studio</button>
-  `;
+  const view: MiniStudioView = buildMiniStudioView();
+  const panel = view.panel;
 
   const parent = args.panelSlot ?? args.shadow;
-  parent.append(style, panel);
-
-  const knobsRoot = panel.querySelector('[data-role="knobs"]') as HTMLElement;
-  for (const { knob, opts } of KNOB_OPTIONS) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const label = document.createElement('label');
-    label.textContent = knob;
-    label.htmlFor = `anyllm-ms-knob-${knob}`;
-    const select = document.createElement('select');
-    select.id = `anyllm-ms-knob-${knob}`;
-    select.dataset.action = 'knob';
-    select.dataset.knob = knob;
-    fillSelect(select, opts, 'auto');
-    row.append(label, select);
-    knobsRoot.appendChild(row);
-  }
+  parent.append(view.style, panel);
 
   let open = false;
   let destroyed = false;
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const enableEl = panel.querySelector('[data-action="enable"]') as HTMLInputElement;
-  const displayEl = panel.querySelector('[data-action="displayMode"]') as HTMLSelectElement;
-  const fontEl = panel.querySelector('[data-action="fontSize"]') as HTMLInputElement;
-  const fontValueEl = panel.querySelector('[data-role="fontValue"]') as HTMLElement;
-  const positionEl = panel.querySelector('[data-action="position"]') as HTMLSelectElement;
-  const opacityEl = panel.querySelector('[data-action="opacity"]') as HTMLInputElement;
-  const opacityValueEl = panel.querySelector('[data-role="opacityValue"]') as HTMLElement;
-  const glossaryEl = panel.querySelector('[data-action="glossary"]') as HTMLSelectElement;
-  const statusEl = panel.querySelector('[data-role="status"]') as HTMLElement;
-  const optionsBtn = panel.querySelector('[data-action="open-options"]') as HTMLButtonElement;
+  function currentPreviewArgs(): {
+    fontSize: number;
+    backgroundOpacity: number;
+    position: 'top' | 'bottom';
+    displayMode: string;
+  } {
+    return {
+      fontSize: Number(view.fontSize.input.value),
+      backgroundOpacity: Number(view.opacity.input.value) / 100,
+      position: view.position.value() as 'top' | 'bottom',
+      displayMode: view.displayMode.value(),
+    };
+  }
 
   function applySnapshot(snap: MiniStudioSnapshot): void {
-    enableEl.checked = snap.enabled;
-    displayEl.value = snap.displayMode;
-    fontEl.value = String(snap.fontSize);
-    fontValueEl.textContent = String(snap.fontSize);
-    positionEl.value = snap.position;
+    view.enable.input.checked = snap.enabled;
+    view.displayMode.setValue(snap.displayMode);
+    view.fontSize.setValue(snap.fontSize);
+    view.fontValue.textContent = String(snap.fontSize);
+    view.position.setValue(snap.position);
     const pct = Math.round(snap.backgroundOpacity * 100);
-    opacityEl.value = String(pct);
-    opacityValueEl.textContent = String(pct);
+    view.opacity.setValue(pct);
+    view.opacityValue.textContent = String(pct);
     hydrateLocalKnobs(snap.knobs);
-    for (const select of panel.querySelectorAll<HTMLSelectElement>('select[data-action="knob"]')) {
+    for (const select of view.knobSelects) {
       const knob = select.dataset.knob as keyof ProfileKnobs;
-      const current = snap.knobs[knob];
-      select.value = current ?? 'auto';
+      select.value = snap.knobs[knob] ?? 'auto';
     }
-    glossaryEl.innerHTML = '';
+    view.glossary.innerHTML = '';
     const none = document.createElement('option');
     none.value = '';
     none.textContent = 'None';
-    glossaryEl.appendChild(none);
+    view.glossary.appendChild(none);
     for (const list of snap.lists) {
       const opt = document.createElement('option');
       opt.value = list.id;
       opt.textContent = list.name;
-      glossaryEl.appendChild(opt);
+      view.glossary.appendChild(opt);
     }
-    glossaryEl.value = snap.activeListId ?? '';
-    statusEl.textContent = STATUS_LABEL[snap.status] ?? snap.status;
+    view.glossary.value = snap.activeListId ?? '';
+    setStatusPill(view.statusPill, view.statusLabel, snap.status);
+    updatePreview(view.preview, {
+      fontSize: snap.fontSize,
+      backgroundOpacity: snap.backgroundOpacity,
+      position: snap.position,
+      displayMode: snap.displayMode,
+    });
+    args.setButtonState?.(buttonStateFromSnapshot(snap));
   }
 
   async function refresh(): Promise<void> {
@@ -293,7 +151,15 @@ export function attachMiniStudio(args: {
   async function openPanel(): Promise<void> {
     if (destroyed || open) return;
     open = true;
+    if (closeTimer != null) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
     panel.hidden = false;
+    // Next frame so the open transition actually runs from the initial state.
+    requestAnimationFrame(() => {
+      if (open && !destroyed) panel.classList.add('open');
+    });
     args.onOpenChange(true);
     await refresh();
   }
@@ -301,7 +167,11 @@ export function attachMiniStudio(args: {
   function closePanel(): void {
     if (destroyed || !open) return;
     open = false;
-    panel.hidden = true;
+    panel.classList.remove('open');
+    closeTimer = setTimeout(() => {
+      closeTimer = null;
+      if (!open && !destroyed) panel.hidden = true;
+    }, CLOSE_HIDE_MS);
     args.onOpenChange(false);
   }
 
@@ -323,43 +193,67 @@ export function attachMiniStudio(args: {
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('pointerdown', onPointerDown, true);
 
-  enableEl.addEventListener('change', () => {
-    void setSubtitlesEnabled(enableEl.checked).then(() => refresh());
+  // Keep the anchor button state (and an open panel) in sync with external
+  // settings writes (popup/options). Event-driven — no polling.
+  let unsubscribeSettings: (() => void) | null = null;
+  if (!isContextInvalidated()) {
+    try {
+      unsubscribeSettings = onSettingsChange(() => {
+        if (!destroyed) void refresh();
+      });
+    } catch {
+      /* no extension context */
+    }
+  }
+
+  view.enable.input.addEventListener('change', () => {
+    void setSubtitlesEnabled(view.enable.input.checked).then(() => refresh());
   });
-  displayEl.addEventListener('change', () => {
-    void setAppearance({
-      displayMode: displayEl.value as MiniStudioSnapshot['displayMode'],
-    }).then(() => refresh());
+  for (const input of view.displayMode.inputs) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      void setAppearance({
+        displayMode: input.value as MiniStudioSnapshot['displayMode'],
+      }).then(() => refresh());
+    });
+  }
+  view.fontSize.input.addEventListener('input', () => {
+    view.fontValue.textContent = view.fontSize.input.value;
+    updatePreview(view.preview, currentPreviewArgs());
   });
-  fontEl.addEventListener('input', () => {
-    fontValueEl.textContent = fontEl.value;
+  view.fontSize.input.addEventListener('change', () => {
+    void setAppearance({ fontSize: Number(view.fontSize.input.value) }).then(() => refresh());
   });
-  fontEl.addEventListener('change', () => {
-    void setAppearance({ fontSize: Number(fontEl.value) }).then(() => refresh());
+  for (const input of view.position.inputs) {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      void setAppearance({
+        position: input.value as MiniStudioSnapshot['position'],
+      }).then(() => refresh());
+    });
+  }
+  view.opacity.input.addEventListener('input', () => {
+    view.opacityValue.textContent = view.opacity.input.value;
+    updatePreview(view.preview, currentPreviewArgs());
   });
-  positionEl.addEventListener('change', () => {
-    void setAppearance({
-      position: positionEl.value as MiniStudioSnapshot['position'],
-    }).then(() => refresh());
-  });
-  opacityEl.addEventListener('input', () => {
-    opacityValueEl.textContent = opacityEl.value;
-  });
-  opacityEl.addEventListener('change', () => {
-    void setAppearance({ backgroundOpacity: Number(opacityEl.value) / 100 }).then(() =>
+  view.opacity.input.addEventListener('change', () => {
+    void setAppearance({ backgroundOpacity: Number(view.opacity.input.value) / 100 }).then(() =>
       refresh(),
     );
   });
-  glossaryEl.addEventListener('change', () => {
-    const id = glossaryEl.value || null;
+  view.glossary.addEventListener('change', () => {
+    const id = view.glossary.value || null;
     void setActiveGlossaryList(id).then(() => refresh());
   });
-  optionsBtn.addEventListener('click', (e) => {
+  view.optionsBtn.addEventListener('click', (e) => {
     e.preventDefault();
     openFullSubtitleStudio();
   });
+  view.closeBtn.addEventListener('click', () => {
+    closePanel();
+  });
 
-  for (const select of panel.querySelectorAll<HTMLSelectElement>('select[data-action="knob"]')) {
+  for (const select of view.knobSelects) {
     select.addEventListener('change', () => {
       const knob = select.dataset.knob as keyof ProfileKnobs;
       setTabKnob(knob, select.value);
@@ -375,10 +269,16 @@ export function attachMiniStudio(args: {
     destroy() {
       destroyed = true;
       open = false;
+      if (closeTimer != null) {
+        clearTimeout(closeTimer);
+        closeTimer = null;
+      }
+      unsubscribeSettings?.();
+      unsubscribeSettings = null;
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('pointerdown', onPointerDown, true);
       panel.remove();
-      style.remove();
+      view.style.remove();
     },
   };
 }
