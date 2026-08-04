@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { runWithConcurrency } from '../concurrency';
 
 describe('runWithConcurrency', () => {
-  it('preserves order, caps concurrency, handles empty/oversize caps, and injected delay', async () => {
+  it('preserves order, caps concurrency, handles empty/oversize caps, injected delay, indexes, rejects concurrency < 1, and surfaces worker rejections', async () => {
     const delayed = await runWithConcurrency(
       [0, 1, 2, 3],
       async (item) => {
@@ -54,9 +54,7 @@ describe('runWithConcurrency', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
 
-  it('passes indexes, rejects concurrency < 1, and surfaces worker rejections', async () => {
     const seen: number[] = [];
     await runWithConcurrency(
       ['a', 'b', 'c'],

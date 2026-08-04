@@ -19,7 +19,7 @@ describe('player chrome mounts', () => {
     __setPlayerChromeAdaptersForTest([]);
   });
 
-  it('mounts floating host with shadow button and toggles visibility', () => {
+  it('mounts floating host with shadow button and toggles visibility; prefers native mount when the adapter provides a node', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     const video = document.createElement('video');
@@ -53,19 +53,18 @@ describe('player chrome mounts', () => {
     shell.setVisible(true);
     shell.destroy();
     expect(document.querySelector(`.${PLAYER_CHROME_HOST_CLASS}`)).toBeNull();
-  });
 
-  it('prefers native mount when adapter provides node', () => {
+    // Native mount: adapter-provided node hosts the chrome.
     const bar = document.createElement('div');
     bar.id = 'right-controls';
     document.body.appendChild(bar);
-    const onToggle = vi.fn();
-    const shell = createNativeShell({ mountNode: bar, onToggle });
+    const onToggle2 = vi.fn();
+    const native = createNativeShell({ mountNode: bar, onToggle: onToggle2 });
     expect(bar.querySelector(`.${PLAYER_CHROME_HOST_CLASS}`)).toBeTruthy();
-    expect(shell.getMountMode()).toBe('native');
-    shell.button.click();
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    shell.destroy();
+    expect(native.getMountMode()).toBe('native');
+    native.button.click();
+    expect(onToggle2).toHaveBeenCalledTimes(1);
+    native.destroy();
     expect(bar.querySelector(`.${PLAYER_CHROME_HOST_CLASS}`)).toBeNull();
   });
 });

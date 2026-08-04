@@ -29,7 +29,7 @@ describe('Platform Subtitle Handlers', () => {
     });
   });
 
-  it('handles YouTube timedtext patterns and language extractions', () => {
+  it('handles YouTube timedtext patterns and language extractions, plus Youku, Disney+, WeTV, and Generic fallback handlers', () => {
     const handler = new YouTubeHandler();
     expect(handler.detect()).toBe(true);
     expect(handler.isWatchPage()).toBe(true);
@@ -42,9 +42,7 @@ describe('Platform Subtitle Handlers', () => {
     if (languageExtractor) {
       expect(languageExtractor(new URL(url))).toBe('en');
     }
-  });
 
-  it('handles Youku, Disney+, WeTV, and Generic fallback handlers', () => {
     // Youku language map (handler detect is hostname-bound)
     expect(youkuCodeToLanguage('chs')).toBe('zh-Hans');
     expect(youkuCodeToLanguage('en')).toBe('en');

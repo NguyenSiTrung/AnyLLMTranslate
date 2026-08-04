@@ -10,15 +10,13 @@ const activeList: NamedGlossaryList = {
 };
 
 describe('mergeSuggestionMaps', () => {
-  it('keeps existing on empty incoming; accumulates new names and overwrites same-source targets', () => {
+  it('keeps existing on empty incoming, overwrites same-source targets, and prefers existing keys when capping', () => {
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, {})).toEqual({ Elsa: '艾莎' });
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, { '': 'x', Bob: '' })).toEqual({ Elsa: '艾莎' });
     expect(
       mergeSuggestionMaps({ Elsa: '艾莎' }, { Anna: '安娜', Elsa: '艾尔莎' }),
     ).toEqual({ Elsa: '艾尔莎', Anna: '安娜' });
-  });
 
-  it('prefers existing keys when capping', () => {
     const existing = { A: '1', B: '2' };
     const incoming = { C: '3', D: '4' };
     expect(mergeSuggestionMaps(existing, incoming, 3)).toEqual({ A: '1', B: '2', C: '3' });
@@ -26,7 +24,7 @@ describe('mergeSuggestionMaps', () => {
 });
 
 describe('buildSuggestionRows', () => {
-  it('excludes active-list sources case-insensitively; sorts stably without mutating input order', () => {
+  it('excludes active-list sources case-insensitively, sorts stably without mutating input order, and caps rows at the limit (default 30)', () => {
     expect(buildSuggestionRows({ ALICE: '艾丽斯', Bob: '鲍勃' }, activeList)).toEqual([
       { source: 'Bob', target: '鲍勃' },
     ]);
@@ -39,15 +37,13 @@ describe('buildSuggestionRows', () => {
       { source: 'zoe', target: '佐伊' },
     ]);
     expect(Object.keys(auto)).toEqual(['zoe', 'Amy', 'amy']);
-  });
 
-  it('caps rows at the requested limit and defaults to 30', () => {
-    const auto = Object.fromEntries(
+    const capped = Object.fromEntries(
       Array.from({ length: 35 }, (_, index) => [`Name${String(index).padStart(2, '0')}`, `${index}`]),
     );
 
-    expect(buildSuggestionRows(auto, undefined)).toHaveLength(30);
-    expect(buildSuggestionRows(auto, undefined, 2)).toEqual([
+    expect(buildSuggestionRows(capped, undefined)).toHaveLength(30);
+    expect(buildSuggestionRows(capped, undefined, 2)).toEqual([
       { source: 'Name00', target: '0' },
       { source: 'Name01', target: '1' },
     ]);

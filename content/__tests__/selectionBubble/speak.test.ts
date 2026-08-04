@@ -72,7 +72,7 @@ describe('SpeakController', () => {
     expect(c.isSpeaking()).toBe(false);
   });
 
-  it('speakSmart uses browser when no provider credentials', async () => {
+  it('speakSmart falls back to browser without provider credentials and throws when disabled', async () => {
     vi.mocked(loadSettings).mockResolvedValue({
       tts: {
         enabled: true,
@@ -103,9 +103,8 @@ describe('SpeakController', () => {
     expect(utt.rate).toBe(1.1);
     expect(utt.lang).toBe('vi-VN');
     expect(utt.voice?.lang).toBe('vi-VN');
-  });
 
-  it('speakSmart throws when disabled', async () => {
+    // Disabled TTS → speakSmart rejects.
     vi.mocked(loadSettings).mockResolvedValue({
       tts: {
         enabled: false,
@@ -118,8 +117,8 @@ describe('SpeakController', () => {
       provider: { baseUrl: '', apiKey: '', requiresApiKey: true },
     } as never);
 
-    const c = new SpeakController();
-    await expect(c.speakSmart('hello')).rejects.toThrow(/disabled/i);
+    const c2 = new SpeakController();
+    await expect(c2.speakSmart('hello')).rejects.toThrow(/disabled/i);
   });
 
   it('speakSmart prefers browser voice matching lang over provider TTS', async () => {
@@ -190,15 +189,15 @@ describe('SpeakController', () => {
     expect(utt.text).toBe('Xin chào');
     expect(utt.lang).toBe('vi-VN');
     expect(utt.voice?.lang).toBe('vi-VN');
-  });
 
-  it('speakSmart with language override uses provider even when browser voice matches', async () => {
-    const sendMessage = vi.fn().mockResolvedValue({
+    // With a language override, the provider is used even when a browser
+    // voice matches the language.
+    const sendMessage2 = vi.fn().mockResolvedValue({
       success: true,
       audioBase64: btoa('fake'),
       mimeType: 'audio/mpeg',
     });
-    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    vi.stubGlobal('chrome', { runtime: { sendMessage: sendMessage2 } });
     vi.stubGlobal(
       'Audio',
       class {
@@ -268,17 +267,18 @@ describe('SpeakController', () => {
       },
     } as never);
 
-    const c = new SpeakController();
-    const result = await c.speakSmart('Xin chào', 'vi');
-    expect(result).toEqual({ backend: 'provider' });
-    expect(sendMessage).toHaveBeenCalledWith(
+    const c2 = new SpeakController();
+    const speakCallsBefore = speakMock.mock.calls.length;
+    const result2 = await c2.speakSmart('Xin chào', 'vi');
+    expect(result2).toEqual({ backend: 'provider' });
+    expect(sendMessage2).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'SYNTHESIZE_SPEECH',
         text: 'Xin chào',
         lang: 'vi',
       }),
     );
-    expect(speakMock).not.toHaveBeenCalled();
+    expect(speakMock.mock.calls.length).toBe(speakCallsBefore);
   });
 
   it('speakSmart ignores language override when preferredBackend is browser', async () => {

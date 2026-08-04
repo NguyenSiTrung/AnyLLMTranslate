@@ -74,7 +74,7 @@ function hangingArticleWords(): AsrWord[] {
 }
 
 describe('flatten / language / split / merge pipeline pieces', () => {
-  it('flattens JSON3 words, skips empties, handles coarse offsets and empty input', () => {
+  it('flattens JSON3 words (skipping empties, coarse offsets), resolves language tables, and splits/merges word groups', () => {
     const words = flattenJson3Words(ASR_EVENTS);
     expect(words.length).toBeGreaterThan(5);
     expect(words[0]).toMatchObject({ text: 'Hello', startMs: 0 });
@@ -101,9 +101,7 @@ describe('flatten / language / split / merge pipeline pieces', () => {
     expect(coarse[0].startMs).toBe(1000);
     expect(flattenJson3Words([])).toEqual([]);
     expect(flattenJson3Words([{ tStartMs: 0, dDurationMs: 100 }])).toEqual([]);
-  });
 
-  it('resolves language tables and splits/merges word groups', () => {
     expect(DEFAULT_YOUTUBE_ASR_CONFIG.enable).toBe(true);
     expect(DEFAULT_YOUTUBE_ASR_CONFIG.aiEnable).toBe(false);
 

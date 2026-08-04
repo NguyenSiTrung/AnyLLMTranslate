@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { extractProperNouns } from '@/services/subtitleResponse';
 
 describe('extractProperNouns', () => {
-  it('extracts well-formed maps and ignores invalid/missing properNouns', () => {
+  it('extracts well-formed maps, ignores invalid/missing properNouns, and strips markdown fences and <think> blocks before parsing', () => {
     expect(
       extractProperNouns(
         JSON.stringify({
@@ -25,9 +25,7 @@ describe('extractProperNouns', () => {
     for (const response of invalid) {
       expect(extractProperNouns(response)).toBeUndefined();
     }
-  });
 
-  it('strips markdown fences and <think> blocks before parsing', () => {
     const fenced =
       '```json\n' +
       JSON.stringify({

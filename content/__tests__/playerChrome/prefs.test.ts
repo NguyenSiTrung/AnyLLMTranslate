@@ -76,7 +76,7 @@ describe('playerChrome prefs', () => {
     expect(snap.status).toBe('disabled');
   });
 
-  it('setSubtitlesEnabled true clears site disable and sets enabled', async () => {
+  it('setSubtitlesEnabled clears site disable and sets enabled; setAppearance updates settings and live overlay config; setTabKnob applies or clears the override; setActiveGlossaryList writes subtitleListBySite', async () => {
     await setSubtitlesEnabled(true);
     expect(updateSettings).toHaveBeenCalled();
     const arg = updateSettings.mock.calls[0][0] as {
@@ -84,25 +84,19 @@ describe('playerChrome prefs', () => {
     };
     expect(arg.subtitleSettings.enabled).toBe(true);
     expect(arg.subtitleSettings.disabledSubtitleSites).not.toContain('youtube');
-  });
 
-  it('setAppearance updates settings and live overlay config', async () => {
     await setAppearance({ fontSize: 22, displayMode: 'translation-only' });
     expect(updateSettings).toHaveBeenCalled();
     expect(updateConfig).toHaveBeenCalledWith(
       expect.objectContaining({ fontSize: 22, displayMode: 'translation-only' }),
     );
-  });
 
-  it('setTabKnob auto clears key via applySubtitleKnobOverride', () => {
     hydrateLocalKnobs({});
     setTabKnob('faithfulness', 'literal');
     expect(applySubtitleKnobOverride).toHaveBeenCalledWith({ faithfulness: 'literal' });
     setTabKnob('faithfulness', 'auto');
     expect(applySubtitleKnobOverride).toHaveBeenCalledWith(null);
-  });
 
-  it('setActiveGlossaryList writes subtitleListBySite', async () => {
     await setActiveGlossaryList('l1');
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({

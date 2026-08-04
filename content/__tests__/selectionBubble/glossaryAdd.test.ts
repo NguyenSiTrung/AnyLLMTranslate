@@ -17,14 +17,12 @@ describe('addToGlobalGlossary', () => {
     vi.mocked(updateSettings).mockReset();
   });
 
-  it('returns invalid for empty source/target', async () => {
+  it('returns invalid for empty source/target, duplicate when the source exists, and appends a new entry otherwise', async () => {
     await expect(addToGlobalGlossary('  ', 'x')).resolves.toEqual({
       status: 'invalid',
       reason: 'Missing source or translation',
     });
-  });
 
-  it('returns duplicate when source exists', async () => {
     vi.mocked(loadSettings).mockResolvedValue({
       glossary: [{ id: '1', source: 'Hello', target: 'Xin chào' }],
     } as never);
@@ -32,9 +30,7 @@ describe('addToGlobalGlossary', () => {
       status: 'duplicate',
     });
     expect(updateSettings).not.toHaveBeenCalled();
-  });
 
-  it('appends new entry', async () => {
     vi.mocked(loadSettings).mockResolvedValue({ glossary: [] } as never);
     vi.mocked(updateSettings).mockImplementation(async (p) => p as never);
     const r = await addToGlobalGlossary('foo', 'bar');

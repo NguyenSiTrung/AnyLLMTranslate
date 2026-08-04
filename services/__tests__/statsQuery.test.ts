@@ -36,7 +36,7 @@ describe('statsQuery', () => {
     vi.clearAllMocks();
   });
 
-  it('period windows, aggregation helpers, percent deltas, and top entries', () => {
+  it('period windows, aggregation helpers, percent deltas, top entries, and buildInsights/loadDaysForPeriod cache mentions and period filters', async () => {
     const now = new Date(2026, 6, 9, 15, 0, 0); // local Jul 9, 2026
     const current = listPeriodDates('7d', now);
     expect(current).toEqual([
@@ -99,9 +99,7 @@ describe('statsQuery', () => {
       { key: 'example.com', value: 80 },
     ]);
     expect(topEntries([], 'characters', 5)).toEqual([]);
-  });
 
-  it('buildInsights and loadDaysForPeriod cover cache mentions and period filters', async () => {
     const rich = buildInsights(
       {
         ...ZERO_COUNTERS,
@@ -131,8 +129,8 @@ describe('statsQuery', () => {
     memory.set('2026-06-01', emptyDay('2026-06-01', { characters: 99 }));
     memory.set('2026-01-01', emptyDay('2026-01-01', { characters: 1 }));
 
-    const now = new Date(2026, 6, 9, 12, 0, 0);
-    const week = await loadDaysForPeriod('7d', now);
+    const loadNow = new Date(2026, 6, 9, 12, 0, 0);
+    const week = await loadDaysForPeriod('7d', loadNow);
     expect(week.map((d) => d.date).sort()).toEqual(['2026-07-08', '2026-07-09']);
 
     const all = await loadDaysForPeriod('all');

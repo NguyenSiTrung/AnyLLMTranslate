@@ -18,7 +18,7 @@ describe('playerChrome host', () => {
     });
   });
 
-  it('resolvePlayerTargets returns null video when none, and picks primary video with optional player root', () => {
+  it('resolvePlayerTargets returns null video when none and picks primary video with optional player root; fullscreen mount parent returns the container; adapter registry matches youtube only', () => {
     const none = resolvePlayerTargets(document);
     expect(none.video).toBeNull();
 
@@ -41,9 +41,7 @@ describe('playerChrome host', () => {
     const r = resolvePlayerTargets(document);
     expect(r.video).toBe(v);
     expect(r.playerRoot === v || r.playerRoot instanceof HTMLElement).toBe(true);
-  });
 
-  it('getFullscreenMountParent returns container element not video', () => {
     const shell = document.createElement('div');
     document.body.appendChild(shell);
     Object.defineProperty(document, 'fullscreenElement', {
@@ -51,9 +49,7 @@ describe('playerChrome host', () => {
       get: () => shell,
     });
     expect(getFullscreenMountParent(document)).toBe(shell);
-  });
 
-  it('getPlayerChromeAdapter returns null for unknown hosts and matches youtube', () => {
     expect(getPlayerChromeAdapter('www.example.com')).toBeNull();
     expect(getPlayerChromeAdapter('www.youtube.com')?.id).toBe('youtube');
   });

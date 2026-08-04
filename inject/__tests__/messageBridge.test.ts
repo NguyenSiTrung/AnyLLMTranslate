@@ -32,7 +32,7 @@ describe('messageBridge early coordinator queue', () => {
     vi.resetModules();
   });
 
-  it('queues SUBTITLE_INTERCEPTED / SUBTITLE_TRACKS_DISCOVERED until COORDINATOR_READY, then posts immediately (no double queue)', async () => {
+  it('queues SUBTITLE_INTERCEPTED / SUBTITLE_TRACKS_DISCOVERED until COORDINATOR_READY then posts immediately (no double queue), and posts YouTube player commands immediately from the isolated side', async () => {
     const bridge = await import('@/inject/messageBridge');
     bridge.__resetMessageBridgeForTests();
 
@@ -111,10 +111,8 @@ describe('messageBridge early coordinator queue', () => {
 
     expect(posted).toHaveLength(1);
     expect((posted[0] as { type: string }).type).toBe('SUBTITLE_INTERCEPTED');
-  });
 
-  it('posts YouTube player commands immediately from the isolated side', async () => {
-    const bridge = await import('@/inject/messageBridge');
+    // YouTube player commands post immediately from the isolated side.
     bridge.__resetMessageBridgeForTests();
     posted.length = 0;
 

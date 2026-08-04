@@ -6,8 +6,8 @@ import {
   tabUrlMatchesHostname,
 } from '@/lib/siteRuleSuggest/url';
 
-describe('parseSuggestUrl', () => {
-  it('accepts and rejects normalized suggestion URLs', () => {
+describe('parseSuggestUrl / hostname helpers', () => {
+  it('accepts and rejects normalized suggestion URLs; normalizes hostname patterns and matches tab hostnames', () => {
     const r = parseSuggestUrl('https://www.Example.com/path?q=1');
     expect(r.ok).toBe(true);
     if (r.ok) {
@@ -22,11 +22,7 @@ describe('parseSuggestUrl', () => {
     const schemeless = parseSuggestUrl('example.com/foo');
     expect(schemeless.ok).toBe(true);
     if (schemeless.ok) expect(schemeless.url.protocol).toBe('https:');
-  });
-});
 
-describe('hostname helpers', () => {
-  it('normalizes hostname patterns and matches tab hostnames', () => {
     const url = new URL('https://www.example.com/a');
     expect(hostnameFromUrl(url)).toBe('www.example.com');
     expect(preferHostnamePattern('www.example.com')).toBe('example.com');

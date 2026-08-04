@@ -37,7 +37,7 @@ describe('crypto — API key encryption', () => {
     vi.restoreAllMocks();
   });
 
-  it('round-trips keys, preserves empty/plaintext, random IV, salt reuse, fails closed', async () => {
+  it('round-trips keys, preserves empty/plaintext, random IV, salt reuse, fails closed, and reports plaintext/success/failure with extension-id rotation', async () => {
     const plaintext = 'sk-test-12345abcdef';
     const encrypted = await encryptApiKey(plaintext);
     expect(encrypted).not.toBe(plaintext);
@@ -66,22 +66,23 @@ describe('crypto — API key encryption', () => {
     __resetSaltCacheForTest();
     expect(store[STORAGE_KEYS.ENC_SALT]).toBe(savedSalt);
     expect(await decryptApiKey(persisted)).toBe('sk-persist');
-  });
 
-  it('decryptApiKeyResult reports plaintext/success/failure and extension-id rotation', async () => {
+    // decryptApiKeyResult: plaintext/success/failure reporting
     expect(await decryptApiKeyResult('plain-key')).toEqual({
       value: 'plain-key',
       ok: true,
       encrypted: false,
     });
 
-    const encrypted = await encryptApiKey('sk-success');
-    const ok = await decryptApiKeyResult(encrypted);
+    const okEncrypted = await encryptApiKey('sk-success');
+    const ok = await decryptApiKeyResult(okEncrypted);
     expect(ok).toEqual({ value: 'sk-success', ok: true, encrypted: true });
 
     const bad = await decryptApiKeyResult('enc:not-valid-base64!!!');
     expect(bad).toEqual({ value: '', ok: false, encrypted: true });
 
+    // Extension-id rotation: a key encrypted under one extension id fails to
+    // decrypt after the id changes.
     installStorageMock();
     __resetSaltCacheForTest();
     (chrome.runtime as { id: string }).id = 'original-extension-id';

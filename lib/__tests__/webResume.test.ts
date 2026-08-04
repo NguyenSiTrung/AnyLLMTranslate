@@ -50,7 +50,7 @@ describe('webResume', () => {
     vi.clearAllMocks();
   });
 
-  it('key stability, serialize round-trip, freshness/TTL constants', () => {
+  it('key stability, serialize round-trip, freshness/TTL constants, and save/load/clear storage integration', async () => {
     const a = computeResumeKey('https://x.test/page', 'abc123');
     expect(a).toBe(computeResumeKey('https://x.test/page', 'abc123'));
     expect(a).toMatch(/^webResume:/);
@@ -87,32 +87,28 @@ describe('webResume', () => {
     ).toBe(false);
     expect(RESUME_TTL_DAYS).toBe(7);
     expect(MAX_RESUME_URLS).toBe(50);
-  });
 
-  describe('storage integration', () => {
-    it('loadSnapshot returns null when empty; clearAllResumeSnapshots removes saved snapshots', async () => {
-      const {
-        saveSnapshot,
-        loadSnapshot,
-        clearAllResumeSnapshots,
-      } = await import('../webResume');
+    const {
+      saveSnapshot,
+      loadSnapshot,
+      clearAllResumeSnapshots,
+    } = await import('../webResume');
 
-      expect(await loadSnapshot('https://x.test', 'hash')).toBeNull();
+    expect(await loadSnapshot('https://x.test', 'hash')).toBeNull();
 
-      const snapshot: WebResumeSnapshot = {
-        url: 'https://x.test/page',
-        contentHash: 'abc123',
-        targetLanguage: 'vi',
-        capturedAt: Date.now(),
-        pieces: [
-          { id: 'p1', text: 'Hello', translatedText: 'Xin chào', status: 'translated' },
-        ],
-      };
-      await saveSnapshot(snapshot);
-      expect(await loadSnapshot(snapshot.url, snapshot.contentHash)).not.toBeNull();
+    const stored: WebResumeSnapshot = {
+      url: 'https://x.test/page',
+      contentHash: 'abc123',
+      targetLanguage: 'vi',
+      capturedAt: Date.now(),
+      pieces: [
+        { id: 'p1', text: 'Hello', translatedText: 'Xin chào', status: 'translated' },
+      ],
+    };
+    await saveSnapshot(stored);
+    expect(await loadSnapshot(stored.url, stored.contentHash)).not.toBeNull();
 
-      await clearAllResumeSnapshots();
-      expect(await loadSnapshot(snapshot.url, snapshot.contentHash)).toBeNull();
-    });
+    await clearAllResumeSnapshots();
+    expect(await loadSnapshot(stored.url, stored.contentHash)).toBeNull();
   });
 });

@@ -184,43 +184,52 @@ describe('runYoutubeLinkPrealign', () => {
     });
   });
 
-  it('rejects an invalid / non-YouTube URL without fetching', async () => {
-    const { deps, fetchFn } = makeDeps();
-    const result = await runYoutubeLinkPrealign('https://example.com/watch?v=x', deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'invalid-url' });
+  it('maps URL/watch-page failures to distinct error codes', async () => {
+    // Invalid / non-YouTube URL: rejected without fetching.
+    const { deps: d1, fetchFn } = makeDeps();
+    const invalid = await runYoutubeLinkPrealign('https://example.com/watch?v=x', d1);
+    expect(invalid).toMatchObject({ success: false, errorCode: 'invalid-url' });
     expect(fetchFn).not.toHaveBeenCalled();
-  });
 
-  it('maps a non-OK watch-page fetch to video-unavailable', async () => {
-    const { deps } = makeDeps({ watchOk: false });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'video-unavailable' });
-  });
-
-  it('maps a consent/bot page (no player response) to fetch-blocked', async () => {
-    const { deps } = makeDeps({
-      watchBody: '<html><body><form action="https://consent.youtube.com/save">x</form></body></html>',
+    // Non-OK watch-page fetch -> video-unavailable.
+    const { deps: d2 } = makeDeps({ watchOk: false });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d2)).toMatchObject({
+      success: false,
+      errorCode: 'video-unavailable',
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'fetch-blocked' });
-  });
 
-  it('maps an UNPLAYABLE playabilityStatus to video-unavailable', async () => {
-    const { deps } = makeDeps({
+    // Consent/bot page (no player response) -> fetch-blocked.
+    const { deps: d3 } = makeDeps({
+      watchBody:
+        '<html><body><form action="https://consent.youtube.com/save">x</form></body></html>',
+    });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d3)).toMatchObject({
+      success: false,
+      errorCode: 'fetch-blocked',
+    });
+
+    // UNPLAYABLE playabilityStatus -> video-unavailable.
+    const { deps: d4 } = makeDeps({
       watchBody: watchHtml(playerResponse({ playabilityStatus: { status: 'UNPLAYABLE' } })),
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'video-unavailable' });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d4)).toMatchObject({
+      success: false,
+      errorCode: 'video-unavailable',
+    });
+
+    // Missing captions -> no-captions.
+    const { deps: d5 } = makeDeps({
+      watchBody: watchHtml(playerResponse({ captions: undefined })),
+    });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d5)).toMatchObject({
+      success: false,
+      errorCode: 'no-captions',
+    });
   });
 
-  it('maps missing captions to no-captions', async () => {
-    const { deps } = makeDeps({ watchBody: watchHtml(playerResponse({ captions: undefined })) });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'no-captions' });
-  });
-
-  it('maps human-uploaded-only tracks to no-asr', async () => {
-    const { deps } = makeDeps({
+  it('maps timedtext/caption-content failures to distinct error codes', async () => {
+    // Human-uploaded-only tracks -> no-asr.
+    const { deps: d1 } = makeDeps({
       watchBody: watchHtml(
         playerResponse({
           captions: {
@@ -237,14 +246,17 @@ describe('runYoutubeLinkPrealign', () => {
         }),
       ),
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'no-asr' });
-  });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d1)).toMatchObject({
+      success: false,
+      errorCode: 'no-asr',
+    });
 
-  it('maps a failed timedtext fetch to fetch-blocked', async () => {
-    const { deps } = makeDeps({ json3Ok: false });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'fetch-blocked' });
+    // Failed timedtext fetch -> fetch-blocked.
+    const { deps: d2 } = makeDeps({ json3Ok: false });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d2)).toMatchObject({
+      success: false,
+      errorCode: 'fetch-blocked',
+    });
   });
 
   it('realigns and saves on the happy path (title stripped, thumbnail, watch URL)', async () => {
@@ -329,31 +341,36 @@ describe('runYoutubeLinkPrealign', () => {
     expect(resegment).toHaveBeenCalledTimes(1);
   });
 
-  it('maps an empty provider pool to provider-not-configured', async () => {
-    const { deps } = makeDeps({
+  it('maps service-stage failures (empty pool, LLM failure, no usable text) without persisting', async () => {
+    // Empty provider pool -> provider-not-configured; nothing written.
+    const { deps: d1 } = makeDeps({
       resegmentImpl: async () => ({
         success: false,
         error: 'Translation pool is empty — no providers configured.',
       }),
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'provider-not-configured' });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d1)).toMatchObject({
+      success: false,
+      errorCode: 'provider-not-configured',
+    });
     expect(memory.size).toBe(0);
-  });
 
-  it('maps a generic LLM failure to llm-failure and writes nothing', async () => {
-    const { deps } = makeDeps({
+    // Generic LLM failure -> llm-failure; nothing written.
+    const { deps: d2 } = makeDeps({
       resegmentImpl: async () => ({ success: false, error: 'Empty response from LLM' }),
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'llm-failure' });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d2)).toMatchObject({
+      success: false,
+      errorCode: 'llm-failure',
+    });
     expect(memory.size).toBe(0);
-  });
 
-  it('maps an ASR body with no usable text to no-captions', async () => {
-    const { deps } = makeDeps({ json3Body: JSON.stringify({ events: [] }) });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'no-captions' });
+    // ASR body with no usable text -> no-captions.
+    const { deps: d3 } = makeDeps({ json3Body: JSON.stringify({ events: [] }) });
+    expect(await runYoutubeLinkPrealign(WATCH_URL, d3)).toMatchObject({
+      success: false,
+      errorCode: 'no-captions',
+    });
   });
 
   it('hash parity: Settings-flow units + contentHash match the playback pipeline', async () => {

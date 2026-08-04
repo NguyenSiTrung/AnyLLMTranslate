@@ -34,7 +34,7 @@ describe('youtubeAsrRealignCache pure helpers', () => {
     });
   });
 
-  it('canonicalizes units stably and hashes them', async () => {
+  it('canonicalizes units stably, hashes them, and builds cache keys/YouTube URLs', async () => {
     expect(canonicalizeAsrRealignInput(units)).toBe('Hello\t0\t400\nworld\t400\t900');
     const a = await hashAsrRealignContent(units);
     const b = await hashAsrRealignContent([...units].reverse().reverse());
@@ -42,9 +42,7 @@ describe('youtubeAsrRealignCache pure helpers', () => {
     expect(a).toBe(b);
     const c = await hashAsrRealignContent([{ ...units[0], text: 'Hello!' }, units[1]]);
     expect(c).not.toBe(a);
-  });
 
-  it('builds cache key and YouTube URLs', () => {
     expect(buildAsrRealignCacheKey('abc123', 'en', 'deadbeef')).toBe('ai:abc123:en:deadbeef');
     expect(youtubeWatchUrl('abc123')).toBe('https://www.youtube.com/watch?v=abc123');
     expect(youtubeThumbnailUrl('abc123')).toBe('https://i.ytimg.com/vi/abc123/mqdefault.jpg');

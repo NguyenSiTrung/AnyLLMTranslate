@@ -158,7 +158,7 @@ describe('detectFormat', () => {
 });
 
 describe('sanitizeImportObject', () => {
-  it('splits recognized vs ignored keys and drops prototype-pollution keys silently', () => {
+  it('splits recognized vs ignored keys, drops prototype-pollution keys, and rejects non-object payloads', () => {
     const parsed = {
       targetLanguage: 'ja',
       unknownSetting: 1,
@@ -171,16 +171,16 @@ describe('sanitizeImportObject', () => {
     expect(ignored).toEqual(['unknownSetting']);
     // No pollution leaked into Object.prototype.
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-  });
 
-  it('rejects non-object payloads and accepts a full settings object untouched', () => {
+    // Non-object payloads are rejected…
     expect(() => sanitizeImportObject(null)).toThrow(/JSON object/);
     expect(() => sanitizeImportObject([1, 2])).toThrow(/JSON object/);
     expect(() => sanitizeImportObject('string')).toThrow(/JSON object/);
 
-    const { recognized, ignored } = sanitizeImportObject(fullSettings());
-    expect(ignored).toEqual([]);
-    expect(recognized['providers']).toEqual(fullSettings().providers);
+    // …and a full settings object passes through untouched.
+    const { recognized: fullRec, ignored: fullIgn } = sanitizeImportObject(fullSettings());
+    expect(fullIgn).toEqual([]);
+    expect(fullRec['providers']).toEqual(fullSettings().providers);
   });
 });
 
@@ -196,7 +196,8 @@ describe('serializeSettings', () => {
 });
 
 describe('deepEqual', () => {
-  it('compares scalars with Object.is semantics and arrays element-wise, order-sensitive', () => {
+  it('compares scalars/arrays and nested plain objects (no inherited properties)', () => {
+    // Scalars with Object.is semantics.
     expect(deepEqual(1, 1)).toBe(true);
     expect(deepEqual(1, 2)).toBe(false);
     expect(deepEqual('a', 'a')).toBe(true);
@@ -205,17 +206,18 @@ describe('deepEqual', () => {
     expect(deepEqual(0, -0)).toBe(false);
     expect(deepEqual(NaN, NaN)).toBe(true);
 
+    // Arrays element-wise, order-sensitive.
     expect(deepEqual([1, 2, 3], [1, 2, 3])).toBe(true);
     expect(deepEqual([1, 2], [2, 1])).toBe(false);
     expect(deepEqual([{ a: 1 }], [{ a: 1 }])).toBe(true);
-  });
 
-  it('compares nested plain objects by own keys and never compares inherited properties', () => {
+    // Nested plain objects by own keys.
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 1 } })).toBe(true);
     expect(deepEqual({ a: { b: 1 } }, { a: { b: 2 } })).toBe(false);
     expect(deepEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
     expect(deepEqual({ a: 1 }, { b: 1 })).toBe(false);
 
+    // Inherited properties are never compared.
     const o = Object.create({ inherited: 1 }) as Record<string, unknown>;
     o.own = 1;
     expect(deepEqual(o, { own: 1 })).toBe(true);
@@ -231,36 +233,37 @@ describe('computeImportImpact', () => {
     siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
   });
 
-  it('merge: lists recognized keys whose imported value differs and omits unchanged keys', () => {
+  it('merge: lists changed recognized keys, omits unchanged keys, and no-ops on unchanged/undefined values', () => {
     const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
     expect(impact.changed).toEqual(['targetLanguage']);
     expect(impact.resetToDefaults).toEqual([]);
 
     const same = computeImportImpact(customized(), { targetLanguage: 'ja' }, 'merge');
     expect(same.changed).toEqual([]);
-  });
 
-  it('merge: a partial nested object that changes a nested field is listed as changed; undefined file values are no-ops', () => {
+    // A partial nested object that changes a nested field is listed as changed.
     const current = customized();
     current.pdfSettings = { ...DEFAULT_SETTINGS.pdfSettings, openMode: 'same-tab' };
-    const impact = computeImportImpact(current, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
-    expect(impact.changed).toEqual(['pdfSettings']);
+    const nested = computeImportImpact(current, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
+    expect(nested.changed).toEqual(['pdfSettings']);
 
+    // undefined file values are no-ops.
     const noop = computeImportImpact(current, { targetLanguage: undefined }, 'merge');
     expect(noop.changed).toEqual([]);
   });
 
-  it('replace: lists changed recognized keys against the defaults baseline and customized keys absent from the file as resetToDefaults', () => {
+  it('replace: lists changed recognized keys, resets customized keys absent from the file, and excludes built-in site rules', () => {
     const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
     expect(impact.changed).toEqual(['targetLanguage']);
     expect(impact.resetToDefaults).toContain('theme');
     expect(impact.resetToDefaults).not.toContain('targetLanguage');
-  });
 
-  it('replace: untouched built-in site rules are excluded; empty file warns every customized key (merge is a no-op); nothing customized means no warnings', () => {
     const current = customized();
-    expect(computeImportImpact(current, { targetLanguage: 'ko' }, 'replace').resetToDefaults).not.toContain('siteRules');
+    expect(
+      computeImportImpact(current, { targetLanguage: 'ko' }, 'replace').resetToDefaults,
+    ).not.toContain('siteRules');
 
+    // Empty file: merge is a no-op; replace warns every customized key.
     expect(computeImportImpact(current, {}, 'merge')).toEqual({
       changed: [],
       resetToDefaults: [],
@@ -270,6 +273,7 @@ describe('computeImportImpact', () => {
     expect(replace.resetToDefaults).toContain('theme');
     expect(replace.resetToDefaults).toContain('targetLanguage');
 
+    // Nothing customized -> no warnings.
     const untouched = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
     expect(computeImportImpact(untouched, {}, 'replace').resetToDefaults).toEqual([]);
   });

@@ -41,7 +41,7 @@ function openrouter(): PoolProvider {
 }
 
 describe('isGoogleAiStudioProvider', () => {
-  it('detects Google providers and resolves single-model defaults', () => {
+  it('detects Google providers and resolves single- and multi-model defaults', () => {
     expect(isGoogleAiStudioProvider(google())).toBe(true);
     expect(
       isGoogleAiStudioProvider(
@@ -61,9 +61,8 @@ describe('isGoogleAiStudioProvider', () => {
     expect(resolveProviderModels({ baseUrl: '', model: '' })).toEqual(['']);
     expect(resolveProviderModels(google({ model: '', models: undefined }))).toEqual(['']);
     expect(isMultiModelActive(google({ model: '', models: undefined }))).toBe(false);
-  });
 
-  it('returns ordered unique models for Google multi-model', () => {
+    // Multi-model: ordered unique models.
     const p = google({
       model: 'gemini-2.5-flash',
       models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'],
@@ -77,7 +76,7 @@ describe('isGoogleAiStudioProvider', () => {
 });
 
 describe('resolveModelStrategy / normalizeGoogleModels', () => {
-  it('selects model strategy and normalizes Google/non-Google providers', () => {
+  it('selects model strategy, normalizes Google/non-Google providers, and builds slot ids', () => {
     const multi = google({
       models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
     });
@@ -105,9 +104,7 @@ describe('resolveModelStrategy / normalizeGoogleModels', () => {
     });
     expect(stripped.models).toBeUndefined();
     expect(stripped.modelStrategy).toBeUndefined();
-  });
 
-  it('uses keyId alone for single-model slots and composite IDs for multi-model slots', () => {
     expect(makeSlotId('k1', 'm', false)).toBe('k1');
     expect(makeSlotId('k1', 'gemini-2.5-flash', true)).toBe('k1::gemini-2.5-flash');
   });

@@ -31,7 +31,7 @@ describe('setup wizard provider selection sync', () => {
     model: '',
   });
 
-  it('atomic provider+providers write keeps catalog selection on both mirrors', () => {
+  it('atomic provider+providers write keeps catalog selection on both mirrors, and readiness then requires only the API key', () => {
     const current = { ...DEFAULT_SETTINGS, providers: [] as ExtensionSettings['providers'] };
     const next = applyAtomicWizardPatch(current, selection.patch);
 
@@ -44,13 +44,8 @@ describe('setup wizard provider selection sync', () => {
     expect(next.providers[0]?.baseUrl).toBe(openRouter.baseUrl);
     expect(next.providers[0]?.model).toBe(openRouter.defaultModel);
     expect(next.providers[0]?.displayName).toBe(openRouter.displayName);
-  });
 
-  it('after catalog pick, readiness requires only the API key (model+url filled)', () => {
-    const current = { ...DEFAULT_SETTINGS, providers: [] as ExtensionSettings['providers'] };
-    const next = applyAtomicWizardPatch(current, selection.patch);
     const readiness = getProviderReadiness(next.provider);
-
     expect(readiness.canTest).toBe(false);
     expect(readiness.reason).toBe('missing-api-key');
 

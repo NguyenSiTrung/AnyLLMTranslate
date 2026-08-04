@@ -9,12 +9,10 @@ describe('youtubePlayerChromeAdapter', () => {
     document.body.innerHTML = '';
   });
 
-  it('matches youtube hosts', () => {
+  it('matches youtube hosts, finds the right-controls mount, and detects autohide', () => {
     expect(youtubePlayerChromeAdapter.match('www.youtube.com')).toBe(true);
     expect(youtubePlayerChromeAdapter.match('example.com')).toBe(false);
-  });
 
-  it('finds right controls mount', () => {
     document.body.innerHTML = `
       <div class="html5-video-player">
         <div class="ytp-chrome-bottom">
@@ -28,9 +26,7 @@ describe('youtubePlayerChromeAdapter', () => {
         'html5-video-player',
       ),
     ).toBe(true);
-  });
 
-  it('detects autohide', () => {
     document.body.innerHTML = `<div class="html5-video-player ytp-autohide"></div>`;
     expect(youtubePlayerChromeAdapter.isControlsVisible?.(document)).toBe(false);
   });

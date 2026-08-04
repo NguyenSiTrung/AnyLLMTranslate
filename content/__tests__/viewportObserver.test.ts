@@ -78,7 +78,7 @@ describe('ViewportObserver', () => {
     vi.useRealTimers();
   });
 
-  it('dispatches untranslated pieces once when they enter the viewport', () => {
+  it('dispatches untranslated pieces once when they enter the viewport, and does not re-dispatch the same piece id until released', () => {
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50);
     const p = document.createElement('p');
@@ -94,21 +94,6 @@ describe('ViewportObserver', () => {
     expect(onVisible.mock.calls[0][0]).toEqual([piece]);
     // Unobserved after dispatch
     expect(mock.observed.has(p)).toBe(false);
-    observer.disconnect();
-  });
-
-  it('does not re-dispatch the same piece id after release is needed', () => {
-    const onVisible = vi.fn();
-    const observer = new ViewportObserver(onVisible, 50);
-    const p = document.createElement('p');
-    document.body.appendChild(p);
-    const piece = makePiece('a', p);
-    observer.observe(piece);
-
-    const mock = MockIntersectionObserver.instances[0];
-    mock.fire(p, true);
-    vi.advanceTimersByTime(50);
-    expect(onVisible).toHaveBeenCalledTimes(1);
 
     // Re-observe without release — should be a no-op (already dispatched)
     observer.observe(piece);

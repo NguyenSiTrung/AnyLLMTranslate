@@ -13,7 +13,7 @@ const baseHandlers = () => ({
 });
 
 describe('buildFooterActions', () => {
-  it('renders five action buttons including dual speak', () => {
+  it('renders five action buttons including dual speak, shows stop labels when speaking, and renders the status line', () => {
     const handlers = baseHandlers();
     const el = buildFooterActions({ handlers });
     expect(el.querySelectorAll('[data-anyllm-role="selection-action"]')).toHaveLength(5);
@@ -31,20 +31,18 @@ describe('buildFooterActions', () => {
     expect(handlers.onSpeakOriginal).toHaveBeenCalledOnce();
     (el.querySelector('[data-action="speak-translation"]') as HTMLButtonElement).click();
     expect(handlers.onSpeakTranslation).toHaveBeenCalledOnce();
-  });
 
-  it('shows stop labels when speaking', () => {
-    const el = buildFooterActions({ handlers: baseHandlers(), speaking: true });
+    // While speaking, both speak buttons show "Stop".
+    const speakingEl = buildFooterActions({ handlers: baseHandlers(), speaking: true });
     expect(
-      el.querySelector('[data-action="speak-original"]')?.getAttribute('aria-label'),
+      speakingEl.querySelector('[data-action="speak-original"]')?.getAttribute('aria-label'),
     ).toBe('Stop');
     expect(
-      el.querySelector('[data-action="speak-translation"]')?.getAttribute('aria-label'),
+      speakingEl.querySelector('[data-action="speak-translation"]')?.getAttribute('aria-label'),
     ).toBe('Stop');
-  });
 
-  it('shows status line', () => {
-    const el = buildFooterActions({
+    // Status line renders the provided text.
+    const withStatus = buildFooterActions({
       handlers: {
         onCopy: () => {},
         onRetry: () => {},
@@ -53,9 +51,9 @@ describe('buildFooterActions', () => {
         onGlossary: () => {},
       },
     });
-    setStatusLine(el, 'Added to glossary', 'success');
-    expect(el.querySelector('[data-anyllm-role="selection-status"]')?.textContent).toBe(
-      'Added to glossary',
-    );
+    setStatusLine(withStatus, 'Added to glossary', 'success');
+    expect(
+      withStatus.querySelector('[data-anyllm-role="selection-status"]')?.textContent,
+    ).toBe('Added to glossary');
   });
 });

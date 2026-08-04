@@ -106,7 +106,7 @@ describe('pageContext category detection helpers', () => {
     expect(categoryState.isCategoryDetectionInFlight()).toBe(false);
   });
 
-  it('clears stale auto category when the page URL changes', async () => {
+  it('clears stale auto category when the page URL changes, and does not let weak heuristic results permanently block LLM detection', async () => {
     const { categoryState } = await loadModules();
     categoryState.setAutoDetectedCategory('News', 'llm');
     expect(categoryState.getAutoDetectedCategory()).toBe('News');
@@ -116,9 +116,9 @@ describe('pageContext category detection helpers', () => {
 
     expect(categoryState.getAutoDetectedCategory()).toBeUndefined();
     expect(categoryState.getAutoDetectedSource()).toBeUndefined();
-  });
 
-  it('does not let weak heuristic results permanently block LLM detection', async () => {
+    // Weak heuristic (meta description) should be available immediately but
+    // must not skip LLM refinement.
     vi.stubGlobal('chrome', {
       runtime: {
         sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Technology News' }),
@@ -126,14 +126,12 @@ describe('pageContext category detection helpers', () => {
     });
 
     document.head.innerHTML = `<meta name="description" content="breaking news headlines journalism">`;
-    const { categoryState, pageContext } = await loadModules();
+    const { categoryState: state2, pageContext } = await loadModules();
 
-    // Weak heuristic (meta description) should be available immediately...
     const heuristic = pageContext.extractPageContext(document, true).category;
     expect(heuristic).toBe('News');
-    categoryState.setAutoDetectedCategory(heuristic, 'heuristic');
+    state2.setAutoDetectedCategory(heuristic, 'heuristic');
 
-    // ...but must not skip LLM refinement.
     const onDetected = vi.fn();
     await pageContext.triggerAutoCategoryDetection(
       settings({ llmCategoryDetectionMode: 'blocking' }),
@@ -142,11 +140,11 @@ describe('pageContext category detection helpers', () => {
     );
     expect(chrome.runtime.sendMessage).toHaveBeenCalled();
     expect(onDetected).toHaveBeenCalledWith('Technology News');
-    expect(categoryState.getAutoDetectedCategory()).toBe('Technology News');
-    expect(categoryState.getAutoDetectedSource()).toBe('llm');
+    expect(state2.getAutoDetectedCategory()).toBe('Technology News');
+    expect(state2.getAutoDetectedSource()).toBe('llm');
   });
 
-  it('skips the LLM when a domain-map/prior-LLM category is locked or the session cache has the host', async () => {
+  it('skips the LLM when a domain-map/prior-LLM category is locked or the session cache has the host, and normalizes LLM responses through detectLLMCategoryIfNeeded', async () => {
     vi.stubGlobal('chrome', {
       runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
     });
@@ -188,9 +186,8 @@ describe('pageContext category detection helpers', () => {
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     expect(categoryState.getAutoDetectedCategory()).toBe('Academic Research');
     expect(categoryState.getAutoDetectedSource()).toBe('cache');
-  });
 
-  it('normalizes LLM responses through detectLLMCategoryIfNeeded', async () => {
+    // Direct normalization through detectLLMCategoryIfNeeded (blocking mode).
     vi.stubGlobal('chrome', {
       runtime: {
         sendMessage: vi.fn().mockResolvedValue({
@@ -199,19 +196,19 @@ describe('pageContext category detection helpers', () => {
         }),
       },
     });
-    const { pageContext } = await loadModules();
+    const { pageContext: pc2 } = await loadModules();
     const ctx: PageContext = { title: 't', description: 'd', domain: 'example.com' };
-    const onDetected = vi.fn();
+    const onDetected2 = vi.fn();
 
-    await pageContext.detectLLMCategoryIfNeeded(
+    await pc2.detectLLMCategoryIfNeeded(
       ctx,
       settings({ llmCategoryDetectionMode: 'blocking' }),
       undefined,
       undefined,
-      onDetected,
+      onDetected2,
     );
 
-    expect(onDetected).toHaveBeenCalledWith('Software Development');
+    expect(onDetected2).toHaveBeenCalledWith('Software Development');
     expect(ctx.category).toBe('Software Development');
   });
 });

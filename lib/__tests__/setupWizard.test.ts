@@ -32,7 +32,7 @@ describe('setupWizard steps', () => {
     expect(normalizeWizardStep(undefined)).toBeNull();
   });
 
-  it('resolveWizardEntryStep: first run, completed reopen, and resume lastStep', () => {
+  it('resolveWizardEntryStep: first run, completed reopen, resume lastStep, legacy ids, and ready-without-complete', () => {
     expect(resolveWizardEntryStep({ completed: false, skipped: false })).toBe('welcome');
 
     expect(
@@ -57,9 +57,7 @@ describe('setupWizard steps', () => {
         lastStep: 'verify',
       }),
     ).toBe('verify');
-  });
 
-  it('resolveWizardEntryStep: normalizes legacy lastStep and handles ready-without-complete', () => {
     expect(
       resolveWizardEntryStep({
         completed: false,

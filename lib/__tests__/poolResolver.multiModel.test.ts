@@ -38,7 +38,7 @@ function googleMulti(): PoolProvider {
 }
 
 describe('resolveSlots multi-model', () => {
-  it('expands model-major × key-major with composite slotIds and keeps slotId === keyId for single-model', () => {
+  it('expands model-major × key-major with composite slotIds, keeps slotId === keyId for single-model, and does not expand models on OpenRouter', () => {
     const slots = resolveSlots([googleMulti()]);
     expect(slots.map((s) => s.slotId)).toEqual([
       'k1::gemini-2.5-flash',
@@ -62,6 +62,34 @@ describe('resolveSlots multi-model', () => {
     expect(single).toHaveLength(2);
     expect(single.map((s) => s.slotId)).toEqual(['k1', 'k2']);
     expect(single.every((s) => !s.multiModel)).toBe(true);
+
+    const orSlots = resolveSlots([
+      {
+        id: 'or',
+        displayName: 'OR',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        catalogId: 'openrouter',
+        model: 'openai/gpt-4o-mini',
+        models: ['a', 'b'],
+        requiresApiKey: true,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        keys: [
+          {
+            id: 'k1',
+            apiKey: 'sk',
+            maxRpm: 0,
+            concurrencyLimit: 0,
+            interval: 0,
+            enabled: true,
+          },
+        ],
+      },
+    ]);
+    expect(orSlots).toHaveLength(1);
+    expect(orSlots[0]!.slotId).toBe('k1');
+    expect(orSlots[0]!.providerConfig.model).toBe('openai/gpt-4o-mini');
   });
 
   it('still yields a slot when model is empty and key not required (DEFAULT_SETTINGS)', () => {
@@ -92,36 +120,6 @@ describe('resolveSlots multi-model', () => {
     expect(slots).toHaveLength(1);
     expect(slots[0]?.slotId).toBe('k_default');
     expect(slots[0]?.providerConfig.model).toBe('');
-  });
-
-  it('does not expand models on OpenRouter', () => {
-    const slots = resolveSlots([
-      {
-        id: 'or',
-        displayName: 'OR',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        catalogId: 'openrouter',
-        model: 'openai/gpt-4o-mini',
-        models: ['a', 'b'],
-        requiresApiKey: true,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: true,
-        keys: [
-          {
-            id: 'k1',
-            apiKey: 'sk',
-            maxRpm: 0,
-            concurrencyLimit: 0,
-            interval: 0,
-            enabled: true,
-          },
-        ],
-      },
-    ]);
-    expect(slots).toHaveLength(1);
-    expect(slots[0]!.slotId).toBe('k1');
-    expect(slots[0]!.providerConfig.model).toBe('openai/gpt-4o-mini');
   });
 
   it('healthySlots filters by slotId breaker', () => {

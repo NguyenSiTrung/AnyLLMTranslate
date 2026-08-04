@@ -7,8 +7,8 @@ import {
   stripThinkTags,
 } from '@/lib/thinkingDetection';
 
-describe('contentHasThinkTags / stripThinkTags', () => {
-  it('detects closed/unclosed think tags and strips think blocks', () => {
+describe('contentHasThinkTags / stripThinkTags / detectThinkingSignals', () => {
+  it('detects think tags, strips think blocks, and flags reasoning_content independently', () => {
     expect(contentHasThinkTags('<think>plan</think>Hello')).toBe(true);
     expect(contentHasThinkTags('<think>unclosed tail')).toBe(true);
     expect(contentHasThinkTags('plain translation')).toBe(false);
@@ -18,11 +18,7 @@ describe('contentHasThinkTags / stripThinkTags', () => {
     expect(stripThinkTags('<think>x</think>\nXin chào')).toBe('Xin chào');
     expect(stripThinkTags('<think>still thinking')).toBe('');
     expect(stripThinkTags('no tags')).toBe('no tags');
-  });
-});
 
-describe('detectThinkingSignals', () => {
-  it('flags reasoning_content and think tags independently', () => {
     expect(extractReasoningContent({ content: 'hi', reasoning_content: ' step ' })).toBe('step');
     expect(extractReasoningContent({ content: 'hi', reasoning: 'r' })).toBe('r');
     expect(extractReasoningContent({ content: 'hi', thinking: 't' })).toBe('t');
@@ -55,7 +51,7 @@ describe('detectThinkingSignals', () => {
 });
 
 describe('evaluateThinkingProbe', () => {
-  it('reports disable-success when clean; disable-failed when tags or reasoning_content present', () => {
+  it('reports disable-success when clean, disable-failed on tags/reasoning_content, controls-rejected first, and not-applicable for auto/on', () => {
     const r = evaluateThinkingProbe({
       mode: 'off',
       controlsSent: true,
@@ -84,17 +80,15 @@ describe('evaluateThinkingProbe', () => {
     });
     expect(rc.verdict).toBe('disable-failed');
     expect(rc.summary).toMatch(/reasoning_content/);
-  });
 
-  it('reports controls-rejected before other verdicts; marks auto/on as not-applicable', () => {
-    const r = evaluateThinkingProbe({
+    const r2 = evaluateThinkingProbe({
       mode: 'off',
       controlsSent: true,
       controlsRejected: true,
       thinkingDetected: false,
       sources: [],
     });
-    expect(r.verdict).toBe('controls-rejected');
+    expect(r2.verdict).toBe('controls-rejected');
 
     expect(
       evaluateThinkingProbe({

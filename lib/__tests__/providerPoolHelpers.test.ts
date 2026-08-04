@@ -41,7 +41,7 @@ function makeProvider(overrides: Partial<PoolProvider> = {}): PoolProvider {
 }
 
 describe('provider pool UI and operational helpers', () => {
-  it('picks credentials, gates tests, builds config, and handles cursor/reorder/bulk/status/dashboard helpers', () => {
+  it('picks credentials, gates tests, builds config, handles cursor/reorder/bulk/status/dashboard helpers, and maps pool lastTestResult to popup footer status', () => {
     const withThinking = makeProvider({ thinkingMode: 'off', thinkingEffort: 'high' });
     const built = buildProviderConfig(withThinking, withThinking.keys[0]!);
     expect(built.thinkingMode).toBe('off');
@@ -104,9 +104,8 @@ describe('provider pool UI and operational helpers', () => {
       state: 'not-ready',
       canTranslate: false,
     });
-  });
 
-  it('maps pool lastTestResult to popup footer connection status (not legacy only)', () => {
+    // Pool key lastTestResult drives the popup footer connection status.
     const successfulKey = makeProvider({
       keys: [
         {

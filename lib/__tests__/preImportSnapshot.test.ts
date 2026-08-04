@@ -63,7 +63,7 @@ describe('pre-import snapshot', () => {
     vi.clearAllMocks();
   });
 
-  it('saves full settings with encrypted keys under the snapshot key', async () => {
+  it('round-trips the snapshot: saves encrypted, loads and decrypts, and clears', async () => {
     await savePreImportSnapshot(settingsWithKeys());
     expect(mockSet).toHaveBeenCalledTimes(1);
     const data = mockSet.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -71,9 +71,7 @@ describe('pre-import snapshot', () => {
     expect(stored).toBeTruthy();
     expect(stored.provider.apiKey).toBe('enc:legacy-secret');
     expect(stored.providers[0]?.keys[0]?.apiKey).toBe('enc:sk-secret');
-  });
 
-  it('loads and decrypts the snapshot', async () => {
     const source = settingsWithKeys();
     const encrypted: ExtensionSettings = {
       ...source,
@@ -89,6 +87,9 @@ describe('pre-import snapshot', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot?.provider.apiKey).toBe('legacy-secret');
     expect(snapshot?.providers[0]?.keys[0]?.apiKey).toBe('sk-secret');
+
+    await clearPreImportSnapshot();
+    expect(mockRemove).toHaveBeenCalledWith(STORAGE_KEYS.PRE_IMPORT_SNAPSHOT);
   });
 
   it('returns null when nothing is stored or when the storage read fails', async () => {
@@ -97,10 +98,5 @@ describe('pre-import snapshot', () => {
 
     mockGet.mockRejectedValue(new Error('storage gone'));
     expect(await loadPreImportSnapshot()).toBeNull();
-  });
-
-  it('clears the snapshot', async () => {
-    await clearPreImportSnapshot();
-    expect(mockRemove).toHaveBeenCalledWith(STORAGE_KEYS.PRE_IMPORT_SNAPSHOT);
   });
 });

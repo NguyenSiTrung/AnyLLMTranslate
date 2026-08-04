@@ -30,15 +30,13 @@ describe('site rule suggest prompts', () => {
 });
 
 describe('parseSiteRuleSuggestLlmJson', () => {
-  it('parses pure JSON', () => {
+  it('parses pure and fenced JSON, and rejects garbage', () => {
     const p = parseSiteRuleSuggestLlmJson(
       '{"hostname":"example.com","includeSelectors":["main"],"excludeSelectors":["nav"],"rationale":"main content"}',
     );
     expect(p?.hostname).toBe('example.com');
     expect(p?.includeSelectors).toEqual(['main']);
-  });
 
-  it('parses fenced JSON and rejects garbage', () => {
     expect(
       parseSiteRuleSuggestLlmJson(
         '```json\n{"hostname":"a.com","includeSelectors":["main"],"excludeSelectors":[]}\n```',

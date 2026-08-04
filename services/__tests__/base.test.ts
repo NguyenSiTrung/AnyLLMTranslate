@@ -78,8 +78,8 @@ describe('buildSystemPrompt', () => {
   });
 });
 
-describe('validatePromptTemplate', () => {
-  it('validates default and reports missing targetLanguage / JSON / translations', () => {
+describe('validatePromptTemplate / validateProviderConfig', () => {
+  it('validates the default prompt, reports missing targetLanguage / JSON / translations, and rejects empty/invalid provider URLs or missing required API keys', () => {
     expect(validatePromptTemplate(DEFAULT_SYSTEM_PROMPT_TEMPLATE)).toEqual({
       valid: true,
       warnings: [],
@@ -100,6 +100,58 @@ describe('validatePromptTemplate', () => {
     const empty = validatePromptTemplate('Do something');
     expect(empty.valid).toBe(false);
     expect(empty.warnings).toHaveLength(3);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: '',
+        apiKey: '',
+        model: 'test',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Test',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'not-a-url',
+        apiKey: '',
+        model: 'test',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Test',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: '',
+        model: 'gpt-4',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Custom',
+        requiresApiKey: true,
+      }).valid,
+    ).toBe(false);
+
+    expect(
+      validateProviderConfig({
+        preset: 'custom',
+        baseUrl: 'http://localhost:11434/v1',
+        apiKey: '',
+        model: 'gemma3:4b',
+        temperature: 0.3,
+        maxTokens: 100,
+        displayName: 'Custom',
+        requiresApiKey: false,
+      }).valid,
+    ).toBe(true);
   });
 });
 
@@ -184,61 +236,5 @@ describe('parseTranslationResponse', () => {
       ['id-1', 'id-2', 'id-3'],
     );
     expect([...badTypes.keys()]).toEqual(['id-1']);
-  });
-});
-
-describe('validateProviderConfig', () => {
-  it('rejects empty/invalid URL and missing required API key; accepts valid config', () => {
-    expect(
-      validateProviderConfig({
-        preset: 'custom',
-        baseUrl: '',
-        apiKey: '',
-        model: 'test',
-        temperature: 0.3,
-        maxTokens: 100,
-        displayName: 'Test',
-        requiresApiKey: false,
-      }).valid,
-    ).toBe(false);
-
-    expect(
-      validateProviderConfig({
-        preset: 'custom',
-        baseUrl: 'not-a-url',
-        apiKey: '',
-        model: 'test',
-        temperature: 0.3,
-        maxTokens: 100,
-        displayName: 'Test',
-        requiresApiKey: false,
-      }).valid,
-    ).toBe(false);
-
-    expect(
-      validateProviderConfig({
-        preset: 'custom',
-        baseUrl: 'https://api.example.com/v1',
-        apiKey: '',
-        model: 'gpt-4',
-        temperature: 0.3,
-        maxTokens: 100,
-        displayName: 'Custom',
-        requiresApiKey: true,
-      }).valid,
-    ).toBe(false);
-
-    expect(
-      validateProviderConfig({
-        preset: 'custom',
-        baseUrl: 'http://localhost:11434/v1',
-        apiKey: '',
-        model: 'gemma3:4b',
-        temperature: 0.3,
-        maxTokens: 100,
-        displayName: 'Custom',
-        requiresApiKey: false,
-      }).valid,
-    ).toBe(true);
   });
 });

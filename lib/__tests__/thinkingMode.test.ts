@@ -26,7 +26,7 @@ const geminiBase = 'https://generativelanguage.googleapis.com/v1beta/openai';
 const deepseekBase = 'https://api.deepseek.com';
 const openCodeZenBase = 'https://opencode.ai/zen/v1';
 
-describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
+describe('normalizeThinkingMode / normalizeThinkingEffort / provider dialect mapping', () => {
   it('normalizes thinking modes/efforts and detects supported hosts/models', () => {
     expect(normalizeThinkingMode('auto')).toBe('auto');
     expect(normalizeThinkingMode('on')).toBe('on');
@@ -88,7 +88,7 @@ describe('normalizeThinkingMode / normalizeThinkingEffort', () => {
 });
 
 describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
-  it('maps Gemini thinking support and reasoning request fields by model family, and honors thinkingEffort when mode is on', () => {
+  it('maps provider-dialect request fields: Gemini reasoning fields and DeepSeek thinking.type + reasoning_effort', () => {
     expect(geminiSupportsThinkingNone('gemini-2.5-flash')).toBe(true);
     expect(geminiSupportsThinkingNone('gemini-2.5-flash-lite')).toBe(true);
     expect(geminiSupportsThinkingNone('models/gemini-2.5-flash')).toBe(true);
@@ -184,10 +184,9 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     expect(applyThinkingModeToRequest(pro, 'off', { baseUrl: geminiBase }).reasoning_effort).toBe(
       'minimal',
     );
-  });
 
-  it('uses DeepSeek thinking.type + reasoning_effort (on) and omits effort when off', () => {
-    const req: ChatCompletionRequest = {
+    // DeepSeek dialect: thinking.type + reasoning_effort (on) and omitted effort when off.
+    const dsReq: ChatCompletionRequest = {
       ...baseRequest,
       model: 'deepseek-v4-flash',
     };
@@ -199,30 +198,30 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     expect(deepseekReasoningEffort('max')).toBe('max');
     expect(deepseekReasoningEffort(undefined)).toBe('high');
 
-    const offReq = applyThinkingModeToRequest(req, 'off', { baseUrl: deepseekBase });
-    expect(offReq.thinking).toEqual({ type: 'disabled' });
-    expect(offReq.reasoning_effort).toBeUndefined();
-    expect(offReq.enable_thinking).toBeUndefined();
-    expect(offReq.chat_template_kwargs).toBeUndefined();
+    const dsOffReq = applyThinkingModeToRequest(dsReq, 'off', { baseUrl: deepseekBase });
+    expect(dsOffReq.thinking).toEqual({ type: 'disabled' });
+    expect(dsOffReq.reasoning_effort).toBeUndefined();
+    expect(dsOffReq.enable_thinking).toBeUndefined();
+    expect(dsOffReq.chat_template_kwargs).toBeUndefined();
 
-    const onDefault = applyThinkingModeToRequest(req, 'on', { baseUrl: deepseekBase });
-    expect(onDefault.thinking).toEqual({ type: 'enabled' });
-    expect(onDefault.reasoning_effort).toBe('high');
+    const dsOnDefault = applyThinkingModeToRequest(dsReq, 'on', { baseUrl: deepseekBase });
+    expect(dsOnDefault.thinking).toEqual({ type: 'enabled' });
+    expect(dsOnDefault.reasoning_effort).toBe('high');
 
     expect(
-      applyThinkingModeToRequest(req, 'on', {
+      applyThinkingModeToRequest(dsReq, 'on', {
         baseUrl: deepseekBase,
         thinkingEffort: 'low',
       }).reasoning_effort,
     ).toBe('low');
     expect(
-      applyThinkingModeToRequest(req, 'on', {
+      applyThinkingModeToRequest(dsReq, 'on', {
         baseUrl: deepseekBase,
         thinkingEffort: 'max',
       }).reasoning_effort,
     ).toBe('max');
     expect(
-      applyThinkingModeToRequest(req, 'on', {
+      applyThinkingModeToRequest(dsReq, 'on', {
         baseUrl: 'https://api.deepseek.com/v1',
         thinkingEffort: 'medium',
       }),
@@ -232,7 +231,7 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     });
 
     // auto still no-ops
-    expect(applyThinkingModeToRequest(req, 'auto', { baseUrl: deepseekBase })).toBe(req);
+    expect(applyThinkingModeToRequest(dsReq, 'auto', { baseUrl: deepseekBase })).toBe(dsReq);
 
     const deepseekReq: ChatCompletionRequest = {
       ...baseRequest,

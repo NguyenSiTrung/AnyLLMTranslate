@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Drawer } from '../Drawer';
 
 describe('Drawer', () => {
-  it('renders when open, hides when closed, and closes on Escape', () => {
+  it('renders when open, hides when closed, closes on Escape, and handles onClose identity changes without stealing focus', () => {
     const onClose = vi.fn();
     const { rerender } = render(
       <Drawer open title="Edit provider" onClose={onClose}>
@@ -21,10 +21,8 @@ describe('Drawer', () => {
       </Drawer>,
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
 
-  it('handles onClose identity changes: no focus steal, latest callback wins', () => {
-    // does not steal focus from inputs when onClose identity changes while open
+    // Does not steal focus from inputs when onClose identity changes while open.
     const focusRender = render(
       <Drawer open title="Edit provider" onClose={() => {}}>
         <input aria-label="Display name" defaultValue="" />
@@ -47,16 +45,16 @@ describe('Drawer', () => {
     expect(input).toHaveValue('OpenAI');
     focusRender.unmount();
 
-    // still calls the latest onClose after parent re-renders with a new callback
+    // Still calls the latest onClose after parent re-renders with a new callback.
     const firstClose = vi.fn();
     const secondClose = vi.fn();
-    const { rerender } = render(
+    const { rerender: rerender2 } = render(
       <Drawer open title="Edit provider" onClose={firstClose}>
         <p>Body</p>
       </Drawer>,
     );
 
-    rerender(
+    rerender2(
       <Drawer open title="Edit provider" onClose={secondClose}>
         <p>Body</p>
       </Drawer>,

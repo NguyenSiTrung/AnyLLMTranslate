@@ -7,16 +7,13 @@ import {
 } from '../cacheFingerprint';
 
 describe('cacheFingerprint', () => {
-  it('builds stable payload and empty fingerprint when only languages set', () => {
+  it('builds a stable payload, empty fingerprint when only languages set, and changes fingerprint when glossary/model/prompt change', () => {
     const base = {
       sourceLanguage: 'en',
       targetLanguage: 'vi',
     };
     expect(buildFingerprintPayload(base)).toBe('||en|vi|||||');
     expect(computeCacheFingerprint(base)).toBe('');
-  });
-
-  it('changes fingerprint when glossary/model/prompt change', () => {
     const a = computeCacheFingerprint({
       sourceLanguage: 'en',
       targetLanguage: 'vi',

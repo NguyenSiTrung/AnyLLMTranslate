@@ -46,9 +46,7 @@ describe('textBatching', () => {
           maxTextLengthPerRequest: 2000,
         }),
       ).toEqual([]);
-    });
 
-    it('dedups case-sensitively and maps dupes to the first id', () => {
       // dedupPiecesByText: dedups case-sensitively and maps dupes to the first id
       const { deduped, dupes } = dedupPiecesByText([
         { id: '1', text: 'hello' },

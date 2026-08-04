@@ -820,7 +820,8 @@ describe('OpenAICompatibleService', () => {
       { text: 'you', startMs: 1600, endMs: 1900 },
     ];
 
-    it('detectPageCategory: throws on 429, fails parse, succeeds on valid JSON', async () => {
+    it('detectPageCategory, classifyPdfParagraphs, and resegmentYoutubeAsr: re-throw ApiError on transport/rate-limit while returning {success:false} for content/parse failures, with empty short-circuits', async () => {
+      // detectPageCategory: throws on 429, fails parse, succeeds on valid JSON
       vi.useFakeTimers();
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -845,9 +846,9 @@ describe('OpenAICompatibleService', () => {
       expect(unknown.category).toBe('Other');
 
       globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'software development' }));
-      const ok = await new OpenAICompatibleService(mockConfig).detectPageCategory(ctx);
-      expect(ok.success).toBe(true);
-      expect(ok.category).toBe('Software Development');
+      const dOk = await new OpenAICompatibleService(mockConfig).detectPageCategory(ctx);
+      expect(dOk.success).toBe(true);
+      expect(dOk.category).toBe('Software Development');
 
       // Enriched signals should appear in the user prompt.
       globalThis.fetch = mockFetchResponse(JSON.stringify({ category: 'News' }));
@@ -866,9 +867,8 @@ describe('OpenAICompatibleService', () => {
       expect(userContent).toContain('Breaking update');
       expect(userContent).toContain('article');
       expect(userContent).toContain('NewsArticle');
-    });
 
-    it('classifyPdfParagraphs: throws on 503, fails empty/parse, succeeds + empty short-circuit', async () => {
+      // classifyPdfParagraphs: throws on 503, fails empty/parse, succeeds + empty short-circuit
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
@@ -882,46 +882,45 @@ describe('OpenAICompatibleService', () => {
       ).rejects.toMatchObject({ name: 'ApiError', statusCode: 503 });
 
       globalThis.fetch = mockFetchResponse('not json {{{');
-      const parseFail = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
+      const cParseFail = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
         { id: 'p1', text: 'hi' },
       ]);
-      expect(parseFail.success).toBe(false);
-      expect(parseFail.error).toContain('Failed to parse classification');
+      expect(cParseFail.success).toBe(false);
+      expect(cParseFail.error).toContain('Failed to parse classification');
 
       globalThis.fetch = mockFetchResponse('   ');
-      const empty = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
+      const cEmpty = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
         { id: 'p1', text: 'hi' },
       ]);
-      expect(empty.success).toBe(false);
-      expect(empty.error).toContain('Empty response');
+      expect(cEmpty.success).toBe(false);
+      expect(cEmpty.error).toContain('Empty response');
 
       globalThis.fetch = mockFetchResponse(JSON.stringify({ labels: { p1: 'prose' } }));
-      const ok = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
+      const cOk = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([
         { id: 'p1', text: 'hi' },
       ]);
-      expect(ok.success).toBe(true);
-      expect(ok.labels?.p1).toBe('prose');
+      expect(cOk.success).toBe(true);
+      expect(cOk.labels?.p1).toBe('prose');
 
       globalThis.fetch = vi.fn();
-      const short = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([]);
-      expect(short.success).toBe(true);
+      const cShort = await new OpenAICompatibleService(mockConfig).classifyPdfParagraphs([]);
+      expect(cShort.success).toBe(true);
       expect(globalThis.fetch).not.toHaveBeenCalled();
-    });
 
-    it('resegmentYoutubeAsr: valid cues, parse fail, 503 throw, empty short-circuit', async () => {
+      // resegmentYoutubeAsr: valid cues, parse fail, 503 throw, empty short-circuit
       globalThis.fetch = mockFetchResponse(
         JSON.stringify({ segments: [{ start: 0, end: 2 }, { start: 3, end: 5 }] }),
       );
-      const ok = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(units, 'en');
-      expect(ok.success).toBe(true);
-      expect(ok.cues).toHaveLength(2);
-      expect(ok.cues?.[0]!.text).toMatch(/Hello there friend/i);
-      expect(ok.cues?.[1]!.text).toMatch(/how are you/i);
+      const rOk = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(units, 'en');
+      expect(rOk.success).toBe(true);
+      expect(rOk.cues).toHaveLength(2);
+      expect(rOk.cues?.[0]!.text).toMatch(/Hello there friend/i);
+      expect(rOk.cues?.[1]!.text).toMatch(/how are you/i);
 
       globalThis.fetch = mockFetchResponse('not json {{{');
-      const bad = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(units, 'en');
-      expect(bad.success).toBe(false);
-      expect(bad.error).toMatch(/parse/i);
+      const rBad = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(units, 'en');
+      expect(rBad.success).toBe(false);
+      expect(rBad.error).toMatch(/parse/i);
 
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -934,9 +933,9 @@ describe('OpenAICompatibleService', () => {
       ).rejects.toMatchObject({ name: 'ApiError', statusCode: 503 });
 
       globalThis.fetch = vi.fn();
-      const empty = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr([], 'en');
-      expect(empty.success).toBe(true);
-      expect(empty.cues).toEqual([]);
+      const rEmpty = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr([], 'en');
+      expect(rEmpty.success).toBe(true);
+      expect(rEmpty.cues).toEqual([]);
       expect(globalThis.fetch).not.toHaveBeenCalled();
 
       const many = Array.from({ length: 130 }, (_, i) => ({

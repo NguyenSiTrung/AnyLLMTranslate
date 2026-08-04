@@ -12,7 +12,7 @@ import {
 import { PLAYER_CHROME_PANEL_CLASS } from '@/content/playerChrome/types';
 
 describe('buildMiniStudioView', () => {
-  it('builds the panel skeleton with header, preview, sections, and footer', () => {
+  it('builds the panel skeleton with header, preview, sections, and footer; labels knobs and options with capitalized text; renders section titles', () => {
     const v = buildMiniStudioView();
     expect(v.panel.className).toBe(PLAYER_CHROME_PANEL_CLASS);
     expect(v.panel.hidden).toBe(true);
@@ -35,20 +35,14 @@ describe('buildMiniStudioView', () => {
     ]);
     expect(v.glossary.dataset.action).toBe('glossary');
     expect(v.style.textContent).toContain('backdrop-filter');
-  });
 
-  it('labels knobs and knob options with human-friendly capitalized text', () => {
-    const v = buildMiniStudioView();
     const labels = v.knobSelects.map(
       (s) => v.panel.querySelector(`label[for="${s.id}"]`)?.textContent,
     );
     expect(labels).toEqual(['Faithfulness', 'Brevity', 'Register', 'Profanity']);
     expect(v.knobSelects[0].options[0].textContent).toBe('Auto');
     expect(v.knobSelects[0].options[1].textContent).toBe('Literal');
-  });
 
-  it('renders section titles', () => {
-    const v = buildMiniStudioView();
     const titles = [...v.panel.querySelectorAll('.section-title')].map((el) => el.textContent);
     expect(titles).toEqual(['Appearance', 'Translation style', 'Glossary']);
   });

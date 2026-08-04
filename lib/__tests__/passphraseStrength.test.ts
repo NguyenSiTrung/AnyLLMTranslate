@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { passphraseStrength } from '../passphraseStrength';
 
 describe('passphraseStrength', () => {
-  it('returns null for empty input (meter hidden)', () => {
+  it('returns null for empty input (meter hidden) and classifies weak, fair, and strong passphrases by length and character classes', () => {
     expect(passphraseStrength('')).toBeNull();
-  });
 
-  it('classifies weak, fair, and strong passphrases by length and character classes', () => {
     // weak: under 8 chars, or 8+ with a single class below 12 chars
     expect(passphraseStrength('abc')).toBe('weak');
     expect(passphraseStrength('abcdefgh')).toBe('weak');

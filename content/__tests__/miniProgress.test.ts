@@ -17,7 +17,7 @@ describe('miniProgress', () => {
     hideMiniProgress();
   });
 
-  it('shows translating count and Stop', () => {
+  it('shows translating count and Stop, hides when idle or total is 0, and Stop invokes the callback and hides', () => {
     const onStop = vi.fn();
     updateMiniProgress({
       translated: 3,
@@ -29,9 +29,8 @@ describe('miniProgress', () => {
     const bar = document.querySelector('[data-anyllm-role="mini-progress"]');
     expect(bar?.textContent).toContain('3/10');
     expect(bar?.querySelector('.anyllm-mini-progress-stop')?.textContent).toBe('Stop');
-  });
 
-  it('hides when idle or total is 0', () => {
+    // Idle / zero totals hide the progress bar.
     updateMiniProgress({
       translated: 1,
       total: 2,
@@ -45,10 +44,8 @@ describe('miniProgress', () => {
       onStop: () => {},
     });
     expect(isMiniProgressVisible()).toBe(false);
-  });
 
-  it('Stop invokes callback and hides', () => {
-    const onStop = vi.fn();
+    // Stop click invokes the callback and hides.
     updateMiniProgress({
       translated: 1,
       total: 5,

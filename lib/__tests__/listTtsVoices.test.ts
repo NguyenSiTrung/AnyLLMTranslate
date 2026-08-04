@@ -8,19 +8,17 @@ import {
   voicesEndpointFromBaseUrl,
 } from '@/lib/tts/listTtsVoices';
 
-describe('voicesEndpointFromBaseUrl', () => {
-  it('builds /audio/voices from /v1 base', () => {
+describe('listTtsVoices helpers', () => {
+  it('builds the voices endpoint, parses response shapes, and fetches with auth/error mapping', async () => {
+    // voicesEndpointFromBaseUrl: /v1 (with or without trailing slash) -> /v1/audio/voices
     expect(voicesEndpointFromBaseUrl('https://api.mistral.ai/v1')).toBe(
       'https://api.mistral.ai/v1/audio/voices',
     );
     expect(voicesEndpointFromBaseUrl('https://api.mistral.ai/v1/')).toBe(
       'https://api.mistral.ai/v1/audio/voices',
     );
-  });
-});
 
-describe('parseTtsVoicesResponse', () => {
-  it('parses Mistral items, string arrays, and data arrays', () => {
+    // parseTtsVoicesResponse: Mistral items, string arrays, and data arrays
     const voices = parseTtsVoicesResponse({
       items: [
         { id: 'voice-1', name: 'Neutral Male' },
@@ -43,11 +41,8 @@ describe('parseTtsVoicesResponse', () => {
     expect(
       parseTtsVoicesResponse({ data: [{ voice_id: 'abc', name: 'A' }] }).map((v) => v.id),
     ).toEqual(['abc']);
-  });
-});
 
-describe('listTtsVoices', () => {
-  it('GETs voices endpoint and returns choices on ok, error on non-ok', async () => {
+    // listTtsVoices: GETs voices endpoint and returns choices on ok, error on non-ok
     const fetchImpl = vi.fn(async () =>
       new Response(
         JSON.stringify({

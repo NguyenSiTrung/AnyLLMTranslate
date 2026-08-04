@@ -10,7 +10,7 @@ import {
 } from '@/lib/openAiCompatibleCatalog';
 
 describe('openAiCompatibleCatalog', () => {
-  it('lists/filters providers, resolves key URLs, identity fallbacks, and category groups', () => {
+  it('lists/filters providers, resolves key URLs, identity fallbacks, category groups, and includes the OpenCode Go entry', () => {
     const ids = OPENAI_COMPATIBLE_CATALOG.map((e) => e.id);
     expect(ids).toContain('openrouter');
     expect(ids).toContain('ollama');
@@ -18,6 +18,7 @@ describe('openAiCompatibleCatalog', () => {
     expect(ids).toContain('google-ai-studio');
     expect(ids).toContain('opencode-zen');
     expect(ids).toContain('deepseek');
+    expect(ids).toContain('opencode-go');
     expect(getCatalogEntryById('openrouter')?.baseUrl).toBe('https://openrouter.ai/api/v1');
     expect(getCatalogEntryById('openrouter')?.requiresApiKey).toBe(true);
     expect(getCatalogEntryById('google-ai-studio')?.baseUrl).toBe(
@@ -88,11 +89,9 @@ describe('openAiCompatibleCatalog', () => {
     const filtered = groupByCategory(filterCatalog('ollama'));
     expect(filtered).toHaveLength(1);
     expect(filtered[0]!.category).toBe('local');
-  });
 
-  it('includes the OpenCode Go catalog entry', () => {
+    // OpenCode Go entry: metadata, filtering, and URL inference.
     const entry = getCatalogEntryById('opencode-go');
-
     expect(entry).toMatchObject({
       id: 'opencode-go',
       displayName: 'OpenCode Go',

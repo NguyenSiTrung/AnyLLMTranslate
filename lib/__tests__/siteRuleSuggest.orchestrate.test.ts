@@ -56,7 +56,7 @@ describe('buildSuggestSiteRuleDraft', () => {
     );
   });
 
-  it('errors on bad URL', async () => {
+  it('errors on bad URLs and when capture fails', async () => {
     const r = await buildSuggestSiteRuleDraft({
       urlInput: 'javascript:alert(1)',
       findOpenTabOutline: async () => null,
@@ -67,10 +67,8 @@ describe('buildSuggestSiteRuleDraft', () => {
     });
     expect(r.success).toBe(false);
     expect(r.error).toBeTruthy();
-  });
 
-  it('errors when capture fails', async () => {
-    const r = await buildSuggestSiteRuleDraft({
+    const r2 = await buildSuggestSiteRuleDraft({
       urlInput: 'https://example.com',
       findOpenTabOutline: async () => null,
       loadUrlOutline: async () => {
@@ -78,6 +76,6 @@ describe('buildSuggestSiteRuleDraft', () => {
       },
       runLlm: async () => null,
     });
-    expect(r.success).toBe(false);
+    expect(r2.success).toBe(false);
   });
 });

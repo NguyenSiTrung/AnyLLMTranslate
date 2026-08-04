@@ -8,7 +8,7 @@ import {
 } from '@/lib/subtitleParser';
 
 describe('subtitleParser', () => {
-  it('parses WebVTT cues, metadata, BOM/blocks, and empty input', () => {
+  it('parses WebVTT cues, metadata, BOM/blocks, and empty input; parses SRT and auto-detects formats/timestamps', () => {
     const vtt = `WEBVTT
 
 1
@@ -53,9 +53,8 @@ This has no timing line
 Actual cue`;
     expect(parseWebVTT(withBlocks)).toHaveLength(1);
     expect(parseWebVTT(withBlocks)[0].text).toBe('Actual cue');
-  });
 
-  it('parses SRT and auto-detects formats/timestamps', () => {
+    // SRT parsing + auto-detection of formats/timestamps
     const srt = `1
 00:00:01,500 --> 00:00:04,750
 Hello world
@@ -63,10 +62,10 @@ Hello world
 2
 00:00:05,000 --> 00:00:08,000
 Second cue`;
-    const cues = parseSRT(srt);
-    expect(cues).toHaveLength(2);
-    expect(cues[0].startTime).toBe(1.5);
-    expect(cues[0].voice).toBeUndefined();
+    const srtCues = parseSRT(srt);
+    expect(srtCues).toHaveLength(2);
+    expect(srtCues[0].startTime).toBe(1.5);
+    expect(srtCues[0].voice).toBeUndefined();
 
     const crlf = parseSRT(
       '1\r\n00:00:01,000 --> 00:00:04,000\r\nTest\r\n\r\n2\r\n00:00:05,000 --> 00:00:08,000\r\nSecond',
