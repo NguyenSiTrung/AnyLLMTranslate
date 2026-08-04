@@ -64,29 +64,39 @@
 <!-- execution: sequential -->
 <!-- depends: phase3 -->
 
-- [ ] Task 1: Failing component tests for new
+- [x] Task 1: Failing component tests for new
   `entrypoints/options/sections/subtitles/PrealignFromLinkCard.tsx`: URL validation, run
   states, batch progress i/n, already-saved, typed errors, token-cost note, DisabledDimmer
   when subtitles master is off.
 
-- [ ] Task 2: Implement card; wire into `SubtitlesSection.tsx` between Caption quality and
+- [x] Task 2: Implement card; wire into `SubtitlesSection.tsx` between Caption quality and
   Saved caption re-aligns (fix stagger indices); listen for progress broadcast +
-  `ASR_REALIGN_CACHE_UPDATED`.
+  `ASR_REALIGN_CACHE_UPDATED`. (Card listens for `ASR_REALIGN_PROGRESS_BROADCAST`;
+  `SavedCaptionRealignsCard` already refreshes on `ASR_REALIGN_CACHE_UPDATED`.)
 
-- [ ] Task 3: Update `SubtitlesSection.test.tsx` section-level coverage.
+- [x] Task 3: Update `SubtitlesSection.test.tsx` section-level coverage (heading present +
+  DOM order Caption quality → Re-align from link → Saved caption re-aligns).
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
+  — Automated gates green (card 16/16, section 18/18, lint 0, tsc 0). Interactive
+  smoke deferred to Phase 5.
 
 ## Phase 5: Regression, Lint & Manual Smoke
 <!-- execution: sequential -->
 <!-- depends: phase4 -->
 
-- [ ] Task 1: Full `pnpm test` green.
+- [x] Task 1: Full `pnpm test` green. (633/633 on the final tree; two earlier runs showed
+  pre-existing timing-flaky tests — StatisticsSection interactions, AdvancedSection.backup
+  undo toast, background.test.ts chunk-retry — all pass in isolation and moved between
+  runs; unrelated to this track.)
 
-- [ ] Task 2: `pnpm lint` + `tsc --noEmit` clean.
+- [x] Task 2: `pnpm lint` + `tsc --noEmit` clean. (eslint 0 errors; tsc 0 errors;
+  `wxt build` green with `*://*.youtube.com/*` in the built manifest.)
 
 - [ ] Task 3: Manual smoke — paste URL → progress → entry appears in Saved re-aligns; open
   the video → "Using saved re-align" hit, no re-align LLM call; no translation issued during
-  pre-align; each error state renders.
+  pre-align; each error state renders. **Requires a live browser + YouTube — left for user
+  verification (see handoff).**
 
 - [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
+  — **User action required** (live smoke above).
