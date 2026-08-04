@@ -74,6 +74,7 @@ import {
   youtubeThumbnailUrl,
   youtubeWatchUrl,
 } from '@/lib/youtubeAsrRealignCache';
+import { buildJson3TimedtextUrl } from '@/lib/youtubeWatchPage';
 import type {
   AsrRealignProgressMessage,
   GetAsrRealignCacheResult,
@@ -3234,7 +3235,11 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
 
   let body: string;
   try {
-    body = await fetchSubtitleContent(track.url);
+    // Canonicalize the proactive fetch on fmt=json3 (word-level) so this path
+    // produces the same units + contentHash as the Settings pre-align flow
+    // (cache-key parity, FR-9). Track identity/fallback keep the original URL;
+    // the intercept path stays passive (it serves whatever the player asked).
+    body = await fetchSubtitleContent(buildJson3TimedtextUrl(track.url));
   } catch (error) {
     console.error('AnyLLMTranslate: Failed to fetch YouTube timedtext', error);
     if (state.navigationEpoch !== epochAtStart) return;

@@ -19,7 +19,13 @@ vi.mock('idb-keyval', () => ({
 
 import { runYoutubeLinkPrealign } from '../youtubeLinkPrealign';
 import { getAsrRealignEntry } from '../youtubeAsrRealignStore';
-import type { AsrTimedUnit } from '@/lib/youtubeAsrResegment';
+import { prepareYoutubeAsrAiInput, type AsrTimedUnit } from '@/lib/youtubeAsrResegment';
+import {
+  buildAsrRealignCacheKey,
+  hashAsrRealignContent,
+} from '@/lib/youtubeAsrRealignCache';
+import { buildJson3TimedtextUrl } from '@/lib/youtubeWatchPage';
+import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import type { SubtitleCue } from '@/types/subtitle';
 
 const VIDEO_ID = 'abc123';
@@ -348,6 +354,38 @@ describe('runYoutubeLinkPrealign', () => {
     const { deps } = makeDeps({ json3Body: JSON.stringify({ events: [] }) });
     const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
     expect(result).toMatchObject({ success: false, errorCode: 'no-captions' });
+  });
+
+  it('hash parity: Settings-flow units + contentHash match the playback pipeline', async () => {
+    // FR-9 / AC-2: for the same caption body, the Settings pre-align flow and
+    // the proactive playback path must derive identical units and contentHash,
+    // so both compute the same ai:{videoId}:{lang}:{hash} cache key.
+    const { deps, resegment } = makeDeps();
+
+    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
+    expect(result).toMatchObject({ success: true, outcome: 'realigned' });
+
+    const [settingsUnits, settingsLang] = resegment.mock.calls[0] as unknown as [
+      AsrTimedUnit[],
+      string,
+    ];
+    const settingsKey = [...memory.keys()][0]!;
+
+    // Replicate the playback path exactly as activateYoutubeTrackViaPipelineInner
+    // + applyYoutubeAsrPipeline build units from the fetched json3 body.
+    const playbackUrl = buildJson3TimedtextUrl(ASR_BASE_URL);
+    const handler = new YouTubeHandler();
+    const contentType =
+      /[?&]fmt=json3(?:&|$)/i.test(playbackUrl) || JSON3_BODY.trimStart().startsWith('{')
+        ? 'application/json'
+        : 'text/xml';
+    const playbackRawCues = handler.transformResponse(JSON3_BODY, contentType, playbackUrl);
+    const playbackUnits = prepareYoutubeAsrAiInput({ body: JSON3_BODY, cues: playbackRawCues });
+    const playbackHash = await hashAsrRealignContent(playbackUnits);
+    const playbackKey = buildAsrRealignCacheKey(VIDEO_ID, settingsLang || 'en', playbackHash);
+
+    expect(playbackUnits).toEqual(settingsUnits);
+    expect(playbackKey).toBe(settingsKey);
   });
 
   it('rejects a timedtext baseUrl outside youtube.com (youtube-only guard)', async () => {
