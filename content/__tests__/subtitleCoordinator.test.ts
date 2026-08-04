@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import type * as SubtitleCoordinator from '@/content/subtitleCoordinator';
 
 // ============================================================================
 // Module-level mock factories — vi.mock() is hoisted, so define fn vars here
@@ -42,6 +43,7 @@ const mockSendTranslatedSubtitle = vi.fn();
 let capturedInterceptedHandler: ((payload: unknown, requestId: string) => Promise<void>) | null =
   null;
 let _capturedTracksHandler: ((payload: unknown) => Promise<void>) | null = null;
+let _capturedManifestCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: (handler: (payload: unknown, requestId: string) => Promise<void>) => {
     capturedInterceptedHandler = handler;
@@ -55,7 +57,10 @@ vi.mock('@/content/messageBridge', () => ({
   onDomTrackChanged: () => () => {},
   onTextTrackCues: () => () => {},
   onMseCues: () => () => {},
-  onManifestCues: () => () => {},
+  onManifestCues: (handler: (payload: unknown) => Promise<void>) => {
+    _capturedManifestCuesHandler = handler;
+    return () => {};
+  },
   onMpdProcessing: () => () => {},
   sendTranslatedSubtitle: (...args: unknown[]) => { mockSendTranslatedSubtitle(...args); },
 }));
@@ -82,7 +87,7 @@ vi.mock('@/content/subtitleOverlay', () => ({
 const mockInitializeControls = vi.fn();
 const mockEnableDragReposition = vi.fn<(...args: unknown[]) => (() => void)>(() => vi.fn());
 vi.mock('@/content/subtitleControls', () => ({
-  initializeControls: (...args: unknown[]) => { mockInitializeControls(...args); },
+  initializeControls: (...args: unknown[]) => mockInitializeControls(...args),
   enableDragReposition: (...args: unknown[]) => { mockEnableDragReposition(...args); },
 }));
 
@@ -166,6 +171,726 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+});
+
+describe('subtitleCoordinator – Coursera direct full-track lifecycle', () => {
+  const COURSERA_VTT_URL =
+    'https://www.coursera.org/api/subtitleAssetProxy.v1/asset.vtt?fileExtension=vtt';
+  const COURSERA_VTT =
+    'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n\n' +
+    '00:00:02.000 --> 00:00:04.000\nWorld\n';
+
+  type TranslationReply = {
+    success: boolean;
+    cues?: typeof MOCK_TRANSLATED_CUES;
+    error?: string;
+    sessionId?: number;
+  };
+
+  let coordinator: typeof SubtitleCoordinator;
+  let stopCoordinator: (() => void) | null = null;
+  let extensionMessageHandler: ((
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: () => void,
+  ) => void) | null = null;
+  let resolveTranslation!: (reply: TranslationReply) => void;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof vi.fn>;
+  let video: HTMLVideoElement;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    capturedInterceptedHandler = null;
+    _capturedTracksHandler = null;
+    _capturedManifestCuesHandler = null;
+    extensionMessageHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.coursera.org',
+        pathname: '/learn/project-management/lecture/example',
+        href: 'https://www.coursera.org/learn/project-management/lecture/example',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    document.body.innerHTML = '';
+    video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      writable: true,
+      value: 201,
+    });
+    document.body.appendChild(video);
+
+    const courseraHandler = {
+      platform: 'coursera',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => MOCK_CUES),
+    };
+    mockDetectCurrentHandler.mockReturnValue(courseraHandler);
+    mockGetHandlerByPlatform.mockImplementation((platform: string) =>
+      platform === 'coursera' ? courseraHandler : null,
+    );
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      targetLanguage: 'vi',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        preferredSubtitleLanguage: 'en',
+        autoActivateSubtitles: false,
+      },
+    });
+    mockParseSubtitles.mockReturnValue(MOCK_CUES);
+    mockOnMessage.mockReturnValue(() => {});
+
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => COURSERA_VTT,
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pendingTranslation = new Promise<TranslationReply>((resolve) => {
+      resolveTranslation = resolve;
+    });
+    runtimeSendMessage = vi.fn((message: { action?: string }) => {
+      if (message.action === 'translateSubtitle') return pendingTranslation;
+      return Promise.resolve({ success: true });
+    });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: {
+          addListener: vi.fn((handler: (...args: unknown[]) => void) => {
+            extensionMessageHandler = handler as typeof extensionMessageHandler;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    coordinator = await import('@/content/subtitleCoordinator');
+    stopCoordinator = coordinator.startCoordinator();
+  });
+
+  afterEach(() => {
+    stopCoordinator?.();
+    stopCoordinator = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+    vi.resetModules();
+  });
+
+  async function discoverTrack(url: string): Promise<void> {
+    if (!_capturedTracksHandler) {
+      throw new Error('track discovery handler was not registered');
+    }
+    await _capturedTracksHandler({
+      platform: 'html5',
+      videoId: 'course-video-1',
+      tracks: [
+        {
+          language: 'en',
+          label: 'English',
+          url,
+          isAutoGenerated: false,
+          platform: 'coursera',
+          videoId: 'course-video-1',
+        },
+      ],
+    });
+  }
+
+  it('keeps direct VTT cues/session through an in-range startup seek and applies Vietnamese chunks', async () => {
+    await discoverTrack(COURSERA_VTT_URL);
+
+    const activation = coordinator.selectSubtitleTrack('en');
+    await vi.waitFor(() => {
+      expect(mockInitializeOverlay).toHaveBeenCalledWith(
+        MOCK_CUES,
+        expect.any(Object),
+        video,
+      );
+    });
+
+    const translateCall = runtimeSendMessage.mock.calls.find(
+      ([message]) => (message as { action?: string }).action === 'translateSubtitle',
+    );
+    const translateRequest = translateCall?.[0] as
+      | {
+          sourceLanguage?: string;
+          targetLanguage?: string;
+          sessionId?: number;
+        }
+      | undefined;
+    if (!translateRequest || typeof translateRequest.sessionId !== 'number') {
+      throw new Error('pre-assigned translation session was not sent');
+    }
+    expect(translateRequest).toEqual(
+      expect.objectContaining({
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        sessionId: expect.any(Number),
+      }),
+    );
+
+    mockUpdateCues.mockClear();
+    video.currentTime = 3;
+    video.dispatchEvent(new Event('seeked'));
+
+    const cancelCalls = runtimeSendMessage.mock.calls.filter(
+      ([message]) =>
+        (message as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
+    );
+    expect(cancelCalls).toHaveLength(0);
+    expect(mockUpdateCues).not.toHaveBeenCalledWith([]);
+
+    if (!extensionMessageHandler) {
+      throw new Error('extension message handler was not registered');
+    }
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: [MOCK_TRANSLATED_CUES[0]],
+        sessionId: translateRequest.sessionId,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockUpdateCues).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'Xin chào', originalText: 'Hello' }),
+      ]),
+    );
+    const progressivelyRenderedCues = mockUpdateCues.mock.calls.at(-1)?.[0] as
+      | typeof MOCK_TRANSLATED_CUES
+      | undefined;
+    expect(progressivelyRenderedCues).toHaveLength(MOCK_CUES.length);
+    expect(progressivelyRenderedCues?.[1]).toEqual(MOCK_CUES[1]);
+    expect(mockUpdateCues).not.toHaveBeenCalledWith([]);
+
+    mockUpdateCues.mockClear();
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 0,
+        chunkCues: [MOCK_TRANSLATED_CUES[0]],
+        sessionId: translateRequest.sessionId + 1,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+
+    resolveTranslation({
+      success: true,
+      cues: MOCK_TRANSLATED_CUES,
+      sessionId: translateRequest.sessionId,
+    });
+    await activation;
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('lets the newest direct track own the renderer when an older translation finishes late', async () => {
+    const firstUrl = 'https://www.coursera.org/subtitle_first_en.vtt';
+    const secondUrl = 'https://www.coursera.org/subtitle_second_en.vtt';
+    const firstCues = [{ startTime: 0, endTime: 2, text: 'First source' }];
+    const secondCues = [{ startTime: 0, endTime: 2, text: 'Second source' }];
+    const secondTranslated = [
+      {
+        startTime: 0,
+        endTime: 2,
+        text: 'Nguồn thứ hai',
+        originalText: 'Second source',
+      },
+    ];
+
+    mockParseSubtitles
+      .mockReturnValueOnce(firstCues)
+      .mockReturnValueOnce(secondCues);
+
+    let resolveFirst!: (reply: TranslationReply) => void;
+    let resolveSecond!: (reply: TranslationReply) => void;
+    const firstTranslation = new Promise<TranslationReply>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondTranslation = new Promise<TranslationReply>((resolve) => {
+      resolveSecond = resolve;
+    });
+    runtimeSendMessage.mockImplementation((message: { action?: string; cues?: typeof firstCues }) => {
+      if (message.action !== 'translateSubtitle') return Promise.resolve({ success: true });
+      return message.cues?.[0]?.text === 'First source'
+        ? firstTranslation
+        : secondTranslation;
+    });
+
+    const firstActivation = coordinator.forceOverlayMode(firstUrl, 'first VTT body');
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: firstCues }),
+      );
+    });
+
+    const secondActivation = coordinator.forceOverlayMode(secondUrl, 'second VTT body');
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: secondCues }),
+      );
+    });
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(secondCues);
+
+    const translateRequests = runtimeSendMessage.mock.calls
+      .map(([message]) => message as { action?: string; sessionId?: number; cues?: typeof firstCues })
+      .filter((message) => message.action === 'translateSubtitle');
+    const firstSessionId = translateRequests[0]?.sessionId;
+    const secondSessionId = translateRequests[1]?.sessionId;
+    if (typeof firstSessionId !== 'number' || typeof secondSessionId !== 'number') {
+      throw new Error('direct activations did not allocate session IDs');
+    }
+
+    mockCleanupOverlay.mockClear();
+    resolveFirst({ success: false, error: 'stale first request', sessionId: firstSessionId });
+    await firstActivation;
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(coordinator.isInOverlayMode()).toBe(true);
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(secondCues);
+
+    resolveSecond({ success: true, cues: secondTranslated, sessionId: secondSessionId });
+    await secondActivation;
+    expect(coordinator.isInOverlayMode()).toBe(true);
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(secondTranslated);
+  });
+
+  it('keeps full English fallback cues when a late-offset chunk wins the response race', async () => {
+    const sourceCues = Array.from({ length: 30 }, (_, index) => ({
+      startTime: index * 2,
+      endTime: index * 2 + 2,
+      text: `English cue ${index}`,
+    }));
+    const translatedCue = {
+      ...sourceCues[25],
+      text: 'Câu tiếng Việt 25',
+      originalText: sourceCues[25].text,
+    };
+    mockParseSubtitles.mockReturnValue(sourceCues);
+
+    const activation = coordinator.forceOverlayMode(
+      'https://www.coursera.org/subtitle_long_en.vtt',
+      'long VTT body',
+    );
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: sourceCues }),
+      );
+    });
+    const translateRequest = runtimeSendMessage.mock.calls.find(
+      ([message]) => (message as { action?: string }).action === 'translateSubtitle',
+    )?.[0] as { sessionId?: number } | undefined;
+    if (typeof translateRequest?.sessionId !== 'number' || !extensionMessageHandler) {
+      throw new Error('long-track translation session was not initialized');
+    }
+
+    mockUpdateCues.mockClear();
+    extensionMessageHandler(
+      {
+        action: 'SUBTITLE_CHUNK_TRANSLATED',
+        chunkStart: 25,
+        chunkCues: [translatedCue],
+        sessionId: translateRequest.sessionId,
+      },
+      {} as chrome.runtime.MessageSender,
+      () => {},
+    );
+
+    const rendered = mockUpdateCues.mock.calls.at(-1)?.[0] as
+      | typeof sourceCues
+      | undefined;
+    expect(rendered).toHaveLength(sourceCues.length);
+    expect(rendered?.[24]).toEqual(sourceCues[24]);
+    expect(rendered?.[25]).toEqual(translatedCue);
+    expect(rendered?.[26]).toEqual(sourceCues[26]);
+
+    resolveTranslation({
+      success: true,
+      cues: MOCK_TRANSLATED_CUES,
+      sessionId: translateRequest.sessionId,
+    });
+    await activation;
+  });
+
+  it('ignores a direct-track failure response after SPA state reset', async () => {
+    await discoverTrack(COURSERA_VTT_URL);
+    const activation = coordinator.selectSubtitleTrack('en');
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle' }),
+      );
+    });
+
+    coordinator.resetCoordinatorState();
+    mockCleanupOverlay.mockClear();
+    mockShowSubtitleToast.mockClear();
+    resolveTranslation({ success: false, error: 'late response after navigation' });
+    await activation;
+
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(mockShowSubtitleToast).not.toHaveBeenCalledWith('Subtitle translation failed.');
+    expect(coordinator.isInOverlayMode()).toBe(false);
+  });
+
+  it('does not repopulate direct cues after an out-of-range seek cancels the session', async () => {
+    await discoverTrack(COURSERA_VTT_URL);
+    const activation = coordinator.selectSubtitleTrack('en');
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle' }),
+      );
+    });
+
+    mockUpdateCues.mockClear();
+    video.currentTime = 9999;
+    video.dispatchEvent(new Event('seeked'));
+    await vi.waitFor(() => {
+      expect(mockUpdateCues).toHaveBeenCalledWith([]);
+    });
+    expect(runtimeSendMessage).toHaveBeenCalledWith({
+      action: 'CANCEL_SUBTITLE_SESSION',
+    });
+
+    mockUpdateCues.mockClear();
+    resolveTranslation({ success: true, cues: MOCK_TRANSLATED_CUES });
+    await activation;
+
+    expect(mockUpdateCues).not.toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('does not let a late direct response overwrite a manifest takeover', async () => {
+    const directCues = [{ startTime: 0, endTime: 2, text: 'Direct source' }];
+    const directTranslated = [
+      {
+        startTime: 0,
+        endTime: 2,
+        text: 'Nguồn trực tiếp',
+        originalText: 'Direct source',
+      },
+    ];
+    const manifestCues = [{ startTime: 10, endTime: 12, text: 'Manifest source' }];
+    const manifestUrl = 'https://cdn.example.com/subtitles/en.m3u8';
+    mockParseSubtitles.mockReturnValue(directCues);
+
+    let resolveDirect!: (reply: TranslationReply) => void;
+    const directTranslation = new Promise<TranslationReply>((resolve) => {
+      resolveDirect = resolve;
+    });
+    runtimeSendMessage.mockImplementation(
+      (message: { action?: string; cues?: Array<{ text: string }>; sessionId?: number }) => {
+        if (message.action === 'FETCH_MANIFEST_SUBTITLES') {
+          return Promise.resolve({
+            success: true,
+            cues: manifestCues,
+            language: 'en',
+          });
+        }
+        if (message.action === 'translateSubtitle') {
+          if (message.cues?.[0]?.text === 'Direct source') return directTranslation;
+          return Promise.resolve({
+            success: true,
+            cues: [
+              {
+                startTime: 0,
+                endTime: 1,
+                text: 'Nguồn manifest',
+                originalText: 'Manifest source',
+              },
+            ],
+            sessionId: message.sessionId,
+          });
+        }
+        return Promise.resolve({ success: true });
+      },
+    );
+
+    const directActivation = coordinator.forceOverlayMode(
+      'https://www.coursera.org/subtitle_direct_en.vtt',
+      'direct VTT body',
+    );
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: directCues }),
+      );
+    });
+
+    await discoverTrack(manifestUrl);
+    await coordinator.selectSubtitleTrack('en');
+    expect(runtimeSendMessage).toHaveBeenCalledWith({
+      action: 'CANCEL_SUBTITLE_SESSION',
+    });
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: 'Nguồn manifest',
+          originalText: 'Manifest source',
+        }),
+      ]),
+    );
+
+    const directRequest = runtimeSendMessage.mock.calls.find(
+      ([message]) =>
+        (message as { action?: string; cues?: Array<{ text: string }> }).action ===
+          'translateSubtitle' &&
+        (message as { cues?: Array<{ text: string }> }).cues?.[0]?.text === 'Direct source',
+    )?.[0] as { sessionId?: number } | undefined;
+    mockUpdateCues.mockClear();
+    resolveDirect({
+      success: true,
+      cues: directTranslated,
+      sessionId: directRequest?.sessionId,
+    });
+    await directActivation;
+
+    expect(mockUpdateCues).not.toHaveBeenCalledWith(directTranslated);
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('does not let direct attachment resume after an earlier manifest takeover', async () => {
+    const directCues = [{ startTime: 0, endTime: 2, text: 'Blocked direct source' }];
+    const manifestCues = [{ startTime: 10, endTime: 12, text: 'Early manifest source' }];
+    const manifestUrl = 'https://cdn.example.com/subtitles/early-en.m3u8';
+    mockParseSubtitles.mockReturnValue(directCues);
+
+    let releaseDirectControls!: () => void;
+    const blockedDirectControls = new Promise<void>((resolve) => {
+      releaseDirectControls = resolve;
+    });
+    mockInitializeControls
+      .mockImplementationOnce(() => blockedDirectControls)
+      .mockResolvedValue(undefined);
+    runtimeSendMessage.mockImplementation(
+      (message: { action?: string; cues?: Array<{ text: string }>; sessionId?: number }) => {
+        if (message.action === 'FETCH_MANIFEST_SUBTITLES') {
+          return Promise.resolve({ success: true, cues: manifestCues, language: 'en' });
+        }
+        if (message.action === 'translateSubtitle') {
+          const originalText = message.cues?.[0]?.text ?? '';
+          return Promise.resolve({
+            success: true,
+            cues: [
+              {
+                startTime: 0,
+                endTime: 1,
+                text: originalText === 'Early manifest source'
+                  ? 'Manifest đến sớm'
+                  : 'Nguồn trực tiếp bị chặn',
+                originalText,
+              },
+            ],
+            sessionId: message.sessionId,
+          });
+        }
+        return Promise.resolve({ success: true });
+      },
+    );
+
+    const directActivation = coordinator.forceOverlayMode(
+      'https://www.coursera.org/subtitle_blocked_en.vtt',
+      'blocked direct VTT body',
+    );
+    await vi.waitFor(() => {
+      expect(mockInitializeControls).toHaveBeenCalledTimes(1);
+    });
+
+    await discoverTrack(manifestUrl);
+    await coordinator.selectSubtitleTrack('en');
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: 'Manifest đến sớm',
+          originalText: 'Early manifest source',
+        }),
+      ]),
+    );
+
+    mockUpdateCues.mockClear();
+    releaseDirectControls();
+    await directActivation;
+
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+    const sentBlockedDirectTranslation = runtimeSendMessage.mock.calls.some(
+      ([message]) =>
+        (message as { action?: string; cues?: Array<{ text: string }> }).action ===
+          'translateSubtitle' &&
+        (message as { cues?: Array<{ text: string }> }).cues?.[0]?.text ===
+          'Blocked direct source',
+    );
+    expect(sentBlockedDirectTranslation).toBe(false);
+  });
+
+  it('preempts a pending direct response when appended manifest cues take ownership', async () => {
+    const directCues = [{ startTime: 0, endTime: 2, text: 'Pending direct source' }];
+    const directTranslated = [
+      {
+        startTime: 0,
+        endTime: 2,
+        text: 'Nguồn trực tiếp đến muộn',
+        originalText: 'Pending direct source',
+      },
+    ];
+    const manifestCues = [{ startTime: 10, endTime: 12, text: 'Appended manifest source' }];
+    const manifestTranslated = [
+      {
+        startTime: 10,
+        endTime: 12,
+        text: 'Nguồn manifest nối thêm',
+        originalText: 'Appended manifest source',
+      },
+    ];
+    mockParseSubtitles.mockReturnValue(directCues);
+
+    let resolveDirect!: (reply: TranslationReply) => void;
+    const pendingDirect = new Promise<TranslationReply>((resolve) => {
+      resolveDirect = resolve;
+    });
+    runtimeSendMessage.mockImplementation(
+      (message: { action?: string; cues?: Array<{ text: string }>; sessionId?: number }) => {
+        if (message.action === 'translateSubtitle') {
+          if (message.cues?.[0]?.text === 'Pending direct source') return pendingDirect;
+          return Promise.resolve({
+            success: true,
+            cues: manifestTranslated,
+            sessionId: message.sessionId,
+          });
+        }
+        return Promise.resolve({ success: true });
+      },
+    );
+
+    const directActivation = coordinator.forceOverlayMode(
+      'https://www.coursera.org/subtitle_pending_en.vtt',
+      'pending direct VTT body',
+    );
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: directCues }),
+      );
+    });
+    if (!_capturedManifestCuesHandler) {
+      throw new Error('manifest cue handler was not registered');
+    }
+
+    await _capturedManifestCuesHandler({
+      cues: manifestCues,
+      language: 'en',
+      url: 'https://cdn.example.com/subtitles/appended-en.vtt',
+      append: true,
+    });
+    const cancelledDirectSession = runtimeSendMessage.mock.calls.some(
+      ([message]) =>
+        (message as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
+    );
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: 'Nguồn manifest nối thêm',
+          originalText: 'Appended manifest source',
+        }),
+      ]),
+    );
+
+    mockUpdateCues.mockClear();
+    const directRequest = runtimeSendMessage.mock.calls.find(
+      ([message]) =>
+        (message as { action?: string; cues?: Array<{ text: string }> }).action ===
+          'translateSubtitle' &&
+        (message as { cues?: Array<{ text: string }> }).cues?.[0]?.text ===
+          'Pending direct source',
+    )?.[0] as { sessionId?: number } | undefined;
+    resolveDirect({
+      success: true,
+      cues: directTranslated,
+      sessionId: directRequest?.sessionId,
+    });
+    await directActivation;
+
+    expect(cancelledDirectSession).toBe(true);
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('keeps a pending valid activation owned when a newer duplicate cannot parse', async () => {
+    const activation = coordinator.forceOverlayMode(
+      COURSERA_VTT_URL,
+      'valid VTT body',
+    );
+    await vi.waitFor(() => {
+      expect(runtimeSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'translateSubtitle', cues: MOCK_CUES }),
+      );
+    });
+
+    mockParseSubtitles.mockReturnValueOnce([]);
+    await coordinator.forceOverlayMode(COURSERA_VTT_URL, 'invalid duplicate body');
+    expect(coordinator.isInOverlayMode()).toBe(true);
+
+    mockUpdateCues.mockClear();
+    resolveTranslation({ success: true, cues: MOCK_TRANSLATED_CUES });
+    await activation;
+
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(MOCK_TRANSLATED_CUES);
+    expect(coordinator.isInOverlayMode()).toBe(true);
+  });
+
+  it('leaves the native track untouched when direct fetch or parse fails', async () => {
+    const nativeTrack = { mode: 'showing' } as unknown as TextTrack;
+    Object.defineProperty(video, 'textTracks', {
+      configurable: true,
+      value: { length: 1, 0: nativeTrack },
+    });
+
+    fetchMock.mockRejectedValueOnce(new Error('CORS blocked'));
+    await coordinator.forceOverlayMode('https://www.coursera.org/missing_en.vtt');
+    expect(nativeTrack.mode).toBe('showing');
+    expect(coordinator.isInOverlayMode()).toBe(false);
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
+
+    mockParseSubtitles.mockReturnValue([]);
+    await coordinator.forceOverlayMode(
+      'https://www.coursera.org/invalid_en.vtt',
+      'not subtitle content',
+    );
+    expect(nativeTrack.mode).toBe('showing');
+    expect(coordinator.isInOverlayMode()).toBe(false);
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['HLS', 'https://cdn.example.com/subtitles/en.m3u8'],
+    ['DASH', 'https://cdn.example.com/subtitles/en.mpd'],
+  ])('keeps %s tracks on the manifest fetch path', async (_kind, url) => {
+    await discoverTrack(url);
+
+    await coordinator.selectSubtitleTrack('en');
+
+    expect(runtimeSendMessage).toHaveBeenCalledWith({
+      action: 'FETCH_MANIFEST_SUBTITLES',
+      playlistUrl: url,
+      preferredLanguage: 'en',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    const sentDirectTranslation = runtimeSendMessage.mock.calls.some(
+      ([message]) => (message as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sentDirectTranslation).toBe(false);
+  });
 });
 
 // ============================================================================
@@ -870,23 +1595,18 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     vi.resetModules();
   });
 
-  it('sends translateSubtitle after parsing cues and initializes the overlay with translated (not original) cues on success', async () => {
-    const { forceOverlayMode, resetCoordinatorState, isInOverlayMode } = await import(
+  it('renders parsed full-track cues and applies translated cues', async () => {
+    const { forceOverlayMode, resetCoordinatorState } = await import(
       '@/content/subtitleCoordinator'
     );
-    resetCoordinatorState(); // ensure isOverlayMode = false
+    resetCoordinatorState();
 
     const vttContent = 'WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\nHello\n\n';
-    await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
+    await forceOverlayMode('https://www.coursera.org/subtitle_en.vtt', vttContent);
 
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'translateSubtitle',
-        cues: MOCK_CUES,
-      }),
-    );
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(
-      MOCK_TRANSLATED_CUES,
+    const sendMessageMock = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    expect(mockInitializeOverlay).toHaveBeenLastCalledWith(
+      MOCK_CUES,
       expect.objectContaining({
         fontFamily: 'system-ui, sans-serif',
         displayMode: 'bilingual',
@@ -897,14 +1617,23 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       }),
       expect.any(HTMLVideoElement),
     );
-    expect(mockInitializeOverlay).not.toHaveBeenCalledWith(
-      MOCK_CUES,
-      expect.anything(),
-      expect.any(HTMLVideoElement),
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        cues: MOCK_CUES,
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        sessionId: expect.any(Number),
+      }),
     );
+    expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+  });
 
-    mockInitializeOverlay.mockClear();
-    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
+  it('does not activate a direct full track when subtitle translation is disabled', async () => {
+    const { forceOverlayMode, isInOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       subtitleSettings: {
@@ -913,28 +1642,69 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       },
     });
 
-    resetCoordinatorState();
+    await forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
 
-    await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
-
+    const sentTranslate = (
+      chrome.runtime.sendMessage as ReturnType<typeof vi.fn>
+    ).mock.calls.some(
+      ([message]) => (message as { action?: string }).action === 'translateSubtitle',
+    );
+    expect(sentTranslate).toBe(false);
     expect(isInOverlayMode()).toBe(false);
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
+  });
 
-    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
-    (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>)
-      .mockReset()
-      .mockRejectedValue(new Error('Service unavailable'));
-
+  it('tears down the direct-file renderer and restores the native track on translation failure', async () => {
+    const { forceOverlayMode, isInOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
     resetCoordinatorState();
 
-    await forceOverlayMode('https://youtube.com/timedtext.vtt', vttContent);
+    const video = document.querySelector('video');
+    if (!video) throw new Error('test video is missing');
+    const nativeTrack = { mode: 'showing' } as unknown as TextTrack;
+    Object.defineProperty(video, 'textTracks', {
+      configurable: true,
+      value: { length: 1, 0: nativeTrack },
+    });
+    const nativeCaptionWindow = document.createElement('div');
+    nativeCaptionWindow.className = 'native-captions';
+    document.body.appendChild(nativeCaptionWindow);
+    mockDetectCurrentHandler.mockReturnValue({
+      ...mockHandler,
+      platform: 'coursera',
+      getNativeCaptionHide: vi.fn(() => ({
+        selector: '.native-captions',
+        method: 'display' as const,
+      })),
+    });
+    mockGetHandlerByPlatform.mockReturnValue(null);
+    const sendMessageMock = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    sendMessageMock.mockImplementation((message: { action?: string }) => {
+      if (message.action === 'translateSubtitle') {
+        return Promise.reject(new Error('Service unavailable'));
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    await forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
 
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
       MOCK_CUES,
-      expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
-      expect.any(HTMLVideoElement),
+      expect.any(Object),
+      video,
     );
+    expect(mockCleanupOverlay).toHaveBeenCalled();
+    expect(nativeTrack.mode).toBe('showing');
+    expect(document.querySelector('[data-anyllm-role="caption-hide"]')).toBeNull();
+    expect(sendMessageMock).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+    expect(isInOverlayMode()).toBe(false);
   });
 
   it('retries overlay attachment when the video mounts after translation succeeds', async () => {

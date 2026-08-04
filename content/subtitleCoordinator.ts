@@ -125,9 +125,10 @@ function armMpdDomGraceWindow(): void {
  * Check whether a new source tier should be suppressed by the currently active source.
  * Returns true if the new source is lower-precedence than the active one.
  *
- * Full-file intercept (Youku ASS, etc.) is higher fidelity than DOM/MSE/TextTrack
- * scrapers: once `interceptOriginalCues` is populated, lower tiers must not
- * clobber the overlay or spawn competing translation sessions.
+ * Complete full-file cues (intercepted or directly fetched) are higher
+ * fidelity than DOM/MSE/TextTrack scrapers: once `interceptOriginalCues` is
+ * populated, lower tiers must not clobber the overlay or spawn competing
+ * translation sessions.
  */
 function shouldSuppressSource(newSource: 'manifest' | 'texttrack' | 'mse' | 'dom'): boolean {
   if (state.interceptOriginalCues.length > 0 && newSource !== 'manifest') {
@@ -181,6 +182,18 @@ function blankNativeSubtitleBody(body: string): string {
  * instead of being dropped as stale (null !== sessionId).
  */
 let nextContentSubtitleSessionId = 1;
+/** Monotonic request ids and the latest valid direct full-file activation. */
+let nextDirectFullTrackActivationGeneration = 1;
+let activeDirectFullTrackActivationGeneration = 0;
+
+/**
+ * Revoke every direct full-track activation that started before a higher-tier
+ * source took ownership, including activations still awaiting UI setup and
+ * therefore not represented by an active translation session yet.
+ */
+function invalidateDirectFullTrackActivations(): void {
+  activeDirectFullTrackActivationGeneration = nextDirectFullTrackActivationGeneration++;
+}
 
 function allocateSubtitleSessionId(): number {
   return nextContentSubtitleSessionId++;
@@ -332,10 +345,9 @@ interface CoordinatorState {
   /** DOM-platform: persistent map of originalText → translatedText across batches */
   domTranslationMap: Map<string, string>;
   /**
-   * Intercept-path: parsed cues from the full subtitle body captured by
-   * handleIntercepted (e.g. Youku's full .ass file). The whole track is parsed
-   * upfront, so any in-range seek keeps these cues valid — the background
-   * chunked-translation session must not be cancelled for in-range seeks.
+   * Full-file path: parsed cues from an intercepted subtitle body or a directly
+   * fetched subtitle URL. Because the whole track is available upfront, any
+   * in-range seek keeps these cues and the active translation session valid.
    */
   interceptOriginalCues: SubtitleCue[];
   /** Manifest-platform (HBOMax progressive VTT): rolling original (source) cues from capture */
@@ -569,6 +581,9 @@ function buildSubtitleOverlayConfig(
 }
 
 function cleanupActiveOverlay(): void {
+  if (state.activeSubtitleSessionId !== null) {
+    cancelBackgroundSubtitleSession();
+  }
   cleanupRendererAttachmentRetry();
   if (state.dragCleanup) {
     state.dragCleanup();
@@ -581,9 +596,12 @@ function cleanupActiveOverlay(): void {
   state.rendererCues = null;
   state.rendererConfig = null;
   restoreHtml5TextTracks();
+  restoreNativeCaptions();
+  state.activeSubtitleSessionId = null;
+  state.translatedCues = null;
   state.activeSource = null;
-  // Drop the intercept-path cue cache: the overlay is gone, and any future
-  // intercept repopulates this with the new track's parsed cues.
+  // Drop the full-file cue cache: the overlay is gone, and any future
+  // intercepted or directly fetched track repopulates it with parsed cues.
   state.interceptOriginalCues = [];
 }
 
@@ -893,16 +911,19 @@ async function applyYoutubeAsrPipeline(options: {
 }
 
 /**
- * Activate overlay + progressive translate for already-parsed cues.
- * Shared by intercept response path and proactive YouTube timedtext fetch.
+ * Activate overlay + progressive translation for already-parsed full-track cues.
+ * Shared by intercepted full files, direct subtitle URLs, and proactive
+ * YouTube timedtext fetches.
  */
 async function activateOverlayWithParsedCues(options: {
   cues: SubtitleCue[];
   sourceLanguage: string;
   settings: Awaited<ReturnType<typeof loadSettings>>;
   platform?: string;
-  /** Navigation epoch captured before the async YouTube pipeline started. */
+  /** Navigation epoch captured before the async activation started. */
   navigationEpoch?: number;
+  /** Optional ownership check for same-navigation activation races. */
+  isActivationCurrent?: () => boolean;
   /** When set, blank native track after successful translation (intercept path). */
   intercept?: { requestId: string; originalBody: string };
 }): Promise<boolean> {
@@ -913,21 +934,25 @@ async function activateOverlayWithParsedCues(options: {
     intercept,
     navigationEpoch,
   } = options;
-  const isStaleNavigation = () =>
-    navigationEpoch !== undefined && state.navigationEpoch !== navigationEpoch;
+  const isStaleActivation = () =>
+    (navigationEpoch !== undefined && state.navigationEpoch !== navigationEpoch) ||
+    (options.isActivationCurrent !== undefined && !options.isActivationCurrent());
   const unblockStaleIntercept = (): false => {
     if (intercept) {
       sendTranslatedSubtitle({ requestId: intercept.requestId, vttContent: intercept.originalBody });
     }
     return false;
   };
-  if (isStaleNavigation()) return unblockStaleIntercept();
+  if (isStaleActivation()) return unblockStaleIntercept();
 
   const handler =
     (options.platform ? getHandlerByPlatform(options.platform) : null) ??
     detectCurrentHandler();
 
   state.interceptOriginalCues = cues;
+  // Progressive chunks can arrive before the initial response. Seed the merge
+  // buffer with the complete source track so untranslated cues remain visible.
+  state.translatedCues = [...cues];
 
   // Always (re)apply native hide: proactive YouTube can start overlay while
   // CC is already painting, and a prior overlay session may have skipped hide.
@@ -940,21 +965,23 @@ async function activateOverlayWithParsedCues(options: {
   if (!state.isOverlayMode) {
     console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
     const savedPrefs = await initializeControls();
-    if (isStaleNavigation()) return unblockStaleIntercept();
+    if (isStaleActivation()) return unblockStaleIntercept();
     state.isOverlayMode = true;
     const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
     const attached = await initializeActiveRenderer(cues, overlayConfig);
     if (!attached) scheduleRendererAttachmentRetry();
-    if (isStaleNavigation()) return unblockStaleIntercept();
+    if (isStaleActivation()) return unblockStaleIntercept();
   } else {
     updateActiveRendererCues(cues);
   }
 
-  showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
-  const pageContext = await buildSubtitlePageContext();
-  if (isStaleNavigation()) return unblockStaleIntercept();
   const sessionId = allocateSubtitleSessionId();
   state.activeSubtitleSessionId = sessionId;
+  const stillOwnsSession = () => state.activeSubtitleSessionId === sessionId;
+
+  showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
+  const pageContext = await buildSubtitlePageContext();
+  if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
 
   try {
     const response = (await chrome.runtime.sendMessage({
@@ -969,7 +996,7 @@ async function activateOverlayWithParsedCues(options: {
       sessionId,
     })) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
-    if (isStaleNavigation()) return unblockStaleIntercept();
+    if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
       if (intercept) {
@@ -996,6 +1023,7 @@ async function activateOverlayWithParsedCues(options: {
     showSubtitleToast('Subtitles processing...');
     return true;
   } catch (error) {
+    if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
     console.warn('AnyLLMTranslate: activateOverlayWithParsedCues error', error);
     if (intercept) {
       sendTranslatedSubtitle({ requestId: intercept.requestId, vttContent: intercept.originalBody });
@@ -1156,28 +1184,41 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
 }
 
 /**
- * Activate overlay mode with fetched subtitles.
+ * Fetch and parse a complete subtitle file, then activate the shared
+ * full-track renderer/translation lifecycle.
  */
-async function activateOverlayMode(subtitleUrl: string, content?: string): Promise<void> {
+async function activateOverlayMode(
+  subtitleUrl: string,
+  options: { content?: string; sourceLanguageHint?: string } = {},
+): Promise<void> {
   if (state.isOverlayMode && state.activeSource === 'manifest') return;
-  preemptLowerTierOverlay();
+
+  const activationGeneration = nextDirectFullTrackActivationGeneration++;
+  const navigationEpoch = state.navigationEpoch;
+  const canCommitActivation = () =>
+    navigationEpoch === state.navigationEpoch &&
+    activationGeneration >= activeDirectFullTrackActivationGeneration;
 
   const settings = await loadSettings();
+  if (!canCommitActivation()) return;
   if (!settings.subtitleSettings.enabled) {
+    activeDirectFullTrackActivationGeneration = activationGeneration;
     cleanupActiveOverlay();
     return;
   }
 
   // Fetch subtitle content if not provided
-  let subtitleContent = content;
+  let subtitleContent = options.content;
   if (!subtitleContent) {
     try {
       subtitleContent = await fetchSubtitleContent(subtitleUrl);
     } catch (error) {
+      if (!canCommitActivation()) return;
       console.error('AnyLLMTranslate: Failed to fetch subtitle content', error);
       return;
     }
   }
+  if (!canCommitActivation()) return;
 
   // Parse subtitles
   const cues = parseSubtitles(subtitleContent);
@@ -1185,56 +1226,33 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
     console.warn('AnyLLMTranslate: No cues found in subtitle content');
     return;
   }
+  if (!canCommitActivation()) return;
 
-  state.isOverlayMode = true;
-  state.activeSource = 'manifest';
+  // Only a successfully parsed replacement takes ownership. A newer failed
+  // fetch/parse must not orphan an older valid translation already in flight.
+  activeDirectFullTrackActivationGeneration = activationGeneration;
+  const isActivationCurrent = () =>
+    activationGeneration === activeDirectFullTrackActivationGeneration &&
+    navigationEpoch === state.navigationEpoch;
+
+  preemptLowerTierOverlay();
+  resetActiveSource();
   state.fetchedTrackUrls.add(subtitleUrl);
-  console.log('AnyLLMTranslate: Activating overlay from manifest track URL');
+  console.log('AnyLLMTranslate: Activating overlay from complete subtitle track URL');
 
-  const handler = detectCurrentHandler();
-  applyNativeCaptionHideForHandler(handler);
+  const sourceLanguage =
+    settings.sourceLanguage === 'auto'
+      ? options.sourceLanguageHint || 'en'
+      : settings.sourceLanguage;
 
-  // FR-5: Translate cues before handing to overlay
-  let cuesToDisplay = cues;
-  try {
-    showSubtitleToast('Translating Overlay Subtitles...', true);
-
-    const pageContext = await buildSubtitlePageContext();
-
-    const response = await chrome.runtime.sendMessage({
-      action: 'translateSubtitle',
-      hostname: window.location.hostname,
-      cues,
-      sourceLanguage: settings.sourceLanguage,
-      targetLanguage: settings.targetLanguage,
-      pageContext,
-      profile: currentSubtitleProfile(),
-      knobOverrides: state.subtitleKnobOverride,
-    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
-
-    if (response?.success && response.cues) {
-      cuesToDisplay = response.cues;
-      if (response.sessionId !== undefined) {
-        state.activeSubtitleSessionId = response.sessionId;
-      }
-      hideSubtitleToast();
-      showSubtitleToast('Overlay mapped successfully!');
-    } else {
-      hideSubtitleToast();
-      showSubtitleToast('Overlay mapping failed.');
-    }
-  } catch (error) {
-    hideSubtitleToast();
-    showSubtitleToast('Overlay translation error.');
-    console.warn('AnyLLMTranslate: Overlay translation failed — showing original cues', error);
-  }
-
-  // Initialize overlay with controls
-  const savedPrefs = await initializeControls();
-  const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-
-  const attached = await initializeActiveRenderer(cuesToDisplay, overlayConfig);
-  if (!attached) scheduleRendererAttachmentRetry();
+  await activateOverlayWithParsedCues({
+    cues,
+    sourceLanguage,
+    settings,
+    platform: detectCurrentHandler()?.platform,
+    navigationEpoch,
+    isActivationCurrent,
+  });
 }
 
 /**
@@ -1597,7 +1615,7 @@ function handleVideoSeeked(event?: Event): void {
 
   // If the seeked time is covered by the current full-content cue set,
   // keep the existing cues and the active translation session. Two paths can
-  // hold full content: the intercept path (e.g. Youku's full .ass body,
+  // hold full content: the full-file path (e.g. Youku ASS or Coursera VTT,
   // cached in state.interceptOriginalCues) and the manifest path (streaming
   // VTT, cached in state.manifestOriginalCues). This prevents startup seeks
   // or local scrubbing from clearing already loaded cues and — critically for
@@ -1663,22 +1681,24 @@ function handleVideoSeeked(event?: Event): void {
   }, SEEK_RESET_DEBOUNCE_MS);
 }
 
-/** Tear down a lower-precedence overlay so manifest tier can take over. */
+/** Release session/buffer ownership before another full-track source takes over. */
 function preemptLowerTierOverlay(): void {
+  if (state.activeSubtitleSessionId !== null) {
+    cancelBackgroundSubtitleSession();
+    state.activeSubtitleSessionId = null;
+  }
   if (!state.isOverlayMode) return;
   if (state.activeSource === 'dom') {
     state.domOriginalCues = [];
     state.domTranslatedCues = [];
     state.domTranslatedTexts = new Set();
     state.domTranslationMap = new Map();
-    state.activeSubtitleSessionId = null;
   }
   if (state.activeSource === 'manifest') {
     state.manifestOriginalCues = [];
     state.manifestTranslatedCues = [];
     state.manifestTranslatedTexts = new Set();
     state.manifestTranslationMap = new Map();
-    state.activeSubtitleSessionId = null;
   }
   if (state.dragCleanup) {
     state.dragCleanup();
@@ -1981,10 +2001,13 @@ async function activateOverlayFromManifestCues(
     return false;
   }
 
+  invalidateDirectFullTrackActivations();
   preemptLowerTierOverlay();
 
   state.isOverlayMode = true;
   state.activeSource = 'manifest';
+  state.interceptOriginalCues = [];
+  state.translatedCues = null;
   if (trackUrl) state.fetchedTrackUrls.add(trackUrl);
   console.log('AnyLLMTranslate: Activating overlay mode from manifest', {
     cueCount: cues.length,
@@ -2110,7 +2133,14 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
   state.mpdProcessingInFlight = false;
   state.mpdGraceUntil = 0;
 
-  if (state.isOverlayMode && (state.activeSource === 'manifest' || (!state.activeSource && payload.append))) {
+  const canReuseManifestShell =
+    state.activeSource === 'manifest' ||
+    (
+      !state.activeSource &&
+      payload.append &&
+      state.interceptOriginalCues.length === 0
+    );
+  if (state.isOverlayMode && canReuseManifestShell) {
     state.activeSource = 'manifest';
     if (payload.append) {
       // Progressive VTT capture (HBOMax): a new segment arrived. Merge into the
@@ -2680,7 +2710,7 @@ export function startCoordinator(): () => void {
  * Manually trigger overlay mode (for testing or user preference).
  */
 export async function forceOverlayMode(subtitleUrl: string, content?: string): Promise<void> {
-  await activateOverlayMode(subtitleUrl, content);
+  await activateOverlayMode(subtitleUrl, { content });
 }
 
 /**
@@ -2897,6 +2927,13 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
 async function tryAutoActivate(epochAtStart: number): Promise<{ activated: boolean; reason: string }> {
   if (state.isOverlayMode && state.activeSource === 'manifest') {
     return { activated: true, reason: 'manifest already active' };
+  }
+  if (
+    state.isOverlayMode &&
+    state.activeSource !== 'manifest' &&
+    state.interceptOriginalCues.length > 0
+  ) {
+    return { activated: true, reason: 'full track already active' };
   }
   if (shouldSuppressSource('manifest')) {
     return { activated: false, reason: 'manifest suppressed' };
@@ -3305,7 +3342,7 @@ export async function selectSubtitleTrack(language: string): Promise<void> {
 
   // Task 6.3: Record fetched URL to deduplicate with interceptor flow
   state.fetchedTrackUrls.add(track.url);
-  await activateOverlayMode(track.url);
+  await activateOverlayMode(track.url, { sourceLanguageHint: track.language });
 }
 
 /** Coalesce concurrent proactive YouTube timedtext activations per URL. */
