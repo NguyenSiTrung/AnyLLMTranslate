@@ -84,12 +84,11 @@ This file tracks all major tracks for the project.
 - ✅ **BabelDOC-parity PDF pipeline (scientific translation + bilingual dual export)** (`pdf-babeldoc-parity_20260717`) — Archived 2026-07-17. Dual export (mono / side-by-side / alternating), shared typesetting ladder, document term extraction, scanned detect + OCR workaround, PdfSettings toggles. Predecessor: `pdf-composition_20260717`. 6 phases. [View](./conductor/archive/pdf-babeldoc-parity_20260717/)
 - ✅ **Scientific PDF Backend (layout-preserving local bridge)** (`scientific-pdf-backend_20260717`) — Archived 2026-07-17. Optional Scientific / PDF Translate mode via Docker pdf2zh bridge; same provider pool credentials per-job; setup wizard + Docker helper scripts; bridge-only viewer path; mono/dual/side-by-side job modal. 6 phases; Beads epic `AnyLLMTranslate-17v`. [View](./conductor/archive/scientific-pdf-backend_20260717/)
 - ✅ **Web Translate Lifecycle & Bilingual Display Hardening** (`web-translate-hardening_20260720`) — Archived 2026-07-20. P0 lifecycle (session/stream/stop/resume), cache fingerprint, piece registry, langDetect skip bar, site-rule specificity, blocklist boundary, a11y retry; 638 tests. Beads epic `AnyLLMTranslate-5x6`. [View](./conductor/archive/web-translate-hardening_20260720/)
+- ✅ **YouTube Link AI Pre-Align from Settings** (`youtube-link-prealign_20260804`) — Archived 2026-08-04. Paste a YouTube URL in Subtitle Studio → "Re-align from link" card to pre-warm the AI re-align cache ahead of playback (no translation). Pure `lib/youtubeWatchPage.ts` (balanced-brace `ytInitialPlayerResponse` extraction, ASR track selection, `fmt=json3` canonicalizer); `services/youtubeLinkPrealign.ts` DI-seamed orchestration (watch HTML → ASR track → json3 → units → cache check → pooled resegment → save with title/thumbnail, typed errors, single-flight dedupe shared with the playback path); proactive playback fetch canonicalized on `fmt=json3` for cache-key parity (hash-parity test); `REALIGN_YOUTUBE_URL` + runtime-broadcast progress; `*://*.youtube.com/*` static host permission. 52 new tests (633 total). Beads epic `AnyLLMTranslate-9r6`. [View](./conductor/archive/youtube-link-prealign_20260804/)
 
 ---
 
 ## Active Tracks
 
-## [~] Track: YouTube Link AI Pre-Align from Settings — paste a YouTube URL in Subtitle Studio to run AI caption re-alignment ahead of playback, without translating (pre-warm the AI re-align cache)
-*Link: [./conductor/tracks/youtube-link-prealign_20260804/](./conductor/tracks/youtube-link-prealign_20260804/)*
-
 ---
+

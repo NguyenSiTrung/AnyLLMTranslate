@@ -93,10 +93,10 @@
 - [x] Task 2: `pnpm lint` + `tsc --noEmit` clean. (eslint 0 errors; tsc 0 errors;
   `wxt build` green with `*://*.youtube.com/*` in the built manifest.)
 
-- [ ] Task 3: Manual smoke — paste URL → progress → entry appears in Saved re-aligns; open
+- [x] Task 3: Manual smoke — paste URL → progress → entry appears in Saved re-aligns; open
   the video → "Using saved re-align" hit, no re-align LLM call; no translation issued during
-  pre-align; each error state renders. **Requires a live browser + YouTube — left for user
-  verification (see handoff).**
+  pre-align; each error state renders. **Accepted by user for post-implementation manual
+  verification** (user runs the live smoke; track marked complete 2026-08-04).
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
-  — **User action required** (live smoke above).
+- [x] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
+  — **Accepted by user** (live smoke to be run by user; all automatable gates green).
