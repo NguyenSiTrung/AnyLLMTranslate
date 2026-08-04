@@ -41,15 +41,15 @@ export const CHROME_SHADOW_CSS = `
   font: 600 12px/1 system-ui, sans-serif;
 }
 .${PLAYER_CHROME_BUTTON_CLASS}:hover {
-  border-color: #0ea5e9;
+  border-color: #22d3ee;
   color: #fff;
 }
 .${PLAYER_CHROME_BUTTON_CLASS}:focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 2px;
 }
 .${PLAYER_CHROME_BUTTON_CLASS}[aria-expanded="true"] {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 2px;
 }
 .panel-slot {

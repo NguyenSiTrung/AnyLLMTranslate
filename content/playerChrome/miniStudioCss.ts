@@ -13,8 +13,8 @@ export const MINI_STUDIO_CSS = `
   box-sizing: border-box;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(12,12,16,0.72);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(12,12,16,0.78);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   color: #e4e4e7;
@@ -74,7 +74,7 @@ export const MINI_STUDIO_CSS = `
   color: #fafafa;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .close-btn:focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 1px;
 }
 
@@ -91,20 +91,44 @@ export const MINI_STUDIO_CSS = `
   font-size: 10px;
   font-weight: 500;
   color: #d4d4d8;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
   background: #71717a;
+  transition: background 160ms ease;
+}
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="idle"] {
+  background: rgba(34,211,238,0.10);
+  border-color: rgba(34,211,238,0.25);
 }
 .${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="idle"] .status-dot { background: #22d3ee; }
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="waiting"] {
+  background: rgba(251,191,36,0.10);
+  border-color: rgba(251,191,36,0.28);
+}
 .${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="waiting"] .status-dot { background: #fbbf24; }
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="translating"] {
+  background: rgba(34,211,238,0.10);
+  border-color: rgba(34,211,238,0.28);
+}
 .${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="translating"] .status-dot {
   background: #22d3ee;
   animation: anyllmMsPulse 1.6s ease-in-out infinite;
 }
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="error"] {
+  background: rgba(248,113,113,0.12);
+  border-color: rgba(248,113,113,0.32);
+  color: #fca5a5;
+}
 .${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="error"] .status-dot { background: #f87171; }
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="disabled"] {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.06);
+}
+.${PLAYER_CHROME_PANEL_CLASS} .status-pill[data-status="disabled"] .status-dot { background: #52525b; }
 @keyframes anyllmMsPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
@@ -122,7 +146,7 @@ export const MINI_STUDIO_CSS = `
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 55%, #1e1b4b 100%);
+  background: linear-gradient(135deg, #212128 0%, #131318 55%, #0a2229 100%);
   display: flex;
   justify-content: center;
   padding: 10px;
@@ -191,7 +215,7 @@ export const MINI_STUDIO_CSS = `
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #71717a;
+  color: #a1a1aa;
 }
 
 /* Toggle switch */
@@ -229,7 +253,7 @@ export const MINI_STUDIO_CSS = `
   transition: transform 140ms ease;
   pointer-events: none;
 }
-.${PLAYER_CHROME_PANEL_CLASS} .toggle input:checked ~ .track { background: #0ea5e9; }
+.${PLAYER_CHROME_PANEL_CLASS} .toggle input:checked ~ .track { background: #22d3ee; }
 .${PLAYER_CHROME_PANEL_CLASS} .toggle input:checked ~ .thumb { transform: translateX(16px); }
 .${PLAYER_CHROME_PANEL_CLASS} .toggle input:focus-visible ~ .track {
   outline: 2px solid #22d3ee;
@@ -260,7 +284,7 @@ export const MINI_STUDIO_CSS = `
   text-align: center;
   padding: 6px 8px;
   border-radius: 8px;
-  color: #a1a1aa;
+  color: #d4d4d8;
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -272,7 +296,7 @@ export const MINI_STUDIO_CSS = `
   color: #67e8f9;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .seg-item input:focus-visible + span {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 1px;
 }
 
@@ -291,7 +315,7 @@ export const MINI_STUDIO_CSS = `
   border-radius: 2px;
   background: linear-gradient(
     to right,
-    #0ea5e9 var(--fill, 50%),
+    #22d3ee var(--fill, 50%),
     rgba(255,255,255,0.12) var(--fill, 50%)
   );
 }
@@ -312,7 +336,7 @@ export const MINI_STUDIO_CSS = `
 .${PLAYER_CHROME_PANEL_CLASS} .glass-range::-moz-range-progress {
   height: 4px;
   border-radius: 2px;
-  background: #0ea5e9;
+  background: #22d3ee;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .glass-range::-moz-range-thumb {
   width: 14px;
@@ -322,7 +346,7 @@ export const MINI_STUDIO_CSS = `
   background: #fafafa;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .glass-range:focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -349,7 +373,7 @@ export const MINI_STUDIO_CSS = `
 }
 .${PLAYER_CHROME_PANEL_CLASS} .select-wrap select:hover { border-color: rgba(255,255,255,0.2); }
 .${PLAYER_CHROME_PANEL_CLASS} .select-wrap select:focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 1px;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .select-wrap option {
@@ -364,27 +388,27 @@ export const MINI_STUDIO_CSS = `
   gap: 10px;
 }
 
-/* Footer */
+/* Footer — quiet escape hatch, deliberately secondary to the controls above */
 .${PLAYER_CHROME_PANEL_CLASS} .footer-btn {
   width: 100%;
   margin-top: 12px;
   pointer-events: auto;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.06);
-  color: #d4d4d8;
-  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #a1a1aa;
+  border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;
   font: 500 11px/1 system-ui, -apple-system, sans-serif;
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  text-align: center;
+  transition: color 120ms ease, background 120ms ease;
 }
 .${PLAYER_CHROME_PANEL_CLASS} .footer-btn:hover {
-  border-color: rgba(34,211,238,0.55);
   color: #67e8f9;
-  background: rgba(34,211,238,0.08);
+  background: rgba(34,211,238,0.07);
 }
 .${PLAYER_CHROME_PANEL_CLASS} .footer-btn:focus-visible {
-  outline: 2px solid #0ea5e9;
+  outline: 2px solid #22d3ee;
   outline-offset: 1px;
 }
 `;
