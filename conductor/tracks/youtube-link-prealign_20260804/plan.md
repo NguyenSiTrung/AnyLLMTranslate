@@ -45,17 +45,20 @@
 <!-- execution: sequential -->
 <!-- depends: phase2 -->
 
-- [ ] Task 1: Failing test — proactive playback fetch normalizes the track URL through
+- [x] Task 1: Failing test — proactive playback fetch normalizes the track URL through
   `buildJson3TimedtextUrl` (coordinator `activateYoutubeTrackViaPipeline` path).
 
-- [ ] Task 2: Implement normalization in the proactive path only (intercept path stays
+- [x] Task 2: Implement normalization in the proactive path only (intercept path stays
   passive — it receives whatever the player requests); confirm json3 `transformResponse`
-  coverage.
+  coverage. (Only the fetch URL is canonicalized; track identity + native-caption
+  fallback keep the original URL. One existing test updated for the new fetch URL.)
 
-- [ ] Task 3: Hash-parity test — same caption body yields identical units + contentHash in
+- [x] Task 3: Hash-parity test — same caption body yields identical units + contentHash in
   the Settings flow and the playback flow.
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+  — Automated gates green (coordinator 29/29, prealign 15/15, lint 0, tsc 0).
+  UI-level manual verification deferred to Phase 5 smoke.
 
 ## Phase 4: Subtitle Studio UI Card (TDD)
 <!-- execution: sequential -->

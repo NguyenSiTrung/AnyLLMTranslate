@@ -65,8 +65,22 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     expect(screen.getByRole('heading', { name: 'Platforms', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Caption quality', level: 3 })).toBeInTheDocument();
     expect(
+      screen.getByRole('heading', { name: 'Re-align from link', level: 3 }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole('heading', { name: 'Saved caption re-aligns', level: 3 }),
     ).toBeInTheDocument();
+
+    // Card order: Caption quality → Re-align from link → Saved caption re-aligns.
+    const captionQuality = screen.getByRole('heading', { name: 'Caption quality', level: 3 });
+    const prealign = screen.getByRole('heading', { name: 'Re-align from link', level: 3 });
+    const saved = screen.getByRole('heading', { name: 'Saved caption re-aligns', level: 3 });
+    expect(
+      captionQuality.compareDocumentPosition(prealign) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      prealign.compareDocumentPosition(saved) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Translation style', level: 3 })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByTestId('asr-realign-summary')).toHaveTextContent(/No saved re-aligns yet/i);

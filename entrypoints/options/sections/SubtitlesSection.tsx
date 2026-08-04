@@ -15,6 +15,7 @@ import { AppearanceCard } from './subtitles/AppearanceCard';
 import { SourceTrackCard } from './subtitles/SourceTrackCard';
 import { PlatformsCard } from './subtitles/PlatformsCard';
 import { CaptionQualityCard, SAVED_CAPTION_REALIGNS_SECTION_ID } from './subtitles/CaptionQualityCard';
+import { PrealignFromLinkCard } from './subtitles/PrealignFromLinkCard';
 import { SavedCaptionRealignsCard } from './subtitles/SavedCaptionRealignsCard';
 import { TranslationStyleCard } from './subtitles/TranslationStyleCard';
 
@@ -110,15 +111,18 @@ export function SubtitlesSection() {
               onUpdate={handleUpdate}
             />
           </div>
+          <div className="animate-stagger" style={stagger(3)}>
+            <PrealignFromLinkCard disabled={isDisabled} />
+          </div>
           <div
             id={SAVED_CAPTION_REALIGNS_SECTION_ID}
             tabIndex={-1}
             className="animate-stagger outline-none"
-            style={stagger(3)}
+            style={stagger(4)}
           >
             <SavedCaptionRealignsCard disabled={isDisabled} />
           </div>
-          <div className="animate-stagger" style={stagger(4)}>
+          <div className="animate-stagger" style={stagger(5)}>
             <TranslationStyleCard
               settings={subtitleSettings}
               disabled={isDisabled}
