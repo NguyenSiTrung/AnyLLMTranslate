@@ -57,6 +57,7 @@ import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/s
 import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
+import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import {
   reconcilePendingTranslatedTexts,
   sortCueTextsByPlaybackPriority,
@@ -309,6 +310,17 @@ interface CoordinatorState {
   activeSource: 'manifest' | 'texttrack' | 'mse' | 'dom' | null;
   /** Active subtitle renderer (native TextTrack or overlay fallback). Null until first init. */
   activeRenderer: SubtitleRenderer | null;
+  /** Video element currently owned by the renderer. */
+  rendererVideo: HTMLVideoElement | null;
+  /** Latest cue/config snapshot used when a player mounts late. */
+  rendererCues: SubtitleCue[] | null;
+  rendererConfig: Partial<OverlayConfig> | null;
+  /** Pending dynamic-player attachment lifecycle. */
+  rendererRetryCleanup: (() => void) | null;
+  rendererRetryTimer: ReturnType<typeof setTimeout> | null;
+  rendererAttachPromise: Promise<boolean> | null;
+  /** HTML5 tracks changed from showing to hidden by this coordinator. */
+  hiddenHtml5Tracks: Set<TextTrack>;
   /** Injected <style> hiding the platform's native caption window (null when inactive) */
   captionHideStyle: HTMLStyleElement | null;
   /** DOM-platform: rolling original (source-language) cues from the scraper */
@@ -371,6 +383,13 @@ const state: CoordinatorState = {
   activeSubtitleSessionId: null,
   activeSource: null,
   activeRenderer: null,
+  rendererVideo: null,
+  rendererCues: null,
+  rendererConfig: null,
+  rendererRetryCleanup: null,
+  rendererRetryTimer: null,
+  rendererAttachPromise: null,
+  hiddenHtml5Tracks: new Set(),
   captionHideStyle: null,
   domOriginalCues: [],
   domTranslatedCues: [],
@@ -415,23 +434,122 @@ function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | 
   return fontFamilyMap[fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
 }
 
-/**
- * Lazily create the active renderer (native TextTrack if supported, else the
- * custom overlay fallback) bound to the page's primary <video>. The same
- * instance is reused across updateCues calls until destroyRenderer().
- */
-function ensureRenderer(): SubtitleRenderer {
-  if (!state.activeRenderer) {
-    const video = document.querySelector('video');
-    state.activeRenderer = createRenderer(video as HTMLVideoElement);
-  }
-  return state.activeRenderer;
-}
-
-/** Tear down the active renderer (clears cues, disables tracks / overlay). */
+/** Tear down the active renderer and forget its video ownership. */
 function destroyRenderer(): void {
   state.activeRenderer?.destroy();
   state.activeRenderer = null;
+  state.rendererVideo = null;
+}
+
+function cleanupRendererAttachmentRetry(): void {
+  state.rendererRetryCleanup?.();
+}
+
+async function attachRendererNow(
+  cues: SubtitleCue[],
+  config: Partial<OverlayConfig>,
+  video: HTMLVideoElement,
+): Promise<boolean> {
+  if (state.rendererVideo && state.rendererVideo !== video) {
+    destroyRenderer();
+  }
+
+  if (state.activeRenderer && state.rendererVideo === video) {
+    state.activeRenderer.updateCues(cues);
+    return true;
+  }
+
+  const renderer = state.activeRenderer ?? createRenderer(video);
+  state.activeRenderer = renderer;
+  const attached = await renderer.initialize(cues, config, video);
+  if (!attached) {
+    destroyRenderer();
+    return false;
+  }
+
+  state.rendererVideo = video;
+  return true;
+}
+
+async function initializeActiveRenderer(
+  cues: SubtitleCue[],
+  config: Partial<OverlayConfig>,
+): Promise<boolean> {
+  state.rendererCues = cues;
+  state.rendererConfig = config;
+  if (state.rendererAttachPromise) return state.rendererAttachPromise;
+
+  const video = findPrimaryVideo();
+  if (!video) return false;
+
+  const attachPromise = attachRendererNow(cues, config, video).then((attached) => {
+    if (!attached) return false;
+
+    hideHtml5TextTracks();
+    const textContainer = getOverlayTextContainer();
+    if (textContainer && !state.dragCleanup) {
+      state.dragCleanup = enableDragReposition(textContainer);
+    }
+    cleanupRendererAttachmentRetry();
+    return true;
+  }).finally(() => {
+    if (state.rendererAttachPromise === attachPromise) {
+      state.rendererAttachPromise = null;
+    }
+  });
+  state.rendererAttachPromise = attachPromise;
+  return attachPromise;
+}
+
+function updateActiveRendererCues(cues: SubtitleCue[]): void {
+  state.rendererCues = cues;
+  if (state.activeRenderer && state.rendererVideo) {
+    state.activeRenderer.updateCues(cues);
+    return;
+  }
+  if (state.isOverlayMode && state.rendererConfig) {
+    void initializeActiveRenderer(cues, state.rendererConfig).then((attached) => {
+      if (!attached) scheduleRendererAttachmentRetry();
+    });
+  }
+}
+
+function scheduleRendererAttachmentRetry(): void {
+  if (
+    state.rendererRetryCleanup ||
+    !state.rendererCues ||
+    !state.rendererConfig
+  ) {
+    return;
+  }
+
+  const attempt = (): void => {
+    const cues = state.rendererCues;
+    const config = state.rendererConfig;
+    if (!cues || !config) return;
+    void initializeActiveRenderer(cues, config).then((attached) => {
+      if (attached) cleanupRendererAttachmentRetry();
+    });
+  };
+  const onMediaReady = (): void => attempt();
+  const mediaEvents = ['loadedmetadata', 'canplay', 'play'] as const;
+  for (const eventName of mediaEvents) {
+    document.addEventListener(eventName, onMediaReady, true);
+  }
+  const observer = new MutationObserver(() => attempt());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  const timer = setTimeout(() => cleanupRendererAttachmentRetry(), 10_000);
+
+  state.rendererRetryTimer = timer;
+  state.rendererRetryCleanup = () => {
+    for (const eventName of mediaEvents) {
+      document.removeEventListener(eventName, onMediaReady, true);
+    }
+    observer.disconnect();
+    clearTimeout(timer);
+    state.rendererRetryTimer = null;
+    state.rendererRetryCleanup = null;
+  };
 }
 
 function buildSubtitleOverlayConfig(
@@ -451,6 +569,7 @@ function buildSubtitleOverlayConfig(
 }
 
 function cleanupActiveOverlay(): void {
+  cleanupRendererAttachmentRetry();
   if (state.dragCleanup) {
     state.dragCleanup();
     state.dragCleanup = null;
@@ -459,6 +578,9 @@ function cleanupActiveOverlay(): void {
     destroyRenderer();
     state.isOverlayMode = false;
   }
+  state.rendererCues = null;
+  state.rendererConfig = null;
+  restoreHtml5TextTracks();
   state.activeSource = null;
   // Drop the intercept-path cue cache: the overlay is gone, and any future
   // intercept repopulates this with the new track's parsed cues.
@@ -509,11 +631,10 @@ function applyNativeCaptionHideForHandler(handler: ReturnType<typeof getHandlerB
 }
 
 /**
- * Turn off showing HTML5 TextTrack cues (mode "showing" → "hidden").
- * YouTube mostly uses its own caption DOM, but some embeds / fallbacks use
- * <track>; leaving them "showing" stacks originals under our overlay.
+ * Turn off showing HTML5 TextTrack cues after the custom overlay attaches.
+ * Only tracks changed by this extension are recorded for restoration.
  */
-function disableHtml5TextTracks(): void {
+function hideHtml5TextTracks(): void {
   if (typeof document === 'undefined') return;
   try {
     const videos = document.querySelectorAll('video');
@@ -523,6 +644,7 @@ function disableHtml5TextTracks(): void {
       for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
         if (track && track.mode === 'showing') {
+          state.hiddenHtml5Tracks.add(track);
           track.mode = 'hidden';
         }
       }
@@ -530,6 +652,17 @@ function disableHtml5TextTracks(): void {
   } catch {
     /* ignore cross-origin / missing textTracks */
   }
+}
+
+function restoreHtml5TextTracks(): void {
+  for (const track of state.hiddenHtml5Tracks) {
+    try {
+      track.mode = 'showing';
+    } catch {
+      // Ignore tracks removed during player teardown.
+    }
+  }
+  state.hiddenHtml5Tracks.clear();
 }
 
 /**
@@ -804,29 +937,17 @@ async function activateOverlayWithParsedCues(options: {
   } else {
     applyNativeCaptionHideForHandler(handler);
   }
-  // Belt-and-suspenders: disable HTML5 text tracks so browser-native cues
-  // cannot stack under the overlay when CSS hide is delayed/recreated.
-  disableHtml5TextTracks();
-
   if (!state.isOverlayMode) {
     console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
     const savedPrefs = await initializeControls();
     if (isStaleNavigation()) return unblockStaleIntercept();
     state.isOverlayMode = true;
     const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-    await ensureRenderer().initialize(
-      cues,
-      overlayConfig,
-      document.querySelector('video') as HTMLVideoElement,
-    );
+    const attached = await initializeActiveRenderer(cues, overlayConfig);
+    if (!attached) scheduleRendererAttachmentRetry();
     if (isStaleNavigation()) return unblockStaleIntercept();
-
-    const textContainer = getOverlayTextContainer();
-    if (textContainer) {
-      state.dragCleanup = enableDragReposition(textContainer);
-    }
   } else {
-    state.activeRenderer?.updateCues(cues);
+    updateActiveRendererCues(cues);
   }
 
   showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
@@ -1112,13 +1233,8 @@ async function activateOverlayMode(subtitleUrl: string, content?: string): Promi
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
-  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
-
-  // Attach drag-to-reposition on the subtitle text container
-  const textContainer = getOverlayTextContainer();
-  if (textContainer) {
-    state.dragCleanup = enableDragReposition(textContainer);
-  }
+  const attached = await initializeActiveRenderer(cuesToDisplay, overlayConfig);
+  if (!attached) scheduleRendererAttachmentRetry();
 }
 
 /**
@@ -1207,7 +1323,7 @@ async function translateDomCueTexts(
     // batches' translations are preserved across rebuilds.
     applyTranslatedCueBatchToMap(state.domTranslationMap, response.cues);
     rebuildTranslatedCues();
-    state.activeRenderer?.updateCues(state.domTranslatedCues);
+    updateActiveRendererCues(state.domTranslatedCues);
   } catch (error) {
     console.warn('AnyLLMTranslate: DOM cue delta translation error', error);
   }
@@ -1339,7 +1455,7 @@ async function translateManifestBatch(
     }
     applyTranslatedCueBatchToMap(state.manifestTranslationMap, response.cues);
     rebuildManifestTranslatedCues();
-    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+    updateActiveRendererCues(state.manifestTranslatedCues);
     return true;
   } catch (error) {
     console.warn('AnyLLMTranslate: Manifest cue delta translation error', error);
@@ -1543,7 +1659,7 @@ function handleVideoSeeked(event?: Event): void {
 
     // Clear the overlay so stale cues from the old position don't show during
     // the brief window before the new position's segment arrives.
-    state.activeRenderer?.updateCues([]);
+    updateActiveRendererCues([]);
   }, SEEK_RESET_DEBOUNCE_MS);
 }
 
@@ -1583,7 +1699,7 @@ async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): 
   clearDomTranslationBuffers();
   clearManifestTranslationBuffers();
   if (state.isOverlayMode) {
-    state.activeRenderer?.updateCues([]);
+    updateActiveRendererCues([]);
   }
   scheduleDomTrackDiscovery();
 }
@@ -1647,12 +1763,8 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
-
-  const textContainer = getOverlayTextContainer();
-  if (textContainer) {
-    state.dragCleanup = enableDragReposition(textContainer);
-  }
+  const attached = await initializeActiveRenderer(cuesToDisplay, overlayConfig);
+  if (!attached) scheduleRendererAttachmentRetry();
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
@@ -1733,7 +1845,7 @@ async function handleDomCues(payload: SubtitleDomCuesPayload): Promise<void> {
   // Always rebuild + push to overlay even when no new texts — cue timing
   // changes (endTime corrections on previous cues) must reach findActiveCue().
   rebuildTranslatedCues();
-  state.activeRenderer?.updateCues(state.domTranslatedCues);
+  updateActiveRendererCues(state.domTranslatedCues);
 
   if (newTexts.length === 0) return;
 
@@ -1821,12 +1933,8 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
 
   // Initialize overlay with bilingual cues (source until translated).
-  await ensureRenderer().initialize(state.domTranslatedCues, overlayConfig, document.querySelector('video') as HTMLVideoElement);
-
-  const textContainer = getOverlayTextContainer();
-  if (textContainer) {
-    state.dragCleanup = enableDragReposition(textContainer);
-  }
+  const attached = await initializeActiveRenderer(state.domTranslatedCues, overlayConfig);
+  if (!attached) scheduleRendererAttachmentRetry();
 
   // On first-ever viewing of a film, the background runs a one-time name
   // pre-scan before chunk 0 (cached thereafter). The toast copy reflects the
@@ -1899,12 +2007,8 @@ async function activateOverlayFromManifestCues(
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  await ensureRenderer().initialize(state.manifestTranslatedCues, overlayConfig, document.querySelector('video') as HTMLVideoElement);
-
-  const textContainer = getOverlayTextContainer();
-  if (textContainer) {
-    state.dragCleanup = enableDragReposition(textContainer);
-  }
+  const attached = await initializeActiveRenderer(state.manifestTranslatedCues, overlayConfig);
+  if (!attached) scheduleRendererAttachmentRetry();
 
   showSubtitleToast('Translating subtitles...', true);
   const pageContext = await buildSubtitlePageContext();
@@ -2019,7 +2123,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
       // Always rebuild + push, even when no new texts — timing corrections on
       // prior cues must reach findActiveCue().
       rebuildManifestTranslatedCues();
-      state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+      updateActiveRendererCues(state.manifestTranslatedCues);
       state.playbackAnchorTime = null;
       if (newTexts.length === 0) return;
 
@@ -2045,7 +2149,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     // Re-seed the rolling buffer without tearing down the overlay shell.
     const newTexts = mergeManifestOriginalCues(payload.cues);
     rebuildManifestTranslatedCues();
-    state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+    updateActiveRendererCues(state.manifestTranslatedCues);
     state.playbackAnchorTime = null;
     if (newTexts.length === 0) return;
 
@@ -2133,12 +2237,8 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-  await ensureRenderer().initialize(cuesToDisplay, overlayConfig, document.querySelector('video') as HTMLVideoElement);
-
-  const textContainer = getOverlayTextContainer();
-  if (textContainer) {
-    state.dragCleanup = enableDragReposition(textContainer);
-  }
+  const attached = await initializeActiveRenderer(cuesToDisplay, overlayConfig);
+  if (!attached) scheduleRendererAttachmentRetry();
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
@@ -2193,7 +2293,7 @@ export function updateTranslatedCues(cues: SubtitleCue[]): void {
     return;
   }
   state.translatedCues = cues;
-  state.activeRenderer?.updateCues(cues);
+  updateActiveRendererCues(cues);
 }
 
 /**
@@ -2223,7 +2323,7 @@ function mergeTranslatedChunk(chunkStart: number, chunkCues: SubtitleCue[]): voi
   // progressive chunk — the helper filters sparse slots and is idempotent.
   const adapted = adaptCueTimings(currentCues);
   state.translatedCues = adapted;
-  state.activeRenderer?.updateCues(adapted);
+  updateActiveRendererCues(adapted);
 }
 
 /**
@@ -2475,7 +2575,7 @@ export function startCoordinator(): () => void {
         if (useManifestChunkPath) {
           applyTranslatedCueBatchToMap(state.manifestTranslationMap, msg.chunkCues);
           rebuildManifestTranslatedCues();
-          state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+          updateActiveRendererCues(state.manifestTranslatedCues);
         } else {
           mergeTranslatedChunk(msg.chunkStart, msg.chunkCues);
         }
@@ -2484,7 +2584,7 @@ export function startCoordinator(): () => void {
         if (useManifestChunkPath) {
           applyTranslatedCueBatchToMap(state.manifestTranslationMap, msg.cues);
           rebuildManifestTranslatedCues();
-          state.activeRenderer?.updateCues(state.manifestTranslatedCues);
+          updateActiveRendererCues(state.manifestTranslatedCues);
         } else {
           updateTranslatedCues(msg.cues);
         }
@@ -2561,9 +2661,13 @@ export function startCoordinator(): () => void {
       state.dragCleanup();
       state.dragCleanup = null;
     }
-    if (state.isOverlayMode) {
+    cleanupRendererAttachmentRetry();
+    if (state.isOverlayMode || state.activeRenderer) {
       destroyRenderer();
     }
+    state.rendererCues = null;
+    state.rendererConfig = null;
+    restoreHtml5TextTracks();
     if (state.youtubeCaptionFallbackUrls.size > 0) {
       restoreYoutubeCaptionFallback();
       state.youtubeCaptionFallbackUrls.clear();
@@ -2591,9 +2695,13 @@ export function isInOverlayMode(): boolean {
  */
 export function resetCoordinatorState(): void {
   // Clean up active overlay before resetting the flag
-  if (state.isOverlayMode) {
+  cleanupRendererAttachmentRetry();
+  if (state.isOverlayMode || state.activeRenderer) {
     destroyRenderer();
   }
+  state.rendererCues = null;
+  state.rendererConfig = null;
+  restoreHtml5TextTracks();
   state.isOverlayMode = false;
   state.availableTracks = [];
   state.navigationEpoch++;

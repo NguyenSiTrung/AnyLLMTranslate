@@ -68,11 +68,12 @@ vi.mock('@/inject/messageBridge', () => ({
 }));
 
 const mockInitializeOverlay = vi.fn();
+mockInitializeOverlay.mockReturnValue(true);
 const mockUpdateCues = vi.fn();
 const mockCleanupOverlay = vi.fn();
 const mockGetOverlayTextContainer = vi.fn<(...args: unknown[]) => null>(() => null);
 vi.mock('@/content/subtitleOverlay', () => ({
-  initializeOverlay: (...args: unknown[]) => { mockInitializeOverlay(...args); },
+  initializeOverlay: (...args: unknown[]) => mockInitializeOverlay(...args),
   updateCues: (...args: unknown[]) => { mockUpdateCues(...args); },
   cleanup: (...args: unknown[]) => { mockCleanupOverlay(...args); },
   getOverlayTextContainer: (...args: unknown[]) => { mockGetOverlayTextContainer(...args); },
@@ -159,6 +160,14 @@ const mockHandler = {
   ),
 };
 
+beforeEach(() => {
+  document.body.innerHTML = '<video data-test-primary-video></video>';
+});
+
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
 // ============================================================================
 // Phase 1: handleIntercepted translation path
 // ============================================================================
@@ -177,6 +186,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       writable: true,
       configurable: true,
     });
+    document.body.innerHTML = '<video data-test-primary-video></video>';
 
     // Per-test mock defaults
     mockInitializeControls.mockResolvedValue(undefined);
@@ -388,6 +398,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         position: 'bottom',
         backgroundOpacity: 0.7,
       }),
+      expect.any(HTMLVideoElement),
     );
 
     // Scenario 2: overridden appearance settings are all mapped into the runtime config.
@@ -429,6 +440,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         position: 'top',
         backgroundOpacity: 0.35,
       }),
+      expect.any(HTMLVideoElement),
     );
   });
 
@@ -830,6 +842,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       writable: true,
       configurable: true,
     });
+    document.body.innerHTML = '<video data-test-primary-video></video>';
 
     mockInitializeControls.mockResolvedValue(undefined);
     mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
@@ -882,8 +895,13 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
         position: 'bottom',
         backgroundOpacity: 0.7,
       }),
+      expect.any(HTMLVideoElement),
     );
-    expect(mockInitializeOverlay).not.toHaveBeenCalledWith(MOCK_CUES, expect.anything());
+    expect(mockInitializeOverlay).not.toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.anything(),
+      expect.any(HTMLVideoElement),
+    );
 
     mockInitializeOverlay.mockClear();
     (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
@@ -915,7 +933,90 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     expect(mockInitializeOverlay).toHaveBeenCalledWith(
       MOCK_CUES,
       expect.objectContaining({ fontFamily: expect.any(String), displayMode: 'bilingual' }),
+      expect.any(HTMLVideoElement),
     );
+  });
+
+  it('retries overlay attachment when the video mounts after translation succeeds', async () => {
+    const { forceOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
+    document.body.innerHTML = '';
+    mockInitializeOverlay.mockReturnValue(false);
+
+    await forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
+
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+    mockInitializeOverlay.mockReturnValue(true);
+    video.dispatchEvent(new Event('loadedmetadata'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockInitializeOverlay).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      video,
+    );
+  });
+
+  it('reattaches the renderer when the player replaces the video element', async () => {
+    const { forceOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
+    document.body.innerHTML = '';
+    mockInitializeOverlay.mockReturnValue(false);
+
+    await forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
+
+    const firstVideo = document.createElement('video');
+    document.body.appendChild(firstVideo);
+    mockInitializeOverlay.mockReturnValue(true);
+    firstVideo.dispatchEvent(new Event('loadedmetadata'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const replacementVideo = document.createElement('video');
+    firstVideo.remove();
+    document.body.appendChild(replacementVideo);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockInitializeOverlay).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      replacementVideo,
+    );
+  });
+
+  it('hides showing native tracks only after attachment and restores them on reset', async () => {
+    const { forceOverlayMode, resetCoordinatorState } = await import(
+      '@/content/subtitleCoordinator'
+    );
+    resetCoordinatorState();
+    document.body.innerHTML = '';
+    const video = document.createElement('video');
+    const nativeTrack = { mode: 'showing' } as unknown as TextTrack;
+    Object.defineProperty(video, 'textTracks', {
+      configurable: true,
+      value: { length: 1, 0: nativeTrack },
+    });
+    document.body.appendChild(video);
+    mockInitializeOverlay.mockReturnValue(true);
+
+    await forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
+
+    expect(nativeTrack.mode).toBe('hidden');
+    resetCoordinatorState();
+    expect(nativeTrack.mode).toBe('showing');
   });
 
 });
