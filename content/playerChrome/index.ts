@@ -160,6 +160,7 @@ export function startPlayerChrome(): () => void {
       anchorButton: shell.button,
       panelSlot: shell.panelSlot,
       onOpenChange,
+      setButtonState: shell.setButtonState,
     });
 
     boundVideo = video;

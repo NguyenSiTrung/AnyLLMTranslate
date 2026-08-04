@@ -1,5 +1,5 @@
 import { PLAYER_CHROME_HOST_CLASS, PLAYER_CHROME_BUTTON_CLASS } from './types';
-import { createChromeButton } from './button';
+import { createChromeButton, type ChromeButtonState } from './button';
 
 export interface ChromeShell {
   host: HTMLElement;
@@ -8,6 +8,7 @@ export interface ChromeShell {
   panelSlot: HTMLElement;
   setVisible(visible: boolean): void;
   setExpanded(expanded: boolean): void;
+  setButtonState(state: ChromeButtonState): void;
   destroy(): void;
   reposition(): void;
   getMountMode(): 'floating' | 'native';
@@ -57,12 +58,33 @@ export const CHROME_SHADOW_CSS = `
   bottom: calc(100% + 8px);
   right: 0;
 }
+.${PLAYER_CHROME_BUTTON_CLASS}[data-state="enabled"] {
+  border-color: rgba(34,211,238,0.55);
+  color: #67e8f9;
+}
+.${PLAYER_CHROME_BUTTON_CLASS}[data-state="translating"] {
+  border-color: rgba(34,211,238,0.55);
+  color: #67e8f9;
+  animation: anyllmChromePulse 1.6s ease-in-out infinite;
+}
+@keyframes anyllmChromePulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,0.35); }
+  50% { box-shadow: 0 0 0 4px rgba(34,211,238,0.18), 0 4px 16px rgba(0,0,0,0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .${PLAYER_CHROME_BUTTON_CLASS}[data-state="translating"] { animation: none; }
+}
 `;
 
 function appendChromeShadow(
   host: HTMLElement,
   onToggle: () => void,
-): { shadow: ShadowRoot; button: HTMLButtonElement; panelSlot: HTMLElement } {
+): {
+  shadow: ShadowRoot;
+  button: HTMLButtonElement;
+  panelSlot: HTMLElement;
+  setButtonState: (state: ChromeButtonState) => void;
+} {
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = CHROME_SHADOW_CSS;
@@ -70,10 +92,10 @@ function appendChromeShadow(
   wrap.className = 'wrap';
   const panelSlot = document.createElement('div');
   panelSlot.className = 'panel-slot';
-  const button = createChromeButton(onToggle);
-  wrap.append(panelSlot, button);
+  const handle = createChromeButton(onToggle);
+  wrap.append(panelSlot, handle.button);
   shadow.append(style, wrap);
-  return { shadow, button, panelSlot };
+  return { shadow, button: handle.button, panelSlot, setButtonState: handle.setState };
 }
 
 export function createFloatingShell(args: {
@@ -88,7 +110,7 @@ export function createFloatingShell(args: {
   host.dataset.mountMode = 'floating';
   host.style.cssText =
     'position:fixed;z-index:2147483646;pointer-events:none;top:0;left:0;opacity:1;visibility:visible;';
-  const { shadow, button, panelSlot } = appendChromeShadow(host, args.onToggle);
+  const { shadow, button, panelSlot, setButtonState } = appendChromeShadow(host, args.onToggle);
   const parent = args.mountParent ?? document.body;
   parent.appendChild(host);
 
@@ -112,6 +134,7 @@ export function createFloatingShell(args: {
     shadow,
     button,
     panelSlot,
+    setButtonState,
     getMountMode: () => 'floating',
     setVisible(visible: boolean) {
       host.style.opacity = visible ? '1' : '0';
@@ -137,7 +160,7 @@ export function createNativeShell(args: {
   host.dataset.mountMode = 'native';
   host.style.cssText =
     'position:relative;display:inline-flex;align-items:center;pointer-events:none;margin-left:4px;z-index:10;';
-  const { shadow, button, panelSlot } = appendChromeShadow(host, args.onToggle);
+  const { shadow, button, panelSlot, setButtonState } = appendChromeShadow(host, args.onToggle);
   // Panel opens upward; native bar needs a higher stacking context for the slot.
   panelSlot.style.zIndex = '2147483646';
   args.mountNode.appendChild(host);
@@ -147,6 +170,7 @@ export function createNativeShell(args: {
     shadow,
     button,
     panelSlot,
+    setButtonState,
     getMountMode: () => 'native',
     setVisible(visible: boolean) {
       host.style.opacity = visible ? '1' : '0';
