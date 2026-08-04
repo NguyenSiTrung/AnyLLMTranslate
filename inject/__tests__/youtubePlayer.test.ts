@@ -115,7 +115,7 @@ describe('YouTube metadata discovery', () => {
     cleanup();
   });
 
-  it('retries discovery and emits once when metadata appears later, including after navigation to a new video', () => {
+  it('retries discovery and emits once when metadata appears later (including after navigation), does not re-emit duplicate or stale metadata, and stops retrying after cleanup', () => {
     // No metadata at start; discovery keeps polling.
     let cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
     vi.advanceTimersByTime(250);
@@ -153,13 +153,13 @@ describe('YouTube metadata discovery', () => {
       expect.objectContaining({ videoId: 'new-video' }),
     );
     cleanup();
-  });
 
-  it('does not re-emit duplicate or stale metadata after discovering a newer response', () => {
     // Same response re-discovered (yt-navigate-finish) is not re-emitted.
+    delete (window as Window & { ytplayer?: unknown }).ytplayer;
+    bridge.send.mockClear();
     (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse =
       embeddedResponse();
-    let cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
     window.dispatchEvent(new Event('yt-navigate-finish'));
     vi.advanceTimersByTime(250);
 
@@ -189,11 +189,13 @@ describe('YouTube metadata discovery', () => {
 
     expect(bridge.send).toHaveBeenCalledTimes(2);
     cleanup();
-  });
 
-  it('stops retrying after cleanup', () => {
-    const cleanup = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
-    cleanup();
+    // Cleanup stops the retry loop entirely.
+    bridge.send.mockClear();
+    delete (window as Window & { ytInitialPlayerResponse?: unknown }).ytInitialPlayerResponse;
+    delete (window as Window & { ytplayer?: unknown }).ytplayer;
+    const cleanup3 = startYoutubeMetadataDiscovery(new YouTubeHandler(), bridge);
+    cleanup3();
     vi.advanceTimersByTime(10_000);
 
     expect(bridge.send).not.toHaveBeenCalled();
