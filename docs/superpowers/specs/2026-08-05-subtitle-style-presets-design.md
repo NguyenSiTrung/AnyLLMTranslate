@@ -115,7 +115,7 @@ export function withAlpha(color: string, alpha: number): string;  // hex → rgb
 Derivation rules:
 - `backgroundStyle` = `overrides.backgroundStyle ?? preset.backgroundStyle`; `backgroundOpacity` = `backgroundStyle === 'none' ? 0 : backgroundOpacity`.
 - `textColor` = `overrides.textColor ?? preset.textColor`; `originalTextColor` = preset explicit value, else `withAlpha(textColor, 0.6)`.
-- `shadowStrength` = `overrides.shadowStrength ?? preset.shadowStrength`; `textShadow` = `0 1px 3px rgba(0,0,0,${0.5 × strength})` when strength > 0, else `'none'`.
+- `shadowStrength` = `overrides.shadowStrength ?? preset.shadowStrength`; `textShadow` = `0 1px 3px rgba(0,0,0,${strength})` when strength > 0, else `'none'` (alpha equals strength so classic 0.5 reproduces the historic `rgba(0,0,0,0.5)`).
 - `borderRadius` is preset-only (not overridable).
 
 ### 5.3 Overlay rendering — `content/subtitleOverlay.ts` + `styles/subtitle.css`
@@ -195,7 +195,7 @@ None. `stylePreset: 'classic'` + empty overrides reproduces today's rendering ex
 
 ## 7. Testing plan
 
-- New `lib/__tests__/subtitleStylePresets.test.ts`: preset table completeness (5 presets, distinct field values), override merge, `withAlpha` (hex → rgba, 1.0 → unchanged), `none` → opacity 0, shadow scaling (0 → `'none'`, 1 → alpha 0.5), classic = current look constants.
+- New `lib/__tests__/subtitleStylePresets.test.ts`: preset table completeness (5 presets, distinct field values), override merge, `withAlpha` (hex → rgba, 1.0 → unchanged), `none` → opacity 0, shadow scaling (0 → `'none'`, 1 → alpha 1.0), classic = current look constants.
 - Extend `content/__tests__/subtitleOverlay.test.ts`: `updateConfig` sets the five new CSS vars.
 - Extend coordinator tests: `buildSubtitleOverlayConfig` resolves style fields; live-apply listener calls `updateConfig` with resolved values when attached.
 - Extend `AppearanceCard.test.tsx`: preset pick → `onUpdate({ stylePreset, styleOverrides: {} })`; customize write → overrides set + badge; opacity dimmed when style is `none`.
