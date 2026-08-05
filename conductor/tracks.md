@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-08-05 all (confirmed 73 archived / 0 active; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 full-suite load timeouts; isolated affected file passes; tsc 0; lint 0; build 3.77 MB; Beads 7bw+wat open, 0 in_progress; no active track drift) -->
+<!-- conductor-refresh: 2026-08-05 all (confirmed 73 archived / 0 active; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 full-suite load timeouts; isolated affected file passes; tsc 0; lint 0; build 3.77 MB; Beads 0 open, 0 in_progress; no active track drift) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.

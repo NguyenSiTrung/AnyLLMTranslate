@@ -1,35 +1,31 @@
 {
-  "lastRefresh": "2026-08-05T11:28:29+07:00",
+  "lastRefresh": "2026-08-05T21:22:39+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh approved by user; reconciled product, tech, workflow, tracks, patterns, and Beads context against master since the 2026-08-03 refresh.",
-    "product.md: documented OpenCode Go, YouTube embedded-caption/native fallback and stale-request guards, Coursera direct-track lifecycle, the glass mini-studio redesign, and current health/test history.",
-    "tech-stack.md: recorded the YouTube host permission, confirmed no package.json or pnpm-lock.yaml dependency drift, and updated the measured build and validation snapshot.",
-    "workflow.md: confirmed no CI/tooling drift and documented the isolate-then-rerun protocol for load-sensitive Vitest timeouts.",
-    "tracks.md: corrected the archive count to 73, retained 0 active tracks, and restored the explicit empty active-track marker.",
-    "patterns.md: consolidated 71 archived learnings; no new cross-track pattern candidates were found, and the existing YouTube pre-align patterns remain elevated.",
-    "beads: 2 open (7bw, wat), 0 in progress; no active Conductor plan checkboxes; user-approved sync direction is skip.",
-    "backups: six temporary .bak snapshots were created before editing, verified against HEAD, then removed per user request.",
-    "verification: eslint 0; tsc 0; production build 3.77 MB. Vitest has 586 tests across 196 files; the latest parallel run was 584 pass / 2 timeout failures in services/__tests__/background.test.ts, while affected files pass in isolation."
+    "Scope: full refresh approved by user; reconciled product, tech, tracks, patterns, and Beads context against master since the 2026-08-05 11:28 refresh.",
+    "product.md: documented the Nous Portal provider preset (new nous-portal OPENAI_COMPATIBLE_CATALOG entry — inference-api.nousresearch.com/v1, requiresApiKey, hermes/nous keywords — plus host_permissions and catalog test coverage), added Nous Portal to the BYOK and provider-catalog lists, and recorded the empty Beads tracker.",
+    "tech-stack.md: added the Nous Portal host permission (https://inference-api.nousresearch.com/*) to the host_permissions row (verified against wxt.config.ts, which also carries the YouTube and scientific-PDF loopback entries); no package.json or pnpm-lock.yaml dependency drift.",
+    "tracks.md: updated refresh marker to 0 open Beads issues; still 73 archived / 0 active.",
+    "patterns.md: updated both refresh markers to 0 open Beads issues; no new cross-track pattern candidates (the consolidation and Nous Portal commits did not surface repeatable patterns).",
+    "refresh_state.json: reconciled stale codebaseHealth (586 tests -> 509 serial-gated across 196 files), stale Beads state (2 open -> 0 open, tracker closed in commit 22d5665), and added the Nous Portal commit to shippedSinceLastRefresh.",
+    "beads: bd CLI available and enabled (stealth mode); tracker is empty (0 open / 0 in progress). No active Conductor plan.md checkboxes exist, so directional sync remains a no-op; user-approved sync direction is skip.",
+    "verification: trusted the author's serial gate from commit e807ea0 (509/509 pass, tsc 0, lint 0) per user approval; the five markdown docs were already updated to the 509 snapshot in that commit. Backups of all six files were kept in /tmp/conductor-bak/ so the working tree stays clean."
   ],
   "codebaseHealth": {
-    "tests": 586,
-    "testsPassing": 584,
-    "testsFailing": 2,
+    "tests": 509,
+    "testsPassing": 509,
+    "testsFailing": 0,
     "testFiles": 196,
-    "fullSuiteStatus": "Load-sensitive timeout instability under parallel Vitest execution; services/__tests__/background.test.ts passes in isolation, and an earlier GeneralSection timeout also passed in isolation.",
+    "fullSuiteStatus": "Serial gate 509 pass / 0 failures across 196 files (assertion-preserving consolidation in e807ea0, 584 -> 509). Default parallel diagnostic: 507 pass / 2 load-timeout failures in services/__tests__/background.test.ts; that file passes in isolation, so the failures remain recorded as load-sensitive full-suite instability rather than stable assertion failures.",
     "buildSize": "3.77 MB",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean.",
+    "lintErrorsDetail": "Clean (per e807ea0 gate).",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean.",
+    "tscErrorsDetail": "Clean (per e807ea0 gate).",
     "archivedTracks": 73,
     "activeTracks": 0,
     "activeTracksDetail": "None.",
-    "failingTests": [
-      "services/__tests__/background.test.ts — emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries (parallel-run timeout)",
-      "services/__tests__/background.test.ts — does not cache a partial (source-back-filled) translation (parallel-run hook timeout)"
-    ],
+    "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
       "vite": "8.0.8",
@@ -39,31 +35,27 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "feat: OpenCode Go catalog preset — separate searchable OpenAI-compatible provider entry with Go endpoint metadata",
-      "feat: YouTube embedded caption discovery and native fallback — MAIN-world player metadata, native CC toggle/restore, and coordinator fallback",
-      "fix: reset DOM cue buffers on seek and guard stale YouTube caption requests across navigation/video identity changes",
-      "feat: YouTube link AI pre-align from Settings — watch-page extraction, json3 cache parity, background orchestration, and Subtitle Studio card",
-      "feat: Coursera direct full-track VTT lifecycle — shared attachment, seek/session ownership, and dynamic video reattachment",
-      "refactor: player mini-studio glass view — native-backed widgets, SVG anchor states, live preview, and color-token polish",
-      "test: final assertion-preserving suite consolidation — 586 tests across 196 files"
+      "feat: add Nous Portal provider preset — searchable nous-portal catalog entry (Nous Research inference gateway), host permission, and catalog tests",
+      "chore(beads): close all epics/tasks — tracker is empty",
+      "test: assertion-preserving suite consolidation 584 -> 509 across 43 files; serial gate 509/509 pass (196 files), tsc 0, lint 0"
     ]
   },
   "beads": {
-    "open": [
+    "open": [],
+    "inProgress": [],
+    "closedInWindow": [
       "AnyLLMTranslate-7bw",
       "AnyLLMTranslate-wat"
     ],
-    "inProgress": [],
-    "closedInWindow": [],
     "syncDirection": "skip",
-    "syncNote": "User approved full refresh with Beads sync skipped. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization is a no-op."
+    "syncNote": "Tracker is empty (0 open / 0 in progress); all epics/tasks were closed in commit 22d5665. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization is a no-op."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
     "archivedTrackLearnings": 71,
-    "changedTrackLearningsSincePreviousRefresh": 1,
+    "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [],
     "duplicatesMerged": [],
-    "note": "The YouTube link pre-align learnings are already represented in conductor/patterns.md."
+    "note": "No new cross-track pattern candidates from the Nous Portal or suite-consolidation commits; existing elevated patterns remain current."
   }
 }

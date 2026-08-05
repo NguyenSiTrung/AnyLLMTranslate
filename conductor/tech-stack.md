@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 load-timeout failures in background.test.ts; isolated affected file passes; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 7bw+wat open) -->
+<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; Nous Portal host permission added; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 load-timeout failures in background.test.ts; isolated affected file passes; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 0 open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -35,7 +35,7 @@
 | **chrome.storage.local** | Settings persistence, provider config |
 | **chrome.runtime** | Message passing between background ↔ content ↔ popup |
 | **chrome.tabs** | Tab-level translation state, live DOM-outline capture, and temporary-tab fallback for Site Rule suggestions |
-| **host_permissions** | YouTube watch/timedtext access for embedded-caption fallback and link pre-align (`*://*.youtube.com/*`) |
+| **host_permissions** | YouTube watch/timedtext access for embedded-caption fallback and link pre-align (`*://*.youtube.com/*`); Nous Portal inference gateway (`https://inference-api.nousresearch.com/*`); scientific-PDF loopback (`http://127.0.0.1/*`, `http://localhost/*`) |
 | **chrome.sidePanel** | Side panel reading view |
 | **chrome.contextMenus** | Right-click translation actions |
 | **chrome.commands** | Keyboard shortcuts |
