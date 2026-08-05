@@ -27,6 +27,16 @@ export interface OverlayConfig {
   offsetY: number; // Drag offset Y
   /** Font family for subtitle text (CSS value) */
   fontFamily: string;
+  /** Text color for the translated line (full CSS color). */
+  textColor: string;
+  /** Text color for the original line (full CSS color). */
+  originalTextColor: string;
+  /** Box background as an rgb triplet, e.g. '0,0,0'. */
+  backgroundColor: string;
+  /** Box corner radius in px. */
+  borderRadius: number;
+  /** CSS text-shadow value ('none' disables). */
+  textShadow: string;
   /** Whether to show original + translated, or translated only */
   displayMode: 'bilingual' | 'translation-only';
 }
@@ -40,6 +50,11 @@ const DEFAULT_CONFIG: OverlayConfig = {
   offsetX: 0,
   offsetY: 0,
   fontFamily: 'system-ui, sans-serif',
+  textColor: 'rgba(255,255,255,1)',
+  originalTextColor: 'rgba(255,255,255,0.6)',
+  backgroundColor: '0,0,0',
+  borderRadius: 8,
+  textShadow: '0 1px 3px rgba(0,0,0,0.5)',
   displayMode: 'bilingual',
 };
 
@@ -327,6 +342,13 @@ function updateOverlayStyle(config: OverlayConfig): void {
 
   // Set font family via CSS custom property
   overlay.style.setProperty('--anyllm-subtitle-font-family', config.fontFamily);
+
+  // Style preset fields
+  overlay.style.setProperty('--anyllm-subtitle-text-color', config.textColor);
+  overlay.style.setProperty('--anyllm-subtitle-original-color', config.originalTextColor);
+  overlay.style.setProperty('--anyllm-subtitle-bg-color', config.backgroundColor);
+  overlay.style.setProperty('--anyllm-subtitle-border-radius', `${config.borderRadius}px`);
+  overlay.style.setProperty('--anyllm-subtitle-text-shadow', config.textShadow);
 
   // Set display mode via data attribute (CSS handles show/hide of original text)
   overlay.setAttribute('data-display-mode', config.displayMode);

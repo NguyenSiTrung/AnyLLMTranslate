@@ -81,12 +81,46 @@ describe('subtitleOverlay — fontFamily / displayMode wiring', () => {
     updateConfig({ displayMode: 'translation-only' });
     expect(overlay.getAttribute('data-display-mode')).toBe('translation-only');
 
+    updateConfig({
+      textColor: 'rgba(255,255,255,1)',
+      originalTextColor: 'rgba(255,255,255,0.6)',
+      backgroundColor: '0,0,0',
+      borderRadius: 8,
+      textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+    });
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-text-color')).toBe(
+      'rgba(255,255,255,1)',
+    );
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-original-color')).toBe(
+      'rgba(255,255,255,0.6)',
+    );
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-bg-color')).toBe('0,0,0');
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-border-radius')).toBe('8px');
+    expect(overlay.style.getPropertyValue('--anyllm-subtitle-text-shadow')).toBe(
+      '0 1px 3px rgba(0,0,0,0.5)',
+    );
+
     // Positioning uses fixed viewport coordinates without scroll offsets.
     expect(overlay.style.position).toBe('fixed');
     expect(overlay.style.top).toBe('100px');
     expect(overlay.style.left).toBe('50px');
     expect(overlay.style.width).toBe('800px');
     expect(overlay.style.height).toBe('600px');
+  });
+
+  it('defaults the style fields to the classic look', () => {
+    const video = document.querySelector('video') as HTMLVideoElement;
+    vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
+      top: 0, left: 0, width: 800, height: 600, bottom: 600, right: 800, x: 0, y: 0, toJSON: () => {},
+    });
+    initializeOverlay(MOCK_CUES);
+    expect(getConfig()).toMatchObject({
+      textColor: 'rgba(255,255,255,1)',
+      originalTextColor: 'rgba(255,255,255,0.6)',
+      backgroundColor: '0,0,0',
+      borderRadius: 8,
+      textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+    });
   });
 });
 

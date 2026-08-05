@@ -42,16 +42,16 @@
      per-line <div> rendering (lib/subtitleWrap.ts). */
   max-width: 80%;
   gap: 4px;
-  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  background-color: rgba(var(--anyllm-subtitle-bg-color, 0,0,0), var(--anyllm-subtitle-bg-opacity, 0.75));
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--anyllm-subtitle-border-radius, 8px);
   font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
 }
 
 /* Original text (smaller, dimmer) */
 .anyllm-translate-subtitle-original {
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--anyllm-subtitle-original-color, rgba(255,255,255,0.6));
   line-height: 1.4;
   font-weight: 400;
 }
@@ -59,10 +59,10 @@
 /* Translated text (larger, brighter) */
 .anyllm-translate-subtitle-translated {
   font-size: 1em;
-  color: rgba(255, 255, 255, 1);
+  color: var(--anyllm-subtitle-text-color, rgba(255,255,255,1));
   line-height: 1.5;
   font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--anyllm-subtitle-text-shadow, 0 1px 3px rgba(0,0,0,0.5));
 }
 
 /* Fade-in: the overlay's opacity is handled by the transition above (opacity 0
@@ -168,9 +168,9 @@
   text-align: center;
   max-width: 80%;
   gap: 4px;
-  background-color: rgba(0, 0, 0, var(--anyllm-subtitle-bg-opacity, 0.75));
+  background-color: rgba(var(--anyllm-subtitle-bg-color, 0,0,0), var(--anyllm-subtitle-bg-opacity, 0.75));
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius: var(--anyllm-subtitle-border-radius, 8px);
   font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
   pointer-events: auto;
   cursor: grab;
@@ -194,7 +194,7 @@
 .anyllm-translate-subtitle-original {
   all: revert;
   font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--anyllm-subtitle-original-color, rgba(255,255,255,0.6));
   line-height: 1.4;
   font-weight: 400;
 }
@@ -202,10 +202,10 @@
 .anyllm-translate-subtitle-translated {
   all: revert;
   font-size: 1em;
-  color: rgba(255, 255, 255, 1);
+  color: var(--anyllm-subtitle-text-color, rgba(255,255,255,1));
   line-height: 1.5;
   font-weight: 500;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--anyllm-subtitle-text-shadow, 0 1px 3px rgba(0,0,0,0.5));
 }
 
 /* Subtitle Toast */

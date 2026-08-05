@@ -26,6 +26,11 @@ const DEFAULT_PREFS: OverlayConfig = {
   offsetX: 0,
   offsetY: 0,
   fontFamily: 'system',
+  textColor: 'rgba(255,255,255,1)',
+  originalTextColor: 'rgba(255,255,255,0.6)',
+  backgroundColor: '0,0,0',
+  borderRadius: 8,
+  textShadow: '0 1px 3px rgba(0,0,0,0.5)',
   displayMode: 'bilingual',
 };
 
