@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (598 pass / 0 fail; lint 0; tsc 0; build 3.74 MB; 72 archived / 0 active; Beads zg4+7uk open; full-settings backup + export chooser + Youku fullscreen fix) -->
+<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; 586 total / 584 pass / 2 load-timeout failures in full suite; isolated affected files pass; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 7bw+wat open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -35,6 +35,7 @@
 | **chrome.storage.local** | Settings persistence, provider config |
 | **chrome.runtime** | Message passing between background ↔ content ↔ popup |
 | **chrome.tabs** | Tab-level translation state, live DOM-outline capture, and temporary-tab fallback for Site Rule suggestions |
+| **host_permissions** | YouTube watch/timedtext access for embedded-caption fallback and link pre-align (`*://*.youtube.com/*`) |
 | **chrome.sidePanel** | Side panel reading view |
 | **chrome.contextMenus** | Right-click translation actions |
 | **chrome.commands** | Keyboard shortcuts |
@@ -167,4 +168,4 @@
 - Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
 - The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
 
-- Quality gates snapshot (2026-08-03, after full-settings backup + export chooser + Youku fullscreen fix): **598** Vitest TCs passed / **0** fail across **186** test files; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.74 MB**.
+- Quality gates snapshot (2026-08-05, after the Coursera lifecycle, YouTube caption guards, OpenCode Go catalog, and player-chrome glass wave): **586** Vitest TCs across **196** test files; the latest parallel run had **584 pass / 2 timeout failures** in `services/__tests__/background.test.ts`, while the affected files pass in isolation; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.77 MB**. No `package.json` or `pnpm-lock.yaml` dependency changes were detected since the previous refresh.

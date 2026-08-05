@@ -1,31 +1,35 @@
 {
-  "lastRefresh": "2026-08-03T01:22:00+07:00",
+  "lastRefresh": "2026-08-05T11:28:29+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh per user selection (quality gates re-run + learnings consolidation) on top of the 2026-08-01 01:24 refresh; 21 commits on master since then across three clusters.",
-    "product.md: refreshed marker; added timeline entries for full-settings backup with encryption (2026-08-01, Beads 8ms closed), data portability export chooser (2026-08-01/02, Beads 1z1 closed), and Youku fullscreen overlay fix (2026-08-02/03, Beads gjk closed); updated Current State (598/186, build 3.74 MB) and test-suite history.",
-    "tech-stack.md: refreshed marker and quality-gate snapshot to 598/186/0 and build 3.74 MB. No package.json or lockfile dependency changes.",
-    "patterns.md: no new cross-track patterns; 70 archived learnings files scanned (0 active tracks, no learnings files changed since last refresh); retained the existing player-chrome hybrid-mount, soft-mirror, shadow-DOM, and single-authority patterns.",
-    "tracks.md: refresh marker only; confirmed 72 archived / 0 active with no track or learning drift.",
-    "workflow.md: refreshed marker; no CI, tooling, or workflow drift.",
-    "beads: user selected Skip — no active Conductor plan checkboxes, so directional sync is a no-op; retained open zg4 + 7uk; closed in window: 8ms (backup), 1z1 (export chooser), gjk (Youku fullscreen).",
-    "backups: product.md.bak, tech-stack.md.bak, patterns.md.bak, tracks.md.bak, workflow.md.bak, refresh_state.json.bak.",
-    "verification: vitest 598/598 pass across 186 files; tsc 0; eslint 0; production build artifact 3.74 MB."
+    "Scope: full refresh approved by user; reconciled product, tech, workflow, tracks, patterns, and Beads context against master since the 2026-08-03 refresh.",
+    "product.md: documented OpenCode Go, YouTube embedded-caption/native fallback and stale-request guards, Coursera direct-track lifecycle, the glass mini-studio redesign, and current health/test history.",
+    "tech-stack.md: recorded the YouTube host permission, confirmed no package.json or pnpm-lock.yaml dependency drift, and updated the measured build and validation snapshot.",
+    "workflow.md: confirmed no CI/tooling drift and documented the isolate-then-rerun protocol for load-sensitive Vitest timeouts.",
+    "tracks.md: corrected the archive count to 73, retained 0 active tracks, and restored the explicit empty active-track marker.",
+    "patterns.md: consolidated 71 archived learnings; no new cross-track pattern candidates were found, and the existing YouTube pre-align patterns remain elevated.",
+    "beads: 2 open (7bw, wat), 0 in progress; no active Conductor plan checkboxes; user-approved sync direction is skip.",
+    "backups: six temporary .bak snapshots were created before editing, verified against HEAD, then removed per user request.",
+    "verification: eslint 0; tsc 0; production build 3.77 MB. Vitest has 586 tests across 196 files; the latest parallel run was 584 pass / 2 timeout failures in services/__tests__/background.test.ts, while affected files pass in isolation."
   ],
   "codebaseHealth": {
-    "tests": 598,
-    "testsPassing": 598,
-    "testsFailing": 0,
-    "testFiles": 186,
-    "buildSize": "3.74 MB",
+    "tests": 586,
+    "testsPassing": 584,
+    "testsFailing": 2,
+    "testFiles": 196,
+    "fullSuiteStatus": "Load-sensitive timeout instability under parallel Vitest execution; services/__tests__/background.test.ts passes in isolation, and an earlier GeneralSection timeout also passed in isolation.",
+    "buildSize": "3.77 MB",
     "lintErrors": 0,
     "lintErrorsDetail": "Clean.",
     "tscErrors": 0,
     "tscErrorsDetail": "Clean.",
-    "archivedTracks": 72,
+    "archivedTracks": 73,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Player Subtitle Chrome, DeepSeek/OpenCode Zen provider work, full-settings backup, export chooser, and the Youku fullscreen fix shipped on master through superpowers specs/plans and Beads without Conductor tracks.",
-    "failingTests": [],
+    "activeTracksDetail": "None.",
+    "failingTests": [
+      "services/__tests__/background.test.ts — emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries (parallel-run timeout)",
+      "services/__tests__/background.test.ts — does not cache a partial (source-back-filled) translation (parallel-run hook timeout)"
+    ],
     "installedTooling": {
       "wxt": "0.20.22",
       "vite": "8.0.8",
@@ -35,22 +39,31 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "feat: full-settings backup with encryption (bac73c9..4890385) — lib/backup.ts crypto module, lib/passphraseStrength.ts, replaceSettings exact-restore, BackupDialogs, Advanced tab wiring; Beads 8ms closed",
-      "feat: data portability export chooser (ee12ab0..0199f6a) — ExportFormatDialog encrypted-recommended chooser; Beads 1z1 closed",
-      "fix: Youku fullscreen overlay visibility (f83e732, cbba3a4) — subtitleOverlay.ts + subtitle.css; Beads gjk closed"
+      "feat: OpenCode Go catalog preset — separate searchable OpenAI-compatible provider entry with Go endpoint metadata",
+      "feat: YouTube embedded caption discovery and native fallback — MAIN-world player metadata, native CC toggle/restore, and coordinator fallback",
+      "fix: reset DOM cue buffers on seek and guard stale YouTube caption requests across navigation/video identity changes",
+      "feat: YouTube link AI pre-align from Settings — watch-page extraction, json3 cache parity, background orchestration, and Subtitle Studio card",
+      "feat: Coursera direct full-track VTT lifecycle — shared attachment, seek/session ownership, and dynamic video reattachment",
+      "refactor: player mini-studio glass view — native-backed widgets, SVG anchor states, live preview, and color-token polish",
+      "test: final assertion-preserving suite consolidation — 586 tests across 196 files"
     ]
   },
   "beads": {
-    "open": ["AnyLLMTranslate-zg4", "AnyLLMTranslate-7uk"],
+    "open": [
+      "AnyLLMTranslate-7bw",
+      "AnyLLMTranslate-wat"
+    ],
     "inProgress": [],
-    "closedInWindow": ["AnyLLMTranslate-8ms", "AnyLLMTranslate-1z1", "AnyLLMTranslate-gjk"],
+    "closedInWindow": [],
     "syncDirection": "skip",
-    "syncNote": "User selected Skip. No active Conductor tracks or plan.md checkboxes exist, so either directional synchronization would be a no-op."
+    "syncNote": "User approved full refresh with Beads sync skipped. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization is a no-op."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
-    "changedTrackLearningsSincePreviousRefresh": 0,
+    "archivedTrackLearnings": 71,
+    "changedTrackLearningsSincePreviousRefresh": 1,
     "newPatternsElevated": [],
-    "duplicatesMerged": []
+    "duplicatesMerged": [],
+    "note": "The YouTube link pre-align learnings are already represented in conductor/patterns.md."
   }
 }

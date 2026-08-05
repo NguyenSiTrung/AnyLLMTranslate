@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (598 pass / 0 fail; lint 0; tsc 0; 72 archived / 0 active; Beads zg4+7uk open; no new cross-track patterns; player-chrome hybrid-mount/soft-mirror/shadow-DOM/single-authority patterns retained) -->
+<!-- conductor-refresh: 2026-08-05 all (71 archived learnings scanned; no new cross-track patterns; 73 archived / 0 active; Beads 7bw+wat open; latest full suite 584 pass / 2 load-timeout failures across 196 files; lint 0; tsc 0; build 3.77 MB) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
@@ -886,4 +886,4 @@ Codebase health: 1042 tests across 92 files (1041 passing / 1 failing: `subtitle
 - **Selective mask via `getProseMaskRects`:** Return `null` to skip mask (math/figure/verbatim); for mixed runs mask only prose boxes (run.y is baseline → top = y+height); full-para rect otherwise. (from: pdf-composition_20260717)
 
 ---
-Last refreshed: 2026-07-24 (setup-wizard 4-step B+C-lite, thinkingDetection, tab-scoped popup, empty-model pool elevated; suite 705 pass / 2 fail / 707; lint 0; tsc 0; build ~3.6 MB; 72 archived / 0 active; Beads 7uk+zg4 open, s3t in_progress)
+Last refreshed: 2026-08-05 (71 archived learnings scanned; YouTube pre-align patterns already elevated; no new cross-track candidates; 73 archived / 0 active; latest full suite 584 pass / 2 load-timeout failures across 196 files; lint 0; tsc 0; build 3.77 MB; Beads 7bw+wat open)

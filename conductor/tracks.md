@@ -1,5 +1,5 @@
-<!-- conductor-archive: 2026-07-20 web-translate-hardening_20260720 archived (72 archived / 0 active) -->
-<!-- conductor-refresh: 2026-08-03 all (confirmed 72 archived / 0 active; 598 pass / 0 fail; tsc 0; lint 0; Beads zg4+7uk open, 0 in_progress; no track drift; full-settings backup + export chooser + Youku fullscreen fix shipped without Conductor tracks) -->
+<!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
+<!-- conductor-refresh: 2026-08-05 all (confirmed 73 archived / 0 active; 586 total / 584 pass / 2 full-suite load timeouts; isolated affected files pass; tsc 0; lint 0; build 3.77 MB; Beads 7bw+wat open, 0 in_progress; no active track drift) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -90,5 +90,6 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
----
+*(none)*
 
+---

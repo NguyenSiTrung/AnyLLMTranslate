@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-03 all (quality gates updated to 598/186/0; no workflow/tooling drift) -->
+<!-- conductor-refresh: 2026-08-05 all (no CI/tooling drift; 586 tests across 196 files; parallel full-suite timeout instability recorded; lint 0; tsc 0; build 3.77 MB) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
@@ -36,6 +36,8 @@ At the end of each phase:
 2. Run lint: `pnpm lint`
 3. Manual verification of new features
 4. Update track learnings
+
+When a full Vitest run times out, rerun the affected file(s) in isolation and perform one clean full-suite rerun before classifying it as a regression. Record repeated load-sensitive timeouts in the refresh health snapshot; do not report the full gate as green solely because isolated files pass.
 
 ## Code Review Checklist
 
