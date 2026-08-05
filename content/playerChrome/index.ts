@@ -4,15 +4,11 @@
 
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { isContextInvalidated } from '@/lib/utils';
-import { getFullscreenMountParent, resolvePlayerTargets } from './host';
+import { getFullscreenMountParent, isPlausibleControlBar, resolvePlayerTargets } from './host';
 import { createFloatingShell, createNativeShell, type ChromeShell } from './mountFloating';
 import { attachMiniStudio, type MiniStudioControllers } from './miniStudio';
 import { subscribeFullscreenChange } from './fullscreen';
-import {
-  createVisibilityState,
-  reduceVisibility,
-  type VisibilityState,
-} from './visibility';
+import { createVisibilityState, reduceVisibility, type VisibilityState } from './visibility';
 const VIDEO_POLL_MS = 1000;
 const IDLE_TICK_MS = 500;
 const NATIVE_RECHECK_MS = 200;
@@ -134,7 +130,7 @@ export function startPlayerChrome(): () => void {
     destroyShell();
 
     const nativeMount = adapter?.findNativeMount?.(document) ?? null;
-    if (nativeMount && !fsParent) {
+    if (nativeMount && !fsParent && isPlausibleControlBar(nativeMount, video)) {
       shell = createNativeShell({ mountNode: nativeMount, onToggle });
       nativeObserver = new MutationObserver(() => {
         if (stopped) return;

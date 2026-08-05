@@ -49,3 +49,25 @@ export function getFullscreenMountParent(doc: Document = document): Element | nu
   if (el instanceof HTMLVideoElement) return null;
   return el;
 }
+
+/**
+ * A native control-bar candidate must actually occupy the player's bottom
+ * control band. Some site variants (e.g. Coursera) expose player-root or
+ * top-bar lookalikes under loose selectors; appending there would strand the
+ * button in the wrong corner. Falls back to floating when geometry is unknown
+ * (player not laid out yet — trust the selector rather than dropping native
+ * mounts on dynamically mounting players).
+ */
+export function isPlausibleControlBar(node: HTMLElement, video: HTMLVideoElement): boolean {
+  if (!node.isConnected) return false;
+  const vr = video.getBoundingClientRect();
+  if (vr.width < 80 || vr.height < 80) return true;
+  const r = node.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return false;
+  return (
+    r.height <= vr.height * 0.35 &&
+    r.top >= vr.top + vr.height * 0.5 &&
+    r.bottom >= vr.bottom - 8 &&
+    r.bottom <= vr.bottom + 16
+  );
+}

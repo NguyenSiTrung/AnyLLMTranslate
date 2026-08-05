@@ -76,6 +76,15 @@ export const CHROME_SHADOW_CSS = `
 }
 `;
 
+/**
+ * Floating anchor insets, per design spec §5.2: bottom-right INSIDE the
+ * player, above the usual progress/control band (native bars are ~40-48px).
+ */
+export const FLOATING_BOTTOM_INSET_PX = 56;
+export const FLOATING_RIGHT_INSET_PX = 12;
+/** Off-screen position used while the player has no usable geometry. */
+const OFFSCREEN_PX = -10000;
+
 function appendChromeShadow(
   host: HTMLElement,
   onToggle: () => void,
@@ -108,8 +117,7 @@ export function createFloatingShell(args: {
   const host = document.createElement('div');
   host.className = PLAYER_CHROME_HOST_CLASS;
   host.dataset.mountMode = 'floating';
-  host.style.cssText =
-    'position:fixed;z-index:2147483646;pointer-events:none;top:0;left:0;opacity:1;visibility:visible;';
+  host.style.cssText = `position:fixed;z-index:2147483646;pointer-events:none;top:${OFFSCREEN_PX}px;left:${OFFSCREEN_PX}px;opacity:1;visibility:visible;`;
   const { shadow, button, panelSlot, setButtonState } = appendChromeShadow(host, args.onToggle);
   const parent = args.mountParent ?? document.body;
   parent.appendChild(host);
@@ -117,17 +125,36 @@ export function createFloatingShell(args: {
   const reposition = (): void => {
     const rect = args.video.getBoundingClientRect();
     if (rect.width < 80 || rect.height < 80) {
-      host.style.opacity = host.style.visibility === 'hidden' ? '0' : host.style.opacity;
+      // Player not laid out yet (mounting/hidden). Never strand the button at
+      // the viewport origin — keep it off-screen until geometry is usable.
+      host.style.top = `${OFFSCREEN_PX}px`;
+      host.style.left = `${OFFSCREEN_PX}px`;
+      host.style.bottom = 'auto';
+      host.style.right = 'auto';
       return;
     }
-    const bottom = window.innerHeight - rect.bottom + 48;
-    const right = window.innerWidth - rect.right + 12;
+    // Bottom-right INSIDE the video, above the native progress/control band.
+    const bottom = window.innerHeight - rect.bottom + FLOATING_BOTTOM_INSET_PX;
+    const right = window.innerWidth - rect.right + FLOATING_RIGHT_INSET_PX;
     host.style.bottom = `${Math.max(8, bottom)}px`;
     host.style.right = `${Math.max(8, right)}px`;
     host.style.top = 'auto';
     host.style.left = 'auto';
   };
   reposition();
+
+  // The host is position:fixed with viewport coords — keep it glued to the
+  // video across scrolls (including inner scroll containers) and resizes.
+  let rafId = 0;
+  const scheduleReposition = (): void => {
+    if (rafId !== 0) return;
+    rafId = window.requestAnimationFrame(() => {
+      rafId = 0;
+      reposition();
+    });
+  };
+  window.addEventListener('scroll', scheduleReposition, { capture: true, passive: true });
+  window.addEventListener('resize', scheduleReposition, { passive: true });
 
   return {
     host,
@@ -145,6 +172,11 @@ export function createFloatingShell(args: {
       button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     },
     destroy() {
+      window.removeEventListener('scroll', scheduleReposition, {
+        capture: true,
+      } as EventListenerOptions);
+      window.removeEventListener('resize', scheduleReposition);
+      if (rafId !== 0) window.cancelAnimationFrame(rafId);
       host.remove();
     },
     reposition,
