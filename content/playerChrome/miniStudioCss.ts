@@ -162,7 +162,7 @@ export const MINI_STUDIO_CSS = `
   text-align: center;
   gap: 2px;
   max-width: 85%;
-  background: rgba(0,0,0,var(--preview-bg,0.7));
+  background: rgba(var(--preview-bg-color,0,0,0),var(--preview-bg,0.7));
   padding: 5px 10px;
   border-radius: 6px;
 }

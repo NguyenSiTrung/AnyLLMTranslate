@@ -13,15 +13,19 @@ import {
   loadMiniStudioSnapshot,
   setActiveGlossaryList,
   setAppearance,
+  setStylePreset,
   setSubtitlesEnabled,
   setTabKnob,
 } from './prefs';
 import {
   buildMiniStudioView,
+  fillStyleSelect,
   setStatusPill,
   updatePreview,
   type MiniStudioView,
 } from './miniStudioView';
+import { resolveSubtitleStyle, type ResolvedSubtitleStyle } from '@/lib/subtitleStylePresets';
+import type { SubtitleStylePresetId } from '@/types/config';
 
 export interface MiniStudioControllers {
   open(): Promise<void>;
@@ -34,6 +38,9 @@ export interface MiniStudioControllers {
 /** Slightly longer than the 160ms panel transition so the close fade completes
  *  before `hidden` is applied. */
 const CLOSE_HIDE_MS = 170;
+
+/** Preview style used before the first snapshot applies. */
+const DEFAULT_PREVIEW_STYLE: ResolvedSubtitleStyle = resolveSubtitleStyle('classic', undefined, 0.7);
 
 function openFullSubtitleStudio(): void {
   let url: string;
@@ -90,24 +97,29 @@ export function attachMiniStudio(args: {
   let open = false;
   let destroyed = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastStyle: ResolvedSubtitleStyle = DEFAULT_PREVIEW_STYLE;
 
   function currentPreviewArgs(): {
     fontSize: number;
     backgroundOpacity: number;
     position: 'top' | 'bottom';
     displayMode: string;
+    style: ResolvedSubtitleStyle;
   } {
     return {
       fontSize: Number(view.fontSize.input.value),
       backgroundOpacity: Number(view.opacity.input.value) / 100,
       position: view.position.value() as 'top' | 'bottom',
       displayMode: view.displayMode.value(),
+      style: lastStyle,
     };
   }
 
   function applySnapshot(snap: MiniStudioSnapshot): void {
     view.enable.input.checked = snap.enabled;
     view.displayMode.setValue(snap.displayMode);
+    lastStyle = resolveSubtitleStyle(snap.stylePreset, snap.styleOverrides, snap.backgroundOpacity);
+    fillStyleSelect(view.styleSelect.select, snap.stylePreset, snap.hasCustomStyle);
     view.fontSize.setValue(snap.fontSize);
     view.fontValue.textContent = String(snap.fontSize);
     view.position.setValue(snap.position);
@@ -137,6 +149,7 @@ export function attachMiniStudio(args: {
       backgroundOpacity: snap.backgroundOpacity,
       position: snap.position,
       displayMode: snap.displayMode,
+      style: lastStyle,
     });
     args.setButtonState?.(buttonStateFromSnapshot(snap));
   }
@@ -240,6 +253,11 @@ export function attachMiniStudio(args: {
     void setAppearance({ backgroundOpacity: Number(view.opacity.input.value) / 100 }).then(() =>
       refresh(),
     );
+  });
+  view.styleSelect.select.addEventListener('change', () => {
+    const value = view.styleSelect.select.value;
+    if (value === 'custom') return;
+    void setStylePreset(value as SubtitleStylePresetId).then(() => refresh());
   });
   view.glossary.addEventListener('change', () => {
     const id = view.glossary.value || null;

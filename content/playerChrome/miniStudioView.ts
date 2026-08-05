@@ -14,7 +14,10 @@ import {
   type ToggleWidget,
   type SegmentedWidget,
   type SliderWidget,
+  type SelectWidget,
 } from './widgets';
+import { SUBTITLE_STYLE_PRESETS, type ResolvedSubtitleStyle } from '@/lib/subtitleStylePresets';
+import type { SubtitleStylePresetId } from '@/types/config';
 
 /** Preview cue renders at a reduced scale of the real overlay font size. */
 export const PREVIEW_FONT_SCALE = 0.6;
@@ -49,6 +52,28 @@ export function fillSelect(select: HTMLSelectElement, values: string[], current:
   select.value = values.includes(current) ? current : values[0] ?? '';
 }
 
+/** Fill the style select with the five presets (+ Custom when overridden). */
+export function fillStyleSelect(
+  select: HTMLSelectElement,
+  current: SubtitleStylePresetId,
+  hasCustom: boolean,
+): void {
+  select.innerHTML = '';
+  for (const id of Object.keys(SUBTITLE_STYLE_PRESETS) as SubtitleStylePresetId[]) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = SUBTITLE_STYLE_PRESETS[id].label;
+    select.appendChild(opt);
+  }
+  if (hasCustom) {
+    const opt = document.createElement('option');
+    opt.value = 'custom';
+    opt.textContent = 'Custom';
+    select.appendChild(opt);
+  }
+  select.value = hasCustom ? 'custom' : current;
+}
+
 export interface PreviewElements {
   root: HTMLElement;
   cue: HTMLElement;
@@ -61,6 +86,7 @@ export interface MiniStudioView {
   panel: HTMLElement;
   enable: ToggleWidget;
   displayMode: SegmentedWidget;
+  styleSelect: SelectWidget;
   fontSize: SliderWidget;
   fontValue: HTMLElement;
   position: SegmentedWidget;
@@ -108,6 +134,7 @@ export function buildMiniStudioView(): MiniStudioView {
     <div class="section">
       <h3 class="section-title">Appearance</h3>
       <div class="row"><span class="row-label">Display</span></div>
+      <div class="row"><span class="row-label">Style</span></div>
       <div class="row">
         <label for="anyllm-ms-font">Font size <span data-role="fontValue">18</span>px</label>
       </div>
@@ -142,8 +169,11 @@ export function buildMiniStudioView(): MiniStudioView {
     ],
   });
   const rows = panel.querySelectorAll('.section .row');
-  // rows: 0=Display, 1=Font size, 2=Position, 3=Background, 4=Glossary list
+  // rows: 0=Display, 1=Style, 2=Font size, 3=Position, 4=Background, 5=Glossary list
   rows[0]?.appendChild(displayMode.root);
+
+  const styleSelect = buildSelect({ id: 'anyllm-ms-style', action: 'stylePreset' });
+  rows[1]?.appendChild(styleSelect.root);
 
   const fontSize = buildSlider({
     id: 'anyllm-ms-font',
@@ -152,7 +182,7 @@ export function buildMiniStudioView(): MiniStudioView {
     max: 36,
     step: 1,
   });
-  rows[1]?.appendChild(fontSize.root);
+  rows[2]?.appendChild(fontSize.root);
 
   const position = buildSegmented({
     name: 'anyllm-ms-position',
@@ -162,7 +192,7 @@ export function buildMiniStudioView(): MiniStudioView {
       { value: 'top', label: 'Top' },
     ],
   });
-  rows[2]?.appendChild(position.root);
+  rows[3]?.appendChild(position.root);
 
   const opacity = buildSlider({
     id: 'anyllm-ms-opacity',
@@ -171,10 +201,10 @@ export function buildMiniStudioView(): MiniStudioView {
     max: 100,
     step: 5,
   });
-  rows[3]?.appendChild(opacity.root);
+  rows[4]?.appendChild(opacity.root);
 
   const glossary = buildSelect({ id: 'anyllm-ms-list', action: 'glossary' });
-  rows[4]?.appendChild(glossary.root);
+  rows[5]?.appendChild(glossary.root);
 
   const knobSelects: HTMLSelectElement[] = [];
   const knobsRoot = panel.querySelector('[data-role="knobs"]') as HTMLElement;
@@ -196,6 +226,7 @@ export function buildMiniStudioView(): MiniStudioView {
     panel,
     enable,
     displayMode,
+    styleSelect,
     fontSize,
     fontValue: panel.querySelector('[data-role="fontValue"]') as HTMLElement,
     position,
@@ -228,10 +259,17 @@ export function updatePreview(
     backgroundOpacity: number;
     position: 'top' | 'bottom';
     displayMode: string;
+    style: ResolvedSubtitleStyle;
   },
 ): void {
   preview.cue.style.fontSize = `${Math.round(args.fontSize * PREVIEW_FONT_SCALE)}px`;
-  preview.cue.style.setProperty('--preview-bg', String(args.backgroundOpacity));
+  const bgOpacity = args.style.backgroundOpacity === 0 ? 0 : args.backgroundOpacity;
+  preview.cue.style.setProperty('--preview-bg', String(bgOpacity));
+  preview.cue.style.setProperty('--preview-bg-color', args.style.backgroundColor);
+  preview.cue.style.borderRadius = `${args.style.borderRadius}px`;
+  preview.cue.style.textShadow = args.style.textShadow;
+  preview.original.style.color = args.style.originalTextColor;
+  preview.translated.style.color = args.style.textColor;
   preview.root.dataset.position = args.position;
   preview.root.dataset.display = args.displayMode;
 }

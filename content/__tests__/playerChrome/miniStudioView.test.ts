@@ -7,6 +7,7 @@ import {
   setStatusPill,
   updatePreview,
   fillSelect,
+  fillStyleSelect,
   PREVIEW_FONT_SCALE,
 } from '@/content/playerChrome/miniStudioView';
 import { PLAYER_CHROME_PANEL_CLASS } from '@/content/playerChrome/types';
@@ -25,6 +26,14 @@ describe('mini studio view', () => {
     expect(v.fontSize.input.dataset.action).toBe('fontSize');
     expect(v.opacity.input.dataset.action).toBe('opacity');
     expect(v.displayMode.inputs[0].dataset.action).toBe('displayMode');
+    expect(v.styleSelect.select.dataset.action).toBe('stylePreset');
+    fillStyleSelect(v.styleSelect.select, 'classic', false);
+    expect(v.styleSelect.select.options).toHaveLength(5);
+    expect(v.styleSelect.select.value).toBe('classic');
+    expect(v.styleSelect.select.options[1].textContent).toBe('Netflix');
+    fillStyleSelect(v.styleSelect.select, 'classic', true);
+    expect(v.styleSelect.select.options).toHaveLength(6);
+    expect(v.styleSelect.select.value).toBe('custom');
     expect(v.position.inputs[0].dataset.action).toBe('position');
     expect(v.knobSelects).toHaveLength(4);
     expect(v.knobSelects.map((s) => s.dataset.knob)).toEqual([
@@ -60,9 +69,22 @@ describe('mini studio view', () => {
       backgroundOpacity: 0.5,
       position: 'top',
       displayMode: 'translation-only',
+      style: {
+        textColor: 'rgba(255,255,255,1)',
+        originalTextColor: 'rgba(255,255,255,0.6)',
+        backgroundColor: '0,0,0',
+        backgroundOpacity: 0.5,
+        borderRadius: 8,
+        textShadow: 'none',
+      },
     });
     expect(v.preview.cue.style.fontSize).toBe(`${Math.round(20 * PREVIEW_FONT_SCALE)}px`);
     expect(v.preview.cue.style.getPropertyValue('--preview-bg')).toBe('0.5');
+    expect(v.preview.cue.style.getPropertyValue('--preview-bg-color')).toBe('0,0,0');
+    expect(v.preview.cue.style.borderRadius).toBe('8px');
+    expect(v.preview.cue.style.textShadow).toBe('none');
+    expect(v.preview.original.style.color).toBe('rgba(255,255,255,0.6)');
+    expect(v.preview.translated.style.color).toBe('rgba(255,255,255,1)');
     expect(v.preview.root.dataset.position).toBe('top');
     expect(v.preview.root.dataset.display).toBe('translation-only');
     fillSelect(v.glossary, ['auto', 'literal'], 'literal');

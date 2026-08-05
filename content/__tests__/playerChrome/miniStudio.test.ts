@@ -10,6 +10,9 @@ vi.mock('@/content/playerChrome/prefs', () => ({
     fontSize: 18,
     position: 'bottom',
     backgroundOpacity: 0.7,
+    stylePreset: 'classic',
+    styleOverrides: {},
+    hasCustomStyle: false,
     knobs: {},
     lists: [{ id: 'l1', name: 'Pack', entries: [], updatedAt: 1 }],
     activeListId: null,
@@ -18,6 +21,7 @@ vi.mock('@/content/playerChrome/prefs', () => ({
   })),
   setSubtitlesEnabled: vi.fn(async () => {}),
   setAppearance: vi.fn(async () => {}),
+  setStylePreset: vi.fn(async () => {}),
   setTabKnob: vi.fn(),
   hydrateLocalKnobs: vi.fn(),
   setActiveGlossaryList: vi.fn(async () => {}),
@@ -186,6 +190,9 @@ describe('attachMiniStudio', () => {
       fontSize: 18,
       position: 'bottom',
       backgroundOpacity: 0.7,
+      stylePreset: 'classic',
+      styleOverrides: {},
+      hasCustomStyle: false,
       knobs: {},
       lists: [],
       activeListId: null,
@@ -211,6 +218,75 @@ describe('attachMiniStudio', () => {
     expect(pill.dataset.status).toBe('disabled');
     expect(pill.textContent).toContain('Off');
     expect(setButtonState).toHaveBeenCalledWith('off');
+    studio.destroy();
+  });
+
+  it('style select reflects the snapshot and calls setStylePreset on change', async () => {
+    vi.mocked(prefs.loadMiniStudioSnapshot).mockResolvedValueOnce({
+      enabled: true,
+      displayMode: 'bilingual',
+      fontSize: 18,
+      position: 'bottom',
+      backgroundOpacity: 0.7,
+      stylePreset: 'netflix',
+      styleOverrides: {},
+      hasCustomStyle: false,
+      knobs: {},
+      lists: [],
+      activeListId: null,
+      hostname: 'youtube.com',
+      status: 'idle',
+    });
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    document.body.appendChild(host);
+    const btn = document.createElement('button');
+    shadow.appendChild(btn);
+    const studio = attachMiniStudio({ shadow, anchorButton: btn, onOpenChange: vi.fn() });
+    await studio.open();
+
+    const panel = shadow.querySelector(`.${PLAYER_CHROME_PANEL_CLASS}`) as HTMLElement;
+    const select = panel.querySelector('[data-action="stylePreset"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.value).toBe('netflix');
+    // All five preset options render
+    expect(select.options.length).toBe(5);
+
+    select.value = 'classic';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(prefs.setStylePreset).toHaveBeenCalledWith('classic');
+    studio.destroy();
+  });
+
+  it('shows a Custom option when style overrides exist', async () => {
+    vi.mocked(prefs.loadMiniStudioSnapshot).mockResolvedValueOnce({
+      enabled: true,
+      displayMode: 'bilingual',
+      fontSize: 18,
+      position: 'bottom',
+      backgroundOpacity: 0.7,
+      stylePreset: 'classic',
+      styleOverrides: { textColor: '#ff0000' },
+      hasCustomStyle: true,
+      knobs: {},
+      lists: [],
+      activeListId: null,
+      hostname: 'youtube.com',
+      status: 'idle',
+    });
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    document.body.appendChild(host);
+    const btn = document.createElement('button');
+    shadow.appendChild(btn);
+    const studio = attachMiniStudio({ shadow, anchorButton: btn, onOpenChange: vi.fn() });
+    await studio.open();
+
+    const panel = shadow.querySelector(`.${PLAYER_CHROME_PANEL_CLASS}`) as HTMLElement;
+    const select = panel.querySelector('[data-action="stylePreset"]') as HTMLSelectElement;
+    expect(select.options.length).toBe(6);
+    expect(select.value).toBe('custom');
+    expect(select.options[5].textContent).toBe('Custom');
     studio.destroy();
   });
 });
