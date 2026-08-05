@@ -21,7 +21,7 @@ import {
   onMpdProcessing,
 } from '@/content/messageBridge';
 import { sendMessage } from '@/inject/messageBridge';
-import { getOverlayTextContainer } from '@/content/subtitleOverlay';
+import { getOverlayTextContainer, updateConfig, isOverlayActive } from '@/content/subtitleOverlay';
 import { createRenderer, type SubtitleRenderer } from '@/content/subtitleRenderer';
 import { clearHoverCache } from '@/content/hoverTranslate';
 import { clearTranslatedSections } from '@/content/sectionTranslate';
@@ -29,6 +29,7 @@ import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
+import { resolveSubtitleFontFamily, resolveSubtitleStyle } from '@/lib/subtitleStylePresets';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
 import type {
@@ -440,15 +441,6 @@ function getPlaybackTimeForTranslation(): number {
   return 0;
 }
 
-function resolveSubtitleFontFamily(fontFamily: SubtitleSettings['fontFamily'] | undefined): string {
-  const fontFamilyMap: Record<SubtitleSettings['fontFamily'], string> = {
-    serif: 'Georgia, serif',
-    monospace: 'monospace',
-    system: 'system-ui, sans-serif',
-  };
-  return fontFamilyMap[fontFamily ?? 'system'] ?? 'system-ui, sans-serif';
-}
-
 /** Tear down the active renderer and forget its video ownership. */
 function destroyRenderer(): void {
   state.activeRenderer?.destroy();
@@ -571,13 +563,23 @@ function buildSubtitleOverlayConfig(
   subtitleSettings: SubtitleSettings,
   savedPrefs?: Partial<OverlayConfig>,
 ): Partial<OverlayConfig> {
+  const style = resolveSubtitleStyle(
+    subtitleSettings.stylePreset,
+    subtitleSettings.styleOverrides,
+    subtitleSettings.backgroundOpacity,
+  );
   return {
     fontSize: subtitleSettings.fontSize,
     fontSizeMode: subtitleSettings.fontSizeMode,
     position: subtitleSettings.position,
-    backgroundOpacity: subtitleSettings.backgroundOpacity,
+    backgroundOpacity: style.backgroundOpacity,
     fontFamily: resolveSubtitleFontFamily(subtitleSettings.fontFamily),
     displayMode: subtitleSettings.displayMode,
+    textColor: style.textColor,
+    originalTextColor: style.originalTextColor,
+    backgroundColor: style.backgroundColor,
+    borderRadius: style.borderRadius,
+    textShadow: style.textShadow,
     offsetX: savedPrefs?.offsetX ?? 0,
     offsetY: savedPrefs?.offsetY ?? 0,
   };
@@ -2505,6 +2507,25 @@ function scheduleProactiveCategoryDetection(): void {
   }, 1500);
 }
 
+/** Debounced timer for re-applying settings to an attached overlay. */
+let styleApplyTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Re-apply the latest settings to an attached overlay (style live-apply).
+ * No-op when no renderer is attached. Called debounced from the storage
+ * change listener; the renderer config carries the saved drag offsets.
+ */
+export function refreshAttachedOverlayConfig(
+  settings: Awaited<ReturnType<typeof loadSettings>>,
+): void {
+  if (!isOverlayActive()) return;
+  const config = buildSubtitleOverlayConfig(
+    settings.subtitleSettings,
+    state.rendererConfig ?? undefined,
+  );
+  updateConfig(config);
+}
+
 /**
  * Start the subtitle coordinator.
  * Returns a cleanup function.
@@ -2535,6 +2556,11 @@ export function startCoordinator(): () => void {
     loadSettings().then((s) => {
       state.cachedSettings = s;
       pushSubtitleConfigToMainWorld(s);
+      if (styleApplyTimer) clearTimeout(styleApplyTimer);
+      styleApplyTimer = setTimeout(() => {
+        styleApplyTimer = null;
+        refreshAttachedOverlayConfig(s);
+      }, 100);
     }).catch(() => {});
   };
   try { chrome.storage.onChanged.addListener(settingsChangeListener); } catch { /* tests may not mock */ }
@@ -2710,6 +2736,10 @@ export function startCoordinator(): () => void {
     if (proactiveCategoryDetectionTimer !== null) {
       clearTimeout(proactiveCategoryDetectionTimer);
       proactiveCategoryDetectionTimer = null;
+    }
+    if (styleApplyTimer !== null) {
+      clearTimeout(styleApplyTimer);
+      styleApplyTimer = null;
     }
 
     // Cleanup drag listeners and overlay if active

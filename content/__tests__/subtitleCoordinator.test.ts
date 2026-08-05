@@ -77,11 +77,15 @@ mockInitializeOverlay.mockReturnValue(true);
 const mockUpdateCues = vi.fn();
 const mockCleanupOverlay = vi.fn();
 const mockGetOverlayTextContainer = vi.fn<(...args: unknown[]) => null>(() => null);
+const mockUpdateConfig = vi.fn();
+const mockIsOverlayActive = vi.fn<(...args: unknown[]) => boolean>(() => false);
 vi.mock('@/content/subtitleOverlay', () => ({
   initializeOverlay: (...args: unknown[]) => mockInitializeOverlay(...args),
   updateCues: (...args: unknown[]) => { mockUpdateCues(...args); },
   cleanup: (...args: unknown[]) => { mockCleanupOverlay(...args); },
   getOverlayTextContainer: (...args: unknown[]) => { mockGetOverlayTextContainer(...args); },
+  updateConfig: (...args: unknown[]) => { mockUpdateConfig(...args); },
+  isOverlayActive: () => mockIsOverlayActive(),
 }));
 
 const mockInitializeControls = vi.fn();
@@ -138,6 +142,8 @@ const MOCK_SETTINGS = {
   displayMode: 'bilingual-below',
   subtitleSettings: {
     fontFamily: 'system',
+    stylePreset: 'classic',
+    styleOverrides: {},
     displayMode: 'bilingual',
     translationTimeout: 30,
     position: 'bottom',
@@ -1122,6 +1128,11 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         fontSizeMode: 'fixed',
         position: 'bottom',
         backgroundOpacity: 0.7,
+        textColor: 'rgba(255,255,255,1)',
+        originalTextColor: 'rgba(255,255,255,0.6)',
+        backgroundColor: '0,0,0',
+        borderRadius: 8,
+        textShadow: '0 1px 3px rgba(0,0,0,0.5)',
       }),
       expect.any(HTMLVideoElement),
     );
@@ -1167,6 +1178,34 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       }),
       expect.any(HTMLVideoElement),
     );
+  });
+
+  it('refreshAttachedOverlayConfig re-applies resolved settings and no-ops when detached', async () => {
+    mockIsOverlayActive.mockReturnValue(true);
+    const settings = {
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        stylePreset: 'netflix',
+      },
+    } as unknown as Awaited<ReturnType<typeof import('@/lib/config').loadSettings>>;
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.refreshAttachedOverlayConfig(settings);
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backgroundOpacity: 0,
+        textColor: 'rgba(255,255,255,1)',
+        originalTextColor: 'rgba(255,255,255,0.6)',
+        backgroundColor: '0,0,0',
+        borderRadius: 8,
+        textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+      }),
+    );
+
+    mockIsOverlayActive.mockReturnValue(false);
+    mockUpdateConfig.mockClear();
+    mod.refreshAttachedOverlayConfig(settings);
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   it('passes original content through (no background call) when subtitles disabled, cues empty, or no handler matches', async () => {
