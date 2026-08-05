@@ -416,6 +416,24 @@ export type SubtitleListBySite = Record<string, string>;
 /** Subtitle font family options */
 export type SubtitleFontFamily = 'system' | 'serif' | 'monospace';
 
+/** Named subtitle style presets. 'classic' reproduces the pre-preset look. */
+export type SubtitleStylePresetId =
+  | 'classic'
+  | 'netflix'
+  | 'white-on-black'
+  | 'yellow-on-black'
+  | 'black-on-white';
+
+/** Manual style overrides; any non-empty field switches the effective style to Custom. */
+export interface SubtitleStyleOverrides {
+  /** Text color as a hex string, e.g. '#f5c518'. */
+  textColor?: string;
+  /** Caption box background; 'none' renders shadow-only text. */
+  backgroundStyle?: 'none' | 'black-box' | 'white-box';
+  /** Text shadow strength 0–1; 0 disables the shadow. */
+  shadowStrength?: number;
+}
+
 /** Subtitle overlay display mode (independent of page displayMode) */
 export type SubtitleDisplayMode = 'bilingual' | 'translation-only';
 
@@ -456,6 +474,10 @@ export interface SubtitleSettings {
   enabled: boolean;
   /** Font family for subtitle overlay */
   fontFamily: SubtitleFontFamily;
+  /** Named style preset; 'classic' = pre-preset look (default). */
+  stylePreset: SubtitleStylePresetId;
+  /** Manual style overrides; non-empty means the effective style is Custom. */
+  styleOverrides: Partial<SubtitleStyleOverrides>;
   /** Overlay display mode: show original + translated, or translated only */
   displayMode: SubtitleDisplayMode;
   /** Translation timeout in seconds (10–120) */
@@ -770,6 +792,8 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   backgroundOpacity: 0.7,
   enabled: true,
   fontFamily: 'system',
+  stylePreset: 'classic',
+  styleOverrides: {},
   displayMode: 'bilingual',
   translationTimeout: 30,
   preferredSubtitleLanguage: 'en',
