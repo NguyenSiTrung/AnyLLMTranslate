@@ -74,6 +74,8 @@ export function SubtitlesSection() {
               fontSizeMode={subtitleSettings.fontSizeMode}
               backgroundOpacity={subtitleSettings.backgroundOpacity}
               fontFamily={subtitleSettings.fontFamily}
+              stylePreset={subtitleSettings.stylePreset}
+              styleOverrides={subtitleSettings.styleOverrides}
               displayMode={subtitleSettings.displayMode}
               position={subtitleSettings.position}
               cues={previewCues}

@@ -10,10 +10,14 @@ import {
   Paintbrush,
 } from 'lucide-react';
 import { Card } from '@/ui/Card';
+import { Badge } from '@/ui/Badge';
 import { DisabledDimmer } from '@/ui/DisabledDimmer';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { SettingsGroup } from '@/ui/SettingsGroup';
 import { SegmentedControl } from '@/ui/SegmentedControl';
 import { Slider } from '@/ui/Slider';
+import { SUBTITLE_STYLE_PRESETS } from '@/lib/subtitleStylePresets';
+import type { SubtitleStyleOverrides, SubtitleStylePresetId } from '@/types/config';
 import {
   FONT_FAMILY_OPTIONS,
   FONT_SIZE_MODE_OPTIONS,
@@ -46,7 +50,23 @@ const DISPLAY_MODE_OPTIONS = [
   },
 ];
 
+const BACKGROUND_STYLE_OPTIONS = [
+  { value: 'none' as const, label: 'None' },
+  { value: 'black-box' as const, label: 'Black box' },
+  { value: 'white-box' as const, label: 'White box' },
+];
+
+const STYLE_PRESET_IDS = Object.keys(SUBTITLE_STYLE_PRESETS) as SubtitleStylePresetId[];
+
 export function AppearanceCard({ settings, disabled, onUpdate }: SubtitleCardBaseProps) {
+  const overrides = settings.styleOverrides ?? {};
+  const hasCustom = Object.keys(overrides).length > 0;
+  const preset = SUBTITLE_STYLE_PRESETS[settings.stylePreset] ?? SUBTITLE_STYLE_PRESETS.classic;
+  const effectiveBackgroundStyle = overrides.backgroundStyle ?? preset.backgroundStyle;
+  const setOverride = (partial: Partial<SubtitleStyleOverrides>) => {
+    onUpdate({ styleOverrides: { ...overrides, ...partial } });
+  };
+
   return (
     <Card
       title="Appearance"
@@ -56,6 +76,70 @@ export function AppearanceCard({ settings, disabled, onUpdate }: SubtitleCardBas
     >
       <DisabledDimmer disabled={disabled}>
         <div className="space-y-5">
+          <SettingsGroup title="Style" description="Preset caption looks. Classic is the original look.">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {STYLE_PRESET_IDS.map((id) => {
+                const active = !hasCustom && settings.stylePreset === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onUpdate({ stylePreset: id, styleOverrides: {} })}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                      active
+                        ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                        : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/70 hover:text-zinc-200 hover:border-zinc-600'
+                    }`}
+                  >
+                    {SUBTITLE_STYLE_PRESETS[id].label}
+                  </button>
+                );
+              })}
+              {hasCustom && <Badge>Custom</Badge>}
+            </div>
+            <AdvancedDisclosure label="Customize colors" idPrefix="subtitle-style-custom">
+              <div className="space-y-4 pt-1">
+                <div>
+                  <label
+                    htmlFor="subtitle-style-text-color"
+                    className="text-xs text-zinc-400"
+                  >
+                    Text color
+                  </label>
+                  <input
+                    id="subtitle-style-text-color"
+                    type="color"
+                    value={overrides.textColor ?? preset.textColor}
+                    onChange={(e) => setOverride({ textColor: e.target.value })}
+                    className="mt-1 h-8 w-14 rounded border border-zinc-700 bg-zinc-900 p-1"
+                  />
+                </div>
+                <SegmentedControl
+                  label="Background"
+                  options={BACKGROUND_STYLE_OPTIONS}
+                  value={overrides.backgroundStyle ?? preset.backgroundStyle}
+                  onChange={(val) => setOverride({ backgroundStyle: val })}
+                  disabled={disabled}
+                  accent="cyan"
+                />
+                <Slider
+                  id="subtitle-style-shadow"
+                  label="Shadow Strength"
+                  value={overrides.shadowStrength ?? preset.shadowStrength}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(v) => setOverride({ shadowStrength: v })}
+                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  minLabel="None"
+                  maxLabel="Strong"
+                  disabled={disabled}
+                />
+              </div>
+            </AdvancedDisclosure>
+          </SettingsGroup>
+
           <SettingsGroup title="Layout" description="Where captions sit relative to the video.">
             <SegmentedControl
               label="Subtitle Position"
@@ -109,19 +193,21 @@ export function AppearanceCard({ settings, disabled, onUpdate }: SubtitleCardBas
           </SettingsGroup>
 
           <SettingsGroup title="Backdrop">
-            <Slider
-              id="subtitle-opacity"
-              label="Background Opacity"
-              value={settings.backgroundOpacity}
-              min={0}
-              max={1}
-              step={0.05}
-              onChange={(v) => onUpdate({ backgroundOpacity: v })}
-              formatValue={(v) => `${Math.round(v * 100)}%`}
-              minLabel="0%"
-              maxLabel="100%"
-              disabled={disabled}
-            />
+            <DisabledDimmer disabled={effectiveBackgroundStyle === 'none'}>
+              <Slider
+                id="subtitle-opacity"
+                label="Background Opacity"
+                value={settings.backgroundOpacity}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => onUpdate({ backgroundOpacity: v })}
+                formatValue={(v) => `${Math.round(v * 100)}%`}
+                minLabel="0%"
+                maxLabel="100%"
+                disabled={disabled}
+              />
+            </DisabledDimmer>
           </SettingsGroup>
 
           <SettingsGroup

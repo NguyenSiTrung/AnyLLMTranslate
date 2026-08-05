@@ -17,25 +17,24 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Play } from 'lucide-react';
-import type { SubtitleFontFamily, SubtitleDisplayMode, SubtitleFontSizeMode } from '@/types/config';
+import {
+  SUBTITLE_STYLE_PRESETS,
+  resolveSubtitleFontFamily,
+  resolveSubtitleStyle,
+} from '@/lib/subtitleStylePresets';
+import type {
+  SubtitleDisplayMode,
+  SubtitleFontFamily,
+  SubtitleFontSizeMode,
+  SubtitleStyleOverrides,
+  SubtitleStylePresetId,
+} from '@/types/config';
 import { buildAppearanceSummaryChips } from '@/lib/subtitlePreviewSummary';
 
 /** A sample subtitle cue shown in the preview. */
 export interface PreviewCue {
   original: string;
   translated: string;
-}
-
-/** Map a font-family setting to a CSS font-family string. */
-function resolveFontFamily(family: SubtitleFontFamily): string {
-  switch (family) {
-    case 'serif':
-      return 'Georgia, serif';
-    case 'monospace':
-      return 'monospace';
-    default:
-      return 'system-ui, sans-serif';
-  }
 }
 
 /** Scale font size proportionally for the compact preview viewport. */
@@ -75,6 +74,8 @@ function AnimatedCue({
   fontSizeMode,
   backgroundOpacity,
   fontFamily,
+  stylePreset,
+  styleOverrides,
   displayMode,
   position,
   disabled,
@@ -84,6 +85,8 @@ function AnimatedCue({
   fontSizeMode: SubtitleFontSizeMode;
   backgroundOpacity: number;
   fontFamily: SubtitleFontFamily;
+  stylePreset: SubtitleStylePresetId;
+  styleOverrides: Partial<SubtitleStyleOverrides>;
   displayMode: SubtitleDisplayMode;
   position: 'bottom' | 'top';
   disabled: boolean;
@@ -120,7 +123,8 @@ function AnimatedCue({
   }, [disabled, prefersReducedMotion, advanceCue]);
 
   const previewFontSize = scalePreviewFontSize(fontSize, fontSizeMode);
-  const resolvedFont = resolveFontFamily(fontFamily);
+  const resolvedFont = resolveSubtitleFontFamily(fontFamily);
+  const style = resolveSubtitleStyle(stylePreset, styleOverrides, backgroundOpacity);
   const isTop = position === 'top';
   const cue = cues[cueIndex] ?? cues[0];
 
@@ -147,7 +151,9 @@ function AnimatedCue({
         isTop ? 'top-4' : 'bottom-6'
       } left-1/2 -translate-x-1/2`}
       style={{
-        backgroundColor: `rgba(0, 0, 0, ${backgroundOpacity})`,
+        backgroundColor: `rgba(${style.backgroundColor},${style.backgroundOpacity})`,
+        borderRadius: `${style.borderRadius}px`,
+        textShadow: style.textShadow,
         opacity: phase === 'visible' ? 1 : 0,
         transition: 'opacity 0.5s ease-in-out',
         fontFamily: resolvedFont,
@@ -156,9 +162,13 @@ function AnimatedCue({
       }}
     >
       {displayMode === 'bilingual' && (
-        <div className="text-zinc-300 leading-tight">{cue.original}</div>
+        <div className="leading-tight" style={{ color: style.originalTextColor }}>
+          {cue.original}
+        </div>
       )}
-      <div className="text-white leading-tight font-medium">{cue.translated}</div>
+      <div className="leading-tight font-medium" style={{ color: style.textColor }}>
+        {cue.translated}
+      </div>
     </div>
   );
 }
@@ -196,6 +206,9 @@ export interface SubtitlePreviewProps {
   fontSizeMode: SubtitleFontSizeMode;
   backgroundOpacity: number;
   fontFamily: SubtitleFontFamily;
+  stylePreset: SubtitleStylePresetId;
+  /** Manual style overrides; non-empty means the effective style is Custom. */
+  styleOverrides?: Partial<SubtitleStyleOverrides>;
   displayMode: SubtitleDisplayMode;
   position: 'bottom' | 'top';
   /** Sample cues to cycle through. Falls back to a built-in set. */
@@ -220,6 +233,8 @@ export function SubtitlePreview({
   fontSizeMode,
   backgroundOpacity,
   fontFamily,
+  stylePreset,
+  styleOverrides = {},
   displayMode,
   position,
   cues = DEFAULT_CUES,
@@ -233,6 +248,10 @@ export function SubtitlePreview({
     fontSize,
     backgroundOpacity,
   });
+  const styleChipLabel =
+    Object.keys(styleOverrides).length > 0
+      ? 'Custom'
+      : SUBTITLE_STYLE_PRESETS[stylePreset]?.label ?? 'Classic';
 
   return (
     <div className="space-y-2" data-testid="subtitle-preview">
@@ -291,6 +310,8 @@ export function SubtitlePreview({
           fontSizeMode={fontSizeMode}
           backgroundOpacity={backgroundOpacity}
           fontFamily={fontFamily}
+          stylePreset={stylePreset}
+          styleOverrides={styleOverrides}
           displayMode={displayMode}
           position={position}
           disabled={disabled}
@@ -306,14 +327,16 @@ export function SubtitlePreview({
           data-testid="subtitle-preview-summary"
           aria-live="polite"
         >
-          {[chips.position, chips.display, chips.size, chips.opacity].map((label) => (
-            <span
-              key={label}
-              className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-400 border border-zinc-700/50"
-            >
-              {label}
-            </span>
-          ))}
+          {[styleChipLabel, chips.position, chips.display, chips.size, chips.opacity].map(
+            (label) => (
+              <span
+                key={label}
+                className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800/80 text-zinc-400 border border-zinc-700/50"
+              >
+                {label}
+              </span>
+            ),
+          )}
         </div>
       )}
     </div>
