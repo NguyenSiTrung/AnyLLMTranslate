@@ -25,6 +25,7 @@ export default defineConfig({
       // CSP already allows connect-src http: https: for extension pages.
       'http://127.0.0.1/*',
       'http://localhost/*',
+      'https://inference-api.nousresearch.com/*',
     ],
     // PDF.js worker + standard fonts/cmaps are bundled under assets/ via Vite ?url imports.
     // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.

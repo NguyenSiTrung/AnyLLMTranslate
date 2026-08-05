@@ -19,6 +19,7 @@ describe('openAiCompatibleCatalog', () => {
     expect(ids).toContain('opencode-zen');
     expect(ids).toContain('deepseek');
     expect(ids).toContain('opencode-go');
+    expect(ids).toContain('nous-portal');
     expect(getCatalogEntryById('openrouter')?.baseUrl).toBe('https://openrouter.ai/api/v1');
     expect(getCatalogEntryById('openrouter')?.requiresApiKey).toBe(true);
     expect(getCatalogEntryById('google-ai-studio')?.baseUrl).toBe(
@@ -38,9 +39,20 @@ describe('openAiCompatibleCatalog', () => {
       'https://platform.deepseek.com/api_keys',
     );
     expect(getCatalogEntryById('deepseek')?.defaultModel).toBe('deepseek-v4-flash');
+    expect(getCatalogEntryById('nous-portal')).toMatchObject({
+      id: 'nous-portal',
+      displayName: 'Nous Portal',
+      baseUrl: 'https://inference-api.nousresearch.com/v1',
+      requiresApiKey: true,
+      defaultModel: 'Hermes-4-70B',
+      getKeyUrl: 'https://portal.nousresearch.com/api-keys',
+      supportsModelListing: true,
+      category: 'cloud',
+    });
     expect(filterCatalog('gemini').some((e) => e.id === 'google-ai-studio')).toBe(true);
     expect(filterCatalog('opencode').some((e) => e.id === 'opencode-zen')).toBe(true);
     expect(filterCatalog('deepseek').some((e) => e.id === 'deepseek')).toBe(true);
+    expect(filterCatalog('nous').map((provider) => provider.id)).toContain('nous-portal');
     expect(getKeyUrlForProvider('https://generativelanguage.googleapis.com/v1beta/openai')).toBe(
       'https://aistudio.google.com/apikey',
     );
@@ -48,11 +60,15 @@ describe('openAiCompatibleCatalog', () => {
     expect(getKeyUrlForProvider('https://api.deepseek.com')).toBe(
       'https://platform.deepseek.com/api_keys',
     );
+    expect(getKeyUrlForProvider('https://inference-api.nousresearch.com/v1')).toBe(
+      'https://portal.nousresearch.com/api-keys',
+    );
     expect(inferCatalogId('https://generativelanguage.googleapis.com/v1beta/openai/')).toBe(
       'google-ai-studio',
     );
     expect(inferCatalogId('https://opencode.ai/zen/v1/')).toBe('opencode-zen');
     expect(inferCatalogId('https://api.deepseek.com/')).toBe('deepseek');
+    expect(inferCatalogId('https://inference-api.nousresearch.com/v1/')).toBe('nous-portal');
 
     expect(filterCatalog('')).toHaveLength(OPENAI_COMPATIBLE_CATALOG.length);
     expect(filterCatalog('router').some((e) => e.id === 'openrouter')).toBe(true);
