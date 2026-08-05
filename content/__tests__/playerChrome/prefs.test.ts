@@ -40,6 +40,7 @@ import {
   loadMiniStudioSnapshot,
   setSubtitlesEnabled,
   setAppearance,
+  setStylePreset,
   setTabKnob,
   hydrateLocalKnobs,
   setActiveGlossaryList,
@@ -101,6 +102,48 @@ describe('playerChrome prefs', () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         subtitleListBySite: expect.any(Object),
+      }),
+    );
+  });
+
+  it('loadMiniStudioSnapshot maps style preset, overrides, and custom state', async () => {
+    loadSettings.mockResolvedValueOnce({
+      subtitleSettings: {
+        enabled: true,
+        fontSize: 18,
+        position: 'bottom',
+        backgroundOpacity: 0.7,
+        stylePreset: 'netflix',
+        styleOverrides: { shadowStrength: 0.2 },
+      },
+    });
+    const snap = await loadMiniStudioSnapshot();
+    expect(snap.stylePreset).toBe('netflix');
+    expect(snap.styleOverrides).toEqual({ shadowStrength: 0.2 });
+    expect(snap.hasCustomStyle).toBe(true);
+  });
+
+  it('setStylePreset writes settings, clears overrides, and live-applies the resolved style', async () => {
+    loadSettings.mockResolvedValueOnce({
+      subtitleSettings: {
+        enabled: true,
+        fontSize: 18,
+        position: 'bottom',
+        backgroundOpacity: 0.7,
+        stylePreset: 'classic',
+        styleOverrides: {},
+      },
+    });
+    await setStylePreset('netflix');
+    expect(updateSettings).toHaveBeenCalledWith({
+      subtitleSettings: expect.objectContaining({ stylePreset: 'netflix', styleOverrides: {} }),
+    });
+    expect(updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        backgroundOpacity: 0,
+        textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+        textColor: 'rgba(255,255,255,1)',
+        borderRadius: 8,
       }),
     );
   });

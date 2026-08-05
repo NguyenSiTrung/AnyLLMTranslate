@@ -16,7 +16,13 @@ import {
   normalizeSubtitleSiteHost,
 } from '@/lib/namedGlossaryLists';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
-import type { NamedGlossaryList, SubtitleDisplayMode } from '@/types/config';
+import { resolveSubtitleStyle } from '@/lib/subtitleStylePresets';
+import type {
+  NamedGlossaryList,
+  SubtitleDisplayMode,
+  SubtitleStyleOverrides,
+  SubtitleStylePresetId,
+} from '@/types/config';
 import type { ChromeStatus } from './types';
 import { isContextInvalidated } from '@/lib/utils';
 
@@ -26,6 +32,9 @@ export interface MiniStudioSnapshot {
   fontSize: number;
   position: 'top' | 'bottom';
   backgroundOpacity: number;
+  stylePreset: SubtitleStylePresetId;
+  styleOverrides: Partial<SubtitleStyleOverrides>;
+  hasCustomStyle: boolean;
   knobs: Partial<ProfileKnobs>;
   lists: NamedGlossaryList[];
   activeListId: string | null;
@@ -53,6 +62,9 @@ export async function loadMiniStudioSnapshot(): Promise<MiniStudioSnapshot> {
       fontSize: 20,
       position: 'bottom',
       backgroundOpacity: 0.75,
+      stylePreset: 'classic',
+      styleOverrides: {},
+      hasCustomStyle: false,
       knobs: {},
       lists: [],
       activeListId: null,
@@ -75,6 +87,9 @@ export async function loadMiniStudioSnapshot(): Promise<MiniStudioSnapshot> {
     fontSize: ss.fontSize,
     position: ss.position,
     backgroundOpacity: ss.backgroundOpacity,
+    stylePreset: ss.stylePreset,
+    styleOverrides: ss.styleOverrides ?? {},
+    hasCustomStyle: Object.keys(ss.styleOverrides ?? {}).length > 0,
     knobs,
     lists: settings.namedGlossaryLists ?? [],
     activeListId,
@@ -115,11 +130,33 @@ export async function setAppearance(partial: {
     next.backgroundOpacity = Math.max(0, Math.min(1, partial.backgroundOpacity));
   }
   await updateSettings({ subtitleSettings: next });
+  const style = resolveSubtitleStyle(next.stylePreset, next.styleOverrides, next.backgroundOpacity);
   updateConfig({
     fontSize: next.fontSize,
     position: next.position,
-    backgroundOpacity: next.backgroundOpacity,
+    backgroundOpacity: style.backgroundOpacity,
     displayMode: next.displayMode,
+    textColor: style.textColor,
+    originalTextColor: style.originalTextColor,
+    backgroundColor: style.backgroundColor,
+    borderRadius: style.borderRadius,
+    textShadow: style.textShadow,
+  });
+}
+
+export async function setStylePreset(presetId: SubtitleStylePresetId): Promise<void> {
+  if (isContextInvalidated()) return;
+  const settings = await loadSettings();
+  const next = { ...settings.subtitleSettings, stylePreset: presetId, styleOverrides: {} };
+  await updateSettings({ subtitleSettings: next });
+  const style = resolveSubtitleStyle(presetId, {}, next.backgroundOpacity);
+  updateConfig({
+    backgroundOpacity: style.backgroundOpacity,
+    textColor: style.textColor,
+    originalTextColor: style.originalTextColor,
+    backgroundColor: style.backgroundColor,
+    borderRadius: style.borderRadius,
+    textShadow: style.textShadow,
   });
 }
 
