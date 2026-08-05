@@ -3,7 +3,7 @@ import { buildSubtitleSystemPrompt } from '@/services/subtitlePrompt';
 import { PROFILE_PRESETS } from '@/lib/subtitleProfiles';
 
 describe('buildSubtitleSystemPrompt named list', () => {
-  it('places personal dictionary before global glossary', () => {
+  it('orders the personal dictionary and omits it when absent', () => {
     const prompt = buildSubtitleSystemPrompt(
       'vi',
       PROFILE_PRESETS.media,
@@ -17,10 +17,7 @@ describe('buildSubtitleSystemPrompt named list', () => {
     expect(iNamed).toBeGreaterThan(-1);
     expect(iNamed).toBeLessThan(iGlobal);
     expect(iGlobal).toBeLessThan(iRolling);
-  });
-
-  it('omits named section when block absent', () => {
-    const prompt = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media);
-    expect(prompt).not.toContain('Personal dictionary');
+    const promptWithoutNamed = buildSubtitleSystemPrompt('vi', PROFILE_PRESETS.media);
+    expect(promptWithoutNamed).not.toContain('Personal dictionary');
   });
 });

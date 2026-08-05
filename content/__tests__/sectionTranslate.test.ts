@@ -36,7 +36,7 @@ describe('sectionTranslate FR-5 dismiss = canonical restore', () => {
     clearTranslatedSections();
   });
 
-  it('translation-only → section dismiss → originals visible + wrappers unwrapped', () => {
+  it('restores originals for section dismiss and remove-all parity', () => {
     const section = document.createElement('section');
     section.id = 'article-section';
     const p = document.createElement('p');
@@ -71,18 +71,20 @@ describe('sectionTranslate FR-5 dismiss = canonical restore', () => {
     expect(section.querySelector('[data-anyllm-original-wrapper]')).toBeNull();
     expect(section.contains(p)).toBe(true);
     expect(p.textContent).toBe('Hello world');
-  });
-
-  it('removeAllTranslations still fully cleans the same markers (parity baseline)', () => {
-    const p = document.createElement('p');
-    p.textContent = 'Hello';
-    document.body.appendChild(p);
-    applyTranslation(p, 'p-1', 'Xin chào');
+    {
+    document.body.innerHTML = '';
+    document.documentElement.removeAttribute(DATA_ATTRS.STATE);
+    clearTranslatedSections();
+    const parityParagraph = document.createElement('p');
+    parityParagraph.textContent = 'Hello';
+    document.body.appendChild(parityParagraph);
+    applyTranslation(parityParagraph, 'p-1', 'Xin chào');
     setPageState('translation-only');
     removeAllTranslations();
-    expect(p.getAttribute(DATA_ATTRS.ROLE)).toBeNull();
-    expect(p.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(false);
+    expect(parityParagraph.getAttribute(DATA_ATTRS.ROLE)).toBeNull();
+    expect(parityParagraph.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(false);
     expect(document.querySelector(`[${DATA_ATTRS.ROLE}="translation"]`)).toBeNull();
     expect(getTranslatedSections().length).toBe(0);
+    }
   });
 });

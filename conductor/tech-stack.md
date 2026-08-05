@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; 586 total / 584 pass / 2 load-timeout failures in full suite; isolated affected files pass; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 7bw+wat open) -->
+<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 load-timeout failures in background.test.ts; isolated affected file passes; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 7bw+wat open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -168,4 +168,4 @@
 - Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
 - The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
 
-- Quality gates snapshot (2026-08-05, after the Coursera lifecycle, YouTube caption guards, OpenCode Go catalog, and player-chrome glass wave): **586** Vitest TCs across **196** test files; the latest parallel run had **584 pass / 2 timeout failures** in `services/__tests__/background.test.ts`, while the affected files pass in isolation; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.77 MB**. No `package.json` or `pnpm-lock.yaml` dependency changes were detected since the previous refresh.
+- Quality gates snapshot (2026-08-05, after assertion-preserving test-suite consolidation): **509** Vitest TCs across **196** test files; the serial gate had **509 pass / 0 failures**; the latest default parallel diagnostic had **507 pass / 2 timeout failures** in `services/__tests__/background.test.ts`, while the affected file passes in isolation; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.77 MB**. No `package.json` or `pnpm-lock.yaml` dependency changes were detected since the previous refresh.

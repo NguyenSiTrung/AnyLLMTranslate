@@ -79,13 +79,13 @@ function renderRow(
   return { onUpdate, onRemove };
 }
 
-describe('ProviderKeyRow API key field', () => {
+describe('ProviderKeyRow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cleanup();
   });
 
-  it('always shows API key input whether requiresApiKey is true or false (custom/local)', () => {
+  it('covers API key visibility, rate-limit presets, and the overflow menu', () => {
     renderRow();
     expect(screen.getByLabelText(/^API key$/i)).toBeInTheDocument();
     expect(screen.queryByText(/No key required/i)).not.toBeInTheDocument();
@@ -106,16 +106,9 @@ describe('ProviderKeyRow API key field', () => {
       screen.getByText(/Optional — leave blank for local or unauthenticated endpoints/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/No key required/i)).not.toBeInTheDocument();
-  });
-});
-
-describe('ProviderKeyRow rate limits UX', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
     cleanup();
-  });
-
-  it('collapsed summary expands; Balanced/Custom/Reset presets; overflow menu', () => {
+    vi.clearAllMocks();
+    {
     const { onUpdate } = renderRow({ onMove: vi.fn() });
 
     expect(
@@ -162,5 +155,6 @@ describe('ProviderKeyRow rate limits UX', () => {
       concurrencyLimit: 1,
       interval: 500,
     });
+    }
   });
 });

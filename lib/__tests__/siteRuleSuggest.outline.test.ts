@@ -7,7 +7,7 @@ function dom(html: string): Document {
 }
 
 describe('buildDomOutline', () => {
-  it('captures title and content-ish nodes with caps', () => {
+  it('captures relevant nodes with caps while skipping script/style and empty noise', () => {
     const doc = dom(`<!doctype html><html><head><title>Hello</title></head>
       <body>
         <nav class="top-nav">Home</nav>
@@ -32,14 +32,11 @@ describe('buildDomOutline', () => {
     expect(article?.id).toBeUndefined();
     expect(article?.classes?.length).toBeGreaterThan(0);
     expect((article?.textSample ?? '').length).toBeLessThanOrEqual(80);
-  });
-
-  it('skips script/style and empty noise', () => {
-    const doc = dom(
+    const noiseDoc = dom(
       `<html><body><script>alert(1)</script><style>x{}</style><div></div><p>Hi there friend</p></body></html>`,
     );
-    const outline = buildDomOutline(doc, { url: 'https://x.test', hostname: 'x.test' });
-    expect(outline.nodes.every((n) => n.tag !== 'script' && n.tag !== 'style')).toBe(
+    const noiseOutline = buildDomOutline(noiseDoc, { url: 'https://x.test', hostname: 'x.test' });
+    expect(noiseOutline.nodes.every((n) => n.tag !== 'script' && n.tag !== 'style')).toBe(
       true,
     );
   });

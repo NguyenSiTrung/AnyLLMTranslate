@@ -23,7 +23,7 @@ function emptyDay(date: string, totals: Partial<StatCounters> = {}): DailyStatRe
 }
 
 describe('statisticsDisplay', () => {
-  it('buildLast30Days and buildChartDays zero-fill, map counters, drop OOR', () => {
+  it('builds chart ranges, formats values, detects activity, and calculates cache efficiency', () => {
     const days = buildLast30Days(
       [
         { date: '2026-04-01', chars: 999, apiCalls: 9, cacheHits: 9 },
@@ -78,9 +78,6 @@ describe('statisticsDisplay', () => {
     expect(allDays.map((d) => d.date)).toEqual(['2026-07-01', '2026-07-02', '2026-07-03']);
     expect(allDays.map((d) => d.chars)).toEqual([5, 0, 15]);
     expect(buildChartDays([], 'all', new Date(2026, 6, 9))).toEqual([]);
-  });
-
-  it('formatters, activity detection, and cache efficiency', () => {
     expect(formatCompactDate('2026-05-06', 'en-US')).toBe('May 6');
     expect(formatFullDate('2026-05-06', 'en-US')).toBe('May 6, 2026');
 

@@ -39,7 +39,7 @@ describe('ModelPicker', () => {
     vi.clearAllMocks();
   });
 
-  it('browses full model list, filters by search, selects model', async () => {
+  it('browses, filters, selects, and reports model-list errors', async () => {
     const models = Array.from({ length: 30 }, (_, i) => `provider/model-${i}`);
     listProviderModelsMock.mockResolvedValue({
       success: true,
@@ -72,9 +72,7 @@ describe('ModelPicker', () => {
     fireEvent.click(screen.getByRole('option', { name: 'provider/model-29' }));
     expect(onModelChange).toHaveBeenCalledWith('provider/model-29');
     unmount();
-  });
-
-  it('shows search for small lists and error when browse fails', async () => {
+    {
     listProviderModelsMock.mockResolvedValue({
       success: true,
       models: ['a', 'b', 'c'],
@@ -109,5 +107,6 @@ describe('ModelPicker', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('HTTP 401');
     });
+    }
   });
 });

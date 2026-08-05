@@ -34,7 +34,7 @@ describe('youtubeAsrRealignCache pure helpers', () => {
     });
   });
 
-  it('canonicalizes units stably, hashes them, and builds cache keys/YouTube URLs', async () => {
+  it('covers canonicalization, hashing, URLs, summaries, formatting, and LRU eviction', async () => {
     expect(canonicalizeAsrRealignInput(units)).toBe('Hello\t0\t400\nworld\t400\t900');
     const a = await hashAsrRealignContent(units);
     const b = await hashAsrRealignContent([...units].reverse().reverse());
@@ -53,9 +53,6 @@ describe('youtubeAsrRealignCache pure helpers', () => {
     );
     expect(extractYoutubeVideoIdFromUrl('https://youtu.be/xyz789')).toBe('xyz789');
     expect(extractYoutubeVideoIdFromUrl('https://example.com')).toBeUndefined();
-  });
-
-  it('estimates bytes, maps summary, formats size, sorts, and picks LRU victims', () => {
     const entry: YoutubeAsrRealignCacheEntry = {
       key: 'ai:v:en:h',
       videoId: 'v',

@@ -12,7 +12,7 @@ const draft: SuggestSiteRuleDraft = {
 };
 
 describe('mergeSuggestDraftIntoRuleForm', () => {
-  it('on Add overwrites hostname and selectors; on Edit keeps hostname when set', () => {
+  it('applies draft fields for add/edit while preserving non-default mode settings', () => {
     const form = {
       hostname: '',
       includeSelectors: [] as string[],
@@ -39,10 +39,7 @@ describe('mergeSuggestDraftIntoRuleForm', () => {
     const editNext = mergeSuggestDraftIntoRuleForm(editForm, draft, false);
     expect(editNext.hostname).toBe('keep.me');
     expect(editNext.includeSelectors).toEqual(['main', 'article']);
-  });
-
-  it('does not override non-default mode', () => {
-    const form = {
+    const modeForm = {
       hostname: 'x.com',
       includeSelectors: [] as string[],
       excludeSelectors: [] as string[],
@@ -50,9 +47,9 @@ describe('mergeSuggestDraftIntoRuleForm', () => {
       neverTranslate: true,
       categoryValue: 'News',
     };
-    const next = mergeSuggestDraftIntoRuleForm(form, draft, false);
-    expect(next.neverTranslate).toBe(true);
-    expect(next.alwaysTranslate).toBe(false);
-    expect(next.categoryValue).toBe('News');
+    const modeNext = mergeSuggestDraftIntoRuleForm(modeForm, draft, false);
+    expect(modeNext.neverTranslate).toBe(true);
+    expect(modeNext.alwaysTranslate).toBe(false);
+    expect(modeNext.categoryValue).toBe('News');
   });
 });

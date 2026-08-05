@@ -11,7 +11,7 @@ describe('listProviderModels', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns all model ids from a single-page /models response', async () => {
+  it('covers single-page, pagination, deduplication, and first-page error responses', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -31,9 +31,25 @@ describe('listProviderModels', () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.example.com/v1/models');
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer sk-test');
-  });
+    {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      }),
+    );
 
-  it('follows has_more pagination via after cursor until complete and dedupes ids across pages', async () => {
+    const failed = await listProviderModels({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'bad',
+    });
+
+    expect(failed.success).toBe(false);
+    expect(failed.models).toEqual([]);
+    expect(failed.error).toMatch(/401/);
+    }
+    {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -92,24 +108,7 @@ describe('listProviderModels', () => {
     });
 
     expect(deduped.models).toEqual(['shared', 'only-1', 'only-2']);
+    }
   });
 
-  it('returns error when first page is not ok', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-      }),
-    );
-
-    const result = await listProviderModels({
-      baseUrl: 'https://api.example.com/v1',
-      apiKey: 'bad',
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.models).toEqual([]);
-    expect(result.error).toMatch(/401/);
-  });
 });

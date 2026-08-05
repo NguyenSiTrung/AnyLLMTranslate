@@ -158,7 +158,7 @@ describe('OpenAICompatibleService', () => {
       expect(partial.translations.size).toBe(2);
     });
 
-    it('covers generic and Gemini thinking request fields', async () => {
+    it('covers thinking request fields and retries when providers reject them', async () => {
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"hi"}}');
       await new OpenAICompatibleService({ ...mockConfig, thinkingMode: 'off' }).translate({
         texts: new Map([['p1', 'Hello']]),
@@ -269,9 +269,7 @@ describe('OpenAICompatibleService', () => {
         (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1]?.body as string,
       ) as { reasoning_effort?: string };
       expect(g3High.reasoning_effort).toBe('high');
-    });
-
-    it('retries without thinking fields (chat_template_kwargs / reasoning_effort) when provider rejects them', async () => {
+      {
       // Scenario 1: chat_template_kwargs rejected → retry without it.
       const fetchKwargs = vi
         .fn()
@@ -379,6 +377,7 @@ describe('OpenAICompatibleService', () => {
       };
       expect(effortFirstBody.reasoning_effort).toBe('minimal');
       expect(effortSecondBody.reasoning_effort).toBeUndefined();
+      }
     });
 
     it('retries without response_format when provider rejects it and skips on subsequent requests', async () => {
@@ -699,7 +698,7 @@ describe('OpenAICompatibleService', () => {
       });
     };
 
-    it('maxRpm default/0 is unlimited, and changing maxRpm via updateConfig from 0 to N enables limiting', async () => {
+    it('covers RPM defaults, dynamic limiting, and acquire-before-fetch ordering', async () => {
       // Phase 1: maxRpm from config (default/0/updateConfig) does not block a
       // single request.
       globalThis.fetch = mockFetchResponse('{"translations":{"p1":"test"}}');
@@ -769,9 +768,7 @@ describe('OpenAICompatibleService', () => {
       await vi.advanceTimersByTimeAsync(60_001);
       await p3;
       expect(fetchSpy).toHaveBeenCalledTimes(3);
-    });
-
-    it('acquire() is awaited before fetch (call order verified)', async () => {
+      {
       vi.useFakeTimers();
       const fetchSpy = mockTranslateResponse();
       globalThis.fetch = fetchSpy;
@@ -803,6 +800,7 @@ describe('OpenAICompatibleService', () => {
       await vi.advanceTimersByTimeAsync(60_001);
       await Promise.all([p1, p2]);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
+      }
     });
   });
 
@@ -993,4 +991,3 @@ describe('OpenAICompatibleService', () => {
     });
   });
 });
-

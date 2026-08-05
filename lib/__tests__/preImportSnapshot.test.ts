@@ -63,7 +63,7 @@ describe('pre-import snapshot', () => {
     vi.clearAllMocks();
   });
 
-  it('round-trips the snapshot: saves encrypted, loads and decrypts, and clears', async () => {
+  it('round-trips encrypted snapshots and returns null for missing or failed storage reads', async () => {
     await savePreImportSnapshot(settingsWithKeys());
     expect(mockSet).toHaveBeenCalledTimes(1);
     const data = mockSet.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -90,9 +90,6 @@ describe('pre-import snapshot', () => {
 
     await clearPreImportSnapshot();
     expect(mockRemove).toHaveBeenCalledWith(STORAGE_KEYS.PRE_IMPORT_SNAPSHOT);
-  });
-
-  it('returns null when nothing is stored or when the storage read fails', async () => {
     mockGet.mockResolvedValue({});
     expect(await loadPreImportSnapshot()).toBeNull();
 

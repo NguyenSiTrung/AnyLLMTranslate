@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { NamedGlossarySuggestionsModal } from '../NamedGlossarySuggestionsModal';
 import { QuickSettings } from '../QuickSettings';
 
 describe('Popup modals and quick settings', () => {
-  it('selects suggestions, edits targets, and pushes selected rows in NamedGlossarySuggestionsModal', () => {
+  it('covers glossary selection/editing and QuickSettings subtitle-list behavior', () => {
     const onPush = vi.fn();
     render(
       <NamedGlossarySuggestionsModal
@@ -24,9 +24,8 @@ describe('Popup modals and quick settings', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Bob' }));
     fireEvent.click(screen.getByRole('button', { name: 'Push selected' }));
     expect(onPush).toHaveBeenCalledWith([{ source: 'Alice', target: '艾丽丝' }]);
-  });
+    cleanup();
 
-  it('handles QuickSettings named subtitle lists and disabled state', () => {
     const onSubtitleListChange = vi.fn();
     const { rerender } = render(
       <QuickSettings

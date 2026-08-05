@@ -9,13 +9,10 @@ import {
 } from '../scientificJobModalFormats';
 
 describe('scientificJobModalFormats', () => {
-  it('compare prefers mono then dual', () => {
+  it('compares artifacts and derives availability, defaults, copy, and open preferences', () => {
     expect(compareArtifactKind({ hasMono: true, hasDual: true })).toBe('mono');
     expect(compareArtifactKind({ hasMono: false, hasDual: true })).toBe('dual');
     expect(compareArtifactKind({ hasMono: false, hasDual: false })).toBe(null);
-  });
-
-  it('availability, defaults, copy, open prefer, and recommended flags', () => {
     expect(availableFormats({ hasMono: true, hasDual: true })).toEqual([
       'side-by-side',
       'dual',

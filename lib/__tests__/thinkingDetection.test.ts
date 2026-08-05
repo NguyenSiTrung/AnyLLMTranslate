@@ -7,8 +7,8 @@ import {
   stripThinkTags,
 } from '@/lib/thinkingDetection';
 
-describe('contentHasThinkTags / stripThinkTags / detectThinkingSignals', () => {
-  it('detects think tags, strips think blocks, and flags reasoning_content independently', () => {
+describe('thinking detection', () => {
+  it('detects and strips thinking signals and evaluates probe outcomes', () => {
     expect(contentHasThinkTags('<think>plan</think>Hello')).toBe(true);
     expect(contentHasThinkTags('<think>unclosed tail')).toBe(true);
     expect(contentHasThinkTags('plain translation')).toBe(false);
@@ -47,11 +47,6 @@ describe('contentHasThinkTags / stripThinkTags / detectThinkingSignals', () => {
       detected: false,
       sources: [],
     });
-  });
-});
-
-describe('evaluateThinkingProbe', () => {
-  it('reports disable-success when clean, disable-failed on tags/reasoning_content, controls-rejected first, and not-applicable for auto/on', () => {
     const r = evaluateThinkingProbe({
       mode: 'off',
       controlsSent: true,

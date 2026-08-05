@@ -18,8 +18,8 @@ function voice(
   };
 }
 
-describe('normalizeSpeechLang / scoreVoiceForLang', () => {
-  it('normalizes empty, language-code, and region-tag speech languages; scores exact and primary matches above unrelated languages', () => {
+describe('browser voice selection', () => {
+  it('normalizes and scores language tags, then picks the best usable voice', () => {
     expect(normalizeSpeechLang(undefined)).toBeUndefined();
     expect(normalizeSpeechLang('')).toBeUndefined();
     expect(normalizeSpeechLang('auto')).toBeUndefined();
@@ -41,11 +41,6 @@ describe('normalizeSpeechLang / scoreVoiceForLang', () => {
       scoreVoiceForLang('en-GB', 'en-US'),
     );
     expect(scoreVoiceForLang('en-US', 'vi-VN')).toBe(-1);
-  });
-});
-
-describe('pickBrowserVoice', () => {
-  it('returns null for unusable languages and picks the best matching voice', () => {
     expect(pickBrowserVoice([], 'vi')).toBeNull();
     expect(pickBrowserVoice([voice('vi-VN')], 'auto')).toBeNull();
     expect(pickBrowserVoice([voice('vi-VN')], undefined)).toBeNull();

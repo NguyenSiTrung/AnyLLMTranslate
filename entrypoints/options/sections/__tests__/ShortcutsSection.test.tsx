@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import type { ReactNode } from 'react';
 
@@ -74,7 +74,7 @@ describe('ShortcutsSection', () => {
     });
   });
 
-  it('renders studio, live shortcuts, Not set unbound, and search filter', async () => {
+  it('covers shortcut browsing/filtering, copy, management, and inline navigation', async () => {
     render(<ShortcutsSection />);
     expect(screen.getByText('Shortcut Studio')).toBeInTheDocument();
     await waitFor(() => {
@@ -95,9 +95,17 @@ describe('ShortcutsSection', () => {
     });
     expect(screen.getByText('Toggle hover translate')).toBeInTheDocument();
     expect(screen.queryByText('Translate page')).not.toBeInTheDocument();
-  });
-
-  it('copies cheatsheet, opens manage URL, navigates to Inline', async () => {
+    cleanup();
+    useSettingsStore.setState({
+      ...DEFAULT_SETTINGS,
+      isLoaded: true,
+      inlineTranslate: {
+        ...DEFAULT_SETTINGS.inlineTranslate,
+        tapCount: 3,
+        timeWindowMs: 800,
+      },
+    });
+    {
     const writeText = vi.fn(async () => undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     const onNav = vi.fn();
@@ -118,5 +126,6 @@ describe('ShortcutsSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /configure on inline/i }));
     expect(onNav).toHaveBeenCalled();
-  });
+    }
+});
 });

@@ -9,8 +9,8 @@ const activeList: NamedGlossaryList = {
   updatedAt: 1,
 };
 
-describe('mergeSuggestionMaps', () => {
-  it('keeps existing on empty incoming, overwrites same-source targets, and prefers existing keys when capping', () => {
+describe('named glossary suggestions', () => {
+  it('merges maps and builds filtered, sorted, capped suggestion rows', () => {
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, {})).toEqual({ Elsa: '艾莎' });
     expect(mergeSuggestionMaps({ Elsa: '艾莎' }, { '': 'x', Bob: '' })).toEqual({ Elsa: '艾莎' });
     expect(
@@ -20,11 +20,6 @@ describe('mergeSuggestionMaps', () => {
     const existing = { A: '1', B: '2' };
     const incoming = { C: '3', D: '4' };
     expect(mergeSuggestionMaps(existing, incoming, 3)).toEqual({ A: '1', B: '2', C: '3' });
-  });
-});
-
-describe('buildSuggestionRows', () => {
-  it('excludes active-list sources case-insensitively, sorts stably without mutating input order, and caps rows at the limit (default 30)', () => {
     expect(buildSuggestionRows({ ALICE: '艾丽斯', Bob: '鲍勃' }, activeList)).toEqual([
       { source: 'Bob', target: '鲍勃' },
     ]);

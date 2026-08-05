@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { DictionaryAddForm } from '../DictionaryAddForm';
 import { DictionaryCommandBar } from '../DictionaryCommandBar';
 import { DictionaryEmptyHero } from '../DictionaryEmptyHero';
@@ -23,7 +23,7 @@ describe('Dictionary UI components', () => {
     vi.mocked(templates.downloadGlossaryTemplate).mockClear();
   });
 
-  it('renders DictionaryAddForm with keyboard shortcuts, errors, and button states', () => {
+  it('covers the dictionary form, command bar, empty state, entries, and import hint', () => {
     const onSubmit = vi.fn();
     const onCancel = vi.fn();
     const { rerender } = render(
@@ -50,9 +50,8 @@ describe('Dictionary UI components', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-  });
+    cleanup();
 
-  it('renders DictionaryCommandBar, EmptyHero, EntryList, and ImportHint', () => {
     // Command bar
     const onAddClick = vi.fn();
     render(

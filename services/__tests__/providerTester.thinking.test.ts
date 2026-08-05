@@ -139,7 +139,7 @@ describe('testConnection thinking probe', () => {
     expect(autoResult.thinking?.controlsSent).toBe(false);
   });
 
-  it('sends DeepSeek thinking.type disabled (off) and enabled+effort (on) on DeepSeek Official', async () => {
+  it('sends DeepSeek thinking parameters on Official and OpenCode Zen', async () => {
     // Scenario 1: thinkingMode off → thinking.type=disabled, no effort
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
@@ -208,9 +208,7 @@ describe('testConnection thinking probe', () => {
     expect(result.overall).toBe(true);
     expect(result.thinking?.controlsSent).toBe(true);
     expect(result.thinking?.thinkingDetected).toBe(true);
-  });
-
-  it('sends DeepSeek thinking params on OpenCode Zen for DeepSeek models only', async () => {
+    {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash-free' }] });
@@ -238,6 +236,7 @@ describe('testConnection thinking probe', () => {
     );
     expect(result.overall).toBe(true);
     expect(result.thinking?.controlsSent).toBe(true);
+    }
   });
 
   it('retries without thinking controls when provider rejects them', async () => {
@@ -269,7 +268,7 @@ describe('testConnection thinking probe', () => {
     expect(translationCalls).toBe(2);
   });
 
-  it('fails the translation step with actionable errors when content is null/empty (incl. reasoning-burned budget)', async () => {
+  it('validates the translation probe budget and reports empty or reasoning-only responses', async () => {
     // Scenario 1: HTTP 200 with null content and 0 completion tokens.
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
@@ -337,9 +336,7 @@ describe('testConnection thinking probe', () => {
     expect(translation?.error).toMatch(/Empty response from LLM/i);
     expect(translation?.error).toMatch(/reasoning/i);
     expect(translation?.error).toMatch(/Thinking mode to Off/i);
-  });
-
-  it('uses at least 1024 max_tokens on the translation probe', async () => {
+    {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
@@ -353,5 +350,6 @@ describe('testConnection thinking probe', () => {
     const result = await testConnection(baseConfig({ maxTokens: 100, thinkingMode: 'auto' }));
     expect(result.overall).toBe(true);
     expect(result.translationSample).toBe('Xin chào');
-  });
+    }
+});
 });

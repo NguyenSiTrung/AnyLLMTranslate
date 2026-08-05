@@ -12,18 +12,13 @@ const base: SuggestSiteRuleDraft = {
   source: 'tab',
 };
 
-describe('sanitizeSelector', () => {
-  it('keeps simple selectors and drops junk', () => {
+describe('site-rule suggestion sanitization', () => {
+  it('keeps valid selectors, drops junk, and sanitizes draft fields', () => {
     expect(sanitizeSelector(' article.post ')).toBe('article.post');
     expect(sanitizeSelector('')).toBeNull();
     expect(sanitizeSelector('a'.repeat(300))).toBeNull();
     expect(sanitizeSelector('div > script')).toBeNull();
     expect(sanitizeSelector('p:has(script)')).toBeNull();
-  });
-});
-
-describe('sanitizeDraft', () => {
-  it('falls back fields and merges warnings', () => {
     const d = sanitizeDraft(
       {
         hostname: '*.Evil.com.',

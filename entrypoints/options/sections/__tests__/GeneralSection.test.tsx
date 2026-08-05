@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 const mockStorageData: Record<string, unknown> = {};
@@ -46,7 +46,7 @@ describe('GeneralSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders four-card IA and handles language swap / locked position', async () => {
+  it('covers four-card IA, language/layout controls, and theme/contrast/compact settings', async () => {
     const { unmount } = render(<GeneralSection />);
     expect(screen.getByRole('heading', { name: 'Language', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Layout', level: 3 })).toBeInTheDocument();
@@ -76,9 +76,19 @@ describe('GeneralSection', () => {
     for (const radio of within(positionGroup as HTMLElement).getAllByRole('radio')) {
       expect(radio).toBeDisabled();
     }
-  });
-
-  it('themes navigation gate and updates theme/contrast/compact-inline', async () => {
+    cleanup();
+    useSettingsStore.setState({
+      ...DEFAULT_SETTINGS,
+      isLoaded: true,
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+      displayMode: 'bilingual-below',
+      translationPosition: 'below',
+      theme: 'blockquote',
+      darkMode: 'auto',
+      enableCompactInlineForShortText: false,
+    });
+    {
     const onNavigate = vi.fn();
     const { unmount } = render(<GeneralSection onNavigateToThemes={onNavigate} />);
     fireEvent.click(screen.getByRole('button', { name: /Browse themes/i }));
@@ -104,5 +114,6 @@ describe('GeneralSection', () => {
     await waitFor(() => {
       expect(useSettingsStore.getState().enableCompactInlineForShortText).toBe(true);
     });
+    }
   });
 });

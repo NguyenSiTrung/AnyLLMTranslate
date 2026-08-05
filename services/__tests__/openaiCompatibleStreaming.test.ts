@@ -79,7 +79,7 @@ describe('OpenAICompatibleService.translateStream', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('sends stream:true and invokes per-piece callbacks as deltas arrive (incremental or single-shot)', async () => {
+  it('covers streaming success, errors, fallback, and partial results', async () => {
     const texts = new Map([
       ['p1', 'Hello'],
       ['p2', 'World'],
@@ -149,9 +149,7 @@ describe('OpenAICompatibleService.translateStream', () => {
     expect(singleResult.success).toBe(true);
     expect(singleResult.translations.get('p1')).toBe('Xin chào');
     expect(callbacks.some((c) => c.id === 'p1' && c.text === 'Xin chào')).toBe(true);
-  });
-
-  it('throws ApiError with statusCode on HTTP error and handles an empty stream body gracefully', async () => {
+    {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       makeStreamResponse([], 429),
     );
@@ -178,10 +176,11 @@ describe('OpenAICompatibleService.translateStream', () => {
       () => {},
     );
     expect(result.success).toBe(false);
-  });
+    }
 
-  it('does not affect the non-streaming translate() path', async () => {
+    {
     // translate() should still work with a regular JSON response.
+    vi.clearAllMocks();
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       status: 200,
@@ -201,9 +200,9 @@ describe('OpenAICompatibleService.translateStream', () => {
     // Verify stream was NOT set on the non-streaming request.
     const callBody = JSON.parse((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
     expect(callBody.stream).toBeUndefined();
-  });
+    }
 
-  it('partial response: back-fills missing pieces with original text', async () => {
+    {
     const texts = new Map([
       ['p1', 'Hello'],
       ['p2', 'World'],
@@ -226,5 +225,6 @@ describe('OpenAICompatibleService.translateStream', () => {
     expect(result.translations.get('p1')).toBe('Xin chào');
     // p2 falls back to its original text.
     expect(result.translations.get('p2')).toBe('World');
+    }
   });
 });

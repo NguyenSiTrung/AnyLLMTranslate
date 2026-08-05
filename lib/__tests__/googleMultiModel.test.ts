@@ -40,8 +40,8 @@ function openrouter(): PoolProvider {
   };
 }
 
-describe('isGoogleAiStudioProvider', () => {
-  it('detects Google providers and resolves single- and multi-model defaults', () => {
+describe('Google AI Studio model helpers', () => {
+  it('detects providers, resolves models, normalizes strategies, and builds slot ids', () => {
     expect(isGoogleAiStudioProvider(google())).toBe(true);
     expect(
       isGoogleAiStudioProvider(
@@ -72,11 +72,6 @@ describe('isGoogleAiStudioProvider', () => {
       'gemini-2.5-flash-lite',
     ]);
     expect(isMultiModelActive(p)).toBe(true);
-  });
-});
-
-describe('resolveModelStrategy / normalizeGoogleModels', () => {
-  it('selects model strategy, normalizes Google/non-Google providers, and builds slot ids', () => {
     const multi = google({
       models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
     });

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SETTINGS, DEFAULT_SUBTITLE_SETTINGS } from '@/types/config';
 
 const mockStorageData: Record<string, unknown> = {};
@@ -55,7 +55,7 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     vi.clearAllMocks();
   });
 
-  it('renders studio cards/preview and toggles enable + display mode', async () => {
+  it('covers studio cards, display toggles, ASR disable behavior, and profile reset', async () => {
     render(<SubtitlesSection />);
     expect(screen.getByRole('heading', { name: 'Subtitle Studio', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Enable Subtitles/i })).toBeInTheDocument();
@@ -97,9 +97,8 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     await waitFor(() => {
       expect(useSettingsStore.getState().subtitleSettings.enabled).toBe(false);
     });
-  });
-
-  it('clears ASR aiEnable when master off and resets knobs', async () => {
+    cleanup();
+    {
     useSettingsStore.setState({
       subtitleSettings: {
         ...DEFAULT_SUBTITLE_SETTINGS,
@@ -120,5 +119,6 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     await waitFor(() => {
       expect(useSettingsStore.getState().subtitleSettings.knobOverrides).toEqual({});
     });
-  });
+    }
+});
 });

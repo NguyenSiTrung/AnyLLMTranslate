@@ -17,7 +17,7 @@ describe('miniProgress', () => {
     hideMiniProgress();
   });
 
-  it('shows translating count and Stop, hides when idle or total is 0, and Stop invokes the callback and hides', () => {
+  it('shows translating and realigning states, hides when idle, and handles Stop', () => {
     const onStop = vi.fn();
     updateMiniProgress({
       translated: 3,
@@ -55,9 +55,7 @@ describe('miniProgress', () => {
     (document.querySelector('.anyllm-mini-progress-stop') as HTMLButtonElement).click();
     expect(onStop).toHaveBeenCalled();
     expect(isMiniProgressVisible()).toBe(false);
-  });
-
-  it('shows realigning batch progress and saved re-align cache hit label', () => {
+    // Realigning states show their distinct progress labels.
     updateMiniProgress({
       translated: 2,
       total: 5,

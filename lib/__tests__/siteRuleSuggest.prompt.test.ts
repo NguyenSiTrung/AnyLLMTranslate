@@ -14,23 +14,16 @@ const outline: DomOutline = {
 };
 
 describe('site rule suggest prompts', () => {
-  it('asks for JSON only with required keys', () => {
+  it('builds JSON-only instructions and embeds the compact outline', () => {
     const s = buildSiteRuleSuggestSystemPrompt();
     expect(s.toLowerCase()).toContain('json');
     expect(s).toContain('includeSelectors');
     expect(s).toContain('excludeSelectors');
     expect(s).toContain('hostname');
-  });
-
-  it('embeds outline compactly', () => {
     const u = buildSiteRuleSuggestUserPrompt(outline);
     expect(u).toContain('example.com');
     expect(u).toContain('main');
-  });
-});
 
-describe('parseSiteRuleSuggestLlmJson', () => {
-  it('parses pure and fenced JSON, and rejects garbage', () => {
     const p = parseSiteRuleSuggestLlmJson(
       '{"hostname":"example.com","includeSelectors":["main"],"excludeSelectors":["nav"],"rationale":"main content"}',
     );

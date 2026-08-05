@@ -38,7 +38,7 @@ function googleMulti(): PoolProvider {
 }
 
 describe('resolveSlots multi-model', () => {
-  it('expands model-major × key-major with composite slotIds, keeps slotId === keyId for single-model, and does not expand models on OpenRouter', () => {
+  it('expands supported models, preserves default single slots, and filters healthy slot breakers', () => {
     const slots = resolveSlots([googleMulti()]);
     expect(slots.map((s) => s.slotId)).toEqual([
       'k1::gemini-2.5-flash',
@@ -90,12 +90,10 @@ describe('resolveSlots multi-model', () => {
     expect(orSlots).toHaveLength(1);
     expect(orSlots[0]!.slotId).toBe('k1');
     expect(orSlots[0]!.providerConfig.model).toBe('openai/gpt-4o-mini');
-  });
-
-  it('still yields a slot when model is empty and key not required (DEFAULT_SETTINGS)', () => {
+    {
     // Regression: multi-model resolveProviderModels used to return [] for
     // model:'' → resolveSlots skipped the provider → empty pool.
-    const slots = resolveSlots([
+    const defaultSlots = resolveSlots([
       {
         id: 'p_default',
         displayName: 'Custom',
@@ -117,16 +115,15 @@ describe('resolveSlots multi-model', () => {
         ],
       },
     ]);
-    expect(slots).toHaveLength(1);
-    expect(slots[0]?.slotId).toBe('k_default');
-    expect(slots[0]?.providerConfig.model).toBe('');
-  });
+    expect(defaultSlots).toHaveLength(1);
+    expect(defaultSlots[0]?.slotId).toBe('k_default');
+    expect(defaultSlots[0]?.providerConfig.model).toBe('');
+    }
 
-  it('healthySlots filters by slotId breaker', () => {
-    const slots = resolveSlots([googleMulti()]);
+    const healthyTestSlots = resolveSlots([googleMulti()]);
     const breaker = createCircuitBreaker({ clock: () => 0 });
-    breaker.recordFailure(slots[0]!.slotId, 'rateLimit', 0);
-    const healthy = healthySlots(slots, breaker, 0);
+    breaker.recordFailure(healthyTestSlots[0]!.slotId, 'rateLimit', 0);
+    const healthy = healthySlots(healthyTestSlots, breaker, 0);
     expect(healthy.map((s) => s.slotId)).not.toContain('k1::gemini-2.5-flash');
     expect(healthy.map((s) => s.slotId)).toContain('k1::gemini-2.5-flash-lite');
   });

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { ToastProvider } from '@/ui/ToastProvider';
 
@@ -41,7 +41,7 @@ describe('SiteRulesSection Suggest from URL', () => {
     sendMessage.mockReset();
   });
 
-  it('fills draft from SUGGEST_SITE_RULE and does not auto-save', async () => {
+  it('covers successful draft filling, deferred save, and failure feedback', async () => {
     sendMessage.mockResolvedValue({
       success: true,
       draft: {
@@ -91,9 +91,14 @@ describe('SiteRulesSection Suggest from URL', () => {
       expect(rules[0].hostname).toBe('example.com');
       expect(rules[0].includeSelectors).toEqual(['main', 'article']);
     });
-  });
-
-  it('shows error and leaves form empty on failure', async () => {
+    cleanup();
+    useSettingsStore.setState({
+      ...DEFAULT_SETTINGS,
+      isLoaded: true,
+      siteRules: [],
+    });
+    sendMessage.mockReset();
+    {
     sendMessage.mockResolvedValue({
       success: false,
       error: 'Could not load page',
@@ -110,5 +115,6 @@ describe('SiteRulesSection Suggest from URL', () => {
     const hostname = screen.getByPlaceholderText('*.example.com') as HTMLInputElement;
     expect(hostname.value).toBe('');
     expect(useSettingsStore.getState().siteRules).toHaveLength(0);
-  });
+    }
+});
 });

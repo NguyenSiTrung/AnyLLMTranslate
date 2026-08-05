@@ -70,7 +70,7 @@ function fullSettings(): ExtensionSettings {
 }
 
 describe('encryptBackup / decryptBackup', () => {
-  it('round-trips a full settings object including pool keys and TTS overrides', async () => {
+  it('round-trips full settings and rejects wrong credentials, tampering, unknown versions, and short passwords', async () => {
     const source = fullSettings();
     const envelope = await encryptBackup(source, PASSWORD);
     const parsed = JSON.parse(envelope) as Record<string, unknown>;
@@ -86,16 +86,10 @@ describe('encryptBackup / decryptBackup', () => {
     expect(envelope).not.toContain('tts-secret');
 
     expect(await decryptBackup(envelope, PASSWORD)).toEqual(source);
-  });
-
-  it('throws on wrong password', async () => {
-    const envelope = await encryptBackup(fullSettings(), PASSWORD);
     await expect(decryptBackup(envelope, 'wrong-password-123')).rejects.toThrow(
       BackupDecryptError,
     );
-  });
 
-  it('rejects tampered ciphertext, tampered AAD format marker, unknown version, and non-envelope plain JSON', async () => {
     // Tampered ciphertext must fail authentication.
     const tampered = JSON.parse(
       await encryptBackup(fullSettings(), PASSWORD),
@@ -129,9 +123,6 @@ describe('encryptBackup / decryptBackup', () => {
     await expect(decryptBackup('{"targetLanguage":"ja"}', PASSWORD)).rejects.toThrow(
       BackupDecryptError,
     );
-  });
-
-  it('rejects short passwords', async () => {
     await expect(encryptBackup(fullSettings(), 'short')).rejects.toThrow(
       /at least 8 characters/,
     );
@@ -233,26 +224,24 @@ describe('computeImportImpact', () => {
     siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
   });
 
-  it('merge: lists changed recognized keys, omits unchanged keys, and no-ops on unchanged/undefined values', () => {
-    const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
-    expect(impact.changed).toEqual(['targetLanguage']);
-    expect(impact.resetToDefaults).toEqual([]);
+  it('computes merge changes and replace resets without warning for built-in rules', () => {
+    const mergeImpact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
+    expect(mergeImpact.changed).toEqual(['targetLanguage']);
+    expect(mergeImpact.resetToDefaults).toEqual([]);
 
     const same = computeImportImpact(customized(), { targetLanguage: 'ja' }, 'merge');
     expect(same.changed).toEqual([]);
 
     // A partial nested object that changes a nested field is listed as changed.
-    const current = customized();
-    current.pdfSettings = { ...DEFAULT_SETTINGS.pdfSettings, openMode: 'same-tab' };
-    const nested = computeImportImpact(current, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
+    const mergeCurrent = customized();
+    mergeCurrent.pdfSettings = { ...DEFAULT_SETTINGS.pdfSettings, openMode: 'same-tab' };
+    const nested = computeImportImpact(mergeCurrent, { pdfSettings: { autoOpen: 'prompt' } }, 'merge');
     expect(nested.changed).toEqual(['pdfSettings']);
 
     // undefined file values are no-ops.
-    const noop = computeImportImpact(current, { targetLanguage: undefined }, 'merge');
+    const noop = computeImportImpact(mergeCurrent, { targetLanguage: undefined }, 'merge');
     expect(noop.changed).toEqual([]);
-  });
 
-  it('replace: lists changed recognized keys, resets customized keys absent from the file, and excludes built-in site rules', () => {
     const impact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'replace');
     expect(impact.changed).toEqual(['targetLanguage']);
     expect(impact.resetToDefaults).toContain('theme');

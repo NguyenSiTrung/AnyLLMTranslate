@@ -57,19 +57,25 @@ describe('PrealignFromLinkCard', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['watch', 'https://www.youtube.com/watch?v=abc123&t=10'],
-    ['youtu.be', 'https://youtu.be/abc123'],
-    ['shorts', 'https://www.youtube.com/shorts/abc123'],
-    ['embed', 'https://www.youtube.com/embed/abc123'],
-  ])('accepts %s URLs and requests a pre-align', async (_label, url) => {
-    render(<PrealignFromLinkCard disabled={false} />);
-    fireEvent.change(screen.getByLabelText(/YouTube link/i), { target: { value: url } });
-    fireEvent.click(screen.getByRole('button', { name: /Re-align now/i }));
-    await waitFor(() => {
-      expect(sendMessage).toHaveBeenCalledWith({ action: 'REALIGN_YOUTUBE_URL', url });
-    });
-    expect(await screen.findByText(/Re-aligned and saved/i)).toBeInTheDocument();
+  it('accepts watch, youtu.be, shorts, and embed URLs and requests each pre-align', async () => {
+    for (const url of [
+      'https://www.youtube.com/watch?v=abc123&t=10',
+      'https://youtu.be/abc123',
+      'https://www.youtube.com/shorts/abc123',
+      'https://www.youtube.com/embed/abc123',
+    ]) {
+      sendMessage.mockClear();
+      sendMessage.mockResolvedValue({ success: true, outcome: 'realigned' });
+      messageListener = null;
+      const view = render(<PrealignFromLinkCard disabled={false} />);
+      fireEvent.change(screen.getByLabelText(/YouTube link/i), { target: { value: url } });
+      fireEvent.click(screen.getByRole('button', { name: /Re-align now/i }));
+      await waitFor(() => {
+        expect(sendMessage).toHaveBeenCalledWith({ action: 'REALIGN_YOUTUBE_URL', url });
+      });
+      expect(await screen.findByText(/Re-aligned and saved/i)).toBeInTheDocument();
+      view.unmount();
+    }
   });
 
   it('shows batch progress i/n from the runtime broadcast while running', async () => {
@@ -112,20 +118,26 @@ describe('PrealignFromLinkCard', () => {
     });
   });
 
-  it.each([
-    ['video-unavailable', /unavailable, private, or age-gated/i],
-    ['no-captions', /no caption tracks/i],
-    ['no-asr', /human-uploaded captions/i],
-    ['fetch-blocked', /consent or bot-check/i],
-    ['provider-not-configured', /No translation provider is configured/i],
-    ['llm-failure', /AI re-align failed/i],
-    ['invalid-url', /valid YouTube link/i],
-  ])('maps typed error %s to a specific message', async (errorCode, pattern) => {
-    sendMessage.mockResolvedValue({ success: false, errorCode, error: 'detail' });
-    render(<PrealignFromLinkCard disabled={false} />);
-    fireEvent.change(screen.getByLabelText(/YouTube link/i), { target: { value: WATCH_URL } });
-    fireEvent.click(screen.getByRole('button', { name: /Re-align now/i }));
-    expect(await screen.findByText(pattern)).toBeInTheDocument();
+  it('maps every typed error code to its specific message', async () => {
+    const cases: Array<[string, RegExp]> = [
+      ['video-unavailable', /unavailable, private, or age-gated/i],
+      ['no-captions', /no caption tracks/i],
+      ['no-asr', /human-uploaded captions/i],
+      ['fetch-blocked', /consent or bot-check/i],
+      ['provider-not-configured', /No translation provider is configured/i],
+      ['llm-failure', /AI re-align failed/i],
+      ['invalid-url', /valid YouTube link/i],
+    ];
+    for (const [errorCode, pattern] of cases) {
+      sendMessage.mockClear();
+      sendMessage.mockResolvedValue({ success: false, errorCode, error: 'detail' });
+      messageListener = null;
+      const view = render(<PrealignFromLinkCard disabled={false} />);
+      fireEvent.change(screen.getByLabelText(/YouTube link/i), { target: { value: WATCH_URL } });
+      fireEvent.click(screen.getByRole('button', { name: /Re-align now/i }));
+      expect(await screen.findByText(pattern)).toBeInTheDocument();
+      view.unmount();
+    }
   });
 
   it('disables controls when the subtitles master toggle is off', () => {

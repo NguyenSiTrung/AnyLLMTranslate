@@ -87,7 +87,7 @@ describe('startTextTrackDiscovery', () => {
     vi.restoreAllMocks();
   });
 
-  it('emits tracks payload (or not), prefers primary video, cleanup is a function, and cleanup disconnects observers and removes listeners', async () => {
+  it('covers initial discovery, primary-video selection, cleanup, dynamic insert, addtrack, and metadata rescan', async () => {
     const cleanupEmpty = startTextTrackDiscovery(bridge);
     expect(typeof cleanupEmpty).toBe('function');
     cleanupEmpty();
@@ -158,9 +158,9 @@ describe('startTextTrackDiscovery', () => {
     document.body.appendChild(video3);
     await flushObservers();
     expect(bridge.send).not.toHaveBeenCalled();
-  });
-
-  it('watches dynamic video insert, addtrack, and loadedmetadata re-scans', async () => {
+    document.body.innerHTML = '';
+    bridge.send.mockClear();
+    {
     const cleanup = startTextTrackDiscovery(bridge);
     expect(bridge.send).not.toHaveBeenCalled();
 
@@ -219,5 +219,6 @@ describe('startTextTrackDiscovery', () => {
     expect(payload3.tracks).toHaveLength(1);
     expect(payload3.tracks[0].language).toBe('ja');
     cleanup3();
+    }
   });
 });

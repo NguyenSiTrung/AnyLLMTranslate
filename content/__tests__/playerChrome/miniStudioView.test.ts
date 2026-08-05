@@ -11,8 +11,8 @@ import {
 } from '@/content/playerChrome/miniStudioView';
 import { PLAYER_CHROME_PANEL_CLASS } from '@/content/playerChrome/types';
 
-describe('buildMiniStudioView', () => {
-  it('builds the panel skeleton with header, preview, sections, and footer; labels knobs and options with capitalized text; renders section titles', () => {
+describe('mini studio view', () => {
+  it('builds the panel and applies status, preview, and select mutations', () => {
     const v = buildMiniStudioView();
     expect(v.panel.className).toBe(PLAYER_CHROME_PANEL_CLASS);
     expect(v.panel.hidden).toBe(true);
@@ -45,11 +45,7 @@ describe('buildMiniStudioView', () => {
 
     const titles = [...v.panel.querySelectorAll('.section-title')].map((el) => el.textContent);
     expect(titles).toEqual(['Appearance', 'Translation style', 'Glossary']);
-  });
-});
-
-describe('setStatusPill', () => {
-  it('maps status to data-status and label text', () => {
+    {
     const v = buildMiniStudioView();
     setStatusPill(v.statusPill, v.statusLabel, 'translating');
     expect(v.statusPill.dataset.status).toBe('translating');
@@ -59,12 +55,6 @@ describe('setStatusPill', () => {
     expect(v.statusLabel.textContent).toBe('Off');
     setStatusPill(v.statusPill, v.statusLabel, 'waiting');
     expect(v.statusLabel.textContent).toBe('Waiting for captions');
-  });
-});
-
-describe('updatePreview', () => {
-  it('reflects font size, opacity, position, and display mode', () => {
-    const v = buildMiniStudioView();
     updatePreview(v.preview, {
       fontSize: 20,
       backgroundOpacity: 0.5,
@@ -75,17 +65,12 @@ describe('updatePreview', () => {
     expect(v.preview.cue.style.getPropertyValue('--preview-bg')).toBe('0.5');
     expect(v.preview.root.dataset.position).toBe('top');
     expect(v.preview.root.dataset.display).toBe('translation-only');
-  });
-});
-
-describe('fillSelect', () => {
-  it('fills capitalized options, selects current, falls back to first', () => {
-    const v = buildMiniStudioView();
     fillSelect(v.glossary, ['auto', 'literal'], 'literal');
     expect(v.glossary.options).toHaveLength(2);
     expect(v.glossary.options[0].textContent).toBe('Auto');
     expect(v.glossary.value).toBe('literal');
     fillSelect(v.glossary, ['auto', 'literal'], 'missing');
     expect(v.glossary.value).toBe('auto');
+    }
   });
 });

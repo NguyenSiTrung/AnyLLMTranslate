@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { BridgeSetupCard } from '../BridgeSetupCard';
 
 describe('BridgeSetupCard', () => {
-  it('shows setup steps and no Translate button when offline', () => {
+  it('covers offline setup copy and configured setup, refresh, and dismiss actions', () => {
     render(
       <BridgeSetupCard
         status="offline"
@@ -15,9 +15,8 @@ describe('BridgeSetupCard', () => {
     expect(screen.getByText(/scientific-pdf-docker\.sh up/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Translate$/i })).toBeNull();
     expect(screen.queryByText(/fast translation/i)).toBeNull();
-  });
+    cleanup();
 
-  it('wires Set up, Check connection, and Not now dismiss', () => {
     const onOpenSetup = vi.fn();
     const onRefresh = vi.fn();
     const configured = render(

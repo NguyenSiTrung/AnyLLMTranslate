@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-05 all (no CI/tooling drift; 586 tests across 196 files; parallel full-suite timeout instability recorded; lint 0; tsc 0; build 3.77 MB) -->
+<!-- conductor-refresh: 2026-08-05 all (no CI/tooling drift; 509 serial-gated tests across 196 files; default parallel 2-test timeout instability recorded; lint 0; tsc 0; build 3.77 MB) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy

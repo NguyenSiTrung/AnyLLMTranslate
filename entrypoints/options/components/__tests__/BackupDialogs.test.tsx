@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { BackupPasswordDialog, ExportFormatDialog, ImportSummaryDialog } from '../BackupDialogs';
 
 describe('BackupPasswordDialog', () => {
@@ -11,8 +11,9 @@ describe('BackupPasswordDialog', () => {
     onCancel.mockClear();
   });
 
-  it('blocks submit until a matching 8+ char password is entered (export mode)', () => {
-    render(
+  it('validates export/import passwords, cancel, strength hints, and reveal controls', () => {
+    {
+      render(
       <BackupPasswordDialog
         title="Encrypt backup"
         message="Choose a passphrase"
@@ -21,29 +22,31 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    const confirmBtn = screen.getByRole('button', { name: 'Encrypt & download' });
-    expect(confirmBtn).toBeDisabled();
+      );
+      const confirmBtn = screen.getByRole('button', { name: 'Encrypt & download' });
+      expect(confirmBtn).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/passphrase \(min/i), {
-      target: { value: 'password123' },
-    });
-    fireEvent.change(screen.getByLabelText(/confirm passphrase/i), {
-      target: { value: 'different' },
-    });
-    expect(confirmBtn).toBeDisabled();
+      fireEvent.change(screen.getByLabelText(/passphrase \(min/i), {
+        target: { value: 'password123' },
+      });
+      fireEvent.change(screen.getByLabelText(/confirm passphrase/i), {
+        target: { value: 'different' },
+      });
+      expect(confirmBtn).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/confirm passphrase/i), {
-      target: { value: 'password123' },
-    });
-    expect(confirmBtn).toBeEnabled();
+      fireEvent.change(screen.getByLabelText(/confirm passphrase/i), {
+        target: { value: 'password123' },
+      });
+      expect(confirmBtn).toBeEnabled();
 
-    fireEvent.click(confirmBtn);
-    expect(onConfirm).toHaveBeenCalledWith('password123');
-  });
+      fireEvent.click(confirmBtn);
+      expect(onConfirm).toHaveBeenCalledWith('password123');
+      cleanup();
+    }
 
-  it('import mode needs only one password, and shows the error from the parent', () => {
-    render(
+    {
+      onConfirm.mockClear();
+      render(
       <BackupPasswordDialog
         title="Unlock backup"
         message="Enter the passphrase used when exporting"
@@ -52,22 +55,24 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    const unlockBtn = screen.getByRole('button', { name: 'Unlock' });
-    expect(unlockBtn).toBeDisabled();
+      );
+      const unlockBtn = screen.getByRole('button', { name: 'Unlock' });
+      expect(unlockBtn).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(/passphrase/i), {
-      target: { value: 'password123' },
-    });
-    expect(unlockBtn).toBeEnabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Wrong password or corrupted file');
+      fireEvent.change(screen.getByLabelText(/passphrase/i), {
+        target: { value: 'password123' },
+      });
+      expect(unlockBtn).toBeEnabled();
+      expect(screen.getByRole('alert')).toHaveTextContent('Wrong password or corrupted file');
 
-    fireEvent.click(unlockBtn);
-    expect(onConfirm).toHaveBeenCalledWith('password123');
-  });
+      fireEvent.click(unlockBtn);
+      expect(onConfirm).toHaveBeenCalledWith('password123');
+      cleanup();
+    }
 
-  it('dismisses on cancel', () => {
-    render(
+    {
+      onCancel.mockClear();
+      render(
       <BackupPasswordDialog
         title="Encrypt backup"
         message="x"
@@ -76,13 +81,14 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onCancel).toHaveBeenCalled();
-  });
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onCancel).toHaveBeenCalled();
+      cleanup();
+    }
 
-  it('shows a live strength hint in export mode but not in import mode', () => {
-    const { unmount } = render(
+    {
+      const { unmount } = render(
       <BackupPasswordDialog
         title="Encrypt backup"
         message="x"
@@ -91,22 +97,22 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    const field = screen.getByLabelText(/passphrase \(min/i);
-    expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
+      );
+      const field = screen.getByLabelText(/passphrase \(min/i);
+      expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
 
-    fireEvent.change(field, { target: { value: 'abc' } });
-    expect(screen.getByText('Strength: Weak')).toBeInTheDocument();
+      fireEvent.change(field, { target: { value: 'abc' } });
+      expect(screen.getByText('Strength: Weak')).toBeInTheDocument();
 
-    fireEvent.change(field, { target: { value: 'abcd1234' } });
-    expect(screen.getByText('Strength: Fair')).toBeInTheDocument();
+      fireEvent.change(field, { target: { value: 'abcd1234' } });
+      expect(screen.getByText('Strength: Fair')).toBeInTheDocument();
 
-    fireEvent.change(field, { target: { value: 'Abcdefg12345' } });
-    expect(screen.getByText('Strength: Strong')).toBeInTheDocument();
+      fireEvent.change(field, { target: { value: 'Abcdefg12345' } });
+      expect(screen.getByText('Strength: Strong')).toBeInTheDocument();
 
-    // Import mode never surfaces the strength hint.
-    unmount();
-    render(
+      // Import mode never surfaces the strength hint.
+      unmount();
+      render(
       <BackupPasswordDialog
         title="Unlock backup"
         message="x"
@@ -114,15 +120,16 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    fireEvent.change(screen.getByLabelText('Passphrase'), {
-      target: { value: 'Abcdefg12345' },
-    });
-    expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
-  });
+      );
+      fireEvent.change(screen.getByLabelText('Passphrase'), {
+        target: { value: 'Abcdefg12345' },
+      });
+      expect(screen.queryByText(/strength:/i)).not.toBeInTheDocument();
+      cleanup();
+    }
 
-  it('passphrase field can be revealed via the built-in show/hide toggle', () => {
-    render(
+    {
+      render(
       <BackupPasswordDialog
         title="Unlock backup"
         message="x"
@@ -130,15 +137,17 @@ describe('BackupPasswordDialog', () => {
         onConfirm={onConfirm}
         onCancel={onCancel}
       />,
-    );
-    const field = screen.getByLabelText('Passphrase') as HTMLInputElement;
-    expect(field.type).toBe('password');
+      );
+      const field = screen.getByLabelText('Passphrase') as HTMLInputElement;
+      expect(field.type).toBe('password');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
-    expect(field.type).toBe('text');
+      fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
+      expect(field.type).toBe('text');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
-    expect(field.type).toBe('password');
+      fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
+      expect(field.type).toBe('password');
+      cleanup();
+    }
   });
 });
 
@@ -151,7 +160,7 @@ describe('ImportSummaryDialog', () => {
     onCancel.mockClear();
   });
 
-  it('defaults to merge, reports recognized/ignored counts, and hides both lists when empty', () => {
+  it('covers merge defaults, exact restore, counts, and overwrite/reset visibility', () => {
     const { unmount } = render(
       <ImportSummaryDialog
         source="plain"
@@ -183,9 +192,9 @@ describe('ImportSummaryDialog', () => {
     );
     expect(screen.queryByText(/will be overwritten/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/reset to defaults/i)).not.toBeInTheDocument();
-  });
+    cleanup();
 
-  it('exact restore when the replace toggle is on', () => {
+    onConfirm.mockClear();
     render(
       <ImportSummaryDialog
         source="encrypted"
@@ -200,9 +209,8 @@ describe('ImportSummaryDialog', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Replace all current settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Replace & import' }));
     expect(onConfirm).toHaveBeenCalledWith(true);
-  });
+    cleanup();
 
-  it('shows the overwrite list in merge mode by default and reveals reset-to-defaults only when replace is toggled on', () => {
     render(
       <ImportSummaryDialog
         source="plain"
@@ -224,6 +232,7 @@ describe('ImportSummaryDialog', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/theme/)).toBeInTheDocument();
     expect(screen.getByText(/glossary/)).toBeInTheDocument();
+    cleanup();
   });
 });
 
@@ -236,64 +245,70 @@ describe('ExportFormatDialog', () => {
     onCancel.mockClear();
   });
 
-  it('pre-selects encrypted (recommended) by default and continues with the selected format', () => {
-    const { unmount } = render(
+  it('covers encrypted/plain selection, cleartext warnings, keyboard navigation, and dismissal', () => {
+    {
+      const { unmount } = render(
       <ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />,
-    );
+      );
 
-    const encrypted = screen.getByRole('radio', { name: /encrypted backup/i });
-    expect(encrypted).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText('Recommended')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    );
+      const encrypted = screen.getByRole('radio', { name: /encrypted backup/i });
+      expect(encrypted).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText('Recommended')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onSelect).toHaveBeenCalledWith('encrypted');
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(onSelect).toHaveBeenCalledWith('encrypted');
 
-    // Switching to Plain JSON changes what Continue submits.
-    onSelect.mockClear();
-    unmount();
-    render(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
-    fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onSelect).toHaveBeenCalledWith('plain');
-  });
+      // Switching to Plain JSON changes what Continue submits.
+      onSelect.mockClear();
+      unmount();
+      render(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
+      fireEvent.click(screen.getByRole('radio', { name: /plain json/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(onSelect).toHaveBeenCalledWith('plain');
+      cleanup();
+    }
 
-  it('warns about cleartext keys on Plain JSON only when keys exist', () => {
-    const { rerender } = render(
+    {
+      const { rerender } = render(
       <ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />,
-    );
-    expect(screen.queryByText(/cleartext/i)).not.toBeInTheDocument();
+      );
+      expect(screen.queryByText(/cleartext/i)).not.toBeInTheDocument();
 
-    rerender(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
-    expect(
-      screen.getByText(/will contain your api keys in cleartext/i),
-    ).toBeInTheDocument();
-  });
+      rerender(<ExportFormatDialog hasApiKeys onSelect={onSelect} onCancel={onCancel} />);
+      expect(
+        screen.getByText(/will contain your api keys in cleartext/i),
+      ).toBeInTheDocument();
+      cleanup();
+    }
 
-  it('supports arrow-key navigation and closes on Escape and Cancel', () => {
-    render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
-    const group = screen.getByRole('radiogroup', { name: 'Export format' });
+    {
+      onCancel.mockClear();
+      render(<ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />);
+      const group = screen.getByRole('radiogroup', { name: 'Export format' });
 
-    fireEvent.keyDown(group, { key: 'ArrowDown' });
-    expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+      fireEvent.keyDown(group, { key: 'ArrowDown' });
+      expect(screen.getByRole('radio', { name: /plain json/i })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
 
-    fireEvent.keyDown(group, { key: 'ArrowUp' });
-    expect(screen.getByRole('radio', { name: /encrypted backup/i })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+      fireEvent.keyDown(group, { key: 'ArrowUp' });
+      expect(screen.getByRole('radio', { name: /encrypted backup/i })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
 
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    onCancel.mockClear();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      onCancel.mockClear();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onCancel).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      cleanup();
+    }
   });
 });
