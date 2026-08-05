@@ -83,8 +83,8 @@ describe('mini studio view', () => {
     expect(v.preview.cue.style.getPropertyValue('--preview-bg-color')).toBe('0,0,0');
     expect(v.preview.cue.style.borderRadius).toBe('8px');
     expect(v.preview.cue.style.textShadow).toBe('none');
-    expect(v.preview.original.style.color).toBe('rgba(255,255,255,0.6)');
-    expect(v.preview.translated.style.color).toBe('rgba(255,255,255,1)');
+    expect(v.preview.original.style.color).toBe('rgba(255, 255, 255, 0.6)');
+    expect(v.preview.translated.style.color).toBe('rgb(255, 255, 255)');
     expect(v.preview.root.dataset.position).toBe('top');
     expect(v.preview.root.dataset.display).toBe('translation-only');
     fillSelect(v.glossary, ['auto', 'literal'], 'literal');

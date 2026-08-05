@@ -5,7 +5,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import type * as ConfigModule from '@/lib/config';
 import type * as SubtitleCoordinator from '@/content/subtitleCoordinator';
+
+type ConfigLoadSettings = typeof ConfigModule.loadSettings;
 
 // ============================================================================
 // Module-level mock factories — vi.mock() is hoisted, so define fn vars here
@@ -1188,7 +1191,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         ...MOCK_SETTINGS.subtitleSettings,
         stylePreset: 'netflix',
       },
-    } as unknown as Awaited<ReturnType<typeof import('@/lib/config').loadSettings>>;
+    } as unknown as Awaited<ReturnType<ConfigLoadSettings>>;
     const mod = await import('@/content/subtitleCoordinator');
     mod.refreshAttachedOverlayConfig(settings);
     expect(mockUpdateConfig).toHaveBeenCalledWith(
