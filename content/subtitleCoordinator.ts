@@ -29,6 +29,7 @@ import { showSubtitleToast, hideSubtitleToast } from '@/content/subtitleToast';
 import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { initializeControls, enableDragReposition } from '@/content/subtitleControls';
 import { parseSubtitles } from '@/lib/subtitleParser';
+import { detectLanguage } from '@/lib/langDetect';
 import { resolveSubtitleFontFamily, resolveSubtitleStyle } from '@/lib/subtitleStylePresets';
 import { getHandlerByPlatform, detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import { loadSettings } from '@/lib/config';
@@ -166,14 +167,37 @@ Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
+/** True when the body is a JSON document (`{` or `[` after leading whitespace). */
+function isJsonPayloadBody(body: string): boolean {
+  const trimmed = body.trimStart();
+  return trimmed.startsWith('{') || trimmed.startsWith('[');
+}
+
+/**
+ * Best-effort source-language detection from cue texts. Used when the
+ * platform's URL carries no language signal (LinkedIn's detailedCourses JSON).
+ */
+function detectCueSourceLanguage(cues: SubtitleCue[]): string {
+  let sample = '';
+  for (const cue of cues) {
+    sample += cue.text + ' ';
+    if (sample.length >= 300) break;
+  }
+  return detectLanguage(sample).lang ?? '';
+}
+
 /**
  * Body to return to the player after successful intercept-path translation.
  * - VTT / generic: empty WEBVTT blanks the native track.
  * - ASS/SSA: empty-but-valid ASS (never WEBVTT — breaks Youku KUI ASS parser).
  *   Returning the original ASS would re-show native Dialogue under the overlay.
+ * - JSON payloads (LinkedIn detailedCourses): NOT a native subtitle track —
+ *   the page consumes the original body, so it is returned untouched.
  */
 function blankNativeSubtitleBody(body: string): string {
-  return isAssSubtitleBody(body) ? EMPTY_ASS_BODY : 'WEBVTT\n\n';
+  if (isAssSubtitleBody(body)) return EMPTY_ASS_BODY;
+  if (isJsonPayloadBody(body)) return body;
+  return 'WEBVTT\n\n';
 }
 
 /**
@@ -1137,6 +1161,16 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       return;
     }
 
+    // LinkedIn Learning: captions travel inside the detailedCourses JSON API.
+    // The page needs that exact JSON back (player bootstrap + transcript
+    // panel), so respond immediately with the original body — the translated
+    // overlay then renders asynchronously instead of blocking the page's
+    // request until translation finishes.
+    const respondImmediatelyWithOriginal = platform === 'linkedin' && isJsonPayloadBody(body);
+    if (respondImmediatelyWithOriginal) {
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+    }
+
     // Order: parse → ASR resegment (YouTube auto-captions only) → progressive
     // translate → adaptCueTimings on the bilingual display path. Cache keys must
     // use post-resegment source text (we pass `cues` into translateSubtitle).
@@ -1164,9 +1198,13 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       });
     }
 
+    // LinkedIn's detailedCourses URL carries no language signal — derive it
+    // from the transcript text so non-English courses don't translate from 'en'.
     const sourceLanguage =
       settings.sourceLanguage === 'auto'
-        ? originalLanguage || 'en'
+        ? (originalLanguage ||
+          (platform === 'linkedin' ? detectCueSourceLanguage(rawCues) : '') ||
+          'en')
         : settings.sourceLanguage;
 
     await activateOverlayWithParsedCues({
@@ -1175,7 +1213,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       settings,
       platform,
       navigationEpoch: youtubeNavigationEpoch,
-      intercept: { requestId, originalBody: body },
+      intercept: respondImmediatelyWithOriginal ? undefined : { requestId, originalBody: body },
     });
   } catch (error) {
     console.warn('AnyLLMTranslate: handleIntercepted error', error);

@@ -1073,6 +1073,51 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     });
   });
 
+  it('responds immediately with the original JSON for LinkedIn detailedCourses and detects the transcript language', async () => {
+    mockGetHandlerByPlatform.mockReturnValue({ ...mockHandler, platform: 'linkedin' });
+    mockHandler.transformResponse.mockReturnValue([
+      { startTime: 0, endTime: 2.5, text: 'Este es un ejemplo del transcript en español.' },
+      { startTime: 2.5, endTime: 5, text: 'Continuamos con la siguiente lección del curso.' },
+      { startTime: 5, endTime: 7, text: 'Terminamos esta sección de la capacitación.' },
+    ]);
+    // Fresh module → state.cachedSettings is unset, so this auto setting applies.
+    mockLoadSettings.mockResolvedValue({ ...MOCK_SETTINGS, sourceLanguage: 'auto' });
+
+    const linkedInJsonBody = JSON.stringify({
+      elements: [{ selectedVideo: { transcript: { lines: [{ transcriptStartAt: 0, caption: 'Hola' }] } } }],
+    });
+    if (capturedInterceptedHandler) {
+      await capturedInterceptedHandler(
+        {
+          url: 'https://www.linkedin.com/learning-api/detailedCourses?courseSlug=abc&videoSlug=def&resolution=_720',
+          body: linkedInJsonBody,
+          contentType: 'application/json',
+          platform: 'linkedin',
+          originalLanguage: '',
+        },
+        'req-linkedin-json',
+      );
+    }
+
+    // The page gets its original JSON back immediately — never a blanked VTT —
+    // and exactly once (no second response after translation completes).
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledTimes(1);
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalledWith({
+      requestId: 'req-linkedin-json',
+      vttContent: linkedInJsonBody,
+    });
+
+    // Translation still runs through the overlay; the source language is
+    // detected from the transcript text (no language in the API URL).
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'translateSubtitle',
+        sourceLanguage: 'es',
+        cues: expect.any(Array),
+      }),
+    );
+  });
+
   it('passes through a queued YouTube intercept from a different video', async () => {
     Object.defineProperty(window, 'location', {
       value: {
