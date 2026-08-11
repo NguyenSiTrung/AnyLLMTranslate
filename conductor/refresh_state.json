@@ -1,30 +1,30 @@
 {
-  "lastRefresh": "2026-08-05T21:22:39+07:00",
+  "lastRefresh": "2026-08-11T18:12:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh approved by user; reconciled product, tech, tracks, patterns, and Beads context against master since the 2026-08-05 11:28 refresh.",
-    "product.md: documented the Nous Portal provider preset (new nous-portal OPENAI_COMPATIBLE_CATALOG entry — inference-api.nousresearch.com/v1, requiresApiKey, hermes/nous keywords — plus host_permissions and catalog test coverage), added Nous Portal to the BYOK and provider-catalog lists, and recorded the empty Beads tracker.",
-    "tech-stack.md: added the Nous Portal host permission (https://inference-api.nousresearch.com/*) to the host_permissions row (verified against wxt.config.ts, which also carries the YouTube and scientific-PDF loopback entries); no package.json or pnpm-lock.yaml dependency drift.",
-    "tracks.md: updated refresh marker to 0 open Beads issues; still 73 archived / 0 active.",
-    "patterns.md: updated both refresh markers to 0 open Beads issues; no new cross-track pattern candidates (the consolidation and Nous Portal commits did not surface repeatable patterns).",
-    "refresh_state.json: reconciled stale codebaseHealth (586 tests -> 509 serial-gated across 196 files), stale Beads state (2 open -> 0 open, tracker closed in commit 22d5665), and added the Nous Portal commit to shippedSinceLastRefresh.",
-    "beads: bd CLI available and enabled (stealth mode); tracker is empty (0 open / 0 in progress). No active Conductor plan.md checkboxes exist, so directional sync remains a no-op; user-approved sync direction is skip.",
-    "verification: trusted the author's serial gate from commit e807ea0 (509/509 pass, tsc 0, lint 0) per user approval; the five markdown docs were already updated to the 509 snapshot in that commit. Backups of all six files were kept in /tmp/conductor-bak/ so the working tree stays clean."
+    "Scope: full refresh approved by user; reconciled product, tech, tracks, patterns, and Beads context against master since the 2026-08-05 21:22 refresh.",
+    "product.md: documented Subtitle style presets (2026-08-05/06, commits 0c36ac4..7f51036 — stylePreset + stylePresetOverrides on SubtitleSettings, pure lib/subtitleStylePresets.ts resolver, overlay CSS-variable rendering with live apply, mini-studio preset select with live preview, Options AppearanceCard/SubtitlePreview picker with synced preview, +35 TCs); player mini-studio floating control anchor fix (c3f5ea6); LinkedIn Learning ambry VTT + transcript JSON caption fix (1e6eea8); Scientific PDF setup guide site + CI (48df31d/ba82d99 — docs/guide GitHub Pages via pages.yml, GHCR bridge-image.yml, in-extension guide links, dropped invalid upload-pages-artifact input). Updated Current State (544 tests / 198 files, clean parallel run) and appended suite history.",
+    "tech-stack.md: added pages.yml (GitHub Pages guide deploy) and bridge-image.yml (GHCR scientific-pdf-bridge image) to the CI/CD table; updated quality-gates snapshot to 544 / 198 / 0 fail clean default parallel run; package.json / pnpm-lock.yaml unchanged.",
+    "tracks.md: updated refresh marker — still 73 archived / 0 active; noted subtitle style presets shipped untracked via superpowers spec+plan (docs/superpowers/2026-08-05-subtitle-style-presets*).",
+    "patterns.md: updated both refresh markers; consolidation scan found no new cross-track candidates (style presets / LinkedIn ambry / guide-site CI added no track learnings; 71 archived learnings unchanged since the previous refresh scan).",
+    "refresh_state.json: reconciled codebaseHealth (509 -> 544 tests across 198 files; full default parallel run clean — the background.test.ts load-timeout instability from 2026-08-05 did not reproduce), Beads (live Dolt 0 open / 0 in progress; two issues closed in window: AnyLLMTranslate-8l8 style-presets epic and AnyLLMTranslate-pve beads worktree hook bug; passive export lags the live DB with 3 stale open rows), and added the 17 commits since 2026-08-05 to shippedSinceLastRefresh.",
+    "verification: ran the full default `pnpm test` on 2026-08-11 — 544 passed / 0 failed across 198 files in 37.5s. lint/tsc/build not re-run — carried from the 2026-08-05 gate (0 errors / 0 errors / 3.77 MB). Backups of all six files kept in /tmp/conductor-bak/ so the working tree stays clean."
   ],
   "codebaseHealth": {
-    "tests": 509,
-    "testsPassing": 509,
+    "tests": 544,
+    "testsPassing": 544,
     "testsFailing": 0,
-    "testFiles": 196,
-    "fullSuiteStatus": "Serial gate 509 pass / 0 failures across 196 files (assertion-preserving consolidation in e807ea0, 584 -> 509). Default parallel diagnostic: 507 pass / 2 load-timeout failures in services/__tests__/background.test.ts; that file passes in isolation, so the failures remain recorded as load-sensitive full-suite instability rather than stable assertion failures.",
+    "testFiles": 198,
+    "fullSuiteStatus": "Full default `pnpm test` run on 2026-08-11: 544 pass / 0 failures across 198 files in 37.5s — clean, no load-timeout instability (the background.test.ts 2-test timeout pattern from the 2026-08-05 refresh did not reproduce).",
     "buildSize": "3.77 MB",
+    "buildSizeNote": "Measured 2026-08-05; not re-measured this refresh.",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean (per e807ea0 gate).",
+    "lintErrorsDetail": "Clean (per 2026-08-05 gate; not re-run this refresh).",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean (per e807ea0 gate).",
+    "tscErrorsDetail": "Clean (per 2026-08-05 gate; not re-run this refresh).",
     "archivedTracks": 73,
     "activeTracks": 0,
-    "activeTracksDetail": "None.",
+    "activeTracksDetail": "None. Subtitle style presets shipped untracked via superpowers spec+plan (docs/superpowers/specs/2026-08-05-subtitle-style-presets-design.md + docs/superpowers/plans/2026-08-05-subtitle-style-presets.md).",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -35,20 +35,24 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "feat: add Nous Portal provider preset — searchable nous-portal catalog entry (Nous Research inference gateway), host permission, and catalog tests",
-      "chore(beads): close all epics/tasks — tracker is empty",
-      "test: assertion-preserving suite consolidation 584 -> 509 across 43 files; serial gate 509/509 pass (196 files), tsc 0, lint 0"
+      "feat(subtitles): subtitle style presets — settings model, pure resolver, overlay CSS-var rendering, mini-studio + Options pickers, quality-gate fixes (0c36ac4..7f51036, 13 commits, +35 TCs)",
+      "fix(playerChrome): anchor floating control bottom-right above control band (c3f5ea6)",
+      "fix(subtitles): LinkedIn Learning captions via ambry VTT and transcript JSON (1e6eea8)",
+      "feat(scientific-pdf): setup guide site on GitHub Pages (docs/guide + pages.yml), GHCR bridge-image.yml, in-extension guide links (48df31d)",
+      "fix(ci): drop invalid upload-pages-artifact input (ba82d99)",
+      "chore(beads): sync issue exports (a297d14)",
+      "chore: remove superseded PLAN-immersive-translate-clone.md (8fe30f7)"
     ]
   },
   "beads": {
     "open": [],
     "inProgress": [],
     "closedInWindow": [
-      "AnyLLMTranslate-7bw",
-      "AnyLLMTranslate-wat"
+      "AnyLLMTranslate-8l8",
+      "AnyLLMTranslate-pve"
     ],
     "syncDirection": "skip",
-    "syncNote": "Tracker is empty (0 open / 0 in progress); all epics/tasks were closed in commit 22d5665. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization is a no-op."
+    "syncNote": "Live Dolt DB reports 0 open / 0 in progress (bd list / bd ready / bd show all agree). Two issues closed in window: AnyLLMTranslate-8l8 (subtitle style presets epic) and AnyLLMTranslate-pve (beads prepare-commit-msg worktree hook bug). Passive export .beads/issues.jsonl lags the live DB with 3 stale open rows (AnyLLMTranslate-5k8, -pve, -x9f) from the 2026-08-06 export sync — the export is passive and the live DB is authoritative. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; user-approved sync direction is skip."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
@@ -56,6 +60,6 @@
     "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [],
     "duplicatesMerged": [],
-    "note": "No new cross-track pattern candidates from the Nous Portal or suite-consolidation commits; existing elevated patterns remain current."
+    "note": "No new cross-track pattern candidates: the style-presets, playerChrome anchor, LinkedIn ambry, and guide-site/CI commits added no track learnings (no new tracks created; archived learnings unchanged since the 2026-08-05 scan). Existing elevated patterns remain current."
   }
 }

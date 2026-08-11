@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-05 all (package/lock unchanged; Nous Portal host permission added; 509 serial-gated / 509 pass across 196 files; default parallel 507 pass / 2 load-timeout failures in background.test.ts; isolated affected file passes; lint 0; tsc 0; build 3.77 MB; 73 archived / 0 active; Beads 0 open) -->
+<!-- conductor-refresh: 2026-08-11 all (package/lock unchanged; CI/CD rows added: pages.yml GitHub Pages guide deploy + bridge-image.yml GHCR bridge image; 544 pass / 0 fail across 198 files — clean default parallel run; lint 0 / tsc 0 per 2026-08-05 gate; build 3.77 MB carried; 73 archived / 0 active; Beads 0 open) -->
 # Tech Stack — AnyLLMTranslate
 
 ## Core Language
@@ -96,6 +96,8 @@
 | Technology | Usage |
 |-----------|-------|
 | **Chrome Web Store API** | Manual extension publishing via `pnpm zip` |
+| **GitHub Actions — `pages.yml`** | Deploys `docs/guide/` to GitHub Pages on `master` push (path-scoped) / `workflow_dispatch`; OIDC `pages` permissions |
+| **GitHub Actions — `bridge-image.yml`** | Builds + publishes the scientific-pdf-bridge Docker image to GHCR on `master` pushes touching `services/scientific-pdf-bridge/**` and `v*` tags |
 
 ## Architecture Decisions
 
@@ -168,4 +170,4 @@
 - Provider failures and invalid JSON fail open to deterministic heuristics; all LLM fields pass hostname/selector sanitization before the editable draft reaches UI.
 - The `tabs` permission is required to query matching tabs and manage the temporary capture tab.
 
-- Quality gates snapshot (2026-08-05, after assertion-preserving test-suite consolidation): **509** Vitest TCs across **196** test files; the serial gate had **509 pass / 0 failures**; the latest default parallel diagnostic had **507 pass / 2 timeout failures** in `services/__tests__/background.test.ts`, while the affected file passes in isolation; **eslint 0** errors; `tsc --noEmit` **0** errors; production build **3.77 MB**. No `package.json` or `pnpm-lock.yaml` dependency changes were detected since the previous refresh.
+- Quality gates snapshot (2026-08-11, after subtitle style presets): **544** Vitest TCs across **198** test files; the full default parallel `vitest run` completed **544 pass / 0 failures** — clean, no load-timeout instability this refresh; **eslint 0** errors and `tsc --noEmit` **0** errors per the 2026-08-05 gate (not re-run); production build **3.77 MB** (measured 2026-08-05). No `package.json` or `pnpm-lock.yaml` dependency changes were detected since the previous refresh. CI/CD added since last refresh: `pages.yml` (GitHub Pages guide deploy) and `bridge-image.yml` (GHCR scientific-pdf-bridge image).
