@@ -11,6 +11,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Keep jsdom and Web Crypto-heavy files from timing out on oversubscribed
+    // hosts while preserving bounded file-level parallelism.
+    maxWorkers: 4,
     environmentMatchGlobs: [
       ['entrypoints/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
       ['entrypoints/**/*.test.{ts,tsx}', 'jsdom'],

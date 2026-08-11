@@ -1,577 +1,270 @@
-# 🌐 AnyLLMTranslate — Bilingual Web Translation Extension
+# AnyLLMTranslate
 
-> **Translate any webpage & video subtitles into your language using any OpenAI-compatible LLM.**
+> Read the web bilingually, translate video subtitles, and bring your own LLM.
 
-AnyLLMTranslate is a Chrome/Firefox browser extension that provides seamless bilingual translation for web pages, video subtitles, and PDFs. Unlike traditional translation tools, it shows translations **inline alongside original text** — preserving context while enabling comprehension. Powered entirely by your own LLM endpoint: no data leaves your machine except to your configured API.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
----
+AnyLLMTranslate is an open-source, privacy-first browser extension for bilingual web reading, video subtitle translation, interactive translation tools, and optional scientific PDF translation. It connects to an OpenAI-compatible endpoint that **you** choose, including cloud providers and local runtimes such as Ollama or LM Studio.
 
-## ✨ Features
+Translation is BYOK (Bring Your Own Key): AnyLLMTranslate does not provide a hosted translation API, proxy your requests through developer infrastructure, or collect telemetry.
 
-### 🔤 Web Page Translation
+**Jump to:** [Features](#features) · [Subtitle support](#subtitle-support) · [Install](#install-for-development) · [Configure](#configure-your-provider) · [Scientific PDF](#scientific-pdf-translation) · [Development](#development) · [Privacy](#privacy-and-security) · [Contributing](#contributing)
 
-- **Full-page bilingual translation** — original + translated text displayed together
-- **Smart DOM walker** — TreeWalker-based extraction groups text into semantic pieces at block boundaries, splitting long texts at sentence boundaries
-- **Lazy viewport loading** — `IntersectionObserver` with 200px pre-load margin; batches pieces every 100ms
-- **Zero-layout-shift progress indicators** — pure CSS spinners display per-paragraph translation status
-- **17 visual themes** — Dividing Line, Blockquote, Paper, Underline, Dashed Underline, Highlight, Wavy Underline, Bubble, Side-by-side, Mask, Fade In, Italic, Dotted Border, Shadow Card, Minimal, Gradient Accent, **Custom** (user-defined)
-- **Custom theme editor** — define your own theme with configurable text color, background, border style/color, font style, and size; live preview via CSS custom properties
-- **Translation position control** — below / above / side via CSS data-attributes
-- **Dark mode support** — auto (system `prefers-color-scheme`), light, or forced dark
-- **SPA support** — MutationObserver-based dynamic content detection for single-page applications
-- **Auto-translate** — per-site automatic translation on page load via hostname matching with wildcard support; dismissible notification bar
-- **Smart excludes** — automatically skip nav, TOC, footers, sidebars, pagination, and infoboxes (configurable)
+## Features
 
-### 🎬 Video Subtitle Translation
+### Bilingual web pages
 
-- **Platform-specific handlers** with extensible registry pattern
-  - **YouTube**: Supports `/api/timedtext` endpoint with srv3 XML and JSON3 formats
-  - **Udemy**: Handles VTT from `udemycdn.com` with sprite metadata filtering
-  - **Coursera**: Processes VTT from `coursera.org` with query/path language extraction
-  - **LinkedIn Learning**: Fetches VTT from `licdn.com` with param/path/filename language extraction and transcript API metadata parsing
-  - **HBO Max / Max**: DOM cue scraping from `[data-testid="cueBoxRowTextCue"]` with aria-label-based language detection (no VTT URL interception)
-  - **Vimeo, Netflix, Amazon**: Subtitle fetch allowlist for CORS bypass (overlay fallback)
-- **Three interception strategies**:
-  - **XHR interception** — YouTube, Udemy
-  - **Fetch interception** — LinkedIn Learning
-  - **DOM cue scraping** — HBO Max (for platforms without VTT URLs)
-- **Proactive subtitle track discovery** via HTML5 TextTrack fallback with MutationObserver + `addtrack` events
-- **XHR + Fetch interception** via MAIN world script (`inject.content` at `document_start`)
-- **Dual-mode architecture**:
-  - **Interception mode**: Hijacks subtitle requests, translates, and returns bilingual VTT
-  - **Overlay fallback**: Auto-activates on timeout (30s) with custom subtitle renderer
-- **Subtitle parser** supports WebVTT and SRT formats with auto-detection
-- **Progressive chunked translation** with seek-aware priority queue for instant feedback
-- **Bilingual builder** generates merged or translation-only VTT output
-- **Custom overlay** with keyboard controls, resize, and position settings, including **Popover API Top Layer support** for native fullscreen
-- **In-player mini studio** — control-bar icon (native on YouTube/Udemy/Coursera when selectors match, else floating) opens enable/appearance/style/glossary controls; soft-hides with player chrome, including fullscreen
-- **Interactive drag-and-drop repositioning** with session and fullscreen persistence
-- **Subtitle coordinator** orchestrates parsing, translation, fallback, and cleanup
-- **Preferred subtitle language** with auto-activation when matching tracks are available
+- Show original and translated text inline with below, above, side-by-side, and translation-only display options.
+- Translate visible content first with viewport-aware loading, batching, streaming, caching, and look-ahead prefetch.
+- Handle single-page applications and dynamic content through mutation watching and lifecycle-safe resume/restore.
+- Choose page-scope presets, smart excludes, site rules, custom glossaries, and context-aware category prompts.
+- Personalize the reading experience with visual themes, custom themes, dark mode, compact inline display, and translation-position controls.
+- Pause, retry, hide, or restore translations without losing the surrounding page.
 
-### 🖱️ Interactive Translation
+### Video subtitle translation
 
-- **Text selection translate** — select text, click the floating icon; results open in a branded dialog with **copy**, **retry**, **speak** (browser TTS or OpenAI-compatible provider TTS; Settings → Advanced → Speech), **add to glossary**, and **pin**. Short selections use **dictionary mode** (phonetic, POS, definitions, examples, context) when enabled; longer text uses translation with collapsible original
-- **Mouse hover translate** — hover over paragraph-level elements; configurable 200–500ms delay, element-level cache
-- **Inline translate** — rapid key-gesture translation in editable fields (default: triple-space); includes native undo support, pulsing border feedback, and floating toast notifications; works with Google Search, ChatGPT, and other input fields via window-level capture phase listener
-- **Section translate** — translate specific DOM sections without full-page commitment; multiple sections can be translated independently with dismiss buttons; visual section picker with highlight overlay
-- **Keyboard shortcuts** (global via `chrome.commands` + page-level via event listeners)
-- **Context menu integration** — right-click → Translate Page / Translate Selection / Translate Section / Translate Subtitles
+- Translate subtitles progressively and display original plus translated cues in the native player or a resilient custom overlay.
+- Discover tracks proactively and use platform-specific interception, manifest/TextTrack access, or DOM cue scraping where needed.
+- Use the in-player mini studio for subtitle activation, language, display mode, position, font size, opacity, style presets, and glossary selection.
+- Keep subtitle quality consistent with site profiles, register/faithfulness/brevity/profanity controls, named glossaries, reading-speed timing, line wrapping, and speaker-aware context.
+- Optionally re-align fragmented YouTube auto-generated captions locally or with a BYOK model, with saved results cached for reuse.
 
-### 📄 PDF Translation
+### Interactive translation tools
 
-- **PDF viewer** — opens PDFs in a bundled React app that renders pages on canvas; translation runs via a **local Docker bridge** (not in-browser)
-- **PDF auto-detection** — detects when a tab is rendering a PDF via `document.contentType === 'application/pdf'`, which catches extensionless URLs (e.g. `https://arxiv.org/pdf/2606.20543`) that URL-only heuristics miss
-- **Auto-open translator** — optional setting (`Options → Advanced → PDF Translator`) to open the translator automatically when a PDF tab loads. Off by default; supports per-site opt-out and new-tab vs same-tab open modes
-- **Layout-preserving (Docker bridge)** — required path via a local bridge wrapping [pdf2zh](https://github.com/PDFMathTranslate/PDFMathTranslate) (`services/scientific-pdf-bridge/`). Uses the **same provider pool** per job (no second API key). In-extension setup wizard. If the bridge is offline, PDF Translate shows **not available** with setup guidance. See [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)
+- Select a word or sentence for dictionary-style definitions or a focused translation with copy, retry, speak, glossary, and pin actions.
+- Translate paragraph-level content on hover with a configurable delay and local element cache.
+- Translate text in inputs, textareas, and contenteditable fields with a configurable key gesture or the optional `Alt+I` command.
+- Translate a selected page section without committing to a full-page translation.
+- Use browser or provider text-to-speech, keyboard shortcuts, and context-menu actions for common workflows.
 
-### ⚙️ Settings & Advanced
+### PDF translation
 
-- **Any OpenAI-compatible API** — OpenAI, Ollama, LM Studio, Groq, Together AI, Gemini, etc.
-- **Provider catalog** — search and select from popular providers (OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI, Google AI Studio / Gemini, Ollama, LM Studio) or configure a custom endpoint
-- **Auto model listing** — fetches available models from providers that support model listing via the `/v1/models` endpoint
-- **Connection tester** — sends a round-trip ping and reports latency
-- **Request timeout configuration** — configurable timeout for API requests (default: 60s)
-- **Customizable system prompt** with `{{SOURCE_LANG}}` / `{{TARGET_LANG}}` variable injection
-- **Context-aware translation** — injects page title, description, and domain into prompts for better context
-- **Page category detection** — automatic page categorization with two-layer override system:
-  - **Tab-scoped temporary override** — set via popup dropdown, cleared on tab close
-  - **Persistent SiteRule override** — saved per-hostname with "Save as Rule" promotion pattern
-  - **Three-level resolution**: tab override → site rule category → auto-detected
-  - **21 predefined categories** covering software dev, news, academia, e-commerce, and more
-- **Per-site translation rules** — include/exclude CSS selectors, always/never translate, auto-translate with dismissible notification
-- **Custom glossary / dictionary** — term-protected translation via prompt injection, live mismatch validation preview; CSV & JSON import/export
-- **Translation cache** — IndexedDB via `idb-keyval`, SHA-256 keyed, configurable TTL/size limits, LRU eviction via `chrome.alarms`, daily automatic eviction
-- **Statistics tracking** — characters translated, API calls, cache hit/miss rate, pages translated, subtitle cues, daily activity bar chart (last 30 days, CSS-only)
-- **Custom theme editor** — user-defined themes with configurable text color, background, border style/color, font style, and size; live preview via CSS custom properties
-- **Subtitle settings** — position, font family, display mode (bilingual vs translation-only), background opacity, translation timeout, preferred language, auto-activation, per-platform disable
-- **AES-GCM encryption** — API keys encrypted at rest via `lib/crypto.ts`
-- **Rate limiting** — in-process semaphore limiting concurrent translation requests (max 3 for pages/subtitles, max 2 for PDFs)
-- **React error boundaries** — graceful error handling for popup and options pages
-- **Setup wizard** — 4-step first-run onboarding (welcome → connect → verify → ready) with brand Welcome, catalog filters, and language on verify
+- Open PDFs in a bundled reader-first viewer with original, translated, and compare workflows.
+- Translate scientific PDFs through an optional local Docker bridge that preserves layout, math, figures, and document structure.
+- Download mono, dual, or side-by-side results after a bridge job completes.
+- Keep PDF translation separate from ordinary web translation: the Scientific PDF path is bridge-only and has no in-browser Fast fallback.
 
----
+## Subtitle support
 
-## 🚀 Quick Start
+The extension includes dedicated handlers for the platforms below plus a last-resort generic handler for common subtitle formats and players.
 
-### Installation (Developer Mode)
+| Platform            | Coverage            | Notes                                                          |
+| ------------------- | ------------------- | -------------------------------------------------------------- |
+| YouTube             | Dedicated handler   | Native track discovery and optional ASR re-alignment           |
+| Udemy               | Dedicated handler   | Course captions                                                |
+| Coursera            | Dedicated handler   | Lecture subtitles and transcript tracks                        |
+| LinkedIn Learning   | Dedicated handler   | VTT and transcript metadata paths                              |
+| HBO Max / Max       | Dedicated handler   | VTT, manifest, and DOM fallback paths vary by player           |
+| Youku               | Dedicated handler   | ASS, manifest, and DOM fallback paths                          |
+| Netflix             | Dedicated handler   | Player metadata and timed-text paths                           |
+| Disney+             | Dedicated handler   | Player metadata and VTT paths                                  |
+| WeTV / iFlix        | Dedicated handler   | VTT interception                                               |
+| Generic auto-detect | Last-resort handler | Common VTT, SRT, TTML, content-type, and DOM caption detection |
 
-1. Clone the repository:
+> Subtitle behavior depends on the site player, available tracks, account and region, and future platform changes. The Generic handler only runs when a dedicated handler does not own the current host.
 
-   ```bash
-   git clone https://github.com/NguyenSiTrung/AnyLLMTranslate.git
-   cd AnyLLMTranslate
-   ```
+## How it works
 
-2. Install dependencies:
+| Layer                                | Responsibility                                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Popup, Options, and Side panel       | Setup, language, display, provider, subtitle, glossary, and advanced controls                 |
+| Isolated content script              | DOM translation, page lifecycle, selection, hover, inline tools, and subtitle coordination    |
+| MAIN-world injectors                 | Subtitle request interception, player integration, TextTrack access, and DOM cue sources      |
+| Background service worker            | Message routing, provider pool, retries, cache, rate limits, circuit breakers, and statistics |
+| PDF viewer and Scientific PDF bridge | Reader UI plus optional local layout-preserving PDF jobs                                      |
 
-   ```bash
-   npm install
-   ```
+### Translation and provider flow
 
-3. Build the extension:
+1. You choose a target language and configure one or more providers in the setup wizard or Options.
+2. The content script extracts page text or subtitle cues without sending page content to AnyLLMTranslate servers.
+3. The background service worker routes translation requests through the active provider pool, cache, retry, and rate-limit layers.
+4. Results return to the page, player overlay, selection bubble, or PDF viewer as bilingual content.
 
-   ```bash
-   npm run build
-   ```
+The provider pool supports multiple providers and API keys, round-robin distribution, per-key RPM/concurrency/interval limits, and circuit-breaker failover. Provider models can be listed from compatible `/models` endpoints when supported.
 
-4. Load in Chrome:
-   - Navigate to `chrome://extensions/`
-   - Enable **Developer mode** (top right)
-   - Click **Load unpacked** and select the `.output/chrome-mv3` directory
+## Install for development
 
-### Configuration
+> This repository documents unpacked developer builds. It does not claim a Chrome Web Store or Firefox Add-ons release.
 
-1. Click the **AnyLLMTranslate** icon in the Chrome toolbar
-2. If this is your first time, the **Setup Wizard** will guide you through:
-   - Selecting a provider from the catalog (or entering a custom endpoint)
-   - Testing the connection
-   - Choosing your target language
-3. Or click the **Settings** gear icon to open the full Options page
-4. Go to the **Provider** tab and configure your LLM:
-   - **Search or browse** the provider catalog (OpenRouter, Groq, Ollama, LM Studio, etc.)
-   - **API Base URL**: e.g., `http://localhost:11434/v1` or `https://api.openai.com/v1`
-   - **API Key**: Your API key (leave blank for local providers like Ollama)
-   - **Model**: Select from the auto-fetched list or type a model name
-5. Click **Test Connection** to verify
-6. Go to **General** tab → set your **Target Language**
-7. Return to any webpage → click **Translate Page**
+### Prerequisites
 
----
+- Node.js `>=20.12.0`
+- [pnpm](https://pnpm.io/) (recommended) or npm
+- Chrome or Firefox for unpacked-extension testing
+- Docker Desktop or Docker Engine, only if you want Scientific PDF translation
 
-## 🛠️ Development
+### Clone and build
 
-### Tech Stack
+```bash
+git clone https://github.com/NguyenSiTrung/AnyLLMTranslate.git
+cd AnyLLMTranslate
 
-| Layer               | Technology                                                              |
-| ------------------- | ----------------------------------------------------------------------- |
-| Extension framework | **WXT** v0.20.20 (Manifest V3 Chrome, Manifest V2 Firefox)               |
-| UI                  | **React 19** + **TypeScript 5.9** (15-component shared UI library)      |
-| Styling             | **Tailwind CSS v4** (options/popup) + Vanilla CSS (injected themes)     |
-| State management    | **Zustand v5** with `chrome.storage.local` sync                          |
-| Translation cache   | **IndexedDB** via `idb-keyval`                                           |
-| Encryption          | **AES-GCM** (Web Crypto API) for API key storage                        |
-| Icons               | **Lucide React**                                                        |
-| Testing             | **Vitest** + `@testing-library/react` + `jsdom` (1240 tests, 98 files) |
-| Linting             | ESLint + `typescript-eslint` + Prettier                                 |
-| Service worker      | Rate limiting, keep-alive alarm, session tracking, retry with backoff   |
+pnpm install
+pnpm build
+```
+
+The npm equivalent is:
+
+```bash
+npm install
+npm run build
+```
+
+### Load the extension in Chrome
+
+1. Open `chrome://extensions/`.
+2. Enable **Developer mode**.
+3. Select **Load unpacked**.
+4. Choose `.output/chrome-mv3`.
+5. Pin AnyLLMTranslate to the toolbar for easy access.
+
+After source changes, rebuild and use **Reload** on the extension card.
+
+### Build for Firefox
+
+```bash
+pnpm build:firefox
+```
+
+Load the generated Firefox extension from the corresponding WXT output directory using `about:debugging` → **This Firefox** → **Load Temporary Add-on**. These are development builds, not store distribution instructions.
+
+### First run
+
+1. Open the AnyLLMTranslate popup and start the setup wizard.
+2. Select a provider from the catalog or enter a custom endpoint.
+3. Test the connection and select a target language.
+4. Open a normal webpage and choose **Translate Page** or press `Alt+A`.
+
+## Configure your provider
+
+Open **Options → Providers** to manage endpoints, models, keys, rotation, connection tests, and per-key throttling.
+
+| Provider type           | Examples                                                            |
+| ----------------------- | ------------------------------------------------------------------- |
+| Cloud OpenAI-compatible | OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI |
+| Google-compatible       | Google AI Studio / Gemini                                           |
+| Additional gateways     | OpenCode Zen, OpenCode Go, DeepSeek Official, Nous Portal           |
+| Local                   | Ollama or LM Studio, usually without an API key                     |
+| Custom                  | Any endpoint exposing a compatible chat API                         |
+
+Typical setup fields are:
+
+- **API Base URL** — for example, `http://localhost:11434/v1` for Ollama or `https://api.openai.com/v1` for a compatible cloud endpoint.
+- **API Key** — required by most hosted providers; leave it blank for keyless local runtimes.
+- **Model** — select from the provider model list when available, or enter an ID manually.
+- **Target language** — set in **Options → General** or during the setup wizard.
+
+The provider pool lets you add multiple keys or providers and tune `maxRpm`, concurrency, and minimum request interval per key. Start with one tested provider, then add failover capacity if you need it.
+
+## Scientific PDF translation
+
+Scientific PDF translation is optional and requires the local Scientific PDF bridge. The bridge wraps [pdf2zh / PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate), listens on `http://127.0.0.1:17890` by default, and uses the active provider pool instead of a second API-key store.
+
+**Recommended path:** [Open the Scientific PDF setup guide](https://nguyensitrung.github.io/AnyLLMTranslate/guide/). It covers the prebuilt GHCR image, Docker Compose, health checks, updates, and troubleshooting.
+
+**From this repository:**
+
+```bash
+./scripts/scientific-pdf-docker.sh up
+curl -sS http://127.0.0.1:17890/health
+```
+
+Then open **Options → Advanced → Scientific PDF**, complete the setup wizard, and translate from the bundled PDF viewer. Jobs produce mono, dual, or side-by-side downloads with progress and logs.
+
+Scientific jobs send the full PDF and short-lived provider credentials to the bridge URL you configure. Keep the default loopback URL unless you intentionally run the bridge elsewhere. See the [local setup guide](docs/scientific-pdf-setup.md) and [bridge API reference](docs/scientific-pdf-bridge-api.md) for details.
+
+## Development
+
+The project uses WXT, React, TypeScript, Tailwind CSS, Zustand, IndexedDB, Web Crypto, and PDF.js.
 
 ### Commands
 
-| Command                  | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `npm run dev`            | Start development server (Chrome, hot reload)            |
-| `npm run dev:firefox`    | Start development server (Firefox)                        |
-| `npm run build`          | Production build → `.output/chrome-mv3`                   |
-| `npm run build:firefox`  | Production build → `.output/firefox-mv2`                  |
-| `npm test`               | Run all tests                                            |
-| `npm run test:watch`     | Vitest watch mode                                        |
-| `npm run test:coverage`  | Coverage report                                          |
-| `npm run lint`           | ESLint check                                             |
-| `npm run lint:fix`       | ESLint auto-fix                                          |
-| `npm run format`         | Prettier format                                          |
-| `npm run zip`            | Create distributable ZIP for Chrome Web Store             |
-| `npm run zip:firefox`    | Create distributable ZIP for Firefox Add-ons             |
-| `npm run zip:source`     | Create source code archive (git archive)                  |
-| `npm run compile`        | TypeScript type check (`tsc --noEmit`)                    |
+Run these from the repository root:
 
-### Project Structure
+| Command              | Purpose                                   |
+| -------------------- | ----------------------------------------- |
+| `pnpm dev`           | Chrome development server with hot reload |
+| `pnpm dev:firefox`   | Firefox development server                |
+| `pnpm build`         | Production Chrome build                   |
+| `pnpm build:firefox` | Production Firefox build                  |
+| `pnpm test:fast`     | Fast library and unit-test subset         |
+| `pnpm test`          | Full Vitest suite                         |
+| `pnpm test:watch`    | Vitest watch mode                         |
+| `pnpm test:coverage` | Generate a coverage report                |
+| `pnpm compile`       | TypeScript type check                     |
+| `pnpm lint`          | ESLint check                              |
+| `pnpm format`        | Format source and Markdown files          |
+| `pnpm zip`           | Chrome distributable package              |
+| `pnpm zip:firefox`   | Firefox distributable package             |
+| `pnpm zip:source`    | Git-tracked source archive                |
 
-```
-├── entrypoints/
-│   ├── background.ts          # Service worker: message routing, context menus, chrome.commands, rate limiting
-│   ├── content.ts             # Content script orchestrator: DOM translation pipeline, auto-translate
-│   ├── inject.content/        # Injected in-page script: XHR/Fetch interception for subtitles
-│   ├── popup/                 # Popup React UI (340px, dark theme)
-│   │   ├── App.tsx            # Main popup component (language selector, translate button, theme/mode toggles, category override)
-│   │   └── main.tsx
-│   ├── options/               # Options page React UI (full-screen, sidebar navigation)
-│   │   ├── App.tsx            # Layout: sidebar navigation + tab content
-│   │   ├── SetupWizard.tsx    # 4-step first-run onboarding wizard (shell + steps)
-│   │   ├── ThemePreview.tsx   # Live theme preview component
-│   │   ├── CustomThemeEditor.tsx # User-defined custom theme editor
-│   │   ├── components/        # Specialized options components
-│   │   │   ├── ModelPicker.tsx            # Auto-fetch models from provider API
-│   │   │   └── ProviderCatalogPicker.tsx    # Search/filter provider catalog
-│   │   └── sections/          # 11 settings sections
-│   │       ├── GeneralSection.tsx
-│   │       ├── ProviderSection.tsx
-│   │       ├── ThemesSection.tsx
-│   │       ├── DictionarySection.tsx
-│   │       ├── GlossaryTranslatePreview.tsx
-│   │       ├── SiteRulesSection.tsx
-│   │       ├── SubtitlesSection.tsx
-│   │       ├── ShortcutsSection.tsx
-│   │       ├── InlineTranslateSection.tsx
-│   │       ├── StatisticsSection.tsx
-│   │       └── AdvancedSection.tsx
-│   └── pdf-viewer/            # Bundled PDF translation React app
-│       ├── App.tsx
-│       ├── components/        # PdfCanvasRenderer, PdfTranslationPane, DownloadProgressModal, FilePermissionGuide
-│       ├── hooks/             # usePdfDocument, usePdfDownload, usePdfPageTranslations, useSynchronizedScroll
-│       └── lib/               # PDF text extraction, font management, translated PDF generation
-├── content/                   # Content script modules
-│   ├── domWalker.ts           # TreeWalker-based text piece extraction
-│   ├── viewportObserver.ts    # IntersectionObserver lazy translation
-│   ├── translationDisplay.ts  # DOM injection + theme/position/dark-mode application
-│   ├── mutationWatcher.ts     # SPA / dynamic content detection
-│   ├── textSelection.ts       # Floating translate button + tooltip
-│   ├── hoverTranslate.ts      # Mouse hover translate (debounced, cached)
-│   ├── inlineTranslate.ts     # Key-gesture translation in editable fields
-│   ├── sectionTranslate.ts    # Translate specific DOM sections
-│   ├── sectionPicker.ts       # Section picker UI for section translation
-│   ├── keyboardShortcuts.ts   # Page-level keyboard shortcut handler
-│   ├── messageBridge.ts       # Content ↔ background messaging abstraction
-│   ├── autoTranslateNotification.ts # Auto-translate notification bar
-│   ├── subtitleCoordinator.ts # Coordinates all subtitle modules
-│   ├── subtitleControls.ts    # Subtitle control UI
-│   ├── subtitleOverlay.ts     # Custom overlay renderer (fixed positioning, Popover API top layer)
-│   ├── subtitleToast.ts       # Subtitle status notifications
-│   ├── pdfDetect.ts           # PDF content type detection
-│   ├── categoryState.ts       # Category state management for content scripts
-│   └── utils/
-│       └── pageContext.ts     # Page context extraction for context-aware translation
-├── inject/                    # In-page injected script modules (MAIN world)
-│   ├── fetchInterceptor.ts    # Fetch API interception
-│   ├── xhrInterceptor.ts      # XHR interception
-│   ├── interceptorRegistry.ts # URL pattern matching registry
-│   ├── messageBridge.ts       # Inject ↔ content postMessage bridge
-│   ├── textTrackDiscovery.ts  # HTML5 TextTrack subtitle discovery
-│   ├── domCueSource.ts        # DOM-based cue scraping for platforms without VTT URLs
-│   └── subtitleHandlers/      # Platform-specific subtitle handlers
-│       ├── youtube.ts         # YouTube /api/timedtext (srv3 XML, JSON3)
-│       ├── udemy.ts           # Udemy VTT with sprite filtering
-│       ├── coursera.ts        # Coursera VTT with language extraction
-│       ├── linkedin.ts        # LinkedIn Learning VTT with param/path/filename language extraction
-│       ├── hbomax.ts          # HBO Max / Max DOM cue scraping
-│       └── registry.ts        # Handler interface + registration system
-├── services/                  # Background services
-│   ├── background.ts          # Tab state machine + translation message handler, rate limiting
-│   ├── base.ts                # Abstract TranslationService + prompt builder + response parser
-│   ├── openaiCompatible.ts    # OpenAI-compatible API client (retry with exponential backoff)
-│   ├── batcher.ts             # Request batching, deduplication, char-limit splitting
-│   ├── cacheManager.ts        # IndexedDB cache (TTL + LRU, daily eviction)
-│   ├── categoryStore.ts       # Tab-scoped category override store (in-memory Map<tabId, category>)
-│   ├── providerTester.ts      # Connection testing with latency measurement
-│   ├── statsCollector.ts      # Translation statistics tracking (daily charts)
-│   ├── pdfAutoOpen.ts         # Pure decision logic for PDF auto-open
-│   ├── providerReadiness.ts   # Provider readiness state machine
-│   └── debugLog.ts            # Debug logging with cached settings check
-├── stores/
-│   └── settingsStore.ts       # Zustand store with chrome.storage.local sync
-├── ui/                        # Reusable React component library (options page)
-│   ├── Button.tsx, Input.tsx, Select.tsx, Toggle.tsx
-│   ├── Slider.tsx, Badge.tsx, Card.tsx
-│   ├── Modal.tsx, Toast.tsx, ToastProvider.tsx
-│   ├── FieldGroup.tsx, EmptyState.tsx
-│   ├── SegmentedControl.tsx, SectionHeader.tsx
-│   └── ErrorBoundary.tsx      # React error boundary
-├── styles/
-│   ├── inject.css             # 17 themes + custom theme + page states (data-anyllm-theme, data-anyllm-position)
-│   ├── subtitle.css           # Subtitle overlay styles (fixed positioning, drag-and-drop)
-│   └── tooltip.css            # Selection translate tooltip styles
-├── types/                     # TypeScript type definitions
-│   ├── index.ts               # Barrel re-export
-│   ├── config.ts              # ExtensionSettings, ProviderConfig, ThemeName, SiteRule, CustomThemeConfig, InlineTranslateSettings, etc.
-│   ├── translation.ts         # TranslationPiece, TranslationRequest, CacheEntry
-│   ├── messages.ts            # Chrome message protocol types (23 message types)
-│   ├── subtitle.ts            # SubtitleCue, AvailableSubtitleTrack, DomCueSource, SubtitleUrlPattern
-│   └── stats.ts               # Statistics tracking types
-├── lib/                       # Shared utilities
-│   ├── constants.ts           # BLOCK_ELEMENTS, SKIP_ELEMENTS, DATA_ATTRS, STORAGE_KEYS
-│   ├── config.ts              # loadSettings() helper with migration
-│   ├── languages.ts           # 35 languages (ISO 639-1 codes with native names) + Auto-Detect
-│   ├── categories.ts          # 21 predefined page categories for context-aware translation
-│   ├── glossary.ts            # Glossary formatting, mismatch detection, CSV/JSON import/export
-│   ├── siteRules.ts           # Site rule matching utilities + built-in rules
-│   ├── subtitleParser.ts      # WebVTT parser
-│   ├── subtitleBuilder.ts     # Bilingual VTT builder
-│   ├── subtitleSites.ts       # Subtitle platform metadata (5 supported platforms)
-│   ├── openAiCompatibleCatalog.ts # Static catalog of OpenAI-compatible LLM providers (+ custom)
-│   ├── providerReadiness.ts   # Provider readiness state machine
-│   ├── findPrimaryVideo.ts    # Video element detection
-│   ├── crypto.ts              # SHA-256 hashing for cache keys + AES-GCM encryption for API keys
-│   ├── performance.ts         # Performance measurement utilities
-│   ├── domUtils.ts            # DOM utility functions
-│   ├── styleUtils.ts          # Style utilities
-│   └── utils.ts               # General utility functions
-└── wxt.config.ts              # WXT configuration (permissions, commands, Tailwind plugin, CSP)
-```
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut   | Action                                       |
-| ---------- | -------------------------------------------- |
-| **Alt+A**  | Translate current page                       |
-| **Alt+S**  | Translate video subtitles                    |
-| **Alt+Z**  | Toggle translation display (show/hide)       |
-| **Alt+X**  | Restore original page (remove translations)  |
-| **Alt+H**  | Toggle hover translate (page-level)          |
-| **Alt+D**  | Toggle text selection translate (page-level) |
-| **Alt+Q**  | Translate selected section                   |
-| **Escape** | Dismiss translation tooltip                  |
-
-> Global shortcuts (Alt+A/S/Z/X) can be reconfigured at `chrome://extensions/shortcuts`
-
----
-
-## 🎨 Visual Themes
-
-AnyLLMTranslate includes **16 built-in themes + 1 custom theme** that apply via CSS data-attributes on `<html>`:
-
-| Theme            | Key = `data-anyllm-theme` |
-| ---------------- | ------------------------: |
-| Dividing Line    |           `dividing-line` |
-| Blockquote       |  `blockquote` _(default)_ |
-| Paper            |                   `paper` |
-| Underline        |               `underline` |
-| Dashed Underline |        `dashed-underline` |
-| Highlight        |               `highlight` |
-| Wavy Underline   |          `wavy-underline` |
-| Bubble           |                  `bubble` |
-| Side by Side     |            `side-by-side` |
-| Mask             |                    `mask` |
-| Fade In          |                 `fade-in` |
-| Italic           |                  `italic` |
-| Dotted Border    |           `dotted-border` |
-| Shadow Card      |             `shadow-card` |
-| Minimal          |                 `minimal` |
-| Gradient Accent  |         `gradient-accent` |
-| **Custom**       |                  `custom` |
-
-All themes include dark mode variants (CSS `@media (prefers-color-scheme: dark)` + `.anyllm-dark` class).
-
-The **Custom** theme allows user-defined styling via the theme editor in Options → Themes, with live preview powered by CSS custom properties (`--anyllm-custom-*`).
-
----
-
-## 📄 PDF Translation
-
-PDF translation runs in a bundled React page at `chrome-extension://<id>/pdf-viewer.html?file=<url>`. The viewer renders the original PDF on canvas (left pane) and runs translation only through a **local Docker bridge** (right pane shows bridge status). Jobs produce downloadable mono / dual / side-by-side PDFs.
-
-### Opening the translator
-
-There are three ways to open the translator for a PDF, all of which funnel through one shared background helper:
-
-1. **Popup button** — click the extension icon on a PDF tab and press **Open current PDF**. The popup queries the content script for `document.contentType`, so this works even for extensionless URLs like `https://arxiv.org/pdf/2606.20543`.
-2. **Context menu** — right-click a `.pdf` link or a PDF page → **Open in PDF Translator**.
-3. **Auto-open** — see below.
-
-### Auto-opening the translator
-
-Enable **Options → Advanced → PDF Translator → Auto-open mode** to detect PDF tabs automatically and open the translator without a click. This also lights up the popup button for extensionless PDF URLs the URL-only heuristic misses.
-
-- **Off** — manual only (default).
-- **Prompt** — *(planned)* shows an in-page banner button on the native viewer.
-- **Auto** — opens the translator immediately when a PDF tab loads.
-
-Safeguards:
-
-- **Infinite-loop guard** — the bundled viewer loads a PDF too; detection is suppressed on `chrome-extension://` origins.
-- **Provider readiness gate** — nothing auto-opens if the LLM provider is not configured and tested.
-- **Per-tab dedupe** — each tab+document auto-opens at most once per browser session (state in `chrome.storage.session`, survives service-worker eviction).
-- **Per-site opt-out** — **Never auto-open these sites** (comma-separated hostnames) overrides the global setting.
-- **Open mode** — **New tab** keeps the native viewer; **Same tab** replaces it in place.
-
-### Limitations
-
-- `file://` PDFs require **Allow access to file URLs** toggled on in `chrome://extensions` (content scripts cannot run on `file://` otherwise).
-- Embedded PDFs (`<embed type="application/pdf">` inside an HTML host page) are not detected — only standalone PDF tabs.
-
-### Docker bridge (required for PDF Translate)
-
-PDF Translate requires the local Docker bridge. Enable **Options → Advanced → Scientific PDF**, complete the setup wizard, and leave the bridge running. Default URL: `http://127.0.0.1:17890`.
-
-If the bridge is offline or not configured, the viewer shows **PDF Translate not available** and guides you to set up / connect the bridge. There is no in-browser Fast fallback.
-
-**New users — full guide:** [Scientific PDF setup guide](https://nguyensitrung.github.io/AnyLLMTranslate/guide/) (public site) · [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md) (repo copy)
-
-**Two setup paths** (details in the guide):
-
-1. **Quick Start — pull the prebuilt image** (no clone, no build): copy the compose file from the guide, then `docker compose up -d`
-2. **Build from source:** clone the repo and run `./scripts/scientific-pdf-docker.sh up`
+A typical contributor check is:
 
 ```bash
-# From repo root (Docker Desktop must be running)
-./scripts/scientific-pdf-docker.sh up      # down if exists → build → start → health
-# ./scripts/scientific-pdf-docker.sh logs  # optional live logs
-# ./scripts/scientific-pdf-docker.sh down  # stop
-# Then: Options → Advanced → Scientific PDF → Set up… → Check health
+pnpm test
+pnpm compile
+pnpm lint
 ```
 
-When the bridge is **Ready**, click **Translate** in the PDF viewer. Progress + logs appear in a modal; downloads are manual (mono / dual / side-by-side). Jobs use the **active provider pool** (including maxRpm / concurrency / interval).
+### Repository map
 
-- Setup guide: [public site](https://nguyensitrung.github.io/AnyLLMTranslate/guide/) · [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)
-- API: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)  
-- Privacy: [PRIVACY.md](PRIVACY.md)
+| Directory                          | Purpose                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `entrypoints/`                     | WXT entrypoints: background, content, popup, options, and PDF viewer       |
+| `content/`                         | Page translation, selection, hover, inline input, subtitles, and player UI |
+| `inject/`                          | MAIN-world subtitle interceptors, platform handlers, and cue discovery     |
+| `services/`                        | Background translation, provider pool, cache, statistics, and PDF bridge   |
+| `lib/`, `types/`, `stores/`, `ui/` | Shared logic, contracts, settings state, and reusable React components     |
+| `styles/`                          | Host-page translation themes, subtitle overlay, and tooltip styles         |
 
----
+## Keyboard shortcuts
 
-## 🎬 Subtitle Handler Architecture
+### Global commands
 
-The extension uses a modular, extensible subtitle handler system with three interception strategies:
+| Shortcut | Action                          |
+| -------- | ------------------------------- |
+| `Alt+A`  | Translate the current page      |
+| `Alt+S`  | Translate video subtitles       |
+| `Alt+Z`  | Show or hide translations       |
+| `Alt+X`  | Restore the original page       |
+| `Alt+I`  | Translate the focused input box |
 
-### Handler Interface
+### Page controls
 
-All platform handlers implement the `SubtitleHandler` interface:
+| Shortcut | Action                                           |
+| -------- | ------------------------------------------------ |
+| `Alt+H`  | Toggle hover translation                         |
+| `Alt+D`  | Toggle text-selection translation                |
+| `Alt+Q`  | Enter or exit section-picker mode                |
+| `Escape` | Dismiss the selection tooltip or floating button |
 
-- `platform`: Unique identifier (e.g., `'youtube'`, `'udemy'`, `'coursera'`, `'linkedin'`, `'hbomax'`)
-- `detect()`: Returns `true` if the handler applies to the current page
-- `getPatterns()`: Returns URL patterns for interception with optional language extractors
-- `transformResponse()`: Transforms raw subtitle content into normalized `SubtitleCue[]`
-- `getMetadataPatterns()`: *(optional)* Returns URL patterns for metadata API responses that list available tracks
-- `extractAvailableTracks()`: *(optional)* Extracts available subtitle tracks from a metadata API response
-- `getDomCueSource()`: *(optional)* Returns cue-scraping contract for DOM-sourced platforms (e.g. Max)
-- `isWatchPage()`: *(optional)* Returns `true` if the current page is a video watch page (vs. listing/search)
+Global commands can be changed at `chrome://extensions/shortcuts`. The inline-input command has no default suggested key; bind `Alt+I` or another key there. Inline input translation can also be triggered with its configured Space-based gesture.
 
-### Handler Registry
+## Privacy and security
 
-- Centralized registration system for platform handlers
-- Auto-detects current platform by hostname
-- Aggregates URL patterns for XHR/Fetch interceptors
-- Pattern matching with optional `languageExtractor` functions
+- **No telemetry:** no developer analytics, advertising, crash reporting, or browsing-history collection.
+- **Local storage:** settings, statistics, translation cache, and encrypted API keys remain in browser storage.
+- **Direct provider requests:** page and subtitle text goes only to the endpoint you configure for translation.
+- **Protected credentials:** API keys are encrypted at rest and are not exposed to page content or the selection UI.
+- **Extension boundaries:** strict extension-page CSP, origin-checked message bridges, subtitle URL allowlists, and SSRF protections reduce unnecessary exposure.
+- **PDF disclosure:** Scientific PDF jobs send the PDF and short-lived provider credentials to the configured bridge, defaulting to loopback.
 
-### Supported Platforms
+Read the full [Privacy Policy](PRIVACY.md) before enabling a non-local provider or a non-loopback PDF bridge.
 
-#### YouTube
+## Contributing
 
-- **Endpoint**: `/api/timedtext`
-- **Formats**: srv3 XML (default), JSON3
-- **Detection**: `youtube.com` hostname
-- **Language**: Extracted from `lang` query parameter
-- **Parser**: Custom XML DOM parser + JSON3 event parser
-- **Interception**: XHR
+Contributions and bug reports are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, architecture, testing patterns, and pull-request expectations.
 
-#### Udemy
-
-- **Endpoint**: `*.udemycdn.com/*.vtt`
-- **Format**: Standard WebVTT
-- **Detection**: `udemy.com` hostname
-- **Language**: Extracted from path segments (e.g., `/subtitle-en/`, `/en/`) with locale normalization
-- **Special**: Filters sprite metadata cues (image file references with `#xywh=` coordinates) using length heuristic (>100 chars)
-- **Interception**: XHR
-
-#### Coursera
-
-- **Endpoints**: `coursera.org/*subtitle`, `coursera.org/*.vtt`
-- **Format**: Standard WebVTT
-- **Detection**: `coursera.org` hostname
-- **Language**: Extracted from `lang` query param or path segment (e.g., `/en/`)
-- **Interception**: XHR
-
-#### LinkedIn Learning
-
-- **Endpoint**: `licdn.com/*.vtt` (and `linkedin.com` CDN domains)
-- **Format**: Standard WebVTT
-- **Detection**: `linkedin.com` hostname + `/learning/` path for watch pages
-- **Language**: Extracted from query params (`lang`, `locale`), path segments, or filename suffix
-- **Metadata**: Parses transcript/caption/subtitle API responses for track discovery
-- **Interception**: Fetch
-
-#### HBO Max / Max
-
-- **Format**: DOM cue scraping (no VTT URL)
-- **Detection**: `max.com`, `play.hbomax.com` hostnames + `/video/watch/` path for watch pages
-- **Language**: aria-label-based from `[data-testid="player-ux-text-track-button"]` with 40+ label-to-language mappings
-- **Cue source**: Reads `[data-testid="cueBoxRowTextCue"]` with MutationObserver for cue changes
-- **Interception**: DOM scraping (no URL interception)
-
-### Dual-Mode Architecture
-
-**Interception Mode** (primary):
-
-- MAIN world script intercepts XHR/Fetch requests at `document_start`
-- Platform handler transforms response to `SubtitleCue[]`
-- Coordinator translates cues via background service
-- Bilingual or translation-only VTT built and returned to page
-- Native player displays translated subtitles
-
-**Overlay Fallback** (backup):
-
-- Auto-activates if interception times out (30s default for local LLMs)
-- Fetches subtitle content via background worker (CORS bypass)
-- Parses, translates, and renders in custom overlay
-- Includes keyboard controls, resize, and position settings
-- Fixed positioning with Popover API top layer for fullscreen support
-
----
-
-## 🔒 Security & Privacy
-
-- **AES-GCM encryption** — API keys stored encrypted at rest via Web Crypto API
-- **Content Security Policy** — strict CSP on extension pages (`script-src 'self'; connect-src 'self' https:`)
-- **Subtitle URL allowlist** — only whitelisted domains for subtitle fetch CORS bypass
-- **SSRF protection** — private/loopback/host blocking for subtitle CORS-bypass fetch
-- **Prompt injection mitigation** — page context fields capped, wrapped in XML delimiters, marked as untrusted data
-- **No telemetry.** No analytics. No crash reporting.
-- **All data is local** — stored in `chrome.storage.local` (settings, statistics) and `IndexedDB` (translation cache).
-- **API calls go only to your configured endpoint.** The extension never phones home.
-- **Minimal permissions**: `storage`, `activeTab`, `contextMenus`, `sidePanel`, `alarms` (for cache eviction and service worker keep-alive).
-
----
-
-## 🧪 Testing
-
-The project maintains comprehensive test coverage (**1240 tests across 98 files**):
+Before opening a pull request, run:
 
 ```bash
-npm test             # Run all tests
-npm run test:watch   # Watch mode
-npm run test:coverage # Coverage report
+pnpm test
+pnpm compile
+pnpm lint
 ```
 
-Coverage areas:
+## License
 
-- DOM walker piece extraction and chunking
-- Viewport observer lazy batching
-- Translation display injection and cleanup
-- Text selection and hover translate logic
-- Inline translate gesture detection and text replacement
-- Section translation and picker mode
-- Keyboard shortcut handling
-- Mutation watcher SPA detection
-- Auto-translate notification
-- PDF content type detection and auto-open decision logic
-- OpenAI-compatible API client (request/response, retry)
-- Request batcher (deduplication, char-limit splitting)
-- IndexedDB cache manager (TTL, LRU eviction)
-- Category store (tab-scoped overrides)
-- Provider readiness state machine
-- Subtitle parser, builder, handler (YouTube, Udemy, Coursera, LinkedIn, HBO Max)
-- Subtitle sites metadata
-- DOM cue source scraping
-- Glossary CSV/JSON import/export
-- Site rules matching (wildcards)
-- Language code utilities
-- Settings store (Zustand + chrome.storage sync)
-- Statistics collection and daily tracking
-- Provider catalog search/filter
-- Theme CSS coverage (all 17 themes + custom, dark mode, states)
-- UI component library (Button, Input, Toggle, Modal, Toast, SegmentedControl, SectionHeader, etc.)
-- Options page components (ThemePreview, CustomThemeEditor, StatisticsSection)
-- PDF viewer components (PdfCanvasRenderer, hooks, translation, download)
-- AES-GCM crypto utilities
+AnyLLMTranslate is distributed under the [MIT License](LICENSE).
 
----
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Write tests for new functionality
-4. Ensure all tests pass: `npm test`
-5. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
----
-
-**Built with ❤️ using WXT, React 19, TypeScript, and Tailwind CSS v4**
+Built with WXT, React, TypeScript, Tailwind CSS, and the open-source LLM ecosystem.
