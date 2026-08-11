@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Scientific PDF Translate — Setup Guide · AnyLLMTranslate</title>
+<style>
+  :root {
+    --bg: #09090b; --panel: #18181b; --panel-2: #1f1f23; --border: rgba(255,255,255,.08);
+    --text: #d4d4d8; --muted: #a1a1aa; --accent: #f59e0b; --accent-dim: rgba(245,158,11,.12);
+    --link: #60a5fa; --code-bg: #0d0d10; --code-text: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 760px); gap: 48px; max-width: 1080px; margin: 0 auto; padding: 32px 24px 96px; }
+  nav.toc { position: sticky; top: 32px; align-self: start; font-size: 13px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; }
+  nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 4px 8px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--text); border-left-color: var(--accent); }
+  main { min-width: 0; }
+  header h1 { font-size: 28px; margin: 0 0 8px; color: #fafafa; }
+  header p { color: var(--muted); margin: 0 0 8px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(245,158,11,.3); }
+  section { margin-top: 48px; }
+  h2 { font-size: 20px; color: #fafafa; margin: 0 0 12px; padding-top: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 16px; color: #e4e4e7; margin: 24px 0 8px; }
+  p, li { color: var(--text); }
+  a { color: var(--link); }
+  code { background: var(--code-bg); color: var(--code-text); padding: 1px 6px; border-radius: 4px; font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre { position: relative; background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 14px 14px 14px; overflow-x: auto; }
+  pre code { background: none; color: #e4e4e7; padding: 0; display: block; white-space: pre; font-size: 12.5px; line-height: 1.55; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; padding: 4px 8px; cursor: pointer; }
+  .copy-btn:hover { color: var(--text); border-color: rgba(255,255,255,.2); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin: 16px 0; }
+  .card--recommended { border-color: rgba(245,158,11,.35); }
+  .note { border-left: 3px solid var(--accent); background: var(--accent-dim); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 14px; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; }
+  th, td { text-align: left; border: 1px solid var(--border); padding: 8px 12px; vertical-align: top; }
+  th { background: var(--panel-2); color: #e4e4e7; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; } nav.toc ul { display: flex; flex-wrap: wrap; gap: 4px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Table of contents">
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#prerequisites">Prerequisites</a></li>
+    <li><a href="#path-a">Quick Start (pull image)</a></li>
+    <li><a href="#path-b">Build from source</a></li>
+    <li><a href="#verify">Verify the bridge</a></li>
+    <li><a href="#connect">Connect in the extension</a></li>
+    <li><a href="#commands">Everyday commands</a></li>
+    <li><a href="#update">Updates &amp; rebuilds</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#privacy">Privacy</a></li>
+    <li><a href="#links">Links</a></li>
+  </ul>
+</nav>
+<main>
+<header>
+  <h1>Scientific PDF Translate — Setup Guide</h1>
+  <p><span class="badge">AnyLLMTranslate</span> &nbsp; Layout-preserving PDF translation via a local Docker bridge (pdf2zh)</p>
+</header>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p>PDF Translate in AnyLLMTranslate runs through a small local service called the <strong>Scientific PDF bridge</strong>. It wraps <a href="https://github.com/PDFMathTranslate/PDFMathTranslate" rel="noreferrer">pdf2zh</a> and preserves layout, math, and formulas. The bridge listens on <code>http://127.0.0.1:17890</code> and uses <strong>your existing provider pool</strong> — no second API key.</p>
+  <p>There is no in-browser "Fast" PDF path: the bridge must be running for PDF Translate to appear in the viewer.</p>
+  <div class="note"><strong>Two ways to run it.</strong> Pick one: <a href="#path-a">Quick Start</a> downloads a prebuilt image (~1 min, recommended for most users). <a href="#path-b">Build from source</a> compiles the image from this repo (for developers).</div>
+</section>
+
+<section id="prerequisites">
+  <h2>Prerequisites</h2>
+  <ul>
+    <li><strong>Docker</strong>:
+      <ul>
+        <li>macOS / Windows: <a href="https://www.docker.com/products/docker-desktop/" rel="noreferrer">Docker Desktop</a> (start it before the steps below)</li>
+        <li>Linux: Docker Engine + the <code>docker compose</code> plugin — e.g. <code>sudo apt install docker.io docker-compose-v2</code> (Ubuntu/Debian)</li>
+      </ul>
+    </li>
+    <li><strong>Terminal</strong> — macOS/Linux: Terminal; Windows: PowerShell (or Git Bash for the shell script).</li>
+    <li>The bridge image is ~2&nbsp;GB when pulled/built — first run takes a moment.</li>
+  </ul>
+</section>
+
+<section id="path-a">
+  <h2>Quick Start — pull the prebuilt image</h2>
+  <div class="card card--recommended">
+    <p>Recommended. No repository clone, no build. Docker pulls a ready-made image from the GitHub Container Registry.</p>
+  </div>
+  <h3>1. Create a compose file</h3>
+  <p>Save this as <code>docker-compose.scientific-pdf.yml</code> in any empty folder:</p>
+<pre><button class="copy-btn" data-copy>Copy</button><code>services:
+  scientific-pdf-bridge:
+    image: ghcr.io/nguyensitrung/anyllm-scientific-pdf-bridge:latest
+    container_name: anyllm-scientific-pdf
+    ports:
+      - "17890:17890"
+    environment:
+      MOCK_TRANSLATE: "${MOCK_TRANSLATE:-0}"
+      JOB_TTL_SECONDS: "${JOB_TTL_SECONDS:-3600}"
+      SCIENTIFIC_PDF_DATA_DIR: /data
+      HF_ENDPOINT: "${HF_ENDPOINT:-}"
+      HF_HOME: /root/.cache/huggingface
+    volumes:
+      - scientific-pdf-data:/data
+      - scientific-pdf-models:/root/.cache
+    restart: unless-stopped
+
+volumes:
+  scientific-pdf-data:
+  scientific-pdf-models:</code></pre>
+  <h3>2. Start it</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>docker compose -f docker-compose.scientific-pdf.yml up -d</code></pre>
+  <p>The first pull downloads ~2&nbsp;GB; subsequent starts are instant.</p>
+  <h3>3. Verify</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>curl -sS http://127.0.0.1:17890/health</code></pre>
+  <p>Expect: <code>{"status":"ok","version":"1.0.0","pdf2zh":"available"}</code> — then continue at <a href="#connect">Connect in the extension</a>.</p>
+</section>
+
+<section id="path-b">
+  <h2>Build from source (developer path)</h2>
+  <div class="card">
+    <p>Use this if you develop the bridge, or prefer to build everything yourself. You need <code>git</code> plus the prerequisites above.</p>
+  </div>
+  <h3>1. Clone the repo</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>git clone https://github.com/NguyenSiTrung/AnyLLMTranslate.git
+cd AnyLLMTranslate</code></pre>
+  <h3>2. Build and start (helper script)</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>chmod +x scripts/scientific-pdf-docker.sh
+./scripts/scientific-pdf-docker.sh up</code></pre>
+  <p>The script stops any existing container, builds the image, starts it, and waits for <code>/health</code>. First build takes several minutes (Python packages + pdf2zh). The build log should include <code>pdf2zh import ok</code>.</p>
+  <h3>Manual compose (equivalent, Windows-friendly)</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>docker compose -f docker-compose.scientific-pdf.yml down
+docker compose -f docker-compose.scientific-pdf.yml up -d --build
+curl -sS http://127.0.0.1:17890/health</code></pre>
+</section>
+
+<section id="verify">
+  <h2>Verify the bridge</h2>
+  <ul>
+    <li>Container: <code>docker ps --filter name=anyllm-scientific-pdf</code> should list it as <code>Up</code>.</li>
+    <li>Health: <code>curl -sS http://127.0.0.1:17890/health</code> → <code>{"status":"ok",…}</code>.</li>
+    <li>Logs (if something looks wrong): <code>docker logs -f anyllm-scientific-pdf</code>.</li>
+  </ul>
+</section>
+
+<section id="connect">
+  <h2>Connect in the extension</h2>
+  <ol>
+    <li>Open <strong>Options → Advanced → Scientific PDF</strong>.</li>
+    <li>Toggle <strong>Enable PDF bridge</strong> on. Leave the server URL at the default <code>http://127.0.0.1:17890</code>.</li>
+    <li>Click <strong>Set up…</strong> → follow the wizard (health poll + connection test).</li>
+    <li>Open a PDF in the built-in viewer — wait for <strong>Bridge ready</strong> — then click <strong>Translate</strong>.</li>
+  </ol>
+  <p>Jobs use your active provider pool (including rate limits and concurrency). Progress and logs appear in a modal; results download as mono / dual / side-by-side PDFs.</p>
+</section>
+
+<section id="commands">
+  <h2>Everyday commands</h2>
+  <p>With the repo cloned (script) or with the compose file (manual):</p>
+<pre><button class="copy-btn" data-copy>Copy</button><code># script (repo root)
+./scripts/scientific-pdf-docker.sh start    # start without rebuild
+./scripts/scientific-pdf-docker.sh down     # stop
+./scripts/scientific-pdf-docker.sh status   # container + health
+./scripts/scientific-pdf-docker.sh logs     # follow logs (Ctrl+C)
+
+# manual (any folder with the compose file)
+docker compose -f docker-compose.scientific-pdf.yml up -d
+docker compose -f docker-compose.scientific-pdf.yml down</code></pre>
+  <div class="note">After a reboot, Docker Desktop must be started, then re-run the <code>up</code> command — the container restarts automatically (<code>restart: unless-stopped</code>), but the Docker daemon needs to be up.</div>
+</section>
+
+<section id="update">
+  <h2>Updates &amp; rebuilds</h2>
+  <h3>Prebuilt image (Quick Start)</h3>
+<pre><button class="copy-btn" data-copy>Copy</button><code>docker compose -f docker-compose.scientific-pdf.yml pull
+docker compose -f docker-compose.scientific-pdf.yml up -d</code></pre>
+  <h3>Source build</h3>
+  <p>Extension UI changes never need a Docker rebuild. Rebuild only when bridge code or the Dockerfile changed:</p>
+<pre><button class="copy-btn" data-copy>Copy</button><code>git pull
+./scripts/scientific-pdf-docker.sh rebuild</code></pre>
+</section>
+
+<section id="troubleshooting">
+  <h2>Troubleshooting</h2>
+  <table>
+    <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><code>curl</code> connection refused</td><td>Container not running → <code>docker compose … up -d</code>, then check <code>docker ps</code>.</td></tr>
+      <tr><td>Wizard shows "Offline"</td><td>Same — check the container and port <code>17890</code>.</td></tr>
+      <tr><td><code>TextTranslateRequest</code> / pdf2zh import crash</td><td>Rebuild with the current Dockerfile (Tencent SDK pin).</td></tr>
+      <tr><td><code>RateLimError</code> in logs</td><td>Use a chat/instruct model; lower concurrency; check provider RPM.</td></tr>
+      <tr><td>First job is very slow</td><td>Normal — fonts/models download once into the Docker volumes.</td></tr>
+      <tr><td>Permission denied on <code>docker.sock</code></td><td>Use Docker Desktop user permissions, or <code>sudo docker …</code> on Linux.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="privacy">
+  <h2>Privacy</h2>
+  <p>Scientific jobs send the <strong>full PDF</strong> and <strong>short-lived provider credentials</strong> to the configured server URL — default loopback only. Prefer <code>http://127.0.0.1:17890</code>. See <a href="https://github.com/NguyenSiTrung/AnyLLMTranslate/blob/HEAD/PRIVACY.md" rel="noreferrer">PRIVACY.md</a>.</p>
+</section>
+
+<section id="links">
+  <h2>Links</h2>
+  <ul>
+    <li>Repository: <a href="https://github.com/NguyenSiTrung/AnyLLMTranslate" rel="noreferrer">NguyenSiTrung/AnyLLMTranslate</a></li>
+    <li>Bridge API reference: <a href="https://github.com/NguyenSiTrung/AnyLLMTranslate/blob/HEAD/docs/scientific-pdf-bridge-api.md" rel="noreferrer">docs/scientific-pdf-bridge-api.md</a></li>
+    <li>pdf2zh upstream: <a href="https://github.com/PDFMathTranslate/PDFMathTranslate" rel="noreferrer">PDFMathTranslate/PDFMathTranslate</a></li>
+  </ul>
+</section>
+
+<footer>
+  AnyLLMTranslate — Scientific PDF bridge setup guide. Hosted on GitHub Pages from <code>docs/guide/</code>.
+</footer>
+</main>
+</div>
+<script>
+  document.querySelectorAll('pre').forEach(function (pre) {
+    var btn = pre.querySelector('.copy-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var text = pre.querySelector('code').innerText;
+      function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+</script>
+</body>
+</html>

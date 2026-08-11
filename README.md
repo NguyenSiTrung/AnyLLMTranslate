@@ -386,7 +386,12 @@ PDF Translate requires the local Docker bridge. Enable **Options → Advanced �
 
 If the bridge is offline or not configured, the viewer shows **PDF Translate not available** and guides you to set up / connect the bridge. There is no in-browser Fast fallback.
 
-**New users — full guide:** [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)
+**New users — full guide:** [Scientific PDF setup guide](https://nguyensitrung.github.io/AnyLLMTranslate/guide/) (public site) · [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md) (repo copy)
+
+**Two setup paths** (details in the guide):
+
+1. **Quick Start — pull the prebuilt image** (no clone, no build): copy the compose file from the guide, then `docker compose up -d`
+2. **Build from source:** clone the repo and run `./scripts/scientific-pdf-docker.sh up`
 
 ```bash
 # From repo root (Docker Desktop must be running)
@@ -398,7 +403,7 @@ If the bridge is offline or not configured, the viewer shows **PDF Translate not
 
 When the bridge is **Ready**, click **Translate** in the PDF viewer. Progress + logs appear in a modal; downloads are manual (mono / dual / side-by-side). Jobs use the **active provider pool** (including maxRpm / concurrency / interval).
 
-- Setup guide: [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)  
+- Setup guide: [public site](https://nguyensitrung.github.io/AnyLLMTranslate/guide/) · [docs/scientific-pdf-setup.md](docs/scientific-pdf-setup.md)
 - API: [docs/scientific-pdf-bridge-api.md](docs/scientific-pdf-bridge-api.md)  
 - Privacy: [PRIVACY.md](PRIVACY.md)
 

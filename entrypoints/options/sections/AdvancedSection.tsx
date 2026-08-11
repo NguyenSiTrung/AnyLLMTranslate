@@ -5,6 +5,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   Download,
+  ExternalLink,
   Upload,
   Trash2,
   HardDrive,
@@ -78,6 +79,7 @@ import {
   type PageScopePreset,
 } from '@/lib/pageScopePreset';
 import {
+  SCIENTIFIC_PDF_SETUP_GUIDE_URL,
   mergeScientificPdfSettings,
   resolveScientificPdfStatus,
   shouldWarnNonLoopbackServerUrl,
@@ -2067,6 +2069,20 @@ export function AdvancedSection() {
                   onClick={() => void refreshScientificHealth()}
                 >
                   Refresh status
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    try {
+                      chrome.tabs.create({ url: SCIENTIFIC_PDF_SETUP_GUIDE_URL });
+                    } catch {
+                      window.open(SCIENTIFIC_PDF_SETUP_GUIDE_URL, '_blank', 'noreferrer');
+                    }
+                  }}
+                  icon={<ExternalLink className="w-3.5 h-3.5" />}
+                >
+                  Setup guide
                 </Button>
               </div>
               <p className="text-[11px] leading-relaxed text-zinc-500">

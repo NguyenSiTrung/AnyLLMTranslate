@@ -13,6 +13,9 @@ describe('BridgeSetupCard', () => {
     );
     expect(screen.getByText(/not available/i)).toBeTruthy();
     expect(screen.getByText(/scientific-pdf-docker\.sh up/)).toBeTruthy();
+    const guideLink = screen.getByRole('link', { name: /full setup guide/i });
+    expect(guideLink).toHaveAttribute('href', 'https://nguyensitrung.github.io/AnyLLMTranslate/guide/');
+    expect(guideLink).toHaveAttribute('target', '_blank');
     expect(screen.queryByRole('button', { name: /^Translate$/i })).toBeNull();
     expect(screen.queryByText(/fast translation/i)).toBeNull();
     cleanup();

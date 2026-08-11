@@ -4,8 +4,9 @@
  */
 
 import type { ReactElement } from 'react';
-import { ServerCrash, Settings2, RefreshCw } from 'lucide-react';
+import { ServerCrash, Settings2, RefreshCw, ExternalLink } from 'lucide-react';
 import type { ScientificPdfStatus } from '@/lib/scientificPdf';
+import { SCIENTIFIC_PDF_SETUP_GUIDE_URL } from '@/lib/scientificPdf';
 
 export interface BridgeSetupCardProps {
   status: ScientificPdfStatus;
@@ -85,6 +86,15 @@ export function BridgeSetupCard({
             Not now
           </button>
         )}
+        <a
+          href={SCIENTIFIC_PDF_SETUP_GUIDE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="pdf-download-btn pdf-download-btn--secondary"
+        >
+          <ExternalLink size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+          Read the full setup guide
+        </a>
       </div>
 
       <p className="pdf-bridge-panel-hint">

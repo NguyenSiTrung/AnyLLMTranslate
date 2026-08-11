@@ -6,6 +6,15 @@ If the bridge is offline or not set up, the PDF viewer shows **not available** a
 **Default URL:** `http://127.0.0.1:17890`  
 **Port:** `17890`
 
+**Public guide (no repo needed):** https://nguyensitrung.github.io/AnyLLMTranslate/guide/
+
+---
+
+## Two setup paths
+
+1. **Quick Start — pull the prebuilt image** (recommended, no clone): copy the compose file from the public guide into any folder, then `docker compose up -d`. Image: `ghcr.io/nguyensitrung/anyllm-scientific-pdf-bridge:latest`.
+2. **Build from source** (developer): use the helper script below.
+
 ---
 
 ## Do I need to rebuild Docker?

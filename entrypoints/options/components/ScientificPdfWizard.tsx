@@ -18,6 +18,7 @@ import {
   scientificPdfSetupCommands,
   shouldWarnNonLoopbackServerUrl,
   DEFAULT_SCIENTIFIC_PDF_PORT,
+  SCIENTIFIC_PDF_SETUP_GUIDE_URL,
 } from '@/lib/scientificPdf';
 import {
   initialScientificPdfWizardState,
@@ -327,7 +328,15 @@ export function ScientificPdfWizard({ open, onClose }: ScientificPdfWizardProps)
               <p className="flex items-start gap-1.5 text-[11px] text-zinc-500">
                 <Terminal className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>
-                  Full guide: <code className="rounded bg-zinc-800 px-1">docs/scientific-pdf-setup.md</code>
+                  Full guide:{' '}
+                  <a
+                    href={SCIENTIFIC_PDF_SETUP_GUIDE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300"
+                  >
+                    setup guide ↗
+                  </a>
                   . Rebuild only when bridge code/Dockerfile changes (see guide). Progress UI in the
                   PDF viewer does <strong className="text-zinc-400">not</strong> require a Docker rebuild.
                 </span>

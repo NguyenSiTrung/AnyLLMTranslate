@@ -19,6 +19,13 @@ export const DEFAULT_SCIENTIFIC_PDF_SERVER_URL =
   DEFAULT_SCIENTIFIC_PDF_SETTINGS.serverUrl;
 
 /**
+ * Public setup guide for the Scientific PDF bridge (GitHub Pages).
+ * Deterministic URL — do not change without updating every in-extension link.
+ */
+export const SCIENTIFIC_PDF_SETUP_GUIDE_URL =
+  'https://nguyensitrung.github.io/AnyLLMTranslate/guide/';
+
+/**
  * Normalize a user-entered server URL:
  * - trim whitespace
  * - strip trailing slashes (except bare origin paths)
