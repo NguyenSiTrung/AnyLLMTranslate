@@ -234,6 +234,24 @@ export const OPENAI_COMPATIBLE_CATALOG: OpenAiCompatibleCatalogEntry[] = [
     category: 'local',
   },
   {
+    id: 'cherry-studio',
+    displayName: 'Cherry Studio',
+    keywords: ['cherry studio', 'cherry', 'local', 'desktop'],
+    // Built-in OpenAI-compatible API server (Settings → API Server), which
+    // proxies to the providers configured in the app. Default port 23333;
+    // model IDs are exposed as `<provider-id>:<model-id>`.
+    baseUrl: 'http://127.0.0.1:23333/v1',
+    requiresApiKey: true,
+    // The API server requires an API key (auto-generated as `cs-sk-…` in the
+    // app's API Server settings); no external key URL exists.
+    placeholder: 'cs-sk-...',
+    defaultModel: '',
+    supportsModelListing: true,
+    accent: 'pink',
+    monogram: 'CS',
+    category: 'local',
+  },
+  {
     id: 'custom',
     displayName: 'Custom endpoint',
     keywords: ['custom', 'other', 'vllm', 'litellm'],

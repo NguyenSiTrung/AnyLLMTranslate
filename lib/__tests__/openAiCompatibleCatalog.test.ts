@@ -101,6 +101,7 @@ describe('openAiCompatibleCatalog', () => {
     expect(groups.find((g) => g.category === 'local')?.entries.map((e) => e.id)).toEqual([
       'ollama',
       'lm-studio',
+      'cherry-studio',
     ]);
     const filtered = groupByCategory(filterCatalog('ollama'));
     expect(filtered).toHaveLength(1);
@@ -133,5 +134,24 @@ describe('openAiCompatibleCatalog', () => {
     expect(getCatalogEntryById('opencode-zen')?.baseUrl).toBe(
       'https://opencode.ai/zen/v1',
     );
+
+    // Cherry Studio entry: metadata, filtering, and URL inference.
+    expect(getCatalogEntryById('cherry-studio')).toMatchObject({
+      id: 'cherry-studio',
+      displayName: 'Cherry Studio',
+      baseUrl: 'http://127.0.0.1:23333/v1',
+      requiresApiKey: true,
+      placeholder: 'cs-sk-...',
+      supportsModelListing: true,
+      category: 'local',
+      monogram: 'CS',
+    });
+    expect(getCatalogEntryById('cherry-studio')?.getKeyUrl).toBeUndefined();
+    expect(filterCatalog('cherry').map((provider) => provider.id)).toContain('cherry-studio');
+    expect(inferCatalogId('http://127.0.0.1:23333/v1/')).toBe('cherry-studio');
+    expect(getKeyUrlForProvider('http://127.0.0.1:23333/v1')).toBeUndefined();
+    expect(
+      resolveProviderIdentity('Whatever', undefined, 'http://127.0.0.1:23333/v1').monogram,
+    ).toBe('CS');
   });
 });
