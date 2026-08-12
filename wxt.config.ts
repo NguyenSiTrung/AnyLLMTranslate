@@ -10,7 +10,7 @@ export default defineConfig({
   manifest: {
     name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
-    permissions: ['storage', 'activeTab', 'contextMenus', 'sidePanel', 'alarms', 'tabs'],
+    permissions: ['storage', 'activeTab', 'contextMenus', 'alarms', 'tabs'],
     host_permissions: [
       '*://*.prd.media.max.com/*',
       '*://*.media.max.com/*',
@@ -31,8 +31,9 @@ export default defineConfig({
     // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.
     web_accessible_resources: [
       {
-        // icon/* — selection translate chip on web pages loads brand PNG via getURL
-        resources: ['assets/*', 'icon/*', 'pdf.worker.min.mjs', 'pdf.worker.mjs'],
+        // icon/* — selection translate chip on web pages loads brand PNG via getURL.
+        // assets/* covers the hashed pdf.worker.min-*.mjs emitted by the Vite ?url import.
+        resources: ['assets/*', 'icon/*'],
         matches: ['<all_urls>'],
       },
     ],

@@ -13,7 +13,7 @@ This command compiles and packages the extension in production mode (minified an
 ```bash
 pnpm zip
 ```
-*Output location:* `.output/anyllm-translate-chrome-mv3.zip`
+*Output location:* `.output/anyllm-translate-<version>-chrome.zip` (version taken from `package.json`; `1.0.0` → `anyllm-translate-1.0.0-chrome.zip`)
 
 ### 2. Package the Source Code (Highly Recommended)
 Google reviewers frequently request the unminified source code for auditing extensions that interact with external LLM endpoints. 
@@ -48,7 +48,7 @@ Access the [Chrome Web Store Developer Console](https://chrome.google.com/websto
 
 ### 2. Privacy Policy URL
 Google requires a public privacy policy because the extension reads and translates webpage content.
-*   Host the content of the root [PRIVACY.md](file:///home/trung/Documents/ML/Project/AnyLLMTranslate/PRIVACY.md) on a public URL (e.g. GitHub Pages or a raw GitHub link).
+*   Host the content of the root [PRIVACY.md](../PRIVACY.md) on a public URL (e.g. GitHub Pages or a raw GitHub link).
 *   Provide that link in the **Privacy Policy URL** input box.
 
 ---
@@ -58,13 +58,18 @@ Google requires a public privacy policy because the extension reads and translat
 During submission, you must justify your permissions and declare data usage.
 
 ### 1. Permission Justifications
-Use these explanations in the console for each permission declared in [wxt.config.ts](file:///home/trung/Documents/ML/Project/AnyLLMTranslate/wxt.config.ts):
+Use these explanations in the console for each permission declared in [wxt.config.ts](../wxt.config.ts):
 
 *   **`activeTab`:** *"To read the text content of the active tab for translation when explicitly triggered by the user."*
 *   **`storage`:** *"To store translation cache, layout settings, and API credentials locally in the browser."*
 *   **`contextMenus`:** *"To show a right-click 'Translate' option when the user highlights text on a webpage."*
-*   **`sidePanel`:** *"To display translation side-by-side inside Chrome's side panel."*
+*   **`tabs`:** *"To read the active tab's URL so the extension can decide whether a page is translatable and route the correct translator, including when the options page is open."*
 *   **`alarms`:** *"To schedule minor background sync/cache-cleaning routines."*
+
+For **host permissions**, justify in the console:
+*   **`*://*.youtube.com/*`, `*://*.max.com/*` (and related):** *"To fetch subtitle/caption data and translate them on supported video sites when the user enables subtitle translation."*
+*   **`http://127.0.0.1/*`, `http://localhost/*`:** *"Loopback-only access to the user's optional local Scientific PDF translation bridge (Docker)."*
+*   **`https://inference-api.nousresearch.com/*`:** *"Predefined BYOK provider option; contacted only if the user selects it and supplies a key."*
 
 ### 2. Data Usage Disclosures
 Under the **Data Usage** section, fill in the following:
@@ -82,4 +87,4 @@ Under the **Data Usage** section, fill in the following:
 4. Fill out the Store Listing, Privacy page, and justifications.
 5. Submit for Review.
 
-*Review Timeline:* Because you use the highly safe `activeTab` permission instead of wildcard host permissions (like `<all_urls>`), the extension qualifies for faster reviews. It should be approved within **24 to 72 hours**.
+*Review Timeline:* The content script runs on `<all_urls>` and the manifest declares `tabs`, so Chrome shows the "Read and change all your data on all websites" warning and the listing typically receives a **manual review**. Expect days to a few weeks; there is no guaranteed automated timeline.

@@ -48,7 +48,7 @@ AnyLLMTranslate uses a **BYOK (Bring Your Own Key)** model:
 | `storage` | Save your settings and translation cache locally |
 | `activeTab` | Access the current page's DOM for translation |
 | `contextMenus` | Add right-click "Translate" options |
-| `sidePanel` | Future: side panel translate view |
+| `tabs` | Detect the active tab's URL to decide if a page is translatable |
 
 ## Third-Party Services
 
