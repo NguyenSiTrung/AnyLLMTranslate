@@ -8,6 +8,11 @@ import { VIEWPORT_MARGIN } from '@/lib/constants';
 
 export type OnVisibleCallback = (pieces: TranslationPiece[]) => void;
 
+/** Max pieces dispatched per viewport flush. Keeps mid-page translate starts
+ *  from producing one giant spinner storm; remaining visible pieces flush in
+ *  the next batch window (progressive chunked display). */
+export const DEFAULT_MAX_BATCH_PIECES = 16;
+
 export class ViewportObserver {
   private observer: IntersectionObserver;
   private pieceMap: Map<Element, TranslationPiece[]> = new Map();
@@ -19,10 +24,17 @@ export class ViewportObserver {
   private batchDelayMs: number;
   /** When true, intersecting pieces stay observed but are not dispatched (pool pause). */
   private paused = false;
+  /** Cap on pieces dispatched per flush (progressive chunked display). */
+  private maxBatchPieces: number;
 
-  constructor(onVisible: OnVisibleCallback, batchDelayMs = 100) {
+  constructor(
+    onVisible: OnVisibleCallback,
+    batchDelayMs = 100,
+    maxBatchPieces = DEFAULT_MAX_BATCH_PIECES,
+  ) {
     this.onVisible = onVisible;
     this.batchDelayMs = batchDelayMs;
+    this.maxBatchPieces = maxBatchPieces;
 
     this.observer = new IntersectionObserver(
       (entries) => {
@@ -151,15 +163,27 @@ export class ViewportObserver {
     // (resume snapshot, concurrent batch, same-lang skip, etc.).
     const seen = new Set<string>();
     const batch: TranslationPiece[] = [];
+    const remainder: TranslationPiece[] = [];
     for (const piece of this.pendingPieces) {
       if (piece.isTranslated) continue;
       if (seen.has(piece.id)) continue;
       seen.add(piece.id);
-      batch.push(piece);
+      // Cap per-flush dispatch so a dense mid-page viewport does not produce
+      // one giant spinner storm; the rest flush in the next batch window.
+      if (batch.length < this.maxBatchPieces) {
+        batch.push(piece);
+      } else {
+        remainder.push(piece);
+      }
     }
-    this.pendingPieces = [];
+    this.pendingPieces = remainder;
     if (batch.length === 0) return;
     this.onVisible(batch);
+    // Remaining visible pieces wait for the next window so the first chunk
+    // has a chance to settle (progressive display in reading order).
+    if (this.pendingPieces.length > 0) {
+      this.scheduleBatch();
+    }
   }
 
   /**

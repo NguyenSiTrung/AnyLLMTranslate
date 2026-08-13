@@ -9,6 +9,12 @@ import type { PageContext } from '@/types/config';
 import { extractPieces } from '@/content/domWalker';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
+import {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  orderResultsByPieces,
+  isPieceNearViewport,
+} from '@/content/chunkStability';
 import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { loadSettingsCached, invalidateSessionSettingsCache } from '@/lib/sessionSettingsCache';
@@ -447,6 +453,9 @@ function streamTranslate(
         // Incremental in-place update: find the piece + swap its spinner.
         const piece = pieceById.get(msg.id);
         if (piece) {
+          // Each streamed delta changes page height — keep the reading
+          // position stable while chunks stream in.
+          const pieceAnchor = captureScrollAnchor([piece]);
           piece.isTranslated = true;
           piece.translatedText = msg.text;
           markContentHandled(piece);
@@ -455,6 +464,7 @@ function streamTranslate(
           } else {
             applyTranslation(piece.parentElement, piece.id, msg.text, targetLanguage, piece.variables);
           }
+          restoreScrollAnchor(pieceAnchor);
         }
       } else if (msg.type === 'done') {
         settled = true;
@@ -564,7 +574,10 @@ async function translatePieces(
   const compactInlineEnabled = settings.enableCompactInlineForShortText;
 
   // Show spinner placeholder for each piece immediately (before async call)
-  // Short pieces get compact inline spinner, long pieces get block spinner
+  // Short pieces get compact inline spinner, long pieces get block spinner.
+  // Spinners change page height — capture a scroll anchor first so a mid-page
+  // translate start does not jump the user's reading position.
+  const spinnerAnchor = captureScrollAnchor(workPieces);
   for (const piece of workPieces) {
     if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
       showInlineLoadingPlaceholder(piece.parentElement, piece.id);
@@ -572,6 +585,7 @@ async function translatePieces(
       showLoadingPlaceholder(piece.parentElement, piece.id);
     }
   }
+  restoreScrollAnchor(spinnerAnchor);
 
   /** Pieces to silently re-attempt once after this call fully cleans up. */
   let pendingAutoRetry: TranslationPiece[] | null = null;
@@ -624,6 +638,9 @@ async function translatePieces(
     // unnecessarily over silent skip of valid foreign text (higher confidence bar).
     let translatablePieces = workPieces;
     if (settings.enableSourceLanguageDetection && settings.sourceLanguage === 'auto') {
+      // Skipping removes spinner placeholders → height changes. Anchor it so
+      // a mid-page start does not jump while the skip sweep runs.
+      const skipAnchor = captureScrollAnchor(workPieces);
       translatablePieces = workPieces.filter((piece) => {
         const detected = detectLanguage(piece.text);
         if (
@@ -642,6 +659,7 @@ async function translatePieces(
         }
         return true;
       });
+      restoreScrollAnchor(skipAnchor);
       // All pieces already in the target language — nothing to send.
       if (translatablePieces.length === 0) {
         return;
@@ -725,7 +743,14 @@ async function translatePieces(
           );
         }
       }
-      for (const result of response.results) {
+      // Apply results in reading order (workPieces order), not LLM completion
+      // order — background sub-batches finish out of order, and a mid-page
+      // start should fill the viewport top-to-bottom, not in "holes".
+      const orderedResults = orderResultsByPieces(response.results, workPieces);
+      // Translation blocks change page height — keep the user's reading
+      // position stable while the chunk is injected.
+      const applyAnchor = captureScrollAnchor(workPieces);
+      for (const result of orderedResults) {
         const piece = workPieces.find((p) => p.id === result.id);
         if (!piece) continue;
 
@@ -747,6 +772,7 @@ async function translatePieces(
           applyTranslation(piece.parentElement, piece.id, result.translatedText, settings.targetLanguage, piece.variables);
         }
       }
+      restoreScrollAnchor(applyAnchor);
       // A successful batch means the pool is healthy again — allow scroll work.
       if (response.results.length > 0) {
         clearSystemicPause();
@@ -990,10 +1016,22 @@ async function restoreFromSnapshot(
     const matched = matchResumeTranslations(live, snapshot.pieces);
     if (matched.size === 0) return;
 
-    let restored = 0;
+    // Mid-page start: injecting cached translations for the WHOLE page at once
+    // grows everything above the viewport and jumps the scroll position. Only
+    // restore near-viewport pieces now; off-screen pieces stay untranslated
+    // and are filled by the viewport observer (cache hit) when scrolled to.
+    const restorable: Array<[TranslationPiece, string]> = [];
     for (const [index, cached] of matched) {
       const piece = pieces[index];
       if (!piece || piece.isTranslated) continue;
+      if (!isPieceNearViewport(piece)) continue;
+      restorable.push([piece, cached]);
+    }
+    if (restorable.length === 0) return;
+
+    const restoreAnchor = captureScrollAnchor(restorable.map(([piece]) => piece));
+    let restored = 0;
+    for (const [piece, cached] of restorable) {
       piece.isTranslated = true;
       piece.translatedText = cached;
       markContentHandled(piece);
@@ -1004,6 +1042,7 @@ async function restoreFromSnapshot(
       }
       restored++;
     }
+    restoreScrollAnchor(restoreAnchor);
     if (restored > 0) sendStatusUpdate();
   } catch {
     // Resume is best-effort — never block normal translation on it.

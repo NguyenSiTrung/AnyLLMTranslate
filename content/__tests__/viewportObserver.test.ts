@@ -144,6 +144,45 @@ describe('ViewportObserver', () => {
     observer.disconnect();
   });
 
+  it('caps per-flush dispatch and drains the remainder in later windows', () => {
+    const onVisible = vi.fn();
+    const observer = new ViewportObserver(onVisible, 50, 3);
+    const mock = MockIntersectionObserver.instances[0];
+
+    const pieces: TranslationPiece[] = [];
+    for (let i = 0; i < 10; i++) {
+      const p = document.createElement('p');
+      document.body.appendChild(p);
+      const piece = makePiece(`p${i}`, p);
+      pieces.push(piece);
+      observer.observe(piece);
+      mock.fire(p, true);
+    }
+    vi.advanceTimersByTime(50);
+    // First flush respects the cap.
+    expect(onVisible).toHaveBeenCalledTimes(1);
+    expect((onVisible.mock.calls[0][0] as TranslationPiece[]).map((x) => x.id)).toEqual([
+      'p0',
+      'p1',
+      'p2',
+    ]);
+
+    // Each subsequent window drains the next slice until empty.
+    vi.advanceTimersByTime(50);
+    expect(onVisible).toHaveBeenCalledTimes(2);
+    expect((onVisible.mock.calls[1][0] as TranslationPiece[]).map((x) => x.id)).toEqual([
+      'p3',
+      'p4',
+      'p5',
+    ]);
+
+    vi.advanceTimersByTime(50);
+    vi.advanceTimersByTime(50);
+    const allDispatched = onVisible.mock.calls.flatMap((c) => c[0] as TranslationPiece[]);
+    expect(allDispatched).toHaveLength(10);
+    observer.disconnect();
+  });
+
   it('when paused does not dispatch; on unpause redispatch currently visible tracked pieces', () => {
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50);
