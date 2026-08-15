@@ -1030,6 +1030,17 @@ async function handleTestConnection(): Promise<{ success: boolean; error?: strin
   }
 }
 
+/**
+ * Unescape literal backslash-n sequences in LLM subtitle translations.
+ * Some models double-escape newlines inside JSON values, so JSON.parse yields
+ * the two characters `\` + `n`, which the overlay would render verbatim.
+ * Mirrors the ASS parser's source-text handling (lib/assParser.ts).
+ */
+function normalizeTranslatedSubtitleText(text: string): string {
+  return text.replace(/\\n/g, '\n');
+}
+
+
 /** Handle translateSubtitle message */
 async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
@@ -1175,7 +1186,7 @@ async function handleTranslateSubtitle(
           if (cached) {
             chunkResult[i] = {
               ...cue,
-              text: cached,
+              text: normalizeTranslatedSubtitleText(cached),
               originalText: cue.text,
             };
             cacheCharacters += cue.text.length;
@@ -1262,16 +1273,17 @@ async function handleTranslateSubtitle(
 
           if (result.success) {
             const textToTranslation = new Map<string, string>();
-            for (const [id, translatedText] of result.translations.entries()) {
+            for (const [id, rawTranslatedText] of result.translations.entries()) {
               if (id.startsWith('ctx')) continue; // Ignore context
 
               const originalText = idToOriginalText.get(id);
               if (originalText) {
+                const translatedText = normalizeTranslatedSubtitleText(rawTranslatedText);
                 textToTranslation.set(originalText, translatedText);
                 // Partial-result guard: when the LLM omitted this ID, the service
                 // back-fills it with the source text. Never cache that — it would
                 // persist source-as-translation. (result.partial marks the chunk.)
-                const isBackfilled = result.partial === true && translatedText === originalText;
+                const isBackfilled = result.partial === true && rawTranslatedText === originalText;
                 if (!isBackfilled) {
                   const writeKey = await generateSubtitleCacheKey(originalText, sourceLanguage, targetLanguage, subtitleKnobs, glossarySnapshot());
                   await cacheTranslationByKey(writeKey, translatedText, sourceLanguage, targetLanguage);

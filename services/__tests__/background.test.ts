@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import type * as CacheManagerModule from '@/services/cacheManager';
+import { getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
 import {
   handleMessage,
   __resetSemaphoreForTest,
@@ -57,6 +59,19 @@ vi.mock('@/services/filmGlossaryStore', () => ({
   saveFilmGlossary: vi.fn().mockResolvedValue(undefined),
   FILM_GLOSSARY_STORAGE_KEY: 'anyllm-film-glossary',
 }));
+
+// The subtitle cache store is IndexedDB, which is absent in jsdom — reads
+// always miss. Mock the ByKey pair with miss/no-op defaults (equivalent to
+// the real module's behavior in this environment) so individual tests can
+// exercise cache-hit and cache-write normalization.
+vi.mock('@/services/cacheManager', async (importOriginal) => {
+  const actual = await importOriginal<typeof CacheManagerModule>();
+  return {
+    ...actual,
+    getCachedTranslationByKey: vi.fn().mockResolvedValue(null),
+    cacheTranslationByKey: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 // Mock fetch for translation service
 function mockFetch(content: string) {
@@ -303,6 +318,46 @@ describe('services/background', () => {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body2.messages[0].content).not.toContain('Personal dictionary');
+    });
+
+    it('normalizes double-escaped \\n in LLM translations to real newlines (fresh + cache paths)', async () => {
+      const readCache = getCachedTranslationByKey as unknown as Mock;
+      const writeCache = cacheTranslationByKey as unknown as Mock;
+      readCache.mockClear();
+      writeCache.mockClear();
+
+      // literal backslash-n characters, which the overlay would render verbatim.
+      mockFetch(JSON.stringify({ translations: { s1: 'Line one\\nLine two' } }));
+
+      const msg = {
+        action: 'translateSubtitle' as const,
+        hostname: 'example.com',
+        cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        skipFilmPreScan: true,
+      };
+
+      const first = (await handleMessage(
+        msg,
+        { tab: { id: 71 } } as chrome.runtime.MessageSender,
+      )) as { success: boolean; cues?: Array<{ text: string }> };
+      expect(first.success).toBe(true);
+      expect(first.cues?.[0]?.text).toBe('Line one\nLine two');
+      // Cache write stores the normalized value (real newline).
+      expect(writeCache).toHaveBeenCalledWith(expect.any(String), 'Line one\nLine two', 'en', 'vi');
+
+      // Cache round-trip: a dirty cached value (literal backslash-n) is
+      // normalized on the way out, without any fetch.
+      readCache.mockResolvedValueOnce('Cached line\\nbreak');
+      const fetchMock = globalThis.fetch as unknown as Mock;
+      fetchMock.mockClear();
+      const second = (await handleMessage(
+        msg,
+        { tab: { id: 71 } } as chrome.runtime.MessageSender,
+      )) as { success: boolean; cues?: Array<{ text: string }> };
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(second.cues?.[0]?.text).toBe('Cached line\nbreak');
     });
 
     it('re-resolves the hostname-selected named glossary for forward chunks', async () => {
