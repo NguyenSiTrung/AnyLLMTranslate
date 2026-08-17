@@ -68,7 +68,7 @@ The extension includes dedicated handlers for the platforms below plus a last-re
 
 | Layer                                | Responsibility                                                                                |
 | ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| Popup, Options, and Side panel       | Setup, language, display, provider, subtitle, glossary, and advanced controls                 |
+| Popup and Options                    | Setup, language, display, provider, subtitle, glossary, and advanced controls                 |
 | Isolated content script              | DOM translation, page lifecycle, selection, hover, inline tools, and subtitle coordination    |
 | MAIN-world injectors                 | Subtitle request interception, player integration, TextTrack access, and DOM cue sources      |
 | Background service worker            | Message routing, provider pool, retries, cache, rate limits, circuit breakers, and statistics |
@@ -140,13 +140,13 @@ Load the generated Firefox extension from the corresponding WXT output directory
 
 Open **Options → Providers** to manage endpoints, models, keys, rotation, connection tests, and per-key throttling.
 
-| Provider type           | Examples                                                            |
-| ----------------------- | ------------------------------------------------------------------- |
-| Cloud OpenAI-compatible | OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI |
-| Google-compatible       | Google AI Studio / Gemini                                           |
-| Additional gateways     | OpenCode Zen, OpenCode Go, DeepSeek Official, Nous Portal           |
-| Local                   | Ollama or LM Studio, usually without an API key                     |
-| Custom                  | Any endpoint exposing a compatible chat API                         |
+| Provider type           | Examples                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| Cloud OpenAI-compatible | OpenRouter, NVIDIA NIM, Groq, Together AI, Fireworks AI, Mistral AI                              |
+| Google-compatible       | Google AI Studio / Gemini                                                                        |
+| Additional gateways     | OpenCode Zen, OpenCode Go, DeepSeek Official, Nous Portal                                        |
+| Local                   | Ollama or LM Studio, usually without an API key; Cherry Studio via its API server (key required) |
+| Custom                  | Any endpoint exposing a compatible chat API                                                      |
 
 Typical setup fields are:
 
