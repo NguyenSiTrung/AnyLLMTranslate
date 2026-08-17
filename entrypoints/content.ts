@@ -62,6 +62,7 @@ import { translateSection, removeAllSectionTranslations } from '@/content/sectio
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
+import { DeepLearningAiHandler } from '@/inject/subtitleHandlers/deepLearningAi';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
@@ -1605,6 +1606,7 @@ export default defineContentScript({
       new YouTubeHandler(),
       new UdemyHandler(),
       new CourseraHandler(),
+      new DeepLearningAiHandler(),
       new LinkedInHandler(),
       new HboMaxHandler(),
       new YoukuHandler(),

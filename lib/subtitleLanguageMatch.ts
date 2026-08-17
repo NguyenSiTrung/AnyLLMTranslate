@@ -17,6 +17,8 @@ export const ISO_639_2_TO_1: Record<string, string> = {
   rus: 'ru',
   ara: 'ar',
   hin: 'hi',
+  jpn: 'ja',
+  kor: 'ko',
   tha: 'th',
   ita: 'it',
   nld: 'nl',

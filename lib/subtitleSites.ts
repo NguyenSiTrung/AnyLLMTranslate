@@ -54,6 +54,14 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
     summary: 'Course transcripts and captions translated inline.',
   },
   {
+    platform: 'deeplearningai',
+    name: 'DeepLearning.AI',
+    methodHint: 'Embedded metadata + VTT intercept',
+    monogram: 'DL',
+    accent: 'emerald',
+    summary: 'Course lesson subtitles and transcripts translated on playback.',
+  },
+  {
     platform: 'hbomax',
     name: 'HBO Max',
     methodHint: 'VTT intercept + MPD/DOM fallback',

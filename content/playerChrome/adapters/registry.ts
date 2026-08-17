@@ -2,12 +2,14 @@ import type { PlayerChromeAdapter } from './types';
 import { youtubePlayerChromeAdapter } from './youtube';
 import { udemyPlayerChromeAdapter } from './udemy';
 import { courseraPlayerChromeAdapter } from './coursera';
+import { deepLearningAiPlayerChromeAdapter } from './deepLearningAi';
 
 /** Site adapters (first match wins). Floating fallback when native mount is null. */
 const ADAPTERS: PlayerChromeAdapter[] = [
   youtubePlayerChromeAdapter,
   udemyPlayerChromeAdapter,
   courseraPlayerChromeAdapter,
+  deepLearningAiPlayerChromeAdapter,
 ];
 
 export function getPlayerChromeAdapter(hostname: string): PlayerChromeAdapter | null {

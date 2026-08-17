@@ -16,6 +16,7 @@ import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPattern
 import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
 import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
 import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
+import { DeepLearningAiHandler } from '@/inject/subtitleHandlers/deepLearningAi';
 import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
 import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
 import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
@@ -34,6 +35,7 @@ import {
   restoreYoutubeNativeCaptions,
   startYoutubeMetadataDiscovery,
 } from '@/inject/youtubePlayer';
+import { startDeepLearningAiMetadataDiscovery } from '@/inject/deepLearningAi';
 
 export default defineContentScript({
   matches: ['<all_urls>'],
@@ -44,10 +46,12 @@ export default defineContentScript({
 
     // Register platform handlers
     const youtubeHandler = new YouTubeHandler();
+    const deepLearningAiHandler = new DeepLearningAiHandler();
     registerSubtitleHandlers([
        youtubeHandler,
        new UdemyHandler(),
        new CourseraHandler(),
+       deepLearningAiHandler,
        new LinkedInHandler(),
        new HboMaxHandler(),
        new YoukuHandler(),
@@ -84,6 +88,15 @@ export default defineContentScript({
     let youtubeMetadataCleanup: (() => void) | null = null;
     if (youtubeHandler.detect()) {
       youtubeMetadataCleanup = startYoutubeMetadataDiscovery(youtubeHandler, bridge);
+    }
+
+    // DeepLearning.AI: lesson video tracks are SSR'd into #__NEXT_DATA__ —
+    // read them once and emit SUBTITLE_TRACKS_DISCOVERED (no runtime API to
+    // intercept on initial load). Static payload means no re-run on BFCache
+    // restore is needed.
+    let deepLearningAiMetadataCleanup: (() => void) | null = null;
+    if (deepLearningAiHandler.detect()) {
+      deepLearningAiMetadataCleanup = startDeepLearningAiMetadataDiscovery(bridge);
     }
 
     const xhrInterceptor = new XhrInterceptor(registry, bridge);
@@ -142,6 +155,8 @@ export default defineContentScript({
       perfCaptureCleanup = null;
       youtubeMetadataCleanup?.();
       youtubeMetadataCleanup = null;
+      deepLearningAiMetadataCleanup?.();
+      deepLearningAiMetadataCleanup = null;
       xhrInterceptor.disable();
       fetchInterceptor.disable();
       mseInterceptor.disable();

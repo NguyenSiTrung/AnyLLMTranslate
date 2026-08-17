@@ -1468,6 +1468,8 @@ const SUBTITLE_ALLOWLIST = [
   /(?:^|\.)ykimg\.com$/,
   /(?:^|\.)iflix\.com$/,
   /(?:^|\.)wetv\.vip$/,
+  // DeepLearning.AI course video CDN (lesson VTT + subtitle HLS playlists)
+  /(?:^|\.)deeplearning\.ai$/,
 ];
 
 function isAllowedSubtitleUrl(url: string): boolean {

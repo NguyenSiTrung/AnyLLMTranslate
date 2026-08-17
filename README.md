@@ -53,6 +53,7 @@ The extension includes dedicated handlers for the platforms below plus a last-re
 | YouTube             | Dedicated handler   | Native track discovery and optional ASR re-alignment           |
 | Udemy               | Dedicated handler   | Course captions                                                |
 | Coursera            | Dedicated handler   | Lecture subtitles and transcript tracks                        |
+| DeepLearning.AI     | Dedicated handler   | Lesson VTT via embedded metadata and subtitle CDN interception |
 | LinkedIn Learning   | Dedicated handler   | VTT and transcript metadata paths                              |
 | HBO Max / Max       | Dedicated handler   | VTT, manifest, and DOM fallback paths vary by player           |
 | Youku               | Dedicated handler   | ASS, manifest, and DOM fallback paths                          |

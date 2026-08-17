@@ -20,6 +20,9 @@ export default defineConfig({
       // "Re-align from link" (pre-warms the AI re-align cache from a pasted URL).
       // No new install warning: content scripts already match <all_urls>.
       '*://*.youtube.com/*',
+      // DeepLearning.AI lesson VTT fetch (video CDN) — content-script direct
+      // fetch + background CORS-bypass fallback for subtitle translation.
+      '*://*.deeplearning.ai/*',
       // Scientific PDF bridge default (loopback). Custom non-loopback serverUrl
       // may need the user to grant host access later; avoid broad <all_urls>.
       // CSP already allows connect-src http: https: for extension pages.
