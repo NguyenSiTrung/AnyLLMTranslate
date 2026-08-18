@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('subtitleOverlay — fontFamily / displayMode wiring', () => {
-  it('applies and updates font-family CSS var and data-display-mode, and uses fixed viewport positioning', () => {
+  it('applies and updates font-family CSS var, data-display-mode, and fixed viewport positioning; defaults to the classic look', () => {
     const video = document.querySelector('video') as HTMLVideoElement;
     vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
       top: 100,
@@ -106,13 +106,9 @@ describe('subtitleOverlay — fontFamily / displayMode wiring', () => {
     expect(overlay.style.left).toBe('50px');
     expect(overlay.style.width).toBe('800px');
     expect(overlay.style.height).toBe('600px');
-  });
 
-  it('defaults the style fields to the classic look', () => {
-    const video = document.querySelector('video') as HTMLVideoElement;
-    vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
-      top: 0, left: 0, width: 800, height: 600, bottom: 600, right: 800, x: 0, y: 0, toJSON: () => {},
-    });
+    // Without options, the style fields default to the classic look.
+    resetOverlayState();
     initializeOverlay(MOCK_CUES);
     expect(getConfig()).toMatchObject({
       textColor: 'rgba(255,255,255,1)',
@@ -339,9 +335,10 @@ describe('content/subtitleOverlay — lifecycle', () => {
     document.body.innerHTML = '';
   });
 
-  it('creates/configures overlay with video, skips without video, and cleans up', () => {
-    initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }]);
+  it('creates/configures overlay with video, skips without video (returns false), and cleans up', () => {
+    expect(initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }])).toBe(false);
     expect(document.querySelector('.anyllm-translate-subtitle-overlay')).toBeFalsy();
+    expect(isOverlayActive()).toBe(false);
 
     const video = document.createElement('video');
     video.src = 'test.mp4';
@@ -370,13 +367,6 @@ describe('content/subtitleOverlay — lifecycle', () => {
     resetOverlayState();
     expect(isOverlayActive()).toBe(false);
     expect(getConfig().fontSize).toBe(20);
-  });
-
-  it('reports false when no target video is available', () => {
-    document.body.innerHTML = '';
-
-    expect(initializeOverlay([{ startTime: 0, endTime: 2, text: 'Hello' }])).toBe(false);
-    expect(isOverlayActive()).toBe(false);
   });
 
   it('syncs active cue by time, hides between cues, mutates in place, and targets videoNode', () => {

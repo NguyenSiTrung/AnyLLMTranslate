@@ -11,15 +11,13 @@ const base = {
 };
 
 describe('derivePopupStatus', () => {
-  it('returns ready by default', () => {
+  it('derives every status kind with correct precedence and chip labels', () => {
     expect(derivePopupStatus(base)).toEqual({
       kind: 'ready',
       chipLabel: 'Ready',
       showProgress: false,
     });
-  });
 
-  it('prioritizes setup over blocked over error over translating', () => {
     const setup = derivePopupStatus({ ...base, needsSetup: true, unsupported: true });
     expect(setup.kind).toBe('setup');
     expect(setup.chipLabel).toBe('Setup');
@@ -37,16 +35,12 @@ describe('derivePopupStatus', () => {
     expect(error.kind).toBe('error');
     expect(error.chipLabel).toBe('Error');
     expect(error.showProgress).toBe(false);
-  });
 
-  it('returns translating when in flight', () => {
-    const v = derivePopupStatus({ ...base, isTranslating: true, status: 'translating' });
-    expect(v.kind).toBe('translating');
-    expect(v.chipLabel).toBe('Translating');
-    expect(v.showProgress).toBe(true);
-  });
+    const translating = derivePopupStatus({ ...base, isTranslating: true, status: 'translating' });
+    expect(translating.kind).toBe('translating');
+    expect(translating.chipLabel).toBe('Translating');
+    expect(translating.showProgress).toBe(true);
 
-  it('returns active when done or reading area ready', () => {
     const done = derivePopupStatus({ ...base, status: 'done' });
     expect(done.kind).toBe('active');
     expect(done.chipLabel).toBe('Active');

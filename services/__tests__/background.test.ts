@@ -320,7 +320,7 @@ describe('services/background', () => {
       expect(body2.messages[0].content).not.toContain('Personal dictionary');
     });
 
-    it('normalizes double-escaped \\n in LLM translations to real newlines (fresh + cache paths)', async () => {
+    it('normalizes double-escaped \\n to real newlines (fresh + cache paths) and uses original cue text for cache, not voice-prefixed text', async () => {
       const readCache = getCachedTranslationByKey as unknown as Mock;
       const writeCache = cacheTranslationByKey as unknown as Mock;
       readCache.mockClear();
@@ -358,6 +358,35 @@ describe('services/background', () => {
       )) as { success: boolean; cues?: Array<{ text: string }> };
       expect(fetchMock).not.toHaveBeenCalled();
       expect(second.cues?.[0]?.text).toBe('Cached line\nbreak');
+
+      // Voice-prefixed text: the LLM receives '[John] Hello', but the result
+      // cue's originalText (which feeds cacheTranslation) stays unprefixed.
+      const voiceCues = [
+        { startTime: 0, endTime: 2, text: 'Hello', voice: 'John' },
+      ];
+
+      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
+
+      const voiceResult = await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: voiceCues,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          profile: 'media',
+        },
+        { tab: { id: 46 } } as chrome.runtime.MessageSender,
+      ) as { success: boolean; cues?: Array<{ text: string; originalText?: string }> };
+
+      const voiceFetch = globalThis.fetch as ReturnType<typeof vi.fn>;
+      const voiceBody = JSON.parse(voiceFetch.mock.calls[0][1]?.body as string) as {
+        messages: Array<{ role: string; content: string }>;
+      };
+      // Verify the LLM received the prefixed text
+      expect(voiceBody.messages[1].content).toContain('[John] Hello');
+      // Verify cache safety: originalText (which feeds cacheTranslation) is
+      // the unprefixed 'Hello', not the voice-prefixed '[John] Hello'.
+      expect(voiceResult.cues?.[0].originalText).toBe('Hello');
     });
 
     it('re-resolves the hostname-selected named glossary for forward chunks', async () => {
@@ -425,7 +454,7 @@ describe('services/background', () => {
       expect(secondBody.messages[0].content).not.toContain('Personal dictionary "Cast A"');
     });
 
-    it('uses the subtitle prompt (no pageContext injection) and routes the cinematic profile to it', async () => {
+    it('uses the subtitle prompt (no pageContext injection), routes the cinematic profile to it, and applies per-tab knob overrides over preset and persisted globals', async () => {
       // Scenario 1: subtitle path uses the profile-driven subtitle prompt, which
       // does not inject pageContext (UNTRUSTED DATA block is a web-page-prompt
       // feature).
@@ -471,16 +500,14 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      const fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
+      let fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      let body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body2.messages[0].content).toContain('subtitle translator');
       expect(body2.messages[0].content).toContain('idiomatic, natural phrasing');
-    });
 
-    it('applies per-tab knob overrides over the profile preset and persisted global overrides otherwise', async () => {
-      // Per-tab override wins over the profile preset.
+      // Scenario 3: per-tab override wins over the profile preset.
       mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
 
       await handleMessage(
@@ -495,15 +522,15 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      let fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      let body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
       // literal line present, idiomatic line absent (overridden).
-      expect(body.messages[0].content).toContain('precise, faithful translation');
-      expect(body.messages[0].content).not.toContain('idiomatic, natural phrasing');
+      expect(body2.messages[0].content).toContain('precise, faithful translation');
+      expect(body2.messages[0].content).not.toContain('idiomatic, natural phrasing');
 
-      // Persisted global override applies when no per-tab override is set.
+      // Scenario 4: persisted global override applies when no per-tab override is set.
       mockStorage['anyllm-translate-settings'] = {
         subtitleSettings: { knobOverrides: { profanity: 'remove' } },
       };
@@ -520,14 +547,14 @@ describe('services/background', () => {
         { tab: { id: 1 } } as chrome.runtime.MessageSender,
       );
 
-      fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
+      fetchMock2 = globalThis.fetch as ReturnType<typeof vi.fn>;
+      body2 = JSON.parse(fetchMock2.mock.calls[0][1]?.body as string) as {
         messages: Array<{ role: string; content: string }>;
       };
-      expect(body.messages[0].content).toContain('Remove strong profanity entirely');
+      expect(body2.messages[0].content).toContain('Remove strong profanity entirely');
     });
 
-    it('seeds the first chunk with look-ahead context cues', async () => {
+    it('seeds the first chunk with look-ahead context cues and provides bidirectional context for chunks 1+', async () => {
       // Build 30 cues so chunk 0 = cues[0..24] and look-ahead = cues[25..27].
       const cues = Array.from({ length: 30 }, (_, i) => ({
         startTime: i,
@@ -564,28 +591,24 @@ describe('services/background', () => {
       expect(userContent).toContain('"ctx1": "Line 25"');
       expect(userContent).toContain('"ctx2": "Line 26"');
       expect(userContent).toContain('"ctx3": "Line 27"');
-    });
 
-    it('provides bidirectional context for chunks 1+ (preceding + following)', async () => {
-      // Build 60 cues: chunk 0 = [0..24], chunk 1 = [25..49], chunk 2 = [50..59]
-      // For chunk 1 (i=25): preceding = [22..24], following = [50..52]
+      // Bidirectional context: chunk 1 (i=25) has preceding [22..24] and following [50..52].
       // Unique prefix avoids cross-test subtitle cache hits on bare "Line N" texts.
-      const cues = Array.from({ length: 60 }, (_, i) => ({
+      const bidirCues = Array.from({ length: 60 }, (_, i) => ({
         startTime: i,
         endTime: i + 1,
         text: `Bidir line ${i}`,
       }));
 
-      // Capture all fetch calls
       const fetchCalls: string[] = [];
       vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, opts: { body: string }) => {
         fetchCalls.push(opts.body);
         // Return a valid response for any set of keys
         const body = JSON.parse(opts.body) as { messages: Array<{ content: string }> };
         const userJson = JSON.parse(body.messages[1].content.split('\n\n').pop() ?? '{}');
-        const translations: Record<string, string> = {};
+        const bidirTranslations: Record<string, string> = {};
         for (const key of Object.keys(userJson)) {
-          translations[key] = `T-${key}`;
+          bidirTranslations[key] = `T-${key}`;
         }
         return Promise.resolve({
           ok: true,
@@ -593,7 +616,7 @@ describe('services/background', () => {
           statusText: 'OK',
           json: () => Promise.resolve({
             id: 'test',
-            choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations }) }, finish_reason: 'stop' }],
+            choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations: bidirTranslations }) }, finish_reason: 'stop' }],
           }),
           text: () => Promise.resolve(''),
         });
@@ -602,7 +625,7 @@ describe('services/background', () => {
       await handleMessage(
         {
           action: 'translateSubtitle',
-          cues,
+          cues: bidirCues,
           sourceLanguage: 'en',
           targetLanguage: 'vi',
           profile: 'media',
@@ -621,7 +644,6 @@ describe('services/background', () => {
       const ownCalls = bidirBodies();
       expect(ownCalls.length).toBeGreaterThanOrEqual(2);
 
-      // ownCalls[0] = chunk 0 (first chunk, forward look-ahead only)
       // ownCalls[1] = chunk 1 (should have bidirectional context)
       const chunk1Body = JSON.parse(ownCalls[1]) as { messages: Array<{ content: string }> };
       const chunk1UserContent = chunk1Body.messages[1].content;
@@ -714,38 +736,6 @@ describe('services/background', () => {
       expect(messages?.[0].content).toContain('"John" → "Juan"');
       expect(messages?.[0].content).toContain('- "Alice" → "A-lít"');
       expect(messages?.[0].content).not.toContain('Wrong Alice');
-    });
-
-    it('uses original cue text for cache, not voice-prefixed text', async () => {
-      const cues = [
-        { startTime: 0, endTime: 2, text: 'Hello', voice: 'John' },
-      ];
-
-      mockFetch(JSON.stringify({ translations: { s1: 'Xin chào' } }));
-
-      const result = await handleMessage(
-        {
-          action: 'translateSubtitle',
-          cues,
-          sourceLanguage: 'en',
-          targetLanguage: 'vi',
-          profile: 'media',
-        },
-        { tab: { id: 46 } } as chrome.runtime.MessageSender,
-      ) as { success: boolean; cues?: Array<{ text: string; originalText?: string }> };
-
-      // The mockFetch response translates s1 → 'Xin chào'. The result cue's
-      // originalText should be 'Hello' (not '[John] Hello'), confirming cache
-      // operations use the unprefixed text.
-      const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-      const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as {
-        messages: Array<{ role: string; content: string }>;
-      };
-      // Verify the LLM received the prefixed text
-      expect(body.messages[1].content).toContain('[John] Hello');
-      // Verify cache safety: originalText (which feeds cacheTranslation) is
-      // the unprefixed 'Hello', not the voice-prefixed '[John] Hello'.
-      expect(result.cues?.[0].originalText).toBe('Hello');
     });
   });
 

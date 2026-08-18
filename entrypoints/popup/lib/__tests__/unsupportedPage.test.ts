@@ -2,18 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { getUnsupportedPageInfo } from '../unsupportedPage';
 
 describe('getUnsupportedPageInfo', () => {
-  it('returns message when tab missing', () => {
-    const info = getUnsupportedPageInfo(undefined);
-    expect(info?.title).toMatch(/can't be translated/i);
-  });
+  it("returns the can't-be-translated message for missing tabs, chrome:// pages, and browser stores", () => {
+    const missing = getUnsupportedPageInfo(undefined);
+    expect(missing?.title).toMatch(/can't be translated/i);
 
-  it('allows normal https pages', () => {
-    expect(
-      getUnsupportedPageInfo({ id: 1, url: 'https://example.com/page' } as chrome.tabs.Tab),
-    ).toBeNull();
-  });
-
-  it('blocks chrome:// pages and Chrome Web Store', () => {
     const chromePage = getUnsupportedPageInfo({ id: 1, url: 'chrome://extensions' } as chrome.tabs.Tab);
     expect(chromePage).not.toBeNull();
 
@@ -22,6 +14,12 @@ describe('getUnsupportedPageInfo', () => {
       url: 'https://chromewebstore.google.com/detail/foo',
     } as chrome.tabs.Tab);
     expect(webStore).not.toBeNull();
+  });
+
+  it('allows normal https pages', () => {
+    expect(
+      getUnsupportedPageInfo({ id: 1, url: 'https://example.com/page' } as chrome.tabs.Tab),
+    ).toBeNull();
   });
 
   it('returns PDF viewer special copy', () => {

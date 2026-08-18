@@ -119,7 +119,8 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
 
   // ── Retry-After header ──────────────────────────────────────────────────
 
-  it('honors Retry-After headers and exponential backoff with jitter', async () => {
+  it('covers the full retry matrix: Retry-After (seconds/HTTP-date), exponential backoff + jitter, cap message, zero-retry override, non-429 paths, and success-after-retry', async () => {
+    // ── Retry-After header (seconds) ────────────────────────────────────────
     const fetchTimes: number[] = [];
     const fetchMock = vi.fn().mockImplementation(() => {
       fetchTimes.push(Date.now());
@@ -141,6 +142,7 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     expect(gap).toBeGreaterThanOrEqual(2000);
     expect(gap).toBeLessThanOrEqual(2500);
 
+    // ── Retry-After header (HTTP-date) ─────────────────────────────────────
     const retryAfterDate = new Date(Date.now() + 10000).toUTCString();
     const dateFetchTimes: number[] = [];
     const dateFetchMock = vi.fn().mockImplementation(() => {
@@ -157,78 +159,75 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     const dateGap = dateFetchTimes[1] - dateFetchTimes[0];
     expect(dateGap).toBeGreaterThanOrEqual(9000);
     expect(dateGap).toBeLessThanOrEqual(10500);
-    {
-      // ── Exponential backoff (no Retry-After) ─────────────────────────────
-      const backoffTimes: number[] = [];
-      const backoffFetch = vi.fn().mockImplementation(() => {
-        backoffTimes.push(Date.now());
-        return Promise.resolve(make429Response());
-      });
-      globalThis.fetch = backoffFetch;
 
-      const backoffService = new OpenAICompatibleService(makeConfig());
-      const backoffPromise = startTranslate(backoffService, new Map([['p1', 'Hello']]));
-      await flushTimers();
-      await expect(backoffPromise).rejects.toThrow(ApiError);
+    // ── Exponential backoff (no Retry-After) ───────────────────────────────
+    const backoffTimes: number[] = [];
+    const backoffFetch = vi.fn().mockImplementation(() => {
+      backoffTimes.push(Date.now());
+      return Promise.resolve(make429Response());
+    });
+    globalThis.fetch = backoffFetch;
 
-      expect(backoffFetch).toHaveBeenCalledTimes(4);
+    const backoffService = new OpenAICompatibleService(makeConfig());
+    const backoffPromise = startTranslate(backoffService, new Map([['p1', 'Hello']]));
+    await flushTimers();
+    await expect(backoffPromise).rejects.toThrow(ApiError);
 
-      // First retry delay: base * 2^0 + jitter = 1000 + [0,500] -> [1000, 1500]
-      const gap1 = backoffTimes[1] - backoffTimes[0];
-      expect(gap1).toBeGreaterThanOrEqual(1000);
-      expect(gap1).toBeLessThanOrEqual(1500);
+    expect(backoffFetch).toHaveBeenCalledTimes(4);
 
-      // Second retry delay: base * 2^1 + jitter = 2000 + [0,500] -> [2000, 2500]
-      const gap2 = backoffTimes[2] - backoffTimes[1];
-      expect(gap2).toBeGreaterThanOrEqual(2000);
-      expect(gap2).toBeLessThanOrEqual(2500);
+    // First retry delay: base * 2^0 + jitter = 1000 + [0,500] -> [1000, 1500]
+    const gap1 = backoffTimes[1] - backoffTimes[0];
+    expect(gap1).toBeGreaterThanOrEqual(1000);
+    expect(gap1).toBeLessThanOrEqual(1500);
 
-      // Third retry delay: base * 2^2 + jitter = 4000 + [0,500] -> [4000, 4500]
-      const gap3 = backoffTimes[3] - backoffTimes[2];
-      expect(gap3).toBeGreaterThanOrEqual(4000);
-      expect(gap3).toBeLessThanOrEqual(4500);
+    // Second retry delay: base * 2^1 + jitter = 2000 + [0,500] -> [2000, 2500]
+    const gap2 = backoffTimes[2] - backoffTimes[1];
+    expect(gap2).toBeGreaterThanOrEqual(2000);
+    expect(gap2).toBeLessThanOrEqual(2500);
 
-      const capFetch = vi.fn().mockResolvedValue(make429Response());
-      globalThis.fetch = capFetch;
-      const capService = new OpenAICompatibleService(makeConfig());
-      const capPromise = startTranslate(capService, new Map([['p1', 'Hello']]));
-      await flushTimers();
+    // Third retry delay: base * 2^2 + jitter = 4000 + [0,500] -> [4000, 4500]
+    const gap3 = backoffTimes[3] - backoffTimes[2];
+    expect(gap3).toBeGreaterThanOrEqual(4000);
+    expect(gap3).toBeLessThanOrEqual(4500);
 
-      let thrown: unknown;
-      try {
-        await capPromise;
-      } catch (error) {
-        thrown = error;
-      }
-      expect(thrown).toBeInstanceOf(ApiError);
-      expect((thrown as ApiError).statusCode).toBe(429);
-      expect((thrown as ApiError).message).toContain('Rate limit exceeded');
-      expect((thrown as ApiError).message).toContain('batch size');
-      expect(capFetch).toHaveBeenCalledTimes(4);
+    // ── Cap message + zero-retry override ──────────────────────────────────
+    const capFetch = vi.fn().mockResolvedValue(make429Response());
+    globalThis.fetch = capFetch;
+    const capService = new OpenAICompatibleService(makeConfig());
+    const capPromise = startTranslate(capService, new Map([['p1', 'Hello']]));
+    await flushTimers();
 
-      const immediateFetch = vi.fn().mockResolvedValue(make429Response());
-      globalThis.fetch = immediateFetch;
-      const immediateService = new OpenAICompatibleService(makeConfig());
-      immediateService.setMax429Retries(0);
-      const immediatePromise = startTranslate(
-        immediateService,
-        new Map([['p1', 'Hello']]),
-      );
-      await flushTimers();
-      await expect(immediatePromise).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
-      expect(immediateFetch).toHaveBeenCalledTimes(1);
-      immediateService.setMax429Retries(null);
+    let thrown: unknown;
+    try {
+      await capPromise;
+    } catch (error) {
+      thrown = error;
     }
-  });
+    expect(thrown).toBeInstanceOf(ApiError);
+    expect((thrown as ApiError).statusCode).toBe(429);
+    expect((thrown as ApiError).message).toContain('Rate limit exceeded');
+    expect((thrown as ApiError).message).toContain('batch size');
+    expect(capFetch).toHaveBeenCalledTimes(4);
 
-  // ── Non-429 errors unaffected ────────────────────────────────────────────
+    const immediateFetch = vi.fn().mockResolvedValue(make429Response());
+    globalThis.fetch = immediateFetch;
+    const immediateService = new OpenAICompatibleService(makeConfig());
+    immediateService.setMax429Retries(0);
+    const immediatePromise = startTranslate(
+      immediateService,
+      new Map([['p1', 'Hello']]),
+    );
+    await flushTimers();
+    await expect(immediatePromise).rejects.toMatchObject({ name: 'ApiError', statusCode: 429 });
+    expect(immediateFetch).toHaveBeenCalledTimes(1);
+    immediateService.setMax429Retries(null);
 
-  it('non-429 errors (500 / network / 401) use the existing retry path, not 429 backoff', async () => {
+    // ── Non-429 errors use the existing retry path ─────────────────────────
     // 500 → existing retry (1 initial + 1 retry = 2 calls)
     const fetch500 = vi.fn().mockResolvedValue(make500Response());
     globalThis.fetch = fetch500;
-    const service = new OpenAICompatibleService(makeConfig());
-    const p500 = startTranslate(service, new Map([['p1', 'Hello']]));
+    const service500 = new OpenAICompatibleService(makeConfig());
+    const p500 = startTranslate(service500, new Map([['p1', 'Hello']]));
     await flushTimers();
     let thrown500: unknown;
     try {
@@ -269,20 +268,17 @@ describe('OpenAICompatibleService — 429 retry with backoff + jitter', () => {
     expect(thrown401).toBeInstanceOf(ApiError);
     expect((thrown401 as ApiError).statusCode).toBe(401);
     expect(fetch401).toHaveBeenCalledTimes(1);
-  });
 
-  // ── Success after 429 retry ──────────────────────────────────────────────
-
-  it('returns normally when a 429 retry succeeds (with or without Retry-After)', async () => {
+    // ── Success after 429 retry ─────────────────────────────────────────────
     // With Retry-After: 1 failed + 1 success = 2 calls.
     const fetchWithRetryAfter = vi.fn()
       .mockResolvedValueOnce(make429Response('1'))
       .mockResolvedValueOnce(make200Response('{"translations":{"p1":"Xin chao"}}'));
     globalThis.fetch = fetchWithRetryAfter;
-    const service = new OpenAICompatibleService(makeConfig());
-    const promise = startTranslate(service, new Map([['p1', 'Hello']]));
+    const serviceOk = new OpenAICompatibleService(makeConfig());
+    const okPromise = startTranslate(serviceOk, new Map([['p1', 'Hello']]));
     await flushTimers();
-    const result = await promise;
+    const result = await okPromise;
 
     expect(result.success).toBe(true);
     expect(result.translations.get('p1')).toBe('Xin chao');

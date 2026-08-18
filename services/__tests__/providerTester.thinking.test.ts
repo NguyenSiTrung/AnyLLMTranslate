@@ -45,7 +45,8 @@ describe('testConnection thinking probe', () => {
     vi.restoreAllMocks();
   });
 
-  it('covers generic thinking controls, detection, and auto-mode behavior', async () => {
+  it('covers generic and provider-dialect thinking controls, detection, and auto-mode behavior', async () => {
+    // Generic: off → enable_thinking + kwargs; verdict disable-success.
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith('/models') || u.includes('/models?')) {
@@ -76,6 +77,7 @@ describe('testConnection thinking probe', () => {
     expect(result.thinking?.thinkingDetected).toBe(false);
     expect(result.translationSample).toBe('Xin chào, bạn khỏe không?');
 
+    // reasoning_content detection.
     const reasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
@@ -99,6 +101,7 @@ describe('testConnection thinking probe', () => {
     expect(reasoningResult.thinking?.verdict).toBe('disable-failed');
     expect(reasoningResult.thinking?.sources).toContain('reasoning_content');
 
+    // <think> tag detection.
     const tagFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
@@ -115,6 +118,7 @@ describe('testConnection thinking probe', () => {
     expect(tagResult.thinking?.sources).toContain('think_tags');
     expect(tagResult.translationSample).toBe('Xin chào');
 
+    // auto mode sends no controls.
     const autoFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
@@ -137,11 +141,9 @@ describe('testConnection thinking probe', () => {
     const autoResult = await testConnection(baseConfig({ thinkingMode: 'auto' }));
     expect(autoResult.thinking?.verdict).toBe('not-applicable');
     expect(autoResult.thinking?.controlsSent).toBe(false);
-  });
 
-  it('sends DeepSeek thinking parameters on Official and OpenCode Zen', async () => {
-    // Scenario 1: thinkingMode off → thinking.type=disabled, no effort
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    // DeepSeek Official: off → thinking.type=disabled, no effort.
+    const deepseekFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -158,22 +160,22 @@ describe('testConnection thinking probe', () => {
       expect(body.chat_template_kwargs).toBeUndefined();
       return okJson({ choices: [{ message: { content: 'Xin chào' } }] });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', deepseekFetch);
 
-    let result = await testConnection(
+    let dsResult = await testConnection(
       baseConfig({
         baseUrl: 'https://api.deepseek.com',
         model: 'deepseek-v4-flash',
         thinkingMode: 'off',
       }),
     );
-    expect(result.overall).toBe(true);
-    expect(result.thinking?.verdict).toBe('disable-success');
-    expect(result.thinking?.controlsSent).toBe(true);
+    expect(dsResult.overall).toBe(true);
+    expect(dsResult.thinking?.verdict).toBe('disable-success');
+    expect(dsResult.thinking?.controlsSent).toBe(true);
 
-    // Scenario 2: thinkingMode on → thinking.type=enabled + reasoning_effort
+    // DeepSeek Official: on → thinking.type=enabled + reasoning_effort.
     vi.unstubAllGlobals();
-    const fetchMockOn = vi.fn(async (url: string, init?: RequestInit) => {
+    const deepseekOnFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-pro' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -195,9 +197,9 @@ describe('testConnection thinking probe', () => {
         ],
       });
     });
-    vi.stubGlobal('fetch', fetchMockOn);
+    vi.stubGlobal('fetch', deepseekOnFetch);
 
-    result = await testConnection(
+    dsResult = await testConnection(
       baseConfig({
         baseUrl: 'https://api.deepseek.com/v1',
         model: 'deepseek-v4-pro',
@@ -205,11 +207,12 @@ describe('testConnection thinking probe', () => {
         thinkingEffort: 'max',
       }),
     );
-    expect(result.overall).toBe(true);
-    expect(result.thinking?.controlsSent).toBe(true);
-    expect(result.thinking?.thinkingDetected).toBe(true);
-    {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    expect(dsResult.overall).toBe(true);
+    expect(dsResult.thinking?.controlsSent).toBe(true);
+    expect(dsResult.thinking?.thinkingDetected).toBe(true);
+
+    // OpenCode Zen: thinking.type=enabled + reasoning_effort low.
+    const zenFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'deepseek-v4-flash-free' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -224,9 +227,9 @@ describe('testConnection thinking probe', () => {
       expect(body.enable_thinking).toBeUndefined();
       return okJson({ choices: [{ message: { content: 'Xin chào' } }] });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', zenFetch);
 
-    const result = await testConnection(
+    const zenResult = await testConnection(
       baseConfig({
         baseUrl: 'https://opencode.ai/zen/v1',
         model: 'deepseek-v4-flash-free',
@@ -234,14 +237,14 @@ describe('testConnection thinking probe', () => {
         thinkingEffort: 'low',
       }),
     );
-    expect(result.overall).toBe(true);
-    expect(result.thinking?.controlsSent).toBe(true);
-    }
+    expect(zenResult.overall).toBe(true);
+    expect(zenResult.thinking?.controlsSent).toBe(true);
   });
 
-  it('retries without thinking controls when provider rejects them', async () => {
+  it('retries without rejected thinking controls and validates probe budget/empty or reasoning-only responses', async () => {
+    // Controls rejection: 400 → retry without controls; verdict controls-rejected.
     let translationCalls = 0;
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const rejectFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as {
@@ -260,17 +263,15 @@ describe('testConnection thinking probe', () => {
       expect(body.enable_thinking).toBeUndefined();
       return okJson({ choices: [{ message: { content: 'OK' } }] });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', rejectFetch);
 
-    const result = await testConnection(baseConfig({ thinkingMode: 'off' }));
-    expect(result.overall).toBe(true);
-    expect(result.thinking?.verdict).toBe('controls-rejected');
+    const rejected = await testConnection(baseConfig({ thinkingMode: 'off' }));
+    expect(rejected.overall).toBe(true);
+    expect(rejected.thinking?.verdict).toBe('controls-rejected');
     expect(translationCalls).toBe(2);
-  });
 
-  it('validates the translation probe budget and reports empty or reasoning-only responses', async () => {
-    // Scenario 1: HTTP 200 with null content and 0 completion tokens.
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    // HTTP 200 with null content and 0 completion tokens.
+    const nullFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'qwen3.8-max-preview' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -286,7 +287,7 @@ describe('testConnection thinking probe', () => {
         usage: { prompt_tokens: 36, completion_tokens: 0, total_tokens: 36 },
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', nullFetch);
 
     const nullResult = await testConnection(baseConfig({ model: 'qwen3.8-max-preview' }));
     expect(nullResult.overall).toBe(false);
@@ -295,8 +296,8 @@ describe('testConnection thinking probe', () => {
     expect(translation?.error).toMatch(/Empty response from LLM/i);
     expect(translation?.error).toMatch(/0 completion tokens/i);
 
-    // Scenario 2: reasoning burned the completion budget — empty content with
-    // a reasoning field and finish_reason length hints at disabling thinking.
+    // Reasoning burned the completion budget — empty content with a reasoning
+    // field and finish_reason length hints at disabling thinking.
     vi.unstubAllGlobals();
     const reasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
@@ -336,8 +337,9 @@ describe('testConnection thinking probe', () => {
     expect(translation?.error).toMatch(/Empty response from LLM/i);
     expect(translation?.error).toMatch(/reasoning/i);
     expect(translation?.error).toMatch(/Thinking mode to Off/i);
-    {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+
+    // Probe budget floor: maxTokens 100 still requests >= 1024 for the probe.
+    const floorFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'm' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -345,11 +347,10 @@ describe('testConnection thinking probe', () => {
       expect(body.max_tokens).toBeGreaterThanOrEqual(1024);
       return okJson({ choices: [{ message: { content: 'Xin chào' } }] });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('fetch', floorFetch);
 
-    const result = await testConnection(baseConfig({ maxTokens: 100, thinkingMode: 'auto' }));
-    expect(result.overall).toBe(true);
-    expect(result.translationSample).toBe('Xin chào');
-    }
-});
+    const floorResult = await testConnection(baseConfig({ maxTokens: 100, thinkingMode: 'auto' }));
+    expect(floorResult.overall).toBe(true);
+    expect(floorResult.translationSample).toBe('Xin chào');
+  });
 });

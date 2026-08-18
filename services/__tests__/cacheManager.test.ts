@@ -69,7 +69,7 @@ describe('services/cacheManager', () => {
       });
     });
 
-    it('generates stable success keys and distinct negative-cache keys', async () => {
+    it('generates stable, distinct, and fingerprint-sensitive cache keys (success + negative-cache)', async () => {
       const key1 = await generateCacheKey('Hello', 'en', 'vi');
       const key2 = await generateCacheKey('Hello', 'en', 'vi');
       expect(key1).toMatch(/^[0-9a-f]{64}$/);
@@ -81,9 +81,8 @@ describe('services/cacheManager', () => {
       expect(negKey).toBe(`${NEGATIVE_CACHE_PREFIX}${key1}`);
       expect(negKey).not.toBe(key1);
       expect(await generateNegativeCacheKey('World', 'en', 'vi')).not.toBe(negKey);
-    });
 
-    it('FR-6: glossary/model fingerprint change produces cache miss (distinct keys)', async () => {
+      // FR-6: glossary/model fingerprint change produces cache miss (distinct keys).
       const base = await generateCacheKey('Hello', 'en', 'vi', 'gpt-4o-mini', 'fp-gloss-a');
       const glossB = await generateCacheKey('Hello', 'en', 'vi', 'gpt-4o-mini', 'fp-gloss-b');
       const modelB = await generateCacheKey('Hello', 'en', 'vi', 'other-model', 'fp-gloss-a');

@@ -7,13 +7,14 @@ import { renderHook, act } from '@testing-library/react';
 import { useDeferredCommit } from '../useDeferredCommit';
 
 describe('useDeferredCommit', () => {
-  it('updates locally without committing until blur', () => {
+  it('keeps a local draft until commit/blur, syncs clean upstream changes, preserves dirty drafts, and adopt resets without committing', () => {
     const onCommit = vi.fn();
-    const { result } = renderHook(
+    const { result, rerender } = renderHook(
       ({ initial }) => useDeferredCommit(initial, onCommit),
       { initialProps: { initial: 'a' } },
     );
 
+    // Local edit without commit.
     act(() => {
       result.current.setValue('ab');
     });
@@ -24,15 +25,14 @@ describe('useDeferredCommit', () => {
       result.current.commit();
     });
     expect(onCommit).toHaveBeenCalledWith('ab');
-  });
 
-  it('does not clobber a dirty draft when upstream initial changes', () => {
-    const onCommit = vi.fn();
-    const { result, rerender } = renderHook(
-      ({ initial }) => useDeferredCommit(initial, onCommit),
-      { initialProps: { initial: 'host.com' } },
-    );
+    // Clean (not dirty) draft syncs from upstream without committing.
+    onCommit.mockClear();
+    rerender({ initial: 'two' });
+    expect(result.current.value).toBe('two');
+    expect(onCommit).not.toHaveBeenCalled();
 
+    // Dirty draft survives an upstream change.
     act(() => {
       // User is mid-type: trailing comma + space must stick
       result.current.setValue('host.com, ');
@@ -46,27 +46,9 @@ describe('useDeferredCommit', () => {
       result.current.commit();
     });
     expect(onCommit).toHaveBeenCalledWith('host.com, ');
-  });
+    onCommit.mockClear();
 
-  it('syncs from upstream when not dirty', () => {
-    const onCommit = vi.fn();
-    const { result, rerender } = renderHook(
-      ({ initial }) => useDeferredCommit(initial, onCommit),
-      { initialProps: { initial: 'one' } },
-    );
-
-    rerender({ initial: 'two' });
-    expect(result.current.value).toBe('two');
-    expect(onCommit).not.toHaveBeenCalled();
-  });
-
-  it('adopt resets dirty and baseline without committing', () => {
-    const onCommit = vi.fn();
-    const { result, rerender } = renderHook(
-      ({ initial }) => useDeferredCommit(initial, onCommit),
-      { initialProps: { initial: 'old' } },
-    );
-
+    // adopt resets dirty + baseline without committing.
     act(() => {
       result.current.setValue('typing');
     });

@@ -144,7 +144,7 @@ describe('LinkedInHandler', () => {
     }
   });
 
-  it('parses detailedCourses transcript JSON into timed cues', () => {
+  it('parses detailedCourses transcript JSON into timed cues, with duration+2s fallback and empty results for invalid input', () => {
     const cues = parseLinkedInTranscriptJson(TRANSCRIPT_JSON);
     expect(cues).toEqual([
       { startTime: 0, endTime: 2.5, text: 'Welcome to the course.' },
@@ -152,22 +152,18 @@ describe('LinkedInHandler', () => {
       // Last cue ends at the video duration.
       { startTime: 4, endTime: 5, text: 'Here is the final thought.' },
     ]);
-  });
 
-  it('falls back to duration+2s for the last cue when duration is absent', () => {
-    const body = JSON.stringify({
+    const noDuration = JSON.stringify({
       transcript: {
         lines: [
           { transcriptStartAt: 1000, caption: 'Only cue.' },
         ],
       },
     });
-    expect(parseLinkedInTranscriptJson(body)).toEqual([
+    expect(parseLinkedInTranscriptJson(noDuration)).toEqual([
       { startTime: 1, endTime: 3, text: 'Only cue.' },
     ]);
-  });
 
-  it('returns empty cues for non-transcript or invalid JSON', () => {
     // Course-listing payload (chapters only, no selectedVideo transcript)
     const listing = JSON.stringify({
       elements: [{ chapters: [], description: 'x', title: 'y' }],

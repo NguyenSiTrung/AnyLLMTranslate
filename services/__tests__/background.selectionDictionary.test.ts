@@ -138,7 +138,8 @@ describe('handleTranslateSelection — dictionary mode', () => {
     __resetSettingsCacheForTest();
   });
 
-  it('returns dictionary payload when dictionaryMode is true and model returns JSON, and fails open to sentence on invalid JSON', async () => {
+  it('resolves dictionaryMode (JSON payload, fail-open to sentence) and falls back to sentence when omitted or disabled', async () => {
+    // Scenario 1: dictionaryMode true + valid JSON → dictionary payload.
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     const dictJson = JSON.stringify({
       phonetic: '/həˈloʊ/',
@@ -180,8 +181,8 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(body.messages[0].content).toContain('She said hello to me.');
     expect(body.messages[1].content).toContain('hello');
 
-    // Fail-open: invalid JSON still returns a sentence translation (unique
-    // text avoids a dictionary-cache hit from the scenario above).
+    // Scenario 2: fail-open — invalid JSON still returns a sentence translation
+    // (unique text avoids a dictionary-cache hit from the scenario above).
     __resetSettingsCacheForTest();
     __resetTranslationServiceForTest();
     mockFetch('not valid json at all — just a freeform translation: chào');
@@ -201,13 +202,10 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(failOpen.mode).toBe('sentence');
     expect(failOpen.translatedText).toBeTruthy();
     expect(failOpen.dictionary).toBeUndefined();
-  });
 
-  it('plain path when dictionaryMode is omitted, and sentence fallback when selectionDictionaryEnabled is false', async () => {
-    // Unique texts avoid plain-cache key contention with the other tests in
-    // this file (selection cache writes are fire-and-forget).
-    // Scenario 1: plain path when dictionaryMode is omitted (hover/inline
-    // safety).
+    // Scenario 3: plain path when dictionaryMode is omitted (hover/inline
+    // safety). Unique texts avoid plain-cache key contention with the other
+    // tests in this file (selection cache writes are fire-and-forget).
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     mockFetch(JSON.stringify({ translations: { selection: 'xin chào' } }));
 
@@ -226,7 +224,7 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(plain.translatedText).toBe('xin chào');
     expect(plain.dictionary).toBeUndefined();
 
-    // Scenario 2: falls back to sentence when settings.selectionDictionaryEnabled
+    // Scenario 4: falls back to sentence when settings.selectionDictionaryEnabled
     // is false.
     mockStorage['anyllm-translate-settings'] = baseProviderSettings({
       selectionDictionaryEnabled: false,

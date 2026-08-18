@@ -113,16 +113,14 @@ describe('DeepLearningAiHost', () => {
 });
 
 describe('DeepLearningAi language helpers', () => {
-  it('normalizes BCP-47 and ISO 639-2 codes', () => {
+  it('normalizes BCP-47 and ISO 639-2 codes and extracts the language from subtitle URLs', () => {
     expect(normalizeDeepLearningAiLanguage('en-us')).toBe('en-us');
     expect(normalizeDeepLearningAiLanguage('ja-jp')).toBe('ja-jp');
     expect(normalizeDeepLearningAiLanguage('eng')).toBe('en');
     expect(normalizeDeepLearningAiLanguage('JPN')).toBe('ja');
     expect(normalizeDeepLearningAiLanguage('  hi-IN ')).toBe('hi-in');
     expect(normalizeDeepLearningAiLanguage('')).toBe('');
-  });
 
-  it('extracts the language from video.deeplearning.ai subtitle URLs', () => {
     expect(extractDeepLearningAiLanguageFromUrl(new URL(ENG_VTT))).toBe('en');
     expect(extractDeepLearningAiLanguageFromUrl(new URL(JPN_VTT))).toBe('ja');
     // Region-qualified path segment
@@ -162,7 +160,7 @@ describe('extractDeepLearningAiVideoData', () => {
     expect(result?.tracks.some((t) => t.url === CHAPTER_VTT)).toBe(false);
   });
 
-  it('accepts a bare video object and a tRPC-style nested response', () => {
+  it('accepts bare, nested, and subtitle-map payload shapes; returns null for payloads without video data', () => {
     const video = {
       videoId: 42,
       tracks: [{ kind: 'subtitles', label: 'English', src: ENG_VTT, srcLang: 'en-us' }],
@@ -176,17 +174,15 @@ describe('extractDeepLearningAiVideoData', () => {
     };
     const fromNested = extractDeepLearningAiVideoData(nested);
     expect(fromNested?.tracks?.[0]).toEqual(bare?.tracks?.[0]);
-  });
 
-  it('falls back to the string-encoded subtitle map when tracks[] is absent', () => {
-    const result = extractDeepLearningAiVideoData({
+    const fromMap = extractDeepLearningAiVideoData({
       videoId: 7,
       subtitle: JSON.stringify({
         'en-us': { URI: ENG_VTT, NAME: 'ENGLISH' },
       }),
     });
-    expect(result?.videoId).toBe('7');
-    expect(result?.tracks).toEqual([
+    expect(fromMap?.videoId).toBe('7');
+    expect(fromMap?.tracks).toEqual([
       {
         language: 'en-us',
         label: 'ENGLISH',
@@ -196,9 +192,7 @@ describe('extractDeepLearningAiVideoData', () => {
         videoId: '7',
       },
     ]);
-  });
 
-  it('returns null for payloads without subtitle video data', () => {
     expect(extractDeepLearningAiVideoData(null)).toBeNull();
     expect(extractDeepLearningAiVideoData('not json')).toBeNull();
     expect(extractDeepLearningAiVideoData({})).toBeNull();
@@ -279,38 +273,38 @@ describe('DeepLearningAiHandler', () => {
     expect(languageExtractor?.(new URL(JPN_VTT))).toBe('ja');
   });
 
-  it('matches the tRPC lesson-video metadata endpoint on SPA navigation', () => {
+  it('matches tRPC getLessonVideo and Next.js _next/data metadata endpoints, rejects non-metadata URLs', () => {
     const handler = new DeepLearningAiHandler();
-    const [metadata] = handler.getMetadataPatterns();
-    expect(metadata.pattern.test(
+    const metadata = handler.getMetadataPatterns();
+    expect(metadata[0]!.pattern.test(
       'https://learn.deeplearning.ai/api/trpc/course.getLessonVideo?batch=1&input=%7B%220%22%3A%7B%22videoId%22%3A10172096%7D%7D',
     )).toBe(true);
-    expect(metadata.pattern.test(
+    expect(metadata[0]!.pattern.test(
       'https://learn.deeplearning.ai/api/trpc/course.getLessonVideo,0,course.getLessonVideoSubtitle,1?input=x',
     )).toBe(true);
-    expect(metadata.pattern.test(
+    expect(metadata[0]!.pattern.test(
       'https://platform-api.dlai.link/api/trpc/course.getLessonVideo?input=x',
     )).toBe(true);
-    expect(metadata.pattern.test('https://learn.deeplearning.ai/api/auth/signin/google')).toBe(false);
-    expect(metadata.pattern.test('https://learn.deeplearning.ai/courses/agentic-ai/lesson/pu5xbv/welcome!')).toBe(false);
-  });
+    expect(metadata[0]!.pattern.test('https://learn.deeplearning.ai/api/auth/signin/google')).toBe(false);
+    expect(metadata[0]!.pattern.test('https://learn.deeplearning.ai/courses/agentic-ai/lesson/pu5xbv/welcome!')).toBe(false);
 
-  it('recognizes Next.js lesson data payloads used during client navigation', () => {
-    const handler = new DeepLearningAiHandler();
-    const metadata = handler.getMetadataPatterns().find((entry) =>
+    const nextData = handler.getMetadataPatterns().find((entry) =>
       entry.pattern.test(
         'https://learn.deeplearning.ai/learnext/_next/data/build-id/courses/agentic-ai/lesson/nae3i1/next-lesson.json',
       ),
     );
-
-    expect(metadata).toBeDefined();
-    expect(metadata?.pattern.test(
+    expect(nextData).toBeDefined();
+    expect(nextData?.pattern.test(
       'https://learn.deeplearning.ai/learnext/_next/data/build-id/courses/agentic-ai.json',
     )).toBe(false);
   });
 
-  it('extracts tracks from an intercepted tRPC metadata body', () => {
+  it('extracts tracks from intercepted tRPC bodies and embedded __NEXT_DATA__ DOM payloads', () => {
+    document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+      makeNextDataFixture(),
+    )}</script>`;
     const handler = new DeepLearningAiHandler();
+
     const body = JSON.stringify({
       result: { 0: { data: { video: {
         videoId: 10172096,
@@ -324,18 +318,11 @@ describe('DeepLearningAiHandler', () => {
     expect(tracks).toHaveLength(2);
     expect(tracks[0]).toMatchObject({ language: 'en-us', url: ENG_VTT, videoId: '10172096' });
     expect(tracks[1]).toMatchObject({ language: 'ja-jp', url: JPN_VTT, videoId: '10172096' });
-
     expect(handler.extractAvailableTracks('not json', 'application/json', 'https://learn.deeplearning.ai/api/trpc/x')).toEqual([]);
-  });
 
-  it('extracts tracks from the embedded #__NEXT_DATA__ on an empty-body DOM discovery call', () => {
-    document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
-      makeNextDataFixture(),
-    )}</script>`;
-    const handler = new DeepLearningAiHandler();
-    const tracks = handler.extractAvailableTracks('', 'application/json', '');
-    expect(tracks).toHaveLength(2);
-    expect(tracks.map((t) => t.language).sort()).toEqual(['en-us', 'ja-jp']);
+    const domTracks = handler.extractAvailableTracks('', 'application/json', '');
+    expect(domTracks).toHaveLength(2);
+    expect(domTracks.map((t) => t.language).sort()).toEqual(['en-us', 'ja-jp']);
 
     document.body.innerHTML = '';
     expect(handler.extractAvailableTracks('', 'application/json', '')).toEqual([]);

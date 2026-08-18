@@ -278,7 +278,7 @@ describe('gesture detection', () => {
     );
   });
 
-  it('ignores non-editable, password, code-editor, empty fields, and when disabled', async () => {
+  it('ignores non-editable, password, code-editor, empty, and disabled fields; dedups window+document keydown; and never counts taps on empty fields', async () => {
     const div = document.createElement('div');
     document.body.appendChild(div);
     div.focus();
@@ -318,6 +318,51 @@ describe('gesture detection', () => {
     fireKeydown(empty, ' ');
     await vi.advanceTimersByTimeAsync(10);
     expect(mockSendMessage).not.toHaveBeenCalled();
+
+    // Without dedup, three keydown events reaching both window AND document
+    // capture listeners would reach tapCount after ~2 events (6 counts),
+    // producing multiple translation calls.
+    mockSendMessage.mockClear();
+    removeToast();
+    const dedupInput = document.createElement('input');
+    dedupInput.type = 'text';
+    dedupInput.value = 'hello   ';
+    document.body.appendChild(dedupInput);
+    dedupInput.focus();
+
+    mockSendMessage.mockResolvedValueOnce({
+      success: true,
+      translatedText: 'xin chào',
+    });
+
+    dedupInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    dedupInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    dedupInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    mockSendMessage.mockClear();
+    removeToast();
+
+    // Empty or whitespace-only fields never trigger (prevents swallowed
+    // gestures) regardless of tap count.
+    for (const value of ['', '     ']) {
+      const emptyInput = document.createElement('input');
+      emptyInput.type = 'text';
+      emptyInput.value = value;
+      document.body.appendChild(emptyInput);
+      emptyInput.focus();
+
+      for (let i = 0; i < 6; i++) {
+        emptyInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      }
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
+      emptyInput.remove();
+      removeToast();
+    }
 
     // Disabled feature → no-op.
     setInlineTranslateEnabled(false);
@@ -609,64 +654,7 @@ describe('debounce', () => {
   });
 });
 
-/* ── Dedup + Empty-field Guard ───────────────────────────────── */
-
-describe('event dedup and empty-field guard', () => {
-  let cleanup: () => void;
-
-  beforeEach(() => {
-    cleanup = initInlineTranslate();
-  });
-
-  afterEach(() => {
-    cleanup();
-  });
-
-  it('processes each keydown event exactly once across window + document listeners, and never counts taps on empty fields', async () => {
-    // Without dedup, three keydown events reaching both window AND document
-    // capture listeners would reach tapCount after ~2 events (6 counts),
-    // producing multiple translation calls.
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = 'hello   ';
-    document.body.appendChild(input);
-    input.focus();
-
-    mockSendMessage.mockResolvedValueOnce({
-      success: true,
-      translatedText: 'xin chào',
-    });
-
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    await vi.advanceTimersByTimeAsync(10);
-
-    expect(mockSendMessage).toHaveBeenCalledTimes(1);
-    mockSendMessage.mockClear();
-    removeToast();
-
-    // Empty or whitespace-only fields never trigger (prevents swallowed
-    // gestures) regardless of tap count.
-    for (const value of ['', '     ']) {
-      const emptyInput = document.createElement('input');
-      emptyInput.type = 'text';
-      emptyInput.value = value;
-      document.body.appendChild(emptyInput);
-      emptyInput.focus();
-
-      for (let i = 0; i < 6; i++) {
-        emptyInput.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-      }
-      await vi.advanceTimersByTimeAsync(10);
-
-      expect(mockSendMessage).not.toHaveBeenCalled();
-      expect(document.querySelector(`.${TOAST_CLASS}`)).toBeNull();
-      emptyInput.remove();
-      removeToast();
-    }
-  });
-});
+/* ── Active-element re-acquisition ────────────────────────────── */
 
 describe('active-element re-acquisition', () => {
   let cleanup: () => void;

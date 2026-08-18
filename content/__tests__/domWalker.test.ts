@@ -246,7 +246,7 @@ describe('domWalker — aside caps (FR-5)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('with caps ON, skips long aside paragraphs and stops after per-region cap', () => {
+  it('aside caps: ON enforces per-paragraph and per-region caps; OFF keeps all aside text; caps never apply to main, but do apply to role=complementary', () => {
     // Scenario 1: per-paragraph cap — long aside paragraph is skipped
     const aside = document.createElement('aside');
     const shortP = document.createElement('p');
@@ -285,20 +285,18 @@ describe('domWalker — aside caps (FR-5)', () => {
     // Verify cumulative chars don't exceed the region cap + one paragraph
     const totalChars = pieces.reduce((sum, p) => sum + p.text.length, 0);
     expect(totalChars).toBeLessThanOrEqual(1000 + 67);
-  });
 
-  it('with caps OFF, translates all aside paragraphs; caps never apply to non-aside; caps DO apply to [role=complementary]', () => {
-    // Scenario 1: caps OFF — even over-cap aside paragraphs are kept (regression)
-    const aside = document.createElement('aside');
-    const longP = document.createElement('p');
-    longP.textContent = 'This is a very long sidebar paragraph that exceeds the per-paragraph cap limit of sixty-seven characters.';
-    aside.appendChild(longP);
-    document.body.appendChild(aside);
-
-    let pieces = extractPieces(document.body, {});
+    // Scenario 3: caps OFF — even over-cap aside paragraphs are kept (regression)
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const aside3 = document.createElement('aside');
+    aside3.appendChild(longP.cloneNode(true));
+    document.body.appendChild(aside3);
+    pieces = extractPieces(document.body, {});
     expect(pieces.length).toBe(1);
 
-    // Scenario 2: caps ON — long <main> paragraphs are unaffected
+    // Scenario 4: caps ON — long <main> paragraphs are unaffected
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
@@ -311,7 +309,7 @@ describe('domWalker — aside caps (FR-5)', () => {
     pieces = extractPieces(document.body, { enableAsideCaps: true });
     expect(pieces.length).toBe(1);
 
-    // Scenario 3: caps ON — long [role="complementary"] paragraphs ARE capped
+    // Scenario 5: caps ON — long [role="complementary"] paragraphs ARE capped
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
@@ -334,7 +332,7 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('keeps inline <code> text in the parent piece when code is excluded, including GitHub-like rich placeholders and nested rich extraction', () => {
+  it('keeps excluded inline content (code, span.term, translate="no") in the sentence and hard-skips block containers', () => {
     // Scenario 1: plain exclude keeps the code paths in the piece text
     const p = document.createElement('p');
     p.innerHTML =
@@ -350,56 +348,10 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toContain('~/.config/i3/config');
     expect(pieces[0].text).toMatch(/Add to your config file/);
 
-    // Scenario 2: GitHub-like — include markdown-body + exclude code with rich
-    // translate keeps the paths as rich placeholders
+    // Scenario 2: block <pre> is hard-skipped even when pre/code are excluded
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
-    const md = document.createElement('div');
-    md.className = 'markdown-body';
-    const mp = document.createElement('p');
-    mp.setAttribute('dir', 'auto');
-    mp.innerHTML =
-      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
-    md.appendChild(mp);
-    document.body.appendChild(md);
-
-    pieces = extractPieces(document.body, {
-      includeSelectors: ['.markdown-body'],
-      excludeSelectors: ['.highlight', 'pre', 'code'],
-      enableRichTranslate: true,
-    });
-
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('~/.config/sway/config');
-    expect(pieces[0].text).toContain('~/.config/i3/config');
-    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
-
-    // Scenario 3: nested rich extraction emits placeholder tags + CODE variables
-    document.body.innerHTML = '';
-    resetPieceCounter();
-    __resetMatchCacheForTest();
-    const md2 = document.createElement('div');
-    md2.className = 'markdown-body';
-    const p2 = document.createElement('p');
-    p2.innerHTML = 'Run <code>npm install</code> first.';
-    md2.appendChild(p2);
-    document.body.appendChild(md2);
-
-    pieces = extractPieces(document.body, {
-      includeSelectors: ['.markdown-body'],
-      excludeSelectors: ['code', 'pre'],
-      enableRichTranslate: true,
-    });
-
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('<z id=');
-    expect(pieces[0].text).toContain('npm install');
-    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
-  });
-
-  it('hard-skips block <pre> and block containers matched by exclude class', () => {
-    // Scenario 1: block <pre> is hard-skipped even when pre/code are excluded
     const container = document.createElement('div');
     const prose = document.createElement('p');
     prose.textContent = 'See the example below.';
@@ -409,15 +361,15 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     container.appendChild(pre);
     document.body.appendChild(container);
 
-    let pieces = extractPieces(document.body, {
+    pieces = extractPieces(document.body, {
       excludeSelectors: ['pre', 'code'],
     });
 
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toBe('See the example below.');
-    expect(pieces.every((p) => !p.text.includes('console.log'))).toBe(true);
+    expect(pieces.every((piece) => !piece.text.includes('console.log'))).toBe(true);
 
-    // Scenario 2: block container matched by exclude class is hard-skipped
+    // Scenario 3: block container matched by exclude class is hard-skipped
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
@@ -439,32 +391,79 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
 
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toBe('Article prose here.');
-  });
 
-  it('keeps excluded inline class (e.g. span.term) and translate="no" content inside the surrounding sentence', () => {
-    // Scenario 1: excluded inline class stays in the parent piece
-    const p = document.createElement('p');
-    p.innerHTML = 'Use the <span class="term">API_KEY</span> from your dashboard.';
-    document.body.appendChild(p);
+    // Scenario 4: excluded inline class stays in the parent piece
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const p2 = document.createElement('p');
+    p2.innerHTML = 'Use the <span class="term">API_KEY</span> from your dashboard.';
+    document.body.appendChild(p2);
 
-    let pieces = extractPieces(document.body, {
+    pieces = extractPieces(document.body, {
       excludeSelectors: ['.term'],
     });
 
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toBe('Use the API_KEY from your dashboard.');
 
-    // Scenario 2: translate="no" inline content stays in the parent piece
+    // Scenario 5: translate="no" inline content stays in the parent piece
     document.body.innerHTML = '';
     resetPieceCounter();
     __resetMatchCacheForTest();
-    const p2 = document.createElement('p');
-    p2.innerHTML = 'Open <span translate="no">Settings → Advanced</span> to configure.';
-    document.body.appendChild(p2);
+    const p3 = document.createElement('p');
+    p3.innerHTML = 'Open <span translate="no">Settings → Advanced</span> to configure.';
+    document.body.appendChild(p3);
 
     pieces = extractPieces(document.body, {});
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toContain('Settings → Advanced');
     expect(pieces[0].text).toMatch(/Open .* to configure/);
+  });
+
+  it('keeps GitHub-like rich placeholders and nested rich extraction for excluded code', () => {
+    // Scenario 1: GitHub-like — include markdown-body + exclude code with rich
+    // translate keeps the paths as rich placeholders
+    const md = document.createElement('div');
+    md.className = 'markdown-body';
+    const mp = document.createElement('p');
+    mp.setAttribute('dir', 'auto');
+    mp.innerHTML =
+      'Add to your config file (<code>~/.config/sway/config</code> or <code>~/.config/i3/config</code>):';
+    md.appendChild(mp);
+    document.body.appendChild(md);
+
+    let pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['.highlight', 'pre', 'code'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('~/.config/sway/config');
+    expect(pieces[0].text).toContain('~/.config/i3/config');
+    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
+
+    // Scenario 2: nested rich extraction emits placeholder tags + CODE variables
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const md2 = document.createElement('div');
+    md2.className = 'markdown-body';
+    const p2 = document.createElement('p');
+    p2.innerHTML = 'Run <code>npm install</code> first.';
+    md2.appendChild(p2);
+    document.body.appendChild(md2);
+
+    pieces = extractPieces(document.body, {
+      includeSelectors: ['.markdown-body'],
+      excludeSelectors: ['code', 'pre'],
+      enableRichTranslate: true,
+    });
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].text).toContain('<z id=');
+    expect(pieces[0].text).toContain('npm install');
+    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
   });
 });

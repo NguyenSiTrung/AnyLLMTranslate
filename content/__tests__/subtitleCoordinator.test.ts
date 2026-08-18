@@ -1682,7 +1682,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     vi.resetModules();
   });
 
-  it('renders parsed full-track cues and applies translated cues', async () => {
+  it('renders parsed full-track cues, applies translated cues, and skips activation when subtitle translation is disabled', async () => {
     const { forceOverlayMode, resetCoordinatorState } = await import(
       '@/content/subtitleCoordinator'
     );
@@ -1714,13 +1714,11 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       }),
     );
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
-  });
 
-  it('does not activate a direct full track when subtitle translation is disabled', async () => {
-    const { forceOverlayMode, isInOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
-    resetCoordinatorState();
+    // Disabled feature → no translate message, no overlay, no init.
+    (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockClear();
+    mockInitializeOverlay.mockClear();
+    vi.resetModules();
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       subtitleSettings: {
@@ -1728,8 +1726,11 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
         enabled: false,
       },
     });
+    const disabled = await import('@/content/subtitleCoordinator');
+    disabled.startCoordinator();
+    disabled.resetCoordinatorState();
 
-    await forceOverlayMode(
+    await disabled.forceOverlayMode(
       'https://www.coursera.org/subtitle_en.vtt',
       'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
     );
@@ -1740,87 +1741,11 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       ([message]) => (message as { action?: string }).action === 'translateSubtitle',
     );
     expect(sentTranslate).toBe(false);
-    expect(isInOverlayMode()).toBe(false);
+    expect(disabled.isInOverlayMode()).toBe(false);
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
-  it('tears down the direct-file renderer and restores the native track on translation failure', async () => {
-    const { forceOverlayMode, isInOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
-    resetCoordinatorState();
-
-    const video = document.querySelector('video');
-    if (!video) throw new Error('test video is missing');
-    const nativeTrack = { mode: 'showing' } as unknown as TextTrack;
-    Object.defineProperty(video, 'textTracks', {
-      configurable: true,
-      value: { length: 1, 0: nativeTrack },
-    });
-    const nativeCaptionWindow = document.createElement('div');
-    nativeCaptionWindow.className = 'native-captions';
-    document.body.appendChild(nativeCaptionWindow);
-    mockDetectCurrentHandler.mockReturnValue({
-      ...mockHandler,
-      platform: 'coursera',
-      getNativeCaptionHide: vi.fn(() => ({
-        selector: '.native-captions',
-        method: 'display' as const,
-      })),
-    });
-    mockGetHandlerByPlatform.mockReturnValue(null);
-    const sendMessageMock = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
-    sendMessageMock.mockImplementation((message: { action?: string }) => {
-      if (message.action === 'translateSubtitle') {
-        return Promise.reject(new Error('Service unavailable'));
-      }
-      return Promise.resolve({ success: true });
-    });
-
-    await forceOverlayMode(
-      'https://www.coursera.org/subtitle_en.vtt',
-      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
-    );
-
-    expect(mockInitializeOverlay).toHaveBeenCalledWith(
-      MOCK_CUES,
-      expect.any(Object),
-      video,
-    );
-    expect(mockCleanupOverlay).toHaveBeenCalled();
-    expect(nativeTrack.mode).toBe('showing');
-    expect(document.querySelector('[data-anyllm-role="caption-hide"]')).toBeNull();
-    expect(sendMessageMock).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
-    expect(isInOverlayMode()).toBe(false);
-  });
-
-  it('retries overlay attachment when the video mounts after translation succeeds', async () => {
-    const { forceOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
-    resetCoordinatorState();
-    document.body.innerHTML = '';
-    mockInitializeOverlay.mockReturnValue(false);
-
-    await forceOverlayMode(
-      'https://www.coursera.org/subtitle_en.vtt',
-      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
-    );
-
-    const video = document.createElement('video');
-    document.body.appendChild(video);
-    mockInitializeOverlay.mockReturnValue(true);
-    video.dispatchEvent(new Event('loadedmetadata'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(mockInitializeOverlay).toHaveBeenLastCalledWith(
-      expect.any(Array),
-      expect.any(Object),
-      video,
-    );
-  });
-
-  it('reattaches the renderer when the player replaces the video element', async () => {
+  it('attaches the overlay renderer when the video mounts late and reattaches when the player replaces the element', async () => {
     const { forceOverlayMode, resetCoordinatorState } = await import(
       '@/content/subtitleCoordinator'
     );
@@ -1839,6 +1764,13 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     firstVideo.dispatchEvent(new Event('loadedmetadata'));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    expect(mockInitializeOverlay).toHaveBeenLastCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      firstVideo,
+    );
+
+    // Player replaces the video element → renderer re-attaches to the replacement.
     const replacementVideo = document.createElement('video');
     firstVideo.remove();
     document.body.appendChild(replacementVideo);
@@ -1851,7 +1783,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     );
   });
 
-  it('hides showing native tracks only after attachment and restores them on reset', async () => {
+  it('hides showing native tracks only after attachment, restores them on reset, and restores them on failure teardown', async () => {
     const { forceOverlayMode, resetCoordinatorState } = await import(
       '@/content/subtitleCoordinator'
     );
@@ -1874,6 +1806,51 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     expect(nativeTrack.mode).toBe('hidden');
     resetCoordinatorState();
     expect(nativeTrack.mode).toBe('showing');
+
+    // Failure teardown: renderer removed, native track restored, CANCEL sent.
+    vi.resetModules();
+    const failed = await import('@/content/subtitleCoordinator');
+    failed.startCoordinator();
+    failed.resetCoordinatorState();
+
+    mockDetectCurrentHandler.mockReturnValue({
+      ...mockHandler,
+      platform: 'coursera',
+      getNativeCaptionHide: vi.fn(() => ({
+        selector: '.native-captions',
+        method: 'display' as const,
+      })),
+    });
+    mockGetHandlerByPlatform.mockReturnValue(null);
+    const sendMessageMock = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    sendMessageMock.mockImplementation((message: { action?: string }) => {
+      if (message.action === 'translateSubtitle') {
+        return Promise.reject(new Error('Service unavailable'));
+      }
+      return Promise.resolve({ success: true });
+    });
+    const failedVideo = document.querySelector('video') as HTMLVideoElement;
+    const failedTrack = { mode: 'showing' } as unknown as TextTrack;
+    Object.defineProperty(failedVideo, 'textTracks', {
+      configurable: true,
+      value: { length: 1, 0: failedTrack },
+    });
+
+    await failed.forceOverlayMode(
+      'https://www.coursera.org/subtitle_en.vtt',
+      'WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHello\n',
+    );
+
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      MOCK_CUES,
+      expect.any(Object),
+      failedVideo,
+    );
+    expect(mockCleanupOverlay).toHaveBeenCalled();
+    expect(failedTrack.mode).toBe('showing');
+    expect(document.querySelector('[data-anyllm-role="caption-hide"]')).toBeNull();
+    expect(sendMessageMock).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+    expect(failed.isInOverlayMode()).toBe(false);
   });
 
 });
@@ -2301,7 +2278,7 @@ describe('subtitleCoordinator – proactive category detection', () => {
     vi.resetModules();
   });
 
-  it('does NOT fire proactive detection on a non-watch page, when LLM detection is disabled, or with a category override', async () => {
+  it('gates proactive detection on watch pages and LLM detection, and passes a categoryChanged override through', async () => {
     // On a watch page, the debounced detector fires after startup.
     await vi.advanceTimersByTimeAsync(1700);
     expect(mockTriggerAutoCategoryDetection).toHaveBeenCalled();
@@ -2342,9 +2319,25 @@ describe('subtitleCoordinator – proactive category detection', () => {
     cleanupCoordinator = mod.startCoordinator();
     await vi.advanceTimersByTimeAsync(1700);
     expect(mockTriggerAutoCategoryDetection).not.toHaveBeenCalled();
-  });
 
-  it('passes the category override through to triggerAutoCategoryDetection when set (categoryChanged received)', async () => {
+    // Back to default settings for the categoryChanged override phase.
+    stopCoordinator();
+    vi.resetModules();
+    mockTriggerAutoCategoryDetection.mockClear();
+    mockDetectCurrentHandler.mockReturnValue(mockHandler);
+    mockHandler.isWatchPage.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      enableLLMPageCategoryDetection: true,
+      enableContextAwareTranslation: true,
+      llmCategoryDetectionMode: 'async',
+      siteRules: [],
+    });
+    mod = await import('@/content/subtitleCoordinator');
+    cleanupCoordinator = mod.startCoordinator();
+    categoryStateMod = await import('@/content/categoryState');
+    categoryStateMod._resetCategoryState();
+
     // Dispatch a categoryChanged to every registered runtime listener; only the
     // coordinator's listener mutates state.categoryOverride, the rest ignore it.
     const addListenerCalls = (global.chrome.runtime.onMessage.addListener as unknown as { mock: { calls: unknown[][] } }).mock.calls;
@@ -2437,7 +2430,7 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
     return video;
   }
 
-  it('keeps the session alive across an in-range seek and still accepts chunks with the original sessionId', async () => {
+  it('keeps the intercept-path session across an in-range seek and still cancels on an out-of-range seek', async () => {
     // Establish the intercept-path session.
     const payload = {
       url: 'https://sub.ykimg.com/test.ass',
@@ -2482,6 +2475,35 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
       () => {},
     );
     expect(mockUpdateCues).toHaveBeenCalledWith(MOCK_TRANSLATED_CUES);
+
+    // Out-of-range seek regression: re-establish a session, then seek far out.
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-seek-3');
+    expect(mockUpdateCues).toHaveBeenCalled();
+
+    vi.useFakeTimers();
+    try {
+      const video2 = attachSeekVideo();
+      await Promise.resolve();
+
+      sendMessageMock.mockClear();
+
+      // Out-of-range seek (201s → 9999s; cues cover [0,4], so 9999 is out of range).
+      (video2.currentTime as number) = 9999;
+      video2.dispatchEvent(new Event('seeked'));
+
+      await vi.advanceTimersByTimeAsync(250);
+
+      const cancelCalls2 = sendMessageMock.mock.calls.filter(
+        ([msg]) => (msg as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
+      );
+      // Out-of-range seeks are NOT short-circuited by the in-range guard —
+      // they still cancel the active session. (Count may exceed 1 if the
+      // fake-timer window also flushes other pending senders; we only need to
+      // prove the cancel path fired at least once.)
+      expect(cancelCalls2.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('Youku ASS intercept blanks native with empty ASS (hides original Dialogue)', async () => {
@@ -2522,44 +2544,6 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
     // Intercept path uses display:none (full track already captured — no DOM scrape).
     const hideStyle = document.head.querySelector('style[data-anyllm-role="caption-hide"]');
     expect(hideStyle?.textContent).toMatch(/#subtitle\s*\{\s*display:\s*none\s*!important/i);
-  });
-
-  it('regression: an out-of-range seek still cancels the session', async () => {
-    const payload = {
-      url: 'https://sub.ykimg.com/test.ass',
-      body: '[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello',
-      contentType: 'text/plain',
-      platform: 'youku',
-      originalLanguage: 'en',
-    };
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-seek-3');
-    expect(mockUpdateCues).toHaveBeenCalled();
-
-    vi.useFakeTimers();
-    try {
-      const video = attachSeekVideo();
-      await Promise.resolve();
-
-      const sendMessageMock = global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
-      sendMessageMock.mockClear();
-
-      // Out-of-range seek (201s → 9999s; cues cover [0,4], so 9999 is out of range).
-      (video.currentTime as number) = 9999;
-      video.dispatchEvent(new Event('seeked'));
-
-      await vi.advanceTimersByTimeAsync(250);
-
-      const cancelCalls = sendMessageMock.mock.calls.filter(
-        ([msg]) => (msg as { action?: string }).action === 'CANCEL_SUBTITLE_SESSION',
-      );
-      // Out-of-range seeks are NOT short-circuited by the in-range guard —
-      // they still cancel the active session. (Count may exceed 1 if the
-      // fake-timer window also flushes other pending senders; we only need to
-      // prove the cancel path fired at least once.)
-      expect(cancelCalls.length).toBeGreaterThanOrEqual(1);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });
 

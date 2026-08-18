@@ -45,7 +45,7 @@ describe('withAlpha', () => {
 });
 
 describe('resolveSubtitleStyle', () => {
-  it('classic preset reproduces the current look at the given opacity', () => {
+  it('resolves each approved preset base look at the given opacity', () => {
     expect(resolveSubtitleStyle('classic', undefined, 0.7)).toEqual({
       textColor: 'rgba(255,255,255,1)',
       originalTextColor: 'rgba(255,255,255,0.6)',
@@ -54,17 +54,11 @@ describe('resolveSubtitleStyle', () => {
       borderRadius: 8,
       textShadow: '0 1px 3px rgba(0,0,0,0.5)',
     });
-  });
-
-  it('netflix preset has no box (opacity forced to 0) and a stronger shadow', () => {
     expect(resolveSubtitleStyle('netflix', undefined, 0.7)).toMatchObject({
       backgroundColor: '0,0,0',
       backgroundOpacity: 0,
       textShadow: '0 1px 3px rgba(0,0,0,0.8)',
     });
-  });
-
-  it('black-on-white renders black text on a white box with no shadow', () => {
     expect(resolveSubtitleStyle('black-on-white', undefined, 1)).toMatchObject({
       textColor: 'rgba(0,0,0,1)',
       originalTextColor: 'rgba(0,0,0,0.6)',
@@ -74,7 +68,7 @@ describe('resolveSubtitleStyle', () => {
     });
   });
 
-  it('overrides merge per-field and derive the original color at 60% alpha', () => {
+  it('merges per-field overrides and switches the box via backgroundStyle override', () => {
     const result = resolveSubtitleStyle(
       'netflix',
       { textColor: '#f5c518', shadowStrength: 0.2 },
@@ -84,12 +78,10 @@ describe('resolveSubtitleStyle', () => {
     expect(result.originalTextColor).toBe('rgba(245,197,24,0.6)');
     expect(result.textShadow).toBe('0 1px 3px rgba(0,0,0,0.2)');
     expect(result.backgroundOpacity).toBe(0); // netflix backgroundStyle still none
-  });
 
-  it('backgroundStyle override switches the box and opacity handling', () => {
-    const result = resolveSubtitleStyle('netflix', { backgroundStyle: 'black-box' }, 0.5);
-    expect(result.backgroundOpacity).toBe(0.5);
-    expect(result.backgroundColor).toBe('0,0,0');
+    const boxed = resolveSubtitleStyle('netflix', { backgroundStyle: 'black-box' }, 0.5);
+    expect(boxed.backgroundOpacity).toBe(0.5);
+    expect(boxed.backgroundColor).toBe('0,0,0');
   });
 
   it('unknown preset id falls back to classic', () => {

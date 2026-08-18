@@ -127,42 +127,40 @@ describe('translationDisplay', () => {
         .map((child) => child.getAttribute('data-anyllm-piece-id'))
         .filter(Boolean);
       expect(orderedPieceIds).toEqual(['piece-list-1', 'piece-list-2', 'piece-list-3']);
-    });
-
-    it('reconstructs and updates rich-translate markup (FR-1)', () => {
-      const parent = document.createElement('p');
-      parent.textContent = 'Hello world';
-      document.body.appendChild(parent);
 
       // Simulate a translated flat text + the variable produced by encodeInlineHtml.
+      const richParent = document.createElement('p');
+      richParent.textContent = 'Hello world';
+      document.body.appendChild(richParent);
+
       const translatedFlat = 'Xin chào <z id="0">thế giới</z>';
       const variables = [
         { id: 0, tag: 'STRONG', openHtml: '<strong>', closeHtml: '</strong>' },
       ];
-      applyTranslation(parent, 'piece-rich', translatedFlat, 'vi', variables);
+      applyTranslation(richParent, 'piece-rich', translatedFlat, 'vi', variables);
 
-      const translation = document.querySelector('[data-anyllm-piece-id="piece-rich"]');
-      expect(translation).not.toBeNull();
-      const strong = translation?.querySelector('strong');
+      const richTranslation = document.querySelector('[data-anyllm-piece-id="piece-rich"]');
+      expect(richTranslation).not.toBeNull();
+      const strong = richTranslation?.querySelector('strong');
       expect(strong).not.toBeNull();
       expect(strong?.textContent).toBe('thế giới');
 
       // A second pass updates the same rich placeholder while preserving markup.
-      const richParent = document.createElement('p');
-      richParent.textContent = 'Hello world';
-      document.body.appendChild(richParent);
+      const rtParent = document.createElement('p');
+      rtParent.textContent = 'Hello world';
+      document.body.appendChild(rtParent);
       const vars = [
         { id: 0, tag: 'A', openHtml: '<a href="https://x.test">', closeHtml: '</a>' },
       ];
-      applyTranslation(richParent, 'piece-rt', 'A <z id="0">link</z>', 'vi', vars);
-      applyTranslation(richParent, 'piece-rt', 'Một <z id="0">liên kết</z>', 'vi', vars);
+      applyTranslation(rtParent, 'piece-rt', 'A <z id="0">link</z>', 'vi', vars);
+      applyTranslation(rtParent, 'piece-rt', 'Một <z id="0">liên kết</z>', 'vi', vars);
 
-      const richTranslation = document.querySelector('[data-anyllm-piece-id="piece-rt"]');
-      const a = richTranslation?.querySelector('a');
+      const rtEl = document.querySelector('[data-anyllm-piece-id="piece-rt"]');
+      const a = rtEl?.querySelector('a');
       expect(a).not.toBeNull();
       expect(a?.getAttribute('href')).toBe('https://x.test');
       expect(a?.textContent).toBe('liên kết');
-      expect(richTranslation?.textContent).toBe('Một liên kết');
+      expect(rtEl?.textContent).toBe('Một liên kết');
 
       // Malicious variables are sanitized and never render executable elements.
       const xssParent = document.createElement('p');
@@ -290,7 +288,6 @@ describe('translationDisplay', () => {
       expect(document.querySelectorAll('.anyllm-translate-translation')).toHaveLength(0);
       expect(getPageState()).toBe('off');
 
-      expect(getPageState()).toBe('off');
       // Toggle from default off: explicit mode request honored, then cycles off
       expect(togglePageState('translation-only')).toBe('translation-only');
       expect(togglePageState()).toBe('off');

@@ -168,7 +168,7 @@ describe('stream port recordUsage', () => {
     __resetSettingsCacheForTest();
   });
 
-  it('records page usage on web stream success (with pageSession once per tab)', async () => {
+  it('records page and PDF stream usage on success (pageSession once per tab, never for PDF)', async () => {
     mockStreamFetch(JSON.stringify({ p1: 'Xin chào', p2: 'Thế giới' }));
 
     const sender = {
@@ -219,26 +219,26 @@ describe('stream port recordUsage', () => {
     });
     expect(recordUsage).toHaveBeenCalledTimes(1);
     expect(recordUsage.mock.calls[0][0].pageSession).toBeUndefined();
-  });
 
-  it('records pdf usage on PDF stream success without pageSession', async () => {
+    // PDF stream: usage recorded without pageSession.
+    recordUsage.mockClear();
     mockStreamFetch(JSON.stringify({ a1: 'Đoạn' }));
 
-    const sender = {
+    const pdfSender = {
       tab: { id: 99, url: 'chrome-extension://abc/pdf-viewer.html' },
     } as chrome.runtime.MessageSender;
 
-    const { port, posted, deliver } = makePort(PDF_STREAM_PORT, sender);
-    fireConnect(port);
+    const pdf = makePort(PDF_STREAM_PORT, pdfSender);
+    fireConnect(pdf.port);
 
-    await deliver({
+    await pdf.deliver({
       type: 'request',
       pieces: [{ id: 'a1', text: 'Paragraph text' }],
       sourceLanguage: 'en',
       targetLanguage: 'vi',
     });
 
-    expect(posted.some((m) => (m as { type: string }).type === 'done')).toBe(true);
+    expect(pdf.posted.some((m) => (m as { type: string }).type === 'done')).toBe(true);
     expect(recordUsage).toHaveBeenCalledTimes(1);
     expect(recordUsage).toHaveBeenCalledWith(
       expect.objectContaining({

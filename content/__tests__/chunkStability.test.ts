@@ -46,7 +46,7 @@ describe('chunkStability', () => {
   });
 
   describe('orderResultsByPieces', () => {
-    it('reorders results into piece order (reading order, not completion order)', () => {
+    it('orders results into piece reading order, trails unknown ids, and does not mutate inputs', () => {
       const pieces = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
       const results = [
         { id: 'c', translatedText: 'C' },
@@ -54,22 +54,19 @@ describe('chunkStability', () => {
         { id: 'b', translatedText: 'B' },
       ];
       expect(orderResultsByPieces(results, pieces).map((r) => r.id)).toEqual(['a', 'b', 'c']);
-    });
 
-    it('places unknown ids last and does not mutate inputs', () => {
-      const pieces = [{ id: 'a' }, { id: 'b' }];
-      const results = [
+      const unknownResults = [
         { id: 'zzz', translatedText: 'Z' },
         { id: 'a', translatedText: 'A' },
       ];
-      const ordered = orderResultsByPieces(results, pieces);
+      const ordered = orderResultsByPieces(unknownResults, [{ id: 'a' }, { id: 'b' }]);
       expect(ordered.map((r) => r.id)).toEqual(['a', 'zzz']);
-      expect(results.map((r) => r.id)).toEqual(['zzz', 'a']);
+      expect(unknownResults.map((r) => r.id)).toEqual(['zzz', 'a']);
     });
   });
 
   describe('pickScrollAnchor', () => {
-    it('picks the bottom-most piece parent within the viewport band', () => {
+    it('picks the bottom-most piece in the viewport band, excludes below-fold + margin pieces, and returns null for below-fold or detached pieces', () => {
       const above = document.createElement('p');
       const mid = document.createElement('p');
       const bottom = document.createElement('p');
@@ -84,9 +81,7 @@ describe('chunkStability', () => {
           { viewportHeight: 800 },
         ),
       ).toBe(bottom);
-    });
 
-    it('excludes pieces below the fold + margin (look-ahead prefetch)', () => {
       const visible = document.createElement('p');
       const belowFold = document.createElement('p');
       document.body.appendChild(visible);
@@ -100,13 +95,11 @@ describe('chunkStability', () => {
           viewportMarginPx: 200,
         }),
       ).toBe(visible);
-    });
 
-    it('returns null when all pieces are below the fold or disconnected', () => {
-      const belowFold = document.createElement('p');
-      document.body.appendChild(belowFold);
       stubRect(belowFold, { top: 1500 });
-      expect(pickScrollAnchor([{ parentElement: belowFold }], { viewportHeight: 800 })).toBeNull();
+      expect(
+        pickScrollAnchor([{ parentElement: belowFold }], { viewportHeight: 800 }),
+      ).toBeNull();
 
       const detached = document.createElement('p'); // never appended
       expect(pickScrollAnchor([{ parentElement: detached }], { viewportHeight: 800 })).toBeNull();
@@ -115,7 +108,7 @@ describe('chunkStability', () => {
 
 
   describe('captureScrollAnchor / restoreScrollAnchor', () => {
-    it('captures the anchor top + scrollY and compensates after insertions', () => {
+    it('captures anchor top + scrollY, compensates insertions, and skips ~0 delta, user scroll, hidden anchors, null anchors, and look-ahead-only batches', () => {
       const p = document.createElement('p');
       document.body.appendChild(p);
       stubRect(p, { top: 300 });
@@ -130,56 +123,41 @@ describe('chunkStability', () => {
       stubRect(p, { top: 345 });
       restoreScrollAnchor(anchor);
       expect(window.scrollBy).toHaveBeenCalledWith(0, 45);
-    });
+      vi.mocked(window.scrollBy).mockClear();
 
-    it('does nothing when the delta is ~0 (native anchoring already compensated)', () => {
-      const p = document.createElement('p');
-      document.body.appendChild(p);
+      // Top unchanged → native anchoring already compensated.
       stubRect(p, { top: 300 });
-      stubLaidOut(p);
-
-      const anchor = captureScrollAnchor([{ parentElement: p }], { viewportHeight: 800 });
-      restoreScrollAnchor(anchor); // top unchanged
+      restoreScrollAnchor(anchor);
       expect(window.scrollBy).not.toHaveBeenCalled();
-    });
+      vi.mocked(window.scrollBy).mockClear();
 
-    it('skips when the user scrolled during application', () => {
-      const p = document.createElement('p');
-      document.body.appendChild(p);
-      stubRect(p, { top: 300 });
-      stubLaidOut(p);
-
-      const anchor = captureScrollAnchor([{ parentElement: p }], { viewportHeight: 800 });
+      // User scrolled during application → skip.
       Object.defineProperty(window, 'scrollY', { value: 620, configurable: true, writable: true });
       stubRect(p, { top: 380 });
       restoreScrollAnchor(anchor);
       expect(window.scrollBy).not.toHaveBeenCalled();
-    });
+      vi.mocked(window.scrollBy).mockClear();
+      Object.defineProperty(window, 'scrollY', { value: 500, configurable: true, writable: true });
 
-    it('skips when the anchor was hidden (translation-only display swap)', () => {
-      const p = document.createElement('p');
-      document.body.appendChild(p);
-      stubRect(p, { top: 300 });
-      // Laid out at capture…
-      stubLaidOut(p);
-      const anchor = captureScrollAnchor([{ parentElement: p }], { viewportHeight: 800 });
-      // …then hidden by translation-only (display:none → no offsetParent, no rects).
+      // Anchor hidden by translation-only (display:none → no offsetParent, no rects) → skip.
       Object.defineProperty(p, 'offsetParent', { value: null, configurable: true });
       vi.spyOn(p, 'getClientRects').mockReturnValue([] as unknown as DOMRectList);
       stubRect(p, { top: 0 });
       restoreScrollAnchor(anchor);
       expect(window.scrollBy).not.toHaveBeenCalled();
-    });
+      vi.mocked(window.scrollBy).mockClear();
 
-    it('is a no-op for null anchors and look-ahead-only batches', () => {
+      // Null anchors and look-ahead-only batches are no-ops.
       restoreScrollAnchor(null);
       expect(window.scrollBy).not.toHaveBeenCalled();
 
       const belowFold = document.createElement('p');
       document.body.appendChild(belowFold);
       stubRect(belowFold, { top: 1500 });
-      const anchor = captureScrollAnchor([{ parentElement: belowFold }], { viewportHeight: 800 });
-      expect(anchor).toBeNull();
+      const nullAnchor = captureScrollAnchor([{ parentElement: belowFold }], {
+        viewportHeight: 800,
+      });
+      expect(nullAnchor).toBeNull();
     });
   });
 

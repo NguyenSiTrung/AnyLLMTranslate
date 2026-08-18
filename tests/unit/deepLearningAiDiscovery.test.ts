@@ -55,12 +55,12 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
     document.body.innerHTML = '';
   });
 
-  it('emits SUBTITLE_TRACKS_DISCOVERED from the embedded #__NEXT_DATA__ payload', () => {
+  it('emits SUBTITLE_TRACKS_DISCOVERED from embedded __NEXT_DATA__, immediately or when it appears mid-retry, deduplicated exactly once', () => {
     document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
       nextDataFixture(),
     )}</script>`;
 
-    const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
+    let cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
     try {
       expect(bridge.send).toHaveBeenCalledWith(
         'SUBTITLE_TRACKS_DISCOVERED',
@@ -82,22 +82,11 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
     } finally {
       cleanup();
     }
-  });
 
-  it('retries while #__NEXT_DATA__ is absent and stops after the retry limit', () => {
-    const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
-    try {
-      expect(bridge.send).not.toHaveBeenCalled();
-      // 100 retries × 100ms — exhaust the discovery budget.
-      vi.advanceTimersByTime(120_000);
-      expect(bridge.send).not.toHaveBeenCalled();
-    } finally {
-      cleanup();
-    }
-  });
-
-  it('picks up the payload when it appears during the retry window', () => {
-    const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
+    // Restart with no payload, then inject it during the retry window.
+    document.body.innerHTML = '';
+    bridge.send.mockClear();
+    cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
     try {
       expect(bridge.send).not.toHaveBeenCalled();
       document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
@@ -113,6 +102,26 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
     }
   });
 
+  it('stays silent and exhausts the retry budget when __NEXT_DATA__ is absent or carries no lesson video data', () => {
+    const run = (payload?: string): void => {
+      if (payload) document.body.innerHTML = payload;
+      const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
+      try {
+        expect(bridge.send).not.toHaveBeenCalled();
+        // 100 retries × 100ms — exhaust the discovery budget.
+        vi.advanceTimersByTime(120_000);
+        expect(bridge.send).not.toHaveBeenCalled();
+      } finally {
+        cleanup();
+      }
+      document.body.innerHTML = '';
+      bridge.send.mockClear();
+    };
+
+    run();
+    run(`<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"trpcState":{"json":{"queries":[]}}}}}</script>`);
+  });
+
   it('cleanup stops pending retries', () => {
     const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
     vi.advanceTimersByTime(250);
@@ -123,16 +132,5 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
     )}</script>`;
     vi.advanceTimersByTime(120_000);
     expect(bridge.send).not.toHaveBeenCalled();
-  });
-
-  it('stays silent when the payload has no lesson video subtitle data', () => {
-    document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"trpcState":{"json":{"queries":[]}}}}}</script>`;
-    const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
-    try {
-      vi.advanceTimersByTime(120_000);
-      expect(bridge.send).not.toHaveBeenCalled();
-    } finally {
-      cleanup();
-    }
   });
 });

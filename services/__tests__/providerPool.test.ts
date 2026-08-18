@@ -313,7 +313,7 @@ describe('ProviderPoolCoordinator', () => {
   });
 
   describe('circuit-breaker failover', () => {
-    it('429/5xx/401 failover, cooldown rejoin, and 400 no-trip', async () => {
+    it('covers 429/5xx/401 failover, cooldown rejoin, 400 no-trip, and PoolExhaustedError with lastError/openUntil', async () => {
       const coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
@@ -391,18 +391,19 @@ describe('ProviderPoolCoordinator', () => {
       expect(stubs.get('k1')?.callCount).toBe(1);
       expect(stubs.get('k2')?.callCount).toBe(0);
       expect(coord400.getKeyStatus('k1').open).toBe(false);
-    });
 
-    it('all-open throws PoolExhaustedError with descriptive lastError (during and before dispatch)', async () => {
-      const coord = new ProviderPoolCoordinator({
+      // All-open exhaustion mid-dispatch.
+      stubs.clear();
+      factory.mockClear();
+      const coordEx = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(twoKeySettings());
+      coordEx.rebuild(twoKeySettings());
       setOutcome('k1', { kind: 'fail', error: new ApiError('rate limited', 429) });
       setOutcome('k2', { kind: 'fail', error: new ApiError('server error', 500) });
       try {
-        await coord.translate(baseRequest());
+        await coordEx.translate(baseRequest());
         throw new Error('expected translate to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(PoolExhaustedError);
@@ -412,18 +413,19 @@ describe('ProviderPoolCoordinator', () => {
         expect(typeof exhausted.lastError.message).toBe('string');
       }
 
+      // All-open exhaustion before dispatch.
       stubs.clear();
       factory.mockClear();
-      const coord2 = new ProviderPoolCoordinator({
+      const coordPre = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord2.rebuild(twoKeySettings());
+      coordPre.rebuild(twoKeySettings());
       setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
       setOutcome('k2', { kind: 'fail', error: new ApiError('429', 429) });
-      await coord2.translate(baseRequest()).catch(() => null);
-      expect(coord2.getKeyStatus('k1').open).toBe(true);
-      expect(coord2.getKeyStatus('k2').open).toBe(true);
+      await coordPre.translate(baseRequest()).catch(() => null);
+      expect(coordPre.getKeyStatus('k1').open).toBe(true);
+      expect(coordPre.getKeyStatus('k2').open).toBe(true);
       setOutcome('k1', {
         kind: 'success',
         result: { success: true, translations: new Map([['id1', 'from-k1']]) },
@@ -433,7 +435,7 @@ describe('ProviderPoolCoordinator', () => {
         result: { success: true, translations: new Map([['id1', 'from-k2']]) },
       });
       try {
-        await coord2.translate(baseRequest());
+        await coordPre.translate(baseRequest());
         throw new Error('expected translate to throw');
       } catch (error) {
         expect(error).toBeInstanceOf(PoolExhaustedError);
@@ -442,13 +444,13 @@ describe('ProviderPoolCoordinator', () => {
         expect(exhausted.lastError.message.length).toBeGreaterThan(0);
         expect(exhausted.openUntil).toBeDefined();
         expect(exhausted.openUntil!).toBeGreaterThan(clockNow);
-        expect(exhausted.openUntil).toBe(coord2.getKeyStatus('k1').openUntil);
+        expect(exhausted.openUntil).toBe(coordPre.getKeyStatus('k1').openUntil);
       }
     });
   });
 
   describe('delegated methods + getKeyStatus', () => {
-    it('testConnection round-robin, keyId target, unknown, and skips open slots', async () => {
+    it('delegated methods (testConnection/detectPageCategory/classifyPdfParagraphs) failover, targeting, and key-status badges', async () => {
       const coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
@@ -500,53 +502,57 @@ describe('ProviderPoolCoordinator', () => {
       expect(r.success).toBe(true);
       expect(stubs.get('k1')?.callCount).toBe(0);
       expect(stubs.get('k2')?.callCount).toBe(1);
-    });
 
-    it('detectPageCategory/classifyPdfParagraphs failover and key status badges', async () => {
-      const coord = new ProviderPoolCoordinator({
+      // detectPageCategory failover to k2 on 429.
+      stubs.clear();
+      factory.mockClear();
+      const coordCat = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(twoKeySettings());
+      coordCat.rebuild(twoKeySettings());
       setOutcome('k1', { kind: 'fail', error: new ApiError('rate limited', 429) });
-      const cat = await coord.detectPageCategory({ title: 't', description: 'd', domain: 'x.com' });
+      const cat = await coordCat.detectPageCategory({ title: 't', description: 'd', domain: 'x.com' });
       expect(cat.success).toBe(true);
       expect(cat.category).toBe('tech');
       expect(stubs.get('k2')?.callCount).toBe(1);
 
+      // classifyPdfParagraphs failover to k2 on 429.
       stubs.clear();
       factory.mockClear();
-      const coord2 = new ProviderPoolCoordinator({
+      const coordPdf = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord2.rebuild(twoKeySettings());
+      coordPdf.rebuild(twoKeySettings());
       setOutcome('k1', { kind: 'fail', error: new ApiError('rate limited', 429) });
-      const pdf = await coord2.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
+      const pdf = await coordPdf.classifyPdfParagraphs([{ id: 'p1', text: 'hi' }]);
       expect(pdf.success).toBe(true);
       expect(stubs.get('k2')?.callCount).toBe(1);
 
+      // Default key-status badges + key list.
       stubs.clear();
       factory.mockClear();
-      const coord3 = new ProviderPoolCoordinator({
+      const coordSt = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord3.rebuild(twoKeySettings());
-      const st = coord3.getKeyStatus('k1');
+      coordSt.rebuild(twoKeySettings());
+      const st = coordSt.getKeyStatus('k1');
       expect(st.open).toBe(false);
       expect(st.credentialInvalid).toBe(false);
-      expect(Object.keys(coord3.getAllKeyStatuses()).sort()).toEqual(['k1', 'k2']);
+      expect(Object.keys(coordSt.getAllKeyStatuses()).sort()).toEqual(['k1', 'k2']);
 
+      // Disabled key badge.
       const settings = twoKeySettings();
       const key = settings.providers[0]?.keys[0];
       if (key) key.enabled = false;
-      const coord4 = new ProviderPoolCoordinator({
+      const coordDis = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord4.rebuild(settings);
-      expect(coord4.getKeyStatus('k1').disabled).toBe(true);
+      coordDis.rebuild(settings);
+      expect(coordDis.getKeyStatus('k1').disabled).toBe(true);
     });
   });
 

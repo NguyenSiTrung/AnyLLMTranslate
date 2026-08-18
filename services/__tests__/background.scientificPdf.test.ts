@@ -152,7 +152,7 @@ describe('background — scientific PDF handlers', () => {
   });
 
   describe('SCIENTIFIC_PDF_CREATE_JOB', () => {
-    it('injects pool credentials + languages into createJob multipart', async () => {
+    it('injects pool credentials + languages into createJob multipart, gates on empty pool, and rejects missing fileBase64', async () => {
       // Arrange
       vi.mocked(fetch).mockResolvedValueOnce(
         jsonResponse({ id: 'job_1', state: 'queued' }, 202),
@@ -187,9 +187,9 @@ describe('background — scientific PDF handlers', () => {
         concurrencyLimit: 1,
         interval: 0,
       });
-    });
 
-    it('gates on empty pool (no dispatchable credentials) and rejects missing fileBase64', async () => {
+      // Empty pool → no dispatchable credentials; nothing fetched.
+      vi.mocked(fetch).mockClear();
       seedSettings({
         providers: [],
         provider: {
