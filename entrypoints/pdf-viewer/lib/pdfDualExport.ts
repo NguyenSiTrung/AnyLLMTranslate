@@ -117,11 +117,35 @@ export function dualExportFilename(
   }
 }
 
+/**
+ * Resolve pairs for a subset translation: mono page i corresponds to
+ * original page monoToOriginalIndex[i] (0-based). The mapping length
+ * defines the pairs; mono pages beyond it are ignored.
+ */
+export function resolveSubsetPagePairs(
+  monoToOriginalIndex: number[],
+  originalPageCount: number,
+  translatedPageCount: number,
+): DualPagePair[] {
+  const clamp = (idx: number): number =>
+    Math.max(0, Math.min(idx, Math.max(0, originalPageCount - 1)));
+  return monoToOriginalIndex.map((originalIndex, monoIndex) => ({
+    originalIndex: clamp(originalIndex),
+    translatedIndex: monoIndex < translatedPageCount ? monoIndex : null,
+    missingTranslated: monoIndex >= translatedPageCount,
+  }));
+}
+
 export interface BuildDualPdfOptions {
   /** Bytes of the mono translated PDF (from generateTranslatedPdf). */
   monoBytes: Uint8Array;
   /** Bytes of the original PDF. */
   originalBytes: Uint8Array;
+  /**
+   * 0-based original page index for each mono page — set when only a page
+   * subset was translated. Defaults to identity pairing over all originals.
+   */
+  monoToOriginalIndex?: number[];
   onProgress?: (progress: DualExportProgress) => void;
   signal?: AbortSignal;
 }
@@ -134,19 +158,22 @@ export interface BuildDualPdfOptions {
 export async function buildSideBySideDualPdf(
   options: BuildDualPdfOptions,
 ): Promise<Uint8Array> {
-  const { monoBytes, originalBytes, onProgress, signal } = options;
+  const { monoBytes, originalBytes, monoToOriginalIndex, onProgress, signal } = options;
   const originalDoc = await PDFDocument.load(originalBytes);
   const monoDoc = await PDFDocument.load(monoBytes);
   const output = await PDFDocument.create();
 
   const origCount = originalDoc.getPageCount();
   const monoCount = monoDoc.getPageCount();
-  const total = origCount;
+  const pairs = monoToOriginalIndex
+    ? resolveSubsetPagePairs(monoToOriginalIndex, origCount, monoCount)
+    : Array.from({ length: origCount }, (_, i) => resolveDualPagePair(i, origCount, monoCount));
+  const total = pairs.length;
 
-  for (let i = 0; i < origCount; i++) {
+  for (let i = 0; i < pairs.length; i++) {
     if (signal?.aborted) break;
 
-    const pair = resolveDualPagePair(i, origCount, monoCount);
+    const pair = pairs[i];
     const [origEmbedded] = await output.embedPdf(originalDoc, [pair.originalIndex]);
     const origSize = {
       width: origEmbedded.width,
@@ -190,6 +217,83 @@ export async function buildSideBySideDualPdf(
     }
 
     onProgress?.({ completed: i + 1, total });
+  }
+
+  return output.save();
+}
+
+export interface MergedRunInput {
+  /** Mono translated bytes from one successful job (subset or whole doc). */
+  monoBytes: Uint8Array;
+  /** 0-based original page index for each mono page (see BuildDualPdfOptions). */
+  monoToOriginalIndex: number[];
+}
+
+export interface BuildMergedMonoOptions {
+  originalBytes: Uint8Array;
+  /** Chronological runs; on overlap, later runs override earlier ones. */
+  runs: MergedRunInput[];
+  onProgress?: (progress: DualExportProgress) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Accumulate page-range translations into one full-length document: for each
+ * original page, embed the translated page from the latest run covering it,
+ * falling back to the original page when no run covered it.
+ */
+export async function buildMergedMonoPdf(
+  options: BuildMergedMonoOptions,
+): Promise<Uint8Array> {
+  const { originalBytes, runs, onProgress, signal } = options;
+  const originalDoc = await PDFDocument.load(originalBytes);
+  const output = await PDFDocument.create();
+  const origCount = originalDoc.getPageCount();
+
+  // Latest-wins map from original page index → {run, monoIndex}.
+  const pageSource = new Map<number, { run: number; monoIndex: number }>();
+  runs.forEach((run, runIdx) => {
+    const mapped = run.monoToOriginalIndex.slice(0, origCount);
+    mapped.forEach((originalIndex, monoIndex) => {
+      pageSource.set(originalIndex, { run: runIdx, monoIndex });
+    });
+  });
+
+  // Load run docs lazily only when a page is actually needed.
+  const runDocs = new Map<number, PDFDocument>();
+  const getRunDoc = async (runIdx: number): Promise<PDFDocument> => {
+    let doc = runDocs.get(runIdx);
+    if (!doc) {
+      doc = await PDFDocument.load(runs[runIdx].monoBytes);
+      runDocs.set(runIdx, doc);
+    }
+    return doc;
+  };
+
+  for (let i = 0; i < origCount; i++) {
+    if (signal?.aborted) break;
+    const source = pageSource.get(i);
+    if (source) {
+      const runDoc = await getRunDoc(source.run);
+      const [embedded] = await output.embedPdf(runDoc, [source.monoIndex]);
+      const page = output.addPage([embedded.width, embedded.height]);
+      page.drawPage(embedded, {
+        x: 0,
+        y: 0,
+        width: embedded.width,
+        height: embedded.height,
+      });
+    } else {
+      const [embedded] = await output.embedPdf(originalDoc, [i]);
+      const page = output.addPage([embedded.width, embedded.height]);
+      page.drawPage(embedded, {
+        x: 0,
+        y: 0,
+        width: embedded.width,
+        height: embedded.height,
+      });
+    }
+    onProgress?.({ completed: i + 1, total: origCount });
   }
 
   return output.save();

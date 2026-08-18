@@ -3,8 +3,9 @@
  * create → poll (with live log/progress) → fetch mono/dual blobs → user-driven download.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadSettings } from '@/lib/config';
+import { parsePagesSpec } from '@/lib/pdfPageSelection';
 import {
   mergeScientificPdfSettings,
   resolveScientificPdfStatus,
@@ -54,6 +55,8 @@ export interface ScientificJobProgress {
   /** Whether dual artifact is available for download */
   hasMono: boolean;
   hasDual: boolean;
+  /** One-line coverage summary on the done stage (e.g. "5 pages translated"). */
+  resultSummary?: string;
 }
 
 const IDLE: ScientificJobProgress = {
@@ -106,6 +109,17 @@ function stamp(msg: string): string {
   return `${t}  ${msg}`;
 }
 
+/** Best-effort page count from raw PDF bytes ("/Type /Page" scan, no parser). */
+async function countPdfPages(bytes: Uint8Array): Promise<number> {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+    return doc.getPageCount();
+  } catch {
+    return 0;
+  }
+}
+
 export interface UseScientificPdfJobOptions {
   pdfUrl: string;
   fileName?: string;
@@ -117,7 +131,15 @@ export interface UseScientificPdfJobResult {
   bridgeStatus: ScientificPdfStatus;
   healthOk: boolean | null;
   refreshHealth: () => Promise<boolean>;
-  startJob: () => Promise<void>;
+  /**
+   * Start a bridge translation job. `pages` is an optional pdf2zh-style
+   * selection ("1-3, 5"); omit it for the whole document.
+   * `mergeWithPrevious` (default true once a previous run exists) accumulates
+   * this run onto earlier runs of the same document into one merged result.
+   */
+  startJob: (opts?: { pages?: string; mergeWithPrevious?: boolean }) => Promise<void>;
+  /** Whether a successful run exists for the current document. */
+  hasPreviousRun: boolean;
   cancel: () => Promise<void>;
   reset: () => void;
   /**
@@ -154,6 +176,11 @@ export function useScientificPdfJob({
   fileName = 'document.pdf',
 }: UseScientificPdfJobOptions): UseScientificPdfJobResult {
   const [progress, setProgress] = useState<ScientificJobProgress>(IDLE);
+  // Clear accumulated runs when the document changes.
+  useEffect(() => {
+    runsRef.current = [];
+    setHasPreviousRun(false);
+  }, [pdfUrl]);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<ScientificPdfStatus>('not_configured');
   const abortRef = useRef(false);
@@ -162,6 +189,13 @@ export function useScientificPdfJob({
   const dualBlobRef = useRef<Blob | null>(null);
   const originalBytesRef = useRef<Uint8Array | null>(null);
   const monoBytesRef = useRef<Uint8Array | null>(null);
+  /** Raw pages spec for this job (null = whole document). */
+  const pagesSpecRef = useRef<string | null>(null);
+  /** 0-based original page index per expected mono page (subset jobs). */
+  const monoToOriginalRef = useRef<number[] | null>(null);
+  /** Successful runs of the current document (for merge accumulation). */
+  const runsRef = useRef<Array<{ monoBytes: Uint8Array; monoToOriginalIndex: number[] }>>([]);
+  const [hasPreviousRun, setHasPreviousRun] = useState(false);
   const resultUrlsRef = useRef<{ mono?: string; dual?: string }>({});
 
   const push = useCallback(
@@ -243,21 +277,37 @@ export function useScientificPdfJob({
     dualBlobRef.current = null;
     originalBytesRef.current = null;
     monoBytesRef.current = null;
+    pagesSpecRef.current = null;
+    monoToOriginalRef.current = null;
     if (resultUrlsRef.current.mono) URL.revokeObjectURL(resultUrlsRef.current.mono);
     if (resultUrlsRef.current.dual) URL.revokeObjectURL(resultUrlsRef.current.dual);
     resultUrlsRef.current = {};
     setProgress(IDLE);
+    // NOTE: runsRef intentionally survives reset — startJob calls reset at the
+    // top of every run, and accumulated runs must persist across runs. They
+    // are cleared only when the document (pdfUrl) changes.
   }, []);
 
-  const startJob = useCallback(async () => {
+  const startJob = useCallback(async (opts?: { pages?: string; mergeWithPrevious?: boolean }) => {
     abortRef.current = false;
     reset();
+    const pagesSpec = typeof opts?.pages === 'string' ? opts.pages.trim() : '';
+    pagesSpecRef.current = pagesSpec || null;
+    const expanded = pagesSpec ? parsePagesSpec(pagesSpec) : null;
+    monoToOriginalRef.current = expanded ? expanded.map((p) => p - 1) : null;
+    const mergeWithPrevious = opts?.mergeWithPrevious !== false && runsRef.current.length > 0;
     setProgress({
       ...IDLE,
       stage: 'checking',
       progress: 0.05,
       message: SCIENTIFIC_STAGE_META.checking.hint,
-      logs: [stamp('Starting Scientific translation…')],
+      logs: [
+        stamp(
+          pagesSpec
+            ? `Starting Scientific translation (pages ${pagesSpec})…`
+            : 'Starting Scientific translation…',
+        ),
+      ],
     });
 
     const ok = await refreshHealth();
@@ -308,6 +358,7 @@ export function useScientificPdfJob({
       action: 'SCIENTIFIC_PDF_CREATE_JOB',
       fileBase64,
       fileName,
+      ...(pagesSpec ? { pages: pagesSpec } : {}),
     })) as {
       success?: boolean;
       jobId?: string;
@@ -419,6 +470,51 @@ export function useScientificPdfJob({
           monoUrl = URL.createObjectURL(blob);
           resultUrlsRef.current.mono = monoUrl;
           push({ log: 'Mono PDF ready (translated only)' });
+
+          // Record this run for merge accumulation.
+          const original = originalBytesRef.current;
+          const mapping = monoToOriginalRef.current;
+          if (original && monoBytesRef.current) {
+            if (mapping) {
+              runsRef.current.push({ monoBytes: monoBytesRef.current, monoToOriginalIndex: mapping });
+            } else {
+              // Whole-document run: covers every original page in order.
+              const origCount = await countPdfPages(original);
+              runsRef.current.push({
+                monoBytes: monoBytesRef.current,
+                monoToOriginalIndex: Array.from({ length: origCount }, (_, i) => i),
+              });
+            }
+          }
+
+          // Replace the presented result with the merged document when asked.
+          if (mergeWithPrevious && runsRef.current.length > 1 && original) {
+            push({ log: 'Merging with previous translation runs…' });
+            try {
+              const { buildMergedMonoPdf } = await import('../lib/pdfDualExport');
+              const mergedBytes = await buildMergedMonoPdf({
+                originalBytes: original,
+                runs: runsRef.current,
+              });
+              const mergedBlob = new Blob([new Uint8Array(mergedBytes)], {
+                type: 'application/pdf',
+              });
+              monoBlobRef.current = mergedBlob;
+              monoBytesRef.current = new Uint8Array(mergedBytes);
+              if (monoUrl) URL.revokeObjectURL(monoUrl);
+              monoUrl = URL.createObjectURL(mergedBlob);
+              resultUrlsRef.current.mono = monoUrl;
+              // Merged mono is full-length → side-by-side pairs identity.
+              monoToOriginalRef.current = null;
+              push({ log: 'Merged result ready (all runs combined)' });
+            } catch (err) {
+              push({
+                log: `Merge failed — showing latest run only: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              });
+            }
+          }
         }
 
         const dualRes = (await chrome.runtime.sendMessage({
@@ -450,6 +546,16 @@ export function useScientificPdfJob({
           return;
         }
 
+        // Summary describes the presented result: union of runs when merged,
+        // otherwise just the pages this run covered.
+        const latestRun = runsRef.current[runsRef.current.length - 1];
+        const summaryCount = mergeWithPrevious
+          ? new Set(runsRef.current.flatMap((r) => r.monoToOriginalIndex)).size
+          : (latestRun?.monoToOriginalIndex.length ?? 0);
+        const resultSummary = mergeWithPrevious
+          ? `${summaryCount} pages translated (merged with previous runs)`
+          : `${summaryCount} pages translated`;
+
         push({
           stage: 'done',
           progress: 1,
@@ -459,8 +565,10 @@ export function useScientificPdfJob({
           dualUrl,
           hasMono: Boolean(monoUrl),
           hasDual: Boolean(dualUrl),
+          resultSummary,
           log: 'Complete — choose mono, dual, or side-by-side download (no auto-download)',
         });
+        setHasPreviousRun(true);
         return;
       }
 
@@ -556,6 +664,7 @@ export function useScientificPdfJob({
       const bytes = await buildSideBySideDualPdf({
         monoBytes: mono,
         originalBytes: orig,
+        monoToOriginalIndex: monoToOriginalRef.current ?? undefined,
       });
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
@@ -583,6 +692,7 @@ export function useScientificPdfJob({
     healthOk,
     refreshHealth,
     startJob,
+    hasPreviousRun,
     cancel,
     reset,
     dismissProgress,

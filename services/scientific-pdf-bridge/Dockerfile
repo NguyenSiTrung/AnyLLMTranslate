@@ -24,9 +24,11 @@ COPY requirements.txt .
 # Install bridge deps first, then pdf2zh (heavy).
 # Pin tencentcloud TMT SDK: newer 3.1.x removed TextTranslateRequest which pdf2zh 1.9.x
 # still imports at module load → ImportError on `from pdf2zh.converter import …`.
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir "pdf2zh>=1.9.6,<2" \
-    && pip install --no-cache-dir \
+# Retries + long read timeout: pdf2zh's tree includes 70+ MB wheels (opencv, scipy)
+# and a single read timeout otherwise kills the whole build step.
+RUN pip install --no-cache-dir --retries 10 --timeout 120 -r requirements.txt \
+    && pip install --no-cache-dir --retries 10 --timeout 120 "pdf2zh>=1.9.6,<2" \
+    && pip install --no-cache-dir --retries 10 --timeout 120 \
         "tencentcloud-sdk-python-tmt==3.0.1270" \
         "tencentcloud-sdk-python-common==3.0.1270" \
     && python -c "from pdf2zh.high_level import translate; print('pdf2zh import ok')"

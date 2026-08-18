@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { parsePageSelection } from '@/lib/pdfPageSelection';
 import {
   SCIENTIFIC_STAGE_META,
   type ScientificJobProgress,
@@ -30,6 +31,18 @@ export interface ScientificJobModalProps {
   onDownloadMono?: () => void;
   onDownloadDual?: () => void;
   onDownloadSideBySide?: () => void | Promise<void>;
+  /** Source file name shown in the pre-start setup stage. */
+  fileName?: string;
+  /** Total source pages (0/undefined while the document is still loading). */
+  numPages?: number;
+  /** Whether a previous successful run exists for this document. */
+  hasPreviousRun?: boolean;
+  /**
+   * Show the pre-start setup stage (choose pages) when provided.
+   * Called with the raw pdf2zh-style selection (undefined = all pages) and
+   * the merge preference when a previous run exists.
+   */
+  onStart?: (pages?: string, opts?: { mergeWithPrevious?: boolean }) => void;
 }
 
 function formatPercent(fraction: number): string {
@@ -73,12 +86,26 @@ export function ScientificJobModal({
   onDownloadMono,
   onDownloadDual,
   onDownloadSideBySide,
+  fileName,
+  numPages = 0,
+  hasPreviousRun = false,
+  onStart,
 }: ScientificJobModalProps): ReactElement {
   const isDone = progress.stage === 'done';
   const isError = progress.stage === 'error';
   const isActive = !isDone && !isError && progress.stage !== 'idle';
+  const isSetup = progress.stage === 'idle' && Boolean(onStart);
   const offline = progress.errorCode === 'offline';
   const meta = SCIENTIFIC_STAGE_META[progress.stage];
+
+  const [pageMode, setPageMode] = useState<'all' | 'selected'>('all');
+  const [pageInput, setPageInput] = useState('');
+  const [mergeWithPrevious, setMergeWithPrevious] = useState(true);
+  const pageSelection = useMemo(
+    () => parsePageSelection(pageInput, numPages),
+    [pageInput, numPages],
+  );
+  const selectedPagesInvalid = pageMode === 'selected' && Boolean(pageSelection.error);
 
   const flags = useMemo(
     () => ({ hasMono: progress.hasMono, hasDual: progress.hasDual }),
@@ -123,7 +150,9 @@ export function ScientificJobModal({
     ? 'Translation failed'
     : isDone
       ? 'Translation ready'
-      : 'Translating with Scientific layout…';
+      : isSetup
+        ? 'Translate PDF'
+        : 'Translating with Scientific layout…';
 
   const selectedCopy = selected ? formatCardCopy(selected) : null;
 
@@ -180,6 +209,83 @@ export function ScientificJobModal({
           )}
         </div>
 
+        {isSetup && (
+          <div className="pdf-sci-setup">
+            {(fileName || numPages > 0) && (
+              <p className="pdf-sci-setup-file">
+                {fileName}
+                {numPages > 0 && <span> · {numPages} pages</span>}
+              </p>
+            )}
+            <div className="pdf-sci-pages" role="radiogroup" aria-label="Pages to translate">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={pageMode === 'all'}
+                className={`pdf-sci-pages-option${pageMode === 'all' ? ' pdf-sci-pages-option--active' : ''}`}
+                onClick={() => setPageMode('all')}
+              >
+                All pages{numPages > 0 ? ` (1-${numPages})` : ''}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={pageMode === 'selected'}
+                className={`pdf-sci-pages-option${pageMode === 'selected' ? ' pdf-sci-pages-option--active' : ''}`}
+                onClick={() => setPageMode('selected')}
+              >
+                Selected pages
+              </button>
+            </div>
+            {pageMode === 'selected' && (
+              <div className="pdf-sci-pages-custom">
+                <input
+                  type="text"
+                  className="pdf-sci-pages-input"
+                  aria-label="Page selection"
+                  placeholder="e.g. 1-3, 5, 8-10"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  spellCheck={false}
+                />
+                {pageSelection.error ? (
+                  <p className="pdf-sci-pages-error" role="alert">
+                    {pageSelection.error}
+                  </p>
+                ) : pageInput.trim() ? (
+                  <p className="pdf-sci-pages-summary">
+                    {numPages > 0
+                      ? `${pageSelection.pages.length} of ${numPages} pages · ${Math.round(
+                          (pageSelection.pages.length / numPages) * 100,
+                        )}% of the document`
+                      : `${pageSelection.pages.length} pages`}
+                  </p>
+                ) : (
+                  <p className="pdf-sci-pages-summary pdf-sci-pages-summary--hint">
+                    Comma-separated pages and ranges, e.g. 1-3, 5, 8-10
+                  </p>
+                )}
+              </div>
+            )}
+            {hasPreviousRun && (
+              <label className="pdf-sci-merge-toggle">
+                <input
+                  type="checkbox"
+                  checked={mergeWithPrevious}
+                  onChange={(e) => setMergeWithPrevious(e.target.checked)}
+                />
+                <span>
+                  Add to previous translation
+                  <small>
+                    Result combines all runs so far; pages you translate now override
+                    earlier translations of the same page.
+                  </small>
+                </span>
+              </label>
+            )}
+          </div>
+        )}
+
         {(isActive || isDone) && (
           <ol className="pdf-sci-steps" aria-label="Pipeline stages">
             {PIPELINE_STEPS.map((s) => {
@@ -217,16 +323,19 @@ export function ScientificJobModal({
           </div>
         )}
 
-        {isDone ? (
-          <p className="pdf-download-modal-message">
-            Choose a format, then download. Nothing downloads automatically.
-          </p>
-        ) : isError ? null : (
-          <p className="pdf-download-modal-message">
-            <strong className="pdf-sci-status-label">{meta.label}:</strong>{' '}
-            {progress.message || meta.hint}
-          </p>
-        )}
+        {!isSetup &&
+          (isDone ? (
+            <p className="pdf-download-modal-message">
+              {progress.resultSummary
+                ? `${progress.resultSummary}. Choose a format, then download. Nothing downloads automatically.`
+                : 'Choose a format, then download. Nothing downloads automatically.'}
+            </p>
+          ) : isError ? null : (
+            <p className="pdf-download-modal-message">
+              <strong className="pdf-sci-status-label">{meta.label}:</strong>{' '}
+              {progress.message || meta.hint}
+            </p>
+          ))}
 
         {isError && progress.error && (
           <p className="pdf-download-modal-error">{progress.error}</p>
@@ -326,6 +435,30 @@ export function ScientificJobModal({
         )}
 
         <div className="pdf-download-modal-actions">
+          {isSetup && (
+            <>
+              <button
+                type="button"
+                className="pdf-download-btn pdf-download-btn--secondary"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pdf-download-btn pdf-download-btn--primary"
+                disabled={selectedPagesInvalid}
+                onClick={() =>
+                  onStart?.(
+                    pageMode === 'all' ? undefined : pageInput.trim(),
+                    hasPreviousRun ? { mergeWithPrevious } : undefined,
+                  )
+                }
+              >
+                Start translation
+              </button>
+            </>
+          )}
           {isError && offline && onOpenSetup && (
             <button
               type="button"

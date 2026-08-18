@@ -863,6 +863,124 @@ html, body, #root {
   padding: 2px 7px;
 }
 
+/* Pre-start setup stage (page selection) */
+.pdf-sci-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+
+.pdf-sci-setup-file {
+  margin: 0;
+  font-size: 12px;
+  color: #a1a1aa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf-sci-pages {
+  display: flex;
+  gap: 8px;
+}
+
+.pdf-sci-pages-option {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.6);
+  color: #d4d4d8;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.pdf-sci-pages-option:hover {
+  border-color: #3f3f46;
+}
+
+.pdf-sci-pages-option--active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  color: #e4e4e7;
+}
+
+.pdf-sci-pages-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pdf-sci-pages-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.8);
+  color: #e4e4e7;
+  font: inherit;
+  font-size: 13px;
+}
+
+.pdf-sci-pages-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.pdf-sci-pages-error {
+  margin: 0;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+.pdf-sci-pages-summary {
+  margin: 0;
+  font-size: 12px;
+  color: #a1a1aa;
+}
+
+.pdf-sci-pages-summary--hint {
+  color: #71717a;
+}
+
+.pdf-sci-merge-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #27272a;
+  background: rgba(24, 24, 27, 0.6);
+  cursor: pointer;
+}
+
+.pdf-sci-merge-toggle input[type='checkbox'] {
+  margin-top: 2px;
+  accent-color: #3b82f6;
+}
+
+.pdf-sci-merge-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+
+.pdf-sci-merge-toggle small {
+  font-size: 11px;
+  font-weight: 400;
+  color: #a1a1aa;
+  line-height: 1.45;
+}
+
 /* Abstract format glyphs */
 .pdf-sci-format-glyph {
   flex-shrink: 0;

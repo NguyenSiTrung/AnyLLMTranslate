@@ -6,7 +6,7 @@
  * vs an adopted bridge result. Bridge health is header chrome + offline setup card.
  */
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { FileWarning, FlaskConical, Settings2 } from 'lucide-react';
 import { ViewerLayout } from './components/ViewerLayout';
 import { PdfDocumentPane } from './components/PdfDocumentPane';
@@ -58,6 +58,7 @@ export default function App(): ReactElement {
   const [session, setSession] = useState(initialSessionState);
   const [showScientificModal, setShowScientificModal] = useState(false);
   const [setupCardDismissed, setSetupCardDismissed] = useState(false);
+  const [sourceNumPages, setSourceNumPages] = useState(0);
 
   const readerScrollRef = useRef<HTMLDivElement | null>(null);
   const compareLeftRef = useRef<HTMLDivElement | null>(null);
@@ -141,14 +142,19 @@ export default function App(): ReactElement {
     );
   }
 
+  // Translate opens the modal's setup stage (page selection) — the job
+  // starts from the modal's Start button.
   const startTranslate = (): void => {
     if (!bridgeReady) {
       setSetupCardDismissed(false);
       return;
     }
     setShowScientificModal(true);
-    void scientific.startJob();
   };
+
+  const handleSourceNumPages = useCallback((n: number): void => {
+    setSourceNumPages(n);
+  }, []);
 
   const shellMode =
     session.shellMode === 'compare' && resultPdfUrl ? 'compare' : 'reader';
@@ -282,12 +288,24 @@ export default function App(): ReactElement {
           headerExtra={headerExtra}
           readerLabel={readerPaneLabel(session.readerFocus, session.resultKind)}
           readerPaneRef={readerScrollRef}
-          reader={<PdfDocumentPane url={readerUrl} containerRef={readerScrollRef} />}
+          reader={
+            <PdfDocumentPane
+              url={readerUrl}
+              containerRef={readerScrollRef}
+              onNumPages={readerUrl === sourcePdfUrl ? handleSourceNumPages : undefined}
+            />
+          }
           leftPaneRef={compareLeftRef}
           rightPaneRef={compareRightRef}
           leftLabel="Original"
           rightLabel={compareRightLabel(session.resultKind)}
-          left={<PdfDocumentPane url={sourcePdfUrl} containerRef={compareLeftRef} />}
+          left={
+            <PdfDocumentPane
+              url={sourcePdfUrl}
+              containerRef={compareLeftRef}
+              onNumPages={handleSourceNumPages}
+            />
+          }
           right={
             resultPdfUrl ? (
               <PdfDocumentPane url={resultPdfUrl} containerRef={compareRightRef} />
@@ -323,14 +341,30 @@ export default function App(): ReactElement {
                   }
                 : scientific.progress
             }
+            fileName={fileName}
+            numPages={sourceNumPages}
+            hasPreviousRun={scientific.hasPreviousRun}
+            onStart={(pages, opts) => {
+              void scientific.startJob(
+                pages || opts?.mergeWithPrevious !== undefined
+                  ? {
+                      ...(pages ? { pages } : {}),
+                      ...(opts?.mergeWithPrevious !== undefined
+                        ? { mergeWithPrevious: opts.mergeWithPrevious }
+                        : {}),
+                    }
+                  : {},
+              );
+            }}
             onCancel={() => void scientific.cancel()}
             onClose={() => {
               setShowScientificModal(false);
               scientific.dismissProgress();
             }}
             onRetry={() => {
+              // Back to the setup stage so the page selection can be adjusted.
+              scientific.dismissProgress();
               setShowScientificModal(true);
-              void scientific.startJob();
             }}
             onOpenTranslated={() => {
               const prefer = scientific.progress.hasMono

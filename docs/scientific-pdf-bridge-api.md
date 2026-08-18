@@ -53,7 +53,8 @@ Create a translation job. Multipart form:
   "lang_out": "vi",
   "maxRpm": 20,
   "concurrencyLimit": 1,
-  "interval": 500
+  "interval": 500,
+  "pages": "1-3, 5"
 }
 ```
 
@@ -67,6 +68,7 @@ Create a translation job. Multipart form:
 | `maxRpm` | no | From active pool key (0 = unlimited). Enforced on LLM calls inside the bridge. |
 | `concurrencyLimit` | no | From pool key (0 = unlimited → bridge caps workers). Maps to pdf2zh `-t` + semaphore. |
 | `interval` | no | Min ms between LLM request starts (0 = off). Same as extension pool key `interval`. |
+| `pages` | no | pdf2zh-style page selection, 1-based inclusive (`"1-3, 5"`). Omitted / blank → whole document. Syntax-validated by the bridge (`400 invalid_request` on garbage); maps to pdf2zh `-p` / Python API `pages`. Output mono/dual PDFs contain **only** the selected pages. |
 
 Credentials and throttle are **per-job only** (from the extension active pool key). The bridge maps them to pdf2zh OpenAI env + an in-process throttle and **must not** require a global `config.json` for keys.
 

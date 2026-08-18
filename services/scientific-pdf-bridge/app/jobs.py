@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import threading
 import time
@@ -15,6 +16,25 @@ from typing import Any
 from .config import DATA_DIR, JOB_TTL_SECONDS, ensure_data_dir
 
 logger = logging.getLogger("scientific_pdf_bridge.jobs")
+
+# pdf2zh-style page spec: 1-based `n` / `n-m` tokens, comma-separated.
+PAGE_SPEC_RE = re.compile(r"^\s*\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*\s*$")
+
+
+def _expand_page_spec(spec: str) -> list[int]:
+    """Expand a validated page spec into sorted unique 0-based indices."""
+    out: set[int] = set()
+    for token in spec.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_s, _, end_s = token.partition("-")
+            start, end = int(start_s.strip()), int(end_s.strip())
+            out.update(range(start - 1, end))  # inclusive 1-based → 0-based
+        else:
+            out.add(int(token) - 1)
+    return sorted(i for i in out if i >= 0)
 
 
 class JobState(str, Enum):
@@ -55,6 +75,8 @@ class JobConfig:
     max_rpm: int = 0
     concurrency_limit: int = 0
     interval_ms: int = 0
+    # Optional pdf2zh-style page selection ("1-3, 5", 1-based); None = whole doc
+    pages: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "JobConfig":
@@ -67,6 +89,20 @@ class JobConfig:
             api_key = str(api_key)
             if not api_key:
                 api_key = None
+
+        pages_raw = data.get("pages")
+        pages: str | None = None
+        if pages_raw is not None:
+            pages = str(pages_raw).strip()
+            if pages:
+                # Regex for shape, expansion for semantics: a valid spec must
+                # yield at least one 1-based page (rejects "0", "5-2", …).
+                if not PAGE_SPEC_RE.match(pages) or not _expand_page_spec(pages):
+                    raise ValueError(
+                        "Invalid pages selection (expected e.g. \"1-3, 5\")"
+                    )
+            else:
+                pages = None
 
         max_rpm = _nonneg_int(data, "maxRpm", "max_rpm")
         concurrency_limit = _nonneg_int(data, "concurrencyLimit", "concurrency_limit")
@@ -94,17 +130,25 @@ class JobConfig:
             max_rpm=max_rpm,
             concurrency_limit=concurrency_limit,
             interval_ms=interval_ms,
+            pages=pages,
         )
+
+    def page_indices(self) -> list[int] | None:
+        """0-based page indices for pdf2zh's Python API; None = all pages."""
+        if not self.pages:
+            return None
+        return _expand_page_spec(self.pages)
 
     def redacted_summary(self) -> str:
         key_hint = "none"
         if self.api_key:
             key_hint = f"***{self.api_key[-4:]}" if len(self.api_key) >= 4 else "***"
+        pages_part = f" pages={self.pages!r}" if self.pages else ""
         return (
             f"baseUrl={self.base_url!r} model={self.model!r} "
             f"lang={self.lang_in}->{self.lang_out} apiKey={key_hint} "
             f"maxRpm={self.max_rpm} concurrency={self.concurrency_limit} "
-            f"intervalMs={self.interval_ms}"
+            f"intervalMs={self.interval_ms}{pages_part}"
         )
 
 

@@ -6,7 +6,8 @@ import os
 import tempfile
 from pathlib import Path
 
-BRIDGE_VERSION = "1.0.0"
+# 1.1.0 — optional `pages` config field (pdf2zh-style page-range selection)
+BRIDGE_VERSION = "1.1.0"
 DEFAULT_SCIENTIFIC_PDF_PORT = 17890
 
 # Job artifact TTL (seconds). Default 1 hour.

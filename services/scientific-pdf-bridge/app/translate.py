@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from .config import MOCK_TRANSLATE, TRANSLATE_TIMEOUT_SECONDS
 from .jobs import Job, JobConfig
@@ -245,22 +245,15 @@ def _parse_progress_fraction(line: str) -> float | None:
     return None
 
 
-def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    """Run pdf2zh CLI with **live** stdout/stderr → docker logs + job.message."""
-    from .throttle import resolve_pdf2zh_threads
+def build_pdf2zh_cmd(job: Job, out_dir: Path, threads: int) -> list[str]:
+    """Full pdf2zh CLI argv, including the throttle runner prefix.
 
-    out_dir = job.work_dir / "out"
-    out_dir.mkdir(exist_ok=True)
-
-    threads = resolve_pdf2zh_threads(
-        job.config.concurrency_limit,
-        job.config.max_rpm,
-    )
+    Common pdf2zh CLI: file.pdf -li en -lo vi -s openai -o outdir -t N [-p pages]
+    """
     # Runner installs OpenAI throttle inside the child process (pool RPM/interval).
     # Prefer app package on PYTHONPATH (WORKDIR=/app in Docker).
     base_cmd = [sys.executable, "-m", "app.pdf2zh_runner"]
 
-    # Common pdf2zh CLI: file.pdf -li en -lo vi -s openai -o outdir -t N
     service = "openai"
     if job.config.model:
         service = f"openai:{job.config.model}"
@@ -279,6 +272,49 @@ def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProces
         "-t",
         str(threads),
     ]
+    if job.config.pages:
+        cmd += ["-p", job.config.pages]
+    return cmd
+
+
+def _python_api_variants(job: Job, out_dir: Path, threads: int) -> list[dict[str, Any]]:
+    """Ordered pdf2zh.translate() kwarg sets; later variants are TypeError fallbacks."""
+    variants: list[dict[str, Any]] = [
+        {
+            "lang_in": job.config.lang_in,
+            "lang_out": job.config.lang_out,
+            "service": f"openai:{job.config.model}" if job.config.model else "openai",
+            "output": str(out_dir),
+            "thread": threads,
+        },
+        {
+            "lang_in": job.config.lang_in,
+            "lang_out": job.config.lang_out,
+            "service": "openai",
+            "output": str(out_dir),
+            "thread": threads,
+        },
+    ]
+    pages = job.config.page_indices()
+    if pages is not None:
+        # Lead with pages; fall back to the no-pages variant when the installed
+        # pdf2zh signature does not accept the kwarg.
+        variants[0] = {**variants[0], "pages": pages}
+    return variants
+
+
+def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """Run pdf2zh CLI with **live** stdout/stderr → docker logs + job.message."""
+    from .throttle import resolve_pdf2zh_threads
+
+    out_dir = job.work_dir / "out"
+    out_dir.mkdir(exist_ok=True)
+
+    threads = resolve_pdf2zh_threads(
+        job.config.concurrency_limit,
+        job.config.max_rpm,
+    )
+    cmd = build_pdf2zh_cmd(job, out_dir, threads)
     timeout = TRANSLATE_TIMEOUT_SECONDS or None
     logger.info(
         "Running pdf2zh for %s: threads=%s maxRpm=%s intervalMs=%s concurrency=%s (timeout=%s)",
@@ -316,7 +352,8 @@ def _run_pdf2zh_cli(job: Job, env: dict[str, str]) -> subprocess.CompletedProces
     except FileNotFoundError:
         # Last resort: bare pdf2zh without in-process throttle
         fallback = ["pdf2zh"] if shutil.which("pdf2zh") else [sys.executable, "-m", "pdf2zh"]
-        cmd = [*fallback, *cmd[len(base_cmd) :]]
+        runner_prefix = [sys.executable, "-m", "app.pdf2zh_runner"]
+        cmd = [*fallback, *cmd[len(runner_prefix) :]]
         logger.warning("[%s] pdf2zh_runner missing; falling back to %s", job.id, fallback)
         proc = _start(cmd)
 
@@ -478,23 +515,7 @@ def _try_python_api(job: Job, env: dict[str, str]) -> tuple[Path | None, Path | 
             job.config.concurrency_limit,
             job.config.max_rpm,
         )
-        service = f"openai:{job.config.model}" if job.config.model else "openai"
-        kwargs_variants = [
-            {
-                "lang_in": job.config.lang_in,
-                "lang_out": job.config.lang_out,
-                "service": service,
-                "output": str(job.work_dir / "out"),
-                "thread": threads,
-            },
-            {
-                "lang_in": job.config.lang_in,
-                "lang_out": job.config.lang_out,
-                "service": "openai",
-                "output": str(job.work_dir / "out"),
-                "thread": threads,
-            },
-        ]
+        kwargs_variants = _python_api_variants(job, job.work_dir / "out", threads)
         last_err: Exception | None = None
         for kwargs in kwargs_variants:
             try:

@@ -19,6 +19,26 @@ vi.mock('@/lib/config', () => ({
 }));
 
 import { useScientificPdfJob } from '../useScientificPdfJob';
+import { buildSideBySideDualPdf } from '../../lib/pdfDualExport';
+
+vi.mock('../../lib/pdfDualExport', () => ({
+  buildSideBySideDualPdf: vi.fn(async () => new Uint8Array([37, 80, 68, 70])),
+  buildMergedMonoPdf: vi.fn(
+    async ({ runs }: { runs: Array<{ monoToOriginalIndex: number[] }> }) =>
+      // Fake merged bytes sized by covered pages so summaries stay testable.
+      new Uint8Array(37 + runs.reduce((n, r) => n + r.monoToOriginalIndex.length, 0)),
+  ),
+}));
+
+function stubPdfFetch(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode('%PDF-1.4').buffer,
+    }),
+  );
+}
 
 describe('useScientificPdfJob', () => {
   const sendMessage = vi.fn();
@@ -122,5 +142,163 @@ describe('useScientificPdfJob', () => {
       expect(result.current.openResultInViewer('mono', { openInNewTab: true })).toBeNull();
     });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('startJob forwards the page selection on the create message', async () => {
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: false, error: 'nope', code: 'internal' });
+    stubPdfFetch();
+
+    const { result } = renderHook(() =>
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+    );
+    await act(async () => {
+      await result.current.startJob({ pages: '1-3, 5' });
+    });
+
+    const createMsg = sendMessage.mock.calls.find(
+      (c) => c[0]?.action === 'SCIENTIFIC_PDF_CREATE_JOB',
+    )?.[0];
+    expect(createMsg.pages).toBe('1-3, 5');
+  });
+
+  it('startJob omits pages when no selection is given', async () => {
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: false, error: 'nope', code: 'internal' });
+    stubPdfFetch();
+
+    const { result } = renderHook(() =>
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+    );
+    await act(async () => {
+      await result.current.startJob();
+    });
+
+    const createMsg = sendMessage.mock.calls.find(
+      (c) => c[0]?.action === 'SCIENTIFIC_PDF_CREATE_JOB',
+    )?.[0];
+    expect(createMsg.pages).toBeUndefined();
+  });
+
+  it('downloadSideBySide maps subset mono pages to their original pages', async () => {
+    // jsdom has no blob URL support; the success path creates object URLs.
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    const monoB64 = btoa('mono');
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: true, jobId: 'job_1' })
+      .mockResolvedValueOnce({
+        success: true,
+        job: { state: 'succeeded', progress: 1 },
+      })
+      .mockResolvedValueOnce({ success: true, fileBase64: monoB64 }) // mono
+      .mockResolvedValueOnce({ success: true, fileBase64: monoB64 }); // dual
+    stubPdfFetch();
+
+    const { result } = renderHook(() =>
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+    );
+    await act(async () => {
+      await result.current.startJob({ pages: '1-3, 5' });
+    });
+    expect(result.current.progress.stage).toBe('done');
+
+    await act(async () => {
+      await result.current.downloadSideBySide();
+    });
+
+    expect(buildSideBySideDualPdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monoToOriginalIndex: [0, 1, 2, 4],
+      }),
+    );
+  });
+
+  it('merges a continued run into one full-length result and summarizes coverage', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    const b64 = (s: string) => btoa(s);
+    // Run 1 (pages 1-2) succeeds.
+    const run1 = renderHook(() =>
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+    );
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: true, jobId: 'job_1' })
+      .mockResolvedValueOnce({ success: true, job: { state: 'succeeded', progress: 1 } })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('run1-mono') })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('run1-dual') });
+    stubPdfFetch();
+    await act(async () => {
+      await run1.result.current.startJob({ pages: '1-2' });
+    });
+    expect(run1.result.current.progress.stage).toBe('done');
+    expect(run1.result.current.hasPreviousRun).toBe(true);
+    expect(run1.result.current.progress.resultSummary).toBe('2 pages translated');
+
+    // Run 2 (pages 3-4) merges with the previous run.
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: true, jobId: 'job_2' })
+      .mockResolvedValueOnce({ success: true, job: { state: 'succeeded', progress: 1 } })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('run2-mono') })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('run2-dual') });
+    await act(async () => {
+      await run2Act(run1, { pages: '3-4', mergeWithPrevious: true });
+    });
+    expect(run1.result.current.progress.stage).toBe('done');
+    expect(run1.result.current.progress.resultSummary).toBe(
+      '4 pages translated (merged with previous runs)',
+    );
+
+    // Merged side-by-side pairs every original page with the merged mono.
+    await act(async () => {
+      await run1.result.current.downloadSideBySide();
+    });
+    expect(buildSideBySideDualPdf).toHaveBeenCalledWith(
+      expect.objectContaining({ monoToOriginalIndex: undefined }),
+    );
+
+    run1.unmount();
+  });
+
+  async function run2Act(
+    h: { result: { current: ReturnType<typeof useScientificPdfJob> } },
+    opts: { pages: string; mergeWithPrevious: boolean },
+  ): Promise<void> {
+    await h.result.current.startJob(opts);
+  }
+
+  it('merging can be skipped: latest run replaces the previous result', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    const b64 = (s: string) => btoa(s);
+    const { result } = renderHook(() =>
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+    );
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: true, jobId: 'job_1' })
+      .mockResolvedValueOnce({ success: true, job: { state: 'succeeded', progress: 1 } })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('m1') })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('d1') });
+    stubPdfFetch();
+    await act(async () => {
+      await result.current.startJob({ pages: '1-2' });
+    });
+
+    sendMessage
+      .mockResolvedValueOnce({ success: true, status: 'ok' })
+      .mockResolvedValueOnce({ success: true, jobId: 'job_2' })
+      .mockResolvedValueOnce({ success: true, job: { state: 'succeeded', progress: 1 } })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('m2') })
+      .mockResolvedValueOnce({ success: true, fileBase64: b64('d2') });
+    await act(async () => {
+      await result.current.startJob({ pages: '3-4', mergeWithPrevious: false });
+    });
+    expect(result.current.progress.resultSummary).toBe('2 pages translated');
   });
 });

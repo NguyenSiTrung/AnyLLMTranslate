@@ -3,7 +3,7 @@
  * Owns document loading + visibility virtualization for that URL.
  */
 
-import { useMemo, useRef, type ReactElement, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type ReactElement, type RefObject } from 'react';
 import { usePdfDocument } from '../hooks/usePdfDocument';
 import { useVisiblePages } from '../hooks/useVisiblePages';
 import { PdfCanvasRenderer } from './PdfCanvasRenderer';
@@ -14,12 +14,15 @@ export interface PdfDocumentPaneProps {
   containerRef: RefObject<HTMLDivElement | null>;
   /** Optional max canvas width */
   maxWidth?: number;
+  /** Reports the document's total page count (0 while unknown). */
+  onNumPages?: (numPages: number) => void;
 }
 
 export function PdfDocumentPane({
   url,
   containerRef,
   maxWidth = 720,
+  onNumPages,
 }: PdfDocumentPaneProps): ReactElement {
   const numPagesRef = useRef(0);
   const { visiblePages } = useVisiblePages({
@@ -28,6 +31,14 @@ export function PdfDocumentPane({
   });
   const { loadState, pages, numPages, error } = usePdfDocument(url, { visiblePages });
   numPagesRef.current = numPages;
+
+  // Report through a ref so the effect tracks only the count, not the
+  // caller's callback identity.
+  const onNumPagesRef = useRef(onNumPages);
+  onNumPagesRef.current = onNumPages;
+  useEffect(() => {
+    onNumPagesRef.current?.(numPages);
+  }, [numPages]);
 
   const pageDimensions = useMemo(() => {
     const dims = new Map<number, { width: number; height: number }>();

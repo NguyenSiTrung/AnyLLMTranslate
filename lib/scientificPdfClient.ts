@@ -56,6 +56,11 @@ export interface ScientificPdfJobConfig {
   maxRpm?: number;
   concurrencyLimit?: number;
   interval?: number;
+  /**
+   * Optional pdf2zh-style page selection ("1-3, 5", 1-based, inclusive).
+   * Omitted → translate the whole document.
+   */
+  pages?: string;
 }
 
 export type ScientificPdfJobState =

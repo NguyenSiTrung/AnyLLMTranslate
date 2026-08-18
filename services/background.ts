@@ -196,6 +196,7 @@ import { normalizeHost } from '@/services/statsCounters';
 import { invalidateDebugCache } from '@/services/debugLog';
 import { shouldAutoOpenPdf, buildSessionKey } from '@/services/pdfAutoOpen';
 import { mergeScientificPdfSettings, normalizeScientificPdfServerUrl } from '@/lib/scientificPdf';
+import { parsePagesSpec } from '@/lib/pdfPageSelection';
 import {
   health as scientificPdfHealth,
   createJob as scientificPdfCreateJob,
@@ -2730,6 +2731,15 @@ async function handleScientificPdfCreateJob(
     const langIn = (message.sourceLanguage ?? settings.sourceLanguage ?? 'auto').trim() || 'auto';
     const langOut = (message.targetLanguage ?? settings.targetLanguage ?? 'en').trim() || 'en';
 
+    const pagesSpec = typeof message.pages === 'string' ? message.pages.trim() : '';
+    if (pagesSpec && !parsePagesSpec(pagesSpec)) {
+      return {
+        success: false,
+        error: 'Invalid pages selection (expected e.g. "1-3, 5")',
+        code: 'invalid_request',
+      };
+    }
+
     let fileBytes: Uint8Array;
     try {
       fileBytes = base64ToUint8Array(message.fileBase64);
@@ -2757,6 +2767,7 @@ async function handleScientificPdfCreateJob(
         maxRpm: creds.maxRpm,
         concurrencyLimit: creds.concurrencyLimit,
         interval: creds.interval,
+        ...(pagesSpec ? { pages: pagesSpec } : {}),
       },
     });
 
