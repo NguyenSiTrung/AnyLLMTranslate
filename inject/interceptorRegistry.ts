@@ -84,42 +84,29 @@ export class InterceptorRegistry {
 
   /** Match a URL against all registered subtitle patterns */
   matchUrl(url: string): UrlMatch | null {
-    for (const entry of this.patterns) {
-      if (entry.pattern.test(url)) {
-        // Resolve relative URLs against the actual page origin so platform
-        // handlers' languageExtractor receives a usable URL object. Using a
-        // dummy base ('http://example.com') would yield wrong host/path info
-        // for relative subtitle URLs.
-        const parsedUrl = new URL(url, window.location.origin);
-        return {
-          platform: entry.platform,
-          language: entry.languageExtractor?.(parsedUrl),
-          pattern: entry.pattern,
-        };
-      }
-    }
-    return null;
+    return this.matchRegisteredUrl(this.patterns, url);
   }
 
   /** Match a URL against all registered metadata patterns (read-only) */
   matchMetadataUrl(url: string): UrlMatch | null {
-    for (const entry of this.metadataPatterns) {
-      if (entry.pattern.test(url)) {
-        const parsedUrl = new URL(url, window.location.origin);
-        return {
-          platform: entry.platform,
-          language: entry.languageExtractor?.(parsedUrl),
-          pattern: entry.pattern,
-        };
-      }
-    }
-    return null;
+    return this.matchRegisteredUrl(this.metadataPatterns, url);
   }
 
   /** Match a URL against all registered manifest patterns (read-only, non-blocking) */
   matchManifestUrl(url: string): UrlMatch | null {
-    for (const entry of this.manifestPatterns) {
-      if (entry.pattern.test(url)) {
+    return this.matchRegisteredUrl(this.manifestPatterns, url);
+  }
+
+  private matchRegisteredUrl(patterns: SubtitleUrlPattern[], url: string): UrlMatch | null {
+    const candidates = [url];
+    const absoluteUrl = resolveUrlForMatching(url);
+    if (absoluteUrl !== url) candidates.push(absoluteUrl);
+
+    for (const candidate of candidates) {
+      for (const entry of patterns) {
+        if (!entry.pattern.test(candidate)) continue;
+        // Resolve relative URLs against the actual page origin so platform
+        // handlers' languageExtractor receives a usable URL object.
         const parsedUrl = new URL(url, window.location.origin);
         return {
           platform: entry.platform,
@@ -198,6 +185,15 @@ export class InterceptorRegistry {
     this.metadataPatterns = [];
     this.manifestPatterns = [];
     this.contentTypeMap.clear();
+  }
+}
+
+/** Resolve relative requests for patterns that include the current host. */
+function resolveUrlForMatching(url: string): string {
+  try {
+    return new URL(url, window.location.origin).href;
+  } catch {
+    return url;
   }
 }
 

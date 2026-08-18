@@ -191,6 +191,12 @@ export class DeepLearningAiHandler implements SubtitleHandler {
         // is handled by embedded __NEXT_DATA__ discovery in the MAIN world.
         pattern: /(?:deeplearning\.ai|dlai\.link)\/api\/trpc\/.*getLessonVideo/i,
       },
+      {
+        platform: DEEP_LEARNING_AI_PLATFORM,
+        // Next.js Pages Router fetches this payload during client-side lesson
+        // navigation. It contains the same dehydrated tRPC state as __NEXT_DATA__.
+        pattern: /(?:deeplearning\.ai|dlai\.link)\/[^?#]*\/_next\/data\/[^/?#]+\/.*\/lesson\/.*\.json(?:\?|$)/i,
+      },
     ];
   }
 

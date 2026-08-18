@@ -295,6 +295,20 @@ describe('DeepLearningAiHandler', () => {
     expect(metadata.pattern.test('https://learn.deeplearning.ai/courses/agentic-ai/lesson/pu5xbv/welcome!')).toBe(false);
   });
 
+  it('recognizes Next.js lesson data payloads used during client navigation', () => {
+    const handler = new DeepLearningAiHandler();
+    const metadata = handler.getMetadataPatterns().find((entry) =>
+      entry.pattern.test(
+        'https://learn.deeplearning.ai/learnext/_next/data/build-id/courses/agentic-ai/lesson/nae3i1/next-lesson.json',
+      ),
+    );
+
+    expect(metadata).toBeDefined();
+    expect(metadata?.pattern.test(
+      'https://learn.deeplearning.ai/learnext/_next/data/build-id/courses/agentic-ai.json',
+    )).toBe(false);
+  });
+
   it('extracts tracks from an intercepted tRPC metadata body', () => {
     const handler = new DeepLearningAiHandler();
     const body = JSON.stringify({

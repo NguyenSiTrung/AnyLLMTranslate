@@ -60,6 +60,7 @@ import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
+import { startSpaNavigationWatcher as watchSpaNavigation } from '@/content/spaNavigationWatcher';
 import {
   reconcilePendingTranslatedTexts,
   sortCueTextsByPlaybackPriority,
@@ -2469,51 +2470,32 @@ function restoreYoutubeCaptionFallback(): void {
  * Returns a cleanup function.
  */
 function startSpaNavigationWatcher(): () => void {
-  let lastUrl = window.location.href;
-
-  const handleNavigation = () => {
-    const currentUrl = window.location.href;
-    if (currentUrl !== lastUrl) {
-      lastUrl = currentUrl;
-      console.log('AnyLLMTranslate: SPA navigation detected, resetting coordinator state');
-      // P1: cancel the pending proactive-category-detection timer so it doesn't
-      // fire against the new page's context after the reset. Cleared here (not
-      // in resetCoordinatorState) because resetCoordinatorState runs in many
-      // test beforeEach setups under fake timers and clearing there breaks them.
-      if (proactiveCategoryDetectionTimer !== null) {
-        clearTimeout(proactiveCategoryDetectionTimer);
-        proactiveCategoryDetectionTimer = null;
-      }
-      // Tell the background to abandon any in-progress subtitle session for this
-      // tab so it stops translating cues for the page we just left.
-      cancelBackgroundSubtitleSession();
-      resetCoordinatorState();
+  let lastHandledUrl = window.location.href;
+  const handleNavigation = (url = window.location.href) => {
+    if (url === lastHandledUrl) return;
+    lastHandledUrl = url;
+    console.log('AnyLLMTranslate: SPA navigation detected, resetting coordinator state');
+    // P1: cancel the pending proactive-category-detection timer so it doesn't
+    // fire against the new page's context after the reset. Cleared here (not
+    // in resetCoordinatorState) because resetCoordinatorState runs in many
+    // test beforeEach setups under fake timers and clearing there breaks them.
+    if (proactiveCategoryDetectionTimer !== null) {
+      clearTimeout(proactiveCategoryDetectionTimer);
+      proactiveCategoryDetectionTimer = null;
     }
+    // Tell the background to abandon any in-progress subtitle session for this
+    // tab so it stops translating cues for the page we just left.
+    cancelBackgroundSubtitleSession();
+    resetCoordinatorState();
   };
 
-  // YouTube emits 'yt-navigate-finish' on SPA nav; fall back to history API patching
-  window.addEventListener('yt-navigate-finish', handleNavigation);
-
-  // Patch pushState / replaceState for generic SPA support
-  const originalPushState = history.pushState.bind(history);
-  const originalReplaceState = history.replaceState.bind(history);
-
-  history.pushState = function (...args) {
-    originalPushState(...args);
-    handleNavigation();
-  };
-  history.replaceState = function (...args) {
-    originalReplaceState(...args);
-    handleNavigation();
-  };
-
-  window.addEventListener('popstate', handleNavigation);
+  const cleanupNavigation = watchSpaNavigation(handleNavigation);
+  const handleYoutubeNavigation = () => handleNavigation();
+  window.addEventListener('yt-navigate-finish', handleYoutubeNavigation);
 
   return () => {
-    window.removeEventListener('yt-navigate-finish', handleNavigation);
-    window.removeEventListener('popstate', handleNavigation);
-    history.pushState = originalPushState;
-    history.replaceState = originalReplaceState;
+    window.removeEventListener('yt-navigate-finish', handleYoutubeNavigation);
+    cleanupNavigation();
   };
 }
 
