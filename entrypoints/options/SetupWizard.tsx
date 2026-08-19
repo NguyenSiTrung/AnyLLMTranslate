@@ -7,7 +7,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
 import { syncProviderToPool } from '@/lib/config';
-import type { ProviderConfig } from '@/types/config';
+import type { KeyTestResult, ProviderConfig } from '@/types/config';
 import {
   inferCatalogId,
   resolveCatalogSelection,
@@ -250,10 +250,21 @@ export function SetupWizard({
     setTestResult(result);
     setIsTesting(false);
     const status = result.overall ? 'success' : 'error';
+    const failedStep = result.steps.find((s) => !s.success);
+    const keyResult: KeyTestResult = {
+      success: result.overall,
+      at: Date.now(),
+      latencyMs: result.totalLatencyMs,
+      error: result.overall ? undefined : failedStep?.error,
+    };
     const { provider, providers } = useSettingsStore.getState();
     await updateSettings({
       provider: { ...provider, connectionStatus: status },
-      providers: syncProviderToPool(providers ?? [], { connectionStatus: status }),
+      providers: syncProviderToPool(
+        providers ?? [],
+        { connectionStatus: status },
+        { lastTestResult: keyResult },
+      ),
     });
 
     if (result.overall) {

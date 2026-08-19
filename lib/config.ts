@@ -212,6 +212,15 @@ export function syncProviderToPool(
       ? { thinkingEffort: providerPatch.thinkingEffort }
       : {}),
   };
+  // Editing credentials invalidates any persisted connection-test result
+  // (mirrors applyProviderPatch in lib/poolTestStatus.ts).
+  if (
+    providerPatch.baseUrl !== undefined ||
+    providerPatch.model !== undefined ||
+    providerPatch.requiresApiKey !== undefined
+  ) {
+    delete patchedProvider.lastTestResult;
+  }
   // Patch the first key (apiKey + maxRpm live on the key in the pool model).
   let patchedKeys = first.keys;
   if (
@@ -219,15 +228,18 @@ export function syncProviderToPool(
     patchedKeys.length > 0
   ) {
     const [firstKey, ...restKeys] = patchedKeys;
-    patchedKeys = [
-      {
-        ...firstKey,
-        ...(providerPatch.apiKey !== undefined ? { apiKey: providerPatch.apiKey } : {}),
-        ...(providerPatch.maxRpm !== undefined ? { maxRpm: providerPatch.maxRpm } : {}),
-        ...keyPatch,
-      },
-      ...restKeys,
-    ];
+    const nextKey: PoolKey = {
+      ...firstKey,
+      ...(providerPatch.apiKey !== undefined ? { apiKey: providerPatch.apiKey } : {}),
+      ...(providerPatch.maxRpm !== undefined ? { maxRpm: providerPatch.maxRpm } : {}),
+      ...keyPatch,
+    };
+    // Changing the API key invalidates the key's persisted test result
+    // (mirrors applyKeyPatch in lib/poolTestStatus.ts).
+    if (providerPatch.apiKey !== undefined) {
+      delete nextKey.lastTestResult;
+    }
+    patchedKeys = [nextKey, ...restKeys];
   }
   return [{ ...patchedProvider, keys: patchedKeys }, ...rest];
 }
