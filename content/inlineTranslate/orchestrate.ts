@@ -19,8 +19,25 @@ import {
   scheduleToastDismiss,
   showToast,
 } from './feedback';
-import { joinDualMode, writeElementText } from './writeback';
+import { joinDualMode, writeElementText, writeElementTextAsync } from './writeback';
+import type { WriteBackResult } from './writeback';
 import type { InlineTranslateRuntimeConfig } from './types';
+
+/** Async helper for CE framework sync (ChatGPT etc.) with fallback to sync */
+async function writeSafeAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
+  isWritingBack = true;
+  try {
+    // Prefer async path for contentEditable to allow Lexical/ProseMirror to reconcile via events
+    if (el.isContentEditable || el.contentEditable === 'true') {
+      return await writeElementTextAsync(el, text);
+    }
+    return writeElementText(el, text);
+  } finally {
+    isWritingBack = false;
+  }
+}
+
+
 
 export interface OrchestrateOptions {
   /** Skip stripping trailing trigger characters (e.g. Alt+I path) */
@@ -74,7 +91,7 @@ export function cancelActiveRequest(reason = 'cancelled'): void {
   activeElement = null;
 }
 
-function writeSafe(el: HTMLElement, text: string): ReturnType<typeof writeElementText> {
+function writeSafe(el: HTMLElement, text: string): WriteBackResult {
   isWritingBack = true;
   try {
     return writeElementText(el, text);
@@ -82,6 +99,7 @@ function writeSafe(el: HTMLElement, text: string): ReturnType<typeof writeElemen
     isWritingBack = false;
   }
 }
+
 
 function stripTrailingTrigger(text: string, key: string, count: number): string {
   let result = text;
@@ -227,7 +245,7 @@ export async function runInlineTranslate(
   const preTranslateDisplay = options.skipStripTrailing
     ? prefixResult.body.trim() || text
     : text;
-  // Show body (without prefix) before request
+  // Show body (without prefix) before request (sync — keep gesture timing fast; framework sync for final write is critical)
   writeSafe(targetEl, preTranslateDisplay);
 
   const reqId = ++requestSeq;
@@ -279,22 +297,18 @@ export async function runInlineTranslate(
       cancelActiveRequest('element-changed');
       return;
     }
-    // User may have typed during network — abort write
     if (getElementText(snapshotEl) !== activeSnapshotText) {
       cancelActiveRequest('user-edited-after-response');
       return;
     }
-
-    console.debug('[AnyLLMTranslate:inline] received response', response);
-
     if (response?.success && response.translatedText) {
       let out: string = response.translatedText;
       if (config.dualMode) {
         out = joinDualMode(text, response.translatedText, snapshotEl);
       }
-      const write = writeSafe(snapshotEl, out);
+      const write = await writeSafeAsync(snapshotEl, out);
       if (!write.success) {
-        writeSafe(snapshotEl, originalText);
+        await writeSafeAsync(snapshotEl, originalText);
         showToast(snapshotEl, '⚠ Write failed', 'error');
         console.warn('[AnyLLMTranslate:inline] write-back failed');
       } else {
@@ -303,13 +317,13 @@ export async function runInlineTranslate(
         showToast(snapshotEl, 'Translated ✓', 'success');
       }
     } else {
-      writeSafe(snapshotEl, originalText);
+      await writeSafeAsync(snapshotEl, originalText);
       showToast(snapshotEl, '⚠ Translation failed', 'error');
       console.warn('[AnyLLMTranslate:inline] translation failed', response);
     }
   } catch (error) {
     if (activeRequestId === reqId && snapshotEl.isConnected) {
-      writeSafe(snapshotEl, originalText);
+      await writeSafeAsync(snapshotEl, originalText);
       showToast(snapshotEl, '⚠ Translation failed', 'error');
     }
     console.error('[AnyLLMTranslate:inline] translation error', error);
