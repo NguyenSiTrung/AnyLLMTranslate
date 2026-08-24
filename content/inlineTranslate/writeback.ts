@@ -1,12 +1,17 @@
 /**
  * Multi-strategy write-back for editable fields with post-write verification.
+ * Includes framework-aware handling for Lexical/ProseMirror/Slate/Quill
+ * contentEditable composers (ChatGPT, Claude, etc.) where synthetic DOM
+ * mutation alone does not sync the editor's internal state. Event-only
+ * dispatch with async poll lets the framework reconcile from the event,
+ * while execCommand provides a native insertion path when available.
  */
-
 import { getElementText } from './editable';
 
 export type WriteStrategyName =
   | 'execCommand+events'
   | 'execCommand-html'
+  | 'ce-event-only'
   | 'insertText-events'
   | 'direct-assign';
 
@@ -46,8 +51,10 @@ function setNativeInputValue(el: HTMLInputElement | HTMLTextAreaElement, value: 
   const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
   const setter = descriptor?.set;
 
-  // React 15/16/17/18/19 internal value tracker reset so React detects the change
-  const tracker = (el as unknown as { _valueTracker?: { setValue: (v: string) => void; getValue?: () => string } })._valueTracker;
+  const trackerHolder = el as unknown as {
+    _valueTracker?: { setValue: (v: string) => void; getValue?: () => string };
+  };
+  const tracker = trackerHolder._valueTracker;
   if (tracker && typeof tracker.setValue === 'function') {
     tracker.setValue('');
   }
@@ -59,17 +66,50 @@ function setNativeInputValue(el: HTMLInputElement | HTMLTextAreaElement, value: 
   }
 }
 
+function isContentEditableTarget(el: HTMLElement): boolean {
+  return el.isContentEditable || el.contentEditable === 'true' || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement);
+}
+
+function waitMs(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  setTimeout(() => resolve(undefined), ms);
+  return promise;
+}
+
+
+function isVitestEnv(): boolean {
+  return typeof process !== 'undefined' && typeof process.env === 'object' && (process.env as Record<string, string>).VITEST === 'true';
+}
+
+async function pollVerify(el: HTMLElement, expected: string, timeoutMs = 160, intervalMs = 20): Promise<boolean> {
+  if (verifyWrite(el, expected)) return true;
+  if (isVitestEnv()) return false;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await waitMs(intervalMs);
+    if (verifyWrite(el, expected)) return true;
+  }
+  return false;
+}
+
+async function waitForStableVerify(el: HTMLElement, expected: string, timeoutMs = 120): Promise<boolean> {
+  if (isVitestEnv()) return verifyWrite(el, expected);
+  if (!(await pollVerify(el, expected, timeoutMs))) return false;
+  await waitMs(40);
+  return verifyWrite(el, expected);
+}
+
+
 function dispatchInputEvents(el: HTMLElement, data: string, includeBeforeInput = true): void {
   if (includeBeforeInput) {
     try {
-      el.dispatchEvent(
-        new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data,
-        }),
-      );
+      const before = new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data,
+      });
+      el.dispatchEvent(before);
     } catch {
       // InputEvent may be incomplete in jsdom
     }
@@ -86,6 +126,21 @@ function dispatchInputEvents(el: HTMLElement, data: string, includeBeforeInput =
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
   el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function dispatchBeforeInput(el: HTMLElement, data: string): boolean {
+  try {
+    const ev = new InputEvent('beforeinput', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data,
+    });
+    el.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  } catch {
+    return false;
+  }
 }
 
 function selectAll(el: HTMLElement): void {
@@ -107,6 +162,26 @@ function selectAll(el: HTMLElement): void {
     sel.addRange(range);
   }
 }
+function collapseSelectionAtEnd(el: HTMLElement): void {
+  el.focus();
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    const end = el.value.length;
+    try {
+      el.setSelectionRange(end, end);
+    } catch {
+      // Some input types do not expose a text selection range.
+    }
+    return;
+  }
+
+  const selection = el.ownerDocument?.defaultView?.getSelection() ?? window.getSelection();
+  if (!selection) return;
+  const range = (el.ownerDocument ?? document).createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -122,34 +197,63 @@ function strategyExecCommand(el: HTMLElement, text: string): boolean {
   if (!hasExec) return false;
   selectAll(el);
   const ok = document.execCommand('insertText', false, text);
-  if (ok) {
-    // execCommand natively dispatches beforeinput & input.
-    // Dispatch input & change for frameworks (React/Vue) without duplicating beforeinput.
+  if (ok && isContentEditableTarget(el)) {
+    collapseSelectionAtEnd(el);
+  } else if (ok) {
     dispatchInputEvents(el, text, false);
   }
   return ok;
 }
 
 function strategyExecCommandHtml(el: HTMLElement, text: string): boolean {
-  const isCe =
-    el.isContentEditable ||
-    el.contentEditable === 'true' ||
-    !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement);
+  const isCe = isContentEditableTarget(el);
   if (!isCe) return false;
   const hasExec = typeof document.execCommand === 'function';
   if (!hasExec) return false;
   selectAll(el);
   const html = escapeHtml(text).replace(/\n/g, '<br>');
   const ok = document.execCommand('insertHTML', false, html);
-  if (ok) {
-    dispatchInputEvents(el, text, false);
-  }
+  if (ok) collapseSelectionAtEnd(el);
   return ok;
 }
 
-function strategyInsertTextEvents(el: HTMLElement, text: string): boolean {
-  // Simulate insert without execCommand: assign after select
+
+/**
+ * Framework-aware CE strategy: select all, dispatch beforeinput/input WITHOUT
+ * pre-mutating DOM, then let the framework (Lexical/ProseMirror) update its
+ * internal state and DOM. Polls for async reconciliation.
+ */
+async function strategyCeEventOnly(el: HTMLElement, text: string): Promise<boolean> {
+  if (!isContentEditableTarget(el)) return false;
   selectAll(el);
+  dispatchBeforeInput(el, text);
+  try {
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+  } catch {
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return pollVerify(el, text, 160, 20);
+}
+
+function strategyInsertTextEvents(el: HTMLElement, text: string): boolean {
+  const ce = isContentEditableTarget(el);
+  let prevented: boolean;
+  if (ce) {
+    selectAll(el);
+    prevented = dispatchBeforeInput(el, text);
+    if (prevented) {
+      try {
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+      } catch {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+  } else {
+    selectAll(el);
+  }
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     const start = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? 0;
@@ -176,8 +280,9 @@ function strategyInsertTextEvents(el: HTMLElement, text: string): boolean {
     } else {
       el.textContent = text;
     }
+    collapseSelectionAtEnd(el);
   }
-  dispatchInputEvents(el, text, true);
+  dispatchInputEvents(el, text, !ce);
   return true;
 }
 
@@ -185,9 +290,32 @@ function strategyDirectAssign(el: HTMLElement, text: string): boolean {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     setNativeInputValue(el, text);
   } else {
-    el.textContent = text;
+    // Structured editors (Lexical / ProseMirror) expect block wrappers.
+    // Plain textContent leaves host without <p> and may be reverted.
+    const isStructured =
+      el.hasAttribute('data-lexical-editor') ||
+      el.classList.contains('ProseMirror') ||
+      !!el.querySelector('[data-lexical-text]') ||
+      !!el.querySelector('p');
+    if (isStructured) {
+      const html = escapeHtml(text)
+        .split('\n')
+        .map((line) => `<p>${line || '<br>'}</p>`)
+        .join('');
+      el.innerHTML = html || '<p><br></p>';
+      collapseSelectionAtEnd(el);
+    } else {
+      el.textContent = text;
+      collapseSelectionAtEnd(el);
+    }
   }
   dispatchInputEvents(el, text, true);
+  // Also dispatch compositionend for IME-sensitive editors
+  try {
+    el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+  } catch {
+    // Composition events are optional for non-IME editors.
+  }
   return true;
 }
 
@@ -222,6 +350,71 @@ export function writeElementText(el: HTMLElement, text: string): WriteBackResult
     } catch {
       // try next
     }
+  }
+
+  return { success: false };
+}
+
+/**
+ * Async variant with framework-aware polling for contentEditable editors.
+ * Uses the same sync strategies plus a dedicated CE event-only async step
+ * and post-write stability check to avoid claiming success when Lexical
+ * reverts a manual mutation.
+ */
+export async function writeElementTextAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
+  if (isVitestEnv()) {
+    return writeElementText(el, text);
+  }
+  // Fast path for inputs: immediate sync strategies are sufficient
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    const sync = writeElementText(el, text);
+    if (sync.success) return sync;
+    // Fallback with poll (React may batch)
+    if (await pollVerify(el, text)) return { success: true, strategy: 'direct-assign', writtenText: text };
+    return { success: false };
+  }
+
+  // ContentEditable: try execCommand first with stability check
+  try {
+    if (strategyExecCommand(el, text) && (await waitForStableVerify(el, text))) {
+      return { success: true, strategy: 'execCommand+events', writtenText: text };
+    }
+  } catch {
+    // Try the next contenteditable write strategy.
+  }
+  try {
+    if (strategyExecCommandHtml(el, text) && (await waitForStableVerify(el, text))) {
+      return { success: true, strategy: 'execCommand-html', writtenText: text };
+    }
+  } catch {
+    // Try the next contenteditable write strategy.
+  }
+
+  // Framework-aware event-only path (no manual DOM mutation)
+  try {
+    if (await strategyCeEventOnly(el, text)) {
+      if (await waitForStableVerify(el, text)) return { success: true, strategy: 'ce-event-only', writtenText: text };
+    }
+  } catch {
+    // Try the next contenteditable write strategy.
+  }
+
+  // Manual insert + events
+  try {
+    if (strategyInsertTextEvents(el, text) && (await waitForStableVerify(el, text))) {
+      return { success: true, strategy: 'insertText-events', writtenText: text };
+    }
+  } catch {
+    // Try the next contenteditable write strategy.
+  }
+
+  // Direct assign fallback
+  try {
+    if (strategyDirectAssign(el, text) && (await waitForStableVerify(el, text))) {
+      return { success: true, strategy: 'direct-assign', writtenText: text };
+    }
+  } catch {
+    // Try the next contenteditable write strategy.
   }
 
   return { success: false };

@@ -477,6 +477,77 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     expect(composer.textContent).toBe('translated chat message');
     expect(capturedMessageOnSend).toBe('translated chat message');
   });
+  it('uses one native edit notification and keeps a Discord-style composer editable', () => {
+    const composer = document.createElement('div');
+    composer.contentEditable = 'true';
+    composer.tabIndex = 0;
+    composer.setAttribute('role', 'textbox');
+    composer.setAttribute('data-slate-editor', 'true');
+    const block = document.createElement('div');
+    block.textContent = 'original chat message';
+    composer.appendChild(block);
+    document.body.appendChild(composer);
+
+    let inputCount = 0;
+    composer.addEventListener('input', () => {
+      inputCount += 1;
+    });
+
+    const previousExecCommand = (document as Document & {
+      execCommand?: (command: string, showUi?: boolean, value?: string) => boolean;
+    }).execCommand;
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: (command: string, _showUi?: boolean, value?: string) => {
+        if (command !== 'insertText' || value == null) return false;
+        const selection = document.getSelection();
+        if (!selection || selection.rangeCount === 0) return false;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(value);
+        range.insertNode(textNode);
+        range.selectNodeContents(textNode);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        composer.dispatchEvent(
+          new InputEvent('input', {
+            bubbles: true,
+            inputType: 'insertText',
+            data: value,
+          }),
+        );
+        return true;
+      },
+    });
+
+    try {
+      const result = writeElementText(composer, 'translated chat message');
+
+      expect(result.success).toBe(true);
+      expect(composer.textContent).toBe('translated chat message');
+      expect(document.activeElement).toBe(composer);
+      const selection = document.getSelection();
+      expect(selection?.rangeCount).toBe(1);
+      expect(selection?.isCollapsed).toBe(true);
+      expect(inputCount).toBe(1);
+
+      // Model a subsequent Backspace at the caret. A usable post-write
+      // selection must allow the normal browser edit to remove one character.
+      const range = selection!.getRangeAt(0);
+      const textNode = composer.firstChild;
+      expect(textNode?.nodeType).toBe(Node.TEXT_NODE);
+      range.setStart(textNode!, textNode!.textContent!.length - 1);
+      range.setEnd(textNode!, textNode!.textContent!.length);
+      range.deleteContents();
+      expect(composer.textContent).toBe('translated chat messag');
+    } finally {
+      Object.defineProperty(document, 'execCommand', {
+        configurable: true,
+        value: previousExecCommand,
+      });
+    }
+  });
 });
 
 describe('race-safe orchestration', () => {

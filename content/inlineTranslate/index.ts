@@ -270,9 +270,10 @@ export { replaceElementText };
 export { undoMap, isInlineTranslating, tryFallbackUndo, cancelActiveRequest };
 export { PULSING_CLASS, TOAST_CLASS, removeToast, getActiveToast };
 export { isUrlBlocked, isCurrentPageBlocked, resolveBlocklistPatterns } from './blocklist';
-export { joinDualMode, writeElementText } from './writeback';
+export { joinDualMode, writeElementText, writeElementTextAsync } from './writeback';
 export { createGestureController, isTriggerKey, isTriggerInsertData } from './gesture';
 export { parseLanguagePrefix } from '@/lib/inlineTranslatePrefix';
+
 
 /** Test helper: activeToast alias */
 export const activeToast = {
