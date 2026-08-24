@@ -6,6 +6,7 @@ import { getElementText } from './editable';
 
 export type WriteStrategyName =
   | 'execCommand+events'
+  | 'execCommand-html'
   | 'insertText-events'
   | 'direct-assign';
 
@@ -38,18 +39,40 @@ export function joinDualMode(
   return `${original}\n${translation}`;
 }
 
-function dispatchInputEvents(el: HTMLElement, data: string): void {
-  try {
-    el.dispatchEvent(
-      new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data,
-      }),
-    );
-  } catch {
-    // InputEvent may be incomplete in jsdom
+function setNativeInputValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = el instanceof HTMLInputElement
+    ? window.HTMLInputElement.prototype
+    : window.HTMLTextAreaElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+  const setter = descriptor?.set;
+
+  // React 15/16/17/18/19 internal value tracker reset so React detects the change
+  const tracker = (el as unknown as { _valueTracker?: { setValue: (v: string) => void; getValue?: () => string } })._valueTracker;
+  if (tracker && typeof tracker.setValue === 'function') {
+    tracker.setValue('');
+  }
+
+  if (setter) {
+    setter.call(el, value);
+  } else {
+    el.value = value;
+  }
+}
+
+function dispatchInputEvents(el: HTMLElement, data: string, includeBeforeInput = true): void {
+  if (includeBeforeInput) {
+    try {
+      el.dispatchEvent(
+        new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data,
+        }),
+      );
+    } catch {
+      // InputEvent may be incomplete in jsdom
+    }
   }
   try {
     el.dispatchEvent(
@@ -66,43 +89,60 @@ function dispatchInputEvents(el: HTMLElement, data: string): void {
 }
 
 function selectAll(el: HTMLElement): void {
+  el.focus();
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    el.focus();
     el.select();
+    try {
+      el.setSelectionRange(0, el.value.length);
+    } catch {
+      // Some input types (e.g. email/number in some browsers) throw on setSelectionRange
+    }
     return;
   }
-  el.focus();
-  const hasExec = typeof document.execCommand === 'function';
-  if (hasExec) {
-    document.execCommand('selectAll', false, undefined);
-  } else {
-    const range = document.createRange();
+  const sel = el.ownerDocument?.defaultView?.getSelection() ?? window.getSelection();
+  if (sel) {
+    const range = (el.ownerDocument ?? document).createRange();
     range.selectNodeContents(el);
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
+    sel.removeAllRanges();
+    sel.addRange(range);
   }
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function strategyExecCommand(el: HTMLElement, text: string): boolean {
   const hasExec = typeof document.execCommand === 'function';
   if (!hasExec) return false;
   selectAll(el);
-  try {
-    el.dispatchEvent(
-      new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: text,
-      }),
-    );
-  } catch {
-    /* noop */
-  }
   const ok = document.execCommand('insertText', false, text);
   if (ok) {
-    dispatchInputEvents(el, text);
+    // execCommand natively dispatches beforeinput & input.
+    // Dispatch input & change for frameworks (React/Vue) without duplicating beforeinput.
+    dispatchInputEvents(el, text, false);
+  }
+  return ok;
+}
+
+function strategyExecCommandHtml(el: HTMLElement, text: string): boolean {
+  const isCe =
+    el.isContentEditable ||
+    el.contentEditable === 'true' ||
+    !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement);
+  if (!isCe) return false;
+  const hasExec = typeof document.execCommand === 'function';
+  if (!hasExec) return false;
+  selectAll(el);
+  const html = escapeHtml(text).replace(/\n/g, '<br>');
+  const ok = document.execCommand('insertHTML', false, html);
+  if (ok) {
+    dispatchInputEvents(el, text, false);
   }
   return ok;
 }
@@ -114,7 +154,8 @@ function strategyInsertTextEvents(el: HTMLElement, text: string): boolean {
     const start = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? 0;
     const value = el.value;
-    el.value = value.slice(0, start) + text + value.slice(end);
+    const nextValue = value.slice(0, start) + text + value.slice(end);
+    setNativeInputValue(el, nextValue);
     const caret = start + text.length;
     try {
       el.setSelectionRange(caret, caret);
@@ -122,24 +163,41 @@ function strategyInsertTextEvents(el: HTMLElement, text: string): boolean {
       /* some types disallow */
     }
   } else {
-    el.textContent = text;
+    const sel = el.ownerDocument?.defaultView?.getSelection() ?? window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const textNode = (el.ownerDocument ?? document).createTextNode(text);
+      range.insertNode(textNode);
+      range.selectNodeContents(textNode);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      el.textContent = text;
+    }
   }
-  dispatchInputEvents(el, text);
+  dispatchInputEvents(el, text, true);
   return true;
 }
 
 function strategyDirectAssign(el: HTMLElement, text: string): boolean {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    el.value = text;
+    setNativeInputValue(el, text);
   } else {
     el.textContent = text;
   }
-  dispatchInputEvents(el, text);
+  dispatchInputEvents(el, text, true);
   return true;
 }
 
 function verifyWrite(el: HTMLElement, expected: string): boolean {
-  return getElementText(el) === expected;
+  const current = getElementText(el);
+  return (
+    current === expected ||
+    current.replace(/\r\n/g, '\n') === expected.replace(/\r\n/g, '\n') ||
+    current.trim() === expected.trim()
+  );
 }
 
 /**
@@ -149,6 +207,7 @@ function verifyWrite(el: HTMLElement, expected: string): boolean {
 export function writeElementText(el: HTMLElement, text: string): WriteBackResult {
   const strategies: Array<{ name: WriteStrategyName; run: () => boolean }> = [
     { name: 'execCommand+events', run: () => strategyExecCommand(el, text) },
+    { name: 'execCommand-html', run: () => strategyExecCommandHtml(el, text) },
     { name: 'insertText-events', run: () => strategyInsertTextEvents(el, text) },
     { name: 'direct-assign', run: () => strategyDirectAssign(el, text) },
   ];

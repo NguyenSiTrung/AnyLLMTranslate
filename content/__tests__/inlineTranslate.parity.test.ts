@@ -428,6 +428,55 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     expect(r.targetLang).toBe('en');
     expect(r.body).toBe('hello');
   });
+  it('updates React controlled inputs with valueTracker and triggers onChange listeners', () => {
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+
+    // Simulate React value tracker
+    let reactState = 'original text';
+    textarea.value = reactState;
+    let trackedValue = reactState;
+    (textarea as unknown as { _valueTracker: { setValue: (v: string) => void; getValue: () => string } })._valueTracker = {
+      setValue(v: string) {
+        trackedValue = v;
+      },
+      getValue() {
+        return trackedValue;
+      },
+    };
+
+    textarea.addEventListener('input', (e) => {
+      const target = e.target as HTMLTextAreaElement;
+      reactState = target.value;
+    });
+
+    const writeResult = writeElementText(textarea, 'translated content');
+    expect(writeResult.success).toBe(true);
+    expect(textarea.value).toBe('translated content');
+    // Verify React state updated so sending upon Enter sends translated content
+    expect(reactState).toBe('translated content');
+  });
+
+  it('replaces content in contentEditable chat composers without selecting entire document', () => {
+    const composer = document.createElement('div');
+    composer.contentEditable = 'true';
+    composer.setAttribute('role', 'textbox');
+    const p = document.createElement('p');
+    p.textContent = 'original chat message';
+    composer.appendChild(p);
+    document.body.appendChild(composer);
+
+    let capturedMessageOnSend = '';
+    composer.addEventListener('input', (e) => {
+      const target = e.currentTarget as HTMLElement;
+      capturedMessageOnSend = target.textContent ?? '';
+    });
+
+    const writeResult = writeElementText(composer, 'translated chat message');
+    expect(writeResult.success).toBe(true);
+    expect(composer.textContent).toBe('translated chat message');
+    expect(capturedMessageOnSend).toBe('translated chat message');
+  });
 });
 
 describe('race-safe orchestration', () => {
