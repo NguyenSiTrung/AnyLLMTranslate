@@ -14,8 +14,16 @@ import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { updateConfig, getConfig } from '@/content/subtitleOverlay';
 import { isContextInvalidated } from '@/lib/utils';
 
-/** Storage key for subtitle preferences */
+/** Storage key for subtitle style preferences (shared across sites). */
 const STORAGE_KEY = 'anyllm-translate-subtitle-prefs';
+
+/**
+ * Storage key for per-host drag offsets: `{ [hostname]: { offsetX, offsetY } }`.
+ * Drag offsets are position-on-video, which differs per player size/layout —
+ * an offset tuned on one site's large player can park the overlay entirely off
+ * the video on another site (reported on Udemy). Style prefs stay global.
+ */
+const OFFSET_STORAGE_KEY = 'anyllm-translate-subtitle-offsets';
 
 /** Default preferences */
 const DEFAULT_PREFS: OverlayConfig = {
@@ -51,35 +59,84 @@ let dragState: DragState = {
   startOffsetY: 0,
 };
 
-/**
- * Load preferences from chrome.storage.local.
- */
-export async function loadPreferences(): Promise<OverlayConfig> {
-  if (isContextInvalidated()) {
-    return { ...DEFAULT_PREFS };
-  }
+interface StoredOffsets {
+  offsetX: number;
+  offsetY: number;
+}
+
+type OffsetMap = Record<string, StoredOffsets>;
+
+/** Read the per-host offset map from storage. Empty map on any failure. */
+async function loadOffsetMap(): Promise<OffsetMap> {
+  if (isContextInvalidated()) return {};
   try {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const prefs = result[STORAGE_KEY];
-    return prefs ? { ...DEFAULT_PREFS, ...prefs } : { ...DEFAULT_PREFS };
+    const result = await chrome.storage.local.get(OFFSET_STORAGE_KEY);
+    const map = result[OFFSET_STORAGE_KEY];
+    return map && typeof map === 'object' ? (map as OffsetMap) : {};
   } catch (error) {
     if (!isContextInvalidated()) {
-      console.warn('AnyLLMTranslate: Failed to load subtitle preferences', error);
+      console.warn('AnyLLMTranslate: Failed to load subtitle drag offsets', error);
     }
-    return { ...DEFAULT_PREFS };
+    return {};
   }
 }
 
 /**
- * Save preferences to chrome.storage.local.
+ * Load preferences from chrome.storage.local.
+ * Style fields come from the shared blob; drag offsets come from this
+ * hostname's entry (legacy offsets embedded in the shared blob are ignored).
+ */
+export async function loadPreferences(): Promise<OverlayConfig> {
+  let prefs: OverlayConfig = { ...DEFAULT_PREFS };
+  const offsets = await loadOffsetMap();
+  if (isContextInvalidated()) {
+    return prefs;
+  }
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const stored = result[STORAGE_KEY];
+    if (stored) prefs = { ...DEFAULT_PREFS, ...stored };
+  } catch (error) {
+    if (!isContextInvalidated()) {
+      console.warn('AnyLLMTranslate: Failed to load subtitle preferences', error);
+    }
+  }
+  const host = offsets[window.location.hostname];
+  prefs.offsetX = host?.offsetX ?? 0;
+  prefs.offsetY = host?.offsetY ?? 0;
+  return prefs;
+}
+
+/**
+ * Save style preferences to chrome.storage.local.
+ * Drag offsets are deliberately NOT persisted here — they are per-host (see
+ * saveOffsetForHost) and must not leak back into the shared blob.
  */
 export async function savePreferences(config: OverlayConfig): Promise<void> {
   if (isContextInvalidated()) return;
   try {
-    await chrome.storage.local.set({ [STORAGE_KEY]: config });
+    const { offsetX: _offsetX, offsetY: _offsetY, ...stylePrefs } = config;
+    await chrome.storage.local.set({ [STORAGE_KEY]: stylePrefs });
   } catch (error) {
     if (!isContextInvalidated()) {
       console.warn('AnyLLMTranslate: Failed to save subtitle preferences', error);
+    }
+  }
+}
+
+/** Persist this hostname's drag offset entry. */
+async function saveOffsetForHost(offsetX: number, offsetY: number): Promise<void> {
+  // Capture the host before any await: an in-flight save must not land on a
+  // different host if navigation changes location mid-save.
+  const host = window.location.hostname;
+  if (isContextInvalidated()) return;
+  try {
+    const map = await loadOffsetMap();
+    map[host] = { offsetX, offsetY };
+    await chrome.storage.local.set({ [OFFSET_STORAGE_KEY]: map });
+  } catch (error) {
+    if (!isContextInvalidated()) {
+      console.warn('AnyLLMTranslate: Failed to save subtitle drag offsets', error);
     }
   }
 }
@@ -128,12 +185,13 @@ export function setBackgroundOpacity(opacity: number): void {
 
 /**
  * Update offset position (for drag-to-reposition).
+ * Offsets persist per hostname so each site's player keeps its own position.
  */
 export function setOffset(offsetX: number, offsetY: number): void {
   const config = getConfig();
   const newConfig = { ...config, offsetX, offsetY };
   updateConfig(newConfig);
-  savePreferences(newConfig).catch(() => {});
+  saveOffsetForHost(offsetX, offsetY).catch(() => {});
 }
 
 /**
@@ -142,7 +200,10 @@ export function setOffset(offsetX: number, offsetY: number): void {
 export async function resetPreferences(): Promise<void> {
   const defaultConfig = { ...DEFAULT_PREFS };
   updateConfig(defaultConfig);
-  await savePreferences(defaultConfig);
+  await Promise.all([
+    savePreferences(defaultConfig),
+    saveOffsetForHost(0, 0),
+  ]);
 }
 
 /**

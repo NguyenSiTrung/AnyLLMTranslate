@@ -518,6 +518,9 @@ async function initializeActiveRenderer(
     if (!attached) return false;
 
     hideHtml5TextTracks();
+    // Drag wiring happens inside initializeActiveRenderer's attach chain, so
+    // a teardown racing the chain cannot leave a stale dragCleanup closure
+    // pointing at a removed overlay container.
     const textContainer = getOverlayTextContainer();
     if (textContainer && !state.dragCleanup) {
       state.dragCleanup = enableDragReposition(textContainer);

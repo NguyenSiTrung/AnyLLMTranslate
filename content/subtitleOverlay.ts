@@ -87,6 +87,33 @@ const overlayState: OverlayState = {
 /** Tracked fullscreen reposition timeouts — cleared on cleanup to prevent leaks. */
 const fullscreenRepositionTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
+/** Pending viewport-tracking frame — nonzero while a reposition is queued. */
+let viewportTrackRafId = 0;
+
+function cancelViewportTrackingFrame(): void {
+  if (viewportTrackRafId !== 0) {
+    cancelAnimationFrame(viewportTrackRafId);
+    viewportTrackRafId = 0;
+  }
+}
+
+/**
+ * Clamp drag offsets so the subtitle box can never be translated fully outside
+ * the video box. Offsets persist globally across sessions, so without this an
+ * offset tuned on one site's large player can park the overlay completely off
+ * the video on another site (reported on Udemy) — leaving nothing to grab.
+ * ±half the video size still allows moving the box anywhere over the video.
+ */
+function clampDragOffset(value: number, boxSize: number): number {
+  const limit = Math.max(0, Math.floor(boxSize / 2));
+  return Math.max(-limit, Math.min(limit, Math.round(value)));
+}
+
+function clampedOffsetTransform(config: OverlayConfig, video: HTMLVideoElement): string {
+  const rect = video.getBoundingClientRect();
+  return `translate(${clampDragOffset(config.offsetX, rect.width)}px, ${clampDragOffset(config.offsetY, rect.height)}px)`;
+}
+
 type PopoverElement = HTMLElement & {
   showPopover?: () => void;
   hidePopover?: () => void;
@@ -277,7 +304,7 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
     overlay.style.width = '100%';
     overlay.style.height = '100%';
     overlay.style.zIndex = '2147483647';
-    overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
+    overlay.style.transform = clampedOffsetTransform(config, video);
     return;
   }
 
@@ -291,8 +318,8 @@ function positionOverlay(overlay: HTMLElement, video: HTMLVideoElement, config: 
   overlay.style.left = `${videoRect.left}px`;
   overlay.style.zIndex = '2147483647';
 
-  // Apply user offsets (drag-to-reposition)
-  overlay.style.transform = `translate(${config.offsetX}px, ${config.offsetY}px)`;
+  // Apply user offsets (drag-to-reposition), clamped to the video box.
+  overlay.style.transform = clampedOffsetTransform(config, video);
 }
 
 /**
@@ -531,6 +558,23 @@ function handleFullscreenChange(): void {
 }
 
 /**
+ * Viewport-tracking handler: the overlay uses fixed viewport coordinates
+ * snapshotted from the video rect, so it must re-snapshot whenever the video
+ * moves WITHOUT resizing. Page scroll (including inner scroll containers via
+ * capture) and window resizes are the triggers; ResizeObserver only covers
+ * size changes (issue: Udemy lecture pages scroll the player under a stale
+ * overlay). rAF-coalesced so bursts of scroll events cost one reposition.
+ */
+function handleViewportChange(): void {
+  if (viewportTrackRafId !== 0) return;
+  viewportTrackRafId = requestAnimationFrame(() => {
+    viewportTrackRafId = 0;
+    if (!overlayState.overlay || !overlayState.video) return;
+    positionOverlay(overlayState.overlay, overlayState.video, overlayState.config);
+  });
+}
+
+/**
  * Attach event listeners to the video element.
  */
 function attachVideoListeners(video: HTMLVideoElement): void {
@@ -538,6 +582,8 @@ function attachVideoListeners(video: HTMLVideoElement): void {
   video.addEventListener('seeked', handleSeeked);
   document.addEventListener('fullscreenchange', handleFullscreenChange);
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+  window.addEventListener('scroll', handleViewportChange, { capture: true, passive: true });
+  window.addEventListener('resize', handleViewportChange, { passive: true });
 }
 
 /**
@@ -548,6 +594,8 @@ function detachVideoListeners(video: HTMLVideoElement): void {
   video.removeEventListener('seeked', handleSeeked);
   document.removeEventListener('fullscreenchange', handleFullscreenChange);
   document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+  window.removeEventListener('scroll', handleViewportChange, { capture: true } as EventListenerOptions);
+  window.removeEventListener('resize', handleViewportChange);
 }
 
 /**
@@ -681,6 +729,7 @@ export function cleanup(): void {
     clearTimeout(id);
   }
   fullscreenRepositionTimeouts.clear();
+  cancelViewportTrackingFrame();
 
   if (overlayState.video) {
     detachVideoListeners(overlayState.video);

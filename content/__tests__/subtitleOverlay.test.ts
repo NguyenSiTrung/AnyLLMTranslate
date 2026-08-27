@@ -428,3 +428,101 @@ describe('content/subtitleOverlay — lifecycle', () => {
   });
 });
 
+// ============================================================================
+// Scroll/resize repositioning + drag-offset clamping (issue wmv/muo)
+// ============================================================================
+describe('subtitleOverlay — scroll/resize repositioning + drag-offset clamping', () => {
+  let rafQueue: FrameRequestCallback[];
+
+  beforeEach(() => {
+    resetOverlayState();
+    document.body.innerHTML = '';
+    rafQueue = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      rafQueue.push(cb);
+      return rafQueue.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  });
+
+  afterEach(() => {
+    resetOverlayState();
+    vi.unstubAllGlobals();
+  });
+
+  function setupVideo(): { video: HTMLVideoElement; rectAt: (top: number, left: number) => void } {
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+    const rectSpy = vi.spyOn(video, 'getBoundingClientRect');
+    const rectAt = (top: number, left: number): void => {
+      rectSpy.mockReturnValue({
+        top,
+        left,
+        width: 800,
+        height: 600,
+        bottom: top + 600,
+        right: left + 800,
+        x: left,
+        y: top,
+        toJSON: () => {},
+      });
+    };
+    rectAt(300, 200);
+    return { video, rectAt };
+  }
+
+  it('follows the video rect across page scrolls (Udemy side-tab layout shift)', () => {
+    const { video, rectAt } = setupVideo();
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    expect(overlay.style.top).toBe('300px');
+    expect(overlay.style.left).toBe('200px');
+
+    rectAt(120, 40); // user scrolled — video moved up-left without resizing
+    window.dispatchEvent(new Event('scroll'));
+    rafQueue.splice(0).forEach((cb) => cb(0));
+    expect(overlay.style.top).toBe('120px');
+    expect(overlay.style.left).toBe('40px');
+  });
+
+  it('follows the video rect on window resize', () => {
+    const { video, rectAt } = setupVideo();
+    initializeOverlay(MOCK_CUES, {}, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+    rectAt(50, 10);
+    window.dispatchEvent(new Event('resize'));
+    rafQueue.splice(0).forEach((cb) => cb(0));
+    expect(overlay.style.top).toBe('50px');
+    expect(overlay.style.left).toBe('10px');
+  });
+
+  it('coalesces bursts of scroll events into one reposition per frame', () => {
+    const { video } = setupVideo();
+    initializeOverlay(MOCK_CUES, {}, video);
+
+    window.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('scroll'));
+    window.dispatchEvent(new Event('scroll'));
+    expect(rafQueue.length).toBe(1);
+  });
+
+  it('clamps drag offsets so the text box cannot leave the video box', () => {
+    const { video } = setupVideo();
+    initializeOverlay(MOCK_CUES, { offsetX: 5000, offsetY: -9000 }, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    // 800x600 video → offsets clamp to ±400 / ±300.
+    expect(overlay.style.transform).toBe('translate(400px, -300px)');
+
+    updateConfig({ offsetX: -6000, offsetY: 7500 });
+    expect(overlay.style.transform).toBe('translate(-400px, 300px)');
+  });
+
+  it('keeps in-range drag offsets untouched', () => {
+    const { video } = setupVideo();
+    initializeOverlay(MOCK_CUES, { offsetX: 120, offsetY: -80 }, video);
+    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+    expect(overlay.style.transform).toBe('translate(120px, -80px)');
+  });
+});
+
