@@ -1292,6 +1292,25 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
+  it('refreshAttachedOverlayConfig never carries drag offsets (drag must not snap back)', async () => {
+    // The settings-change listener fires on the extension's OWN storage writes —
+    // including every mousemove of a drag. Re-applying attach-time offsets here
+    // reverted each drag to its starting position ~100ms after release.
+    mockIsOverlayActive.mockReturnValue(true);
+    const settings = {
+      ...MOCK_SETTINGS,
+    } as unknown as Awaited<ReturnType<ConfigLoadSettings>>;
+    const mod = await import('@/content/subtitleCoordinator');
+    mockUpdateConfig.mockClear();
+    mod.refreshAttachedOverlayConfig(settings);
+    expect(mockUpdateConfig).toHaveBeenCalled();
+    for (const call of mockUpdateConfig.mock.calls) {
+      const payload = call[0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('offsetX');
+      expect(payload).not.toHaveProperty('offsetY');
+    }
+  });
+
   it('passes original content through (no background call) when subtitles disabled, cues empty, or no handler matches', async () => {
     // Scenario 1: subtitles disabled
     mockLoadSettings.mockResolvedValue({
