@@ -518,6 +518,9 @@ async function initializeActiveRenderer(
     if (!attached) return false;
 
     hideHtml5TextTracks();
+    // Drag wiring happens inside initializeActiveRenderer's attach chain, so
+    // a teardown racing the chain cannot leave a stale dragCleanup closure
+    // pointing at a removed overlay container.
     const textContainer = getOverlayTextContainer();
     if (textContainer && !state.dragCleanup) {
       state.dragCleanup = enableDragReposition(textContainer);
@@ -2539,10 +2542,15 @@ export function refreshAttachedOverlayConfig(
   settings: Awaited<ReturnType<typeof loadSettings>>,
 ): void {
   if (!isOverlayActive()) return;
-  const config = buildSubtitleOverlayConfig(
-    settings.subtitleSettings,
-    state.rendererConfig ?? undefined,
-  );
+  // Style fields only — never offsets. This listener also fires on the
+  // extension's own storage writes (every mousemove of a drag persists the
+  // offset), and buildSubtitleOverlayConfig sources offsets from the
+  // attach-time state.rendererConfig snapshot, so carrying them would snap
+  // each drag back to its starting position ~100ms after release. updateConfig
+  // merges partials, so omitting offsetX/offsetY preserves live drag position.
+  const config = buildSubtitleOverlayConfig(settings.subtitleSettings);
+  delete config.offsetX;
+  delete config.offsetY;
   updateConfig(config);
 }
 

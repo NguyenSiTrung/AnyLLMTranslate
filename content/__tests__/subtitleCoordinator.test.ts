@@ -79,14 +79,14 @@ const mockInitializeOverlay = vi.fn();
 mockInitializeOverlay.mockReturnValue(true);
 const mockUpdateCues = vi.fn();
 const mockCleanupOverlay = vi.fn();
-const mockGetOverlayTextContainer = vi.fn<(...args: unknown[]) => null>(() => null);
+const mockGetOverlayTextContainer = vi.fn<(...args: unknown[]) => HTMLElement | null>(() => null);
 const mockUpdateConfig = vi.fn();
 const mockIsOverlayActive = vi.fn<(...args: unknown[]) => boolean>(() => false);
 vi.mock('@/content/subtitleOverlay', () => ({
   initializeOverlay: (...args: unknown[]) => mockInitializeOverlay(...args),
   updateCues: (...args: unknown[]) => { mockUpdateCues(...args); },
   cleanup: (...args: unknown[]) => { mockCleanupOverlay(...args); },
-  getOverlayTextContainer: (...args: unknown[]) => { mockGetOverlayTextContainer(...args); },
+  getOverlayTextContainer: (...args: unknown[]) => mockGetOverlayTextContainer(...args),
   updateConfig: (...args: unknown[]) => { mockUpdateConfig(...args); },
   isOverlayActive: () => mockIsOverlayActive(),
 }));
@@ -95,7 +95,7 @@ const mockInitializeControls = vi.fn();
 const mockEnableDragReposition = vi.fn<(...args: unknown[]) => (() => void)>(() => vi.fn());
 vi.mock('@/content/subtitleControls', () => ({
   initializeControls: (...args: unknown[]) => mockInitializeControls(...args),
-  enableDragReposition: (...args: unknown[]) => { mockEnableDragReposition(...args); },
+  enableDragReposition: (...args: unknown[]) => mockEnableDragReposition(...args),
 }));
 
 const mockParseSubtitles = vi.fn();
@@ -408,6 +408,42 @@ describe('subtitleCoordinator – Coursera direct full-track lifecycle', () => {
     });
     await activation;
     expect(mockUpdateCues).toHaveBeenLastCalledWith(MOCK_TRANSLATED_CUES);
+  });
+
+  it('re-wires drag listeners onto the fresh text container after overlay teardown and re-activation', async () => {
+    const textContainerA = document.createElement('div');
+    const textContainerB = document.createElement('div');
+    mockGetOverlayTextContainer
+      .mockReturnValueOnce(textContainerA)
+      .mockReturnValueOnce(textContainerB);
+    // Resolve translations immediately — this test only cares about the
+    // renderer-attachment lifecycle, not chunk delivery.
+    runtimeSendMessage.mockImplementation((message: { action?: string }) => {
+      if (message.action === 'translateSubtitle') {
+        return Promise.resolve({ success: true, cues: MOCK_TRANSLATED_CUES });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    await discoverTrack(COURSERA_VTT_URL);
+    await coordinator.selectSubtitleTrack('en');
+    await vi.waitFor(() => {
+      expect(mockEnableDragReposition).toHaveBeenCalledTimes(1);
+    });
+    expect(mockEnableDragReposition).toHaveBeenLastCalledWith(textContainerA);
+
+    // Teardown (e.g. SPA navigation to another lecture) must invoke the old
+    // drag cleanup so stale listeners do not linger on a removed container.
+    coordinator.resetCoordinatorState();
+    expect(mockEnableDragReposition.mock.results[0]!.value).toHaveBeenCalled();
+
+    // Re-activation wires dragging onto the NEW overlay's text container.
+    await discoverTrack(`${COURSERA_VTT_URL}&second-viewing=1`);
+    await coordinator.selectSubtitleTrack('en');
+    await vi.waitFor(() => {
+      expect(mockEnableDragReposition).toHaveBeenCalledTimes(2);
+    });
+    expect(mockEnableDragReposition).toHaveBeenLastCalledWith(textContainerB);
   });
 
   it('lets the newest direct track own the renderer when an older translation finishes late', async () => {
@@ -1254,6 +1290,25 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     mockUpdateConfig.mockClear();
     mod.refreshAttachedOverlayConfig(settings);
     expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('refreshAttachedOverlayConfig never carries drag offsets (drag must not snap back)', async () => {
+    // The settings-change listener fires on the extension's OWN storage writes —
+    // including every mousemove of a drag. Re-applying attach-time offsets here
+    // reverted each drag to its starting position ~100ms after release.
+    mockIsOverlayActive.mockReturnValue(true);
+    const settings = {
+      ...MOCK_SETTINGS,
+    } as unknown as Awaited<ReturnType<ConfigLoadSettings>>;
+    const mod = await import('@/content/subtitleCoordinator');
+    mockUpdateConfig.mockClear();
+    mod.refreshAttachedOverlayConfig(settings);
+    expect(mockUpdateConfig).toHaveBeenCalled();
+    for (const call of mockUpdateConfig.mock.calls) {
+      const payload = call[0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('offsetX');
+      expect(payload).not.toHaveProperty('offsetY');
+    }
   });
 
   it('passes original content through (no background call) when subtitles disabled, cues empty, or no handler matches', async () => {
