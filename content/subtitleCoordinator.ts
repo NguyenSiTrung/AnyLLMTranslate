@@ -3138,9 +3138,9 @@ async function tryYoutubeProactiveTimedtext(
 }
 
 /**
- * DOM-platform activation attempt (Max). Auto-activates on play ONLY if:
- *   1. Max's caption overlay is present and visible (captions on in Max)
- *   2. Active Max track language matches preferredSubtitleLanguage (or preferred is 'auto')
+ * DOM-platform activation attempt (e.g. Max, Youku). Auto-activates on play ONLY if:
+ *   1. Platform's caption overlay is present and visible (captions on)
+ *   2. Active track language matches preferredSubtitleLanguage (or preferred is 'auto')
  * Returns { activated, reason } for testability.
  */
 export async function tryAutoActivateForDom(options?: {
@@ -3153,6 +3153,10 @@ export async function tryAutoActivateForDom(options?: {
   const domSource = handler?.getDomCueSource?.();
   if (!handler || !domSource) return { activated: false, reason: 'no DOM cue source' };
 
+  // Generic handler: do not auto-activate or show toasts on play; DOM cues flow passively.
+  if (!options?.manual && handler.platform === 'generic') {
+    return { activated: false, reason: 'generic handler uses passive DOM cue flow' };
+  }
   const epochAtStart = state.navigationEpoch;
   const settings = await loadSettings();
   // Stale — user navigated away during the await.
@@ -3175,25 +3179,37 @@ export async function tryAutoActivateForDom(options?: {
   if (handler.platform === 'generic' && settings.subtitleSettings.enableGenericSubtitleHandler === false) {
     return { activated: false, reason: 'generic handler disabled' };
   }
+  const platformLabel =
+    handler.platform === 'hbomax'
+      ? 'Max'
+      : handler.platform === 'youku'
+        ? 'Youku'
+        : 'the video player';
 
-  // Precondition: Max's caption overlay must be present and visible.
+  // Precondition: platform's caption overlay must be present and visible.
   const overlay = document.querySelector<HTMLElement>(domSource.captionWindowSelector);
   if (!overlay || getComputedStyle(overlay).visibility === 'hidden') {
-    showSubtitleToast('Enable subtitles in Max to enable translation (Alt+S to retry).');
-    return { activated: false, reason: 'captions off in Max' };
+    showSubtitleToast(`Enable subtitles in ${platformLabel} to enable translation (Alt+S to retry).`);
+    return { activated: false, reason: `captions off in ${platformLabel}` };
   }
 
-  const activeLang = domSource.readActiveLanguage();
+  let activeLang = domSource.readActiveLanguage();
+  if (!activeLang && handler.platform === 'generic') {
+    // Generic video players rarely expose an active-language signal in DOM;
+    // fall back to the user's preferred subtitle language or 'auto'.
+    activeLang = settings.subtitleSettings.preferredSubtitleLanguage || 'auto';
+  }
+
   if (!activeLang) {
-    showSubtitleToast('Enable subtitles in Max to enable translation (Alt+S to retry).');
-    return { activated: false, reason: 'captions off in Max' };
+    showSubtitleToast(`Enable subtitles in ${platformLabel} to enable translation (Alt+S to retry).`);
+    return { activated: false, reason: `captions off in ${platformLabel}` };
   }
-
   const preferred = settings.subtitleSettings.preferredSubtitleLanguage;
   if (
     !options?.manual &&
     preferred &&
     preferred !== 'auto' &&
+    activeLang !== 'auto' &&
     !subtitleLanguagesMatch(activeLang, preferred)
   ) {
     return { activated: false, reason: `active language ${activeLang} != preferred ${preferred}` };
@@ -3241,9 +3257,11 @@ function startVideoPlaybackWatcher(): () => void {
       // first. If manifest tracks were already discovered, tryAutoActivate will
       // select one; otherwise it no-ops and DOM cue flow handles activation
       // naturally when the first SUBTITLE_DOM_CUES message arrives.
-      // Handlers without manifest patterns (pure DOM-only) go straight to
-      // tryAutoActivateForDom (e.g. Youku).
-      if (currentHandler?.getDomCueSource) {
+      // Handlers without manifest patterns (pure DOM-only, e.g. Youku) go straight to
+      // tryAutoActivateForDom.
+      // Generic handler uses tryAutoActivate for intercepted/HTML5 tracks; DOM
+      // cue scraping is a passive fallback handled when SUBTITLE_DOM_CUES arrives.
+      if (currentHandler?.getDomCueSource && currentHandler.platform !== 'generic') {
         const hasManifestPatterns =
           typeof currentHandler.getManifestPatterns === 'function' &&
           currentHandler.getManifestPatterns().length > 0;

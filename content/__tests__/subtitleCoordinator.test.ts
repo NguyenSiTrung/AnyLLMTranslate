@@ -3280,3 +3280,240 @@ describe('subtitleCoordinator – watch page URL rules', () => {
     expect(mod.isOnWatchPage()).toBe(expected);
   });
 });
+
+describe('subtitleCoordinator – DOM auto-activation and toast scoping', () => {
+  let cleanupCoordinator: (() => void) | null = null;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mockOnMessage.mockReturnValue(() => {});
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+  });
+
+  afterEach(() => {
+    cleanupCoordinator?.();
+    cleanupCoordinator = null;
+    document.body.innerHTML = '';
+  });
+
+  it('does NOT trigger tryAutoActivateForDom or show toast when video plays on generic site', async () => {
+    const genericHandler = {
+      platform: 'generic',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '.vjs-text-track-display',
+        captionWindowSelector: '.vjs-text-track-display',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'display' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(genericHandler);
+    mockGetHandlerByPlatform.mockReturnValue(genericHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        autoActivateSubtitles: true,
+      },
+    });
+
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanupCoordinator = mod.startCoordinator();
+
+    // Trigger video play
+    video.dispatchEvent(new Event('play'));
+
+    // Wait for the 200ms macrotask delay in startVideoPlaybackWatcher
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 350);
+    await promise;
+    expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+  });
+
+  it('tryAutoActivateForDom returns early without toast on generic site when automatic', async () => {
+    const genericHandler = {
+      platform: 'generic',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '.vjs-text-track-display',
+        captionWindowSelector: '.vjs-text-track-display',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'display' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(genericHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        autoActivateSubtitles: true,
+      },
+    });
+
+    const mod = await import('@/content/subtitleCoordinator');
+    const result = await mod.tryAutoActivateForDom();
+
+    expect(result.activated).toBe(false);
+    expect(result.reason).toContain('generic');
+    expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+  });
+
+  it('tryAutoActivateForDom with manual: true shows generic toast when overlay is missing', async () => {
+    const genericHandler = {
+      platform: 'generic',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '.vjs-text-track-display',
+        captionWindowSelector: '.vjs-text-track-display',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'display' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(genericHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+      },
+    });
+
+    const mod = await import('@/content/subtitleCoordinator');
+    const result = await mod.tryAutoActivateForDom({ manual: true });
+
+    expect(result.activated).toBe(false);
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringMatching(/video player/i),
+    );
+    expect(mockShowSubtitleToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('Max'),
+    );
+  });
+
+  it('tryAutoActivateForDom with manual: true succeeds on generic when overlay is visible', async () => {
+    const overlay = document.createElement('div');
+    overlay.className = 'vjs-text-track-display';
+    document.body.appendChild(overlay);
+
+    const genericHandler = {
+      platform: 'generic',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '.vjs-text-track-display',
+        captionWindowSelector: '.vjs-text-track-display',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'display' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(genericHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'en',
+      },
+    });
+
+    const mod = await import('@/content/subtitleCoordinator');
+    const result = await mod.tryAutoActivateForDom({ manual: true });
+
+    expect(result.activated).toBe(true);
+    expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+  });
+
+  it('tryAutoActivateForDom shows Max-specific toast when platform is hbomax and captions are off', async () => {
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'visibility' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        autoActivateSubtitles: true,
+      },
+    });
+
+    const mod = await import('@/content/subtitleCoordinator');
+    const result = await mod.tryAutoActivateForDom();
+
+    expect(result.activated).toBe(false);
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      'Enable subtitles in Max to enable translation (Alt+S to retry).',
+    );
+  });
+
+  it('tryAutoActivateForDom shows Youku-specific toast when platform is youku and captions are off', async () => {
+    const youkuHandler = {
+      platform: 'youku',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '#subtitle',
+        captionWindowSelector: '#subtitle',
+        observeRootSelector: 'body',
+        readActiveLanguage: () => '',
+        captionHideMethod: 'visibility' as const,
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(youkuHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        autoActivateSubtitles: true,
+      },
+    });
+
+    const mod = await import('@/content/subtitleCoordinator');
+    const result = await mod.tryAutoActivateForDom();
+
+    expect(result.activated).toBe(false);
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      'Enable subtitles in Youku to enable translation (Alt+S to retry).',
+    );
+  });
+});
