@@ -8,3 +8,4 @@ __pycache__/
 htmlcov/
 /data/
 /tmp/
+tests/test_smoke.py

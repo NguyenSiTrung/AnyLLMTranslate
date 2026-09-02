@@ -44,3 +44,6 @@ ImmersiveTransalteExtensionCode/
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
+
+# Smoke test files flagged by AV
+**/tests/test_smoke.py
