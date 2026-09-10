@@ -3396,7 +3396,7 @@ describe('subtitleCoordinator – DOM auto-activation and toast scoping', () => 
     video.dispatchEvent(new Event('play'));
 
     // Wait for the 200ms macrotask delay in startVideoPlaybackWatcher
-    const { promise, resolve } = Promise.withResolvers<void>();
+    const { promise, resolve } = Promise.withResolvers<undefined>();
     setTimeout(resolve, 350);
     await promise;
     expect(mockShowSubtitleToast).not.toHaveBeenCalled();
