@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-08-05 all (no CI/tooling drift; 509 serial-gated tests across 196 files; default parallel 2-test timeout instability recorded; lint 0; tsc 0; build 3.77 MB) -->
+<!-- conductor-refresh: 2026-09-10 all (no workflow-drift this window — branching strategy, Conventional-Commit convention, and ≥80% coverage target all still match the repo; CI/CD unchanged at pages.yml + bridge-image.yml; 592 pass / 0 fail across 208 files; tsc 0 / lint 0 re-run; build 3.82 MB re-measured) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy

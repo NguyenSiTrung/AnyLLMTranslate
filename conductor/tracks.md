@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-08-11 all (confirmed 73 archived / 0 active; 544 pass / 0 fail across 198 files — clean default parallel run; tsc 0; lint 0 per 2026-08-05 gate; build 3.77 MB carried; Beads 0 open, 0 in_progress; no active track drift — subtitle style presets shipped untracked via superpowers spec+plan, docs/superpowers/2026-08-05-subtitle-style-presets*) -->
+<!-- conductor-refresh: 2026-09-10 all (confirmed 73 archived / 0 active — unchanged since 2026-08-04; 592 pass / 0 fail across 208 files; tsc 0 / lint 0 re-run; build 3.82 MB re-measured; Beads 2 open / 2 in_progress; still no active track drift — the 2026-08-11…09-10 window shipped untracked via superpowers specs+plans and Beads: docs/superpowers/2026-08-11-readme-refresh*, docs/superpowers/2026-08-24-discord-inline-editing*) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.

@@ -1,30 +1,33 @@
 {
-  "lastRefresh": "2026-08-11T18:12:00+07:00",
+  "lastRefresh": "2026-09-10T23:05:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh approved by user; reconciled product, tech, tracks, patterns, and Beads context against master since the 2026-08-05 21:22 refresh.",
-    "product.md: documented Subtitle style presets (2026-08-05/06, commits 0c36ac4..7f51036 — stylePreset + stylePresetOverrides on SubtitleSettings, pure lib/subtitleStylePresets.ts resolver, overlay CSS-variable rendering with live apply, mini-studio preset select with live preview, Options AppearanceCard/SubtitlePreview picker with synced preview, +35 TCs); player mini-studio floating control anchor fix (c3f5ea6); LinkedIn Learning ambry VTT + transcript JSON caption fix (1e6eea8); Scientific PDF setup guide site + CI (48df31d/ba82d99 — docs/guide GitHub Pages via pages.yml, GHCR bridge-image.yml, in-extension guide links, dropped invalid upload-pages-artifact input). Updated Current State (544 tests / 198 files, clean parallel run) and appended suite history.",
-    "tech-stack.md: added pages.yml (GitHub Pages guide deploy) and bridge-image.yml (GHCR scientific-pdf-bridge image) to the CI/CD table; updated quality-gates snapshot to 544 / 198 / 0 fail clean default parallel run; package.json / pnpm-lock.yaml unchanged.",
-    "tracks.md: updated refresh marker — still 73 archived / 0 active; noted subtitle style presets shipped untracked via superpowers spec+plan (docs/superpowers/2026-08-05-subtitle-style-presets*).",
-    "patterns.md: updated both refresh markers; consolidation scan found no new cross-track candidates (style presets / LinkedIn ambry / guide-site CI added no track learnings; 71 archived learnings unchanged since the previous refresh scan).",
-    "refresh_state.json: reconciled codebaseHealth (509 -> 544 tests across 198 files; full default parallel run clean — the background.test.ts load-timeout instability from 2026-08-05 did not reproduce), Beads (live Dolt 0 open / 0 in progress; two issues closed in window: AnyLLMTranslate-8l8 style-presets epic and AnyLLMTranslate-pve beads worktree hook bug; passive export lags the live DB with 3 stale open rows), and added the 17 commits since 2026-08-05 to shippedSinceLastRefresh.",
-    "verification: ran the full default `pnpm test` on 2026-08-11 — 544 passed / 0 failed across 198 files in 37.5s. lint/tsc/build not re-run — carried from the 2026-08-05 gate (0 errors / 0 errors / 3.77 MB). Backups of all six files kept in /tmp/conductor-bak/ so the working tree stays clean."
+    "Scope: full refresh ('conductor refresh' with no argument, then user go-ahead). Reconciled product, tech-stack, tracks, patterns, workflow, and Beads context against master since the 2026-08-11 18:12 refresh (23 commits, d70f2bc..d4f2cf1).",
+    "product.md: added the 15 missing timeline entries for the 2026-08-11…09-10 window — README refresh (9a0cf09), Cherry Studio provider (1b239e4), Chrome Web Store prep + LICENSE (ed2fc45), web-translate scroll stability (b17367c), double-escaped \\n fix (3e6c8fd), DeepLearning.AI adapter + handler (21108a1), README cleanup (dce09bc), SPA navigation watcher (8be1191), suite consolidation (e3e0a43), PDF page-range selection (487420f), popup settings-window reuse (b896f49), wizard verified-connection persistence (066824c), inline-translate chat-composer safety (0a85d27/283f103), subtitle overlay anchoring (590c067/31c5734), DOM auto-activation scoping (8607156), Python smoke-test removal (7dbd4df). The YouTube ASR Stop-cancellation entry (d4f2cf1) was already present.",
+    "product.md Current State: 544/198 → 592/208; build re-measured 3.77 MB → 3.82 MB; tsc re-run (0 errors); Beads 0 open → 2 open + 2 in progress; appended the suite-history entry.",
+    "tech-stack.md: confirmed package.json / pnpm-lock.yaml unchanged (no dependency drift since 2026-08-05) and no new CI workflows (still pages.yml + bridge-image.yml). Replaced the quality-gates snapshot with the 2026-09-10 numbers, and added a source-added note (content/spaNavigationWatcher.ts, content/chunkStability.ts, lib/pdfPageSelection.ts, DeepLearning.AI adapter + inject handlers, bridge test_pages_selection.py; test_smoke.py removed + gitignored) plus a tooling note (.agents skill-library sync 51536f6, LICENSE added).",
+    "tracks.md: refresh marker only — verified still 73 archived / 0 active (unchanged since 2026-08-04); the whole window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/2026-08-11-readme-refresh*, docs/superpowers/2026-08-24-discord-inline-editing*).",
+    "workflow.md: marker was stale at 2026-08-05 (skipped by the last refresh); updated to 2026-09-10. No workflow drift — branching strategy, Conventional-Commit convention and the >=80% coverage target still match the repo.",
+    "patterns.md: rescanned 71 archived learnings (0 active) — no new learnings.md since 2026-08-04, so no cross-track consolidation candidates. Elevated 2 patterns from the commit window instead: new 'Gotchas' entry for Promise.withResolvers<void>() tripping @typescript-eslint/no-invalid-void-type, and a new section on inline-translate controlled-input write-back. The 'Stop must abort the run' pattern was already added by d4f2cf1.",
+    "QUALITY GATE REGRESSION found and FIXED in-session: `pnpm lint` reported 1 error — content/__tests__/subtitleCoordinator.test.ts:3399:56 `Promise.withResolvers<void>()` → @typescript-eslint/no-invalid-void-type, introduced by the ASR Stop-cancellation commit d4f2cf1. `pnpm compile` (tsc) is clean, which is why it slipped through. Fixed by switching to `Promise.withResolvers<undefined>()` (the form already used by content/inlineTranslate/writeback.ts). Post-fix: `pnpm lint` exit 0, `pnpm compile` exit 0, and content/__tests__/subtitleCoordinator.test.ts re-run green at 57/57.",
+    "verification: full default `pnpm test` on 2026-09-10 — 592 passed / 0 failed across 208 files in 467 s (cold run; the 37.5 s figure from 2026-08-11 was a warm run on a smaller suite, so treat duration as non-comparable). `pnpm compile` 0 errors. `pnpm lint` 0 errors after the withResolvers fix. `pnpm build` 3.82 MB total (du 3.7M). Backups of all six files in /tmp/conductor-bak-20260910/.",
+    "NOT committed — the workflow's step 8 commit was intentionally left for the user (AGENTS.md conservative profile: no commit/push without explicit approval). Changed files are conductor/*.md + conductor/refresh_state.json + content/__tests__/subtitleCoordinator.test.ts."
   ],
   "codebaseHealth": {
-    "tests": 544,
-    "testsPassing": 544,
+    "tests": 592,
+    "testsPassing": 592,
     "testsFailing": 0,
-    "testFiles": 198,
-    "fullSuiteStatus": "Full default `pnpm test` run on 2026-08-11: 544 pass / 0 failures across 198 files in 37.5s — clean, no load-timeout instability (the background.test.ts 2-test timeout pattern from the 2026-08-05 refresh did not reproduce).",
-    "buildSize": "3.77 MB",
-    "buildSizeNote": "Measured 2026-08-05; not re-measured this refresh.",
+    "testFiles": 208,
+    "fullSuiteStatus": "Full default `pnpm test` run on 2026-09-10: 592 pass / 0 failures across 208 files in 467 s — clean, no load-timeout instability. Slow vs the recorded 37.5 s baseline because it was a cold run on a suite that grew by 48 tests and 10 files.",
+    "buildSize": "3.82 MB",
+    "buildSizeNote": "Measured 2026-09-10 via `pnpm build` (WXT reported total 3.82 MB; `du -sh .output/chrome-mv3` = 3.7M).",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean (per 2026-08-05 gate; not re-run this refresh).",
+    "lintErrorsDetail": "Clean — `pnpm lint` exit 0 re-run 2026-09-10 AFTER fixing the regression this refresh found: content/__tests__/subtitleCoordinator.test.ts:3399:56 `void is only valid as a return type or generic type argument` (@typescript-eslint/no-invalid-void-type) on `Promise.withResolvers<void>()`, introduced by d4f2cf1. Fixed by switching to `Promise.withResolvers<undefined>()`. Lesson: tsc clean does NOT imply lint clean — run both.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean (per 2026-08-05 gate; not re-run this refresh).",
+    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) re-run 2026-09-10.",
     "archivedTracks": 73,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Subtitle style presets shipped untracked via superpowers spec+plan (docs/superpowers/specs/2026-08-05-subtitle-style-presets-design.md + docs/superpowers/plans/2026-08-05-subtitle-style-presets.md).",
+    "activeTracksDetail": "None. Everything in the 2026-08-11…09-10 window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/2026-08-11-readme-refresh*, docs/superpowers/2026-08-24-discord-inline-editing*).",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -35,31 +38,52 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "feat(subtitles): subtitle style presets — settings model, pure resolver, overlay CSS-var rendering, mini-studio + Options pickers, quality-gate fixes (0c36ac4..7f51036, 13 commits, +35 TCs)",
-      "fix(playerChrome): anchor floating control bottom-right above control band (c3f5ea6)",
-      "fix(subtitles): LinkedIn Learning captions via ambry VTT and transcript JSON (1e6eea8)",
-      "feat(scientific-pdf): setup guide site on GitHub Pages (docs/guide + pages.yml), GHCR bridge-image.yml, in-extension guide links (48df31d)",
-      "fix(ci): drop invalid upload-pages-artifact input (ba82d99)",
-      "chore(beads): sync issue exports (a297d14)",
-      "chore: remove superseded PLAN-immersive-translate-clone.md (8fe30f7)"
+      "docs(readme): refresh current project guide (9a0cf09)",
+      "feat(providers): add Cherry Studio predefined local provider (1b239e4)",
+      "chore(store): prepare Chrome Web Store submission (ed2fc45)",
+      "fix(web-translate): keep scroll position stable when translating mid-page (b17367c)",
+      "chore(agents): sync skill library and shared ui-ux-pro-max reference data (51536f6)",
+      "fix(subtitles): unescape double-escaped \\n in LLM translation values (3e6c8fd)",
+      "feat(subtitles): add DeepLearning.AI subtitle adapter and handler (21108a1)",
+      "docs(readme): drop removed side panel, add Cherry Studio provider (dce09bc)",
+      "feat(subtitles): extract SPA nav watcher, match absolute metadata URLs (8be1191)",
+      "test: consolidate suite coverage (e3e0a43)",
+      "feat(pdf): page-range selection with merged continued translations (487420f)",
+      "fix(popup): reuse existing settings window instead of opening duplicate (b896f49)",
+      "fix(wizard): persist verified connection status to provider pool (066824c)",
+      "fix(inline-translate): ensure translated content is sent in chat boxes and controlled inputs (0a85d27)",
+      "fix(inline-translate): preserve editable chat composers (283f103)",
+      "fix(subtitles): keep overlay glued to video and make drag offsets per-site (590c067)",
+      "fix(subtitles): stop settings refresh from snapping drag position back (31c5734)",
+      "fix(subtitle): scope DOM auto-activation and guidance toast to supported platforms (8607156)",
+      "chore(tests): remove test_smoke.py and add to gitignore to prevent AV quarantine loop (7dbd4df)",
+      "fix(subtitles): abort in-flight YouTube ASR re-align on Stop (d4f2cf1)"
     ]
   },
   "beads": {
-    "open": [],
-    "inProgress": [],
+    "open": [
+      "AnyLLMTranslate-5k8",
+      "AnyLLMTranslate-x9f"
+    ],
+    "inProgress": [
+      "AnyLLMTranslate-b6g",
+      "AnyLLMTranslate-b6g.9"
+    ],
     "closedInWindow": [
-      "AnyLLMTranslate-8l8",
-      "AnyLLMTranslate-pve"
+      "AnyLLMTranslate-lz2"
     ],
     "syncDirection": "skip",
-    "syncNote": "Live Dolt DB reports 0 open / 0 in progress (bd list / bd ready / bd show all agree). Two issues closed in window: AnyLLMTranslate-8l8 (subtitle style presets epic) and AnyLLMTranslate-pve (beads prepare-commit-msg worktree hook bug). Passive export .beads/issues.jsonl lags the live DB with 3 stale open rows (AnyLLMTranslate-5k8, -pve, -x9f) from the 2026-08-06 export sync — the export is passive and the live DB is authoritative. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; user-approved sync direction is skip."
+    "syncNote": "Live Dolt DB reports 2 open (AnyLLMTranslate-5k8 YouTube timedtext 429 recovery; AnyLLMTranslate-x9f product.md suite-history 581 count) and 2 in progress (AnyLLMTranslate-b6g Coursera overlay restore + child b6g.9) — the tracker is NOT empty, correcting the 2026-08-11 '0 open / 0 in progress' record. AnyLLMTranslate-lz2 (ASR re-align Stop cancellation) was closed in this window. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. Note: x9f asks for a 581 count but the suite is now 592 — the entry is superseded by this refresh and can be closed."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
     "archivedTrackLearnings": 71,
     "changedTrackLearningsSincePreviousRefresh": 0,
-    "newPatternsElevated": [],
+    "newPatternsElevated": [
+      "Gotchas: Promise.withResolvers<void>() trips @typescript-eslint/no-invalid-void-type — and tsc being clean does not imply lint is clean (from: d4f2cf1)",
+      "Inline translate — controlled-input write-back: commit translated text through the framework value-setter path so React/Vue chat composers actually send it; preserve IME/draft/send affordances (from: 0a85d27, 283f103)"
+    ],
     "duplicatesMerged": [],
-    "note": "No new cross-track pattern candidates: the style-presets, playerChrome anchor, LinkedIn ambry, and guide-site/CI commits added no track learnings (no new tracks created; archived learnings unchanged since the 2026-08-05 scan). Existing elevated patterns remain current."
+    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan produced no candidates. Two patterns were elevated directly from the commit window because they are project-wide and cost real time to rediscover. The 'Stop must abort the run, not just the session' pattern had already been appended to the YouTube ASR section by d4f2cf1."
   }
 }

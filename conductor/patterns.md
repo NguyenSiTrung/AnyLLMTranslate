@@ -1,7 +1,14 @@
-<!-- conductor-refresh: 2026-08-11 all (71 archived learnings scanned; no new cross-track patterns — style presets / LinkedIn ambry / guide-site CI added no track learnings; 73 archived / 0 active; Beads 0 open; 544 pass / 0 fail across 198 files — clean default parallel run; lint 0; tsc 0 per 2026-08-05 gate; build 3.77 MB carried) -->
+<!-- conductor-refresh: 2026-09-10 all (71 archived learnings rescanned, 0 active — no new learnings.md since 2026-08-04, so no cross-track candidates; 2 patterns elevated from the commit window instead: Promise.withResolvers<void> lint gotcha + inline-translate controlled-input write-back; Stop-must-abort-the-run already captured by d4f2cf1; 73 archived / 0 active; Beads 2 open + 2 in progress; 592 pass / 0 fail across 208 files; tsc 0 / lint 0 re-run; build 3.82 MB re-measured) -->
 # Codebase Patterns
 
 Reusable patterns discovered during development. Read this before starting new work.
+
+## Gotchas
+- **`Promise.withResolvers<void>()` fails lint** (from: `d4f2cf1`, 2026-09-10): `@typescript-eslint/no-invalid-void-type` rejects `void` in this generic position even though the TS lib signature is `withResolvers<T>()`. Use `Promise.withResolvers<undefined>()` (and `resolve()`), or a plain `new Promise` wrapper, in test helpers — `content/inlineTranslate/writeback.ts` already uses the `<undefined>` form, so follow it. This one slipped through a release because `pnpm compile` (tsc) was clean: **tsc passing does not mean lint passing**, so run both before declaring a gate green.
+
+## Inline translate — controlled-input write-back (from: `0a85d27`, `283f103`, 2026-08-24/25)
+- **Write the framework state, not just the DOM:** chat composers (Discord, and any React/Vue controlled input) re-render from their own state, so setting `element.value` / `textContent` alone is discarded on the next render and the *original* text gets sent. Commit the translated value through the framework's value-setter path (native setter + `input` event) so controlled components observe it.
+- **Preserve the composer's editable contract:** the fix must not break IME composition, draft state, or the send/submit affordance — keep the write-back scoped to the value commit, and leave focus/selection behaviour to the existing inline-translate path.
 
 ## YouTube link pre-align (from: youtube-link-prealign_20260804, 2026-08-04)
 - **Background orchestration DI seam:** give `services/*` orchestration modules injected `fetchFn` / `resolveService` / broadcast callbacks instead of importing `background.ts` — background imports the handler, so a reverse import is an ESM cycle, and injected deps keep tests chrome-free (only idb-keyval needs mocking). (from: youtube-link-prealign_20260804, 2026-08-04)
