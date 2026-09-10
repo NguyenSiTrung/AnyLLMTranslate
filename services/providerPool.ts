@@ -38,6 +38,7 @@ import type {
 } from '@/types/messages';
 import type { AsrTimedUnit } from '@/lib/youtubeAsrResegment';
 import type { TranslationService } from './base';
+import { ASR_REALIGN_CANCELLED } from './base';
 import { OpenAICompatibleService, ApiError } from './openaiCompatible';
 import { createCircuitBreaker, type CircuitBreaker, type FailureKind } from '@/lib/circuitBreaker';
 import { createPoolCursor, type PoolCursor } from '@/lib/poolCursor';
@@ -276,7 +277,11 @@ export class ProviderPoolCoordinator implements TranslationService {
     units: AsrTimedUnit[],
     language: string,
     onProgress?: (current: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<ResegmentYoutubeAsrResult> {
+    if (signal?.aborted) {
+      return { success: false, error: ASR_REALIGN_CANCELLED };
+    }
     try {
       const result = await this.dispatchWithFailover((service) => {
         if (!service.resegmentYoutubeAsr) {
@@ -285,10 +290,13 @@ export class ProviderPoolCoordinator implements TranslationService {
             error: 'resegmentYoutubeAsr not supported',
           });
         }
-        return service.resegmentYoutubeAsr(units, language, onProgress);
+        return service.resegmentYoutubeAsr(units, language, onProgress, signal);
       });
       return result;
     } catch (error) {
+      if (signal?.aborted) {
+        return { success: false, error: ASR_REALIGN_CANCELLED };
+      }
       return { success: false, error: errorMessage(error) };
     }
   }

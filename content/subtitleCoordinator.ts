@@ -773,6 +773,31 @@ function findYoutubeTrackMeta(url: string): AvailableSubtitleTrack | undefined {
 }
 
 /**
+ * In-flight YouTube ASR AI re-align run. One per page: the mini-progress Stop
+ * button (via cancelBackgroundSubtitleSession) cancels it so no further LLM
+ * batches are spent and no progress is drawn after the user opted out.
+ */
+let activeAsrRealign: {
+  cancelled: boolean;
+  removeProgressListener: () => void;
+} | null = null;
+
+/**
+ * Cancel the in-flight AI re-align: mark it cancelled, detach its progress
+ * listener, and clear its progress/toast UI. The pipeline then bails out
+ * before translating. No-op when no re-align is running.
+ */
+function cancelActiveAsrRealign(): void {
+  const run = activeAsrRealign;
+  if (!run) return;
+  activeAsrRealign = null;
+  run.cancelled = true;
+  run.removeProgressListener();
+  hideMiniProgress();
+  hideSubtitleToast();
+}
+
+/**
  * Surface AI re-align progress on mini-progress and the subtitle toast so the
  * user sees stages even when they only watch the larger toast.
  */
@@ -819,6 +844,8 @@ async function applyYoutubeAsrPipeline(options: {
   resegmentMode: AsrResegmentMode;
   asrEnable: boolean;
   asrAiEnable: boolean;
+  /** True when the user cancelled the re-align — callers must not translate. */
+  cancelled: boolean;
 }> {
   const { platform, url, body, rawCues, originalLanguage, settings } = options;
   const asrSettings = settings.subtitleSettings.youtubeAsrResegment;
@@ -841,20 +868,26 @@ async function applyYoutubeAsrPipeline(options: {
     asrEnable && isAsrTrack && platform === 'youtube' ? 'local' : 'off';
 
   if (!(asrEnable && asrAiEnable && platform === 'youtube' && isAsrTrack && rawCues.length > 0)) {
-    return { cues, resegmentMode, asrEnable, asrAiEnable };
+    return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: false };
   }
 
   const onProgressMsg = (msg: unknown) => {
     const m = msg as AsrRealignProgressMessage | undefined;
     if (m?.action !== 'ASR_REALIGN_PROGRESS') return;
+    if (realignRun.cancelled) return;
     showRealignProgressUi('realigning', m.current, m.total);
   };
+  const realignRun = {
+    cancelled: false,
+    removeProgressListener: () => chrome.runtime.onMessage.removeListener(onProgressMsg),
+  };
   chrome.runtime.onMessage.addListener(onProgressMsg);
+  activeAsrRealign = realignRun;
 
   try {
     const units = prepareYoutubeAsrAiInput({ body, cues: rawCues });
     if (units.length === 0) {
-      return { cues, resegmentMode, asrEnable, asrAiEnable };
+      return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: false };
     }
 
     const videoId =
@@ -871,6 +904,10 @@ async function applyYoutubeAsrPipeline(options: {
         key,
       })) as GetAsrRealignCacheResult | undefined;
 
+      if (realignRun.cancelled) {
+        return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: true };
+      }
+
       if (cached?.success && cached.entry?.cues && cached.entry.cues.length > 0) {
         cues = cached.entry.cues;
         resegmentMode = 'ai';
@@ -882,6 +919,10 @@ async function applyYoutubeAsrPipeline(options: {
           language: lang,
           units,
         })) as ResegmentYoutubeAsrResult | undefined;
+
+        if (realignRun.cancelled) {
+          return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: true };
+        }
 
         if (aiResult?.success && aiResult.cues && aiResult.cues.length > 0) {
           cues = aiResult.cues;
@@ -922,6 +963,10 @@ async function applyYoutubeAsrPipeline(options: {
         units,
       })) as ResegmentYoutubeAsrResult | undefined;
 
+      if (realignRun.cancelled) {
+        return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: true };
+      }
+
       if (aiResult?.success && aiResult.cues && aiResult.cues.length > 0) {
         cues = aiResult.cues;
         resegmentMode = 'ai';
@@ -934,13 +979,17 @@ async function applyYoutubeAsrPipeline(options: {
       }
     }
   } catch (err) {
+    if (realignRun.cancelled) {
+      return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: true };
+    }
     console.warn('AnyLLMTranslate: AI ASR resegment error — using local rules', err);
     showSubtitleToast('AI re-align failed · using local rules');
   } finally {
+    if (activeAsrRealign === realignRun) activeAsrRealign = null;
     chrome.runtime.onMessage.removeListener(onProgressMsg);
   }
 
-  return { cues, resegmentMode, asrEnable, asrAiEnable };
+  return { cues, resegmentMode, asrEnable, asrAiEnable, cancelled: false };
 }
 
 /**
@@ -1178,7 +1227,7 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
     // Order: parse → ASR resegment (YouTube auto-captions only) → progressive
     // translate → adaptCueTimings on the bilingual display path. Cache keys must
     // use post-resegment source text (we pass `cues` into translateSubtitle).
-    const { cues, resegmentMode, asrEnable, asrAiEnable } = await applyYoutubeAsrPipeline({
+    const { cues, resegmentMode, asrEnable, asrAiEnable, cancelled } = await applyYoutubeAsrPipeline({
       platform,
       url,
       body,
@@ -1186,6 +1235,14 @@ async function handleIntercepted(payload: SubtitleInterceptedPayload, requestId:
       originalLanguage,
       settings,
     });
+    if (cancelled) {
+      // User pressed Stop during re-align: hand the original track back and
+      // leave the page untouched (no translation, no overlay).
+      cleanupActiveOverlay();
+      hideSubtitleToast();
+      sendTranslatedSubtitle({ requestId, vttContent: body });
+      return;
+    }
     if (isStaleYoutubeRequest()) {
       sendTranslatedSubtitle({ requestId, vttContent: body });
       return;
@@ -2434,6 +2491,10 @@ export function clearPendingRequest(_requestId: string): void {
  * unavailable (e.g. some test contexts).
  */
 function cancelBackgroundSubtitleSession(): void {
+  // Stop any in-flight AI re-align first: the background abort must be issued
+  // before the pipeline's own awaits resolve, and the progress listener must go
+  // away so no progress is drawn after the user pressed Stop.
+  cancelActiveAsrRealign();
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
       const result = chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' });
@@ -3590,7 +3651,7 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
   state.activeTrackIdentity = trackIdentity;
   state.fetchedTrackUrls.add(track.url);
 
-  const { cues, resegmentMode, asrEnable, asrAiEnable } = await applyYoutubeAsrPipeline({
+  const { cues, resegmentMode, asrEnable, asrAiEnable, cancelled } = await applyYoutubeAsrPipeline({
     platform,
     url: track.url,
     body,
@@ -3598,6 +3659,12 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
     originalLanguage,
     settings,
   });
+  if (cancelled) {
+    // User pressed Stop during re-align: do not print the overlay or translate.
+    cleanupActiveOverlay();
+    hideSubtitleToast();
+    return;
+  }
   if (state.navigationEpoch !== epochAtStart) return;
 
   if (resegmentMode !== 'off') {

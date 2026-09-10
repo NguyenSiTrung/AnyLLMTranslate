@@ -61,13 +61,21 @@ export interface TranslationService {
    * YouTube ASR AI re-alignment: group timed word/cue units into sentence cues.
    * Uses the user's BYOK provider. Transport failures should re-throw ApiError
    * for pool failover; parse failures return {success:false}.
+   *
+   * `signal` aborts the run between batches and aborts the in-flight request
+   * (user pressed Stop). Aborted runs return `{success:false, error:'cancelled'}`
+   * and must not be saved to the re-align cache.
    */
   resegmentYoutubeAsr?(
     units: AsrTimedUnit[],
     language: string,
     onProgress?: (current: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<ResegmentYoutubeAsrResult>;
 }
+
+/** `ResegmentYoutubeAsrResult.error` value for a user-cancelled re-align run. */
+export const ASR_REALIGN_CANCELLED = 'cancelled';
 
 /** Default system prompt template with injectable variables */
 export const DEFAULT_SYSTEM_PROMPT_TEMPLATE = `You are a professional translator. Translate the given text to {{targetLanguage}}.

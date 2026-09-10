@@ -3,8 +3,9 @@
  * and activateOverlayMode translate path.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import type { MiniProgressOptions } from '@/content/miniProgress';
 import type * as ConfigModule from '@/lib/config';
 import type * as SubtitleCoordinator from '@/content/subtitleCoordinator';
 
@@ -29,9 +30,11 @@ vi.mock('@/content/subtitleToast', () => ({
   hideSubtitleToast: vi.fn(),
 }));
 
+const mockUpdateMiniProgress = vi.fn<(opts: MiniProgressOptions) => void>();
+const mockHideMiniProgress = vi.fn();
 vi.mock('@/content/miniProgress', () => ({
-  updateMiniProgress: vi.fn(),
-  hideMiniProgress: vi.fn(),
+  updateMiniProgress: (opts: MiniProgressOptions) => mockUpdateMiniProgress(opts),
+  hideMiniProgress: () => mockHideMiniProgress(),
   isMiniProgressVisible: vi.fn(() => false),
 }));
 
@@ -2778,6 +2781,61 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
       expect.stringMatching(/saved re-align|Using saved re-align|Re-aligning/i),
       expect.anything(),
     );
+  });
+
+  it('Stop during re-align aborts the run: no further progress, no translation', async () => {
+    // Background resegment stays pending so Stop lands mid-run (the real path
+    // only aborts after the LLM batch in flight returns).
+    let finishResegment: ((value: unknown) => void) | null = null;
+    const sendMessage = chrome.runtime.sendMessage as Mock;
+    sendMessage.mockImplementation(async (msg: { action?: string }) => {
+      if (msg.action === 'GET_ASR_REALIGN_CACHE') return { success: true };
+      if (msg.action === 'RESEGMENT_YOUTUBE_ASR') {
+        return new Promise((resolve) => { finishResegment = resolve; });
+      }
+      if (msg.action === 'translateSubtitle') {
+        return { success: true, cues: MOCK_TRANSLATED_CUES, sessionId: 7 };
+      }
+      return { success: true };
+    });
+
+    const payload = {
+      url: 'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr&fmt=json3',
+      body: JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 2000, segs: [{ utf8: 'Hello' }] }] }),
+      contentType: 'application/json',
+      platform: 'youtube',
+      originalLanguage: 'en',
+    };
+    const handled = capturedInterceptedHandler!(payload, 'req-stop-realign');
+
+    await vi.waitFor(() => expect(mockUpdateMiniProgress).toHaveBeenCalled());
+    const calls = mockUpdateMiniProgress.mock.calls;
+    calls[calls.length - 1]![0].onStop();
+
+    expect(sendMessage).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+    expect(chrome.runtime.onMessage.removeListener).toHaveBeenCalled();
+
+    // A progress message from the (now aborted) background run must not bring
+    // the progress bar back.
+    mockUpdateMiniProgress.mockClear();
+    const listeners = (chrome.runtime.onMessage.addListener as Mock).mock.calls;
+    for (const [listener] of listeners) {
+      (listener as (msg: unknown) => void)({
+        action: 'ASR_REALIGN_PROGRESS',
+        phase: 'realigning',
+        current: 2,
+        total: 3,
+      });
+    }
+    expect(mockUpdateMiniProgress).not.toHaveBeenCalled();
+
+    // The aborted run resolves cancelled: the pipeline must not translate.
+    finishResegment!({ success: false, error: 'cancelled' });
+    await handled;
+
+    const actions = sendMessage.mock.calls.map((c) => (c[0] as { action?: string }).action);
+    expect(actions).not.toContain('translateSubtitle');
+    expect(mockSendTranslatedSubtitle).toHaveBeenCalled();
   });
 
   it('hides YouTube native caption window when overlay activates (proactive path)', async () => {

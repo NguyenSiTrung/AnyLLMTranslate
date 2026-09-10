@@ -884,6 +884,42 @@ describe('services/background', () => {
       expect(fetchCallCount).toBeGreaterThan(fetchesAfterFirst);
     });
   });
+
+  describe('handleMessage — RESEGMENT_YOUTUBE_ASR cancellation', () => {
+    it('CANCEL_SUBTITLE_SESSION aborts the in-flight AI re-align for the tab', async () => {
+      const signals: AbortSignal[] = [];
+      // A resegment request that never resolves on its own: the only way out is
+      // the user's Stop, which must abort the request signal.
+      vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => {
+        const signal = init.signal as AbortSignal;
+        signals.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          });
+        });
+      }));
+
+      const pending = handleMessage(
+        {
+          action: 'RESEGMENT_YOUTUBE_ASR',
+          language: 'en',
+          units: [{ text: 'hello world', startMs: 0, endMs: 500 }],
+          progressTabId: 42,
+        },
+        { tab: { id: 42 } } as chrome.runtime.MessageSender,
+      );
+
+      await vi.waitFor(() => expect(signals.length).toBeGreaterThan(0));
+      await handleMessage(
+        { action: 'CANCEL_SUBTITLE_SESSION', tabId: 42 },
+        { tab: { id: 42 } } as chrome.runtime.MessageSender,
+      );
+
+      await expect(pending).resolves.toEqual({ success: false, error: 'cancelled' });
+      expect(signals[0]!.aborted).toBe(true);
+    });
+  });
 });
 
 describe('services/background — OPEN_OPTIONS handler', () => {

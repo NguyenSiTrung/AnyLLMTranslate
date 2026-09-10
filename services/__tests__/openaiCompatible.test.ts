@@ -989,5 +989,50 @@ describe('OpenAICompatibleService', () => {
         [2, 2],
       ]);
     });
+
+    it('stops issuing LLM batches once the run is aborted (Stop)', async () => {
+      const many = Array.from({ length: 130 }, (_, i) => ({
+        text: `w${i}`,
+        startMs: i * 100,
+        endMs: i * 100 + 80,
+      }));
+      const controller = new AbortController();
+      let fetchCalls = 0;
+      globalThis.fetch = vi.fn().mockImplementation(async () => {
+        fetchCalls++;
+        // Stop lands while batch 1 is in flight: its request completes, batch 2
+        // must never be issued.
+        if (fetchCalls === 1) controller.abort();
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            id: 'chatcmpl-test',
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({ segments: [{ start: 0, end: 119 }] }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          text: async () => '',
+        };
+      });
+
+      // Stop lands while batch 1 is in flight (see the fetch mock).
+      const result = await new OpenAICompatibleService(mockConfig).resegmentYoutubeAsr(
+        many,
+        'en',
+        undefined,
+        controller.signal,
+      );
+
+      expect(result).toEqual({ success: false, error: 'cancelled' });
+      expect(fetchCalls).toBe(1);
+    });
   });
 });

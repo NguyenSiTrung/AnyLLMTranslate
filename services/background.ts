@@ -241,6 +241,13 @@ interface TranslationSession {
 const activeSessions = new Map<number, TranslationSession>();
 let subtitleSessionCounter = 0;
 
+/**
+ * In-flight AI re-align runs keyed by origin tab. The Stop button (and any
+ * other cancel path) sends CANCEL_SUBTITLE_SESSION, which aborts the run so no
+ * further LLM batches are spent and the in-flight request is dropped.
+ */
+const asrRealignControllers = new Map<number, AbortController>();
+
 /** Keep-alive alarm name for MV3 service worker */
 const KEEPALIVE_ALARM = 'sw-keepalive';
 
@@ -263,12 +270,14 @@ function clearKeepaliveAlarm(): void {
 }
 
 /**
- * Stop an active progressive subtitle session for a tab.
+ * Stop an active progressive subtitle session for a tab, plus any in-flight AI
+ * re-align for that tab (the mini-progress Stop button cancels both).
  * Drains the queue so the background loop exits, removes the session, and
  * clears the keep-alive alarm when no sessions remain. Safe to call when no
  * session exists. Called on restore, explicit cancel, and tab removal.
  */
 function stopSubtitleSession(tabId: number): void {
+  asrRealignControllers.get(tabId)?.abort();
   const session = activeSessions.get(tabId);
   if (session) {
     session.cancelled = true;
@@ -2153,28 +2162,46 @@ async function handleResegmentYoutubeAsr(
   try {
     const contentHash = await hashAsrRealignContent(message.units);
     const inflightKey = `${message.language}:${contentHash}`;
+    const tabId = message.progressTabId ?? sender?.tab?.id;
 
     return await getOrCreateAsrRealignInflight(inflightKey, async () => {
-      const service = await initService();
-      if (!service.resegmentYoutubeAsr) {
-        return { success: false, error: 'Provider does not support YouTube ASR resegment' };
+      // Registered inside the factory so a coalesced second caller never
+      // aborts the run it is sharing.
+      const controller = new AbortController();
+      if (tabId != null) {
+        asrRealignControllers.get(tabId)?.abort();
+        asrRealignControllers.set(tabId, controller);
       }
+      try {
+        const service = await initService();
+        if (!service.resegmentYoutubeAsr) {
+          return { success: false, error: 'Provider does not support YouTube ASR resegment' };
+        }
 
-      const tabId = message.progressTabId ?? sender?.tab?.id;
-      const onProgress =
-        tabId != null
-          ? (current: number, total: number) => {
-              const payload: AsrRealignProgressMessage = {
-                action: 'ASR_REALIGN_PROGRESS',
-                phase: 'realigning',
-                current,
-                total,
-              };
-              chrome.tabs.sendMessage(tabId, payload).catch(() => {});
-            }
-          : undefined;
+        const onProgress =
+          tabId != null
+            ? (current: number, total: number) => {
+                const payload: AsrRealignProgressMessage = {
+                  action: 'ASR_REALIGN_PROGRESS',
+                  phase: 'realigning',
+                  current,
+                  total,
+                };
+                chrome.tabs.sendMessage(tabId, payload).catch(() => {});
+              }
+            : undefined;
 
-      return await service.resegmentYoutubeAsr(message.units, message.language, onProgress);
+        return await service.resegmentYoutubeAsr(
+          message.units,
+          message.language,
+          onProgress,
+          controller.signal,
+        );
+      } finally {
+        if (tabId != null && asrRealignControllers.get(tabId) === controller) {
+          asrRealignControllers.delete(tabId);
+        }
+      }
     });
   } catch (error) {
     return { success: false, error: String(error) };
@@ -2904,6 +2931,10 @@ function __resetSubtitleSessionCounterForTest(): void {
     session.queue.length = 0;
   }
   activeSessions.clear();
+  for (const controller of asrRealignControllers.values()) {
+    controller.abort();
+  }
+  asrRealignControllers.clear();
 }
 
 /**

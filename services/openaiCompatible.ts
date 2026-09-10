@@ -11,7 +11,7 @@ import type {
   ChatCompletionResponse,
 } from '@/types/translation';
 import type { TranslationService } from './base';
-import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse } from './base';
+import { buildSystemPrompt, buildUserPrompt, parseTranslationResponse, ASR_REALIGN_CANCELLED } from './base';
 import { missingTranslationIds } from '@/lib/jsonParseRepair';
 import {
   detectBatchQualityIssues,
@@ -689,6 +689,7 @@ Rules:
     units: AsrTimedUnit[],
     language: string,
     onProgress?: (current: number, total: number) => void,
+    signal?: AbortSignal,
   ): Promise<ResegmentYoutubeAsrResult> {
     if (units.length === 0) {
       return { success: true, cues: [] };
@@ -699,6 +700,10 @@ Rules:
     const total = batches.length;
 
     for (let i = 0; i < batches.length; i++) {
+      // Stop pressed (or tab closed): bail before spending another LLM call.
+      if (signal?.aborted) {
+        return { success: false, error: ASR_REALIGN_CANCELLED };
+      }
       const batch = batches[i];
       if (!batch) continue;
       onProgress?.(i + 1, total);
@@ -712,8 +717,17 @@ Rules:
         temperature: 0,
       });
 
-      // Transport/auth/rate-limit errors propagate for pool failover.
-      const response = await this.fetchCompletion(completionRequest);
+      // Transport/auth/rate-limit errors propagate for pool failover. A caller
+      // abort (Stop) must NOT fail over — it returns a cancelled result instead.
+      let response: ChatCompletionResponse;
+      try {
+        response = await this.fetchCompletion(completionRequest, signal);
+      } catch (err) {
+        if (signal?.aborted) {
+          return { success: false, error: ASR_REALIGN_CANCELLED };
+        }
+        throw err;
+      }
       const responseText = response.choices[0]?.message?.content ?? '';
       if (!responseText.trim()) {
         return { success: false, error: 'Empty response from LLM' };
@@ -812,8 +826,9 @@ Rules:
 
   private async fetchCompletion(
     request: ChatCompletionRequest,
+    signal?: AbortSignal,
   ): Promise<ChatCompletionResponse> {
-    return this.fetchWithRetry(request, OpenAICompatibleService.PER_SERVICE_MAX_RETRIES);
+    return this.fetchWithRetry(request, OpenAICompatibleService.PER_SERVICE_MAX_RETRIES, 1, 0, signal);
   }
 
   private async fetchWithRetry(
@@ -821,6 +836,7 @@ Rules:
     maxRetries: number,
     attempt = 1,
     rateLimitAttempts = 0,
+    callerSignal?: AbortSignal,
   ): Promise<ChatCompletionResponse> {
     const timeout = this.config.requestTimeoutMs ?? 60000;
     // RPM rate limiting: wait for a slot before starting the request-timeout
@@ -829,6 +845,11 @@ Rules:
     // with a clear RateLimitTimeoutError instead of hanging past the user's
     // configured bound.
     await this.rateLimiter.acquire(timeout);
+
+    // A Stop during the RPM wait must not start a request at all.
+    if (callerSignal?.aborted) {
+      throw new Error(ASR_REALIGN_CANCELLED);
+    }
 
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
@@ -858,6 +879,15 @@ Rules:
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
+    // User-initiated Stop aborts the in-flight request immediately (the timer
+    // keeps its own request-timeout semantics).
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        clearTimeout(timer);
+        throw new Error(ASR_REALIGN_CANCELLED);
+      }
+      callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
 
     try {
       const response = await fetch(url, {
@@ -905,7 +935,7 @@ Rules:
           };
           const strippedRequest = { ...request };
           delete strippedRequest.response_format;
-          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
+          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts, callerSignal);
         }
 
         // Some endpoints reject thinking controls:
@@ -933,7 +963,7 @@ Rules:
           delete strippedRequest.enable_thinking;
           delete strippedRequest.reasoning_effort;
           delete strippedRequest.thinking;
-          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts);
+          return this.fetchWithRetry(strippedRequest, maxRetries, attempt, rateLimitAttempts, callerSignal);
         }
 
         // 429 Too Many Requests: retry with backoff + jitter, honoring the
@@ -947,7 +977,7 @@ Rules:
           if (rateLimitAttempts < max429) {
             const delay = this.compute429Delay(response, rateLimitAttempts);
             await new Promise((resolve) => setTimeout(resolve, delay));
-            return this.fetchWithRetry(request, maxRetries, attempt, rateLimitAttempts + 1);
+            return this.fetchWithRetry(request, maxRetries, attempt, rateLimitAttempts + 1, callerSignal);
           }
           throw new ApiError(
             'Rate limit exceeded. The provider is limiting requests. Please wait a moment or reduce the batch size in Settings.',
@@ -960,7 +990,7 @@ Rules:
         if (shouldRetry) {
           const backoff = 500 * Math.pow(2, attempt - 1);
           await new Promise((resolve) => setTimeout(resolve, backoff));
-          return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts);
+          return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts, callerSignal);
         }
 
         throw new ApiError(errorMessage, response.status);
@@ -970,6 +1000,10 @@ Rules:
     } catch (error) {
       clearTimeout(timer);
       if (error instanceof Error && error.name === 'AbortError') {
+        // A caller abort (Stop) is not a timeout and must never be retried.
+        if (callerSignal?.aborted) {
+          throw new Error(ASR_REALIGN_CANCELLED, { cause: error });
+        }
         throw new Error(`Translation request timed out after ${timeout}ms`, { cause: error });
       }
 
@@ -977,10 +1011,10 @@ Rules:
       // 4xx client errors should NOT be retried (determined via ApiError.statusCode,
       // not fragile string matching on error.message).
       const isClientError = error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500;
-      if (attempt <= maxRetries && !isClientError) {
+      if (attempt <= maxRetries && !isClientError && !callerSignal?.aborted) {
         const backoff = 500 * Math.pow(2, attempt - 1);
         await new Promise((resolve) => setTimeout(resolve, backoff));
-        return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts);
+        return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts, callerSignal);
       }
 
       throw error;
