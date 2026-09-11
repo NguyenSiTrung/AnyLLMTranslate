@@ -1,33 +1,41 @@
 {
-  "lastRefresh": "2026-09-10T23:05:00+07:00",
+  "lastRefresh": "2026-09-11T18:05:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh ('conductor refresh' with no argument, then user go-ahead). Reconciled product, tech-stack, tracks, patterns, workflow, and Beads context against master since the 2026-08-11 18:12 refresh (23 commits, d70f2bc..d4f2cf1).",
-    "product.md: added the 15 missing timeline entries for the 2026-08-11…09-10 window — README refresh (9a0cf09), Cherry Studio provider (1b239e4), Chrome Web Store prep + LICENSE (ed2fc45), web-translate scroll stability (b17367c), double-escaped \\n fix (3e6c8fd), DeepLearning.AI adapter + handler (21108a1), README cleanup (dce09bc), SPA navigation watcher (8be1191), suite consolidation (e3e0a43), PDF page-range selection (487420f), popup settings-window reuse (b896f49), wizard verified-connection persistence (066824c), inline-translate chat-composer safety (0a85d27/283f103), subtitle overlay anchoring (590c067/31c5734), DOM auto-activation scoping (8607156), Python smoke-test removal (7dbd4df). The YouTube ASR Stop-cancellation entry (d4f2cf1) was already present.",
-    "product.md Current State: 544/198 → 592/208; build re-measured 3.77 MB → 3.82 MB; tsc re-run (0 errors); Beads 0 open → 2 open + 2 in progress; appended the suite-history entry.",
-    "tech-stack.md: confirmed package.json / pnpm-lock.yaml unchanged (no dependency drift since 2026-08-05) and no new CI workflows (still pages.yml + bridge-image.yml). Replaced the quality-gates snapshot with the 2026-09-10 numbers, and added a source-added note (content/spaNavigationWatcher.ts, content/chunkStability.ts, lib/pdfPageSelection.ts, DeepLearning.AI adapter + inject handlers, bridge test_pages_selection.py; test_smoke.py removed + gitignored) plus a tooling note (.agents skill-library sync 51536f6, LICENSE added).",
-    "tracks.md: refresh marker only — verified still 73 archived / 0 active (unchanged since 2026-08-04); the whole window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/2026-08-11-readme-refresh*, docs/superpowers/2026-08-24-discord-inline-editing*).",
-    "workflow.md: marker was stale at 2026-08-05 (skipped by the last refresh); updated to 2026-09-10. No workflow drift — branching strategy, Conventional-Commit convention and the >=80% coverage target still match the repo.",
-    "patterns.md: rescanned 71 archived learnings (0 active) — no new learnings.md since 2026-08-04, so no cross-track consolidation candidates. Elevated 2 patterns from the commit window instead: new 'Gotchas' entry for Promise.withResolvers<void>() tripping @typescript-eslint/no-invalid-void-type, and a new section on inline-translate controlled-input write-back. The 'Stop must abort the run' pattern was already added by d4f2cf1.",
-    "QUALITY GATE REGRESSION found and FIXED in-session: `pnpm lint` reported 1 error — content/__tests__/subtitleCoordinator.test.ts:3399:56 `Promise.withResolvers<void>()` → @typescript-eslint/no-invalid-void-type, introduced by the ASR Stop-cancellation commit d4f2cf1. `pnpm compile` (tsc) is clean, which is why it slipped through. Fixed by switching to `Promise.withResolvers<undefined>()` (the form already used by content/inlineTranslate/writeback.ts). Post-fix: `pnpm lint` exit 0, `pnpm compile` exit 0, and content/__tests__/subtitleCoordinator.test.ts re-run green at 57/57.",
-    "verification: full default `pnpm test` on 2026-09-10 — 592 passed / 0 failed across 208 files in 467 s (cold run; the 37.5 s figure from 2026-08-11 was a warm run on a smaller suite, so treat duration as non-comparable). `pnpm compile` 0 errors. `pnpm lint` 0 errors after the withResolvers fix. `pnpm build` 3.82 MB total (du 3.7M). Backups of all six files in /tmp/conductor-bak-20260910/.",
-    "NOT committed — the workflow's step 8 commit was intentionally left for the user (AGENTS.md conservative profile: no commit/push without explicit approval). Changed files are conductor/*.md + conductor/refresh_state.json + content/__tests__/subtitleCoordinator.test.ts."
+    "Scope: full refresh ('/conductor refresh' with no argument, user approved 'Apply all + commit locally'). Reconciled product, tech-stack, tracks, patterns, workflow, and Beads context against master since the 2026-09-10 refresh (2 commits, d8f9583..3580a6f: 5c96cf3 YouTube ASR re-align unification, 3580a6f HBO Max hardening MAX-1…MAX-42).",
+    "POLICY CHANGE (user decision): the test-coverage target moved from >=80% to >=70%. Rationale: Phase 8 of the Max hardening added inject/** to coverage.include, which surfaced MAIN-world interception code that had never been counted, and the full covered surface measured 78.31% statements — the old 80% floor was no longer the governing rule. Updated conductor/workflow.md ('Target: >=70% statements' + the note that it covers services/lib/content/inject/types, not just 'core modules'), conductor/product.md Success Metrics ('80%+ test coverage' -> '70%+ test coverage'), and CONTRIBUTING.md ('maintain >=70% coverage on modified files'). Note: the Conductor skill's own command templates still say 80% (.agents/skills/conductor/references/commands/setup.md, implement.md) — those are upstream templates, not project policy, and were deliberately left untouched.",
+    "product.md: added 2 timeline entries — (1) YouTube ASR re-align unit + cache-key unification (5c96cf3; Beads lhh/32w/f8i): srv1/srv3 XML -> timed words, real srv3 <p t d> parsing replacing a shape that yielded zero cues and passed the track through untranslated, fmt=json3 refetch on the intercept path for contentHash parity, real word counts in mergeEndCompatible, track matching by parsed v/lang/tlang/kind (the old url.split('&')[0] prefix matched any track of the video), tlang treated as non-ASR, /live/ + /shorts/ activation, re-align runs tracked in a Set, drag-handle pointer gating + debounced offset persistence; (2) HBO Max pipeline hardening MAX-1…MAX-42 across all 8 phases of docs/superpowers/plans/2026-09-11-hbomax-subtitle-fixes.md, driven by docs/hbomax-subtitle-risk-audit.md. Current State rewritten: 592/208 -> 725/213, build 3.82 -> 3.84 MB, coverage 78.31% recorded, Beads line corrected. Test-suite-history line gained the 2026-09-11 entry.",
+    "tech-stack.md: confirmed package.json / pnpm-lock.yaml unchanged since 2026-08-05 (5th consecutive window with no dependency drift) and no new CI workflows (still pages.yml + bridge-image.yml). Quality-gates snapshot replaced with the 2026-09-11 numbers (725/213, 62 s, tsc 0, lint 0, build 3.84 MB, coverage 78.31/75.76/82.63). host_permissions row corrected — it listed only YouTube + Nous Portal + loopback, missing the Max/HBO Max hosts AND the two hosts added this window (*://*.hbo.com/* and *://*.delivery.mp.microsoft.com/*, MAX-39/42). Stale '3.5 MB' build figure in the Scientific PDF bridge rationale corrected to 3.84 MB. Added a source/tests-added note and a config/tooling note (inject/** into coverage.include, wxt.config.ts host permissions, the two new docs).",
+    "workflow.md: marker was stale at 2026-09-10. Real drift found and fixed: (a) coverage target 80% -> 70% per the user decision, with the scope clarified as the whole covered surface; (b) new Phase Verification paragraph recording that platform-dependent work needs a live check — unit tests cannot close a finding whose trigger only exists on the real site (DRM/MSE capture, player DOM, CDN behaviour), so maintenance touching a platform pipeline must carry an explicit live-verification backlog (Max example: audit §7). Branching strategy and Conventional-Commits still match the repo.",
+    "tracks.md: refresh marker only — verified still 73 archived / 0 active (unchanged since 2026-08-04). The whole window shipped untracked via superpowers specs/plans + Beads.",
+    "patterns.md: rescanned 71 archived learnings (0 active) — no new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. Two pattern sections were elevated directly from the commit window because they are project-wide and cost real time to rediscover: 'YouTube ASR re-align — canonical units, or the cache silently never hits' (6 bullets) and 'Platform capture pipelines — failure modes and lifecycle' (8 bullets, incl. host-permission pre-flight and the live-verification rule).",
+    "beads: 19 issues were closed in this window (AnyLLMTranslate-lhh, -32w, -f8i for the YouTube ASR work; -3zw the 42-finding Max audit; -gyd, -04b, -vap, -5z2, -6ht, -vjw, -8nl, -dkd, -wxt, -0en, -vm0, -1z5, -47f, -6i3 for Max phases 1-8). The 2026-09-10 snapshot's 4 records (b6g, b6g.9, 5k8, x9f) no longer exist in the tracker. Live tracker at refresh time: 1 open (gmj P3 YouTube ASR deferred follow-ups) + 2 in progress (3hj P1 Discord Lexical write-back, s32 P2 DeepLearning.AI).",
+    "verification: full default `pnpm test` on 2026-09-11 — 725 passed / 0 failed across 213 files in 62 s (clean; the 467 s figure from 2026-09-10 was a cold run on the smaller suite). `pnpm compile` (tsc --noEmit) 0 errors. `pnpm lint` 0 errors. `pnpm build` 3.84 MB (WXT total; du 3.8M). Coverage: `vitest run --coverage` — all files 78.31% stmts / 75.76% branch / 82.63% funcs, 725/725 tests green. Backups of all six files in /tmp/conductor-bak-20260911/.",
+    "committed: all conductor/*.md + conductor/refresh_state.json; CONTRIBUTING.md changed in the same commit for the 70% target alignment. NOT pushed (AGENTS.md conservative profile: local commit only, no push without explicit approval)."
   ],
   "codebaseHealth": {
-    "tests": 592,
-    "testsPassing": 592,
+    "tests": 725,
+    "testsPassing": 725,
     "testsFailing": 0,
-    "testFiles": 208,
-    "fullSuiteStatus": "Full default `pnpm test` run on 2026-09-10: 592 pass / 0 failures across 208 files in 467 s — clean, no load-timeout instability. Slow vs the recorded 37.5 s baseline because it was a cold run on a suite that grew by 48 tests and 10 files.",
-    "buildSize": "3.82 MB",
-    "buildSizeNote": "Measured 2026-09-10 via `pnpm build` (WXT reported total 3.82 MB; `du -sh .output/chrome-mv3` = 3.7M).",
+    "testFiles": 213,
+    "fullSuiteStatus": "Full default `pnpm test` run on 2026-09-11: 725 pass / 0 failures across 213 files in 62 s — clean, no load-timeout instability. Grew by 133 tests / 5 files since 2026-09-10.",
+    "buildSize": "3.84 MB",
+    "buildSizeNote": "Measured 2026-09-11 via `pnpm build` (WXT reported total 3.84 MB; `du -sh .output/chrome-mv3` = 3.8M). Was 3.82 MB on 2026-09-10.",
+    "coverage": {
+      "statements": "78.31%",
+      "branches": "75.76%",
+      "functions": "82.63%",
+      "lines": "78.31%",
+      "note": "Measured 2026-09-11 with `vitest run --coverage`. Now includes inject/** (added by MAX-8/Phase 8), which was previously excluded entirely and hid the MAIN-world Max capture + handler code. lib ~89%, inject ~82%."
+    },
+    "coverageTarget": ">=70% statements (lowered from >=80% on 2026-09-11 by user decision; aligned in conductor/workflow.md, conductor/product.md, CONTRIBUTING.md)",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean — `pnpm lint` exit 0 re-run 2026-09-10 AFTER fixing the regression this refresh found: content/__tests__/subtitleCoordinator.test.ts:3399:56 `void is only valid as a return type or generic type argument` (@typescript-eslint/no-invalid-void-type) on `Promise.withResolvers<void>()`, introduced by d4f2cf1. Fixed by switching to `Promise.withResolvers<undefined>()`. Lesson: tsc clean does NOT imply lint clean — run both.",
+    "lintErrorsDetail": "Clean — `pnpm lint` exit 0 re-run 2026-09-11. No regression this window (the 2026-09-10 no-invalid-void-type fix held).",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) re-run 2026-09-10.",
+    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) re-run 2026-09-11.",
     "archivedTracks": 73,
     "activeTracks": 0,
-    "activeTracksDetail": "None. Everything in the 2026-08-11…09-10 window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/2026-08-11-readme-refresh*, docs/superpowers/2026-08-24-discord-inline-editing*).",
+    "activeTracksDetail": "None. The 2026-09-10…09-11 window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/plans/2026-09-11-hbomax-subtitle-fixes.md + docs/hbomax-subtitle-risk-audit.md).",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -38,52 +46,59 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "docs(readme): refresh current project guide (9a0cf09)",
-      "feat(providers): add Cherry Studio predefined local provider (1b239e4)",
-      "chore(store): prepare Chrome Web Store submission (ed2fc45)",
-      "fix(web-translate): keep scroll position stable when translating mid-page (b17367c)",
-      "chore(agents): sync skill library and shared ui-ux-pro-max reference data (51536f6)",
-      "fix(subtitles): unescape double-escaped \\n in LLM translation values (3e6c8fd)",
-      "feat(subtitles): add DeepLearning.AI subtitle adapter and handler (21108a1)",
-      "docs(readme): drop removed side panel, add Cherry Studio provider (dce09bc)",
-      "feat(subtitles): extract SPA nav watcher, match absolute metadata URLs (8be1191)",
-      "test: consolidate suite coverage (e3e0a43)",
-      "feat(pdf): page-range selection with merged continued translations (487420f)",
-      "fix(popup): reuse existing settings window instead of opening duplicate (b896f49)",
-      "fix(wizard): persist verified connection status to provider pool (066824c)",
-      "fix(inline-translate): ensure translated content is sent in chat boxes and controlled inputs (0a85d27)",
-      "fix(inline-translate): preserve editable chat composers (283f103)",
-      "fix(subtitles): keep overlay glued to video and make drag offsets per-site (590c067)",
-      "fix(subtitles): stop settings refresh from snapping drag position back (31c5734)",
-      "fix(subtitle): scope DOM auto-activation and guidance toast to supported platforms (8607156)",
-      "chore(tests): remove test_smoke.py and add to gitignore to prevent AV quarantine loop (7dbd4df)",
-      "fix(subtitles): abort in-flight YouTube ASR re-align on Stop (d4f2cf1)"
+      "fix(subtitles): make YouTube ASR re-align units + cache key consistent across flows (5c96cf3)",
+      "fix(subtitles): harden the HBO Max subtitle pipeline (MAX-1…MAX-42) (3580a6f)"
+    ],
+    "liveVerificationBacklog": [
+      "7 HBO Max items from docs/hbomax-subtitle-risk-audit.md §7 still need a real Max session (DRM/MSE capture, player DOM, CDN behaviour). Unit tests cannot close these."
     ]
   },
   "beads": {
     "open": [
+      "AnyLLMTranslate-gmj"
+    ],
+    "inProgress": [
+      "AnyLLMTranslate-3hj",
+      "AnyLLMTranslate-s32"
+    ],
+    "closedInWindow": [
+      "AnyLLMTranslate-lhh",
+      "AnyLLMTranslate-32w",
+      "AnyLLMTranslate-f8i",
+      "AnyLLMTranslate-3zw",
+      "AnyLLMTranslate-gyd",
+      "AnyLLMTranslate-04b",
+      "AnyLLMTranslate-vap",
+      "AnyLLMTranslate-5z2",
+      "AnyLLMTranslate-6ht",
+      "AnyLLMTranslate-vjw",
+      "AnyLLMTranslate-8nl",
+      "AnyLLMTranslate-dkd",
+      "AnyLLMTranslate-wxt",
+      "AnyLLMTranslate-0en",
+      "AnyLLMTranslate-vm0",
+      "AnyLLMTranslate-1z5",
+      "AnyLLMTranslate-47f",
+      "AnyLLMTranslate-6i3"
+    ],
+    "staleRecordsRemoved": [
+      "AnyLLMTranslate-b6g",
+      "AnyLLMTranslate-b6g.9",
       "AnyLLMTranslate-5k8",
       "AnyLLMTranslate-x9f"
     ],
-    "inProgress": [
-      "AnyLLMTranslate-b6g",
-      "AnyLLMTranslate-b6g.9"
-    ],
-    "closedInWindow": [
-      "AnyLLMTranslate-lz2"
-    ],
     "syncDirection": "skip",
-    "syncNote": "Live Dolt DB reports 2 open (AnyLLMTranslate-5k8 YouTube timedtext 429 recovery; AnyLLMTranslate-x9f product.md suite-history 581 count) and 2 in progress (AnyLLMTranslate-b6g Coursera overlay restore + child b6g.9) — the tracker is NOT empty, correcting the 2026-08-11 '0 open / 0 in progress' record. AnyLLMTranslate-lz2 (ASR re-align Stop cancellation) was closed in this window. No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. Note: x9f asks for a 581 count but the suite is now 592 — the entry is superseded by this refresh and can be closed."
+    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. The four records carried by the 2026-09-10 snapshot (b6g, b6g.9, 5k8, x9f) are absent from the live Dolt DB and were removed from this state file. The x9f item (asking for a 581 count in the suite history) is moot — the suite is now 725."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
     "archivedTrackLearnings": 71,
     "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [
-      "Gotchas: Promise.withResolvers<void>() trips @typescript-eslint/no-invalid-void-type — and tsc being clean does not imply lint is clean (from: d4f2cf1)",
-      "Inline translate — controlled-input write-back: commit translated text through the framework value-setter path so React/Vue chat composers actually send it; preserve IME/draft/send affordances (from: 0a85d27, 283f103)"
+      "YouTube ASR re-align — canonical units, or the cache silently never hits (from: 5c96cf3 / AnyLLMTranslate-lhh, -32w, -f8i, 2026-09-11)",
+      "Platform capture pipelines — failure modes and lifecycle (from: HBO Max hardening MAX-1…MAX-42, 3580a6f, 2026-09-11)"
     ],
     "duplicatesMerged": [],
-    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan produced no candidates. Two patterns were elevated directly from the commit window because they are project-wide and cost real time to rediscover. The 'Stop must abort the run, not just the session' pattern had already been appended to the YouTube ASR section by d4f2cf1."
+    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. Both pattern sections were elevated directly from the commit window. The existing YouTube ASR AI re-align cache section and the older hbomax-* entries were left in place as history; the new sections are the forward-looking rules."
   }
 }

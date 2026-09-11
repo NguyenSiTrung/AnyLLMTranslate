@@ -165,7 +165,7 @@ pnpm zip
 
 1. **Fork** the repository
 2. **Create a branch**: `git checkout -b feat/your-feature`
-3. **Implement** with tests (maintain ≥80% coverage on modified files)
+3. **Implement** with tests (maintain ≥70% coverage on modified files)
 4. **Verify**:
    ```bash
    pnpm test        # All tests pass
