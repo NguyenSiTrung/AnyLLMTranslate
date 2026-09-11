@@ -1,14 +1,15 @@
 /**
- * Tests: Advanced tab Data Portability — full plaintext export, encrypted
- * export/import, and merge-vs-replace import behavior.
+ * Tests: Data and recovery card — full plaintext export, encrypted
+ * export/import, and merge-vs-replace import behavior. Moved verbatim from
+ * AdvancedSection.backup.test.tsx during the card extraction.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
 import { DEFAULT_SETTINGS, type ExtensionSettings } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
-import { AdvancedSection } from '../AdvancedSection';
+import { DataRecoveryCard } from '../DataRecoveryCard';
 import { encryptBackup } from '@/lib/backup';
 import { BUILT_IN_RULES } from '@/lib/siteRules';
 import {
@@ -19,19 +20,6 @@ import {
 
 // jsdom's crypto lacks subtle; use Node's webcrypto for the real crypto paths.
 Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
-
-const cacheStatsState = vi.hoisted(() => ({
-  entryCount: 0,
-  totalSizeBytes: 0,
-  sizeMb: 0,
-  sizeLabel: '0 B',
-  loading: false,
-  refresh: vi.fn(),
-}));
-
-vi.mock('@/entrypoints/options/hooks/useCacheStats', () => ({
-  useCacheStats: () => cacheStatsState,
-}));
 
 vi.mock('@/lib/config', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -50,7 +38,7 @@ const anchorClick = vi.hoisted(() => vi.fn());
 function renderAdvanced() {
   return render(
     <ToastProvider>
-      <AdvancedSection />
+      <DataRecoveryCard />
     </ToastProvider>,
   );
 }
@@ -329,5 +317,41 @@ describe('AdvancedSection Data Portability', () => {
       ).not.toBeInTheDocument(),
     );
     unmount();
+  });
+
+  it('recommends encrypted backup when API keys exist', async () => {
+    storeWith({
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'P',
+          baseUrl: 'https://x/v1',
+          model: 'm',
+          requiresApiKey: true,
+          temperature: 0.3,
+          maxTokens: 4096,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk-abc',
+              maxRpm: 20,
+              concurrencyLimit: 1,
+              interval: 500,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+    });
+    renderAdvanced();
+    fireEvent.click(screen.getByRole('button', { name: /export backup/i }));
+    const dialog = await screen.findByRole('dialog', { name: /export settings/i });
+    expect(
+      await within(dialog).findByRole('radio', { name: /encrypted backup/i }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(
+      within(dialog).getByText(/api keys in cleartext/i),
+    ).toBeInTheDocument();
   });
 });

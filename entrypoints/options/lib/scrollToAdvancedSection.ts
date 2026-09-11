@@ -1,11 +1,9 @@
 export const ADVANCED_SECTION_IDS = {
-  prompt: 'advanced-section-prompt',
+  translation: 'advanced-section-translation',
   performance: 'advanced-section-performance',
-  quality: 'advanced-section-quality',
-  context: 'advanced-section-context',
-  pdf: 'advanced-section-pdf',
-  developer: 'advanced-section-developer',
-  cache: 'advanced-section-cache',
+  compatibility: 'advanced-section-compatibility',
+  data: 'advanced-section-data',
+  diagnostics: 'advanced-section-diagnostics',
 } as const;
 
 export type AdvancedSectionId =

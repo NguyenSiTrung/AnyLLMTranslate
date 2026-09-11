@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Settings, Palette, Globe, BookOpen, Subtitles, Keyboard, Wrench,
-  Check, BarChart3, TextCursorInput, Layers,
-} from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useSettingsStore, initStorageSync } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
 import { GeneralSection } from './sections/GeneralSection';
@@ -11,6 +8,8 @@ import { ThemesSection } from './sections/ThemesSection';
 import { SiteRulesSection } from './sections/SiteRulesSection';
 import { DictionarySection } from './sections/DictionarySection';
 import { SubtitlesSection } from './sections/SubtitlesSection';
+import { SpeechSection } from './sections/SpeechSection';
+import { PdfSection } from './sections/PdfSection';
 import { ShortcutsSection } from './sections/ShortcutsSection';
 import { AdvancedSection } from './sections/AdvancedSection';
 import { InlineTranslateSection } from './sections/InlineTranslateSection';
@@ -22,55 +21,12 @@ import {
   type TranslatePageResult,
   type WizardStep,
 } from '@/lib/setupWizard';
-
-/* ── Grouped Navigation ─────────────────────────────────────── */
-
-interface TabDef {
-  id: string;
-  label: string;
-  icon: typeof Settings;
-}
-
-interface TabGroup {
-  label: string;
-  tabs: TabDef[];
-}
-
-const TAB_GROUPS: TabGroup[] = [
-  {
-    label: 'DISPLAY',
-    tabs: [
-      { id: 'general', label: 'General', icon: Settings },
-      { id: 'themes', label: 'Themes', icon: Palette },
-    ],
-  },
-  {
-    label: 'TRANSLATION',
-    tabs: [
-      { id: 'providers', label: 'Providers', icon: Layers },
-      { id: 'dictionary', label: 'Custom terms', icon: BookOpen },
-      { id: 'site-rules', label: 'Site Rules', icon: Globe },
-    ],
-  },
-  {
-    label: 'MEDIA',
-    tabs: [
-      { id: 'subtitles', label: 'Subtitles', icon: Subtitles },
-    ],
-  },
-  {
-    label: 'SYSTEM',
-    tabs: [
-      { id: 'statistics', label: 'Statistics', icon: BarChart3 },
-      { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-      { id: 'inline', label: 'Inline Translate', icon: TextCursorInput },
-      { id: 'advanced', label: 'Advanced', icon: Wrench },
-    ],
-  },
-];
-
-const ALL_TAB_IDS = TAB_GROUPS.flatMap((g) => g.tabs.map((t) => t.id));
-type TabId = string;
+import {
+  ALL_TAB_IDS,
+  resolveRequestedSettingsTab,
+  TAB_GROUPS,
+  type TabId,
+} from './lib/settingsTabs';
 
 /* ── Component ───────────────────────────────────────────────── */
 
@@ -104,14 +60,10 @@ export default function App() {
     }
 
     // Honor deep links (e.g. `options.html?section=subtitles` from the in-player
-    // mini studio) so the options page opens on the requested section. Providers
-    // is also supported for parity with the content-script settings deep link.
-    const sectionParam = url.searchParams.get('section');
-    if (sectionParam === 'subtitles') {
-      setActiveTab('subtitles');
-    } else if (sectionParam === 'providers') {
-      setActiveTab('providers');
-    }
+    // mini studio) so the options page opens on the requested section. Any known
+    // tab id resolves via the shared registry.
+    const requestedTab = resolveRequestedSettingsTab(url.searchParams.get('section'));
+    if (requestedTab) setActiveTab(requestedTab);
 
     if (requestedSetup || shouldAutoOpen) {
       setShowSetupWizard(true);
@@ -212,6 +164,8 @@ export default function App() {
       case 'site-rules': return <SiteRulesSection />;
       case 'dictionary': return <DictionarySection />;
       case 'subtitles': return <SubtitlesSection />;
+      case 'speech': return <SpeechSection />;
+      case 'pdf': return <PdfSection />;
       case 'statistics': return <StatisticsSection />;
       case 'shortcuts':
         return <ShortcutsSection onNavigateToInline={() => setActiveTab('inline')} />;

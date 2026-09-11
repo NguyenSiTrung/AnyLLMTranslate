@@ -9,13 +9,11 @@ import {
 describe('ADVANCED_SECTION_IDS', () => {
   it('maps every overview chip key to a stable id', () => {
     expect(ADVANCED_SECTION_IDS).toEqual({
-      prompt: 'advanced-section-prompt',
+      translation: 'advanced-section-translation',
       performance: 'advanced-section-performance',
-      quality: 'advanced-section-quality',
-      context: 'advanced-section-context',
-      pdf: 'advanced-section-pdf',
-      developer: 'advanced-section-developer',
-      cache: 'advanced-section-cache',
+      compatibility: 'advanced-section-compatibility',
+      data: 'advanced-section-data',
+      diagnostics: 'advanced-section-diagnostics',
     });
   });
 });
@@ -55,7 +53,7 @@ describe('scrollToAdvancedSection', () => {
 
   it('smooth-scrolls, focuses, and highlights the target; uses auto behavior for reduced motion', () => {
     const el = document.createElement('div');
-    el.id = ADVANCED_SECTION_IDS.context;
+    el.id = ADVANCED_SECTION_IDS.compatibility;
     el.tabIndex = -1;
     const scrollIntoView = vi.fn();
     const focus = vi.fn();
@@ -67,7 +65,7 @@ describe('scrollToAdvancedSection', () => {
       matchMedia: vi.fn().mockReturnValue({ matches: false }),
     } as unknown as Window;
 
-    expect(scrollToAdvancedSection(ADVANCED_SECTION_IDS.context, { window: win })).toBe(
+    expect(scrollToAdvancedSection(ADVANCED_SECTION_IDS.compatibility, { window: win })).toBe(
       true,
     );
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
@@ -79,7 +77,7 @@ describe('scrollToAdvancedSection', () => {
 
     // uses auto scroll behavior when reduced motion is preferred
     const reducedEl = document.createElement('div');
-    reducedEl.id = ADVANCED_SECTION_IDS.prompt;
+    reducedEl.id = ADVANCED_SECTION_IDS.translation;
     reducedEl.tabIndex = -1;
     const reducedScrollIntoView = vi.fn();
     reducedEl.scrollIntoView = reducedScrollIntoView;
@@ -90,18 +88,18 @@ describe('scrollToAdvancedSection', () => {
       matchMedia: vi.fn().mockReturnValue({ matches: true }),
     } as unknown as Window;
 
-    scrollToAdvancedSection(ADVANCED_SECTION_IDS.prompt, { window: reducedWin });
+    scrollToAdvancedSection(ADVANCED_SECTION_IDS.translation, { window: reducedWin });
     expect(reducedScrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
   });
 
   it('replaces highlight on a second jump (single active highlight)', () => {
     const a = document.createElement('div');
-    a.id = ADVANCED_SECTION_IDS.prompt;
+    a.id = ADVANCED_SECTION_IDS.translation;
     a.tabIndex = -1;
     a.scrollIntoView = vi.fn();
     a.focus = vi.fn();
     const b = document.createElement('div');
-    b.id = ADVANCED_SECTION_IDS.developer;
+    b.id = ADVANCED_SECTION_IDS.diagnostics;
     b.tabIndex = -1;
     b.scrollIntoView = vi.fn();
     b.focus = vi.fn();
@@ -112,10 +110,10 @@ describe('scrollToAdvancedSection', () => {
       matchMedia: vi.fn().mockReturnValue({ matches: false }),
     } as unknown as Window;
 
-    scrollToAdvancedSection(ADVANCED_SECTION_IDS.prompt, { window: win });
+    scrollToAdvancedSection(ADVANCED_SECTION_IDS.translation, { window: win });
     expect(a.getAttribute('data-advanced-section-highlight')).toBe('true');
 
-    scrollToAdvancedSection(ADVANCED_SECTION_IDS.developer, { window: win });
+    scrollToAdvancedSection(ADVANCED_SECTION_IDS.diagnostics, { window: win });
     expect(a.hasAttribute('data-advanced-section-highlight')).toBe(false);
     expect(b.getAttribute('data-advanced-section-highlight')).toBe('true');
   });

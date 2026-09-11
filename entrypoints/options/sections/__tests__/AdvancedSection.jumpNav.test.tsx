@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
@@ -32,6 +32,16 @@ vi.mock('@/entrypoints/options/hooks/useCacheStats', () => ({
   useCacheStats: () => cacheStatsState,
 }));
 
+vi.mock('@/lib/config', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    savePreImportSnapshot: vi.fn(async () => {}),
+    loadPreImportSnapshot: vi.fn(async () => null),
+    clearPreImportSnapshot: vi.fn(async () => {}),
+  };
+});
+
 function renderAdvanced() {
   return render(
     <ToastProvider>
@@ -40,7 +50,15 @@ function renderAdvanced() {
   );
 }
 
-describe('AdvancedSection Active features jump nav', () => {
+const destinations = [
+  ['Translation engine', ADVANCED_SECTION_IDS.translation],
+  ['Performance', ADVANCED_SECTION_IDS.performance],
+  ['Website compatibility', ADVANCED_SECTION_IDS.compatibility],
+  ['Data and recovery', ADVANCED_SECTION_IDS.data],
+  ['Diagnostics', ADVANCED_SECTION_IDS.diagnostics],
+] as const;
+
+describe('AdvancedSection explicit section navigation', () => {
   beforeEach(() => {
     scrollToAdvancedSection.mockClear();
     cacheStatsState.entryCount = 12;
@@ -52,53 +70,56 @@ describe('AdvancedSection Active features jump nav', () => {
     });
   });
 
-  it('renders stable section anchors and a labeled Active features region', () => {
+  it('renders explicit navigation for every Advanced destination', () => {
     renderAdvanced();
-    for (const id of Object.values(ADVANCED_SECTION_IDS)) {
-      const el = document.getElementById(id);
-      expect(el).toBeTruthy();
-      expect(el).toHaveAttribute('tabindex', '-1');
+    const nav = screen.getByRole('navigation', { name: /advanced sections/i });
+    for (const [label, id] of destinations) {
+      expect(
+        within(nav).getByRole('button', { name: label }),
+      ).toBeInTheDocument();
+      expect(document.getElementById(id)).toHaveAttribute('tabindex', '-1');
     }
-    expect(screen.getByText(/active features/i)).toBeInTheDocument();
   });
 
-  it('jumps from each Active features chip without mutating settings', () => {
+  it('jumps without changing settings', () => {
     const updateSettings = vi.fn();
     useSettingsStore.setState({ updateSettings });
     renderAdvanced();
-
-    const cases: Array<{ name: RegExp; sectionId: string }> = [
-      { name: /jump to translation system prompt/i, sectionId: ADVANCED_SECTION_IDS.prompt },
-      { name: /jump to context & intelligence/i, sectionId: ADVANCED_SECTION_IDS.context },
-      { name: /jump to translation quality/i, sectionId: ADVANCED_SECTION_IDS.quality },
-      { name: /jump to developer/i, sectionId: ADVANCED_SECTION_IDS.developer },
-      { name: /jump to performance & throughput/i, sectionId: ADVANCED_SECTION_IDS.performance },
-      { name: /jump to pdf translator/i, sectionId: ADVANCED_SECTION_IDS.pdf },
-      { name: /jump to clear translation cache/i, sectionId: ADVANCED_SECTION_IDS.cache },
-    ];
-
-    for (const { name, sectionId } of cases) {
+    const nav = screen.getByRole('navigation', { name: /advanced sections/i });
+    for (const [label, id] of destinations) {
       scrollToAdvancedSection.mockClear();
-      fireEvent.click(screen.getByRole('button', { name }));
-      expect(scrollToAdvancedSection).toHaveBeenCalledWith(sectionId);
+      fireEvent.click(within(nav).getByRole('button', { name: label }));
+      expect(scrollToAdvancedSection).toHaveBeenCalledWith(id);
     }
-
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
-  it('opens the clear-cache modal from the overview panel without scrolling', () => {
+  it('keeps only Reset all settings in the Danger Zone', () => {
     renderAdvanced();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Clear translation cache' }));
-
-    expect(scrollToAdvancedSection).not.toHaveBeenCalled();
-    expect(screen.getByText(/clear translation cache\?/i)).toBeInTheDocument();
+    const danger = screen.getByText('Danger Zone').closest('section');
+    expect(danger).toBeTruthy();
+    expect(
+      within(danger as HTMLElement).queryByRole('button', {
+        name: /clear cache/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(danger as HTMLElement).getByRole('button', {
+        name: /reset everything/i,
+      }),
+    ).toBeInTheDocument();
   });
 
-  it('disables the overview Clear button when the cache is empty', () => {
-    cacheStatsState.entryCount = 0;
+  it('the Export backup first action jumps to Data and recovery without exporting', () => {
     renderAdvanced();
-
-    expect(screen.getByRole('button', { name: 'Clear translation cache' })).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: /export backup first/i }),
+    );
+    expect(scrollToAdvancedSection).toHaveBeenCalledWith(
+      ADVANCED_SECTION_IDS.data,
+    );
+    expect(
+      screen.queryByRole('dialog', { name: /export settings/i }),
+    ).not.toBeInTheDocument();
   });
 });

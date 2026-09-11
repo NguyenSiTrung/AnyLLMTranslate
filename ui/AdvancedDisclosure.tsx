@@ -23,6 +23,12 @@ interface AdvancedDisclosureProps {
   /** Optional id prefix to keep aria ids stable across renders; one is
    *  generated from the label when omitted. */
   idPrefix?: string;
+  /** Natively disable the trigger (parent feature off). */
+  disabled?: boolean;
+  /** Controlled expanded state. When provided, the parent owns expansion. */
+  expanded?: boolean;
+  /** Called when the trigger toggles expansion (controlled mode). */
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 export function AdvancedDisclosure({
@@ -30,8 +36,17 @@ export function AdvancedDisclosure({
   defaultExpanded = false,
   children,
   idPrefix,
+  disabled = false,
+  expanded: controlledExpanded,
+  onExpandedChange,
 }: AdvancedDisclosureProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const expanded = controlledExpanded ?? internalExpanded;
+  const toggle = () => {
+    const next = !expanded;
+    setInternalExpanded(next);
+    onExpandedChange?.(next);
+  };
   const baseId = idPrefix ?? `disc-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   const buttonId = `${baseId}-btn`;
   const regionId = `${baseId}-region`;
@@ -41,10 +56,11 @@ export function AdvancedDisclosure({
       <button
         type="button"
         id={buttonId}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={toggle}
         aria-expanded={expanded}
         aria-controls={regionId}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <ChevronDown
           className={`w-3.5 h-3.5 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
