@@ -1,7 +1,7 @@
 import type { SubtitleCue, SubtitleUrlPattern, AvailableSubtitleTrack } from '@/types/subtitle';
 import type { SubtitleHandler } from './registry';
 import {
-  parseYoutubeJson3Words,
+  parseYoutubeWords,
   type AsrWord,
 } from '@/lib/youtubeAsrResegment';
 
@@ -24,7 +24,10 @@ export class YouTubeHandler implements SubtitleHandler {
   }
 
   isWatchPage(): boolean {
-    return window.location.pathname === '/watch';
+    const { pathname } = window.location;
+    // /watch plus the other player routes that carry captions: /live/ID and
+    // /shorts/ID. Exact equality on '/watch' silently disabled those pages.
+    return pathname === '/watch' || /^\/(?:live|shorts)\//.test(pathname);
   }
 
   /**
@@ -113,19 +116,47 @@ export class YouTubeHandler implements SubtitleHandler {
   }
 
   /**
-   * Word-level parse of JSON3 timedtext (segs + tOffsetMs).
-   * Used by ASR resegment; pure helper lives in lib/youtubeAsrResegment.
-   * Returns [] for non-JSON3 / empty bodies.
+   * Word-level parse of timedtext (JSON3 segs + tOffsetMs, or srv3 `<s t>` /
+   * srv1 `<text start dur>`). Used by ASR resegment; the pure helper lives in
+   * lib/youtubeAsrResegment. Returns [] for empty / unrecognized bodies.
    */
   parseWordEvents(body: string): AsrWord[] {
-    return parseYoutubeJson3Words(body);
+    return parseYoutubeWords(body);
   }
 
-  /** Parse YouTube srv3 XML format into SubtitleCue[] */
+  /** Parse YouTube srv3 / srv1 XML formats into SubtitleCue[] */
   private parseSrv3(xml: string): SubtitleCue[] {
     const cues: SubtitleCue[] = [];
     const parser = new DOMParser();
     const doc = parser.parseFromString(xml, 'text/xml');
+
+    // srv3: <p t="1230" d="4560">…<s t="0">word</s>…</p> (milliseconds).
+    // Require `t` so TTML (`<p begin/end>`) never matches.
+    const paragraphs = doc.getElementsByTagName('p');
+    for (const el of Array.from(paragraphs)) {
+      const startMs = Number.parseFloat(el.getAttribute('t') ?? '');
+      if (!Number.isFinite(startMs)) continue;
+      const durationMs = Number.parseFloat(el.getAttribute('d') ?? '') || 0;
+      // srv3 has no whitespace between <s> words, so textContent alone would
+      // yield "Helloworld"; join the word segments explicitly.
+      const segs = el.getElementsByTagName('s');
+      const text = (
+        segs.length > 0
+          ? Array.from(segs)
+              .map((s) => s.textContent ?? '')
+              .join(' ')
+          : el.textContent ?? ''
+      )
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!text) continue;
+      const start = startMs / 1000;
+      const end = (startMs + durationMs) / 1000;
+      cues.push({ startTime: start, endTime: end > start ? end : start + 0.5, text });
+    }
+    if (cues.length > 0) return cues;
+
+    // srv1: <text start="1.23" dur="2.34">…</text> (seconds)
     const textElements = doc.querySelectorAll('text');
 
     for (const el of textElements) {

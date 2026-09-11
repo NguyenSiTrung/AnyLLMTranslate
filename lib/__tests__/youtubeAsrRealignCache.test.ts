@@ -52,6 +52,11 @@ describe('youtubeAsrRealignCache pure helpers', () => {
       'abc123',
     );
     expect(extractYoutubeVideoIdFromUrl('https://youtu.be/xyz789')).toBe('xyz789');
+    expect(extractYoutubeVideoIdFromUrl('https://www.youtube.com/live/livestream1')).toBe(
+      'livestream1',
+    );
+    expect(extractYoutubeVideoIdFromUrl('https://www.youtube.com/shorts/short1')).toBe('short1');
+    expect(extractYoutubeVideoIdFromUrl('https://www.youtube.com/embed/emb1')).toBe('emb1');
     expect(extractYoutubeVideoIdFromUrl('https://example.com')).toBeUndefined();
     const entry: YoutubeAsrRealignCacheEntry = {
       key: 'ai:v:en:h',

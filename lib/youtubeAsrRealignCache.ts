@@ -82,6 +82,8 @@ export function extractYoutubeVideoIdFromUrl(url: string): string | undefined {
       if (embedIdx >= 0 && parts[embedIdx + 1]) return parts[embedIdx + 1];
       const shortsIdx = parts.indexOf('shorts');
       if (shortsIdx >= 0 && parts[shortsIdx + 1]) return parts[shortsIdx + 1];
+      const liveIdx = parts.indexOf('live');
+      if (liveIdx >= 0 && parts[liveIdx + 1]) return parts[liveIdx + 1];
     }
   } catch {
     // fall through
@@ -95,7 +97,7 @@ export function estimateAsrRealignEntryBytes(
   const { byteSize: _ignore, ...rest } = entry as YoutubeAsrRealignCacheEntry;
   void _ignore;
   const payload = { ...rest, byteSize: 0 };
-  return encoder.encode(entry.key).length + encoder.encode(JSON.stringify(payload)).length;
+  return encoder.encode(JSON.stringify(payload)).length;
 }
 
 export function toAsrRealignSummary(

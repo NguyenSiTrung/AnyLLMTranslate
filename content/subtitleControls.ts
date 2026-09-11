@@ -124,6 +124,39 @@ export async function savePreferences(config: OverlayConfig): Promise<void> {
   }
 }
 
+/** Debounce window for persisting drag offsets (visual update stays immediate). */
+const OFFSET_SAVE_DEBOUNCE_MS = 250;
+
+let offsetSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingOffset: { x: number; y: number } | null = null;
+
+/** Coalesce drag-offset writes so a mousemove burst costs one storage write. */
+function scheduleOffsetSave(offsetX: number, offsetY: number): void {
+  pendingOffset = { x: offsetX, y: offsetY };
+  if (offsetSaveTimer) return;
+  offsetSaveTimer = setTimeout(flushPendingOffsetSave, OFFSET_SAVE_DEBOUNCE_MS);
+}
+
+/** Persist the latest pending offset immediately (no-op when none is queued). */
+export function flushPendingOffsetSave(): void {
+  if (offsetSaveTimer) {
+    clearTimeout(offsetSaveTimer);
+    offsetSaveTimer = null;
+  }
+  const pending = pendingOffset;
+  pendingOffset = null;
+  if (pending) saveOffsetForHost(pending.x, pending.y).catch(() => {});
+}
+
+/** Drop any queued offset write without persisting it (used by reset). */
+function cancelPendingOffsetSave(): void {
+  if (offsetSaveTimer) {
+    clearTimeout(offsetSaveTimer);
+    offsetSaveTimer = null;
+  }
+  pendingOffset = null;
+}
+
 /** Persist this hostname's drag offset entry. */
 async function saveOffsetForHost(offsetX: number, offsetY: number): Promise<void> {
   // Capture the host before any await: an in-flight save must not land on a
@@ -191,7 +224,7 @@ export function setOffset(offsetX: number, offsetY: number): void {
   const config = getConfig();
   const newConfig = { ...config, offsetX, offsetY };
   updateConfig(newConfig);
-  saveOffsetForHost(offsetX, offsetY).catch(() => {});
+  scheduleOffsetSave(offsetX, offsetY);
 }
 
 /**
@@ -199,6 +232,7 @@ export function setOffset(offsetX: number, offsetY: number): void {
  */
 export async function resetPreferences(): Promise<void> {
   const defaultConfig = { ...DEFAULT_PREFS };
+  cancelPendingOffsetSave();
   updateConfig(defaultConfig);
   await Promise.all([
     savePreferences(defaultConfig),
@@ -235,6 +269,8 @@ export function enableDragReposition(element: HTMLElement): () => void {
     if (dragState.isDragging) {
       dragState.isDragging = false;
       element.style.cursor = 'grab';
+      // Persist the final position now instead of waiting for the debounce.
+      flushPendingOffsetSave();
     }
   };
 
@@ -256,6 +292,7 @@ export function enableDragReposition(element: HTMLElement): () => void {
  * Reset drag state (for testing).
  */
 export function resetDragState(): void {
+  cancelPendingOffsetSave();
   dragState = {
     isDragging: false,
     startX: 0,

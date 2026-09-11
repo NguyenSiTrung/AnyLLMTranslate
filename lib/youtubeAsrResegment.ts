@@ -88,11 +88,6 @@ export interface YoutubeAsrConfig {
    * @see resegmentYoutubeAsrWithAi / requestAiAsrResegment
    */
   aiEnable: boolean;
-  /**
-   * Tokenize cue text into words for cue-level fallback.
-   * String form is compiled with the `g` flag.
-   */
-  wordsRegex: string | RegExp;
   langsConfig: {
     base: AsrLangConfig;
     en?: AsrLangConfig;
@@ -173,7 +168,6 @@ const EN_LANG_CONFIG: AsrLangConfig = {
 export const DEFAULT_YOUTUBE_ASR_CONFIG: YoutubeAsrConfig = {
   enable: true,
   aiEnable: false,
-  wordsRegex: /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?|[.!?;:…]+/gu,
   langsConfig: {
     base: BASE_LANG_CONFIG,
     en: EN_LANG_CONFIG,
@@ -267,6 +261,112 @@ export function flattenJson3Words(events: YoutubeJson3Event[]): AsrWord[] {
     }
   }
 
+  return words;
+}
+
+// ─── Flatten XML (srv1 / srv3) ───────────────────────────────────────────────
+
+const XML_TAG_RE = /<\/?[^>]+>/g;
+
+/** Decode the XML entities YouTube emits; `&amp;` last to avoid double-decoding. */
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_m: string, d: string) => {
+      const code = Number(d);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_m: string, h: string) => {
+      const code = Number.parseInt(h, 16);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+    })
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+}
+
+function stripXmlTags(xml: string): string {
+  return decodeXmlEntities(xml.replace(XML_TAG_RE, '')).replace(/\s+/g, ' ').trim();
+}
+
+function xmlAttrNumber(attrs: string, name: string): number | null {
+  const match = attrs.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`, 'i'));
+  if (!match) return null;
+  const value = Number.parseFloat(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Flatten YouTube XML timedtext into a word stream.
+ *
+ * srv3 (`<p t d>` with `<s t>` children, milliseconds) is word-level when the
+ * `<s>` offsets are present; srv1 (`<text start dur>`, seconds) is event-level
+ * (one coarse token) — mirroring the JSON3 tOffsetMs rule. Returns [] for
+ * non-YouTube XML (TTML `<p begin>` and friends never match — the `t`/`start`
+ * attribute is required).
+ */
+export function flattenXmlWords(xml: string): AsrWord[] {
+  const words: AsrWord[] = [];
+
+  // srv3: <p t="1230" d="4560"><s t="0">Hello</s><s t="500">world</s></p>
+  const paragraphRe = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi;
+  let paragraph: RegExpExecArray | null;
+  while ((paragraph = paragraphRe.exec(xml)) !== null) {
+    const attrs = paragraph[1];
+    const baseMs = xmlAttrNumber(attrs, 't');
+    if (baseMs === null) continue; // not srv3 (TTML uses begin/end)
+    const durationMs = xmlAttrNumber(attrs, 'd') ?? 0;
+    const eventEndMs = baseMs + durationMs;
+    const inner = paragraph[2];
+
+    const segRe = /<s\b([^>]*)>([\s\S]*?)<\/s>/gi;
+    const raw: { text: string; offsetMs: number }[] = [];
+    let seg: RegExpExecArray | null;
+    while ((seg = segRe.exec(inner)) !== null) {
+      const text = stripXmlTags(seg[2]);
+      if (!text) continue;
+      raw.push({ text, offsetMs: xmlAttrNumber(seg[1], 't') ?? 0 });
+    }
+
+    if (raw.length === 0) {
+      const text = stripXmlTags(inner);
+      if (!text) continue;
+      words.push({
+        text,
+        startMs: baseMs,
+        endMs: eventEndMs > baseMs ? eventEndMs : baseMs + 500,
+      });
+      continue;
+    }
+
+    for (let i = 0; i < raw.length; i++) {
+      const startMs = baseMs + raw[i].offsetMs;
+      const nextStartMs =
+        i + 1 < raw.length
+          ? baseMs + raw[i + 1].offsetMs
+          : eventEndMs > startMs
+            ? eventEndMs
+            : startMs + 400;
+      words.push({ text: raw[i].text, startMs, endMs: Math.max(startMs + 50, nextStartMs) });
+    }
+  }
+  if (words.length > 0) return words;
+
+  // srv1: <text start="1.23" dur="2.34">Hello world</text> (seconds)
+  const textRe = /<text\b([^>]*)>([\s\S]*?)<\/text>/gi;
+  let textEl: RegExpExecArray | null;
+  while ((textEl = textRe.exec(xml)) !== null) {
+    const startSec = xmlAttrNumber(textEl[1], 'start');
+    if (startSec === null) continue;
+    const durationSec = xmlAttrNumber(textEl[1], 'dur') ?? 0;
+    const startMs = Math.round(startSec * 1000);
+    const endMs = Math.round((startSec + durationSec) * 1000);
+    const text = stripXmlTags(textEl[2]);
+    if (!text) continue;
+    words.push({ text, startMs, endMs: endMs > startMs ? endMs : startMs + 500 });
+  }
   return words;
 }
 
@@ -438,7 +538,9 @@ export function mergeEndCompatible(
     if (gap > maxGapMs) break;
 
     const text = groupText(last);
-    const wc = last.words.length > 0 ? last.words.length : wordCount(text);
+    // Measure real text words: cue-derived groups hold one pseudo-word per cue,
+    // so `last.words.length` would always be 1 and defeat the maxWords cap.
+    const wc = wordCount(text);
     const dur = groupEndMs(last) - groupStartMs(last);
     const matches = configs.some((c) => wc <= c.maxWords && dur <= c.maxDurationMs);
     if (!matches) break;
@@ -578,13 +680,19 @@ export function resegmentYoutubeAsr(input: ResegmentYoutubeAsrInput): SubtitleCu
 
 // ─── URL / body helpers (pure; used by coordinator gate) ─────────────────────
 
-/** True when timedtext URL is YouTube auto-generated (`kind=asr`). */
+/**
+ * True when a timedtext URL points at the YouTube auto-generated source track
+ * (`kind=asr`). A `tlang` URL is the machine-translated *view* of that track:
+ * its body is no longer ASR output, and keying resegment/cache work on the
+ * target language would break parity with the Settings pre-align flow (which
+ * always saves under the source track language). Treat those as non-ASR.
+ */
 export function isYoutubeAsrUrl(url: string): boolean {
   try {
     const u = new URL(url, 'https://www.youtube.com');
-    return u.searchParams.get('kind') === 'asr';
+    return u.searchParams.get('kind') === 'asr' && !u.searchParams.get('tlang');
   } catch {
-    return /[?&]kind=asr(?:&|$)/i.test(url);
+    return /[?&]kind=asr(?:&|$)/i.test(url) && !/[?&]tlang=/i.test(url);
   }
 }
 
@@ -610,6 +718,17 @@ export function parseYoutubeJson3Words(body: string): AsrWord[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Parse any YouTube timedtext body into timed words: JSON3 first, then srv3/srv1
+ * XML. XML fallback matters on the passive intercept path, where the player may
+ * request `fmt=srv3|srv1` instead of json3.
+ */
+export function parseYoutubeWords(body: string): AsrWord[] {
+  const jsonWords = parseYoutubeJson3Words(body);
+  if (jsonWords.length > 0) return jsonWords;
+  return flattenXmlWords(body);
 }
 
 export interface ApplyYoutubeAsrResegmentOptions {
@@ -647,7 +766,7 @@ export function applyYoutubeAsrResegment(options: ApplyYoutubeAsrResegmentOption
   if (!isAsr) return cues;
 
   try {
-    const words = parseYoutubeJson3Words(body);
+    const words = parseYoutubeWords(body);
     const lang = language || extractLanguageFromTimedtextUrl(url) || 'en';
     const result = resegmentYoutubeAsr({
       words: words.length > 0 ? words : undefined,
@@ -909,7 +1028,7 @@ export function prepareYoutubeAsrAiInput(options: {
   body: string;
   cues: SubtitleCue[];
 }): AsrTimedUnit[] {
-  const words = parseYoutubeJson3Words(options.body);
+  const words = parseYoutubeWords(options.body);
   return prepareAsrUnitsForAi(words.length > 0 ? words : undefined, options.cues);
 }
 

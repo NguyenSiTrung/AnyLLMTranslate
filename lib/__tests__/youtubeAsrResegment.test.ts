@@ -14,7 +14,9 @@ import {
   mergeHangingGroups,
   mergeEndCompatible,
   isYoutubeAsrUrl,
+  flattenXmlWords,
   parseYoutubeJson3Words,
+  parseYoutubeWords,
   applyYoutubeAsrResegment,
   parseAiAsrSegmentRanges,
   normalizeSegmentRanges,
@@ -344,6 +346,74 @@ describe('AI ASR parse / normalize / prepare', () => {
         cues: [{ startTime: 0, endTime: 1, text: 'fallback' }],
       }),
     ).toHaveLength(2);
+  });
+});
+
+describe('XML (srv1 / srv3) word parsing + hardening', () => {
+  it('parses srv3 <p t d>/<s t> into word-level units with offsets', () => {
+    const srv3 =
+      '<?xml version="1.0" encoding="utf-8"?><timedtext format="3"><body>' +
+      '<p t="1230" d="4560"><s t="0">Hello</s><s t="500">world</s><s t="1200">again.</s></p>' +
+      '<p t="6000" d="2000"><s t="0">Bye</s></p>' +
+      '</body></timedtext>';
+    const words = flattenXmlWords(srv3);
+    expect(words.map((w) => w.text)).toEqual(['Hello', 'world', 'again.', 'Bye']);
+    expect(words[0]).toMatchObject({ startMs: 1230, endMs: 1730 });
+    expect(words[1]).toMatchObject({ startMs: 1730 });
+    // Last word of a paragraph ends at t + d.
+    expect(words[2].endMs).toBe(5790);
+    expect(words[3]).toMatchObject({ startMs: 6000, endMs: 8000 });
+  });
+
+  it('parses srv1 <text start dur> (seconds) as one coarse token per cue', () => {
+    const srv1 =
+      '<?xml version="1.0"?><transcript>' +
+      '<text start="1.5" dur="2.5">Tom &amp; Jerry &lt;3</text>' +
+      '<text start="5" dur="1">Bye</text>' +
+      '</transcript>';
+    const words = flattenXmlWords(srv1);
+    expect(words).toEqual([
+      { text: 'Tom & Jerry <3', startMs: 1500, endMs: 4000 },
+      { text: 'Bye', startMs: 5000, endMs: 6000 },
+    ]);
+  });
+
+  it('ignores non-YouTube XML (TTML <p begin/end>)', () => {
+    const ttml = '<tt><body><div><p begin="00:00:01.000" end="00:00:03.000">Hi</p></div></body></tt>';
+    expect(flattenXmlWords(ttml)).toEqual([]);
+    expect(flattenXmlWords('')).toEqual([]);
+  });
+
+  it('parseYoutubeWords prefers JSON3 and falls back to XML', () => {
+    const jsonBody = JSON.stringify({
+      events: [{ tStartMs: 0, dDurationMs: 900, segs: [{ utf8: 'Hi', tOffsetMs: 0 }] }],
+    });
+    expect(parseYoutubeWords(jsonBody).map((w) => w.text)).toEqual(['Hi']);
+    expect(
+      parseYoutubeWords(
+        '<timedtext><text start="0" dur="1">Fallback</text></timedtext>',
+      ).map((w) => w.text),
+    ).toEqual(['Fallback']);
+    expect(parseYoutubeWords('not-a-subtitle')).toEqual([]);
+  });
+
+  it('treats a tlang (auto-translate) URL as non-ASR', () => {
+    expect(isYoutubeAsrUrl('https://www.youtube.com/api/timedtext?v=x&lang=en&kind=asr')).toBe(true);
+    expect(
+      isYoutubeAsrUrl('https://www.youtube.com/api/timedtext?v=x&lang=en&kind=asr&tlang=vi'),
+    ).toBe(false);
+  });
+
+  it('does not tail-merge a long trailing cue on duration alone (cue path)', () => {
+    const lang = resolveAsrLangConfig('en');
+    const cues: SubtitleCue[] = [
+      { startTime: 0, endTime: 3, text: 'This is the first sentence.' },
+      { startTime: 3.1, endTime: 4.2, text: 'one two three four five six seven eight' },
+    ];
+    // 8 words in 1.1s: under the duration cap but far over maxWords (3/5) — the
+    // real word count must block the merge (it used to be reported as 1 word).
+    const out = resegmentFromCues(cues, lang);
+    expect(out).toHaveLength(2);
   });
 });
 

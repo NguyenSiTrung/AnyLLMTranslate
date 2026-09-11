@@ -145,6 +145,14 @@
   pointer-events: auto !important;
 }
 
+/* No cue visible -> the drag handle must not intercept clicks. The overlay is
+   only faded (opacity: 0), so without this an invisible text box sits over the
+   video and swallows clicks (e.g. YouTube's control bar / double-click). */
+.anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-text,
+:fullscreen:not(:root) .anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-text {
+  pointer-events: none !important;
+}
+
 /* Popover-specific resets to clear browser user-agent defaults (borders, background, margin) */
 .anyllm-translate-subtitle-overlay[popover] {
   border: none !important;

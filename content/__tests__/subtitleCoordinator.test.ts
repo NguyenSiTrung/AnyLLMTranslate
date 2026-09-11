@@ -2838,6 +2838,62 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
     expect(mockSendTranslatedSubtitle).toHaveBeenCalled();
   });
 
+  it('refetches fmt=json3 for AI units when the intercepted ASR body is XML (cache-key parity)', async () => {
+    const json3 = JSON.stringify({
+      events: [
+        {
+          tStartMs: 0,
+          dDurationMs: 2000,
+          segs: [
+            { utf8: 'Hello ', tOffsetMs: 0 },
+            { utf8: 'world', tOffsetMs: 500 },
+          ],
+        },
+      ],
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => json3,
+    } as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const sendMessage = chrome.runtime.sendMessage as Mock;
+    sendMessage.mockImplementation(async (msg: { action?: string }) => {
+      // Force a cache miss so the realign path runs and we can inspect its units.
+      if (msg.action === 'GET_ASR_REALIGN_CACHE') return { success: true };
+      if (msg.action === 'RESEGMENT_YOUTUBE_ASR') {
+        return { success: true, cues: [{ startTime: 0, endTime: 2, text: 'Hello world.' }] };
+      }
+      if (msg.action === 'translateSubtitle') {
+        return { success: true, cues: MOCK_TRANSLATED_CUES, sessionId: 7 };
+      }
+      return { success: true };
+    });
+
+    const srv1 =
+      '<?xml version="1.0"?><transcript><text start="0" dur="2">Hello world</text></transcript>';
+    await capturedInterceptedHandler!(
+      {
+        url: 'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr',
+        body: srv1,
+        contentType: 'text/xml',
+        platform: 'youtube',
+        originalLanguage: 'en',
+      },
+      'req-xml-parity',
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('fmt=json3'));
+    const resegmentCall = sendMessage.mock.calls.find(
+      ([m]) => (m as { action?: string }).action === 'RESEGMENT_YOUTUBE_ASR',
+    );
+    expect(resegmentCall).toBeTruthy();
+    const units = (resegmentCall![0] as { units: Array<{ text: string }> }).units;
+    // Word-level (one unit per json3 seg), not one coarse cue for the whole line.
+    expect(units.map((u) => u.text)).toEqual(['Hello', 'world']);
+  });
+
   it('hides YouTube native caption window when overlay activates (proactive path)', async () => {
     const mod = await import('@/content/subtitleCoordinator');
     const youtubeHandler = {

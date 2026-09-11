@@ -628,6 +628,9 @@ export function initializeOverlay(
   const video = videoNode || findVideoElement();
   if (!video) {
     console.warn('AnyLLMTranslate: No video element found for subtitle overlay');
+    // Drop any previous overlay: it is bound to a video that is no longer
+    // resolvable, so it can neither position nor sync anymore.
+    cleanup();
     return false;
   }
 
@@ -651,15 +654,13 @@ export function initializeOverlay(
   attachVideoListeners(video);
   setupResizeObserver(video);
 
-  overlayState.isAttached = true;
-  return true;
-
-  // Apply fullscreen logic immediately if already in fullscreen
+  // Apply fullscreen logic immediately if already in fullscreen.
   if (getActiveFullscreenElement()) {
     handleFullscreenChange();
   }
 
-  // Import CSS (will be handled by content script entrypoint)
+  overlayState.isAttached = true;
+  return true;
 }
 
 /**

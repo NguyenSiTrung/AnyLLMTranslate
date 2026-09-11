@@ -34,6 +34,8 @@ import {
   savePreferences,
   setOffset,
   setFontSize,
+  flushPendingOffsetSave,
+  resetDragState,
 } from '@/content/subtitleControls';
 
 function setHostname(hostname: string): void {
@@ -123,5 +125,22 @@ describe('subtitleControls — per-host drag offsets', () => {
     setHostname('www.udemy.com');
     const prefs = await loadPreferences();
     expect(prefs.fontSize).toBe(24);
+  });
+
+  it('coalesces a drag burst into one persisted offset on flush', async () => {
+    setOffset(10, 10);
+    setOffset(40, -20);
+    setOffset(80, -35);
+    // Debounced: nothing written yet mid-drag (the burst above is synchronous).
+    expect(storageData.has('anyllm-translate-subtitle-offsets')).toBe(false);
+
+    flushPendingOffsetSave();
+    await vi.waitFor(() => {
+      const map = storageData.get('anyllm-translate-subtitle-offsets') as
+        | Record<string, { offsetX: number; offsetY: number }>
+        | undefined;
+      expect(map?.['www.udemy.com']).toEqual({ offsetX: 80, offsetY: -35 });
+    });
+    resetDragState();
   });
 });
