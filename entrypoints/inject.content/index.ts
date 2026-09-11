@@ -13,17 +13,9 @@ import { XhrInterceptor } from '@/inject/xhrInterceptor';
 import { FetchInterceptor } from '@/inject/fetchInterceptor';
 import { MseInterceptor } from '@/inject/mseInterceptor';
 import { registerSubtitleHandlers, getPatternsForCurrentHost, getMetadataPatternsForCurrentHost, getManifestPatternsForCurrentHost, getContentTypePatternsForCurrentHost } from '@/inject/subtitleHandlers/registry';
-import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
-import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
-import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
-import { DeepLearningAiHandler } from '@/inject/subtitleHandlers/deepLearningAi';
-import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
-import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
-import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
 import { NetflixHandler } from '@/inject/subtitleHandlers/netflix';
 import { DisneyPlusHandler } from '@/inject/subtitleHandlers/disneyplus';
-import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
-import { GenericSubtitleHandler } from '@/inject/subtitleHandlers/generic';
+import { createPlatformHandlerSet } from '@/inject/subtitleHandlers/worldHandlers';
 import { installJsonParseSubtitleHook } from '@/inject/jsonParseSubtitleHook';
 import { startDomCueSource } from '@/inject/domCueSource';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
@@ -44,22 +36,13 @@ export default defineContentScript({
   async main() {
     console.log('[AnyLLMTranslate] MAIN world script injected');
 
-    // Register platform handlers
-    const youtubeHandler = new YouTubeHandler();
-    const deepLearningAiHandler = new DeepLearningAiHandler();
-    registerSubtitleHandlers([
-       youtubeHandler,
-       new UdemyHandler(),
-       new CourseraHandler(),
-       deepLearningAiHandler,
-       new LinkedInHandler(),
-       new HboMaxHandler(),
-       new YoukuHandler(),
-       new NetflixHandler(),
-       new DisneyPlusHandler(),
-       new WetvHandler(),
-       new GenericSubtitleHandler(), // LAST — lowest-priority fallback (specific handlers win)
-     ]);
+    // Register platform handlers. The list comes from the shared worldHandlers
+    // module so it cannot drift from the isolated world's set — the coordinator
+    // resolves every payload's platform via getHandlerByPlatform(), so a
+    // platform registered here but not there has its intercepted subtitles
+    // passed through untranslated.
+    const { handlers, youtubeHandler, deepLearningAiHandler } = createPlatformHandlerSet();
+    registerSubtitleHandlers(handlers);
 
     const registry = new InterceptorRegistry();
     const bridge = createBridgeSender();

@@ -34,6 +34,9 @@ __pycache__
 # Antigravity CLI
 .antigravitycli/
 
+# Workbuddy AI
+.workbuddy-ai/
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db

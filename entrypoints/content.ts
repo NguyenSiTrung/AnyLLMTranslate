@@ -44,6 +44,7 @@ import {
   translateFocusedInput,
 } from '@/content/inlineTranslate';
 import { registerSubtitleHandlers } from '@/inject/subtitleHandlers/registry';
+import { createIsolatedWorldHandlers } from '@/inject/subtitleHandlers/worldHandlers';
 import { flushLruUpdates } from '@/services/cacheManager';
 import {
   showAutoTranslateNotification,
@@ -59,15 +60,6 @@ import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/li
 import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
-import { YouTubeHandler } from '@/inject/subtitleHandlers/youtube';
-import { UdemyHandler } from '@/inject/subtitleHandlers/udemy';
-import { CourseraHandler } from '@/inject/subtitleHandlers/coursera';
-import { DeepLearningAiHandler } from '@/inject/subtitleHandlers/deepLearningAi';
-import { LinkedInHandler } from '@/inject/subtitleHandlers/linkedin';
-import { HboMaxHandler } from '@/inject/subtitleHandlers/hbomax';
-import { YoukuHandler } from '@/inject/subtitleHandlers/youku';
-import { WetvHandler } from '@/inject/subtitleHandlers/wetv';
-import { GenericSubtitleHandler } from '@/inject/subtitleHandlers/generic';
 import '@/styles/inject.css';
 import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
@@ -1597,22 +1589,14 @@ export default defineContentScript({
     if ((window as unknown as Record<string, unknown>).__anyllmTranslateInitialized) return;
     (window as unknown as Record<string, unknown>).__anyllmTranslateInitialized = true;
 
-    // Register platform handlers for isolated world.
-    // GenericSubtitleHandler is registered LAST so platform-specific handlers
-    // win first-match-wins in detectCurrentHandler(). Its activation is gated
-    // on enableGenericSubtitleHandler in the coordinator (settings are not yet
-    // loaded here).
-    registerSubtitleHandlers([
-      new YouTubeHandler(),
-      new UdemyHandler(),
-      new CourseraHandler(),
-      new DeepLearningAiHandler(),
-      new LinkedInHandler(),
-      new HboMaxHandler(),
-      new YoukuHandler(),
-      new WetvHandler(),
-      new GenericSubtitleHandler(),
-    ]);
+    // Register platform handlers for the isolated world. The list comes from
+    // the shared worldHandlers module so it cannot drift from the MAIN world's
+    // set — a platform registered in only one world has its intercepted
+    // payloads resolved to null by getHandlerByPlatform() and silently passed
+    // through untranslated. GenericSubtitleHandler stays LAST (lowest
+    // precedence); its activation is gated on enableGenericSubtitleHandler in
+    // the coordinator (settings are not yet loaded here).
+    registerSubtitleHandlers(createIsolatedWorldHandlers());
 
     setupMessageListener();
     coordinatorCleanup = startCoordinator();

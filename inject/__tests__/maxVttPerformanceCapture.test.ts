@@ -23,9 +23,12 @@ import {
   MAX_VTT_CAPTURE_DEADLINE_MS,
   FULL_RESYNC_EVERY,
   RESOURCE_TIMING_BUFFER_SIZE,
+  SEGMENT_RECOVERY_COOLDOWN_MS,
   isMaxCdnSubtitleUrl,
 } from '@/inject/maxVttPerformanceCapture';
+import { MAX_MANIFEST_CUES } from '@/lib/constants';
 import type { MessageBridgeSender } from '@/inject/messageBridge';
+import type { SubtitleManifestCuesPayload } from '@/types/subtitle';
 
 class FakeObserver {
   static instances: FakeObserver[] = [];
@@ -62,6 +65,14 @@ describe('resolveTrackIdentity', () => {
 
   it('falls back to the /t/<dir>/ component for directory-style tracks', () => {
     expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/t/t6/1.vtt?x=1')).toBe('t6');
+  });
+
+  it('uses the /t/ component nearest the segment file when the path nests several', () => {
+    expect(resolveTrackIdentity('https://host.example/a/t/lead/t1/main/t3/8.vtt')).toBe('t3');
+  });
+
+  it('ignores a /t/ marker that only appears in the query string', () => {
+    expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/other/1.vtt?path=/t/t6/')).toBeNull();
   });
 
   it('returns null when there is no /t/ marker', () => {
@@ -251,20 +262,64 @@ describe('Max VTT capture — fetch resilience', () => {
     expect(captureEmissions()).toHaveLength(1);
   });
 
-  it('stops retrying after MAX_SEGMENT_FETCH_ATTEMPTS even if the URL reappears', async () => {
-    fetchMock.mockRejectedValue(new Error('403'));
+  it('recovers a segment once its cooldown elapses instead of losing it permanently', async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockRejectedValueOnce(new Error('403'))
+      .mockRejectedValueOnce(new Error('403')) // the immediate attempt pair
+      .mockResolvedValueOnce(new Response(vtt('recovered'), { status: 200 }));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     startMaxVttPerformanceCapture(bridge);
-    const observer = FakeObserver.instances.at(-1)!;
-    observer.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
-    await new Promise((r) => setTimeout(r, 400));
-    observer.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
-    await new Promise((r) => setTimeout(r, 400));
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(warn).toHaveBeenCalled();
+    FakeObserver.instances.at(-1)!.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
+    await vi.advanceTimersByTimeAsync(0);
     expect(captureEmissions()).toHaveLength(0);
+
+    // Cooldown (5s) elapses, then the watchdog tick re-drives the segment.
+    await vi.advanceTimersByTimeAsync(SEGMENT_RECOVERY_COOLDOWN_MS + WATCHDOG_INTERVAL_MS + 1);
+
+    // Bridge sends carry the coordinator's declared payload shape.
+    const manifests = captureEmissions().map((m) => m.payload as SubtitleManifestCuesPayload);
+    expect(manifests).toHaveLength(1);
+    expect(manifests[0]!.cues.map((c) => c.text)).toEqual(['recovered']);
+    expect(warn).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('does not refetch a segment that already parsed', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(new Response(vtt('hello'), { status: 200 }));
+
+    startMaxVttPerformanceCapture(bridge);
+    FakeObserver.instances.at(-1)!.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captureEmissions()).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(SEGMENT_RECOVERY_COOLDOWN_MS * 3 + WATCHDOG_INTERVAL_MS * 3);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(captureEmissions()).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('forgets recovery state on a seek reset', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockRejectedValue(new Error('403'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    startMaxVttPerformanceCapture(bridge);
+    FakeObserver.instances.at(-1)!.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
+    // Let the immediate attempt pair settle so the failure is recorded before
+    // the seek reset — otherwise the in-flight retry would still land after it.
+    await vi.advanceTimersByTimeAsync(400);
+
+    resetMaxVttCaptureForSeek();
+    const attemptsBefore = fetchMock.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(SEGMENT_RECOVERY_COOLDOWN_MS + WATCHDOG_INTERVAL_MS + 1);
+
+    expect(fetchMock.mock.calls.length).toBe(attemptsBefore);
+    expect(captureEmissions()).toHaveLength(0);
+    vi.useRealTimers();
   });
 });
 
@@ -478,5 +533,27 @@ describe('Max VTT capture — delta append protocol', () => {
     const last = payloads().at(-1)!;
     expect(last.full).toBe(true);
     expect(last.cues).toHaveLength(FULL_RESYNC_EVERY + 1);
+  });
+
+  it('caps the rolling buffer at the most recent MAX_MANIFEST_CUES cues', async () => {
+    const total = MAX_MANIFEST_CUES + 25;
+    const body =
+      'WEBVTT\n\n' +
+      Array.from({ length: total }, (_, i) => {
+        const fmt = (n: number) =>
+          `00:${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}.000`;
+        return `${fmt(i)} --> ${fmt(i + 1)}\nline ${i}`;
+      }).join('\n\n') +
+      '\n';
+    fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+
+    startMaxVttPerformanceCapture(bridge);
+    FakeObserver.instances.at(-1)!.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
+    await flush();
+
+    const cues = payloads()[0]!.cues;
+    expect(cues).toHaveLength(MAX_MANIFEST_CUES);
+    expect(cues[0]!.text).toBe('line 25');
+    expect(cues.at(-1)!.text).toBe(`line ${total - 1}`);
   });
 });

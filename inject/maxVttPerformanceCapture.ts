@@ -31,6 +31,7 @@ import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
 import { readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
 import { nativeFetch } from '@/inject/nativeFetch';
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
+import { MAX_MANIFEST_CUES } from '@/lib/constants';
 import type { SubtitleCue } from '@/types/subtitle';
 
 /**
@@ -54,6 +55,19 @@ const PAGE_FETCH_TIMEOUT_MS = 15_000;
 export const MAX_SEGMENT_FETCH_ATTEMPTS = 2;
 /** Delay between segment fetch attempts. */
 const SEGMENT_RETRY_DELAY_MS = 250;
+
+/**
+ * Cooldown before a segment whose fetch exhausted its attempts is tried again.
+ * A transient 403/CORS/timeout must not cost the segment for the whole
+ * session: the URL is re-driven by the watchdog until it lands.
+ */
+export const SEGMENT_RECOVERY_COOLDOWN_MS = 5_000;
+/** Recovery cycles before the backoff saturates (never a permanent poison). */
+export const SEGMENT_RECOVERY_MAX_ATTEMPTS = 4;
+/** Saturated cooldown: 5 s doubling over SEGMENT_RECOVERY_MAX_ATTEMPTS cycles. */
+const SEGMENT_RECOVERY_MAX_COOLDOWN_MS = 40_000;
+/** Failed segments re-driven per watchdog tick. */
+const SEGMENT_RECOVERY_PER_TICK = 2;
 
 /**
  * How long a representation must stay quiet before a segment from a different
@@ -109,6 +123,48 @@ let stalledNotified = false;
 const seenUrls = new Set<string>();
 /** URLs currently being fetched (guards against duplicate concurrent captures). */
 const inFlightUrls = new Set<string>();
+/**
+ * Segments whose fetch exhausted its attempts: url → { attempts, nextAttemptAt }.
+ * Kept separate from `seenUrls` on purpose — a failed fetch is not a parsed
+ * segment, and treating it as seen is what lost the lines permanently.
+ */
+const failedSegments = new Map<string, { attempts: number; nextAttemptAt: number }>();
+
+/** Record a failed fetch and schedule the next recovery attempt (capped backoff). */
+function recordSegmentFailure(url: string): void {
+  const attempts = (failedSegments.get(url)?.attempts ?? 0) + 1;
+  // Doubling past SEGMENT_RECOVERY_MAX_ATTEMPTS would only re-clamp, so cap the
+  // exponent: the cooldown saturates at SEGMENT_RECOVERY_MAX_COOLDOWN_MS.
+  const cycles = Math.min(attempts, SEGMENT_RECOVERY_MAX_ATTEMPTS);
+  const backoff = Math.min(
+    SEGMENT_RECOVERY_COOLDOWN_MS * 2 ** (cycles - 1),
+    SEGMENT_RECOVERY_MAX_COOLDOWN_MS,
+  );
+  failedSegments.set(url, { attempts, nextAttemptAt: Date.now() + backoff });
+}
+
+/** Forget a failed segment (successful parse, or a reset that re-captures it). */
+function clearSegmentFailure(url: string): void {
+  failedSegments.delete(url);
+}
+
+/** True while a failed segment is inside its cooldown — skip it this pass. */
+function isSegmentRecoveryCoolingDown(url: string, now: number): boolean {
+  const entry = failedSegments.get(url);
+  return entry !== undefined && entry.nextAttemptAt > now;
+}
+
+/** Failed segments due for another attempt, bounded per tick. */
+function dueFailedSegments(now: number): string[] {
+  const due: string[] = [];
+  for (const [url, entry] of failedSegments) {
+    if (entry.nextAttemptAt > now) continue;
+    if (seenUrls.has(url) || inFlightUrls.has(url)) continue;
+    due.push(url);
+    if (due.length >= SEGMENT_RECOVERY_PER_TICK) break;
+  }
+  return due;
+}
 let cueBuffer: SubtitleCue[] = [];
 /**
  * Identity of the representation we've locked onto. Prefers the
@@ -135,15 +191,32 @@ let emissionsSinceResync = 0;
 
 /**
  * Stable identity for a Max subtitle segment URL.
- * Returns the `t<n>` representation id when present, else the `/t/<dir>/`
- * component, else null (caller falls back to the full URL).
+ *
+ * The `/t/` path marker starts the representation chain and the directory
+ * immediately above the segment file names the representation
+ * (`…/a/t/caa516/t3/8.vtt` → `t3`, `…/t/t6/1.vtt` → `t6`). Prefer the last
+ * `t<digits>` directory in the chain, else the last directory, so every
+ * segment of one representation resolves to the same id while a lead-in or
+ * preview representation keeps its own.
+ *
+ * Only the PATHNAME is considered: a `/t/…` sequence inside the query string
+ * must not become an identity, and the old "first `/t/<dir>/` match" rule
+ * happily picked a parent directory (`caa516`) over the representation.
  */
 export function resolveTrackIdentity(url: string): string | null {
-  const specific = url.match(/\/t\/[^/]+\/(t\d+)\//i);
-  if (specific?.[1]) return specific[1].toLowerCase();
-  const directory = url.match(/\/t\/([^/]+)\//i);
-  if (directory?.[1]) return directory[1].toLowerCase();
-  return null;
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    pathname = url.split('?')[0] ?? url;
+  }
+  const segments = pathname.split('/').filter(Boolean);
+  // A trailing slash means the path itself is the directory — don't drop it.
+  const dirs = pathname.endsWith('/') ? segments : segments.slice(0, -1);
+  if (!dirs.some((dir) => dir.toLowerCase() === 't')) return null;
+  const representation =
+    [...dirs].reverse().find((dir) => /^t\d+$/i.test(dir)) ?? dirs.at(-1);
+  return representation ? representation.toLowerCase() : null;
 }
 
 /** @internal Test hook — restore with resetPageFetchForTests(). */
@@ -171,6 +244,7 @@ export function resetMaxVttPerformanceCapture(): void {
   stopObserver();
   seenUrls.clear();
   inFlightUrls.clear();
+  failedSegments.clear();
   cueBuffer = [];
   emittedIdentity = null;
   lastEmissionAt = 0;
@@ -189,6 +263,7 @@ export function resetMaxVttPerformanceCaptureLock(): void {
   captureGeneration++;
   seenUrls.clear();
   inFlightUrls.clear();
+  failedSegments.clear();
   cueBuffer = [];
   emittedIdentity = null;
   lastEmissionAt = 0;
@@ -214,6 +289,9 @@ export function resetMaxVttCaptureForSeek(): void {
   captureGeneration++;
   seenUrls.clear();
   inFlightUrls.clear();
+  // Segments re-fetched for the new position get a clean slate: a pre-seek
+  // failure says nothing about the segment at the destination.
+  failedSegments.clear();
   cueBuffer = [];
 }
 
@@ -304,10 +382,15 @@ function stopWatchdog(): void {
  * Report a stalled capture to the coordinator so it can demote the manifest
  * tier and let DOM/TextTrack cues take over. A paused video is not a stall —
  * the player stops requesting segments while paused.
+ *
+ * Also re-drives segments whose fetch failed (see `recordSegmentFailure`):
+ * the watchdog is the only timer guaranteed to run for the life of the
+ * capture, so recovery piggybacks on it rather than owning another one.
  */
 function startWatchdog(bridge: MessageBridgeSender): void {
   stopWatchdog();
   watchdogTimer = setInterval(() => {
+    void retryFailedSegments(bridge);
     if (stalledNotified || emittedIdentity === null) return;
     if (Date.now() - lastEmissionAt < CAPTURE_STALL_MS) return;
     const video = findPrimaryVideo();
@@ -382,10 +465,14 @@ async function handleEntries(
   bridge: MessageBridgeSender,
 ): Promise<void> {
   const newUrls: string[] = [];
+  const now = Date.now();
   for (const entry of entries) {
     const url = entry.name;
     if (seenUrls.has(url) || inFlightUrls.has(url)) continue;
     if (!isMaxCdnSubtitleUrl(url)) continue;
+    // A segment that failed recently waits out its cooldown; a fresh Resource
+    // Timing entry after that is a legitimate second chance.
+    if (isSegmentRecoveryCoolingDown(url, now)) continue;
     newUrls.push(url);
   }
   if (newUrls.length === 0) return;
@@ -429,6 +516,33 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+/** Re-fetch failed segments whose cooldown elapsed. Never throws. */
+async function retryFailedSegments(bridge: MessageBridgeSender): Promise<void> {
+  const due = dueFailedSegments(Date.now());
+  if (due.length === 0) return;
+  const generationAtFetch = captureGeneration;
+  for (const url of due) inFlightUrls.add(url);
+  try {
+    const bodies = await mapWithConcurrency(due, SEGMENT_FETCH_CONCURRENCY, (url) =>
+      fetchSegmentWithRetry(url),
+    );
+    for (let i = 0; i < due.length; i++) {
+      const url = due[i];
+      if (url === undefined) continue;
+      // captureSegment re-records the failure (with a longer cooldown) when the
+      // recovery attempt fails too, so no attempt can be lost or loop.
+      await captureSegment(url, bridge, bodies[i], generationAtFetch);
+    }
+  } finally {
+    // A reset during the fetch cleared inFlightUrls and may already have
+    // re-registered these URLs for the new generation; the stale pass must not
+    // delete a fresh registration, or the same segment is fetched twice.
+    if (generationAtFetch === captureGeneration) {
+      for (const url of due) inFlightUrls.delete(url);
+    }
+  }
+}
+
 async function captureSegment(
   url: string,
   bridge: MessageBridgeSender,
@@ -443,11 +557,12 @@ async function captureSegment(
   // seek/track switch/navigation must not be re-locked by the old track.
   if (generation !== captureGeneration) return;
   if (body === null) {
-    // Exhausted all attempts (fetchSegmentWithRetry logged the failures).
-    // Mark seen so the observer cannot re-trigger an endless retry loop; a
-    // seek or track switch clears seenUrls and allows another attempt.
-    seenUrls.add(url);
-    console.warn('AnyLLMTranslate: Max VTT segment permanently unavailable', { url });
+    // Exhausted the immediate attempts. Do NOT poison the URL as seen: keep it
+    // in the cooldown map so the watchdog re-drives it. A transient 403/CORS/
+    // timeout is the common case, and `seenUrls` is only cleared by a seek,
+    // track switch or navigation — long after the lines were needed.
+    recordSegmentFailure(url);
+    console.warn('AnyLLMTranslate: Max VTT segment fetch failed — scheduled for recovery', { url });
     return;
   }
   const trimmed = body.trimStart();
@@ -459,12 +574,16 @@ async function captureSegment(
       trimmed.includes('xmlns="http://www.w3.org/ns/ttml"'));
   if (!isVtt && !isTtml) {
     seenUrls.add(url);
+    // The URL is settled (parsed and discarded), so drop any recovery entry:
+    // leaving it would keep the map consulting `seenUrls` for its whole life.
+    clearSegmentFailure(url);
     console.warn('AnyLLMTranslate: Max subtitle segment is neither WebVTT nor TTML — ignoring', {
       url,
     });
     return;
   }
   seenUrls.add(url);
+  clearSegmentFailure(url);
   stalledNotified = false;
 
   const language = readMaxActiveSubtitleLanguage();
@@ -601,9 +720,12 @@ function mergeCues(existing: SubtitleCue[], incoming: SubtitleCue[]): SubtitleCu
   const keyFor = (cue: SubtitleCue) => `${cue.startTime}|${cue.endTime}|${cue.text}`;
   for (const cue of existing) byIdentity.set(keyFor(cue), cue);
   for (const cue of incoming) byIdentity.set(keyFor(cue), cue);
-  return Array.from(byIdentity.values()).sort((a, b) =>
+  const merged = Array.from(byIdentity.values()).sort((a, b) =>
     a.startTime - b.startTime ||
     a.endTime - b.endTime ||
     a.text.localeCompare(b.text),
   );
+  // Keep the newest window: cues already behind the playhead are the least
+  // useful, and a backward seek re-captures the destination's segments anyway.
+  return merged.length > MAX_MANIFEST_CUES ? merged.slice(-MAX_MANIFEST_CUES) : merged;
 }

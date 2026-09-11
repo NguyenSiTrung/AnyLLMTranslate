@@ -39,6 +39,15 @@ export const MAX_PIECE_CHARS = 1000;
  */
 export const SUBTITLE_CHUNK_SIZE = 25;
 
+/**
+ * Upper bound on the rolling manifest cue buffer, shared by the MAIN-world
+ * capture (which accumulates segments) and the coordinator (which accumulates
+ * the same cues for translation). A long title emits thousands of cues; the
+ * overlay only needs the neighbourhood of the playhead, and a seek re-captures
+ * from the new position, so both sides keep only the most recent window.
+ */
+export const MAX_MANIFEST_CUES = 2000;
+
 /** Pieces at or below this character count use compact inline display (parenthetical)
  *  instead of block-level themed display — prevents space explosion on short content */
 export const SHORT_PIECE_THRESHOLD = 80;

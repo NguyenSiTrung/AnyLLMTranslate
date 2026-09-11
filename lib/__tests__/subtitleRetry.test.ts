@@ -4,8 +4,13 @@
  * fetchWithRetry (services/openaiCompatible.ts:384).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withRetry } from '@/lib/subtitleRetry';
+import {
+  withRetry,
+  isRetryableTranslationError,
+  extractTranslationErrorStatus,
+} from '@/lib/subtitleRetry';
 import { ApiError } from '@/services/openaiCompatible';
+import { PoolExhaustedError } from '@/services/providerPool';
 
 class TransientError extends Error {}
 const alwaysRetry = () => true;
@@ -65,5 +70,79 @@ describe('withRetry', () => {
     expect(delays).toContain(100);
     expect(delays).toContain(200);
     setTimeoutSpy.mockRestore();
+  });
+});
+
+describe('isRetryableTranslationError', () => {
+  it('fails fast on 4xx client errors (bad request, auth, missing model)', () => {
+    for (const status of [400, 401, 403, 404, 422]) {
+      expect(isRetryableTranslationError(new ApiError(`HTTP ${status}`, status))).toBe(false);
+    }
+  });
+
+  it('retries rate limits, request timeouts, and server errors', () => {
+    for (const status of [408, 429, 500, 502, 503, 504]) {
+      expect(isRetryableTranslationError(new ApiError(`HTTP ${status}`, status))).toBe(true);
+    }
+  });
+
+  it('retries errors with no visible status (network, content, pool)', () => {
+    expect(isRetryableTranslationError(new Error('fetch failed'))).toBe(true);
+    expect(isRetryableTranslationError(new Error('Empty response from LLM'))).toBe(true);
+    expect(isRetryableTranslationError(undefined)).toBe(true);
+    expect(isRetryableTranslationError('boom')).toBe(true);
+  });
+
+  it('unwraps PoolExhaustedError.lastError to classify the underlying failure', () => {
+    const authExhausted = new PoolExhaustedError(
+      'All providers are cooling down',
+      new ApiError('Unauthorized', 401),
+    );
+    expect(extractTranslationErrorStatus(authExhausted)).toBe(401);
+    expect(isRetryableTranslationError(authExhausted)).toBe(false);
+
+    const rateLimited = new PoolExhaustedError(
+      'All providers are cooling down',
+      new ApiError('Too Many Requests', 429),
+    );
+    expect(isRetryableTranslationError(rateLimited)).toBe(true);
+
+    // No status anywhere (all slots open before dispatch) — retry is correct.
+    const statusless = new PoolExhaustedError(
+      'All providers are cooling down',
+      new Error('no healthy slot'),
+    );
+    expect(extractTranslationErrorStatus(statusless)).toBeUndefined();
+    expect(isRetryableTranslationError(statusless)).toBe(true);
+  });
+
+  it('stops retrying a non-retryable failure after one attempt', async () => {
+    vi.useFakeTimers();
+    try {
+      const unauthorized = vi.fn().mockRejectedValue(new ApiError('Unauthorized', 401));
+      await expect(
+        withRetry(unauthorized, {
+          maxRetries: 2,
+          baseDelayMs: 500,
+          shouldRetry: isRetryableTranslationError,
+        }),
+      ).rejects.toThrow('Unauthorized');
+      expect(unauthorized).toHaveBeenCalledTimes(1);
+
+      const rateLimited = vi
+        .fn()
+        .mockRejectedValueOnce(new ApiError('Too Many Requests', 429))
+        .mockResolvedValueOnce('recovered');
+      const recoverP = withRetry(rateLimited, {
+        maxRetries: 2,
+        baseDelayMs: 500,
+        shouldRetry: isRetryableTranslationError,
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      await expect(recoverP).resolves.toBe('recovered');
+      expect(rateLimited).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

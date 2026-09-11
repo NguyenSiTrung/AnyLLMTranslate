@@ -43,6 +43,7 @@ import type {
   SubtitleTextTrackCuesPayload,
   SubtitleMseCuesPayload,
   SubtitleManifestCuesPayload,
+  SubtitleMpdProcessingPayload,
 } from '@/types/subtitle';
 import type { PageContext, SubtitleSettings } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
@@ -60,7 +61,7 @@ import { adaptCueTimings } from '@/lib/subtitleTiming';
 import { shouldTeardownSubtitleSession } from '@/lib/subtitleTeardown';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { getLanguageName } from '@/lib/languages';
-import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
+import { SUBTITLE_CHUNK_SIZE, MAX_MANIFEST_CUES } from '@/lib/constants';
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import { startSpaNavigationWatcher as watchSpaNavigation } from '@/content/spaNavigationWatcher';
 import {
@@ -329,7 +330,9 @@ async function flushPendingCuesAfterMpd(): Promise<void> {
   await handleDomCues(payload);
 }
 
-function handleMpdProcessing(payload: { status: string; success?: boolean }): void {
+function handleMpdProcessing(
+  payload: Pick<SubtitleMpdProcessingPayload, 'status' | 'success'>,
+): void {
   if (payload.status === 'started') {
     state.mpdProcessingInFlight = true;
     state.mpdProcessingStartedAt = Date.now();
@@ -462,6 +465,19 @@ interface CoordinatorState {
   manifestTranslatedTexts: Set<string>;
   /** Manifest-platform: persistent map of originalText → translatedText across appended segments */
   manifestTranslationMap: Map<string, string>;
+  /**
+   * MSE-platform (Tier 3): rolling original cues merged from every
+   * SourceBuffer appendBuffer delta. The MAIN-world interceptor emits each
+   * segment's cues separately (no full/append flag), so the coordinator owns
+   * the accumulation.
+   */
+  mseOriginalCues: SubtitleCue[];
+  /** MSE-platform: rebuilt bilingual cues shown in the overlay (originalText + translated/fallback) */
+  mseTranslatedCues: SubtitleCue[];
+  /** MSE-platform: set of original cue texts already sent for translation (dedup) */
+  mseTranslatedTexts: Set<string>;
+  /** MSE-platform: persistent map of originalText → translatedText across appended segments */
+  mseTranslationMap: Map<string, string>;
   /** Translated cues array (merged from chunk deltas) for overlay display */
   translatedCues: SubtitleCue[] | null;
   /** Cached settings to avoid loadSettings() in hot paths */
@@ -523,6 +539,10 @@ const state: CoordinatorState = {
   manifestTranslatedCues: [],
   manifestTranslatedTexts: new Set(),
   manifestTranslationMap: new Map(),
+  mseOriginalCues: [],
+  mseTranslatedCues: [],
+  mseTranslatedTexts: new Set(),
+  mseTranslationMap: new Map(),
   translatedCues: null,
   cachedSettings: null,
   activeTrackIdentity: null,
@@ -1609,6 +1629,7 @@ async function translateDomCueTexts(
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: DOM cue delta translation failed', response?.error);
+      notifyUntranslatedSection();
       return;
     }
     if (requestSessionId !== state.activeSubtitleSessionId) {
@@ -1661,9 +1682,10 @@ function mergeManifestOriginalCues(
     meta.full !== true &&
     meta.seq !== undefined &&
     meta.seq === lastManifestSeq + 1;
-  state.manifestOriginalCues = isSequentialDelta
+  const merged = isSequentialDelta
     ? mergeCuesByIdentity(state.manifestOriginalCues, incoming)
     : incoming.map((c) => ({ ...c }));
+  state.manifestOriginalCues = boundManifestCues(merged);
   if (meta?.seq !== undefined) lastManifestSeq = meta.seq;
 
   const newTexts: string[] = [];
@@ -1858,23 +1880,53 @@ async function translateManifestCueTexts(
     // Final attempt: translate remaining failed texts one-by-one. Even a single
     // text is sometimes rejected by the LLM (e.g. empty-ish strings); skip
     // those silently rather than blocking the rest of the segment.
+    let untranslated = 0;
     if (remaining.length > 0) {
       for (const text of remaining) {
-        await translateManifestBatch(
+        const ok = await translateManifestBatch(
           [text],
           sourceLanguage,
           targetLanguage,
           pageContext,
           true,
         );
+        if (!ok) untranslated += 1;
       }
     }
 
-    if (!anySubOk && remaining.length === batchTexts.length) {
-      // Entire batch failed even after sub-batch retry — the warning was already
-      // logged by translateManifestBatch. No additional action needed.
+    // `remaining` after the ladder always covers the whole batch when nothing
+    // recovered, so comparing the counted single-text failures to batchTexts
+    // keeps the notice off lines that the one-by-one retry did translate.
+    if (!anySubOk && untranslated === batchTexts.length) {
+      // The warning was already logged by translateManifestBatch. Tell the user
+      // once that the lines on screen are untranslated rather than leaving it to
+      // a console warning.
+      notifyUntranslatedSection();
     }
   }
+}
+
+/**
+ * Keep at most MAX_MANIFEST_CUES cues around the playhead (MAX-738).
+ *
+ * A running capture only ever holds the recent window, so a tail slice is right
+ * for it. The first activation is different: the background hands over the whole
+ * assembled track while the playhead is still at the start of the title, and a
+ * tail slice would drop every cue the user is about to watch — with the
+ * platform's own captions already hidden, that means no subtitles at all for the
+ * opening minutes. Slice around the active cue instead, keeping back-context for
+ * a small backward seek.
+ */
+function boundManifestCues(cues: SubtitleCue[]): SubtitleCue[] {
+  if (cues.length <= MAX_MANIFEST_CUES) return cues;
+  const playhead = getPlaybackTimeForTranslation();
+  let start = 0;
+  if (playhead > 0) {
+    const activeIndex = cues.findIndex((cue) => cue.endTime >= playhead);
+    if (activeIndex > 0) start = activeIndex - Math.floor(MAX_MANIFEST_CUES / 4);
+  }
+  start = Math.max(0, Math.min(start, cues.length - MAX_MANIFEST_CUES));
+  return cues.slice(start, start + MAX_MANIFEST_CUES);
 }
 
 /** Clear manifest-platform translation buffers without tearing down the overlay shell. */
@@ -1885,6 +1937,130 @@ function clearManifestTranslationBuffers(): void {
   state.manifestTranslationMap = new Map();
   state.activeSubtitleSessionId = null;
   resetActiveSource();
+}
+
+// ── MSE-tier (SourceBuffer appendBuffer deltas) translation ──────────────────
+// Mirrors the DOM/manifest delta machinery above. The MAIN-world interceptor
+// emits one SUBTITLE_MSE_CUES message per appendBuffer call, each carrying only
+// that segment's cues — there is no rolling/full-buffer contract, so the
+// coordinator accumulates by cue identity and translates each delta once.
+
+/**
+ * Merge an MSE segment's cues into the rolling original buffer and return the
+ * source texts not yet sent for translation. Cues are merged by
+ * `start|end|text` identity rather than replaced: a player can re-append a
+ * segment after a seek, and a segment boundary can split a line across two
+ * payloads. `mergeCuesByIdentity` dedupes and re-sorts by time so
+ * findActiveCue()'s binary search stays valid.
+ */
+function mergeMseOriginalCues(incoming: SubtitleCue[]): string[] {
+  state.mseOriginalCues = mergeCuesByIdentity(state.mseOriginalCues, incoming);
+  // Same bound as the manifest rolling buffer: a SourceBuffer delta arrives for
+  // every segment of a title, and the overlay only needs the cues around the
+  // playhead. mergeCuesByIdentity sorted by startTime, so slice(-N) keeps the
+  // most recent window.
+  if (state.mseOriginalCues.length > MAX_MANIFEST_CUES) {
+    state.mseOriginalCues = state.mseOriginalCues.slice(-MAX_MANIFEST_CUES);
+  }
+  const newTexts: string[] = [];
+  for (const cue of state.mseOriginalCues) {
+    if (!state.mseTranslatedTexts.has(cue.text)) {
+      newTexts.push(cue.text);
+      state.mseTranslatedTexts.add(cue.text);
+    }
+  }
+  return newTexts;
+}
+
+/**
+ * Rebuild mseTranslatedCues from mseOriginalCues using the persistent
+ * translation map. Each cue carries originalText (source) + text (translated,
+ * or source until the translation arrives) — graceful per-cue fallback.
+ */
+function rebuildMseTranslatedCues(): void {
+  const built = state.mseOriginalCues.map((cue) => ({
+    startTime: cue.startTime,
+    endTime: cue.endTime,
+    text: state.mseTranslationMap.get(cue.text) ?? cue.text,
+    originalText: cue.text,
+  }));
+  state.mseTranslatedCues = adaptCueTimings(built);
+}
+
+/** Clear MSE-platform translation buffers without tearing down the overlay shell. */
+function clearMseTranslationBuffers(): void {
+  state.mseOriginalCues = [];
+  state.mseTranslatedCues = [];
+  state.mseTranslatedTexts = new Set();
+  state.mseTranslationMap = new Map();
+  state.activeSubtitleSessionId = null;
+  resetActiveSource();
+}
+
+/**
+ * Translate the given new MSE source cue texts and merge into the overlay.
+ * Sends a translateSubtitle request for the delta only (the background chunks
+ * internally), accumulating into the persistent mseTranslationMap. Failure is
+ * graceful: the overlay keeps the last rebuild's original-text fallback.
+ */
+async function translateMseCueTexts(
+  newTexts: string[],
+  sourceLanguage: string,
+  targetLanguage: string,
+  pageContext: PageContext | undefined,
+): Promise<void> {
+  if (newTexts.length === 0) return;
+  // Snapshot/preallocate the session identity before sending so progressive
+  // SUBTITLE_CHUNK_TRANSLATED deltas and this response share one id (see
+  // translateDomCueTexts for the MAX-14 rationale).
+  let requestSessionId = state.activeSubtitleSessionId;
+  if (requestSessionId === null) {
+    requestSessionId = allocateSubtitleSessionId();
+    state.activeSubtitleSessionId = requestSessionId;
+  }
+  const orderedTexts = sortCueTextsByPlaybackPriority(
+    newTexts,
+    state.mseOriginalCues,
+    getPlaybackTimeForTranslation(),
+  );
+  const cuesToTranslate: SubtitleCue[] = orderedTexts.map((text, i) => ({
+    startTime: i,
+    endTime: i + 1,
+    text,
+  }));
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'translateSubtitle',
+      hostname: window.location.hostname,
+      cues: cuesToTranslate,
+      sourceLanguage,
+      targetLanguage,
+      pageContext,
+      profile: currentSubtitleProfile(),
+      knobOverrides: state.subtitleKnobOverride,
+      sessionId: requestSessionId,
+    }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+
+    if (!response?.success || !response.cues) {
+      console.warn('AnyLLMTranslate: MSE cue delta translation failed', response?.error);
+      return;
+    }
+    // Seek-cancellation: the active id was cleared or replaced while this batch
+    // was in flight — drop the stale result rather than re-adopting a session
+    // the coordinator already abandoned.
+    if (state.activeSubtitleSessionId !== requestSessionId) {
+      console.log('AnyLLMTranslate: Dropping stale MSE batch (session changed)');
+      return;
+    }
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
+    }
+    applyTranslatedCueBatchToMap(state.mseTranslationMap, response.cues);
+    rebuildMseTranslatedCues();
+    updateActiveRendererCues(state.mseTranslatedCues);
+  } catch (error) {
+    console.warn('AnyLLMTranslate: MSE cue delta translation error', error);
+  }
 }
 
 /** One-shot guard: the manifest-tier stall toast fires once per navigation. */
@@ -2011,6 +2187,13 @@ function handleVideoSeeked(event?: Event): void {
     state.domOriginalCues = [];
     state.domTranslatedCues = [];
     reconcilePendingTranslatedTexts(state.domTranslatedTexts, state.domTranslationMap);
+
+    // MSE buffers hold cues from the old position's segments. Drop the timing
+    // buffers but keep mseTranslationMap as a cache (keyed by text, not time)
+    // so already-translated lines re-appear translated after the seek.
+    state.mseOriginalCues = [];
+    state.mseTranslatedCues = [];
+    reconcilePendingTranslatedTexts(state.mseTranslatedTexts, state.mseTranslationMap);
     resetActiveSource();
 
     // Cancel any in-flight background translation session — its results would
@@ -2043,6 +2226,12 @@ function preemptLowerTierOverlay(): void {
     state.manifestTranslatedTexts = new Set();
     state.manifestTranslationMap = new Map();
   }
+  if (state.activeSource === 'mse') {
+    state.mseOriginalCues = [];
+    state.mseTranslatedCues = [];
+    state.mseTranslatedTexts = new Set();
+    state.mseTranslationMap = new Map();
+  }
   if (state.dragCleanup) {
     state.dragCleanup();
     state.dragCleanup = null;
@@ -2066,6 +2255,8 @@ function resetCueBuffersForTrackSwitch(): void {
   state.domTranslatedCues = [];
   state.manifestOriginalCues = [];
   state.manifestTranslatedCues = [];
+  state.mseOriginalCues = [];
+  state.mseTranslatedCues = [];
   state.activeSubtitleSessionId = null;
   resetActiveSource();
 }
@@ -2170,10 +2361,32 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
 
 const DOM_TRACK_DISCOVER_DEBOUNCE_MS = 300;
 
-/** Last time a SUBTITLE_CHUNK_FAILED toast was shown (ms). Idempotency guard
- *  to prevent toast-spam from a stream of failed background chunks. */
+/** Last time an untranslated-section toast was shown (ms). Idempotency guard
+ *  to prevent toast-spam from a stream of failed background chunks or deltas. */
 let lastChunkFailedToastAt = 0;
 const CHUNK_FAILED_TOAST_COOLDOWN_MS = 5000;
+
+/** Copy shown when a stretch of subtitles stays untranslated. */
+const UNTRANSLATED_NOTICE_TEXT =
+  "A section of subtitles couldn't be translated — showing original.";
+
+/** Notices posted so far — lets an activation tell whether it must re-show one. */
+let untranslatedNoticeCount = 0;
+
+/**
+ * Tell the user that a stretch of subtitles could not be translated and the
+ * original text is on screen. Shared by the background's SUBTITLE_CHUNK_FAILED
+ * message and the synchronous manifest/DOM delta paths — those previously left
+ * the failure to a console warning, so a user on a flaky provider saw source
+ * text with no explanation.
+ */
+function notifyUntranslatedSection(): void {
+  const now = Date.now();
+  if (now - lastChunkFailedToastAt <= CHUNK_FAILED_TOAST_COOLDOWN_MS) return;
+  lastChunkFailedToastAt = now;
+  untranslatedNoticeCount += 1;
+  showSubtitleToast(UNTRANSLATED_NOTICE_TEXT);
+}
 
 /** Debounced scrape of Max track buttons → SUBTITLE_TRACKS_AVAILABLE. */
 function scheduleDomTrackDiscovery(): void {
@@ -2350,6 +2563,7 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   if (state.navigationEpoch !== epochAtStart) return; // stale
 
   // Translate all cue texts seen so far (the first batch).
+  const noticesBefore = untranslatedNoticeCount;
   const newTexts = [...state.domTranslatedTexts];
   await translateDomCueTexts(
     newTexts,
@@ -2360,7 +2574,13 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
   );
 
   hideSubtitleToast();
-  showSubtitleToast('Subtitles processing...');
+  // A notice posted while translating is the only feedback the user gets about
+  // untranslated lines — "processing" would overwrite it before it is painted.
+  showSubtitleToast(
+    untranslatedNoticeCount === noticesBefore
+      ? 'Subtitles processing...'
+      : UNTRANSLATED_NOTICE_TEXT,
+  );
 }
 
 /**
@@ -2435,6 +2655,7 @@ async function activateOverlayFromManifestCues(
   // the translation map) from before the seek. Texts already in the map are
   // rendered from cache — re-sending them would re-bill the LLM for cues that
   // are identical to what was already translated.
+  const noticesBefore = untranslatedNoticeCount;
   const newTexts = [...state.manifestTranslatedTexts].filter(
     (text) => !state.manifestTranslationMap.has(text),
   );
@@ -2449,7 +2670,13 @@ async function activateOverlayFromManifestCues(
   }
 
   hideSubtitleToast();
-  showSubtitleToast('Subtitles processing...');
+  // See activateOverlayFromDom: never overwrite the untranslated notice with
+  // "processing", or the user is back to silent source text.
+  showSubtitleToast(
+    untranslatedNoticeCount === noticesBefore
+      ? 'Subtitles processing...'
+      : UNTRANSLATED_NOTICE_TEXT,
+  );
   return true;
 }
 
@@ -2494,6 +2721,14 @@ async function activateOverlayModeFromManifest(track: AvailableSubtitleTrack): P
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; language?: string };
 
     if (!response?.success || !response.cues || response.cues.length === 0) {
+      // A cancel (Stop / seek / navigation) is not a failure the user needs to
+      // hear about — the fetch was aborted on purpose. The sticky "fetching"
+      // toast must still go: nothing else hides it on these paths.
+      if (response?.error === 'cancelled') {
+        console.log('AnyLLMTranslate: Manifest subtitle fetch cancelled');
+        hideSubtitleToast();
+        return;
+      }
       console.warn('AnyLLMTranslate: Manifest subtitle fetch failed', response?.error);
       hideSubtitleToast();
       showSubtitleToast('Failed to fetch manifest subtitles.');
@@ -2623,15 +2858,54 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
 }
 
 /**
+ * MSE steady state: a new SourceBuffer segment arrived while MSE already owns
+ * the overlay. Merge the delta into the rolling buffer, push the rebuilt
+ * overlay immediately (new cues show with source-text fallback), then translate
+ * only the texts this segment added. Mirrors the manifest-tier append path.
+ */
+async function handleMseCueDelta(payload: SubtitleMseCuesPayload): Promise<void> {
+  console.log('AnyLLMTranslate: MSE cue delta received', {
+    cueCount: payload.cues.length,
+  });
+
+  const newTexts = mergeMseOriginalCues(payload.cues);
+  // Always rebuild + push, even when no new texts: a segment can correct the
+  // endTime of cues already on screen, and findActiveCue() needs the new times.
+  rebuildMseTranslatedCues();
+  updateActiveRendererCues(state.mseTranslatedCues);
+  // SourceBuffer appends run ahead of playback, so the seek anchor (if any)
+  // would mis-prioritize this segment's translations — re-sort against live time.
+  state.playbackAnchorTime = null;
+  if (newTexts.length === 0) return;
+
+  // Cached settings in the hot path, consistent with the DOM/manifest tiers.
+  const settings = state.cachedSettings ?? await loadSettings();
+  if (!state.cachedSettings) state.cachedSettings = settings;
+  const sourceLanguage = settings.sourceLanguage === 'auto'
+    ? (payload.language || 'en')
+    : settings.sourceLanguage;
+  const pageContext = await buildSubtitlePageContext();
+  await translateMseCueTexts(newTexts, sourceLanguage, settings.targetLanguage, pageContext);
+}
+
+/**
  * Handle MSE SourceBuffer cues (Tier 3 — progressive, delta-based).
- * Feeds new cues into the chunked translate path, mirroring DOM-cue delta handling.
- * Lowest precedence tier — Phase 5 finalizes precedence.
+ * The MAIN-world interceptor emits one payload per appendBuffer call, so the
+ * first payload activates the overlay and every later payload is merged as a
+ * delta. Lowest precedence tier — Phase 5 finalizes precedence.
  */
 async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
   if (!isOnWatchPage()) return;
   if (payload.cues.length === 0) return;
   if (shouldSuppressSource('mse')) return; // Higher-precedence source already active
-  if (state.isOverlayMode && state.activeSource === 'mse') return; // Already active
+
+  // Already active — merge the new segment instead of returning. Returning here
+  // froze the overlay after the first SourceBuffer append for the rest of the
+  // episode (later segments were silently dropped).
+  if (state.isOverlayMode && state.activeSource === 'mse') {
+    await handleMseCueDelta(payload);
+    return;
+  }
 
   console.log('AnyLLMTranslate: MSE cues received', {
     cueCount: payload.cues.length,
@@ -2677,6 +2951,15 @@ async function handleMseCues(payload: SubtitleMseCuesPayload): Promise<void> {
   } catch (error) {
     console.warn('AnyLLMTranslate: MSE cue translation error', error);
   }
+
+  // Seed the rolling MSE buffers so the next segment's delta translates only
+  // its own new texts — this activation already translated (or attempted) every
+  // cue in this payload, and re-sending them would duplicate LLM work.
+  state.mseOriginalCues = payload.cues.map((c) => ({ ...c }));
+  state.mseTranslatedCues = cuesToDisplay;
+  state.mseTranslatedTexts = new Set(payload.cues.map((c) => c.text));
+  state.mseTranslationMap = new Map();
+  applyTranslatedCueBatchToMap(state.mseTranslationMap, cuesToDisplay);
 
   const savedPrefs = await initializeControls();
   const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
@@ -3093,11 +3376,7 @@ export function startCoordinator(): () => void {
     // (instead of silently swallowing). Idempotent within a cooldown window to
     // avoid toast-spam from a stream of failed chunks.
     if (msg.action === 'SUBTITLE_CHUNK_FAILED') {
-      const now = Date.now();
-      if (now - lastChunkFailedToastAt > CHUNK_FAILED_TOAST_COOLDOWN_MS) {
-        lastChunkFailedToastAt = now;
-        showSubtitleToast('A section of subtitles couldn\'t be translated — showing original.');
-      }
+      notifyUntranslatedSection();
     }
     // Handle popup requesting subtitle track selection
     if (msg.action === 'SELECT_SUBTITLE_TRACK' && msg.language) {
@@ -3259,6 +3538,7 @@ export function resetCoordinatorState(): void {
   restoreNativeCaptions();
   clearDomTranslationBuffers();
   clearManifestTranslationBuffers();
+  clearMseTranslationBuffers();
 }
 
 /**

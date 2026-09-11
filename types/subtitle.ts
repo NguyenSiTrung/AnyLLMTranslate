@@ -149,7 +149,14 @@ export interface SubtitleConfigPayload {
 export interface SubtitleMpdProcessingPayload {
   mpdUrl: string;
   platform: string;
-  status: 'started' | 'complete';
+  /**
+   * Lifecycle signal from the MAIN-world capture:
+   * - `started`  — MPD fetch/parse began; arms the DOM/texttrack deferral window.
+   * - `complete` — fetch finished; `success` reports whether cues were emitted.
+   * - `stalled`  — the capture watchdog gave up (segment fetch hung); the
+   *   coordinator demotes the manifest tier so DOM/TextTrack can take over.
+   */
+  status: 'started' | 'complete' | 'stalled';
   /** Set when status is 'complete' — whether parsed cues were emitted */
   success?: boolean;
 }

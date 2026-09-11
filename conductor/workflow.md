@@ -37,7 +37,7 @@ At the end of each phase:
 3. Manual verification of new features
 4. Update track learnings
 
-**Platform-dependent work needs a live check.** Unit tests cannot close a finding whose trigger only exists on the real site (DRM/MSE capture, player DOM, CDN behaviour). Maintenance work that touches a platform pipeline must carry an explicit "live verification" backlog — see `docs/hbomax-subtitle-risk-audit.md` §7 for the Max example — and those items stay open until a real session confirms them. A green suite is not evidence that a capture-path fix works in production.
+**Platform-dependent work needs a live check.** Unit tests cannot close a finding whose trigger only exists on the real site (DRM/MSE capture, player DOM, CDN behaviour). Maintenance work that touches a platform pipeline must carry an explicit "live verification" backlog — see `docs/hbomax-subtitle-risk-audit.md` §8 for the Max example — and those items stay open until a real session confirms them. A green suite is not evidence that a capture-path fix works in production.
 
 When a full Vitest run times out, rerun the affected file(s) in isolation and perform one clean full-suite rerun before classifying it as a regression. Record repeated load-sensitive timeouts in the refresh health snapshot; do not report the full gate as green solely because isolated files pass.
 

@@ -70,6 +70,7 @@ import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
 import type { SubtitleCue, SubtitleSegmentFetchTemplate } from '@/types/subtitle';
 import type { ExtensionSettings, NamedGlossaryList } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
+import type { DashSubtitleTrack } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
 import { parseWebVTT } from '@/lib/subtitleParser';
 import {
@@ -163,7 +164,7 @@ import { splitPiecesIntoBatches, dedupPiecesByText } from '@/lib/textBatching';
 import { resolvePoolBatchBudgets } from '@/lib/poolBatchBudgets';
 import { resolveEffectiveKnobs, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { generateSubtitleCacheKey, type GlossarySnapshot } from '@/lib/subtitleCacheKey';
-import { withRetry } from '@/lib/subtitleRetry';
+import { withRetry, isRetryableTranslationError } from '@/lib/subtitleRetry';
 import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
 import {
   filterUnlockedProperNouns,
@@ -280,11 +281,42 @@ function sessionGenerationFor(tabId: number): number {
 }
 
 /**
- * In-flight AI re-align runs keyed by origin tab. The Stop button (and any
+ * In-flight subtitle AI re-align runs keyed by origin tab. The Stop button (and any
  * other cancel path) sends CANCEL_SUBTITLE_SESSION, which aborts the run so no
  * further LLM batches are spent and the in-flight request is dropped.
  */
 const asrRealignControllers = new Map<number, AbortController>();
+
+/**
+ * In-flight subtitle *downloads* keyed by tab. Cancelling a translation session
+ * or navigating away must also stop a DASH assembly: without a signal it kept
+ * fetching every remaining segment for a page the user had left, keeping the
+ * service worker (and the keep-alive alarm) busy for no result.
+ */
+const subtitleFetchControllers = new Map<number, AbortController>();
+
+/**
+ * Supersede this tab's previous subtitle download and expose its signal.
+ * Call `end()` when the request settles; it only clears the entry it owns, so a
+ * newer request's controller is never dropped by an older one finishing.
+ */
+function beginSubtitleFetch(tabId: number | undefined): {
+  signal?: AbortSignal;
+  end: () => void;
+} {
+  if (tabId === undefined) return { signal: undefined, end: () => {} };
+  subtitleFetchControllers.get(tabId)?.abort();
+  const controller = new AbortController();
+  subtitleFetchControllers.set(tabId, controller);
+  return {
+    signal: controller.signal,
+    end: () => {
+      if (subtitleFetchControllers.get(tabId) === controller) {
+        subtitleFetchControllers.delete(tabId);
+      }
+    },
+  };
+}
 
 /** Keep-alive alarm name for MV3 service worker */
 const KEEPALIVE_ALARM = 'sw-keepalive';
@@ -324,6 +356,10 @@ function clearKeepaliveAlarm(): void {
  */
 function stopSubtitleSession(tabId: number): void {
   asrRealignControllers.get(tabId)?.abort();
+  // A segment assembly in flight is not represented by a session (it has no
+  // queue), so it must be aborted explicitly here.
+  subtitleFetchControllers.get(tabId)?.abort();
+  subtitleFetchControllers.delete(tabId);
   // Invalidate any request whose first chunk is still in flight: its loop must
   // not start once that chunk resolves.
   sessionGenerations.set(tabId, sessionGenerationFor(tabId) + 1);
@@ -1304,13 +1340,18 @@ async function handleTranslateSubtitle(
 
           // Sub-project 6: chunk-level retry with exponential backoff. The
           // wrapper normalizes service.translate's { success: false } into a
-          // throw so withRetry's thrown-error model applies. NOTE: because the
-          // service returns an error STRING (not a thrown ApiError), the 4xx
-          // status code is not visible here — shouldRetry returns true for all
-          // failures, so 4xx is retried twice. This is a deliberate trade-off
-          // vs. broad service-layer churn; 4xx is rare and the cost is 2 wasted
-          // calls. (Making the service re-throw ApiError on 4xx would enable
-          // true fail-fast but touches every caller.)
+          // throw so withRetry's thrown-error model applies.
+          //
+          // Failure classification: the provider pool THROWS for transport /
+          // auth / rate-limit / client failures (it does not return
+          // { success: false } for them), so the HTTP status is visible —
+          // ApiError.statusCode directly, or PoolExhaustedError.lastError when
+          // failover exhausted every slot. isRetryableTranslationError retries
+          // only network/timeout/429/5xx and fails fast on 4xx (bad model id,
+          // invalid credentials), which the old `() => true` predicate retried
+          // twice for nothing. Content failures returned as { success: false }
+          // (empty response, unparseable JSON) carry no status and stay
+          // retryable.
           const runTranslate = async () => {
             const r = await service.translate({
               texts,
@@ -1333,7 +1374,7 @@ async function handleTranslateSubtitle(
           const result = await withRetry(runTranslate, {
             maxRetries: 2,
             baseDelayMs: 500,
-            shouldRetry: () => true, // 4xx status not visible; retry all failures
+            shouldRetry: isRetryableTranslationError,
           });
 
           if (result.success) {
@@ -1630,6 +1671,56 @@ export function subtitleFetchPermissionOrigin(url: string): string | null {
 const warnedSubtitlePermissionOrigins = new Set<string>();
 
 /**
+ * Whether one declared match pattern covers `host`. Chrome's `*.example.com`
+ * grants the apex and every subdomain, so `*://*.media.max.com/*` covers
+ * `cf.asia.prd.media.max.com`. Comparing the patterns the way the manifest
+ * writes them is what keeps this pre-flight from warning about a host that is
+ * in fact granted.
+ */
+export function hostMatchesSubtitlePermissionPattern(host: string, pattern: string): boolean {
+  const trimmed = pattern.trim();
+  if (trimmed === '<all_urls>') return true;
+  const match = /^(?:\*|https?|file|ftp):\/\/([^/]*)/.exec(trimmed);
+  if (!match) return false;
+  const patternHost = (match[1] ?? '').toLowerCase();
+  const target = host.toLowerCase();
+  // `*` covers any host; an empty host component (`file:///*`) matches file
+  // URLs only and must never be read as a grant for an http(s) host.
+  if (patternHost === '*') return true;
+  if (patternHost === '') return false;
+  if (patternHost.startsWith('*.')) {
+    const domain = patternHost.slice(2);
+    return target === domain || target.endsWith(`.${domain}`);
+  }
+  return target === patternHost;
+}
+
+/** True when any declared host permission covers `host`. */
+export function isHostCoveredByDeclaredPermissions(
+  host: string,
+  declared: readonly string[],
+): boolean {
+  return declared.some((pattern) => hostMatchesSubtitlePermissionPattern(host, pattern));
+}
+
+/**
+ * `host_permissions` from the running manifest, or null when the manifest is
+ * unavailable (tests, older runtimes) — callers then fall back to the
+ * permissions API.
+ */
+function declaredSubtitleHostPermissions(): string[] | null {
+  const getManifest = chrome.runtime?.getManifest;
+  if (typeof getManifest !== 'function') return null;
+  const manifest: unknown = getManifest.call(chrome.runtime);
+  if (!manifest || typeof manifest !== 'object' || !('host_permissions' in manifest)) {
+    return null;
+  }
+  const declared = manifest.host_permissions;
+  if (!Array.isArray(declared)) return null;
+  return declared.filter((pattern): pattern is string => typeof pattern === 'string');
+}
+
+/**
  * Warn (once per origin) when a subtitle host is allow-listed for the CORS
  * bypass but not granted by `host_permissions`. Fire-and-forget: the fetch is
  * still attempted, this only turns a silent CORS failure into a diagnosable
@@ -1638,6 +1729,24 @@ const warnedSubtitlePermissionOrigins = new Set<string>();
 export function warnIfSubtitleHostPermissionMissing(url: string): void {
   const origin = subtitleFetchPermissionOrigin(url);
   if (!origin || warnedSubtitlePermissionOrigins.has(origin)) return;
+
+  warnedSubtitlePermissionOrigins.add(origin);
+
+  // The manifest declares wildcard patterns (`*://*.media.max.com/*`) that no
+  // exact-host query reproduces, so decide against the declared patterns first:
+  // asking the permissions API for `*://cf.asia.prd.media.max.com/*` reported a
+  // host as missing while the wildcard grant covered it.
+  const declared = declaredSubtitleHostPermissions();
+  if (declared) {
+    const host = new URL(url).hostname;
+    if (!isHostCoveredByDeclaredPermissions(host, declared)) {
+      console.warn(
+        'AnyLLMTranslate: subtitle host is in the fetch allow-list but missing from host_permissions',
+        { url, origin },
+      );
+    }
+    return;
+  }
 
   // Chrome returns a promise when no callback is given; the declared typings
   // still require the callback form, so narrow locally.
@@ -1648,7 +1757,6 @@ export function warnIfSubtitleHostPermissionMissing(url: string): void {
   const contains = permissions?.contains;
   if (typeof contains !== 'function') return;
 
-  warnedSubtitlePermissionOrigins.add(origin);
   Promise.resolve(contains.call(permissions, { origins: [origin] }))
     .then((granted) => {
       if (granted) return;
@@ -1709,6 +1817,7 @@ async function handleFetchManifestSubtitles(
     segmentFetch?: SubtitleSegmentFetchTemplate;
     language?: string;
   },
+  signal?: AbortSignal,
 ): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; language?: string }> {
   warnIfSubtitleHostPermissionMissing(message.playlistUrl);
   if (message.segmentUrls) {
@@ -1726,7 +1835,7 @@ async function handleFetchManifestSubtitles(
     // would pick only the first Period's subtitle track and return a truncated
     // episode, so the provided metadata always wins.
     if (message.segmentUrls?.length) {
-      const segmentResult = await fetchDashSegmentBodies(message.segmentUrls);
+      const segmentResult = await fetchDashSegmentBodies(message.segmentUrls, signal);
       if (!segmentResult.success) {
         return { success: false, error: segmentResult.error };
       }
@@ -1736,7 +1845,7 @@ async function handleFetchManifestSubtitles(
     }
 
     if (message.segmentFetch) {
-      const segmentResult = await fetchProgressiveDashSegments(message.segmentFetch);
+      const segmentResult = await fetchProgressiveDashSegments(message.segmentFetch, signal);
       if (!segmentResult.success) {
         return { success: false, error: segmentResult.error };
       }
@@ -1770,7 +1879,7 @@ async function handleFetchManifestSubtitles(
         // Use the default track or the first one
         const track = tracks.find((t) => t.isDefault) ?? tracks[0];
         // Recursively fetch the subtitle playlist
-        return handleFetchManifestSubtitles({ playlistUrl: track.url });
+        return handleFetchManifestSubtitles({ playlistUrl: track.url }, signal);
       }
 
       // Media playlist — extract segment URLs
@@ -1819,7 +1928,7 @@ async function handleFetchManifestSubtitles(
       }
 
       if (track.segmentUrls && track.segmentUrls.length > 1) {
-        const segmentResult = await fetchDashSegmentBodies(track.segmentUrls);
+        const segmentResult = await fetchDashSegmentBodies(track.segmentUrls, signal);
         if (!segmentResult.success) {
           return { success: false, error: segmentResult.error };
         }
@@ -1829,7 +1938,7 @@ async function handleFetchManifestSubtitles(
       }
 
       if (track.segmentFetch) {
-        const segmentResult = await fetchProgressiveDashSegments(track.segmentFetch);
+        const segmentResult = await fetchProgressiveDashSegments(track.segmentFetch, signal);
         if (!segmentResult.success) {
           return { success: false, error: segmentResult.error };
         }
@@ -1865,25 +1974,32 @@ async function handleFetchManifestSubtitles(
   }
 }
 
+/** Download every segment body, concurrently but re-assembled in URL order. */
 async function fetchDashSegmentBodies(
   urls: string[],
+  signal?: AbortSignal,
 ): Promise<{ success: true; bodies: string[] } | { success: false; error: string }> {
-  const bodies: string[] = [];
   for (const url of urls) {
     if (!isAllowedSubtitleUrl(url)) {
       return { success: false, error: 'Segment URL not in allow-list' };
     }
-    const response = await fetchWithTimeout(url);
-    if (!response.ok) {
-      return { success: false, error: `Segment fetch failed: HTTP ${response.status}` };
-    }
-    bodies.push(await response.text());
+  }
+  const outcomes = await runWithConcurrency(
+    urls,
+    (url) => fetchSegmentText(url, signal),
+    { concurrency: SEGMENT_FETCH_CONCURRENCY },
+  );
+  const bodies: string[] = [];
+  for (const outcome of outcomes) {
+    if (!outcome.ok) return { success: false, error: segmentFetchError(outcome, signal) };
+    bodies.push(outcome.text);
   }
   return { success: true, bodies };
 }
 
 async function fetchProgressiveDashSegments(
-  template: NonNullable<ReturnType<typeof parseDashManifest>[number]['segmentFetch']>,
+  template: NonNullable<DashSubtitleTrack['segmentFetch']>,
+  signal?: AbortSignal,
 ): Promise<{ success: true; bodies: string[] } | { success: false; error: string }> {
   const bodies: string[] = [];
   const capStart = template.startNumber;
@@ -1892,32 +2008,56 @@ async function fetchProgressiveDashSegments(
   // 404. Stopping at the cap is silent data loss on long titles, so the walk
   // reports when it ended there instead of at the end of the track.
   let reachedCap = true;
-  for (let number = capStart; number < capEnd; number++) {
-    const url = resolveSegmentFetchUrl(template, number);
-    if (!url) {
-      reachedCap = false;
-      break;
-    }
-    if (!isAllowedSubtitleUrl(url)) {
-      return { success: false, error: 'Segment URL not in allow-list' };
-    }
-    const response = await fetchWithTimeout(url);
-    if (!response.ok) {
-      if (bodies.length > 0 && (response.status === 404 || response.status === 410)) {
+
+  // Segments are fetched in windows so the walk stays ordered: a segment that
+  // does not exist ends the track, and segments after it must not be assembled.
+  for (let windowStart = capStart; windowStart < capEnd; windowStart += SEGMENT_FETCH_CONCURRENCY) {
+    const numbers: string[] = [];
+    for (let number = windowStart; number < capEnd; number++) {
+      const url = resolveSegmentFetchUrl(template, number);
+      if (!url) {
         reachedCap = false;
         break;
       }
-      return { success: false, error: `Segment fetch failed: HTTP ${response.status}` };
+      if (!isAllowedSubtitleUrl(url)) {
+        return { success: false, error: 'Segment URL not in allow-list' };
+      }
+      numbers.push(url);
+      if (numbers.length === SEGMENT_FETCH_CONCURRENCY) break;
     }
-    const body = await response.text();
-    const contentType = response.headers.get('Content-Type') ?? '';
-    if (isManifestResponse(body, contentType)) {
-      reachedCap = false;
-      if (bodies.length > 0) break;
-      return { success: false, error: 'Segment response is a DASH manifest, not subtitle content' };
+    if (numbers.length === 0) break;
+
+    const outcomes = await runWithConcurrency(
+      numbers,
+      (url) => fetchSegmentText(url, signal),
+      { concurrency: SEGMENT_FETCH_CONCURRENCY },
+    );
+
+    let stop = false;
+    for (const outcome of outcomes) {
+      if (signal?.aborted) return { success: false, error: 'cancelled' };
+      if (!outcome.ok) {
+        if (outcome.aborted) return { success: false, error: segmentFetchError(outcome, signal) };
+        if (bodies.length > 0 && (outcome.status === 404 || outcome.status === 410)) {
+          reachedCap = false;
+          stop = true;
+          break;
+        }
+        return { success: false, error: `Segment fetch failed: HTTP ${outcome.status}` };
+      }
+      if (isManifestResponse(outcome.text, outcome.contentType)) {
+        reachedCap = false;
+        if (bodies.length > 0) {
+          stop = true;
+          break;
+        }
+        return { success: false, error: 'Segment response is a DASH manifest, not subtitle content' };
+      }
+      bodies.push(outcome.text);
     }
-    bodies.push(body);
+    if (stop || numbers.length < SEGMENT_FETCH_CONCURRENCY) break;
   }
+
   if (reachedCap) {
     console.warn(
       'AnyLLMTranslate: progressive DASH segment fetch stopped at the safety cap — later subtitles are missing',
@@ -1935,10 +2075,76 @@ async function fetchProgressiveDashSegments(
   return { success: true, bodies };
 }
 
+/** Max concurrent subtitle segment downloads (results stay in request order). */
+const SEGMENT_FETCH_CONCURRENCY = 4;
+
+/** Outcome of one segment download. `aborted` distinguishes cancel/timeout. */
+type SegmentFetchOutcome =
+  | { ok: true; text: string; contentType: string }
+  | { ok: false; status: number; aborted: boolean };
+
+/** Reject as soon as `signal` aborts, so a stalled body read cannot hang. */
+function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+  const aborted = Promise.withResolvers<never>();
+  const onAbort = () => aborted.reject(new DOMException('aborted', 'AbortError'));
+  signal.addEventListener('abort', onAbort, { once: true });
+  return Promise.race([promise, aborted.promise]).finally(() => {
+    signal.removeEventListener('abort', onAbort);
+  });
+}
+
+/**
+ * Download one subtitle segment with a deadline that covers the BODY read as
+ * well as the headers. `fetchWithTimeout` stops its timer when the response
+ * resolves, so a body that stalls after its headers would hang the assembly.
+ */
+async function fetchSegmentText(
+  url: string,
+  signal?: AbortSignal,
+): Promise<SegmentFetchOutcome> {
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', forwardAbort, { once: true });
+  }
+  const timer = setTimeout(() => controller.abort(), SUBTITLE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return { ok: false, status: response.status, aborted: false };
+    const text = await raceWithAbort(response.text(), controller.signal);
+    return { ok: true, text, contentType: response.headers?.get?.('Content-Type') ?? '' };
+  } catch {
+    return { ok: false, status: 0, aborted: controller.signal.aborted };
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', forwardAbort);
+  }
+}
+
+/** Human-readable reason for a failed segment download. */
+function segmentFetchError(outcome: Extract<SegmentFetchOutcome, { ok: false }>, signal?: AbortSignal): string {
+  if (outcome.aborted) {
+    return signal?.aborted
+      ? 'cancelled'
+      : `Segment fetch timed out after ${SUBTITLE_FETCH_TIMEOUT_MS / 1000}s`;
+  }
+  return `Segment fetch failed: HTTP ${outcome.status}`;
+}
+
+/**
+ * Deadline for one subtitle fetch. The DASH segment helper (`fetchSegmentText`)
+ * enforces it across headers *and* the body read; `fetchWithTimeout` clears its
+ * timer once the headers arrive, so the playlist and direct-body paths still
+ * have no body-read deadline.
+ */
+export const SUBTITLE_FETCH_TIMEOUT_MS = 30_000;
+
 /** Fetch with 30s timeout (reused by manifest handler) */
 async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), SUBTITLE_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
@@ -2567,8 +2773,14 @@ export function handleMessage(
       return handleTranslateSubtitle(message, _sender);
     case 'FETCH_SUBTITLE':
       return handleFetchSubtitle(message);
-    case 'FETCH_MANIFEST_SUBTITLES':
-      return handleFetchManifestSubtitles(message);
+    case 'FETCH_MANIFEST_SUBTITLES': {
+      const fetchWork = beginSubtitleFetch(_sender.tab?.id);
+      const pending = handleFetchManifestSubtitles(message, fetchWork.signal);
+      // handleFetchManifestSubtitles reports failures as values, so `then`
+      // with two handlers (not `finally`) cannot leave a rejection unhandled.
+      void pending.then(fetchWork.end, fetchWork.end);
+      return pending;
+    }
     case 'translateSelection':
       return handleTranslateSelection(message, _sender);
     case 'restore': {
@@ -3128,6 +3340,10 @@ function __resetSubtitleSessionCounterForTest(): void {
     controller.abort();
   }
   asrRealignControllers.clear();
+  for (const controller of subtitleFetchControllers.values()) {
+    controller.abort();
+  }
+  subtitleFetchControllers.clear();
 }
 
 /**

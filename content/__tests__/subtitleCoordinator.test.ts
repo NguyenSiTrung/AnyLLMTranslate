@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import { MAX_MANIFEST_CUES } from '@/lib/constants';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { MiniProgressOptions } from '@/content/miniProgress';
 import type * as ConfigModule from '@/lib/config';
@@ -55,6 +56,7 @@ let _capturedManifestCuesHandler: ((payload: unknown) => Promise<void>) | null =
 let _capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 let _capturedDomTrackChangedHandler: ((payload: unknown) => Promise<void> | void) | null = null;
 let _capturedTextTrackCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let _capturedMseCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
 
 /**
  * Cleanups for coordinators started by describes that only care about a
@@ -88,7 +90,10 @@ vi.mock('@/content/messageBridge', () => ({
     _capturedTextTrackCuesHandler = handler;
     return () => {};
   },
-  onMseCues: () => () => {},
+  onMseCues: (handler: (payload: unknown) => Promise<void>) => {
+    _capturedMseCuesHandler = handler;
+    return () => {};
+  },
   onManifestCues: (handler: (payload: unknown) => Promise<void>) => {
     _capturedManifestCuesHandler = handler;
     return () => {};
@@ -3803,6 +3808,54 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
     );
   });
 
+  it('caps the manifest cue buffer at MAX_MANIFEST_CUES without dropping the opening cues', async () => {
+    if (!_capturedManifestCuesHandler) {
+      throw new Error('manifest cue handler was not registered');
+    }
+    const total = MAX_MANIFEST_CUES + 25;
+
+    await _capturedManifestCuesHandler({
+      cues: Array.from({ length: total }, (_, i) => ({
+        startTime: i,
+        endTime: i + 1,
+        text: `line ${i}`,
+      })),
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    // A full-track activation arrives while the playhead is still at the start:
+    // the window must keep the head, not the tail, or the title opens with no
+    // subtitles at all (the platform's own captions are already hidden).
+    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(last).toHaveLength(MAX_MANIFEST_CUES);
+    expect(last[0]?.originalText).toBe('line 0');
+    expect(last.at(-1)?.originalText).toBe(`line ${MAX_MANIFEST_CUES - 1}`);
+  });
+
+  it('keeps the playhead inside the window when a long track is delivered', async () => {
+    if (!_capturedManifestCuesHandler) {
+      throw new Error('manifest cue handler was not registered');
+    }
+    const video = document.querySelector('video');
+    if (!video) throw new Error('no primary video');
+    video.currentTime = 1_500;
+
+    await _capturedManifestCuesHandler({
+      cues: Array.from({ length: 3_000 }, (_, i) => ({
+        startTime: i,
+        endTime: i + 1,
+        text: `line ${i}`,
+      })),
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(last).toHaveLength(MAX_MANIFEST_CUES);
+    expect(last.map((cue) => cue.originalText)).toContain('line 1500');
+  });
+
   it('treats a sequence gap as a full replace', async () => {
     if (!_capturedManifestCuesHandler) {
       throw new Error('manifest cue handler was not registered');
@@ -3825,6 +3878,404 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
 
     const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
     expect(last.map((cue) => cue.originalText)).toEqual(['c']);
+  });
+});
+
+describe('subtitleCoordinator – MSE SourceBuffer delta tier', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+
+  /** Cues passed to each translateSubtitle request, in call order. */
+  const translateRequests = (): string[][] =>
+    runtimeSendMessage.mock.calls
+      .filter((call) => (call[0] as { action?: string })?.action === 'translateSubtitle')
+      .map((call) =>
+        ((call[0] as { cues?: Array<{ text: string }> }).cues ?? []).map((c) => c.text),
+      );
+
+  const lastOverlayCues = (): Array<{ text: string; originalText?: string }> =>
+    (mockUpdateCues.mock.calls.at(-1)?.[0] ?? []) as Array<{
+      text: string;
+      originalText?: string;
+    }>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedMseCuesHandler = null;
+    _capturedDomTrackChangedHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.netflix.com',
+        pathname: '/watch/81234567',
+        href: 'https://www.netflix.com/watch/81234567',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    // MSE is the Netflix-style interception path: no DOM cue source, no
+    // manifest patterns — the SourceBuffer hook is the only cue source.
+    const netflixHandler = {
+      platform: 'netflix',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => null),
+    };
+    mockDetectCurrentHandler.mockReturnValue(netflixHandler);
+    mockGetHandlerByPlatform.mockImplementation((platform: string) =>
+      platform === 'netflix' ? netflixHandler : null,
+    );
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      targetLanguage: 'vi',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+        autoActivateSubtitles: false,
+      },
+    });
+
+    // Echo-style translation reply: every requested cue comes back translated
+    // with originalText set (the contract the DOM/manifest/MSE merge relies on).
+    runtimeSendMessage = vi.fn(
+      async (message: { action?: string; cues?: Array<{ text: string }> }) => {
+        if (message.action === 'translateSubtitle') {
+          return {
+            success: true,
+            sessionId: 1,
+            cues: (message.cues ?? []).map((cue) => ({
+              ...cue,
+              text: `T:${cue.text}`,
+              originalText: cue.text,
+            })),
+          };
+        }
+        return { success: true };
+      },
+    );
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video data-test-primary-video></video>';
+    const coordinator = await import('@/content/subtitleCoordinator');
+    cleanup = coordinator.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('activates the overlay from the first MSE payload and translates it', async () => {
+    if (!_capturedMseCuesHandler) {
+      throw new Error('MSE cue handler was not registered');
+    }
+
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    expect(translateRequests()).toEqual([['a']]);
+    // First activation goes through the renderer's initialize() rather than
+    // updateActiveRendererCues(), so assert on the overlay initialize call.
+    expect(mockInitializeOverlay).toHaveBeenCalledWith(
+      [expect.objectContaining({ text: 'T:a', originalText: 'a' })],
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('merges later MSE payloads into the overlay and translates only the new texts', async () => {
+    if (!_capturedMseCuesHandler) {
+      throw new Error('MSE cue handler was not registered');
+    }
+
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    });
+    mockUpdateCues.mockClear();
+
+    // Second SourceBuffer segment. Before the fix this payload hit an early
+    // return and never reached the overlay.
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 3, endTime: 4, text: 'b' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    // Only the delta was sent — 'a' is not re-translated.
+    expect(translateRequests()).toEqual([['a'], ['b']]);
+    await vi.waitFor(() => {
+      expect(lastOverlayCues()).toEqual([
+        expect.objectContaining({ originalText: 'a' }),
+        expect.objectContaining({ originalText: 'b' }),
+      ]);
+    });
+  });
+
+  it('re-pushes the overlay for a repeated segment without re-translating it', async () => {
+    if (!_capturedMseCuesHandler) {
+      throw new Error('MSE cue handler was not registered');
+    }
+
+    const payload = {
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    };
+    await _capturedMseCuesHandler(payload);
+    mockUpdateCues.mockClear();
+
+    // A player can re-append a buffered segment; identity merge must dedupe it
+    // and no second translation request may be issued.
+    await _capturedMseCuesHandler(payload);
+
+    expect(translateRequests()).toEqual([['a']]);
+    expect(mockUpdateCues).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not adopt a delta response that lands after the session was abandoned', async () => {
+    if (!_capturedMseCuesHandler || !_capturedDomTrackChangedHandler) {
+      throw new Error('subtitle bridge handlers were not registered');
+    }
+
+    // The abandoned batch is held in flight; every other request answers with a
+    // session id of its own so the adopter of the stale reply is observable in
+    // the next request's `sessionId`.
+    let resolveStale!: (reply: unknown) => void;
+    const staleReply = new Promise((resolve) => {
+      resolveStale = resolve;
+    });
+    runtimeSendMessage.mockImplementation(async (message: { action?: string; cues?: Array<{ text: string }> }) => {
+      if (message.action !== 'translateSubtitle') return { success: true };
+      const first = message.cues?.[0]?.text ?? '';
+      if (first === 'b') return staleReply;
+      return {
+        success: true,
+        sessionId: 7,
+        cues: (message.cues ?? []).map((cue) => ({ ...cue, text: `T:${cue.text}`, originalText: cue.text })),
+      };
+    });
+
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    const staleCall = _capturedMseCuesHandler({
+      cues: [{ startTime: 3, endTime: 4, text: 'b' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    // Track switch while the delta is in flight — session id cleared, buffers
+    // dropped, and the new track re-activates with a session id of its own.
+    await _capturedDomTrackChangedHandler({ platform: 'netflix' });
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'c' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    resolveStale({
+      success: true,
+      sessionId: 99,
+      cues: [{ startTime: 3, endTime: 4, text: 'T:b', originalText: 'b' }],
+    });
+    await staleCall;
+
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 5, endTime: 6, text: 'd' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    // Requests after the stale reply must still carry the live session's id:
+    // adopting 99 would re-open the session the track switch already abandoned.
+    const lastRequest = runtimeSendMessage.mock.calls
+      .map((call) => call[0] as { action?: string; sessionId?: number })
+      .filter((msg) => msg.action === 'translateSubtitle')
+      .at(-1);
+    expect(lastRequest?.sessionId).toBe(7);
+  });
+
+  it('drops the MSE cue buffer on a track switch so the new track re-activates', async () => {
+    if (!_capturedMseCuesHandler || !_capturedDomTrackChangedHandler) {
+      throw new Error('subtitle bridge handlers were not registered');
+    }
+
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    });
+    expect(translateRequests()).toEqual([['a']]);
+
+    await _capturedDomTrackChangedHandler({ platform: 'netflix' });
+
+    // Buffers cleared + activeSource reset, so the next payload re-activates
+    // rather than being treated as a delta of the old track's cues.
+    await _capturedMseCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'mse',
+      language: 'en',
+    });
+
+    expect(translateRequests()).toEqual([['a'], ['a']]);
+    await vi.waitFor(() => {
+      expect(lastOverlayCues()).toEqual([
+        expect.objectContaining({ originalText: 'a' }),
+      ]);
+    });
+  });
+});
+
+describe('subtitleCoordinator – untranslated section notice', () => {
+  let cleanup: (() => void) | null = null;
+
+  const hbomaxHandler = () => ({
+    platform: 'hbomax',
+    detect: vi.fn(() => true),
+    isWatchPage: vi.fn(() => true),
+    getPatterns: vi.fn(() => []),
+    getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+    transformResponse: vi.fn(() => []),
+    getDomCueSource: vi.fn(() => ({
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'en',
+    })),
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedManifestCuesHandler = null;
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+    const handler = hbomaxHandler();
+    mockDetectCurrentHandler.mockReturnValue(handler);
+    mockGetHandlerByPlatform.mockReturnValue(handler);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    global.chrome = {
+      runtime: {
+        // Every translation request fails: the overlay keeps the source text,
+        // so the user must be told instead of relying on a console warning.
+        sendMessage: vi.fn().mockResolvedValue({ success: false, error: 'provider unavailable' }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video></video>';
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  const untranslatedNotices = () =>
+    mockShowSubtitleToast.mock.calls.filter((call) =>
+      String(call[0]).includes("couldn't be translated"),
+    );
+
+  async function deliverManifestCues(startTime: number): Promise<void> {
+    if (!_capturedManifestCuesHandler) throw new Error('manifest handler was not registered');
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime, endTime: startTime + 2, text: 'hola' }],
+      platform: 'hbomax',
+      language: 'en',
+      url: 'https://cf.asia.prd.media.max.com/a/t/t3/1.vtt',
+    });
+  }
+
+  it('tells the user when every retry of a manifest delta failed', async () => {
+    await deliverManifestCues(1);
+
+    expect(untranslatedNotices().length).toBeGreaterThan(0);
+    // The activation path posts its own status toast after the translation
+    // resolves; if that lands last, the notice is erased before it is painted.
+    expect(mockShowSubtitleToast).toHaveBeenLastCalledWith(expect.stringContaining(
+      "couldn't be translated",
+    ));
+  });
+
+  it('does not repeat the notice for a second failing delta', async () => {
+    await deliverManifestCues(1);
+    const afterFirst = untranslatedNotices().length;
+    await deliverManifestCues(5);
+
+    expect(untranslatedNotices()).toHaveLength(afterFirst);
+  });
+
+  it('stays silent when the one-by-one retry translated every line', async () => {
+    const runtimeSendMessage = chrome.runtime.sendMessage as unknown as Mock;
+    runtimeSendMessage.mockImplementation(
+      async (message: { action?: string; cues?: Array<{ text: string }> }) => {
+        if (message.action !== 'translateSubtitle') return { success: true };
+        const cues = message.cues ?? [];
+        // Only the final one-text-per-request attempts succeed; everything the
+        // sub-batch ladder tried (2+ texts) fails. Nothing is left untranslated,
+        // so reporting a gap would be a false alarm.
+        if (cues.length > 1) return { success: false, error: 'provider unavailable' };
+        return {
+          success: true,
+          sessionId: 1,
+          cues: cues.map((cue) => ({ ...cue, text: `T:${cue.text}`, originalText: cue.text })),
+        };
+      },
+    );
+
+    if (!_capturedManifestCuesHandler) throw new Error('manifest handler was not registered');
+    // 24 cues — one full 25-cue batch minus one, so the halving ladder splits
+    // into 12+12 (never a lone text, which would count as a success by itself).
+    await _capturedManifestCuesHandler({
+      cues: Array.from({ length: 24 }, (_, i) => ({
+        startTime: i,
+        endTime: i + 1,
+        text: `line ${i}`,
+      })),
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    expect(untranslatedNotices()).toHaveLength(0);
+    expect(mockUpdateCues.mock.calls.at(-1)?.[0]).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: 'T:line 0' })]),
+    );
   });
 });
 
@@ -4753,6 +5204,26 @@ describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => 
     expect(manifestRequests[0]?.segmentUrls).toEqual([SEG_1, SEG_2, SEG_3]);
     expect(manifestRequests[0]?.language).toBe('en');
     expect(mockInitializeOverlay).toHaveBeenCalled();
+  });
+
+  it('stops the fetching toast without an error toast when the fetch is cancelled', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    await discover([track({ url: SEG_1, segmentUrls: [SEG_1] })]);
+    runtimeSendMessage.mockImplementation(async (message: Record<string, unknown>) => {
+      if (message?.action === 'FETCH_MANIFEST_SUBTITLES') {
+        return { success: false, error: 'cancelled' };
+      }
+      return { success: true };
+    });
+    mockHideSubtitleToast.mockClear();
+
+    await mod.selectSubtitleTrack('en');
+
+    // A cancel is not a failure to report — but the sticky "Fetching subtitle
+    // track from manifest..." toast must still come down.
+    expect(mockHideSubtitleToast).toHaveBeenCalled();
+    const toastTexts = mockShowSubtitleToast.mock.calls.map((call) => String(call[0]));
+    expect(toastTexts.some((text) => text.includes('Failed to fetch manifest subtitles'))).toBe(false);
   });
 
   it('concatenates same-language Period tracks in discovery order', async () => {

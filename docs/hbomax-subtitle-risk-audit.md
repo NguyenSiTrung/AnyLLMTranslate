@@ -242,7 +242,7 @@ implementation notes live in
 Nothing in this audit was fixed by "looks right" reasoning: every task started
 from a failing test, and the Max-specific behaviour that cannot be reproduced
 without live traffic is listed in the plan's **Live-verification backlog**
-(repeated in §7 below).
+(repeated in §8 below).
 
 | Finding | Status | What changed |
 |---------|--------|--------------|
@@ -303,7 +303,42 @@ cases) and `tests/unit/hbomaxHandler.test.ts` (9 cases).
 
 ---
 
-## 7. Live-verification backlog (needs a real Max session)
+## 7. Hardening round 2 (implementation, 2026-09-11)
+
+Seven follow-up risks raised after section 6 (plan:
+`docs/superpowers/plans/2026-09-11-subtitle-hardening-round2.md`). Each was
+reproduced with a failing test before the fix.
+
+| Finding | Issue | Status | What changed |
+|---|---|---|---|
+| Representation identity taken from the first `/t/` in the URL | `jp7` | Fixed | identity is the last `t<digits>` directory in the pathname (else the last directory), so a parent directory like `caa516` can no longer win over the representation `t3`, and `/t/` inside a query string cannot hijack it |
+| A failed segment fetch poisoned its URL for the session | `6rz` | Fixed | `failedSegments` cooldown map + watchdog re-drive (5 s doubling, saturating at 40 s after 4 cycles, never permanent); success/seek/reset clear it |
+| Unbounded rolling capture buffer | `738` | Fixed | `MAX_MANIFEST_CUES = 2000` applied in both the MAIN-world capture and the coordinator's mirrored buffer (constant shared via `lib/constants.ts`), windowed around the playhead so a full-track activation keeps the cues being watched |
+| Sequential DASH segment fetch; body read could hang forever | `uli` | Fixed | bounded fan-out (`SEGMENT_FETCH_CONCURRENCY = 4`, `services/background.ts`) with assembly order preserved, plus a per-segment body-read deadline (`SUBTITLE_FETCH_TIMEOUT_MS = 30_000` in `fetchSegmentText`) shared by both DASH paths |
+| In-flight segment downloads survived cancel/seek/navigation | `41q` | Fixed | per-tab `AbortController` set aborted from `stopSubtitleSession`; a cancelled fetch reports `cancelled` and produces no failure toast |
+| Host-permission pre-flight warned about hosts a wildcard grant covered | `8qa` | Fixed | the declared `host_permissions` patterns are matched (`*.media.max.com` covers the apex and every subdomain, `<all_urls>` included) before the permissions API is consulted |
+| Manifest/DOM deltas could fail translation silently | `pjt` | Fixed | `notifyUntranslatedSection()` — shared with the `SUBTITLE_CHUNK_FAILED` toast and its 5 s cooldown — fires when the manifest ladder exhausts or a DOM delta is rejected |
+
+**Verification (2026-09-11, after round 2):** `npx vitest run` → **754 tests /
+214 files passing**; `npx tsc --noEmit` → 0 errors; `npx eslint .` → 0 errors.
+New coverage: `inject/__tests__/maxVttPerformanceCapture.test.ts` (identity,
+recovery, buffer bound), `services/__tests__/background.test.ts` (permission
+matching, per-tab abort, concurrency/order), and
+`content/__tests__/subtitleCoordinator.test.ts` (untranslated notice, buffer
+window, cancelled fetch).
+
+An independent four-reviewer pass over the changeset then found two defects that
+this section had already claimed as fixed: the buffer cap dropped the opening
+cues of a full-track activation (`slice(-N)` moved to a playhead-anchored
+window) and the untranslated notice was erased by the activation status toast
+that follows it. Both are fixed and covered by tests that fail when the fix is
+reverted; the seven rows above describe the reviewed, post-fix state.
+
+Items below remain open: they need a real Max session.
+
+---
+
+## 8. Live-verification backlog (needs a real Max session)
 
 These changes are defensive but cannot be proven from fixtures. None blocks the
 automated work; each must be checked manually before release.

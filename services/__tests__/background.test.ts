@@ -12,6 +12,8 @@ import {
   __resetSubtitlePermissionWarningsForTest,
   subtitleFetchPermissionOrigin,
   warnIfSubtitleHostPermissionMissing,
+  isHostCoveredByDeclaredPermissions,
+  SUBTITLE_FETCH_TIMEOUT_MS,
 } from '../background';
 
 // Mock chrome APIs
@@ -403,6 +405,115 @@ describe('services/background', () => {
       expect(result.success).toBe(true);
       expect(result.cues?.map((cue) => cue.text)).toEqual(['one', 'two', 'three', 'four']);
       expect(fetchMock.mock.calls.map((call) => call[0])).not.toContain(MPD_URL);
+    });
+
+    it('fetches provided segments concurrently while preserving cue order', async () => {
+      const gates = new Map<string, () => void>();
+      let inFlight = 0;
+      let peak = 0;
+      const fetchMock = vi.fn(async (url: string) => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        const gate = Promise.withResolvers<undefined>();
+        gates.set(url, () => gate.resolve(undefined));
+        await gate.promise;
+        inFlight -= 1;
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => bodiesByUrl.get(url) ?? '',
+          headers: { get: () => 'text/vtt' },
+        };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const pending = handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentUrls: [SEG_1, SEG_2, SEG_3],
+          language: 'en',
+        },
+        { tab: { id: 3 } } as chrome.runtime.MessageSender,
+      ) as Promise<{ success: boolean; cues?: Array<{ text: string }> }>;
+
+      // Every segment is requested before any body resolves. Sequential
+      // fetching would show one in-flight request here.
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      expect(peak).toBe(3);
+
+      // Release out of request order: a completion-order assembler would then
+      // emit ['three','two','one'] and fail the order assertion below.
+      for (const release of [...gates.values()].reverse()) release();
+      const result = await pending;
+
+      expect(result.success).toBe(true);
+      // Assembly order must follow segmentUrls, not fetch completion order.
+      expect(result.cues?.map((cue) => cue.text)).toEqual(['one', 'two', 'three']);
+    });
+
+    it('gives up on a segment whose body read never finishes', async () => {
+      vi.useFakeTimers();
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        // Headers arrived but the body never does — the old helper cleared its
+        // abort timer as soon as the headers resolved, so this hung forever.
+        text: () => Promise.withResolvers<string>().promise,
+        headers: { get: () => 'text/vtt' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const pending = handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentUrls: [SEG_1],
+          language: 'en',
+        },
+        { tab: { id: 3 } } as chrome.runtime.MessageSender,
+      ) as Promise<{ success: boolean; error?: string }>;
+
+      await vi.advanceTimersByTimeAsync(SUBTITLE_FETCH_TIMEOUT_MS + 1);
+      const result = await pending;
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('timed out');
+      vi.useRealTimers();
+    });
+
+    it('aborts an in-flight segment fetch when the tab session is cancelled', async () => {
+      const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+        const gate = Promise.withResolvers<never>();
+        init?.signal?.addEventListener('abort', () => {
+          gate.reject(new DOMException('aborted', 'AbortError'));
+        });
+        return gate.promise;
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const pending = handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentUrls: [SEG_1, SEG_2],
+          language: 'en',
+        },
+        { tab: { id: 77 } } as chrome.runtime.MessageSender,
+      ) as Promise<{ success: boolean; error?: string }>;
+
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+      await handleMessage(
+        { action: 'CANCEL_SUBTITLE_SESSION' },
+        { tab: { id: 77 } } as chrome.runtime.MessageSender,
+      );
+
+      // A cancelled assembly must not keep downloading and must not be
+      // reported as a failure (the coordinator skips the toast for it).
+      await expect(pending).resolves.toEqual({ success: false, error: 'cancelled' });
     });
 
     it('warns when a progressive template fetch hits the segment safety cap (MAX-41)', async () => {
@@ -1260,6 +1371,29 @@ describe('services/background — subtitle host permission pre-flight (MAX-39)',
       .toBe('*://www.hbomax.com/*');
     expect(subtitleFetchPermissionOrigin('not a url')).toBeNull();
     expect(subtitleFetchPermissionOrigin('')).toBeNull();
+  });
+
+  it('treats a declared wildcard pattern as covering the apex and deeper subdomains', () => {
+    const declared = ['*://*.media.max.com/*', '*://*.hbomax.com/*'];
+    expect(isHostCoveredByDeclaredPermissions('cf.asia.prd.media.max.com', declared)).toBe(true);
+    expect(isHostCoveredByDeclaredPermissions('media.max.com', declared)).toBe(true);
+    expect(isHostCoveredByDeclaredPermissions('evil-max.com', declared)).toBe(false);
+    expect(isHostCoveredByDeclaredPermissions('media.max.com.evil.test', declared)).toBe(false);
+    expect(isHostCoveredByDeclaredPermissions('cf.asia.prd.media.max.com', ['<all_urls>'])).toBe(true);
+  });
+
+  it('stays silent when the manifest grant covers the host via a wildcard', () => {
+    const runtime = chrome.runtime as unknown as { getManifest?: () => unknown };
+    const previous = runtime.getManifest;
+    runtime.getManifest = () => ({ host_permissions: ['*://*.media.max.com/*'] });
+
+    warnIfSubtitleHostPermissionMissing(MAX_SEGMENT_URL);
+
+    // The declared grant covers the host, so the pre-flight must not warn —
+    // and it must not need the permissions API to know that.
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(containsMock).not.toHaveBeenCalled();
+    runtime.getManifest = previous;
   });
 
   it('warns once per origin when an allow-listed host has no host permission', async () => {
