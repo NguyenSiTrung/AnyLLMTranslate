@@ -1,41 +1,40 @@
 {
-  "lastRefresh": "2026-09-11T18:05:00+07:00",
+  "lastRefresh": "2026-09-12T00:35:00+07:00",
   "scope": "all",
   "changes": [
-    "Scope: full refresh ('/conductor refresh' with no argument, user approved 'Apply all + commit locally'). Reconciled product, tech-stack, tracks, patterns, workflow, and Beads context against master since the 2026-09-10 refresh (2 commits, d8f9583..3580a6f: 5c96cf3 YouTube ASR re-align unification, 3580a6f HBO Max hardening MAX-1…MAX-42).",
-    "POLICY CHANGE (user decision): the test-coverage target moved from >=80% to >=70%. Rationale: Phase 8 of the Max hardening added inject/** to coverage.include, which surfaced MAIN-world interception code that had never been counted, and the full covered surface measured 78.31% statements — the old 80% floor was no longer the governing rule. Updated conductor/workflow.md ('Target: >=70% statements' + the note that it covers services/lib/content/inject/types, not just 'core modules'), conductor/product.md Success Metrics ('80%+ test coverage' -> '70%+ test coverage'), and CONTRIBUTING.md ('maintain >=70% coverage on modified files'). Note: the Conductor skill's own command templates still say 80% (.agents/skills/conductor/references/commands/setup.md, implement.md) — those are upstream templates, not project policy, and were deliberately left untouched.",
-    "product.md: added 2 timeline entries — (1) YouTube ASR re-align unit + cache-key unification (5c96cf3; Beads lhh/32w/f8i): srv1/srv3 XML -> timed words, real srv3 <p t d> parsing replacing a shape that yielded zero cues and passed the track through untranslated, fmt=json3 refetch on the intercept path for contentHash parity, real word counts in mergeEndCompatible, track matching by parsed v/lang/tlang/kind (the old url.split('&')[0] prefix matched any track of the video), tlang treated as non-ASR, /live/ + /shorts/ activation, re-align runs tracked in a Set, drag-handle pointer gating + debounced offset persistence; (2) HBO Max pipeline hardening MAX-1…MAX-42 across all 8 phases of docs/superpowers/plans/2026-09-11-hbomax-subtitle-fixes.md, driven by docs/hbomax-subtitle-risk-audit.md. Current State rewritten: 592/208 -> 725/213, build 3.82 -> 3.84 MB, coverage 78.31% recorded, Beads line corrected. Test-suite-history line gained the 2026-09-11 entry.",
-    "tech-stack.md: confirmed package.json / pnpm-lock.yaml unchanged since 2026-08-05 (5th consecutive window with no dependency drift) and no new CI workflows (still pages.yml + bridge-image.yml). Quality-gates snapshot replaced with the 2026-09-11 numbers (725/213, 62 s, tsc 0, lint 0, build 3.84 MB, coverage 78.31/75.76/82.63). host_permissions row corrected — it listed only YouTube + Nous Portal + loopback, missing the Max/HBO Max hosts AND the two hosts added this window (*://*.hbo.com/* and *://*.delivery.mp.microsoft.com/*, MAX-39/42). Stale '3.5 MB' build figure in the Scientific PDF bridge rationale corrected to 3.84 MB. Added a source/tests-added note and a config/tooling note (inject/** into coverage.include, wxt.config.ts host permissions, the two new docs).",
-    "workflow.md: marker was stale at 2026-09-10. Real drift found and fixed: (a) coverage target 80% -> 70% per the user decision, with the scope clarified as the whole covered surface; (b) new Phase Verification paragraph recording that platform-dependent work needs a live check — unit tests cannot close a finding whose trigger only exists on the real site (DRM/MSE capture, player DOM, CDN behaviour), so maintenance touching a platform pipeline must carry an explicit live-verification backlog (Max example: audit §8). Branching strategy and Conventional-Commits still match the repo.",
-    "tracks.md: refresh marker only — verified still 73 archived / 0 active (unchanged since 2026-08-04). The whole window shipped untracked via superpowers specs/plans + Beads.",
-    "patterns.md: rescanned 71 archived learnings (0 active) — no new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. Two pattern sections were elevated directly from the commit window because they are project-wide and cost real time to rediscover: 'YouTube ASR re-align — canonical units, or the cache silently never hits' (6 bullets) and 'Platform capture pipelines — failure modes and lifecycle' (8 bullets, incl. host-permission pre-flight and the live-verification rule).",
-    "beads: 19 issues were closed in this window (AnyLLMTranslate-lhh, -32w, -f8i for the YouTube ASR work; -3zw the 42-finding Max audit; -gyd, -04b, -vap, -5z2, -6ht, -vjw, -8nl, -dkd, -wxt, -0en, -vm0, -1z5, -47f, -6i3 for Max phases 1-8). The 2026-09-10 snapshot's 4 records (b6g, b6g.9, 5k8, x9f) no longer exist in the tracker. Live tracker at refresh time: 1 open (gmj P3 YouTube ASR deferred follow-ups) + 2 in progress (3hj P1 Discord Lexical write-back, s32 P2 DeepLearning.AI).",
-    "verification: full default `pnpm test` on 2026-09-11 — 725 passed / 0 failed across 213 files in 62 s (clean; the 467 s figure from 2026-09-10 was a cold run on the smaller suite). `pnpm compile` (tsc --noEmit) 0 errors. `pnpm lint` 0 errors. `pnpm build` 3.84 MB (WXT total; du 3.8M). Coverage: `vitest run --coverage` — all files 78.31% stmts / 75.76% branch / 82.63% funcs, 725/725 tests green. Backups of all six files in /tmp/conductor-bak-20260911/.",
-    "committed: all conductor/*.md + conductor/refresh_state.json; CONTRIBUTING.md changed in the same commit for the 70% target alignment. NOT pushed (AGENTS.md conservative profile: local commit only, no push without explicit approval)."
+    "Scope: full refresh ('/conductor-refresh' with no argument, user approved 'Apply all + commit'). Reconciled product, tech-stack, tracks, patterns, workflow, and Beads context against master since the 2026-09-11 refresh (1 commit, c50808c..727f3a8: subtitle hardening round 2 — seven audit follow-ups jp7/6rz/738/uli/41q/8qa/pjt plus world-parity 0pl and MSE-delta e3i, 21 files +2532/-145).",
+    "product.md: added 1 timeline entry — Subtitle hardening round 2 (727f3a8; Beads 0pl/e3i/jp7/6rz/738/uli/41q/8qa/pjt): shared MAIN/isolated worldHandlers registry so Netflix/Disney+ payloads resolve instead of passing through untranslated; MSE SourceBuffer deltas accumulated into rolling buffers (translate only new texts, reset on preempt/switch/seek, translation map kept as text-keyed cache); MAX_MANIFEST_CUES=2000 bounds capture + coordinator mirror with a playhead-anchored window; failedSegments cooldown recovery (5 s doubling, saturating at 40 s) replaces permanent URL poisoning; representation identity from the LAST t<digits> pathname component; per-tab AbortController aborts in-flight segment fetches; DASH fan-out at SEGMENT_FETCH_CONCURRENCY=4 preserving order + 30 s body-read deadline; wildcard-aware host_permissions pre-flight; transient-only chunk retry via lib/subtitleRetry.ts (408/429/5xx/status-less; other 4xx fail fast; pool throws ApiError/PoolExhaustedError); one-shot notifyUntranslatedSection toast; MPD status union widened. Current State rewritten: 725/213 -> 754/214, build 3.84 -> 3.85 MB, coverage 78.81% recorded, Beads line rewritten (tracker fully clean). Test-suite-history line gained the 2026-09-12 entry. The prior HBO Max entry's stale 'audit §7' ref corrected to §8 (the commit had renumbered the audit: §7 is now the round-2 implementation table, §8 the live-verification backlog).",
+    "tech-stack.md: confirmed package.json / pnpm-lock.yaml unchanged since 2026-08-05 (6th consecutive window with no dependency drift) and no new CI workflows (still pages.yml + bridge-image.yml). Quality-gates snapshot replaced with the 2026-09-12 numbers (754/214, 42 s, tsc 0, lint 0, build 3.85 MB, coverage 78.81/75.50/82.37). Scientific-PDF bridge rationale build figure corrected 3.84 -> 3.85 MB. Source/tests note extended with the round-2 additions (worldHandlers.ts + tests/unit/worldHandlers.test.ts, lib/subtitleRetry.ts, MAX_MANIFEST_CUES, capture/background/coordinator deltas, .gitignore .workbuddy-ai). Docs line gained the round-2 plan + audit §7/§8 structure.",
+    "workflow.md: marker only — no methodology drift. The phase-verification live-check paragraph's 'audit §7' ref had already been corrected to §8 inside 727f3a8; ≥70% coverage target holds at 78.81% measured.",
+    "tracks.md: refresh marker only — verified still 73 archived / 0 active (unchanged since 2026-08-04). Fifth consecutive window shipped untracked via superpowers specs/plans + Beads.",
+    "patterns.md: rescanned 71 archived learnings (0 active) — still no new learnings.md since 2026-08-04, so the strict cross-track consolidation scan produced no candidates. One pattern section elevated directly from the commit window: 'Subtitle pipeline — world parity, delta tiers, transient-only retry' (8 bullets covering two-world handler parity, MSE delta accumulation, pool-throws retry classification, playhead-anchored buffer bounds, cooldown recovery vs permanent poison, per-tab AbortController, pathname-tail identity, wildcard host-permission matching). The 'audit §7' ref in the existing platform-capture section corrected to §8.",
+    "beads: 14 issues were closed in this window (the nine round-2 items AnyLLMTranslate-0pl, -e3i, -jp7, -6rz, -738, -uli, -41q, -8qa, -pjt at 2026-09-11T16:32-16:43Z, plus a stale-record sweep at 17:23Z: -5k8, -b6g, -b6g.9, -9oy, -x9f — the four records the 2026-09-11 snapshot reported as absent had in fact reappeared and were formally closed; 9oy 'browser-level subtitle lifecycle/race integration tests' was new). The previous snapshot's live records — gmj (P3 YouTube ASR deferred follow-ups), 3hj (P1 Discord Lexical write-back), s32 (P2 DeepLearning.AI) — no longer exist in the Dolt DB at all (bd show: no issue found; absent from the 279-record closed list), i.e. purged rather than closed. Live tracker at refresh time: 0 open / 0 in progress / 279 closed.",
+    "verification: full default `pnpm test` on 2026-09-12 — 754 passed / 0 failed across 214 files in 42 s (clean, no load-timeout instability). `pnpm compile` (tsc --noEmit) 0 errors. `pnpm lint` 0 errors. `pnpm build` 3.85 MB (WXT total; du 3.7M). Coverage: `vitest run --coverage` — all files 78.81% stmts / 75.50% branch / 82.37% funcs / 78.81% lines, 754/754 tests green. Backups of all six files in /tmp/conductor-bak-20260912/.",
+    "committed: all conductor/*.md + conductor/refresh_state.json (conductor-only commit; the .beads/interactions.jsonl passive export was left uncommitted). NOT pushed (AGENTS.md conservative profile: local commit only, no push without explicit approval)."
   ],
   "codebaseHealth": {
-    "tests": 725,
-    "testsPassing": 725,
+    "tests": 754,
+    "testsPassing": 754,
     "testsFailing": 0,
-    "testFiles": 213,
-    "fullSuiteStatus": "Full default `pnpm test` run on 2026-09-11: 725 pass / 0 failures across 213 files in 62 s — clean, no load-timeout instability. Grew by 133 tests / 5 files since 2026-09-10.",
-    "buildSize": "3.84 MB",
-    "buildSizeNote": "Measured 2026-09-11 via `pnpm build` (WXT reported total 3.84 MB; `du -sh .output/chrome-mv3` = 3.8M). Was 3.82 MB on 2026-09-10.",
+    "testFiles": 214,
+    "fullSuiteStatus": "Full default `pnpm test` run on 2026-09-12: 754 pass / 0 failures across 214 files in 42 s — clean, no load-timeout instability. Grew by 29 tests / 1 file since 2026-09-11.",
+    "buildSize": "3.85 MB",
+    "buildSizeNote": "Measured 2026-09-12 via `pnpm build` (WXT reported total 3.85 MB; `du -sh .output/chrome-mv3` = 3.7M). Was 3.84 MB on 2026-09-11.",
     "coverage": {
-      "statements": "78.31%",
-      "branches": "75.76%",
-      "functions": "82.63%",
-      "lines": "78.31%",
-      "note": "Measured 2026-09-11 with `vitest run --coverage`. Now includes inject/** (added by MAX-8/Phase 8), which was previously excluded entirely and hid the MAIN-world Max capture + handler code. lib ~89%, inject ~82%."
+      "statements": "78.81%",
+      "branches": "75.50%",
+      "functions": "82.37%",
+      "lines": "78.81%",
+      "note": "Measured 2026-09-12 with `vitest run --coverage`. inject/** remains in coverage.include (added by MAX-8/Phase 8). Statements/lines +0.50 vs 2026-09-11; branches -0.26, functions -0.26 — the new capture/background/coordinator branches added uncovered edges faster than tests chased them, still well above the >=70% floor."
     },
     "coverageTarget": ">=70% statements (lowered from >=80% on 2026-09-11 by user decision; aligned in conductor/workflow.md, conductor/product.md, CONTRIBUTING.md)",
     "lintErrors": 0,
-    "lintErrorsDetail": "Clean — `pnpm lint` exit 0 re-run 2026-09-11. No regression this window (the 2026-09-10 no-invalid-void-type fix held).",
+    "lintErrorsDetail": "Clean — `pnpm lint` exit 0 re-run 2026-09-12. No regression this window.",
     "tscErrors": 0,
-    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) re-run 2026-09-11.",
+    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) re-run 2026-09-12.",
     "archivedTracks": 73,
     "activeTracks": 0,
-    "activeTracksDetail": "None. The 2026-09-10…09-11 window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/plans/2026-09-11-hbomax-subtitle-fixes.md + docs/hbomax-subtitle-risk-audit.md).",
+    "activeTracksDetail": "None. The 2026-09-11…09-12 window shipped untracked via superpowers specs/plans + Beads (docs/superpowers/plans/2026-09-11-subtitle-hardening-round2.md + docs/hbomax-subtitle-risk-audit.md §7).",
     "failingTests": [],
     "installedTooling": {
       "wxt": "0.20.22",
@@ -46,59 +45,47 @@
       "react": "19.2.5"
     },
     "shippedSinceLastRefresh": [
-      "fix(subtitles): make YouTube ASR re-align units + cache key consistent across flows (5c96cf3)",
-      "fix(subtitles): harden the HBO Max subtitle pipeline (MAX-1…MAX-42) (3580a6f)"
+      "fix(subtitles): close round-2 hardening findings across capture, coordinator, and retry (727f3a8)"
     ],
     "liveVerificationBacklog": [
       "7 HBO Max items from docs/hbomax-subtitle-risk-audit.md §8 still need a real Max session (DRM/MSE capture, player DOM, CDN behaviour). Unit tests cannot close these."
     ]
   },
   "beads": {
-    "open": [
-      "AnyLLMTranslate-gmj"
+    "open": [],
+    "inProgress": [],
+    "closedInWindow": [
+      "AnyLLMTranslate-0pl",
+      "AnyLLMTranslate-e3i",
+      "AnyLLMTranslate-jp7",
+      "AnyLLMTranslate-6rz",
+      "AnyLLMTranslate-738",
+      "AnyLLMTranslate-uli",
+      "AnyLLMTranslate-41q",
+      "AnyLLMTranslate-8qa",
+      "AnyLLMTranslate-pjt",
+      "AnyLLMTranslate-5k8",
+      "AnyLLMTranslate-b6g",
+      "AnyLLMTranslate-b6g.9",
+      "AnyLLMTranslate-9oy",
+      "AnyLLMTranslate-x9f"
     ],
-    "inProgress": [
+    "staleRecordsRemoved": [
+      "AnyLLMTranslate-gmj",
       "AnyLLMTranslate-3hj",
       "AnyLLMTranslate-s32"
     ],
-    "closedInWindow": [
-      "AnyLLMTranslate-lhh",
-      "AnyLLMTranslate-32w",
-      "AnyLLMTranslate-f8i",
-      "AnyLLMTranslate-3zw",
-      "AnyLLMTranslate-gyd",
-      "AnyLLMTranslate-04b",
-      "AnyLLMTranslate-vap",
-      "AnyLLMTranslate-5z2",
-      "AnyLLMTranslate-6ht",
-      "AnyLLMTranslate-vjw",
-      "AnyLLMTranslate-8nl",
-      "AnyLLMTranslate-dkd",
-      "AnyLLMTranslate-wxt",
-      "AnyLLMTranslate-0en",
-      "AnyLLMTranslate-vm0",
-      "AnyLLMTranslate-1z5",
-      "AnyLLMTranslate-47f",
-      "AnyLLMTranslate-6i3"
-    ],
-    "staleRecordsRemoved": [
-      "AnyLLMTranslate-b6g",
-      "AnyLLMTranslate-b6g.9",
-      "AnyLLMTranslate-5k8",
-      "AnyLLMTranslate-x9f"
-    ],
     "syncDirection": "skip",
-    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. The four records carried by the 2026-09-10 snapshot (b6g, b6g.9, 5k8, x9f) are absent from the live Dolt DB and were removed from this state file. The x9f item (asking for a 581 count in the suite history) is moot — the suite is now 725."
+    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. The tracker is now fully clean (279 closed / 0 open / 0 in progress). The three records the 2026-09-11 snapshot carried as live (gmj open; 3hj, s32 in progress) are absent from the Dolt DB entirely — purged rather than closed, so their final status is unverifiable; re-create them if their scope still matters. Conversely the four records that snapshot declared absent (b6g, b6g.9, 5k8, x9f) reappeared and were formally closed this window — the live DB view churns across syncs, so treat presence/absence claims as point-in-time."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
     "archivedTrackLearnings": 71,
     "changedTrackLearningsSincePreviousRefresh": 0,
     "newPatternsElevated": [
-      "YouTube ASR re-align — canonical units, or the cache silently never hits (from: 5c96cf3 / AnyLLMTranslate-lhh, -32w, -f8i, 2026-09-11)",
-      "Platform capture pipelines — failure modes and lifecycle (from: HBO Max hardening MAX-1…MAX-42, 3580a6f, 2026-09-11)"
+      "Subtitle pipeline — world parity, delta tiers, transient-only retry (from: 727f3a8 / AnyLLMTranslate-0pl, -e3i, -jp7, -6rz, -738, -uli, -41q, -8qa, -pjt, 2026-09-12)"
     ],
     "duplicatesMerged": [],
-    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. Both pattern sections were elevated directly from the commit window. The existing YouTube ASR AI re-align cache section and the older hbomax-* entries were left in place as history; the new sections are the forward-looking rules."
+    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. The pattern section was elevated directly from the commit window (also captured as bd memories: subtitle-handler-world-parity, subtitle-mse-delta-tier, subtitle-chunk-retry-classification). The 2026-09-11 sections were left in place; the new section is the forward-looking rule for subtitle platform work."
   }
 }

@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-09-11 all (coverage target CHANGED by user decision: ≥80% → ≥70% — repo measured 78.31% statements once inject/** entered the coverage include, so the old target was no longer the governing rule; CONTRIBUTING.md aligned in the same change. Branching strategy and Conventional-Commits still match the repo; CI/CD unchanged at pages.yml + bridge-image.yml; 725 pass / 0 fail across 213 files; tsc 0 / lint 0 re-run; build 3.84 MB re-measured) -->
+<!-- conductor-refresh: 2026-09-12 all (no methodology drift this window — ≥70% coverage target holds at 78.81% measured; the phase-verification live-check paragraph already points at audit §8 after the round-2 renumber; branching strategy and Conventional-Commits still match the repo; CI/CD unchanged at pages.yml + bridge-image.yml; 754 pass / 0 fail across 214 files; tsc 0 / lint 0 re-run; build 3.85 MB re-measured) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy

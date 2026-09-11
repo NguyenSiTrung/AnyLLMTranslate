@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-09-11 all (confirmed 73 archived / 0 active — unchanged since 2026-08-04; 725 pass / 0 fail across 213 files; tsc 0 / lint 0 re-run; build 3.84 MB; coverage 78.31 %; Beads 1 open / 2 in progress; still no track drift — the 2026-09-10…09-11 window shipped untracked via superpowers specs+plans and Beads: docs/superpowers/plans/2026-09-11-hbomax-subtitle-fixes.md + docs/hbomax-subtitle-risk-audit.md) -->
+<!-- conductor-refresh: 2026-09-12 all (confirmed 73 archived / 0 active — unchanged since 2026-08-04; 754 pass / 0 fail across 214 files; tsc 0 / lint 0 re-run; build 3.85 MB; coverage 78.81 %; Beads 0 open / 0 in progress — tracker fully clean at 279 closed; still no track drift — the 2026-09-11…09-12 window shipped untracked via superpowers specs+plans and Beads: docs/superpowers/plans/2026-09-11-subtitle-hardening-round2.md + docs/hbomax-subtitle-risk-audit.md §7) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
