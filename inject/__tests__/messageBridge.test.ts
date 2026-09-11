@@ -124,4 +124,51 @@ describe('messageBridge early coordinator queue', () => {
       'YOUTUBE_RESTORE_CAPTIONS',
     ]);
   });
+
+  it('queues Max manifest lifecycle and cue messages until COORDINATOR_READY', async () => {
+    const bridge = await import('@/inject/messageBridge');
+    bridge.__resetMessageBridgeForTests();
+    posted.length = 0;
+
+    bridge.sendMessage('SUBTITLE_MPD_PROCESSING', { status: 'started', platform: 'hbomax' });
+    bridge.sendMessage('SUBTITLE_MANIFEST_CUES', {
+      cues: [{ startTime: 1, endTime: 2, text: 'hello' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    expect(posted).toHaveLength(0);
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          channel: 'anyllm-translate',
+          type: 'COORDINATOR_READY',
+          requestId: 'ready-max',
+          payload: {},
+        },
+      }),
+    );
+
+    expect(posted.map((message) => (message as { type: string }).type)).toEqual([
+      'SUBTITLE_MPD_PROCESSING',
+      'SUBTITLE_MANIFEST_CUES',
+    ]);
+  });
+
+  it('delivers SUBTITLE_CAPTURE_RESET immediately, even before COORDINATOR_READY', async () => {
+    const bridge = await import('@/inject/messageBridge');
+    bridge.__resetMessageBridgeForTests();
+    posted.length = 0;
+
+    // ISOLATED → MAIN: the MAIN world drops capture state for the old title.
+    // It must never sit in the early queue (the queue only exists to protect
+    // MAIN → ISOLATED first-load captures).
+    bridge.sendMessage('SUBTITLE_CAPTURE_RESET', { platform: 'hbomax' });
+
+    expect(posted.map((message) => (message as { type: string }).type)).toEqual([
+      'SUBTITLE_CAPTURE_RESET',
+    ]);
+  });
 });

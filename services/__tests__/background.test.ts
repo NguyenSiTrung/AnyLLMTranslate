@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type * as CacheManagerModule from '@/services/cacheManager';
 import { getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
+import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import {
   handleMessage,
   __resetSemaphoreForTest,
@@ -8,6 +9,9 @@ import {
   __resetSettingsCacheForTest,
   __resetSubtitleSessionCounterForTest,
   __getActiveSessionCountForTest,
+  __resetSubtitlePermissionWarningsForTest,
+  subtitleFetchPermissionOrigin,
+  warnIfSubtitleHostPermissionMissing,
 } from '../background';
 
 // Mock chrome APIs
@@ -72,6 +76,82 @@ vi.mock('@/services/cacheManager', async (importOriginal) => {
     cacheTranslationByKey: vi.fn().mockResolvedValue(undefined),
   };
 });
+
+/**
+ * Fetch stub that holds every subtitle translation request open until the test
+ * releases it. Lets a test pin exactly how far a progressive session has
+ * advanced (each background loop keeps one chunk in flight).
+ */
+function installGatedSubtitleFetch(): {
+  fetchMock: ReturnType<typeof vi.fn>;
+  pendingCount: () => number;
+  releaseIndex: (index: number) => void;
+  releaseAll: () => void;
+  settle: (rounds?: number) => Promise<void>;
+} {
+  const pending: Array<() => void> = [];
+  const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+    return new Promise((resolve) => {
+      pending.push(() => {
+        // Echo a translation for every requested text id so the chunk parses
+        // cleanly (no retries → one fetch per chunk).
+        let entries: Record<string, string> = {};
+        try {
+          const body = JSON.parse(String(init?.body ?? '{}')) as {
+            messages?: Array<{ content?: string }>;
+          };
+          const userContent = body.messages?.[1]?.content ?? '';
+          const jsonStart = userContent.indexOf('{');
+          if (jsonStart >= 0) {
+            entries = JSON.parse(userContent.slice(jsonStart)) as Record<string, string>;
+          }
+        } catch {
+          entries = {};
+        }
+        const translations: Record<string, string> = {};
+        for (const [id, text] of Object.entries(entries)) {
+          translations[id] = `vi:${text}`;
+        }
+        resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            id: 'test',
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: JSON.stringify({ translations }),
+                },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          text: async () => '',
+        });
+      });
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return {
+    fetchMock,
+    pendingCount: () => pending.length,
+    releaseIndex: (index: number) => {
+      const [release] = pending.splice(index, 1);
+      release?.();
+    },
+    releaseAll: () => {
+      for (const release of pending.splice(0, pending.length)) release();
+    },
+    settle: async (rounds = 6) => {
+      for (let i = 0; i < rounds; i++) {
+        for (const release of pending.splice(0, pending.length)) release();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    },
+  };
+}
 
 // Mock fetch for translation service
 function mockFetch(content: string) {
@@ -240,6 +320,202 @@ describe('services/background', () => {
         messages: Array<{ role: string; content: string }>;
       };
       expect(body2.messages[0].content).not.toContain('Translation Glossary');
+    });
+  });
+
+  describe('handleMessage — FETCH_MANIFEST_SUBTITLES segment passthrough (MAX-10)', () => {
+    const MPD_URL = 'https://cf.asia.prd.media.max.com/a/manifest-params=x/1.mpd';
+    const SEG_1 = 'https://cf.asia.prd.media.max.com/a/t/t3/1.vtt';
+    const SEG_2 = 'https://cf.asia.prd.media.max.com/a/t/t3/2.vtt';
+    const SEG_3 = 'https://cf.asia.prd.media.max.com/a/t/t3/3.vtt';
+    const vtt = (text: string) => `WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n${text}\n`;
+    const bodiesByUrl = new Map<string, string>([
+      [SEG_1, vtt('one')],
+      [SEG_2, vtt('two')],
+      [SEG_3, vtt('three')],
+    ]);
+
+    function mockSegmentFetch(): ReturnType<typeof vi.fn> {
+      const fetchMock = vi.fn(async (url: string) => {
+        const body = bodiesByUrl.get(url);
+        if (body === undefined) {
+          // Unknown segment → 404 terminates a numbered-template walk.
+          return {
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+            text: async () => '',
+            headers: { get: () => '' },
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => body,
+          headers: { get: () => 'text/vtt' },
+        };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    }
+
+    it('uses provided segmentUrls and never fetches the MPD', async () => {
+      const fetchMock = mockSegmentFetch();
+
+      const result = (await handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentUrls: [SEG_1, SEG_2, SEG_3],
+          language: 'en',
+        },
+        { tab: { id: 3 } } as chrome.runtime.MessageSender,
+      )) as { success: boolean; cues?: Array<{ text: string }>; language?: string };
+
+      expect(result.success).toBe(true);
+      expect(result.language).toBe('en');
+      expect(result.cues?.map((cue) => cue.text)).toEqual(['one', 'two', 'three']);
+      // Re-parsing the manifest would return only the first Period's segments.
+      expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([SEG_1, SEG_2, SEG_3]);
+    });
+
+    it('uses a provided segmentFetch template and never fetches the MPD', async () => {
+      const fetchMock = mockSegmentFetch();
+      bodiesByUrl.set('https://cf.asia.prd.media.max.com/a/t/t3/4.vtt', vtt('four'));
+
+      const result = (await handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentFetch: {
+            media: 'https://cf.asia.prd.media.max.com/a/t/t3/$Number$.vtt',
+            startNumber: 1,
+            representationId: 't3',
+            bandwidth: '1000',
+            mpdUrl: MPD_URL,
+          },
+          language: 'en',
+        },
+        { tab: { id: 3 } } as chrome.runtime.MessageSender,
+      )) as { success: boolean; cues?: Array<{ text: string }> };
+
+      expect(result.success).toBe(true);
+      expect(result.cues?.map((cue) => cue.text)).toEqual(['one', 'two', 'three', 'four']);
+      expect(fetchMock.mock.calls.map((call) => call[0])).not.toContain(MPD_URL);
+    });
+
+    it('warns when a progressive template fetch hits the segment safety cap (MAX-41)', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => vtt('looping'),
+        headers: { get: () => 'text/vtt' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = (await handleMessage(
+        {
+          action: 'FETCH_MANIFEST_SUBTITLES',
+          playlistUrl: MPD_URL,
+          segmentFetch: {
+            media: 'https://cf.asia.prd.media.max.com/a/t/t3/$Number$.vtt',
+            startNumber: 1,
+            representationId: 't3',
+            bandwidth: '1000',
+            mpdUrl: MPD_URL,
+          },
+          language: 'en',
+        },
+        { tab: { id: 3 } } as chrome.runtime.MessageSender,
+      )) as { success: boolean; cues?: Array<{ text: string }> };
+
+      expect(result.success).toBe(true);
+      // 500 is MAX_PROGRESSIVE_DASH_SEGMENTS — the walk stopped at the cap, so
+      // later subtitles are missing and the user must be able to see why.
+      expect(fetchMock).toHaveBeenCalledTimes(500);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('safety cap'),
+        expect.objectContaining({ segmentCount: 500, cap: 500 }),
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('handleMessage — translateSubtitle session ownership (MAX-4)', () => {
+    it('cancels every progressive session owned by the tab, not just the newest', async () => {
+      // Unlimited key concurrency + no throttle so both sessions can have a
+      // chunk in flight at the same time (defaults are limit 1 / 500ms, which
+      // would serialize them behind the gate and hide the leak).
+      mockStorage['anyllm-translate-settings'] = {
+        // Skip the safe-throttle migration: an all-zero key fingerprint would
+        // be rewritten to concurrencyLimit 1 / interval 500ms.
+        safeKeyThrottleMigrated: true,
+        providers: [
+          {
+            id: 'p1',
+            displayName: 'P1',
+            baseUrl: 'https://pool/v1',
+            model: 'm',
+            requiresApiKey: true,
+            temperature: 0.3,
+            maxTokens: 4096,
+            enabled: true,
+            keys: [
+              { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+            ],
+          },
+        ],
+      };
+      __resetSettingsCacheForTest();
+      __resetTranslationServiceForTest();
+
+      const gate = installGatedSubtitleFetch();
+      // Two background chunks per session: enough leftover work that a
+      // superseded loop would visibly keep translating after the cancel.
+      const cues = Array.from({ length: SUBTITLE_CHUNK_SIZE * 2 + 1 }, (_, i) => ({
+        startTime: i * 2,
+        endTime: i * 2 + 2,
+        text: `line ${i}`,
+      }));
+      const msg = {
+        action: 'translateSubtitle' as const,
+        hostname: 'example.com',
+        cues,
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        skipFilmPreScan: true,
+      };
+      const sender = { tab: { id: 7 } } as chrome.runtime.MessageSender;
+
+      // Session A: first chunk resolves inline (the only pending request at
+      // that point), leaving its two background chunks queued.
+      const pendingA = handleMessage(msg, sender);
+      await vi.waitFor(() => expect(gate.pendingCount()).toBe(1));
+      gate.releaseIndex(0);
+      await pendingA;
+      await vi.waitFor(() => expect(gate.pendingCount()).toBe(1)); // A's chunk 1
+
+      // Session B for the same tab supersedes A (e.g. a re-activated track):
+      // pending is now [A's chunk 1, B's chunk 0].
+      const pendingB = handleMessage(msg, sender);
+      await vi.waitFor(() => expect(gate.pendingCount()).toBe(2));
+      gate.releaseIndex(1); // B's first chunk only; A's stays gated
+      await pendingB;
+      // B's loop now holds its own chunk; A's loop still holds its first.
+      await vi.waitFor(() => expect(gate.pendingCount()).toBe(2));
+
+      const callsAtCancel = gate.fetchMock.mock.calls.length;
+      await handleMessage({ action: 'CANCEL_SUBTITLE_SESSION' }, sender);
+
+      // Release the two in-flight chunks: no loop may schedule further work.
+      await gate.settle();
+
+      expect(gate.fetchMock.mock.calls.length).toBe(callsAtCancel);
+      expect(gate.pendingCount()).toBe(0);
+      expect(__getActiveSessionCountForTest()).toBe(0);
     });
   });
 
@@ -948,3 +1224,84 @@ describe('services/background — OPEN_OPTIONS handler', () => {
   });
 });
 
+
+// ============================================================================
+// Phase 7 — host permission alignment (MAX-39)
+// ============================================================================
+
+describe('services/background — subtitle host permission pre-flight (MAX-39)', () => {
+  const MAX_SEGMENT_URL = 'https://cf.asia.prd.media.max.com/a/t/t3/1.vtt';
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let containsMock: ReturnType<typeof vi.fn>;
+  let previousPermissions: unknown;
+
+  beforeEach(() => {
+    __resetSubtitlePermissionWarningsForTest();
+    containsMock = vi.fn().mockResolvedValue(false);
+    previousPermissions = (chrome as unknown as { permissions?: unknown }).permissions;
+    (chrome as unknown as { permissions: unknown }).permissions = { contains: containsMock };
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('WEBVTT\n\nx', {
+      status: 200,
+      headers: { 'Content-Type': 'text/vtt' },
+    })));
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    (chrome as unknown as { permissions?: unknown }).permissions = previousPermissions;
+    vi.unstubAllGlobals();
+  });
+
+  it('derives the minimal match pattern for a subtitle URL host', () => {
+    expect(subtitleFetchPermissionOrigin(MAX_SEGMENT_URL))
+      .toBe('*://cf.asia.prd.media.max.com/*');
+    expect(subtitleFetchPermissionOrigin('https://www.hbomax.com/thing?x=1'))
+      .toBe('*://www.hbomax.com/*');
+    expect(subtitleFetchPermissionOrigin('not a url')).toBeNull();
+    expect(subtitleFetchPermissionOrigin('')).toBeNull();
+  });
+
+  it('warns once per origin when an allow-listed host has no host permission', async () => {
+    warnIfSubtitleHostPermissionMissing(MAX_SEGMENT_URL);
+
+    await vi.waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('host_permissions'),
+        expect.objectContaining({ origin: '*://cf.asia.prd.media.max.com/*' }),
+      );
+    });
+    expect(containsMock).toHaveBeenCalledWith({
+      origins: ['*://cf.asia.prd.media.max.com/*'],
+    });
+
+    // A second segment on the same host must not warn (or re-query) again.
+    warnIfSubtitleHostPermissionMissing('https://cf.asia.prd.media.max.com/a/t/t3/2.vtt');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(containsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays silent when the host permission is granted', async () => {
+    containsMock.mockResolvedValue(true);
+
+    warnIfSubtitleHostPermissionMissing(MAX_SEGMENT_URL);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('pre-flights the permission before fetching an allow-listed subtitle URL', async () => {
+    const result = await handleMessage(
+      { action: 'FETCH_SUBTITLE', url: MAX_SEGMENT_URL },
+      {} as chrome.runtime.MessageSender,
+    );
+
+    expect(result).toMatchObject({ success: true });
+    await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1));
+    expect(containsMock).toHaveBeenCalledWith({
+      origins: ['*://cf.asia.prd.media.max.com/*'],
+    });
+  });
+});

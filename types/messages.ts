@@ -4,6 +4,7 @@
  */
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
+import type { SubtitleSegmentFetchTemplate } from './subtitle';
 import type { PageContext } from './config';
 import type { SubtitleProfile, ProfileKnobs } from '@/lib/subtitleProfiles';
 import type { DomOutline, SuggestSiteRuleDraft } from '@/lib/siteRuleSuggest/types';
@@ -178,6 +179,12 @@ export interface FetchManifestSubtitlesMessage {
   action: 'FETCH_MANIFEST_SUBTITLES';
   playlistUrl: string;
   preferredLanguage?: string;
+  /** Concrete segment URLs for the selected track (multi-Period DASH assembly). */
+  segmentUrls?: string[];
+  /** Numbered-segment template when the MPD exposes no concrete URLs. */
+  segmentFetch?: SubtitleSegmentFetchTemplate;
+  /** Language of the selected track. */
+  language?: string;
 }
 
 /** Translate selection request from content script → background */

@@ -67,7 +67,7 @@ import { getLanguageName } from '@/lib/languages';
 import { resolveTtsStack } from '@/lib/tts/resolveTtsBackend';
 import { fetchProviderSpeech } from '@/lib/tts/providerTts';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
-import type { SubtitleCue } from '@/types/subtitle';
+import type { SubtitleCue, SubtitleSegmentFetchTemplate } from '@/types/subtitle';
 import type { ExtensionSettings, NamedGlossaryList } from '@/types/config';
 import { parseHlsSubtitlePlaylist, parseDashManifest, parseHlsManifest } from '@/lib/manifestParser';
 import { concatVttSegments } from '@/lib/vttSegmentConcat';
@@ -239,7 +239,45 @@ interface TranslationSession {
   cancelled: boolean;
 }
 const activeSessions = new Map<number, TranslationSession>();
+
+/**
+ * MAX-4: every live progressive session owned by a tab, not just the newest.
+ * A re-activated track (or a duplicate request) replaces `activeSessions`'
+ * entry while the previous session's chunk loop keeps translating — burning
+ * LLM calls and holding key slots the current session needs. Cancellation must
+ * therefore walk the whole set.
+ */
+const tabSessions = new Map<number, Set<TranslationSession>>();
+
+/**
+ * Cancellation generations per tab. A request registers its session only after
+ * its first chunk returns; a cancel arriving while that chunk is in flight
+ * bumps the generation so the not-yet-started loop is abandoned instead of
+ * translating its queue.
+ */
+const sessionGenerations = new Map<number, number>();
+
 let subtitleSessionCounter = 0;
+
+/** Track a progressive session as owned by its tab. */
+function registerTabSession(tabId: number, session: TranslationSession): void {
+  const owned = tabSessions.get(tabId) ?? new Set<TranslationSession>();
+  owned.add(session);
+  tabSessions.set(tabId, owned);
+}
+
+/** Drop a finished/cancelled session from its tab's ownership set. */
+function unregisterTabSession(tabId: number, session: TranslationSession): void {
+  const owned = tabSessions.get(tabId);
+  if (!owned) return;
+  owned.delete(session);
+  if (owned.size === 0) tabSessions.delete(tabId);
+}
+
+/** Current cancellation generation for a tab (0 when never cancelled). */
+function sessionGenerationFor(tabId: number): number {
+  return sessionGenerations.get(tabId) ?? 0;
+}
 
 /**
  * In-flight AI re-align runs keyed by origin tab. The Stop button (and any
@@ -263,7 +301,12 @@ function ensureKeepaliveAlarm(): void {
 
 /** Clear keep-alive alarm when no sessions (subtitle OR PDF) remain */
 function clearKeepaliveAlarm(): void {
-  if (activeSessions.size === 0 && pdfSessions.size === 0 && keepaliveAlarmActive) {
+  if (
+    activeSessions.size === 0 &&
+    tabSessions.size === 0 &&
+    pdfSessions.size === 0 &&
+    keepaliveAlarmActive
+  ) {
     keepaliveAlarmActive = false;
     chrome.alarms.clear(KEEPALIVE_ALARM);
   }
@@ -275,15 +318,24 @@ function clearKeepaliveAlarm(): void {
  * Drains the queue so the background loop exits, removes the session, and
  * clears the keep-alive alarm when no sessions remain. Safe to call when no
  * session exists. Called on restore, explicit cancel, and tab removal.
+ *
+ * MAX-4: cancels EVERY session owned by the tab. Superseded sessions are no
+ * longer reachable through `activeSessions` but their loops still translate.
  */
 function stopSubtitleSession(tabId: number): void {
   asrRealignControllers.get(tabId)?.abort();
-  const session = activeSessions.get(tabId);
-  if (session) {
-    session.cancelled = true;
-    session.queue.length = 0; // running loop exits on its next iteration
-    activeSessions.delete(tabId);
+  // Invalidate any request whose first chunk is still in flight: its loop must
+  // not start once that chunk resolves.
+  sessionGenerations.set(tabId, sessionGenerationFor(tabId) + 1);
+  const owned = tabSessions.get(tabId);
+  if (owned) {
+    for (const session of owned) {
+      session.cancelled = true;
+      session.queue.length = 0; // running loop exits on its next iteration
+    }
+    tabSessions.delete(tabId);
   }
+  activeSessions.delete(tabId);
   clearKeepaliveAlarm();
 }
 
@@ -1066,6 +1118,9 @@ async function handleTranslateSubtitle(
     const service = await initService();
     const { cues, sourceLanguage, targetLanguage } = message;
     const tabId = sender?.tab?.id;
+    // MAX-4: snapshot the tab's cancellation generation so a cancel arriving
+    // during chunk 0 can stop this request's queue from starting.
+    const requestGeneration = tabId ? sessionGenerationFor(tabId) : 0;
 
     const subtitleSettings = await loadSettings();
     const host = normalizeSubtitleSiteHost(message.hostname ?? hostFromSender(sender) ?? '');
@@ -1392,10 +1447,19 @@ async function handleTranslateSubtitle(
         cancelled: false,
       };
 
+      // MAX-4: this request's chunk 0 already completed, so a cancel that
+      // arrived while it was in flight bumped the generation — surrender the
+      // queue instead of spending the calls.
+      if (sessionGenerationFor(tabId) !== requestGeneration) {
+        return { success: true, cues: translatedCues, sessionId };
+      }
+
       activeSessions.set(tabId, session);
+      registerTabSession(tabId, session);
       ensureKeepaliveAlarm();
 
       (async () => {
+        try {
          while (!session.cancelled && session.queue.length > 0) {
             const i = session.queue.shift();
             if (i === undefined || session.cancelled) break;
@@ -1438,8 +1502,13 @@ async function handleTranslateSubtitle(
                } catch { /* tab gone — nothing to do */ }
             }
          }
-         activeSessions.delete(tabId);
-         clearKeepaliveAlarm();
+        } finally {
+          // Only clear the "current session" pointer when it still points at
+          // this session — a newer request for the same tab installs its own.
+          if (activeSessions.get(tabId) === session) activeSessions.delete(tabId);
+          unregisterTabSession(tabId, session);
+          clearKeepaliveAlarm();
+        }
       })();
       }
 
@@ -1539,6 +1608,58 @@ function isPrivateHost(host: string): boolean {
   return false;
 }
 
+/**
+ * Minimal match pattern (`*://host/*`) covering a subtitle URL's host, or null
+ * when the URL cannot be parsed. Used to pre-flight `host_permissions`: the
+ * allow-list deliberately accepts CDN edges (Akamai/Fastly, hbo.com,
+ * delivery.mp.microsoft.com) that the manifest may or may not grant, and a
+ * missing grant surfaces only as an opaque CORS failure (MAX-39).
+ */
+export function subtitleFetchPermissionOrigin(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    if (!parsed.hostname) return null;
+    return `*://${parsed.hostname}/*`;
+  } catch {
+    return null;
+  }
+}
+
+/** Origins already checked, so each missing permission warns once per session. */
+const warnedSubtitlePermissionOrigins = new Set<string>();
+
+/**
+ * Warn (once per origin) when a subtitle host is allow-listed for the CORS
+ * bypass but not granted by `host_permissions`. Fire-and-forget: the fetch is
+ * still attempted, this only turns a silent CORS failure into a diagnosable
+ * warning. No-op when the permissions API is unavailable (tests, older builds).
+ */
+export function warnIfSubtitleHostPermissionMissing(url: string): void {
+  const origin = subtitleFetchPermissionOrigin(url);
+  if (!origin || warnedSubtitlePermissionOrigins.has(origin)) return;
+
+  // Chrome returns a promise when no callback is given; the declared typings
+  // still require the callback form, so narrow locally.
+  type PermissionChecker = {
+    contains?: (permissions: { origins?: string[] }) => boolean | Promise<boolean>;
+  };
+  const permissions = chrome.permissions as unknown as PermissionChecker | undefined;
+  const contains = permissions?.contains;
+  if (typeof contains !== 'function') return;
+
+  warnedSubtitlePermissionOrigins.add(origin);
+  Promise.resolve(contains.call(permissions, { origins: [origin] }))
+    .then((granted) => {
+      if (granted) return;
+      console.warn(
+        'AnyLLMTranslate: subtitle host is in the fetch allow-list but missing from host_permissions',
+        { url, origin },
+      );
+    })
+    .catch(() => { /* permissions API unavailable — nothing to warn about */ });
+}
+
 /** Handle fetchSubtitle message (CORS bypass for subtitle fetch) */
 async function handleFetchSubtitle(
   message: FetchSubtitleMessage,
@@ -1546,6 +1667,7 @@ async function handleFetchSubtitle(
   if (!isAllowedSubtitleUrl(message.url)) {
     return { success: false, error: 'URL not in subtitle allow-list' };
   }
+  warnIfSubtitleHostPermissionMissing(message.url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
@@ -1580,13 +1702,51 @@ async function handleFetchSubtitle(
 
 /** Handle FETCH_MANIFEST_SUBTITLES — fetch a subtitle playlist + segments, assemble into cues */
 async function handleFetchManifestSubtitles(
-  message: { playlistUrl: string; preferredLanguage?: string },
+  message: {
+    playlistUrl: string;
+    preferredLanguage?: string;
+    segmentUrls?: string[];
+    segmentFetch?: SubtitleSegmentFetchTemplate;
+    language?: string;
+  },
 ): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; language?: string }> {
+  warnIfSubtitleHostPermissionMissing(message.playlistUrl);
+  if (message.segmentUrls) {
+    for (const segmentUrl of message.segmentUrls) {
+      warnIfSubtitleHostPermissionMissing(segmentUrl);
+    }
+  }
   if (!isAllowedSubtitleUrl(message.playlistUrl)) {
     return { success: false, error: 'URL not in subtitle allow-list' };
   }
 
   try {
+    // MAX-10/11: the coordinator already resolved this exact track's segments
+    // from the MPD (concatenated across Periods). Re-parsing the manifest here
+    // would pick only the first Period's subtitle track and return a truncated
+    // episode, so the provided metadata always wins.
+    if (message.segmentUrls?.length) {
+      const segmentResult = await fetchDashSegmentBodies(message.segmentUrls);
+      if (!segmentResult.success) {
+        return { success: false, error: segmentResult.error };
+      }
+      const combined = concatVttSegments(segmentResult.bodies);
+      const cues = parseSubtitleContent(combined, 'text/vtt', message.segmentUrls[0]);
+      return { success: true, cues, language: message.language ?? '' };
+    }
+
+    if (message.segmentFetch) {
+      const segmentResult = await fetchProgressiveDashSegments(message.segmentFetch);
+      if (!segmentResult.success) {
+        return { success: false, error: segmentResult.error };
+      }
+      const body = segmentResult.bodies.length > 1
+        ? concatVttSegments(segmentResult.bodies)
+        : segmentResult.bodies[0];
+      const cues = parseSubtitleContent(body, 'text/vtt', message.playlistUrl);
+      return { success: true, cues, language: message.language ?? '' };
+    }
+
     const lowerUrl = message.playlistUrl.toLowerCase().split('?')[0];
     const isHls = lowerUrl.endsWith('.m3u8');
     const isDash = lowerUrl.endsWith('.mpd') || detectMpdRequests(message.playlistUrl);
@@ -1726,19 +1886,25 @@ async function fetchProgressiveDashSegments(
   template: NonNullable<ReturnType<typeof parseDashManifest>[number]['segmentFetch']>,
 ): Promise<{ success: true; bodies: string[] } | { success: false; error: string }> {
   const bodies: string[] = [];
-  for (
-    let number = template.startNumber;
-    number < template.startNumber + MAX_PROGRESSIVE_DASH_SEGMENTS;
-    number++
-  ) {
+  const capStart = template.startNumber;
+  const capEnd = capStart + MAX_PROGRESSIVE_DASH_SEGMENTS;
+  // MAX-41: a template with no resolvable count walks numbered segments until a
+  // 404. Stopping at the cap is silent data loss on long titles, so the walk
+  // reports when it ended there instead of at the end of the track.
+  let reachedCap = true;
+  for (let number = capStart; number < capEnd; number++) {
     const url = resolveSegmentFetchUrl(template, number);
-    if (!url) break;
+    if (!url) {
+      reachedCap = false;
+      break;
+    }
     if (!isAllowedSubtitleUrl(url)) {
       return { success: false, error: 'Segment URL not in allow-list' };
     }
     const response = await fetchWithTimeout(url);
     if (!response.ok) {
       if (bodies.length > 0 && (response.status === 404 || response.status === 410)) {
+        reachedCap = false;
         break;
       }
       return { success: false, error: `Segment fetch failed: HTTP ${response.status}` };
@@ -1746,10 +1912,22 @@ async function fetchProgressiveDashSegments(
     const body = await response.text();
     const contentType = response.headers.get('Content-Type') ?? '';
     if (isManifestResponse(body, contentType)) {
+      reachedCap = false;
       if (bodies.length > 0) break;
       return { success: false, error: 'Segment response is a DASH manifest, not subtitle content' };
     }
     bodies.push(body);
+  }
+  if (reachedCap) {
+    console.warn(
+      'AnyLLMTranslate: progressive DASH segment fetch stopped at the safety cap — later subtitles are missing',
+      {
+        media: template.media,
+        startNumber: capStart,
+        segmentCount: bodies.length,
+        cap: MAX_PROGRESSIVE_DASH_SEGMENTS,
+      },
+    );
   }
   if (bodies.length === 0) {
     return { success: false, error: 'No DASH subtitle segments fetched' };
@@ -2923,6 +3101,11 @@ function __getSubtitleSessionCounterForTest(): number {
   return subtitleSessionCounter;
 }
 
+/** Forget the origins warned about in the host-permission pre-flight. Exported for tests. */
+function __resetSubtitlePermissionWarningsForTest(): void {
+  warnedSubtitlePermissionOrigins.clear();
+}
+
 /** Reset subtitle session counter to 0 and clear all active sessions. Exported for tests. */
 function __resetSubtitleSessionCounterForTest(): void {
   subtitleSessionCounter = 0;
@@ -2930,7 +3113,17 @@ function __resetSubtitleSessionCounterForTest(): void {
     session.cancelled = true;
     session.queue.length = 0;
   }
+  // MAX-4: sessions reachable only through the per-tab ownership set (a
+  // superseded session is absent from activeSessions) must be cancelled too.
+  for (const owned of tabSessions.values()) {
+    for (const session of owned) {
+      session.cancelled = true;
+      session.queue.length = 0;
+    }
+  }
   activeSessions.clear();
+  tabSessions.clear();
+  sessionGenerations.clear();
   for (const controller of asrRealignControllers.values()) {
     controller.abort();
   }
@@ -2965,6 +3158,7 @@ export {
   __getActiveSessionCountForTest,
   __getSubtitleSessionCounterForTest,
   __resetSubtitleSessionCounterForTest,
+  __resetSubtitlePermissionWarningsForTest,
   __resetTranslationServiceForTest,
   __resetSettingsCacheForTest,
   __resetPdfSessionsForTest,

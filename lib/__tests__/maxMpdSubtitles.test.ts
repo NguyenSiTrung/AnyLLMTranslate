@@ -53,6 +53,25 @@ describe('URL classification', () => {
       false,
     );
     expect(detectMpdRequests('')).toBe(false);
+    // Nested extensionless manifest paths (a CDN version prefix) are still MPDs…
+    expect(
+      detectMpdRequests(
+        'https://akm.asia.prd.media.max.com/v1/fadb6e8d-4efa-49a7?manifest-params=TOKEN&rtype=s&market=apac',
+      ),
+    ).toBe(true);
+    // …while deeper, segment-shaped paths are not.
+    expect(
+      detectMpdRequests(
+        'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/8?manifest-params=TOKEN',
+      ),
+    ).toBe(false);
+    expect(
+      detectMpdRequests(
+        'https://cf.asia.prd.media.max.com/a/b/c/asset?manifest-params=TOKEN',
+      ),
+    ).toBe(false);
+    // A non-Max host stays unrecognised even with the token param.
+    expect(detectMpdRequests('https://cdn.example.com/v1/asset?manifest-params=TOKEN')).toBe(false);
     expect(
       detectMpdRequests(
         'https://akm.asia.prd.media.max.com/fadb6e8d-4efa-49a7/t/2_ada795/t0/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
@@ -423,6 +442,182 @@ describe('extractSubtitleTracks — CDN auth-token preservation', () => {
   });
 });
 
+describe('extractSubtitleTracks — BaseURL hierarchy (MAX-22/23)', () => {
+  it('applies an MPD-root BaseURL to nested SegmentTemplate media', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <BaseURL>v2/</BaseURL>
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="t/t6/$Number$.vtt" startNumber="1">
+          <SegmentTimeline><S t="0" d="4000" r="2"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, MPD_URL), MPD_URL);
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].segmentUrls).toEqual([
+      'https://cf.asia.prd.media.max.com/fadb6e8d/v2/t/t6/1.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/v2/t/t6/2.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/v2/t/t6/3.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+    ]);
+  });
+
+  it('resolves a relative AdaptationSet BaseURL against the Period BaseURL', () => {
+    const multiPeriodUrl =
+      'https://gcp.asia.prd.media.max.com/fadb6e8d-4efa-49e9-90b1-f2d88de5eb5b?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam';
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period id="0">
+    <BaseURL>https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/</BaseURL>
+    <AdaptationSet lang="en-US" contentType="text">
+      <BaseURL>subs/</BaseURL>
+      <Representation id="t1" mimeType="text/vtt">
+        <SegmentTemplate startNumber="1" media="t1/$Number$.vtt">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, multiPeriodUrl), multiPeriodUrl);
+
+    expect(tracks).toHaveLength(1);
+    // The Period host wins, and the relative AdaptationSet BaseURL must be
+    // folded onto it instead of being dropped.
+    expect(tracks[0].url).toBe(
+      'https://gcp.apac-free.prd.media.max.com/apac/34babf11-3f73-426c-ae18-34b6bd57adbe/subs/t1/1.vtt?manifest-params=TOKEN&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+  });
+
+  it('folds a directory Representation BaseURL into the SegmentTemplate instead of fetching it', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <BaseURL>t/t6/</BaseURL>
+        <SegmentTemplate media="$Number$.vtt" startNumber="1">
+          <SegmentTimeline><S t="0" d="4000" r="2"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, MPD_URL), MPD_URL);
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].segmentUrls).toEqual([
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/1.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/2.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/3.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+    ]);
+    // The directory itself must never be offered as a segment.
+    expect(tracks[0].url).not.toMatch(/\/t\/t6\/$/);
+  });
+});
+
+describe('extractSubtitleTracks — template formats and per-Period counts (MAX-24)', () => {
+  it('builds $Time$ segment URLs from the SegmentTimeline (explicit and accumulated t)', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t3" mimeType="text/vtt">
+        <SegmentTemplate timescale="1000" media="t/t3/$Time$.vtt" startNumber="1">
+          <SegmentTimeline>
+            <S t="0" d="4000" r="1"/>
+            <S d="4000"/>
+          </SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, MPD_URL), MPD_URL);
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].segmentUrls).toEqual([
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t3/0.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t3/4000.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t3/8000.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+    ]);
+    expect(tracks[0].segmentOffsetsMs).toEqual([0, 4000, 8000]);
+  });
+
+  it('honours the $Number%0Nd$ width format', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" mimeType="text/vtt">
+        <SegmentTemplate media="t/t6/$Number%05d$.vtt" startNumber="8">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, MPD_URL), MPD_URL);
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].url).toBe(
+      'https://cf.asia.prd.media.max.com/fadb6e8d/t/t6/00008.vtt?manifest-params=CAQSATEA&rtype=s&market=apac&x-wbd-tenant=beam',
+    );
+
+    const bandwidthXml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period>
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t6" bandwidth="1200" mimeType="text/vtt">
+        <SegmentTemplate media="t/$RepresentationID$/bw$Bandwidth%06d$/$Number$.vtt" startNumber="1">
+          <SegmentTimeline><S t="0" d="29960"/></SegmentTimeline>
+        </SegmentTemplate>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+    const bandwidthTrack = extractSubtitleTracks(parseTestMpd(bandwidthXml, MPD_URL), MPD_URL)[0];
+    expect(bandwidthTrack.url).toContain('/t/t6/bw001200/1.vtt');
+  });
+
+  it('counts segments from the enclosing Period duration, not the first Period', () => {
+    const xml = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
+  <Period id="0" duration="PT30S">
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t1" mimeType="text/vtt">
+        <SegmentTemplate media="t/t1/$Number$.vtt" startNumber="1" duration="4000" timescale="1000"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+  <Period id="1" start="PT30S" duration="PT60S">
+    <AdaptationSet contentType="text" lang="en-US">
+      <Representation id="t2" mimeType="text/vtt">
+        <SegmentTemplate media="t/t2/$Number$.vtt" startNumber="1" duration="4000" timescale="1000"/>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+    const tracks = extractSubtitleTracks(parseTestMpd(xml, MPD_URL), MPD_URL);
+
+    const first = tracks.find((track) => track.url.includes('/t/t1/'));
+    const second = tracks.find((track) => track.url.includes('/t/t2/'));
+    expect(first?.segmentUrls).toHaveLength(8); // ceil(30s / 4s)
+    expect(second?.segmentUrls).toHaveLength(15); // ceil(60s / 4s)
+  });
+});
+
 describe('isManifestResponse / mergeManifestQueryParams', () => {
   it('detects MPD by body/content-type; merges params onto bare Max segments not external CDNs', () => {
     expect(
@@ -455,5 +650,15 @@ describe('isManifestResponse / mergeManifestQueryParams', () => {
     const external = new URL('https://other.cdn.com/subs_en.ttml?token=xyz');
     mergeManifestQueryParams(external, mpdUrl);
     expect(external.search).toBe('?token=xyz');
+
+    // Any Max-owned host needs the token, not only *.prd.media.max.com — the
+    // player also streams from hbomax.com and max.com edges.
+    const hbomaxSegment = new URL('https://cf.hbomax.com/asset/t/t3/8.vtt');
+    mergeManifestQueryParams(hbomaxSegment, mpdUrl);
+    expect(hbomaxSegment.searchParams.get('manifest-params')).toBe('TOKEN');
+
+    const maxSegment = new URL('https://edge.max.com/asset/t/t3/9.vtt');
+    mergeManifestQueryParams(maxSegment, mpdUrl);
+    expect(maxSegment.searchParams.get('manifest-params')).toBe('TOKEN');
   });
 });

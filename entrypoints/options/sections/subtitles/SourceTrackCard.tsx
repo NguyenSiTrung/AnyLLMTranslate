@@ -12,7 +12,10 @@ import { LANGUAGES } from '@/lib/languages';
 import type { SubtitleCardBaseProps } from './types';
 
 export function SourceTrackCard({ settings, disabled, onUpdate }: SubtitleCardBaseProps) {
-  const preferredLanguages = LANGUAGES.filter((l) => l.code !== 'auto');
+  // MAX-36: `auto` is offered on purpose — it means "translate whichever track
+  // the platform activated". Without it, a track whose language differs from
+  // the fixed preference was silently skipped with no way to opt in.
+  const preferredLanguages = LANGUAGES;
 
   return (
     <Card
@@ -36,7 +39,10 @@ export function SourceTrackCard({ settings, disabled, onUpdate }: SubtitleCardBa
               disabled={disabled}
               options={preferredLanguages.map((lang) => ({
                 value: lang.code,
-                label: `${lang.nativeName} (${lang.name})`,
+                label:
+                  lang.code === 'auto'
+                    ? 'Auto (match the active track)'
+                    : `${lang.nativeName} (${lang.name})`,
               }))}
             />
           </FieldGroup>

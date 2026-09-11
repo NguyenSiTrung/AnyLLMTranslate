@@ -15,6 +15,38 @@ const originalFetch = nativeFetch;
 
 export { nativeFetch };
 
+/**
+ * Statuses that must not carry a body. Replacing the body of such a response
+ * makes `new Response(...)` throw (RangeError), which inside the message
+ * listener leaves the page's fetch promise permanently unsettled (MAX-26).
+ */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
+/**
+ * Headers describing the ORIGINAL body's bytes. They are invalid once the body
+ * is replaced by the translated VTT: a stale `content-length`/`content-range`
+ * makes players truncate or reject the payload, and `content-encoding`
+ * describes an encoding the new body no longer has (MAX-26). The body type
+ * (`content-type`) is preserved.
+ */
+const BODY_DESCRIBING_HEADERS = new Set([
+  'content-length',
+  'content-range',
+  'content-encoding',
+  'transfer-encoding',
+  'content-md5',
+]);
+
+/** Copy the original headers minus the ones that describe the replaced body. */
+function translatedResponseHeaders(original: Headers): Headers {
+  const headers = new Headers();
+  original.forEach((value, key) => {
+    if (BODY_DESCRIBING_HEADERS.has(key.toLowerCase())) return;
+    headers.set(key, value);
+  });
+  return headers;
+}
+
 export class FetchInterceptor {
   private enabled = false;
   /** Configurable translation timeout in ms (default 30s). */
@@ -65,6 +97,12 @@ export class FetchInterceptor {
         platform: string,
         originalLanguage: string,
       ): Promise<Response> => {
+        // A null-body status has nothing to translate and cannot hold the
+        // translated body — hand the page its original response untouched.
+        if (NULL_BODY_STATUSES.has(response.status)) {
+          return response;
+        }
+
         const requestId = bridge.send('SUBTITLE_INTERCEPTED', {
           url: urlString,
           contentType,
@@ -106,7 +144,7 @@ export class FetchInterceptor {
             const translatedResponse = new Response(event.data.payload.vttContent, {
               status: response.status,
               statusText: response.statusText,
-              headers: response.headers,
+              headers: translatedResponseHeaders(response.headers),
             });
             resolve(translatedResponse);
           };

@@ -62,7 +62,29 @@ export function normalizeSubtitleLanguage(lang: string): string {
       normalized = parts.join('-');
     }
   }
-  return normalized;
+  return applyChineseScriptDefault(normalized);
+}
+
+/**
+ * MAX-38: give Chinese tags an explicit script so variant matching is exact.
+ *
+ * `zh` alone means Simplified in this product (the UI's `zh` entry is
+ * "Chinese (Simplified)"), while `zh-TW`/`zh-HK`/`zh-MO` and any `zh-Hant*` are
+ * Traditional. Without this, `subtitleLanguagesMatch('zh-Hant', 'zh')` matched
+ * on the shared primary subtag, so a Simplified preference selected a
+ * Traditional Max track. Runs after ISO 639-2 conversion, so `zho`/`chi` are
+ * already `zh` by this point.
+ */
+function applyChineseScriptDefault(normalized: string): string {
+  const parts = normalized.split('-');
+  if (parts[0] !== 'zh') return normalized;
+  // Explicit ISO 15924 script subtag (hans/hant/…) — already unambiguous.
+  if (parts.length >= 2 && parts[1].length === 4) return normalized;
+  const region = parts[1];
+  if (region === 'tw' || region === 'hk' || region === 'mo') {
+    return ['zh', 'hant', ...parts.slice(2)].join('-');
+  }
+  return ['zh', 'hans', ...parts.slice(1)].join('-');
 }
 
 /**

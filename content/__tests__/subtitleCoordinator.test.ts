@@ -5,6 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import type { SubtitleCue } from '@/types/subtitle';
 import type { MiniProgressOptions } from '@/content/miniProgress';
 import type * as ConfigModule from '@/lib/config';
 import type * as SubtitleCoordinator from '@/content/subtitleCoordinator';
@@ -25,9 +26,10 @@ vi.mock('@/inject/subtitleHandlers/registry', () => ({
 // Mock subtitleToast with a spy so tests can assert on calls deterministically,
 // independent of the real module's cross-test singleton state.
 const mockShowSubtitleToast = vi.fn();
+const mockHideSubtitleToast = vi.fn();
 vi.mock('@/content/subtitleToast', () => ({
   showSubtitleToast: mockShowSubtitleToast,
-  hideSubtitleToast: vi.fn(),
+  hideSubtitleToast: mockHideSubtitleToast,
 }));
 
 const mockUpdateMiniProgress = vi.fn<(opts: MiniProgressOptions) => void>();
@@ -50,6 +52,21 @@ let capturedInterceptedHandler: ((payload: unknown, requestId: string) => Promis
   null;
 let _capturedTracksHandler: ((payload: unknown) => Promise<void>) | null = null;
 let _capturedManifestCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let _capturedDomCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+let _capturedDomTrackChangedHandler: ((payload: unknown) => Promise<void> | void) | null = null;
+let _capturedTextTrackCuesHandler: ((payload: unknown) => Promise<void>) | null = null;
+
+/**
+ * Cleanups for coordinators started by describes that only care about a
+ * specific entry point (intercept/DOM/track paths). Without this, each started
+ * coordinator keeps its real SPA watcher alive — a popstate listener plus a
+ * 500ms poll — and fires navigation resets into every later describe.
+ */
+const strayCoordinatorCleanups: Array<() => void> = [];
+
+let _capturedMpdHandler:
+  | ((payload: { status: string; success?: boolean }) => void)
+  | null = null;
 vi.mock('@/content/messageBridge', () => ({
   onSubtitleIntercepted: (handler: (payload: unknown, requestId: string) => Promise<void>) => {
     capturedInterceptedHandler = handler;
@@ -59,15 +76,27 @@ vi.mock('@/content/messageBridge', () => ({
     _capturedTracksHandler = handler;
     return () => {};
   },
-  onDomCues: () => () => {},
-  onDomTrackChanged: () => () => {},
-  onTextTrackCues: () => () => {},
+  onDomCues: (handler: (payload: unknown) => Promise<void>) => {
+    _capturedDomCuesHandler = handler;
+    return () => {};
+  },
+  onDomTrackChanged: (handler: (payload: unknown) => Promise<void> | void) => {
+    _capturedDomTrackChangedHandler = handler;
+    return () => {};
+  },
+  onTextTrackCues: (handler: (payload: unknown) => Promise<void>) => {
+    _capturedTextTrackCuesHandler = handler;
+    return () => {};
+  },
   onMseCues: () => () => {},
   onManifestCues: (handler: (payload: unknown) => Promise<void>) => {
     _capturedManifestCuesHandler = handler;
     return () => {};
   },
-  onMpdProcessing: () => () => {},
+  onMpdProcessing: (handler: (payload: { status: string; success?: boolean }) => void) => {
+    _capturedMpdHandler = handler;
+    return () => {};
+  },
   sendTranslatedSubtitle: (...args: unknown[]) => { mockSendTranslatedSubtitle(...args); },
 }));
 
@@ -183,6 +212,14 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+});
+
+afterEach(() => {
+  // Outermost hook: runs after each describe's own afterEach. Stopping here is
+  // safe because the captured cleanup closes over its own module instance.
+  while (strayCoordinatorCleanups.length > 0) {
+    strayCoordinatorCleanups.pop()?.();
+  }
 });
 
 describe('subtitleCoordinator – Coursera direct full-track lifecycle', () => {
@@ -984,7 +1021,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     // Import module (triggers module-level side-effects that capture the handler via mock)
     const mod = await import('@/content/subtitleCoordinator');
     // startCoordinator registers the onSubtitleIntercepted handler
-    mod.startCoordinator();
+    strayCoordinatorCleanups.push(mod.startCoordinator());
   });
 
   afterEach(() => {
@@ -1567,7 +1604,7 @@ describe('subtitleCoordinator – YouTube ASR AI re-align cache', () => {
     } as unknown as typeof chrome;
 
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    strayCoordinatorCleanups.push(mod.startCoordinator());
   });
 
   afterEach(() => {
@@ -1733,7 +1770,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     } as unknown as typeof chrome;
 
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    strayCoordinatorCleanups.push(mod.startCoordinator());
   });
 
   afterEach(() => {
@@ -1785,7 +1822,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       },
     });
     const disabled = await import('@/content/subtitleCoordinator');
-    disabled.startCoordinator();
+    strayCoordinatorCleanups.push(disabled.startCoordinator());
     disabled.resetCoordinatorState();
 
     await disabled.forceOverlayMode(
@@ -1868,7 +1905,7 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     // Failure teardown: renderer removed, native track restored, CANCEL sent.
     vi.resetModules();
     const failed = await import('@/content/subtitleCoordinator');
-    failed.startCoordinator();
+    strayCoordinatorCleanups.push(failed.startCoordinator());
     failed.resetCoordinatorState();
 
     mockDetectCurrentHandler.mockReturnValue({
@@ -1957,7 +1994,7 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     } as unknown as typeof chrome;
 
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    strayCoordinatorCleanups.push(mod.startCoordinator());
   });
 
   afterEach(() => {
@@ -2215,7 +2252,7 @@ describe('auto-detected category from shared state', () => {
 
     // Import coordinator (triggers module-level side-effects that capture the handler)
     const mod = await import('@/content/subtitleCoordinator');
-    mod.startCoordinator();
+    strayCoordinatorCleanups.push(mod.startCoordinator());
 
     // Import categoryState AFTER the coordinator so we share the same fresh
     // module instance (vi.resetModules() invalidates the previous registry).
@@ -3628,6 +3665,1411 @@ describe('subtitleCoordinator – DOM auto-activation and toast scoping', () => 
     expect(result.activated).toBe(false);
     expect(mockShowSubtitleToast).toHaveBeenCalledWith(
       'Enable subtitles in Youku to enable translation (Alt+S to retry).',
+    );
+  });
+});
+
+describe('subtitleCoordinator – Max manifest stall demotion', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedManifestCuesHandler = null;
+    _capturedDomCuesHandler = null;
+    _capturedMpdHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockGetHandlerByPlatform.mockImplementation((platform: string) =>
+      platform === 'hbomax' ? maxHandler : null,
+    );
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      targetLanguage: 'vi',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+        autoActivateSubtitles: false,
+      },
+    });
+
+    runtimeSendMessage = vi.fn().mockResolvedValue({ success: true, cues: [], sessionId: 1 });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    const coordinator = await import('@/content/subtitleCoordinator');
+    cleanup = coordinator.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('demotes the manifest tier when capture stalls so DOM cues flow again', async () => {
+    document.body.innerHTML = '<video data-test-primary-video></video>';
+
+    if (!_capturedManifestCuesHandler || !_capturedMpdHandler || !_capturedDomCuesHandler) {
+      throw new Error('subtitle bridge handlers were not registered');
+    }
+
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'first' }],
+      language: 'en',
+      url: 'https://cf.asia.prd.media.max.com/a/t/t3/1.vtt',
+    });
+    expect(mockUpdateCues).toHaveBeenCalled();
+    mockUpdateCues.mockClear();
+
+    _capturedMpdHandler({ status: 'stalled', success: false });
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringContaining('on-screen captions'),
+    );
+
+    await _capturedDomCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'hola' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+
+    await vi.waitFor(() => {
+      expect(mockUpdateCues).toHaveBeenLastCalledWith(
+        expect.arrayContaining([expect.objectContaining({ originalText: 'hola' })]),
+      );
+    });
+  });
+
+  it('merges a sequenced append instead of replacing the buffer', async () => {
+    if (!_capturedManifestCuesHandler) {
+      throw new Error('manifest cue handler was not registered');
+    }
+
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'hbomax',
+      language: 'en',
+      append: true,
+      seq: 0,
+    });
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 3, endTime: 4, text: 'b' }],
+      platform: 'hbomax',
+      language: 'en',
+      append: true,
+      seq: 1,
+    });
+
+    expect(mockUpdateCues).toHaveBeenLastCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ originalText: 'a' }),
+        expect.objectContaining({ originalText: 'b' }),
+      ]),
+    );
+  });
+
+  it('treats a sequence gap as a full replace', async () => {
+    if (!_capturedManifestCuesHandler) {
+      throw new Error('manifest cue handler was not registered');
+    }
+
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'a' }],
+      platform: 'hbomax',
+      language: 'en',
+      append: false,
+      seq: 0,
+    });
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 5, endTime: 6, text: 'c' }],
+      platform: 'hbomax',
+      language: 'en',
+      append: true,
+      seq: 7,
+    });
+
+    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(last.map((cue) => cue.originalText)).toEqual(['c']);
+  });
+});
+
+describe('subtitleCoordinator – preferred-language skip toast (MAX-36)', () => {
+  let cleanup: (() => void) | null = null;
+
+  const maxHandler = () => ({
+    platform: 'hbomax',
+    detect: vi.fn(() => true),
+    isWatchPage: vi.fn(() => true),
+    getPatterns: vi.fn(() => []),
+    getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+    transformResponse: vi.fn(() => []),
+    getDomCueSource: vi.fn(() => ({
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'es',
+    })),
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedManifestCuesHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const handler = maxHandler();
+    mockDetectCurrentHandler.mockReturnValue(handler);
+    mockGetHandlerByPlatform.mockReturnValue(handler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        // The user asked for English, Max is serving Spanish.
+        preferredSubtitleLanguage: 'en',
+      },
+    });
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video></video>';
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  /** Toasts that name both the skipped track language and the preference. */
+  function skipToasts(): unknown[][] {
+    return mockShowSubtitleToast.mock.calls.filter(
+      (call) => /English/.test(String(call[0])) && /Spanish/.test(String(call[0])),
+    );
+  }
+
+  async function deliverSpanishCues(startTime: number): Promise<void> {
+    if (!_capturedManifestCuesHandler) throw new Error('manifest handler was not registered');
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime, endTime: startTime + 2, text: 'hola' }],
+      platform: 'hbomax',
+      language: 'es',
+    });
+  }
+
+  async function usePreferredLanguage(preferred: string): Promise<void> {
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: preferred,
+      },
+    });
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
+    mockShowSubtitleToast.mockClear();
+  }
+
+  it('toasts once per navigation when the track language is skipped', async () => {
+    await deliverSpanishCues(1);
+    await deliverSpanishCues(2);
+
+    expect(skipToasts()).toHaveLength(1);
+    expect(mockUpdateCues).not.toHaveBeenCalled();
+  });
+
+  it('stays silent when the preference is auto', async () => {
+    await usePreferredLanguage('auto');
+    await deliverSpanishCues(1);
+
+    expect(skipToasts()).toHaveLength(0);
+    expect(mockInitializeOverlay).toHaveBeenCalled();
+  });
+
+  it('stays silent when the track matches the preference', async () => {
+    await usePreferredLanguage('es');
+    await deliverSpanishCues(1);
+
+    expect(skipToasts()).toHaveLength(0);
+    expect(mockInitializeOverlay).toHaveBeenCalled();
+  });
+});
+
+describe('subtitleCoordinator – SPA navigation capture reset (MAX-3)', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let locationStub: { hostname: string; pathname: string; href: string };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedDomCuesHandler = null;
+    _capturedDomTrackChangedHandler = null;
+
+    locationStub = {
+      hostname: 'www.max.com',
+      pathname: '/video/watch/abc',
+      href: 'https://www.max.com/video/watch/abc',
+    };
+    Object.defineProperty(window, 'location', {
+      value: locationStub,
+      writable: true,
+      configurable: true,
+    });
+
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockGetHandlerByPlatform.mockReturnValue(maxHandler);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+      },
+    });
+
+    runtimeSendMessage = vi.fn().mockResolvedValue({ success: true });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('resets MAIN-world capture before tearing down the session on navigation', () => {
+    // Clear history first: unrelated poll-driven navigation events from other
+    // suites must not satisfy the assertions below.
+    mockInjectSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
+
+    locationStub.href = 'https://www.max.com/video/watch/other';
+    window.dispatchEvent(new Event('popstate'));
+
+    const resetIndex = mockInjectSendMessage.mock.calls.findIndex(
+      (call) => call[0] === 'SUBTITLE_CAPTURE_RESET',
+    );
+    expect(resetIndex).toBeGreaterThanOrEqual(0);
+    expect(mockInjectSendMessage.mock.calls[resetIndex][1]).toEqual({ platform: 'hbomax' });
+
+    const cancelIndex = runtimeSendMessage.mock.calls.findIndex(
+      (call) => (call[0] as { action?: string } | undefined)?.action === 'CANCEL_SUBTITLE_SESSION',
+    );
+    expect(cancelIndex).toBeGreaterThanOrEqual(0);
+
+    // The MAIN-world capture must be reset before the coordinator forgets which
+    // platform it was on (resetCoordinatorState runs after cancelBackground...).
+    expect(mockInjectSendMessage.mock.invocationCallOrder[resetIndex]).toBeLessThan(
+      runtimeSendMessage.mock.invocationCallOrder[cancelIndex],
+    );
+  });
+
+  it('does not reset capture for a navigation event with an unchanged URL', () => {
+    mockInjectSendMessage.mockClear();
+    window.dispatchEvent(new Event('popstate'));
+    // Synchronous dispatch + assertion: no timer can interleave here.
+    expect(mockInjectSendMessage).not.toHaveBeenCalledWith(
+      'SUBTITLE_CAPTURE_RESET',
+      expect.anything(),
+    );
+  });
+});
+
+describe('subtitleCoordinator – native TextTrack re-hide (MAX-30)', () => {
+  let cleanup: (() => void) | null = null;
+  let video: HTMLVideoElement;
+  let track: { mode: string };
+
+  const maxHandler = () => ({
+    platform: 'hbomax',
+    detect: vi.fn(() => true),
+    isWatchPage: vi.fn(() => true),
+    getPatterns: vi.fn(() => []),
+    getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+    transformResponse: vi.fn(() => []),
+    getDomCueSource: vi.fn(() => ({
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'en',
+      captionHideMethod: 'visibility' as const,
+    })),
+  });
+
+  function makeVideoWithTrack(): { video: HTMLVideoElement; track: { mode: string } } {
+    const el = document.createElement('video');
+    const t = { mode: 'showing', kind: 'subtitles', language: 'en', label: 'English' };
+    Object.defineProperty(el, 'textTracks', {
+      configurable: true,
+      value: { length: 1, 0: t, item: (i: number) => (i === 0 ? t : null) },
+    });
+    return { video: el, track: t };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedDomCuesHandler = null;
+    _capturedDomTrackChangedHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const handler = maxHandler();
+    mockDetectCurrentHandler.mockReturnValue(handler);
+    mockGetHandlerByPlatform.mockReturnValue(handler);
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'en',
+      },
+    });
+
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true, cues: [], sessionId: 1 }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    const made = makeVideoWithTrack();
+    video = made.video;
+    track = made.track;
+    // The file-level beforeEach seeds `[data-test-primary-video]`; replace it so
+    // exactly one video exists (findPrimaryVideo filters readyState < 1).
+    document.body.innerHTML = '';
+    document.body.appendChild(video);
+
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  /** Activate the overlay through the DOM cue path so the hide is extension-owned. */
+  async function activateOverlay(): Promise<void> {
+    if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+    // Max defers DOM activation until playback has started.
+    video.dispatchEvent(new Event('play'));
+    await _capturedDomCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'hello' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await vi.waitFor(() => expect(track.mode).toBe('hidden'));
+  }
+
+  it('re-hides a native track the player re-enables on loadedmetadata', async () => {
+    await activateOverlay();
+
+    track.mode = 'showing';
+    video.dispatchEvent(new Event('loadedmetadata'));
+    expect(track.mode).toBe('hidden');
+  });
+
+  it('re-hides a native track the player re-enables on play', async () => {
+    await activateOverlay();
+
+    track.mode = 'showing';
+    video.dispatchEvent(new Event('play'));
+    expect(track.mode).toBe('hidden');
+  });
+
+  it('re-hides the native track after a DOM track switch', async () => {
+    await activateOverlay();
+
+    if (!_capturedDomTrackChangedHandler) throw new Error('track changed handler not registered');
+    track.mode = 'showing';
+    await _capturedDomTrackChangedHandler({ platform: 'hbomax', language: 'en' });
+
+    expect(track.mode).toBe('hidden');
+  });
+
+  it('leaves a native track alone while the translated overlay is inactive', async () => {
+    video.dispatchEvent(new Event('loadedmetadata'));
+    video.dispatchEvent(new Event('play'));
+
+    // Give the deferred play-activation path a chance to run: without an active
+    // overlay the user's native captions must stay visible.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(track.mode).toBe('showing');
+  });
+});
+
+describe('subtitleCoordinator – teardown on settings change (MAX-13/14)', () => {
+  type AppSettings = Awaited<ReturnType<ConfigLoadSettings>>;
+
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let storageListener: (() => void) | null = null;
+  let currentSettings: AppSettings;
+
+  const maxHandler = () => ({
+    platform: 'hbomax',
+    detect: vi.fn(() => true),
+    isWatchPage: vi.fn(() => true),
+    getPatterns: vi.fn(() => []),
+    getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+    transformResponse: vi.fn(() => []),
+    getDomCueSource: vi.fn(() => ({
+      cueSelector: '[data-testid="cueBoxRowTextCue"]',
+      captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+      observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+      readActiveLanguage: () => 'en',
+      captionHideMethod: 'visibility' as const,
+    })),
+  });
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    storageListener = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const handler = maxHandler();
+    mockDetectCurrentHandler.mockReturnValue(handler);
+    mockGetHandlerByPlatform.mockReturnValue(handler);
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+
+    currentSettings = {
+      ...MOCK_SETTINGS,
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'en',
+        disabledSubtitleSites: [],
+      },
+    } as unknown as AppSettings;
+    mockLoadSettings.mockImplementation(async () => currentSettings);
+
+    runtimeSendMessage = vi.fn().mockResolvedValue({ success: true });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      storage: {
+        onChanged: {
+          addListener: vi.fn((listener: () => void) => {
+            storageListener = listener;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video></video>';
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+
+    // Activate the overlay so there is a live session to tear down.
+    if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+    (document.querySelector('video') as HTMLVideoElement).dispatchEvent(new Event('play'));
+    await _capturedDomCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'hello' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await vi.waitFor(() => expect(mockInitializeOverlay).toHaveBeenCalled());
+    mockCleanupOverlay.mockClear();
+    runtimeSendMessage.mockClear();
+    mockHideSubtitleToast.mockClear();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  function applySettings(next: Partial<AppSettings['subtitleSettings']>): void {
+    currentSettings = {
+      ...currentSettings,
+      subtitleSettings: { ...currentSettings.subtitleSettings, ...next },
+    };
+    storageListener?.();
+  }
+
+  it('tears down the overlay and cancels the session when subtitles are switched off', async () => {
+    applySettings({ enabled: false });
+
+    await vi.waitFor(() => expect(mockCleanupOverlay).toHaveBeenCalled());
+    expect(runtimeSendMessage).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+    expect(mockHideSubtitleToast).toHaveBeenCalled();
+  });
+
+  it('tears down when the active platform is added to the disabled sites list', async () => {
+    applySettings({ disabledSubtitleSites: ['hbomax'] });
+
+    await vi.waitFor(() => expect(mockCleanupOverlay).toHaveBeenCalled());
+    expect(runtimeSendMessage).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+  });
+
+  it('keeps the session alive for unrelated settings changes', async () => {
+    applySettings({ fontSize: 22 });
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+  });
+
+  it('keeps the session alive when a different platform is disabled', async () => {
+    applySettings({ disabledSubtitleSites: ['youtube'] });
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+  });
+});
+
+describe('subtitleCoordinator – source-equal translations are cached (MAX-15/16)', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let video: HTMLVideoElement;
+  /** Translation requests seen by the background mock, in order. */
+  let translateRequests: Array<{ sessionId?: number; cues?: SubtitleCue[] }> = [];
+  /** When true, translateSubtitle replies are held until the test releases them. */
+  let gateTranslations = false;
+  let pendingTranslationReplies: Array<(value: unknown) => void> = [];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedManifestCuesHandler = null;
+    _capturedDomCuesHandler = null;
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockGetHandlerByPlatform.mockReturnValue(maxHandler);
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      targetLanguage: 'vi',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+      },
+    });
+
+    // Every translation echoes the source text unchanged — the "proper noun /
+    // keep-as-is" case the model legitimately returns.
+    translateRequests = [];
+    gateTranslations = false;
+    pendingTranslationReplies = [];
+    runtimeSendMessage = vi.fn(async (message: { action?: string; sessionId?: number; cues?: SubtitleCue[] }) => {
+      if (message?.action === 'translateSubtitle') {
+        translateRequests.push(message);
+        const reply = {
+          success: true,
+          sessionId: message.sessionId ?? 1,
+          cues: (message.cues ?? []).map((c) => ({ ...c, text: c.text, originalText: c.text })),
+        };
+        if (gateTranslations) {
+          return await new Promise((resolve) => pendingTranslationReplies.push(resolve));
+        }
+        return reply;
+      }
+      return { success: true };
+    });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '';
+    video = document.createElement('video');
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    document.body.appendChild(video);
+
+    const coordinator = await import('@/content/subtitleCoordinator');
+    cleanup = coordinator.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  function translationRequests(): number {
+    return runtimeSendMessage.mock.calls.filter(
+      (call) => (call[0] as { action?: string } | undefined)?.action === 'translateSubtitle',
+    ).length;
+  }
+
+  it('does not re-send a keep-as-is translation after a seek reset', async () => {
+    if (!_capturedManifestCuesHandler) throw new Error('manifest cue handler was not registered');
+
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await vi.waitFor(() => expect(translationRequests()).toBe(1));
+
+    // Seek far from the cue range: the debounced reset clears cue buffers and
+    // reconciles the pending-translation set.
+    video.currentTime = 400;
+    video.dispatchEvent(new Event('seeked'));
+    await vi.waitFor(
+      () => expect(mockUpdateCues).toHaveBeenLastCalledWith([]),
+      { timeout: 3000 },
+    );
+
+    // The next segment repeats the identical caption.
+    await _capturedManifestCuesHandler({
+      cues: [{ startTime: 400, endTime: 402, text: 'Hola' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(translationRequests()).toBe(1);
+  });
+
+  it('caches a keep-as-is DOM translation instead of leaving it pending', async () => {
+    if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+
+    video.dispatchEvent(new Event('play'));
+    await _capturedDomCuesHandler({
+      cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await vi.waitFor(() => expect(translationRequests()).toBe(1));
+
+    video.currentTime = 400;
+    video.dispatchEvent(new Event('seeked'));
+    await vi.waitFor(
+      () => expect(mockUpdateCues).toHaveBeenLastCalledWith([]),
+      { timeout: 3000 },
+    );
+
+    await _capturedDomCuesHandler({
+      cues: [{ startTime: 400, endTime: 402, text: 'Hola' }],
+      platform: 'hbomax',
+      language: 'en',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(translationRequests()).toBe(1);
+  });
+
+  describe('track switch keeps translation caches (MAX-16)', () => {
+    it('clears cue buffers but reuses already-translated texts after a track switch', async () => {
+      if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+      if (!_capturedDomTrackChangedHandler) throw new Error('track-changed handler was not registered');
+
+      // Prefix translations so a cached value is distinguishable from the source.
+      runtimeSendMessage.mockImplementation(
+        async (message: { action?: string; sessionId?: number; cues?: SubtitleCue[] }) => {
+          if (message?.action === 'translateSubtitle') {
+            translateRequests.push(message);
+            return {
+              success: true,
+              sessionId: message.sessionId ?? 1,
+              cues: (message.cues ?? []).map((c) => ({
+                ...c,
+                text: `vi:${c.text}`,
+                originalText: c.text,
+              })),
+            };
+          }
+          return { success: true };
+        },
+      );
+
+      video.dispatchEvent(new Event('play'));
+      await _capturedDomCuesHandler({
+        cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+      await vi.waitFor(() => expect(translateRequests.length).toBe(1));
+
+      await _capturedDomTrackChangedHandler({ platform: 'hbomax', language: 'en' });
+
+      // Cue buffers are dropped (the old track's timeline is gone)...
+      await vi.waitFor(() => expect(mockUpdateCues).toHaveBeenLastCalledWith([]));
+
+      // ...but the translation cache survives: the same caption on the new
+      // track renders translated without another LLM round-trip.
+      await _capturedDomCuesHandler({
+        cues: [{ startTime: 10, endTime: 12, text: 'Hola' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(translateRequests.length).toBe(1);
+      expect(mockUpdateCues).toHaveBeenLastCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ originalText: 'Hola', text: 'vi:Hola' }),
+        ]),
+      );
+
+      // A genuinely new caption still gets translated.
+      await _capturedDomCuesHandler({
+        cues: [{ startTime: 12, endTime: 14, text: 'Buenos días' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+      await vi.waitFor(() => expect(translateRequests.length).toBe(2));
+    });
+  });
+
+  describe('DOM session pre-allocation (MAX-14)', () => {
+    function releaseTranslation(payload?: unknown): void {
+      const release = pendingTranslationReplies.shift();
+      release?.(
+        payload ?? {
+          success: true,
+          sessionId: 1,
+          cues: [{ startTime: 0, endTime: 1, text: 'Hola', originalText: 'Hola' }],
+        },
+      );
+    }
+
+    it('allocates a session id before sending and echoes it back to the MAIN world', async () => {
+      if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+
+      video.dispatchEvent(new Event('play'));
+      gateTranslations = true;
+      const run = _capturedDomCuesHandler({
+        cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+
+      await vi.waitFor(() => expect(translateRequests.length).toBe(1));
+      // Without a pre-allocated id the background invents one and every
+      // progressive SUBTITLE_CHUNK_TRANSLATED message is dropped as stale.
+      expect(typeof translateRequests[0]?.sessionId).toBe('number');
+
+      releaseTranslation();
+      await run;
+    });
+
+    it('drops a response whose session was cancelled while it was in flight', async () => {
+      if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
+
+      video.dispatchEvent(new Event('play'));
+      gateTranslations = true;
+      const run = _capturedDomCuesHandler({
+        cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+      await vi.waitFor(() => expect(translateRequests.length).toBe(1));
+      const allocated = translateRequests[0]?.sessionId;
+
+      // Seek away while the first batch is in flight: the coordinator cancels
+      // the session and forgets the id.
+      video.currentTime = 400;
+      video.dispatchEvent(new Event('seeked'));
+      await vi.waitFor(
+        () => expect(mockUpdateCues).toHaveBeenLastCalledWith([]),
+        { timeout: 3000 },
+      );
+
+      // The stale batch arrives after the cancel with a real translation.
+      releaseTranslation({
+        success: true,
+        sessionId: allocated ?? 1,
+        cues: [{ startTime: 0, endTime: 1, text: 'Hello', originalText: 'Hola' }],
+      });
+      await run;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      gateTranslations = false;
+      await _capturedDomCuesHandler({
+        cues: [{ startTime: 400, endTime: 402, text: 'Hola' }],
+        platform: 'hbomax',
+        language: 'en',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // The cancelled batch must not reach the overlay...
+      expect(mockUpdateCues).not.toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ text: 'Hello' })]),
+      );
+      // ...and must not have cached its text: the caption is translated again.
+      expect(translateRequests.length).toBe(2);
+    });
+  });
+});
+
+describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let manifestRequests: Array<Record<string, unknown>>;
+
+  const MPD_URL =
+    'https://cf.asia.prd.media.max.com/a/manifest-params=x/1.mpd';
+  const SEG_1 = 'https://cf.asia.prd.media.max.com/a/t/t3/1.vtt';
+  const SEG_2 = 'https://cf.asia.prd.media.max.com/a/t/t3/2.vtt';
+  const SEG_3 = 'https://cf.asia.prd.media.max.com/a/t/t3/3.vtt';
+
+  function track(overrides: Record<string, unknown> = {}) {
+    return {
+      language: 'en',
+      label: 'English',
+      url: MPD_URL,
+      isAutoGenerated: false,
+      platform: 'hbomax',
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedTracksHandler = null;
+    _capturedManifestCuesHandler = null;
+    manifestRequests = [];
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockGetHandlerByPlatform.mockReturnValue(maxHandler);
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+      },
+    });
+
+    runtimeSendMessage = vi.fn(async (message: Record<string, unknown>) => {
+      if (message?.action === 'FETCH_MANIFEST_SUBTITLES') {
+        manifestRequests.push(message);
+        return {
+          success: true,
+          language: 'en',
+          cues: [{ startTime: 1, endTime: 2, text: 'assembled cue' }],
+        };
+      }
+      return { success: true };
+    });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video></video>';
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  async function discover(tracks: unknown[]): Promise<void> {
+    if (!_capturedTracksHandler) throw new Error('tracks handler was not registered');
+    await _capturedTracksHandler({ platform: 'hbomax', videoId: 'abc', tracks });
+  }
+
+  it('routes a leaf .vtt track carrying segmentUrls through the manifest fetch', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    await discover([
+      track({ url: SEG_1, segmentUrls: [SEG_1, SEG_2, SEG_3] }),
+    ]);
+
+    await mod.selectSubtitleTrack('en');
+
+    expect(manifestRequests).toHaveLength(1);
+    expect(manifestRequests[0]?.segmentUrls).toEqual([SEG_1, SEG_2, SEG_3]);
+    expect(manifestRequests[0]?.language).toBe('en');
+    expect(mockInitializeOverlay).toHaveBeenCalled();
+  });
+
+  it('concatenates same-language Period tracks in discovery order', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    await discover([
+      track({ language: 'en', label: 'English', url: SEG_1, segmentUrls: [SEG_1, SEG_2] }),
+      track({ language: 'en', label: 'English', url: SEG_3, segmentUrls: [SEG_3] }),
+    ]);
+
+    await mod.selectSubtitleTrack('en');
+
+    expect(manifestRequests).toHaveLength(1);
+    expect(manifestRequests[0]?.segmentUrls).toEqual([SEG_1, SEG_2, SEG_3]);
+  });
+
+  it('prefers a segmentFetch template when the track has no concrete segment URLs', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    const segmentFetch = {
+      media: 'https://cf.asia.prd.media.max.com/a/t/t3/$Number$.vtt',
+      startNumber: 1,
+      representationId: 't3',
+      bandwidth: '1000',
+      mpdUrl: MPD_URL,
+    };
+    await discover([track({ url: MPD_URL, segmentFetch })]);
+
+    await mod.selectSubtitleTrack('en');
+
+    expect(manifestRequests).toHaveLength(1);
+    expect(manifestRequests[0]?.segmentFetch).toEqual(segmentFetch);
+    expect(manifestRequests[0]?.segmentUrls).toBeUndefined();
+  });
+
+  it('still uses the manifest URL when a track has no segment metadata', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    await discover([track({ url: MPD_URL })]);
+
+    await mod.selectSubtitleTrack('en');
+
+    expect(manifestRequests).toHaveLength(1);
+    expect(manifestRequests[0]?.playlistUrl).toBe(MPD_URL);
+    expect(manifestRequests[0]?.segmentUrls).toBeUndefined();
+  });
+});
+
+describe('subtitleCoordinator – TextTrack tier defers to the manifest tier on Max (MAX-12)', () => {
+  let cleanup: (() => void) | null = null;
+  let runtimeSendMessage: ReturnType<typeof vi.fn>;
+  let translateRequests: Array<Record<string, unknown>>;
+
+  const MPD_URL = 'https://cf.asia.prd.media.max.com/a/manifest-params=x/1.mpd';
+
+  const TEXT_TRACK_CUES = [
+    { startTime: 0, endTime: 2, text: 'Hello' },
+    { startTime: 2, endTime: 4, text: 'World' },
+  ];
+
+  function track(overrides: Record<string, unknown> = {}) {
+    return {
+      language: 'en',
+      label: 'English',
+      url: MPD_URL,
+      isAutoGenerated: false,
+      platform: 'hbomax',
+      ...overrides,
+    };
+  }
+
+  async function discover(tracks: unknown[]): Promise<void> {
+    if (!_capturedTracksHandler) throw new Error('tracks handler was not registered');
+    await _capturedTracksHandler({ platform: 'hbomax', videoId: 'abc', tracks });
+  }
+
+  async function dispatchTextTrackCues(): Promise<void> {
+    if (!_capturedTextTrackCuesHandler) throw new Error('texttrack handler was not registered');
+    await _capturedTextTrackCuesHandler({
+      platform: 'hbomax',
+      language: 'en',
+      cues: TEXT_TRACK_CUES,
+    });
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    _capturedTracksHandler = null;
+    _capturedTextTrackCuesHandler = null;
+    _capturedMpdHandler = null;
+    translateRequests = [];
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        hostname: 'www.max.com',
+        pathname: '/video/watch/abc',
+        href: 'https://www.max.com/video/watch/abc',
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    const maxHandler = {
+      platform: 'hbomax',
+      detect: vi.fn(() => true),
+      isWatchPage: vi.fn(() => true),
+      getPatterns: vi.fn(() => []),
+      getManifestPatterns: vi.fn(() => [{ platform: 'hbomax', pattern: /\.mpd$/i }]),
+      transformResponse: vi.fn(() => []),
+      getDomCueSource: vi.fn(() => ({
+        cueSelector: '[data-testid="cueBoxRowTextCue"]',
+        captionWindowSelector: '[data-testid="caption_renderer_overlay"]',
+        observeRootSelector: '[data-testid="caption_renderer_overlay"]',
+        readActiveLanguage: () => 'en',
+      })),
+    };
+    mockDetectCurrentHandler.mockReturnValue(maxHandler);
+    mockGetHandlerByPlatform.mockReturnValue(maxHandler);
+    mockInitializeControls.mockResolvedValue(undefined);
+    mockInitializeOverlay.mockReturnValue(true);
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        preferredSubtitleLanguage: 'auto',
+      },
+    });
+
+    runtimeSendMessage = vi.fn(async (message: Record<string, unknown>) => {
+      if (message?.action === 'translateSubtitle') {
+        translateRequests.push(message);
+        return { success: true, sessionId: 7, cues: MOCK_TRANSLATED_CUES };
+      }
+      return { success: true };
+    });
+    global.chrome = {
+      runtime: {
+        sendMessage: runtimeSendMessage,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    document.body.innerHTML = '<video></video>';
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  it('holds TextTrack cues while the MPD processor is in flight', async () => {
+    await discover([track({})]);
+    _capturedMpdHandler?.({ status: 'started' });
+
+    await dispatchTextTrackCues();
+
+    expect(translateRequests).toHaveLength(0);
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
+
+    _capturedMpdHandler?.({ status: 'complete', success: false });
+
+    await vi.waitFor(() => expect(mockInitializeOverlay).toHaveBeenCalled());
+    expect(translateRequests).toHaveLength(1);
+    const activatedCues = mockInitializeOverlay.mock.calls[0]?.[0] as
+      | Array<{ text: string }>
+      | undefined;
+    expect(activatedCues?.map((cue) => cue.text)).toEqual(['Xin chào', 'Thế giới']);
+  });
+
+  it('holds TextTrack cues during the armed grace window even without an MPD status', async () => {
+    await discover([track({})]);
+
+    await dispatchTextTrackCues();
+
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
+  });
+
+  it('processes TextTrack cues immediately when no MPD capture is pending', async () => {
+    await dispatchTextTrackCues();
+
+    await vi.waitFor(() => expect(mockInitializeOverlay).toHaveBeenCalled());
+    expect(translateRequests).toHaveLength(1);
+  });
+
+  it('cannot extend the MPD grace window past three windows from the first arm', async () => {
+    vi.useFakeTimers();
+    if (!_capturedTracksHandler) throw new Error('tracks handler was not registered');
+
+    // Discovery events are debounced by 150ms, so each one has to be settled
+    // against the fake clock before the grace window is observed.
+    const discoverWithTimers = async (tracks: unknown[]): Promise<void> => {
+      if (!_capturedTracksHandler) throw new Error('tracks handler was not registered');
+      const pending = _capturedTracksHandler({ platform: 'hbomax', videoId: 'abc', tracks });
+      await vi.advanceTimersByTimeAsync(200);
+      await pending;
+    };
+
+    // The first discovery arms the grace window.
+    await discoverWithTimers([track({})]);
+    await dispatchTextTrackCues();
+    expect(mockInitializeOverlay).not.toHaveBeenCalled();
+
+    // Repeated discovery events every 5s extend the window forever unless the
+    // coordinator clamps it to MAX_MPD_DOM_GRACE_MS * 3 from the first arm.
+    for (let iteration = 0; iteration < 12; iteration += 1) {
+      await vi.advanceTimersByTimeAsync(5000);
+      await discoverWithTimers([track({})]);
+    }
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockInitializeOverlay).toHaveBeenCalled();
+  });
+
+  it('abandons the MPD wait within the in-flight cap when processing never completes', async () => {
+    vi.useFakeTimers();
+    mockLoadSettings.mockResolvedValue({
+      ...MOCK_SETTINGS,
+      sourceLanguage: 'auto',
+      subtitleSettings: {
+        ...MOCK_SETTINGS.subtitleSettings,
+        enabled: true,
+        // A preferred language the discovered English track cannot match makes
+        // auto-activate no-op, so the play path falls into the MPD grace wait.
+        preferredSubtitleLanguage: 'fr',
+        autoActivateSubtitles: true,
+      },
+    });
+
+    const pending = _capturedTracksHandler!({
+      platform: 'hbomax',
+      videoId: 'abc',
+      tracks: [track({})],
+    });
+    await vi.advanceTimersByTimeAsync(200);
+    await pending;
+    // The MPD processor reports started and then never reports completion.
+    _capturedMpdHandler?.({ status: 'started' });
+
+    document.querySelector('video')?.dispatchEvent(new Event('play'));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mockShowSubtitleToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('Enable subtitles in Max'),
+    );
+
+    // 200ms activation delay + the 15s in-flight cap + slack.
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringContaining('Enable subtitles in Max'),
+    );
+  });
+});
+
+describe('subtitleCoordinator – manual activation feedback (MAX-35)', () => {
+  let cleanup: (() => void) | null = null;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.resetModules();
+
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/', href: 'https://www.youtube.com/' },
+      writable: true,
+      configurable: true,
+    });
+
+    mockDetectCurrentHandler.mockReturnValue(mockHandler);
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockLoadSettings.mockResolvedValue({ ...MOCK_SETTINGS });
+    mockInitializeControls.mockResolvedValue(undefined);
+    global.chrome = {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ success: true }),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as unknown as typeof chrome;
+
+    const mod = await import('@/content/subtitleCoordinator');
+    cleanup = mod.startCoordinator();
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+    document.body.innerHTML = '';
+  });
+
+  it('tells the user when Alt+S is pressed outside a video watch page', async () => {
+    const mod = await import('@/content/subtitleCoordinator');
+    mockHandler.isWatchPage.mockReturnValue(false);
+
+    await mod.manualActivateSubtitles();
+
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringContaining('video page'),
+    );
+  });
+
+  it('tells the user when the page has no DOM cue source to translate', async () => {
+    Object.defineProperty(window, 'location', {
+      value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=abc' },
+      writable: true,
+      configurable: true,
+    });
+    mockHandler.isWatchPage.mockReturnValue(true);
+    mockHandler.getDomCueSource.mockReturnValue(null);
+
+    const mod = await import('@/content/subtitleCoordinator');
+    await mod.manualActivateSubtitles();
+
+    expect(mockShowSubtitleToast).toHaveBeenCalledWith(
+      expect.stringContaining('No subtitle source'),
     );
   });
 });

@@ -27,17 +27,59 @@
 
 import type { MessageBridgeSender } from '@/inject/messageBridge';
 import { parseWebVTT } from '@/lib/subtitleParser';
+import { parseSubtitleContent } from '@/lib/maxMpdSubtitles';
 import { readMaxActiveSubtitleLanguage } from '@/lib/maxSubtitleLanguages';
 import { nativeFetch } from '@/inject/nativeFetch';
+import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import type { SubtitleCue } from '@/types/subtitle';
 
-const MAX_VTT_RESOURCE_URL =
-  /https?:\/\/[^/]*prd\.media\.max\.com\/.+\.vtt(?:\?|$)/i;
+/**
+ * Subtitle segment URLs on Max-controlled CDNs. Hosts observed in fixtures are
+ * `*.prd.media.max.com`, but the handler's own notes also name
+ * `beam-*.prd.api.hbomax.com` and generic Akamai/Fastly edges, so accept any
+ * media.max.com / hbomax.com / max.com host and let the `/t/` path marker (or a
+ * `.vtt`/`.ttml` extension) identify a subtitle segment.
+ */
+const MAX_SUBTITLE_RESOURCE_URL =
+  /https?:\/\/(?:[^/]*\.)?(?:media\.max\.com|hbomax\.com|max\.com)\/.+\.(?:vtt|ttml)(?:\?|$)/i;
 
 /** Give up + fall back to DOM if no VTT segment surfaces within this window. */
-const MAX_VTT_CAPTURE_DEADLINE_MS = 15_000;
+export const MAX_VTT_CAPTURE_DEADLINE_MS = 15_000;
+/** Upper bound on deadline extensions while playback has not started. */
+const MAX_DEADLINE_TOTAL_MS = 600_000;
 /** Page-context fetch timeout per VTT segment. */
 const PAGE_FETCH_TIMEOUT_MS = 15_000;
+
+/** Bounded attempts per segment URL before it is marked permanently seen. */
+export const MAX_SEGMENT_FETCH_ATTEMPTS = 2;
+/** Delay between segment fetch attempts. */
+const SEGMENT_RETRY_DELAY_MS = 250;
+
+/**
+ * How long a representation must stay quiet before a segment from a different
+ * representation is treated as a real track/Period switch instead of an
+ * interleaved foreign segment (preview, lead-in advert). Without this gate a
+ * second player's segments could hijack the rolling buffer.
+ */
+export const TRACK_SWITCH_IDLE_MS = 3_000;
+
+/** No new segment for this long while playing ⇒ the capture has stalled. */
+export const CAPTURE_STALL_MS = 20_000;
+/** How often the watchdog evaluates capture health. */
+export const WATCHDOG_INTERVAL_MS = 5_000;
+/**
+ * Every N emissions the full accumulated buffer is re-sent so a dropped
+ * message cannot permanently desync the coordinator's buffer.
+ */
+export const FULL_RESYNC_EVERY = 20;
+/** Concurrent segment fetches (network-bound, order of processing preserved). */
+export const SEGMENT_FETCH_CONCURRENCY = 3;
+/**
+ * Resource Timing buffer size requested at capture start. The default 250
+ * entries can overflow during a seek burst; on overflow we re-scan whatever is
+ * still buffered instead of losing those segments.
+ */
+export const RESOURCE_TIMING_BUFFER_SIZE = 500;
 
 /** Page-context fetch (native, not interceptor-patched). Overridable in tests. */
 let pageFetch: typeof fetch = nativeFetch;
@@ -58,15 +100,51 @@ export function resetPerformanceObserverCtorForTests(): void {
 
 let perfObserver: PerformanceObserver | null = null;
 let deadlineTimer: ReturnType<typeof setTimeout> | null = null;
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+let resourceTimingFullHandler: (() => void) | null = null;
+let resourceTimingEventTarget: EventTarget | null = null;
+/** One-shot guard so a stalled capture notifies the coordinator only once. */
+let stalledNotified = false;
 
 const seenUrls = new Set<string>();
+/** URLs currently being fetched (guards against duplicate concurrent captures). */
+const inFlightUrls = new Set<string>();
 let cueBuffer: SubtitleCue[] = [];
-/** Track id of the representation we've locked onto (e.g. "t3"). */
-let emittedTrack: string | null = null;
+/**
+ * Identity of the representation we've locked onto. Prefers the
+ * `…/t/<asset>/t<n>/…` representation id; falls back to the `/t/<dir>/`
+ * component so directory-style tracks (`…/t/t6/1.vtt`) keep a stable identity
+ * across segments.
+ */
+let emittedIdentity: string | null = null;
+/** Timestamp of the last segment accepted for `emittedIdentity`. */
+let lastEmissionAt = 0;
+/**
+ * Monotonic reset counter. A segment fetch that resolves after any reset is a
+ * stale continuation and must not re-lock the old identity.
+ */
+let captureGeneration = 0;
 /** First captured VTT URL — labels MPD_PROCESSING mpdUrl field for logging. */
 let activeCaptureUrl = '';
 /** One-shot lifecycle flag so the grace window is driven exactly once. */
 let processingCompleted = false;
+/** Monotonic sequence attached to every SUBTITLE_MANIFEST_CUES emission. */
+let manifestSeq = 0;
+/** Emissions since the last full-buffer resync. */
+let emissionsSinceResync = 0;
+
+/**
+ * Stable identity for a Max subtitle segment URL.
+ * Returns the `t<n>` representation id when present, else the `/t/<dir>/`
+ * component, else null (caller falls back to the full URL).
+ */
+export function resolveTrackIdentity(url: string): string | null {
+  const specific = url.match(/\/t\/[^/]+\/(t\d+)\//i);
+  if (specific?.[1]) return specific[1].toLowerCase();
+  const directory = url.match(/\/t\/([^/]+)\//i);
+  if (directory?.[1]) return directory[1].toLowerCase();
+  return null;
+}
 
 /** @internal Test hook — restore with resetPageFetchForTests(). */
 export function setPageFetchForTests(fetchFn: typeof fetch): void {
@@ -78,18 +156,29 @@ export function resetPageFetchForTests(): void {
   pageFetch = nativeFetch;
 }
 
+export function isMaxCdnSubtitleUrl(url: string): boolean {
+  return MAX_SUBTITLE_RESOURCE_URL.test(url);
+}
+
+/** @deprecated Use isMaxCdnSubtitleUrl — kept for existing callers/tests. */
 export function isMaxCdnVttUrl(url: string): boolean {
-  return MAX_VTT_RESOURCE_URL.test(url);
+  return isMaxCdnSubtitleUrl(url);
 }
 
 /** Full reset (SPA navigation / BFCache / teardown). Stops the observer. */
 export function resetMaxVttPerformanceCapture(): void {
+  captureGeneration++;
   stopObserver();
   seenUrls.clear();
+  inFlightUrls.clear();
   cueBuffer = [];
-  emittedTrack = null;
+  emittedIdentity = null;
+  lastEmissionAt = 0;
   activeCaptureUrl = '';
   processingCompleted = false;
+  stalledNotified = false;
+  manifestSeq = 0;
+  emissionsSinceResync = 0;
 }
 
 /**
@@ -97,10 +186,15 @@ export function resetMaxVttPerformanceCapture(): void {
  * Called on mid-session track switch so the new track's segments emit fresh.
  */
 export function resetMaxVttPerformanceCaptureLock(): void {
+  captureGeneration++;
   seenUrls.clear();
+  inFlightUrls.clear();
   cueBuffer = [];
-  emittedTrack = null;
+  emittedIdentity = null;
+  lastEmissionAt = 0;
   activeCaptureUrl = '';
+  manifestSeq = 0;
+  emissionsSinceResync = 0;
 }
 
 /**
@@ -117,7 +211,9 @@ export function resetMaxVttPerformanceCaptureLock(): void {
  * (lighter than re-activating the overlay from scratch).
  */
 export function resetMaxVttCaptureForSeek(): void {
+  captureGeneration++;
   seenUrls.clear();
+  inFlightUrls.clear();
   cueBuffer = [];
 }
 
@@ -135,6 +231,102 @@ function stopObserver(): void {
     clearTimeout(deadlineTimer);
     deadlineTimer = null;
   }
+  stopWatchdog();
+  if (resourceTimingFullHandler !== null && resourceTimingEventTarget !== null) {
+    if (typeof resourceTimingEventTarget.removeEventListener === 'function') {
+      resourceTimingEventTarget.removeEventListener('resourcetimingbufferfull', resourceTimingFullHandler);
+    }
+    resourceTimingFullHandler = null;
+    resourceTimingEventTarget = null;
+  }
+}
+
+/**
+ * Ask for a larger Resource Timing buffer and, if it still overflows, re-scan
+ * the entries that survived — the observer may have missed dropped ones.
+ */
+function installResourceTimingHeadroom(bridge: MessageBridgeSender): void {
+  const perf = performance as Performance & {
+    setResourceTimingBufferSize?: (size: number) => void;
+  };
+  perf.setResourceTimingBufferSize?.(RESOURCE_TIMING_BUFFER_SIZE);
+  if (resourceTimingFullHandler !== null && resourceTimingEventTarget !== null) {
+    if (typeof resourceTimingEventTarget.removeEventListener === 'function') {
+      resourceTimingEventTarget.removeEventListener('resourcetimingbufferfull', resourceTimingFullHandler);
+    }
+  }
+  // Browsers fire this on the Performance object; jsdom/older runtimes may not
+  // expose EventTarget on it, so fall back to window.
+  resourceTimingEventTarget =
+    typeof (performance as unknown as EventTarget).addEventListener === 'function'
+      ? (performance as unknown as EventTarget)
+      : window;
+  resourceTimingFullHandler = () => {
+    void handleEntries(performance.getEntriesByType('resource'), bridge);
+  };
+  resourceTimingEventTarget.addEventListener('resourcetimingbufferfull', resourceTimingFullHandler);
+}
+
+/**
+ * Arm (or re-arm) the no-segments deadline. While the primary video is paused
+ * the deadline is extended, up to MAX_DEADLINE_TOTAL_MS from the first arm, so
+ * a slow start does not demote the manifest tier before playback begins.
+ */
+function armCaptureDeadline(bridge: MessageBridgeSender, startedAt: number): void {
+  if (deadlineTimer !== null) clearTimeout(deadlineTimer);
+  deadlineTimer = setTimeout(() => {
+    deadlineTimer = null;
+    if (processingCompleted) return;
+    const video = findPrimaryVideo();
+    if (video && video.paused && Date.now() - startedAt < MAX_DEADLINE_TOTAL_MS) {
+      armCaptureDeadline(bridge, startedAt);
+      return;
+    }
+    processingCompleted = true;
+    bridge.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl: activeCaptureUrl,
+      platform: 'hbomax',
+      status: 'complete',
+      success: false,
+    });
+    console.log('AnyLLMTranslate: Max VTT capture deadline reached — no segments surfaced');
+  }, MAX_VTT_CAPTURE_DEADLINE_MS);
+}
+
+function stopWatchdog(): void {
+  if (watchdogTimer !== null) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+/**
+ * Report a stalled capture to the coordinator so it can demote the manifest
+ * tier and let DOM/TextTrack cues take over. A paused video is not a stall —
+ * the player stops requesting segments while paused.
+ */
+function startWatchdog(bridge: MessageBridgeSender): void {
+  stopWatchdog();
+  watchdogTimer = setInterval(() => {
+    if (stalledNotified || emittedIdentity === null) return;
+    if (Date.now() - lastEmissionAt < CAPTURE_STALL_MS) return;
+    const video = findPrimaryVideo();
+    if (!video || video.paused) return;
+    stalledNotified = true;
+    logCaptureStall();
+    bridge.send('SUBTITLE_MPD_PROCESSING', {
+      mpdUrl: activeCaptureUrl,
+      platform: 'hbomax',
+      status: 'stalled',
+      success: false,
+    });
+  }, WATCHDOG_INTERVAL_MS);
+}
+
+function logCaptureStall(): void {
+  console.warn('AnyLLMTranslate: Max VTT capture stalled — no new segment while playing', {
+    url: activeCaptureUrl,
+  });
 }
 
 /**
@@ -158,18 +350,9 @@ export function startMaxVttPerformanceCapture(bridge: MessageBridgeSender): () =
 
   // Deadline: if no VTT surfaces, signal failure so the coordinator's DOM
   // fallback proceeds (mirrors the old MAX_MPD_IN_FLIGHT_CAP_MS behavior).
-  deadlineTimer = setTimeout(() => {
-    if (!processingCompleted) {
-      processingCompleted = true;
-      bridge.send('SUBTITLE_MPD_PROCESSING', {
-        mpdUrl: activeCaptureUrl,
-        platform: 'hbomax',
-        status: 'complete',
-        success: false,
-      });
-      console.log('AnyLLMTranslate: Max VTT capture deadline reached — no segments surfaced');
-    }
-  }, MAX_VTT_CAPTURE_DEADLINE_MS);
+  // The clock only runs from playback: a paused player has not had a chance to
+  // request segments yet, so give up only once playback has actually started.
+  armCaptureDeadline(bridge, Date.now());
 
   try {
     perfObserver = new ObserverCtor((list) => {
@@ -178,6 +361,8 @@ export function startMaxVttPerformanceCapture(bridge: MessageBridgeSender): () =
     // buffered: true replays resource entries recorded before this observer
     // attached (e.g. segments the player already fetched during startup).
     perfObserver.observe({ type: 'resource', buffered: true });
+    installResourceTimingHeadroom(bridge);
+    startWatchdog(bridge);
   } catch (err) {
     console.log('AnyLLMTranslate: Failed to start Max VTT PerformanceObserver', err);
     perfObserver = null;
@@ -199,26 +384,92 @@ async function handleEntries(
   const newUrls: string[] = [];
   for (const entry of entries) {
     const url = entry.name;
-    if (seenUrls.has(url)) continue;
-    if (!isMaxCdnVttUrl(url)) continue;
-    seenUrls.add(url);
+    if (seenUrls.has(url) || inFlightUrls.has(url)) continue;
+    if (!isMaxCdnSubtitleUrl(url)) continue;
     newUrls.push(url);
   }
+  if (newUrls.length === 0) return;
 
-  for (const url of newUrls) {
-    await captureSegment(url, bridge);
+  const generationAtFetch = captureGeneration;
+  for (const url of newUrls) inFlightUrls.add(url);
+  try {
+    // Fetch concurrently (network-bound) but process in URL order so the first
+    // segment still performs the initial overlay activation.
+    const bodies = await mapWithConcurrency(newUrls, SEGMENT_FETCH_CONCURRENCY, (url) =>
+      fetchSegmentWithRetry(url),
+    );
+    for (let i = 0; i < newUrls.length; i++) {
+      const url = newUrls[i];
+      if (url === undefined) continue;
+      await captureSegment(url, bridge, bodies[i], generationAtFetch);
+    }
+  } finally {
+    for (const url of newUrls) inFlightUrls.delete(url);
   }
 }
 
-async function captureSegment(url: string, bridge: MessageBridgeSender): Promise<void> {
-  const body = await fetchSegment(url);
-  if (body === null) return;
-  if (!body.trimStart().startsWith('WEBVTT')) return;
+/** Run `fn` over `items` with a bounded number of concurrent calls, preserving order. */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next++;
+      if (index >= items.length) return;
+      const item = items[index];
+      if (item === undefined) return;
+      results[index] = await fn(item);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
-  const trackId = extractTrackId(url) ?? url;
+async function captureSegment(
+  url: string,
+  bridge: MessageBridgeSender,
+  prefetchedBody?: string | null,
+  generationAtFetch?: number,
+): Promise<void> {
+  const generation = generationAtFetch ?? captureGeneration;
+  const identity = resolveTrackIdentity(url) ?? url;
+
+  const body = prefetchedBody !== undefined ? prefetchedBody : await fetchSegmentWithRetry(url);
+  // Any reset while this fetch was in flight makes the result stale — a
+  // seek/track switch/navigation must not be re-locked by the old track.
+  if (generation !== captureGeneration) return;
+  if (body === null) {
+    // Exhausted all attempts (fetchSegmentWithRetry logged the failures).
+    // Mark seen so the observer cannot re-trigger an endless retry loop; a
+    // seek or track switch clears seenUrls and allows another attempt.
+    seenUrls.add(url);
+    console.warn('AnyLLMTranslate: Max VTT segment permanently unavailable', { url });
+    return;
+  }
+  const trimmed = body.trimStart();
+  const isVtt = trimmed.startsWith('WEBVTT');
+  const isTtml =
+    !isVtt &&
+    (trimmed.includes('<tt ') ||
+      trimmed.includes('<tt>') ||
+      trimmed.includes('xmlns="http://www.w3.org/ns/ttml"'));
+  if (!isVtt && !isTtml) {
+    seenUrls.add(url);
+    console.warn('AnyLLMTranslate: Max subtitle segment is neither WebVTT nor TTML — ignoring', {
+      url,
+    });
+    return;
+  }
+  seenUrls.add(url);
+  stalledNotified = false;
+
   const language = readMaxActiveSubtitleLanguage();
 
-  const newCues = parseWebVTT(body).map((cue) => ({
+  const newCues = (isVtt ? parseWebVTT(body) : parseSubtitleContent(body, '', url)).map((cue) => ({
     startTime: cue.startTime,
     endTime: cue.endTime,
     text: cue.text,
@@ -226,29 +477,58 @@ async function captureSegment(url: string, bridge: MessageBridgeSender): Promise
   const substantive = newCues.filter((c) => c.text.trim().length > 0);
   if (substantive.length === 0) return;
 
-  // Locked onto a different track already → drop until a track-switch reset.
-  if (emittedTrack !== null && emittedTrack !== trackId) return;
+  const now = Date.now();
+  const isKnownIdentity = emittedIdentity === identity;
+  if (emittedIdentity !== null && !isKnownIdentity) {
+    // A different representation. Only switch when the current one has gone
+    // quiet; otherwise this is an interleaved foreign segment (preview/lead-in)
+    // and must not hijack the rolling buffer.
+    if (now - lastEmissionAt < TRACK_SWITCH_IDLE_MS) return;
+    cueBuffer = [];
+  }
+  const isFirstEmission = emittedIdentity === null || !isKnownIdentity;
+  emittedIdentity = identity;
+  lastEmissionAt = now;
 
   cueBuffer = mergeCues(cueBuffer, newCues);
 
-  // Same track, already emitted → progressive append into the active overlay.
-  if (emittedTrack === trackId) {
+  // Same track, already emitted → progressive delta append into the active
+  // overlay. Every FULL_RESYNC_EVERY emissions the whole accumulated buffer is
+  // re-sent so a dropped message cannot permanently desync the coordinator.
+  if (!isFirstEmission) {
+    manifestSeq++;
+    if (emissionsSinceResync >= FULL_RESYNC_EVERY) {
+      emissionsSinceResync = 1;
+      bridge.send('SUBTITLE_MANIFEST_CUES', {
+        cues: cueBuffer,
+        platform: 'hbomax',
+        language,
+        url,
+        append: true,
+        full: true,
+        seq: manifestSeq,
+      });
+      return;
+    }
+    emissionsSinceResync++;
     bridge.send('SUBTITLE_MANIFEST_CUES', {
-      cues: cueBuffer,
+      cues: newCues,
       platform: 'hbomax',
       language,
       url,
       append: true,
+      seq: manifestSeq,
     });
     return;
   }
 
   // First emission for this track.
-  emittedTrack = trackId;
   activeCaptureUrl = url;
+  manifestSeq++;
+  emissionsSinceResync = 1;
 
   console.log('AnyLLMTranslate: Captured Max VTT segment via Performance API', {
-    trackId,
+    trackId: identity,
     language,
     url,
     cueCount: cueBuffer.length,
@@ -259,6 +539,7 @@ async function captureSegment(url: string, bridge: MessageBridgeSender): Promise
     platform: 'hbomax',
     language,
     url,
+    seq: manifestSeq,
   });
 
   completeProcessing(bridge, true);
@@ -284,18 +565,35 @@ async function fetchSegment(url: string): Promise<string | null> {
   const timer = setTimeout(() => controller.abort(), PAGE_FETCH_TIMEOUT_MS);
   try {
     const response = await pageFetch(url, { signal: controller.signal });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn('AnyLLMTranslate: Max VTT segment fetch failed', {
+        url,
+        status: response.status,
+      });
+      return null;
+    }
     return await response.text();
-  } catch {
+  } catch (error) {
+    console.warn('AnyLLMTranslate: Max VTT segment fetch error', {
+      url,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   } finally {
     clearTimeout(timer);
   }
 }
 
-function extractTrackId(url: string): string | null {
-  const match = url.match(/\/t\/[^/]+\/(t\d+)\//i);
-  return match?.[1] ?? null;
+/** Fetch a segment, retrying transient failures a bounded number of times. */
+async function fetchSegmentWithRetry(url: string): Promise<string | null> {
+  for (let attempt = 1; attempt <= MAX_SEGMENT_FETCH_ATTEMPTS; attempt++) {
+    const body = await fetchSegment(url);
+    if (body !== null) return body;
+    if (attempt < MAX_SEGMENT_FETCH_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, SEGMENT_RETRY_DELAY_MS));
+    }
+  }
+  return null;
 }
 
 function mergeCues(existing: SubtitleCue[], incoming: SubtitleCue[]): SubtitleCue[] {

@@ -57,7 +57,9 @@ import { findMatchingRule } from '@/lib/siteRules';
 import { isSiteDisabled } from '@/lib/subtitleSites';
 import { resolveProfile, type SubtitleProfile, type ProfileKnobs } from '@/lib/subtitleProfiles';
 import { adaptCueTimings } from '@/lib/subtitleTiming';
+import { shouldTeardownSubtitleSession } from '@/lib/subtitleTeardown';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
+import { getLanguageName } from '@/lib/languages';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
 import { startSpaNavigationWatcher as watchSpaNavigation } from '@/content/spaNavigationWatcher';
@@ -117,12 +119,27 @@ function hbomaxUsesMpdSubtitlePipeline(): boolean {
 }
 
 /** Start (or extend) the DOM deferral window while Max MPD may still deliver cues.
- *  Does not set mpdProcessingInFlight — only SUBTITLE_MPD_PROCESSING started does. */
+ *  Does not set mpdProcessingInFlight — only SUBTITLE_MPD_PROCESSING started does.
+ *
+ *  Repeated discovery events (a Max player emits SUBTITLE_TRACKS_AVAILABLE on
+ *  every caption menu render) must not push the window out forever: the window
+ *  is clamped to MAX_MPD_DOM_GRACE_MS * 3 from the moment the episode started.
+ *  Otherwise a busy player would defer DOM/texttrack cues for the whole
+ *  episode and the user would see no subtitles at all. */
 function armMpdDomGraceWindow(): void {
-  const until = Date.now() + MAX_MPD_DOM_GRACE_MS;
+  const now = Date.now();
+  if (state.mpdGraceArmedAt === 0) state.mpdGraceArmedAt = now;
+  const hardCap = state.mpdGraceArmedAt + MAX_MPD_DOM_GRACE_MS * 3;
+  const until = Math.min(now + MAX_MPD_DOM_GRACE_MS, hardCap);
   if (until > state.mpdGraceUntil) {
     state.mpdGraceUntil = until;
   }
+}
+
+/** End the current MPD grace episode (in-flight cap, success, demotion, reset). */
+function clearMpdGraceEpisode(): void {
+  state.mpdGraceUntil = 0;
+  state.mpdGraceArmedAt = 0;
 }
 
 /**
@@ -262,7 +279,7 @@ function clearMpdDomFallbackTimer(): void {
 function shouldDeferDomForMpd(): boolean {
   if (mpdInFlightExceededCap()) {
     state.mpdProcessingInFlight = false;
-    state.mpdGraceUntil = 0;
+    clearMpdGraceEpisode();
     return false;
   }
   if (state.mpdProcessingInFlight) return true;
@@ -271,7 +288,7 @@ function shouldDeferDomForMpd(): boolean {
 
 function scheduleMpdDomFallbackRetry(): void {
   if (state.isOverlayMode || state.activeSource === 'manifest') return;
-  if (!state.pendingDomCuesPayload) return;
+  if (!state.pendingDomCuesPayload && !state.pendingTextTrackCuesPayload) return;
   clearMpdDomFallbackTimer();
   const delay = state.mpdProcessingInFlight
     ? Math.min(
@@ -281,17 +298,28 @@ function scheduleMpdDomFallbackRetry(): void {
     : Math.max(0, state.mpdGraceUntil - Date.now());
   state.mpdDomFallbackTimer = setTimeout(() => {
     state.mpdDomFallbackTimer = null;
-    void flushPendingDomCuesAfterMpd();
+    void flushPendingCuesAfterMpd();
   }, delay + 50);
 }
 
-async function flushPendingDomCuesAfterMpd(): Promise<void> {
+async function flushPendingCuesAfterMpd(): Promise<void> {
   if (state.isOverlayMode || state.activeSource === 'manifest') {
     state.pendingDomCuesPayload = null;
+    state.pendingTextTrackCuesPayload = null;
     return;
   }
   if (shouldDeferDomForMpd()) {
     scheduleMpdDomFallbackRetry();
+    return;
+  }
+  // TextTrack cues (Tier 4) outrank scraped DOM cues (Tier 5); flushing them
+  // first also suppresses the DOM payload via shouldSuppressSource('dom').
+  const textTrackPayload = state.pendingTextTrackCuesPayload;
+  state.pendingTextTrackCuesPayload = null;
+  if (textTrackPayload && textTrackPayload.cues.length > 0) {
+    state.pendingDomCuesPayload = null;
+    console.log('AnyLLMTranslate: Max MPD did not activate overlay — using TextTrack cues');
+    await handleTextTrackCues(textTrackPayload);
     return;
   }
   const payload = state.pendingDomCuesPayload;
@@ -305,24 +333,73 @@ function handleMpdProcessing(payload: { status: string; success?: boolean }): vo
   if (payload.status === 'started') {
     state.mpdProcessingInFlight = true;
     state.mpdProcessingStartedAt = Date.now();
-    state.mpdGraceUntil = Date.now() + MAX_MPD_DOM_GRACE_MS;
+    // A fresh in-flight processing starts a new grace episode.
+    if (state.mpdGraceArmedAt === 0) state.mpdGraceArmedAt = Date.now();
+    const hardCap = state.mpdGraceArmedAt + MAX_MPD_DOM_GRACE_MS * 3;
+    state.mpdGraceUntil = Math.min(Date.now() + MAX_MPD_DOM_GRACE_MS, hardCap);
+    return;
+  }
+  if (payload.status === 'stalled') {
+    demoteManifestTier('capture stalled');
     return;
   }
   state.mpdProcessingInFlight = false;
   state.mpdProcessingStartedAt = 0;
   if (payload.success) {
-    state.mpdGraceUntil = 0;
+    clearMpdGraceEpisode();
     state.pendingDomCuesPayload = null;
+    state.pendingTextTrackCuesPayload = null;
     clearMpdDomFallbackTimer();
     return;
   }
-  state.mpdGraceUntil = 0;
-  void flushPendingDomCuesAfterMpd();
+  clearMpdGraceEpisode();
+  void flushPendingCuesAfterMpd();
+}
+
+/**
+ * Demote the manifest tier after the MAIN-world capture reports a stall, so
+ * the DOM/TextTrack tiers can take over. The last rendered cues stay visible
+ * until a lower tier pushes new ones, and Max's hidden native captions are
+ * restored only when the overlay is fully torn down.
+ */
+function demoteManifestTier(reason: string): void {
+  const wasManifestActive = state.activeSource === 'manifest';
+  state.mpdProcessingInFlight = false;
+  state.mpdProcessingStartedAt = 0;
+  clearMpdGraceEpisode();
+  clearMpdDomFallbackTimer();
+  state.pendingDomCuesPayload = null;
+  state.pendingTextTrackCuesPayload = null;
+  if (!wasManifestActive) return;
+
+  // Clear the rank so the next DOM/TextTrack payload can claim the overlay.
+  state.activeSource = null;
+  if (!manifestStallNotified) {
+    manifestStallNotified = true;
+    console.warn('AnyLLMTranslate: Max VTT capture stalled — falling back to on-screen captions', {
+      reason,
+    });
+    showSubtitleToast('Max subtitle capture stalled — falling back to on-screen captions.');
+  }
 }
 
 async function waitForMpdGraceIfNeeded(): Promise<void> {
+  const startedAt = Date.now();
+  let iterations = 0;
+  const maxIterations = Math.ceil(MAX_MPD_IN_FLIGHT_CAP_MS / 200) + 5;
   while (state.mpdProcessingInFlight || Date.now() < state.mpdGraceUntil) {
     if (state.activeSource === 'manifest' && state.isOverlayMode) return;
+    // Bounded wait: a stuck MPD processor (or a grace window that keeps being
+    // re-armed) must never block the DOM fallback indefinitely.
+    const capExceeded = mpdInFlightExceededCap()
+      || iterations >= maxIterations
+      || Date.now() - startedAt >= MAX_MPD_IN_FLIGHT_CAP_MS;
+    if (capExceeded) {
+      state.mpdProcessingInFlight = false;
+      clearMpdGraceEpisode();
+      return;
+    }
+    iterations += 1;
     await new Promise((r) => setTimeout(r, 200));
   }
 }
@@ -401,10 +478,15 @@ interface CoordinatorState {
   mpdProcessingInFlight: boolean;
   /** DOM tier deferred until this timestamp (ms) while MPD may still succeed */
   mpdGraceUntil: number;
+  /** When the current grace episode first armed (0 = no episode). Used to clamp
+   *  repeated SUBTITLE_TRACKS_DISCOVERED events from extending it forever. */
+  mpdGraceArmedAt: number;
   /** Timestamp when SUBTITLE_MPD_PROCESSING started (for in-flight cap). */
   mpdProcessingStartedAt: number;
   /** Latest DOM cue batch held while MPD may still win (Max). */
   pendingDomCuesPayload: SubtitleDomCuesPayload | null;
+  /** Latest TextTrack cue batch held while MPD may still win (Max, Tier 4). */
+  pendingTextTrackCuesPayload: SubtitleTextTrackCuesPayload | null;
   /** One-shot timer to activate DOM after grace when MPD does not deliver. */
   mpdDomFallbackTimer: ReturnType<typeof setTimeout> | null;
   /** Playback time captured on seek — anchors translation priority until the next segment. */
@@ -449,8 +531,10 @@ const state: CoordinatorState = {
   youtubeAutoActivationKeys: new Set(),
   mpdProcessingInFlight: false,
   mpdGraceUntil: 0,
+  mpdGraceArmedAt: 0,
   mpdProcessingStartedAt: 0,
   pendingDomCuesPayload: null,
+  pendingTextTrackCuesPayload: null,
   mpdDomFallbackTimer: null,
   playbackAnchorTime: null,
 };
@@ -715,6 +799,22 @@ function restoreHtml5TextTracks(): void {
     }
   }
   state.hiddenHtml5Tracks.clear();
+}
+
+/**
+ * Re-apply the native-track hide when the player may have re-enabled a track.
+ *
+ * MAX-30: the player re-asserts its own caption track on `loadedmetadata`,
+ * on `play`, and after a track switch (its React state is unaware of our
+ * change). Re-hiding is only safe while our overlay owns the display —
+ * `hiddenHtml5Tracks` being non-empty proves we already hid tracks, and
+ * `isOverlayMode` covers the window where the overlay is attached but the
+ * player had no showing track to hide. Without either, hiding would silently
+ * remove the user's native captions.
+ */
+function rehideHtml5TextTracksIfActive(): void {
+  if (!state.isOverlayMode && state.hiddenHtml5Tracks.size === 0) return;
+  hideHtml5TextTracks();
 }
 
 /**
@@ -1477,6 +1577,13 @@ async function translateDomCueTexts(
   sessionId: number | null,
 ): Promise<void> {
   if (newTexts.length === 0) return;
+  // MAX-14: allocate the session identity BEFORE sending. Passing `undefined`
+  // let the background invent an id the coordinator never learned, so every
+  // progressive SUBTITLE_CHUNK_TRANSLATED message was dropped as stale and a
+  // cancelled request's response could still be applied (the stale guard was
+  // skipped while the id was unknown).
+  const requestSessionId = sessionId ?? allocateSubtitleSessionId();
+  if (sessionId === null) state.activeSubtitleSessionId = requestSessionId;
   const orderedTexts = sortCueTextsByPlaybackPriority(
     newTexts,
     state.domOriginalCues,
@@ -1497,14 +1604,14 @@ async function translateDomCueTexts(
       pageContext,
       profile: currentSubtitleProfile(),
       knobOverrides: state.subtitleKnobOverride,
-      sessionId: sessionId ?? undefined,
+      sessionId: requestSessionId,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
 
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: DOM cue delta translation failed', response?.error);
       return;
     }
-    if (sessionId !== null && sessionId !== state.activeSubtitleSessionId) {
+    if (requestSessionId !== state.activeSubtitleSessionId) {
       return;
     }
     if (response.sessionId !== undefined) {
@@ -1543,16 +1650,44 @@ function clearDomTranslationBuffers(): void {
  * authoritative — identical to the DOM tier's contract. Returns the list of
  * NEW cue texts not yet sent for translation.
  */
-function mergeManifestOriginalCues(incoming: SubtitleCue[]): string[] {
+function mergeManifestOriginalCues(
+  incoming: SubtitleCue[],
+  meta?: { append?: boolean; full?: boolean; seq?: number },
+): string[] {
+  // Sequenced delta appends merge into the rolling buffer; anything else
+  // (initial activation, periodic resync, or a sequence gap) replaces it.
+  const isSequentialDelta =
+    meta?.append === true &&
+    meta.full !== true &&
+    meta.seq !== undefined &&
+    meta.seq === lastManifestSeq + 1;
+  state.manifestOriginalCues = isSequentialDelta
+    ? mergeCuesByIdentity(state.manifestOriginalCues, incoming)
+    : incoming.map((c) => ({ ...c }));
+  if (meta?.seq !== undefined) lastManifestSeq = meta.seq;
+
   const newTexts: string[] = [];
-  state.manifestOriginalCues = incoming.map((c) => ({ ...c }));
-  for (const cue of incoming) {
+  for (const cue of state.manifestOriginalCues) {
     if (!state.manifestTranslatedTexts.has(cue.text)) {
       newTexts.push(cue.text);
       state.manifestTranslatedTexts.add(cue.text);
     }
   }
   return newTexts;
+}
+
+/** Deduplicate + sort cues by start|end|text identity. */
+function mergeCuesByIdentity(existing: SubtitleCue[], incoming: SubtitleCue[]): SubtitleCue[] {
+  const byIdentity = new Map<string, SubtitleCue>();
+  const keyFor = (cue: SubtitleCue) => `${cue.startTime}|${cue.endTime}|${cue.text}`;
+  for (const cue of existing) byIdentity.set(keyFor(cue), cue);
+  for (const cue of incoming) byIdentity.set(keyFor(cue), cue);
+  return Array.from(byIdentity.values()).sort(
+    (a, b) =>
+      a.startTime - b.startTime ||
+      a.endTime - b.endTime ||
+      a.text.localeCompare(b.text),
+  );
 }
 
 /**
@@ -1583,9 +1718,14 @@ function applyTranslatedCueBatchToMap(
 ): void {
   for (const c of translated) {
     const src = c.originalText;
-    if (src && c.text !== src) {
-      map.set(src, c.text);
-    }
+    if (!src) continue;
+    // MAX-15/16: cache keep-as-is results too (proper nouns, numbers, "OK",
+    // interjections the model legitimately returns unchanged). Skipping them
+    // left the text in the pending set with no map entry, so the next seek
+    // reset (reconcilePendingTranslatedTexts drops unmapped texts) re-sent the
+    // identical cue to the LLM — once per seek, per caption. An empty/blank
+    // translation falls back to the source so the cue is never blanked.
+    map.set(src, c.text && c.text.trim() ? c.text : src);
   }
 }
 
@@ -1747,6 +1887,36 @@ function clearManifestTranslationBuffers(): void {
   resetActiveSource();
 }
 
+/** One-shot guard: the manifest-tier stall toast fires once per navigation. */
+let manifestStallNotified = false;
+/**
+ * One-shot guard: the "track skipped because of your preferred language" toast.
+ * MAX-36: silently returning left the user staring at untranslated native
+ * captions with no hint that a preference was the cause. Reset on navigation.
+ */
+let preferredLanguageSkipNotified = false;
+
+/** Explain (once per navigation) that the active track was skipped by preference. */
+function notifyPreferredLanguageSkip(trackLanguage: string, preferred: string): void {
+  if (preferredLanguageSkipNotified) return;
+  preferredLanguageSkipNotified = true;
+  const trackName = getLanguageName(trackLanguage) || trackLanguage;
+  const preferredName = getLanguageName(preferred) || preferred;
+  console.log('AnyLLMTranslate: Skipping manifest cues — track language not preferred', {
+    trackLanguage,
+    preferred,
+  });
+  showSubtitleToast(
+    `This track is ${trackName}, but your preferred subtitle language is ${preferredName}. ` +
+      `Switch the track or set the preference to Auto to translate it.`,
+  );
+}
+/**
+ * Last accepted SUBTITLE_MANIFEST_CUES seq. A gap means a message was dropped,
+ * so the next payload must replace the buffer instead of merging into it.
+ */
+let lastManifestSeq = -1;
+
 /** Debounce timer for seek-initiated buffer resets (coalesces rapid scrubbing). */
 let seekResetTimer: ReturnType<typeof setTimeout> | null = null;
 const SEEK_RESET_DEBOUNCE_MS = 200;
@@ -1880,17 +2050,41 @@ function preemptLowerTierOverlay(): void {
 }
 
 /**
+ * Drop the cue buffers that belong to the track we just left, keeping the
+ * translation caches.
+ *
+ * MAX-16: a track switch changes which cues will arrive, not what a caption
+ * means. Clearing `domTranslationMap`/`manifestTranslationMap` (and the
+ * "already sent" sets) forced every repeated caption to be re-translated from
+ * scratch on the new track — e.g. switching from "English" to "English (CC)",
+ * or a player that re-asserts the same track. Buffers that carry timing
+ * (`*OriginalCues`/`*TranslatedCues`) and the session id (background work for
+ * the old track must be ignored) are dropped instead.
+ */
+function resetCueBuffersForTrackSwitch(): void {
+  state.domOriginalCues = [];
+  state.domTranslatedCues = [];
+  state.manifestOriginalCues = [];
+  state.manifestTranslatedCues = [];
+  state.activeSubtitleSessionId = null;
+  resetActiveSource();
+}
+
+/**
  * Reset coordinator state when Max subtitle track changes mid-session.
  */
 async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): Promise<void> {
-  console.log('AnyLLMTranslate: DOM subtitle track changed — clearing translation state');
+  console.log('AnyLLMTranslate: DOM subtitle track changed — clearing cue buffers, keeping translation caches');
   cancelBackgroundSubtitleSession();
   // Track-switch fires regardless of which tier is currently active (Max's
   // aria-checked observer doesn't know about our tier precedence), so clear
-  // both DOM and manifest buffers — otherwise the manifest tier's persistent
-  // translationMap/translatedTexts Set from the OLD track survive the switch.
-  clearDomTranslationBuffers();
-  clearManifestTranslationBuffers();
+  // both DOM and manifest cue buffers — otherwise cues from the OLD track's
+  // timeline stay matchable. Translation maps/sets are preserved on purpose
+  // (MAX-16): they are keyed by cue text, not by track.
+  resetCueBuffersForTrackSwitch();
+  // The new track may be rendered natively by the player — re-hide it while
+  // our overlay is up (MAX-30).
+  rehideHtml5TextTracksIfActive();
   if (state.isOverlayMode) {
     updateActiveRendererCues([]);
   }
@@ -1908,12 +2102,23 @@ async function handleTextTrackCues(payload: SubtitleTextTrackCuesPayload): Promi
   if (shouldSuppressSource('texttrack')) return; // Higher-precedence source already active
   if (state.isOverlayMode && state.activeSource === 'texttrack') return; // Already active
 
+  // Max: the TextTrack tier is a fallback for the MPD/capture tier, not a
+  // competitor. Hold full-track HTML5 cues until the manifest tier has had its
+  // chance, then process the held payload through the same flush path as DOM.
+  if (!state.isOverlayMode && hbomaxUsesMpdSubtitlePipeline() && shouldDeferDomForMpd()) {
+    state.pendingTextTrackCuesPayload = payload;
+    scheduleMpdDomFallbackRetry();
+    console.log('AnyLLMTranslate: Deferring TextTrack cues — Max MPD fetch/parse in progress');
+    return;
+  }
+
   console.log('AnyLLMTranslate: TextTrack full cues received', {
     language: payload.language,
     cueCount: payload.cues.length,
   });
 
   const settings = await loadSettings();
+  if (!state.cachedSettings) state.cachedSettings = settings;
   if (!settings.subtitleSettings.enabled) return;
 
   // Use the same overlay activation + translation path as manifest-sourced cues
@@ -2078,6 +2283,9 @@ async function activateOverlayFromDom(payload: SubtitleDomCuesPayload): Promise<
 
   const epochAtStart = state.navigationEpoch;
   const settings = await loadSettings();
+  // Seed the shared cache: the settings-change listener diffs it against the
+  // incoming settings to decide whether the live session must be torn down.
+  if (!state.cachedSettings) state.cachedSettings = settings;
   if (state.navigationEpoch !== epochAtStart) return; // stale — user navigated away
   if (!settings.subtitleSettings.enabled) {
     cleanupActiveOverlay();
@@ -2163,6 +2371,7 @@ async function activateOverlayFromManifestCues(
   cues: SubtitleCue[],
   language: string,
   trackUrl?: string,
+  meta?: { append?: boolean; full?: boolean; seq?: number },
 ): Promise<boolean> {
   if (shouldSuppressSource('manifest')) return false;
   if (state.isOverlayMode && state.activeSource === 'manifest') return false;
@@ -2198,7 +2407,7 @@ async function activateOverlayFromManifestCues(
   // TranslatedCues maps through the (empty) translation map, so the overlay
   // initially shows original text as fallback — identical to DOM activation.
   // The first delta translation below upgrades chunk 0 in place.
-  mergeManifestOriginalCues(cues);
+  mergeManifestOriginalCues(cues, meta);
   rebuildManifestTranslatedCues();
 
   const savedPrefs = await initializeControls();
@@ -2221,14 +2430,23 @@ async function activateOverlayFromManifestCues(
   // Translate the first delta (all cue texts seen so far). On success the
   // manifestTranslationMap is populated and the overlay upgrades to
   // translated text for the initial chunk. This mirrors translateDomCueTexts.
-  const newTexts = [...state.manifestTranslatedTexts];
-  await translateManifestCueTexts(
-    newTexts,
-    sourceLanguage,
-    settings.targetLanguage,
-    pageContext,
-    sessionId,
+  //
+  // MAX-16: after a seek reset the tier re-activates with the pending set (and
+  // the translation map) from before the seek. Texts already in the map are
+  // rendered from cache — re-sending them would re-bill the LLM for cues that
+  // are identical to what was already translated.
+  const newTexts = [...state.manifestTranslatedTexts].filter(
+    (text) => !state.manifestTranslationMap.has(text),
   );
+  if (newTexts.length > 0) {
+    await translateManifestCueTexts(
+      newTexts,
+      sourceLanguage,
+      settings.targetLanguage,
+      pageContext,
+      sessionId,
+    );
+  }
 
   hideSubtitleToast();
   showSubtitleToast('Subtitles processing...');
@@ -2241,7 +2459,8 @@ async function activateOverlayFromManifestCues(
  * fetches the HLS/DASH playlist + segments, assembles into SubtitleCue[]),
  * then feeds cues into the same chunked translation path.
  */
-async function activateOverlayModeFromManifest(playlistUrl: string): Promise<void> {
+async function activateOverlayModeFromManifest(track: AvailableSubtitleTrack): Promise<void> {
+  const playlistUrl = track.url ?? '';
   if (shouldSuppressSource('manifest')) return;
   if (state.isOverlayMode && state.activeSource === 'manifest') return;
 
@@ -2254,6 +2473,10 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
   showSubtitleToast('Fetching subtitle track from manifest...', true);
 
   const preferredLanguage = settings.subtitleSettings.preferredSubtitleLanguage;
+  // MAX-10/11: the segment metadata (and its language echo) is only meaningful
+  // on the segment passthrough path; a plain manifest request keeps its
+  // long-standing shape so other manifest handlers see no change.
+  const hasSegmentMetadata = Boolean(track.segmentUrls?.length || track.segmentFetch);
   let cues: SubtitleCue[];
   let resolvedLanguage: string;
   try {
@@ -2261,6 +2484,13 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
       action: 'FETCH_MANIFEST_SUBTITLES',
       playlistUrl,
       preferredLanguage: preferredLanguage && preferredLanguage !== 'auto' ? preferredLanguage : undefined,
+      // MAX-10/11: hand the background the segments the MPD parser already
+      // resolved for this exact track (concatenated across Periods). Without
+      // them the background re-parses the manifest and returns only the first
+      // Period's segments, silently truncating the episode.
+      segmentUrls: track.segmentUrls?.length ? track.segmentUrls : undefined,
+      segmentFetch: track.segmentUrls?.length ? undefined : track.segmentFetch,
+      language: hasSegmentMetadata ? track.language : undefined,
     }) as { success: boolean; cues?: SubtitleCue[]; error?: string; language?: string };
 
     if (!response?.success || !response.cues || response.cues.length === 0) {
@@ -2270,7 +2500,7 @@ async function activateOverlayModeFromManifest(playlistUrl: string): Promise<voi
       return;
     }
     cues = response.cues;
-    resolvedLanguage = response.language ?? '';
+    resolvedLanguage = response.language || track.language || '';
   } catch (error) {
     console.error('AnyLLMTranslate: Manifest subtitle fetch error', error);
     hideSubtitleToast();
@@ -2300,11 +2530,12 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     payload.language &&
     !subtitleLanguagesMatch(payload.language, preferred)
   ) {
+    notifyPreferredLanguageSkip(payload.language, preferred);
     return;
   }
 
   state.mpdProcessingInFlight = false;
-  state.mpdGraceUntil = 0;
+  clearMpdGraceEpisode();
 
   const canReuseManifestShell =
     state.activeSource === 'manifest' ||
@@ -2322,7 +2553,11 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
       // Mirrors handleDomCues steady-state (delta-only translation against a
       // persistent map). Previously this branch called updateCues(payload.cues)
       // directly, which overwrote the overlay with raw untranslated source text.
-      const newTexts = mergeManifestOriginalCues(payload.cues);
+      const newTexts = mergeManifestOriginalCues(payload.cues, {
+        append: payload.append,
+        full: payload.full,
+        seq: payload.seq,
+      });
       // Always rebuild + push, even when no new texts — timing corrections on
       // prior cues must reach findActiveCue().
       rebuildManifestTranslatedCues();
@@ -2350,7 +2585,11 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     // Fresh non-append emission while manifest tier is still active (VTT capture
     // restart after BFCache restore, or track switch before activeSource reset).
     // Re-seed the rolling buffer without tearing down the overlay shell.
-    const newTexts = mergeManifestOriginalCues(payload.cues);
+    const newTexts = mergeManifestOriginalCues(payload.cues, {
+      append: payload.append,
+      full: payload.full,
+      seq: payload.seq,
+    });
     rebuildManifestTranslatedCues();
     updateActiveRendererCues(state.manifestTranslatedCues);
     state.playbackAnchorTime = null;
@@ -2376,6 +2615,7 @@ async function handleManifestCues(payload: SubtitleManifestCuesPayload): Promise
     payload.cues,
     payload.language,
     payload.url,
+    { append: payload.append, full: payload.full, seq: payload.seq },
   );
   if (activated) {
     state.videoIsPlaying = true;
@@ -2616,6 +2856,13 @@ function startSpaNavigationWatcher(): () => void {
       clearTimeout(proactiveCategoryDetectionTimer);
       proactiveCategoryDetectionTimer = null;
     }
+    // MAX-3: tell the MAIN world to drop capture state (in-flight segment
+    // fetches, sequence counters, DOM cue buffers) before we reset our own
+    // state. Sent first because resetCoordinatorState() forgets the platform
+    // context the MAIN world needs to log/scope the reset.
+    sendMessage('SUBTITLE_CAPTURE_RESET', {
+      platform: detectCurrentHandler()?.platform,
+    });
     // Tell the background to abandon any in-progress subtitle session for this
     // tab so it stops translating cues for the page we just left.
     cancelBackgroundSubtitleSession();
@@ -2712,6 +2959,17 @@ export function startCoordinator(): () => void {
   // Refresh cache on settings changes.
   const settingsChangeListener = () => {
     loadSettings().then((s) => {
+      // MAX-13/14: switching subtitles off (or disabling this site) must end the
+      // running session, not just restyle it — otherwise the overlay keeps
+      // translating cues and the background session stays open.
+      const prev = state.cachedSettings?.subtitleSettings;
+      const platform = detectCurrentHandler()?.platform;
+      if (prev && platform && shouldTeardownSubtitleSession(prev, s.subtitleSettings, platform)) {
+        console.log('AnyLLMTranslate: Subtitle settings disabled this session — tearing down');
+        cleanupActiveOverlay();
+        cancelBackgroundSubtitleSession();
+        hideSubtitleToast();
+      }
       state.cachedSettings = s;
       pushSubtitleConfigToMainWorld(s);
       if (styleApplyTimer) clearTimeout(styleApplyTimer);
@@ -2938,6 +3196,7 @@ export function isInOverlayMode(): boolean {
  * Reset coordinator state (for testing or SPA navigation).
  */
 export function resetCoordinatorState(): void {
+  preferredLanguageSkipNotified = false;
   // Clean up active overlay before resetting the flag
   cleanupRendererAttachmentRetry();
   if (state.isOverlayMode || state.activeRenderer) {
@@ -2964,9 +3223,12 @@ export function resetCoordinatorState(): void {
   state.youtubeCaptionFallbackUrls.clear();
   state.youtubeAutoActivationKeys.clear();
   state.mpdProcessingInFlight = false;
-  state.mpdGraceUntil = 0;
+  clearMpdGraceEpisode();
   state.mpdProcessingStartedAt = 0;
   state.pendingDomCuesPayload = null;
+  state.pendingTextTrackCuesPayload = null;
+  manifestStallNotified = false;
+  lastManifestSeq = -1;
   state.playbackAnchorTime = null;
   clearMpdDomFallbackTimer();
   if (seekResetTimer !== null) {
@@ -3107,9 +3369,25 @@ async function processTracksDiscovered(payload: SubtitleTracksDiscoveredPayload)
     );
     if (!existing) {
       state.availableTracks.push(track);
-    } else if (track.url && !existing.url) {
-      // Update URL if newly discovered
-      existing.url = track.url;
+    } else {
+      // MAX-11: the same language can be split across DASH Periods (one track
+      // entry per Period). Merging by identity must therefore fold the Period
+      // segment lists in discovery order — keeping only the first entry
+      // silently truncates the episode to its first Period.
+      if (track.segmentUrls?.length) {
+        const merged = [...(existing.segmentUrls ?? [])];
+        for (const segmentUrl of track.segmentUrls) {
+          if (!merged.includes(segmentUrl)) merged.push(segmentUrl);
+        }
+        existing.segmentUrls = merged;
+      }
+      if (!existing.segmentFetch && track.segmentFetch) {
+        existing.segmentFetch = track.segmentFetch;
+      }
+      if (track.url && !existing.url) {
+        // Update URL if newly discovered
+        existing.url = track.url;
+      }
     }
   }
 
@@ -3368,7 +3646,12 @@ function startVideoPlaybackWatcher(): () => void {
   /** Store references to remove listeners on cleanup */
   const listenerMap = new Map<
     HTMLVideoElement,
-    { play: () => void; pause: () => void; timeupdate: () => void }
+    {
+      play: () => void;
+      pause: () => void;
+      timeupdate: () => void;
+      loadedmetadata: () => void;
+    }
   >();
 
   const runPlayActivation = () => {
@@ -3427,8 +3710,17 @@ function startVideoPlaybackWatcher(): () => void {
     watchedVideos.add(video);
 
     const playHandler = () => {
+      // The player re-asserts its own caption track when playback starts.
+      rehideHtml5TextTracksIfActive();
       runPlayActivation();
     };
+
+    // `loadedmetadata` fires on every media load (next episode, ad boundary)
+    // and is when players typically restore their subtitle track mode.
+    const loadedMetadataHandler = () => {
+      rehideHtml5TextTracksIfActive();
+    };
+    video.addEventListener('loadedmetadata', loadedMetadataHandler);
 
     const pauseHandler = () => {
       // Don't reset here — a brief pause shouldn't lose the "playing" state.
@@ -3460,6 +3752,7 @@ function startVideoPlaybackWatcher(): () => void {
       play: playHandler,
       pause: pauseHandler,
       timeupdate: timeupdateHandler,
+      loadedmetadata: loadedMetadataHandler,
     });
   };
 
@@ -3535,6 +3828,7 @@ function startVideoPlaybackWatcher(): () => void {
     for (const [video, handlers] of listenerMap) {
       video.removeEventListener('play', handlers.play);
       video.removeEventListener('pause', handlers.pause);
+      video.removeEventListener('loadedmetadata', handlers.loadedmetadata);
       video.removeEventListener('seeked', handleVideoSeeked);
       video.removeEventListener('timeupdate', handlers.timeupdate);
     }
@@ -3607,13 +3901,34 @@ export async function selectSubtitleTrack(
 
   console.log('AnyLLMTranslate: Selecting subtitle track', { language, url: track.url });
 
+  // MAX-10/11: a DASH subtitle track can span multiple Periods, and the MPD
+  // parser emits one track entry per (Period, language). Merge every matching
+  // entry — in discovery order — so the assembled track covers the whole
+  // episode instead of the first Period only.
+  const periodMergedTrack: AvailableSubtitleTrack = {
+    ...track,
+    segmentUrls: matchingTracks
+      .flatMap((t) => t.segmentUrls ?? [])
+      .filter((url, index, all) => all.indexOf(url) === index),
+    segmentFetch: track.segmentFetch
+      ?? matchingTracks.find((t) => t.segmentFetch)?.segmentFetch,
+  };
+  const hasSegmentMetadata =
+    (periodMergedTrack.segmentUrls?.length ?? 0) > 0 || Boolean(periodMergedTrack.segmentFetch);
+
   // Manifest-sourced tracks (HLS/DASH) use FETCH_MANIFEST_SUBTITLES to
-  // fetch + assemble the full subtitle track upfront (Tier 2).
+  // fetch + assemble the full subtitle track upfront (Tier 2). A leaf .vtt
+  // track that carries segment metadata counts as manifest-sourced too — its
+  // URL is a segment, not a complete track.
   const lowerUrl = track.url.toLowerCase().split('?')[0];
-  if (lowerUrl.endsWith('.m3u8') || lowerUrl.endsWith('.mpd')) {
-    console.log('AnyLLMTranslate: Manifest-sourced subtitle track detected', { url: track.url });
+  if (lowerUrl.endsWith('.m3u8') || lowerUrl.endsWith('.mpd') || hasSegmentMetadata) {
+    console.log('AnyLLMTranslate: Manifest-sourced subtitle track detected', {
+      url: track.url,
+      segments: periodMergedTrack.segmentUrls?.length ?? 0,
+      template: Boolean(periodMergedTrack.segmentFetch),
+    });
     state.fetchedTrackUrls.add(track.url);
-    await activateOverlayModeFromManifest(track.url);
+    await activateOverlayModeFromManifest(periodMergedTrack);
     return;
   }
 
@@ -3764,6 +4079,13 @@ async function activateYoutubeTrackViaPipelineInner(track: AvailableSubtitleTrac
  * current handler has no VTT URL.
  */
 export async function manualActivateSubtitles(): Promise<void> {
+  // MAX-35: Alt+S is available on every page, so the off-watch case must say
+  // why nothing happened instead of failing silently.
+  if (!isOnWatchPage()) {
+    showSubtitleToast('Open a video page to translate subtitles.');
+    return;
+  }
+
   const handler = detectCurrentHandler();
   const tracks = getAvailableTracks();
   const settings = await loadSettings();
@@ -3782,12 +4104,16 @@ export async function manualActivateSubtitles(): Promise<void> {
   }
 
   if (handler?.getDomCueSource) {
-    await tryAutoActivateForDom({ manual: true });
+    const result = await tryAutoActivateForDom({ manual: true });
+    if (!result.activated && result.reason === 'no DOM cue source') {
+      showSubtitleToast('No subtitle source found on this page.');
+    }
     return;
   }
 
   if (tracks.length === 0) {
     console.warn('AnyLLMTranslate: No subtitle tracks available for manual activation');
+    showSubtitleToast('No subtitle source found on this page.');
     return;
   }
 

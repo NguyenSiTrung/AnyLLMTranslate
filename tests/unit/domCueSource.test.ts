@@ -100,8 +100,8 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeUndefined();
   });
 
-  it('caps open cue on pause, reseeds after a backward seek, and re-samples on the seek-reset bridge message', async () => {
-    // Scenario 1: pause caps the open cue; a backward seek emits a fresh cue.
+  it('keeps the open cue alive across pause, reseeds after a backward seek, and re-samples on the seek-reset bridge message', async () => {
+    // Scenario 1: pause must NOT cap the open cue; a backward seek emits a fresh cue.
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
 
     Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 20 });
@@ -116,7 +116,9 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     let cues = ((lastMsg ?? { payload: { cues: [] } }).payload as { cues: SubtitleCue[] }).cues;
     const paused = cues.find((c) => c.text === 'Repeated caption');
     expect(paused).toBeDefined();
-    expect((paused ?? { endTime: -1 }).endTime).toBe(24);
+    // MAX-7: capping at the pause time would unmatch the still-visible line, so
+    // the cue stays open (sentinel) until the next cue text change closes it.
+    expect((paused ?? { endTime: -1 }).endTime).toBe(OPEN_CUE_END_SENTINEL);
 
     // The caption text remains unchanged after a backward seek. The source must
     // still emit a new cue at the destination rather than retaining the old cue.
@@ -304,5 +306,150 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(cues?.length).toBeGreaterThanOrEqual(2);
 
     cleanup3();
+  });
+
+  it('re-attaches when the caption root is remounted and keeps observing the new root', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 5 });
+    cueEl.textContent = 'Before remount';
+    await flushObservers();
+
+    // Max's React player replaces the caption overlay element on quality/track
+    // changes. The old root is disconnected; a fresh root must be observed.
+    captionOverlay.remove();
+    const newOverlay = document.createElement('div');
+    newOverlay.setAttribute('data-testid', 'caption_renderer_overlay');
+    document.body.appendChild(newOverlay);
+    const newCueEl = document.createElement('div');
+    newCueEl.setAttribute('data-testid', 'cueBoxRowTextCue');
+    newOverlay.appendChild(newCueEl);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 8 });
+    newCueEl.textContent = 'After remount';
+    await flushObservers();
+
+    let cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues?.map((c) => c.text)).toEqual(['Before remount', 'After remount']);
+    expect(cues?.[1]).toMatchObject({ startTime: 8, endTime: OPEN_CUE_END_SENTINEL });
+
+    // The new root — not the detached one — drives further cue sampling.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 11 });
+    newCueEl.textContent = 'Third caption';
+    newOverlay.appendChild(document.createElement('span'));
+    await flushObservers();
+
+    cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues?.map((c) => c.text)).toEqual(['Before remount', 'After remount', 'Third caption']);
+
+    cleanup();
+  });
+
+  it('rebinds cue timing to a replacement <video> element', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 3 });
+    cueEl.textContent = 'Opening line';
+    await flushObservers();
+
+    // Some players swap the <video> node (or insert a second one) on ads/DRM
+    // re-init. Timing must come from the element that is primary now.
+    video.remove();
+    const newVideo = document.createElement('video');
+    document.body.appendChild(newVideo);
+    Object.defineProperty(newVideo, 'currentTime', { configurable: true, get: () => 42 });
+
+    await flushObservers();
+
+    cueEl.textContent = 'After swap';
+    await flushObservers();
+
+    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues?.map((c) => c.text)).toEqual(['Opening line', 'After swap']);
+    expect(cues?.[1]).toMatchObject({ startTime: 42, endTime: OPEN_CUE_END_SENTINEL });
+
+    cleanup();
+  });
+
+  it('clears the rolling buffer and re-samples on SUBTITLE_CAPTURE_RESET', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
+    cueEl.textContent = 'Previous title caption';
+    await flushObservers();
+    expect(
+      (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues,
+    ).toHaveLength(1);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 9 });
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_CAPTURE_RESET',
+        requestId: 'capture-reset-1',
+        payload: { platform: 'hbomax' },
+      },
+    }));
+    await flushObservers();
+
+    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    // The new title's identical-looking caption is a fresh cue at the new time.
+    expect(cues).toHaveLength(1);
+    expect(cues?.[0]).toMatchObject({
+      startTime: 9,
+      endTime: OPEN_CUE_END_SENTINEL,
+      text: 'Previous title caption',
+    });
+
+    cleanup();
+  });
+
+  it('starts a fresh timeline when the player swaps media (emptied/loadstart)', async () => {
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 300 });
+    cueEl.textContent = 'Season 1 finale line';
+    await flushObservers();
+
+    // Next episode loads into the same <video> element.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 4 });
+    video.dispatchEvent(new Event('emptied'));
+    await flushObservers();
+
+    let cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues).toHaveLength(1);
+    expect(cues?.[0]).toMatchObject({ startTime: 4, endTime: OPEN_CUE_END_SENTINEL });
+
+    // `loadstart` (media load begins) resets as well.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 12 });
+    cueEl.textContent = 'Episode 2 line';
+    await flushObservers();
+    video.dispatchEvent(new Event('loadstart'));
+    await flushObservers();
+
+    cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues).toHaveLength(1);
+    expect(cues?.[0]).toMatchObject({ startTime: 12, text: 'Episode 2 line' });
+
+    cleanup();
+  });
+
+  it('joins multi-row cue nodes in DOM order', async () => {    const secondRow = document.createElement('div');
+    secondRow.setAttribute('data-testid', 'cueBoxRowTextCue');
+    captionOverlay.appendChild(secondRow);
+
+    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 7 });
+    cueEl.textContent = 'First row';
+    secondRow.textContent = 'Second row';
+    await flushObservers();
+
+    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(cues).toHaveLength(1);
+    expect(cues?.[0].text).toBe('First row\nSecond row');
+
+    cleanup();
   });
 });

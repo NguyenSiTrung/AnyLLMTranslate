@@ -21,6 +21,12 @@ const QUEUED_UNTIL_READY: ReadonlySet<BridgeMessageType> = new Set([
   'SUBTITLE_INTERCEPTED',
   'SUBTITLE_TRACKS_DISCOVERED',
   'SUBTITLE_METADATA',
+  // Max capture starts on DOMContentLoaded, which can race the document_end
+  // coordinator: hold its lifecycle + cue messages until COORDINATOR_READY so
+  // the MPD grace window arms and the first segment is not lost.
+  'SUBTITLE_MPD_PROCESSING',
+  'SUBTITLE_MANIFEST_CUES',
+  'SUBTITLE_DOM_CUES',
 ]);
 
 const MAX_EARLY_QUEUE = 32;

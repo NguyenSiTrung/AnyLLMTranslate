@@ -61,6 +61,12 @@ export type BridgeMessageType =
   | 'SUBTITLE_FETCH_RESPONSE'
   | 'SUBTITLE_CONFIG'
   | 'SUBTITLE_SEEK_RESET'
+  /**
+   * ISOLATED coordinator → MAIN: an SPA navigation replaced the current title.
+   * MAIN drop in-flight capture state (segment fetches, sequence numbers,
+   * rolling DOM cue buffers) so the new title starts from a clean timeline.
+   */
+  | 'SUBTITLE_CAPTURE_RESET'
   /** ISOLATED coordinator → MAIN: request YouTube to fetch captions. */
   | 'YOUTUBE_REQUEST_CAPTIONS'
   /** ISOLATED coordinator → MAIN: restore captions changed by the extension. */
@@ -157,6 +163,13 @@ export interface SubtitleManifestCuesPayload {
   videoId?: string;
   /** When true, merge into an already-active manifest overlay (progressive VTT capture). */
   append?: boolean;
+  /**
+   * Monotonic per-capture sequence number. A gap (or a missing number) means a
+   * message was lost, so the coordinator replaces its buffer instead of merging.
+   */
+  seq?: number;
+  /** True when `cues` is the complete accumulated buffer (periodic resync). */
+  full?: boolean;
 }
 
 /** Payload for SUBTITLE_TEXTTRACK_CUES messages (full track cues from HTML5 TextTrack) */
@@ -211,6 +224,18 @@ export interface FetchManifestSubtitlesMessage {
   type: 'FETCH_MANIFEST_SUBTITLES';
   playlistUrl: string;
   preferredLanguage?: string;
+  /**
+   * Concrete subtitle segment URLs for the selected track. The coordinator
+   * already knows them from the MPD/Tracks payload, so the background must use
+   * them instead of re-parsing the manifest and picking a track itself — for a
+   * multi-Period DASH stream the re-parse would return only the FIRST Period's
+   * segments (MAX-10/11).
+   */
+  segmentUrls?: string[];
+  /** Numbered-segment template when the MPD exposes no concrete URLs. */
+  segmentFetch?: SubtitleSegmentFetchTemplate;
+  /** Language of the selected track (background echoes it back for cues). */
+  language?: string;
 }
 
 /** Result of fetching manifest subtitle segments */

@@ -114,6 +114,14 @@ export class HboMaxHandler implements SubtitleHandler {
       // (Previously hardcoded in domCueSource.ts; now declared per-platform.)
       trackSwitchSelector: '[data-testid="player-ux-text-track-button"]',
       trackSwitchAttribute: 'aria-checked',
+      // MAX-28: the cue source (`cueBoxRowTextCue`) lives INSIDE the caption
+      // window, so `display: none` risks Max's renderer detecting a 0-size
+      // container and stopping cue production — which would kill the source we
+      // scrape. `visibility: hidden` preserves geometry (spec decision 1,
+      // docs/superpowers/specs/2026-06-19-hbomax-subtitle-design.md:84-102).
+      // Live-verification backlog: confirm per-row rendering continues while
+      // hidden on production Max.
+      captionHideMethod: 'visibility',
     };
   }
 

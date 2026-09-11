@@ -134,6 +134,14 @@ export default defineContentScript({
       console.log('[AnyLLMTranslate] Max VTT capture reset for seek');
     });
 
+    // SPA navigation: the coordinator (ISOLATED world) moved to a new title.
+    // Drop all MAIN-world capture state so the previous title's segment
+    // fetches, sequence numbers and stall watchdog cannot leak into the new one.
+    onMessage('SUBTITLE_CAPTURE_RESET', () => {
+      resetMaxVttPerformanceCapture();
+      console.log('[AnyLLMTranslate] Capture reset for navigation');
+    });
+
     onMessage('YOUTUBE_REQUEST_CAPTIONS', () => {
       requestYoutubeNativeCaptions();
     });

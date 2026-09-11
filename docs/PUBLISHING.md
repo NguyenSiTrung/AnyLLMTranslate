@@ -67,7 +67,7 @@ Use these explanations in the console for each permission declared in [wxt.confi
 *   **`alarms`:** *"To schedule minor background sync/cache-cleaning routines."*
 
 For **host permissions**, justify in the console:
-*   **`*://*.youtube.com/*`, `*://*.max.com/*` (and related):** *"To fetch subtitle/caption data and translate them on supported video sites when the user enables subtitle translation."*
+*   **`*://*.youtube.com/*`, `*://*.max.com/*`, `*://*.hbomax.com/*` (and related CDN edges such as `*.prd.media.max.com`, `*.hbo.com`, `*.delivery.mp.microsoft.com`):** *"To fetch subtitle/caption data and translate them on supported video sites when the user enables subtitle translation."*
 *   **`http://127.0.0.1/*`, `http://localhost/*`:** *"Loopback-only access to the user's optional local Scientific PDF translation bridge (Docker)."*
 *   **`https://inference-api.nousresearch.com/*`:** *"Predefined BYOK provider option; contacted only if the user selects it and supplies a key."*
 

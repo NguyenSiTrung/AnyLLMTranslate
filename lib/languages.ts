@@ -41,12 +41,22 @@ export const LANGUAGES: Language[] = [
   { code: 'he', name: 'Hebrew', nativeName: 'עברית' },
   { code: 'hu', name: 'Hungarian', nativeName: 'Magyar' },
   { code: 'no', name: 'Norwegian', nativeName: 'Norsk' },
+  // Max exposes Bokmål as its own track (`nb`), distinct from generic `no` —
+  // without it the preference UI could not select that track.
+  { code: 'nb', name: 'Norwegian Bokmål', nativeName: 'Norsk bokmål' },
   { code: 'ro', name: 'Romanian', nativeName: 'Română' },
   { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina' },
   { code: 'bg', name: 'Bulgarian', nativeName: 'Български' },
   { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski' },
   { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
   { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+  // Max track languages that had no picker entry, so a preference could not be
+  // expressed for them (MPD-11). `nb` (Bokmål) is listed next to generic `no`.
+  { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina' },
+  { code: 'et', name: 'Estonian', nativeName: 'Eesti' },
+  { code: 'lv', name: 'Latvian', nativeName: 'Latviešu' },
+  { code: 'lt', name: 'Lithuanian', nativeName: 'Lietuvių' },
+  { code: 'ca', name: 'Catalan', nativeName: 'Català' },
 ];
 
 /** Get display name for a language code */

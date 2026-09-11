@@ -30,6 +30,13 @@ export interface MpdSubtitleTrack {
 /** Max CDN serves top-level DASH manifests at extensionless authenticated paths. */
 const MAX_EXTENSIONLESS_MPD_HOST = /(?:^|\.)prd\.media\.max\.com$/i;
 
+/**
+ * Max-owned hosts (the CDN plus the player's own domains). Any of them carries
+ * the `manifest-params` auth token on every subtitle segment request (MAX-31),
+ * so token re-attachment must not be limited to `prd.media.max.com`.
+ */
+const MAX_OWNED_HOST = /(?:^|\.)(?:max\.com|hbomax\.com)$/i;
+
 /** Safety cap for the SegmentTimeline/SegmentTemplate URL list. */
 const MAX_SEGMENT_FETCH_COUNT = 3000;
 
@@ -61,9 +68,13 @@ export function detectMpdRequests(url: string): boolean {
     const parsed = new URL(url);
     if (!MAX_EXTENSIONLESS_MPD_HOST.test(parsed.hostname)) return false;
     if (!parsed.search.includes('manifest-params')) return false;
-    // Extensionless top-level manifests are a single asset id before the query.
+    // Extensionless manifests are an asset id before the query, optionally
+    // behind a short CDN prefix (`/v1/<id>`, `/dash/<id>`). Anything deeper is
+    // a segment path, and a numeric leaf is a numbered segment (MAX-31).
     const pathSegments = parsed.pathname.split('/').filter(Boolean);
-    return pathSegments.length === 1;
+    if (pathSegments.length === 0 || pathSegments.length > 2) return false;
+    const lastSegment = pathSegments[pathSegments.length - 1] ?? '';
+    return !/^\d+$/.test(lastSegment);
   } catch {
     // ignore invalid URLs
   }
@@ -199,41 +210,48 @@ function buildRepresentationSegmentUrls(
   baseUrl: string,
   mpdXml: Document,
 ): BuiltRepresentationSegments | null {
+  const mpdRootBaseUrl = getMpdRootBaseUrl(mpdXml);
   const periodBaseUrl = getPeriodBaseUrl(adaptationSet);
   const adaptationBaseUrl = getDirectChildBaseUrl(adaptationSet);
-  const mediaBaseUrl = getEffectiveMediaBaseUrl(periodBaseUrl, adaptationBaseUrl, baseUrl);
+  const repBaseUrl = getDirectChildBaseUrl(rep);
+  const baseChain = resolveBaseChain(baseUrl, mpdRootBaseUrl, periodBaseUrl, adaptationBaseUrl);
 
-  const baseUrlEl = rep.querySelector('BaseURL');
-  if (baseUrlEl?.textContent?.trim()) {
-    const resolved = resolveSubtitleUrl(
-      joinMediaPaths(mediaBaseUrl, baseUrlEl.textContent.trim()),
-      baseUrl,
-    );
+  const segmentTemplate =
+    rep.querySelector('SegmentTemplate') ?? adaptationSet.querySelector('SegmentTemplate');
+  const templateMedia = segmentTemplate?.getAttribute('media') ?? null;
+
+  // MAX-23: a Representation BaseURL is the subtitle itself only when it names
+  // a file, or when nothing else describes the media. A directory BaseURL
+  // (`t/t6/`, `./`) is another level of the base hierarchy — fetching it as a
+  // segment returns HTML/404 and the track is lost.
+  const repBaseIsTerminal =
+    repBaseUrl !== undefined && (baseUrlLooksLikeFile(repBaseUrl) || !templateMedia);
+  const repDirectoryBase = repBaseIsTerminal ? undefined : repBaseUrl;
+
+  if (repBaseIsTerminal && repBaseUrl) {
+    const resolved = resolveSubtitleUrl(joinMediaPaths(baseChain, repBaseUrl), baseUrl);
     if (resolved && !isSelfReferentialSubtitleUrl(resolved, baseUrl)) {
       return { urls: [resolved], offsetsMs: [0] };
     }
+    // Self-referential BaseURL (e.g. `dash.mpd`) — never offer the manifest
+    // itself as a segment; fall through to the SegmentList/SegmentTemplate.
   }
+
+  const mediaBaseUrl = repDirectoryBase
+    ? resolveBaseLevel(baseChain, repDirectoryBase)
+    : baseChain;
 
   const segmentListUrls = buildSegmentListUrls(rep, adaptationSet, baseUrl, mediaBaseUrl);
   if (segmentListUrls) {
     return { urls: segmentListUrls, offsetsMs: segmentListUrls.map(() => 0) };
   }
 
-  const segmentTemplate =
-    rep.querySelector('SegmentTemplate') ?? adaptationSet.querySelector('SegmentTemplate');
   if (!segmentTemplate) return null;
 
-  const media = segmentTemplate.getAttribute('media');
+  const media = templateMedia;
   if (!media) return null;
 
-  const templateContext = createTemplateContext(
-    segmentTemplate,
-    rep,
-    adaptationSet,
-    baseUrl,
-    periodBaseUrl,
-    adaptationBaseUrl,
-  );
+  const templateContext = createTemplateContext(segmentTemplate, rep, mediaBaseUrl, baseUrl);
   const segmentCount = resolveSegmentCount(segmentTemplate, mpdXml);
 
   if (segmentCount === null) {
@@ -248,15 +266,27 @@ function buildRepresentationSegmentUrls(
         representationId: templateContext.representationId,
         bandwidth: templateContext.bandwidth,
         mpdUrl: baseUrl,
-        periodBaseUrl: templateContext.periodBaseUrl,
-        adaptationBaseUrl: templateContext.adaptationBaseUrl,
+        // Persist the fully folded base: once the template is stored the MPD
+        // root / Representation levels are gone, so a later segment number must
+        // resolve from the same level (older templates used the raw
+        // period/adaptation pair, still honoured by getEffectiveMediaBaseUrl).
+        periodBaseUrl: templateContext.mediaBaseUrl,
       },
     };
   }
 
+  // `$Time$` templates are keyed by presentation time, `$Number$` templates by
+  // the running segment number (MAX-24). The timeline gives both, in the same
+  // order as the URLs.
+  const timelineTimes = expandSegmentTimeline(segmentTemplate).map((segment) => segment.time);
+
   const urls: string[] = [];
   for (let i = 0; i < segmentCount; i++) {
-    const resolved = buildTemplatedSegmentUrl(templateContext, templateContext.startNumber + i);
+    const resolved = buildTemplatedSegmentUrl(
+      templateContext,
+      templateContext.startNumber + i,
+      timelineTimes[i],
+    );
     if (!resolved || isSelfReferentialSubtitleUrl(resolved, baseUrl)) continue;
     urls.push(resolved);
   }
@@ -276,17 +306,15 @@ interface TemplateContext {
   representationId: string;
   bandwidth: string;
   mpdUrl: string;
-  periodBaseUrl?: string;
-  adaptationBaseUrl?: string;
+  /** Fully resolved base the media template is relative to. */
+  mediaBaseUrl: string;
 }
 
 function createTemplateContext(
   segmentTemplate: Element,
   rep: Element,
-  adaptationSet: Element,
+  mediaBaseUrl: string,
   mpdUrl: string,
-  periodBaseUrl?: string,
-  adaptationBaseUrl?: string,
 ): TemplateContext {
   return {
     media: segmentTemplate.getAttribute('media') ?? '',
@@ -294,19 +322,17 @@ function createTemplateContext(
     representationId: rep.getAttribute('id') ?? '',
     bandwidth: rep.getAttribute('bandwidth') ?? '',
     mpdUrl,
-    periodBaseUrl,
-    adaptationBaseUrl: adaptationBaseUrl ?? getDirectChildBaseUrl(adaptationSet),
+    mediaBaseUrl,
   };
 }
 
-function buildTemplatedSegmentUrl(context: TemplateContext, number: number): string | null {
-  const mediaPath = applySegmentTemplate(context.media, context, number);
-  const mediaBase = getEffectiveMediaBaseUrl(
-    context.periodBaseUrl,
-    context.adaptationBaseUrl,
-    context.mpdUrl,
-  );
-  return resolveSubtitleUrl(joinMediaPaths(mediaBase, mediaPath), context.mpdUrl);
+function buildTemplatedSegmentUrl(
+  context: TemplateContext,
+  number: number,
+  time?: number,
+): string | null {
+  const mediaPath = applySegmentTemplate(context.media, context, number, time);
+  return resolveSubtitleUrl(joinMediaPaths(context.mediaBaseUrl, mediaPath), context.mpdUrl);
 }
 
 /** Resolve a numbered segment URL from persisted SegmentTemplate metadata. */
@@ -321,8 +347,11 @@ export function resolveSegmentFetchUrl(
       representationId: template.representationId,
       bandwidth: template.bandwidth,
       mpdUrl: template.mpdUrl,
-      periodBaseUrl: template.periodBaseUrl,
-      adaptationBaseUrl: template.adaptationBaseUrl,
+      mediaBaseUrl: getEffectiveMediaBaseUrl(
+        template.periodBaseUrl,
+        template.adaptationBaseUrl,
+        template.mpdUrl,
+      ),
     },
     number,
   );
@@ -330,11 +359,38 @@ export function resolveSegmentFetchUrl(
   return resolved;
 }
 
-function applySegmentTemplate(media: string, context: TemplateContext, number: number): string {
+/**
+ * Format a DASH template value, honouring the `%0Nd` width tag (`$Number%05d$`
+ * → `00008`). Values are left-padded with zeros; non-numeric or absent widths
+ * fall back to the plain decimal form.
+ */
+function formatTemplateValue(value: number, width?: string): string {
+  const text = String(value);
+  const parsedWidth = width ? parseInt(width, 10) : NaN;
+  if (!Number.isFinite(parsedWidth) || parsedWidth <= text.length) return text;
+  return text.padStart(parsedWidth, '0');
+}
+
+function applySegmentTemplate(
+  media: string,
+  context: TemplateContext,
+  number: number,
+  time?: number,
+): string {
   return media
-    .replace(/\$RepresentationID\$/g, context.representationId)
-    .replace(/\$Bandwidth\$/g, context.bandwidth)
-    .replace(/\$Number\$/g, String(number));
+    // RepresentationID is non-numeric: the width tag cannot apply, so both
+    // forms substitute the id verbatim.
+    .replace(/\$RepresentationID(?:%0\d+d)?\$/g, context.representationId)
+    .replace(/\$Bandwidth(?:%0(\d+)d)?\$/g, (_match, width: string | undefined) => {
+      const bandwidth = parseInt(context.bandwidth, 10);
+      return Number.isFinite(bandwidth)
+        ? formatTemplateValue(bandwidth, width)
+        : context.bandwidth;
+    })
+    .replace(/\$Number(?:%0(\d+)d)?\$/g, (_match, width: string | undefined) =>
+      formatTemplateValue(number, width))
+    .replace(/\$Time(?:%0(\d+)d)?\$/g, (match, width: string | undefined) =>
+      time === undefined ? match : formatTemplateValue(time, width));
 }
 
 function buildSegmentListUrls(
@@ -370,10 +426,10 @@ function resolveSegmentCount(segmentTemplate: Element, mpdXml: Document): number
   if (durationAttr) {
     const timescale = parseInt(segmentTemplate.getAttribute('timescale') ?? '1', 10);
     const segmentDurationSec = parseInt(durationAttr, 10) / timescale;
-    const presentationDuration = getPresentationDuration(mpdXml);
-    if (presentationDuration && segmentDurationSec > 0) {
+    const periodDuration = getEnclosingPeriodDurationSeconds(segmentTemplate, mpdXml);
+    if (periodDuration && segmentDurationSec > 0) {
       return Math.min(
-        Math.ceil(presentationDuration / segmentDurationSec),
+        Math.ceil(periodDuration / segmentDurationSec),
         MAX_SEGMENT_FETCH_COUNT,
       );
     }
@@ -402,24 +458,20 @@ function countSegmentsFromTimeline(segmentTemplate: Element): number {
 }
 
 /**
- * Compute the DASH presentation-time offset (ms) for each <S> segment in a
- * SegmentTimeline, parallel to the segment URL order produced by
- * buildRepresentationSegmentUrls. Returns [] when there is no timeline.
+ * Expand a SegmentTimeline into one entry per segment (the `r` repeat count is
+ * unfolded), in presentation order and in timescale units.
  *
- * Each <S> may carry a `t` (absolute presentation time in timescale units) and
- * a `d` (duration); `r` repeats the segment `r` more times. When `t` is absent
- * the timeline continues from the previous segment's end. This is the
- * authoritative source for converting segment-relative WebVTT cue timestamps
- * into absolute timeline times.
+ * Each <S> may carry a `t` (absolute presentation time) and a `d` (duration);
+ * `r` repeats the segment `r` more times. An absent `t` continues from the
+ * previous segment's end. This is the authoritative source both for segment
+ * offsets (segment-relative WebVTT timestamps → absolute timeline times) and
+ * for `$Time$` media templates (MAX-24).
  */
-function computeSegmentOffsetsMs(segmentTemplate: Element): number[] {
+function expandSegmentTimeline(segmentTemplate: Element): Array<{ time: number; duration: number }> {
   const timeline = findChildByLocalName(segmentTemplate, 'SegmentTimeline');
   if (!timeline) return [];
 
-  const timescale = parseInt(segmentTemplate.getAttribute('timescale') ?? '1', 10);
-  if (!Number.isFinite(timescale) || timescale <= 0) return [];
-
-  const offsets: number[] = [];
+  const segments: Array<{ time: number; duration: number }> = [];
   let currentTime = 0;
   let first = true;
 
@@ -439,12 +491,58 @@ function computeSegmentOffsetsMs(segmentTemplate: Element): number[] {
     if (!Number.isFinite(repeat) || repeat < 0 || !Number.isFinite(d)) continue;
 
     for (let k = 0; k <= repeat; k++) {
-      offsets.push((currentTime / timescale) * 1000);
+      segments.push({ time: currentTime, duration: d });
       currentTime += d;
     }
   }
 
-  return offsets;
+  return segments;
+}
+
+/**
+ * Compute the DASH presentation-time offset (ms) for each <S> segment in a
+ * SegmentTimeline, parallel to the segment URL order produced by
+ * buildRepresentationSegmentUrls. Returns [] when there is no timeline.
+ */
+function computeSegmentOffsetsMs(segmentTemplate: Element): number[] {
+  const timescale = parseInt(segmentTemplate.getAttribute('timescale') ?? '1', 10);
+  if (!Number.isFinite(timescale) || timescale <= 0) return [];
+
+  return expandSegmentTimeline(segmentTemplate).map((segment) => (segment.time / timescale) * 1000);
+}
+
+/**
+ * Duration (seconds) of the Period enclosing `element` (MAX-24). Subtitle
+ * segment counts must follow the Period the Representation lives in — the
+ * first Period's duration truncates a later, longer Period and over-fetches a
+ * shorter one. Falls back to the presentation duration (last resort, matching
+ * the previous behaviour) when the Period declares no duration.
+ */
+function getEnclosingPeriodDurationSeconds(element: Element, mpdXml: Document): number | null {
+  let parent: Element | null = element.parentElement;
+  let period: Element | null = null;
+  while (parent) {
+    if (parent.localName === 'Period') {
+      period = parent;
+      break;
+    }
+    parent = parent.parentElement;
+  }
+
+  const periodDuration = parseIso8601Duration(period?.getAttribute('duration') ?? null);
+  if (periodDuration) return periodDuration;
+
+  const presentationDuration = parseIso8601Duration(
+    mpdXml.documentElement.getAttribute('mediaPresentationDuration'),
+  );
+  if (presentationDuration && period) {
+    // Last Period without an explicit duration runs until the presentation ends.
+    const periodStart = parseIso8601Duration(period.getAttribute('start') ?? null) ?? 0;
+    const remaining = presentationDuration - periodStart;
+    if (remaining > 0) return remaining;
+  }
+
+  return getPresentationDuration(mpdXml);
 }
 
 function getPresentationDuration(mpdXml: Document): number | null {
@@ -470,6 +568,57 @@ function parseIso8601Duration(value: string | null): number | null {
   const seconds = parseFloat(match[3] ?? '0');
   const total = hours * 3600 + minutes * 60 + seconds;
   return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+/**
+ * Direct `<MPD>`-level BaseURL — the outermost level of the DASH base
+ * hierarchy (MAX-22). Level order per DASH: MPD → Period → AdaptationSet →
+ * Representation, each resolved relative to its parent.
+ */
+function getMpdRootBaseUrl(mpdXml: Document): string | undefined {
+  const root = mpdXml.documentElement;
+  if (!root || root.localName !== 'MPD') return undefined;
+  return getDirectChildBaseUrl(root);
+}
+
+/**
+ * True when a BaseURL names a file (has an extension) rather than a directory.
+ * A directory BaseURL must be folded into the SegmentTemplate/SegmentList
+ * instead of being fetched as a segment (MAX-23).
+ */
+function baseUrlLooksLikeFile(value: string): boolean {
+  const withoutQuery = value.split('?')[0]?.split('#')[0] ?? '';
+  if (withoutQuery.endsWith('/')) return false;
+  const lastSegment = withoutQuery.split('/').pop() ?? '';
+  return /\.[a-z0-9]{1,6}$/i.test(lastSegment);
+}
+
+/** Resolve one BaseURL level against its parent (absolute levels replace it). */
+function resolveBaseLevel(parentBase: string, level: string | undefined): string {
+  const value = level?.trim();
+  if (!value) return parentBase;
+  if (/^https?:\/\//i.test(value)) {
+    return value.endsWith('/') ? value : `${value}/`;
+  }
+  try {
+    return new URL(value, parentBase).href;
+  } catch {
+    return parentBase;
+  }
+}
+
+/**
+ * Fold the MPD → Period → AdaptationSet (→ Representation directory) BaseURL
+ * chain. Each relative level resolves against its parent, so a relative
+ * AdaptationSet BaseURL is no longer silently dropped when the Period carries
+ * an absolute BaseURL (MAX-22).
+ */
+function resolveBaseChain(mpdUrl: string, ...levels: Array<string | undefined>): string {
+  let base = mpdResolveBase(mpdUrl) ?? mpdUrl;
+  for (const level of levels) {
+    base = resolveBaseLevel(base, level);
+  }
+  return base;
 }
 
 function getDirectChildBaseUrl(element: Element): string | undefined {
@@ -636,9 +785,9 @@ export function mergeManifestQueryParams(resolvedUrl: URL, mpdUrl: string): void
   const mpdParams = mpd.searchParams;
   if (mpdParams.toString() === '') return;
 
-  const isMaxCdn = MAX_EXTENSIONLESS_MPD_HOST.test(resolvedUrl.hostname);
+  const isMaxOwned = MAX_OWNED_HOST.test(resolvedUrl.hostname);
   const sameOrigin = resolvedUrl.origin === mpd.origin;
-  if (!isMaxCdn && !sameOrigin) return;
+  if (!isMaxOwned && !sameOrigin) return;
 
   const existing = resolvedUrl.searchParams;
   for (const [key, value] of mpdParams) {

@@ -33,10 +33,15 @@
 
 /* Subtitle text container */
 .anyllm-translate-subtitle-text {
+  position: relative; /* positioning context for the drag handle */
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  /* MAX-34: the bottom-centred box overlaps the player's control bar while a
+     cue is visible. Only the drag handle is a hit target; everything else in
+     the box lets clicks through to the player. */
+  pointer-events: none;
   /* Safety net for unbreakable runs (long URLs/IDs exceeding the data layer's
      maxCharsPerLine). Intentional line breaks are now owned by the overlay's
      per-line <div> rendering (lib/subtitleWrap.ts). */
@@ -142,6 +147,9 @@
 
 :fullscreen:not(:root) .anyllm-translate-subtitle-text {
   z-index: 2147483647 !important;
+}
+
+:fullscreen:not(:root) .anyllm-translate-subtitle-drag-handle {
   pointer-events: auto !important;
 }
 
@@ -149,7 +157,9 @@
    only faded (opacity: 0), so without this an invisible text box sits over the
    video and swallows clicks (e.g. YouTube's control bar / double-click). */
 .anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-text,
-:fullscreen:not(:root) .anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-text {
+.anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-drag-handle,
+:fullscreen:not(:root) .anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-text,
+:fullscreen:not(:root) .anyllm-translate-subtitle-overlay:not(.anyllm-translate-subtitle-visible) .anyllm-translate-subtitle-drag-handle {
   pointer-events: none !important;
 }
 
@@ -170,6 +180,7 @@
 
 .anyllm-translate-subtitle-text {
   all: revert;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -180,17 +191,44 @@
   padding: 10px 16px;
   border-radius: var(--anyllm-subtitle-border-radius, 8px);
   font-family: var(--anyllm-subtitle-font-family, system-ui, sans-serif);
-  pointer-events: auto;
-  cursor: grab;
+  pointer-events: none;
   transition: box-shadow 0.2s ease, outline 0.2s ease;
 }
 
-/* Drag affordance — subtle highlight on hover */
-.anyllm-translate-subtitle-text:hover {
+/* Drag affordance — subtle highlight while the handle is hovered/dragged. */
+.anyllm-translate-subtitle-text:has(.anyllm-translate-subtitle-drag-handle:hover) {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
 
-.anyllm-translate-subtitle-text:active {
+/* Drag handle (MAX-34) — the only interactive part of the overlay box. */
+.anyllm-translate-subtitle-drag-handle {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background-color: rgba(0, 0, 0, 0.6);
+  /* 3x3 dot grip drawn with a radial gradient (no font/emoji dependency). */
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.9) 1.1px, transparent 1.2px);
+  background-size: 6px 6px;
+  background-position: 4px 4px;
+  opacity: 0.4;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+
+.anyllm-translate-subtitle-drag-handle:hover,
+.anyllm-translate-subtitle-drag-handle:focus-visible {
+  opacity: 1;
+}
+
+.anyllm-translate-subtitle-drag-handle:active {
   cursor: grabbing;
 }
 

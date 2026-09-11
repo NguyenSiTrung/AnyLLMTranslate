@@ -39,7 +39,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['services/**', 'lib/**', 'content/**', 'types/**'],
+      // inject/** carries the MAIN-world Max capture + subtitle handlers; it
+      // used to be excluded entirely, which hid untested interception code.
+      include: ['services/**', 'lib/**', 'content/**', 'inject/**', 'types/**'],
       exclude: ['**/*.d.ts', '**/__tests__/**', '**/node_modules/**'],
     },
   },

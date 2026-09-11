@@ -4,6 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { SubtitleCue } from '@/types/subtitle';
 
 // ============================================================================
@@ -15,6 +17,12 @@ const mockResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 vi.stubGlobal('ResizeObserver', mockResizeObserver);
+
+const mockShowSubtitleToast = vi.fn();
+vi.mock('@/content/subtitleToast', () => ({
+  showSubtitleToast: (...args: unknown[]) => { mockShowSubtitleToast(...args); },
+  hideSubtitleToast: vi.fn(),
+}));
 
 import {
   initializeOverlay,
@@ -526,3 +534,97 @@ describe('subtitleOverlay — scroll/resize repositioning + drag-offset clamping
   });
 });
 
+
+describe('subtitleOverlay — fullscreen popover fallback + drag handle (MAX-29/MAX-34)', () => {
+  let video: HTMLVideoElement;
+
+  const SUBTITLE_CSS = readFileSync(
+    resolve(process.cwd(), 'styles/subtitle.css'),
+    'utf8',
+  );
+
+  /** Every declaration block written for an exact selector. */
+  function cssBlocksFor(selector: string): string[] {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const matcher = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`, 'gm');
+    return [...SUBTITLE_CSS.matchAll(matcher)].map((match) => match[1] ?? '');
+  }
+
+  beforeEach(() => {
+    mockShowSubtitleToast.mockClear();
+    video = document.createElement('video');
+    document.body.appendChild(video);
+    vi.spyOn(video, 'getBoundingClientRect').mockReturnValue({
+      top: 0, left: 0, width: 800, height: 600, bottom: 600, right: 800, x: 0, y: 0, toJSON: () => {},
+    });
+  });
+
+  afterEach(() => {
+    resetOverlayState();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).showPopover;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (HTMLElement.prototype as any).popover;
+    Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
+    document.body.innerHTML = '';
+  });
+
+  it('warns and toasts once when the fullscreen popover cannot be shown', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (HTMLElement.prototype as any).popover = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (HTMLElement.prototype as any).showPopover = () => {
+      throw new Error('popover blocked');
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      initializeOverlay(MOCK_CUES, {}, video);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+      Object.defineProperty(document, 'fullscreenElement', { value: video, configurable: true });
+      document.dispatchEvent(new Event('fullscreenchange'));
+
+      // The overlay must not be left hidden by a popover attribute that never
+      // entered the popover-showing state.
+      expect(overlay.hasAttribute('popover')).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/popover/i),
+        expect.anything(),
+      );
+      expect(mockShowSubtitleToast).toHaveBeenCalledTimes(1);
+
+      // A second fullscreen sync must not toast again.
+      document.dispatchEvent(new Event('fullscreenchange'));
+      expect(mockShowSubtitleToast).toHaveBeenCalledTimes(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('renders an explicit drag handle inside the text box', () => {
+    initializeOverlay(MOCK_CUES, {}, video);
+    const textContainer = document.querySelector('.anyllm-translate-subtitle-text') as HTMLElement;
+    const handle = textContainer.querySelector('.anyllm-translate-subtitle-drag-handle');
+
+    expect(handle).not.toBeNull();
+    expect(handle?.parentElement).toBe(textContainer);
+  });
+
+  it('keeps the subtitle box click-through and only the drag handle interactive', () => {
+    // MAX-34: while a cue is visible the bottom-centred box overlaps the
+    // player's control bar, so the box itself must never be a hit target.
+    const boxBlocks = cssBlocksFor('.anyllm-translate-subtitle-text');
+    expect(boxBlocks.length).toBeGreaterThan(0);
+    expect(boxBlocks.some((block) => /pointer-events:\s*none/.test(block))).toBe(true);
+    expect(boxBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(false);
+
+    const handleBlocks = cssBlocksFor('.anyllm-translate-subtitle-drag-handle');
+    expect(handleBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(true);
+
+    // Hidden overlays stay fully click-through, handle included.
+    expect(SUBTITLE_CSS).toMatch(
+      /:not\(\.anyllm-translate-subtitle-visible\)[^{]*\.anyllm-translate-subtitle-drag-handle/,
+    );
+  });
+});

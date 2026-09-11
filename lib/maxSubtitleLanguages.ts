@@ -48,30 +48,110 @@ export const MAX_LABEL_TO_LANGUAGE: Record<string, string> = {
   Lithuanian: 'lt',
 };
 
+/**
+ * True when a track option/button is the selected one.
+ *
+ * MAX-9: Max has shipped more than one selected-state idiom (and React UI kits
+ * commonly use `data-state="checked"`), so reading only `aria-checked` silently
+ * reported "no active track" — which then toasts "Enable subtitles" over live
+ * captions and sends a non-English track to the model as English.
+ */
+export function isTrackOptionChecked(el: Element): boolean {
+  return (
+    el.getAttribute('aria-checked') === 'true' ||
+    el.getAttribute('aria-selected') === 'true' ||
+    el.getAttribute('aria-pressed') === 'true' ||
+    el.getAttribute('data-state') === 'checked'
+  );
+}
+
+/** Checked state declared on the control itself or on one of its descendants. */
+function isTrackButtonChecked(btn: Element): boolean {
+  if (isTrackOptionChecked(btn)) return true;
+  const nested = btn.querySelectorAll(
+    '[aria-checked], [aria-selected], [aria-pressed], [data-state]',
+  );
+  return Array.from(nested).some(isTrackOptionChecked);
+}
+
 /** Read the active Max subtitle language from DOM track buttons ('' if Off/unknown). */
 export function readMaxActiveSubtitleLanguage(): string {
-  const buttons = document.querySelectorAll<HTMLButtonElement>(
+  const buttons = document.querySelectorAll<HTMLElement>(
     '[data-testid="player-ux-text-track-button"]',
   );
   for (const btn of buttons) {
-    if (btn.getAttribute('aria-checked') === 'true') {
-      const label = btn.getAttribute('aria-label') || '';
-      if (!label || label.toLowerCase() === 'off') return '';
+    if (!isTrackButtonChecked(btn)) continue;
 
-      const attrLang = btn.getAttribute('lang') || btn.getAttribute('data-language');
-      return normalizeMaxSubtitleLanguage(label, attrLang);
-    }
+    const label = btn.getAttribute('aria-label') || '';
+    if (!label || label.toLowerCase() === 'off') return '';
+
+    const attrLang = btn.getAttribute('lang') || btn.getAttribute('data-language');
+    return normalizeMaxSubtitleLanguage(label, attrLang);
   }
   return '';
 }
 
-/** Normalize a Max subtitle button label/metadata to a comparable language tag. */
+/**
+ * Strip trailing parenthetical qualifiers: 'English (CC)' → 'English'.
+ * Returns '' when nothing is left.
+ */
+function stripLabelQualifiers(label: string): string {
+  return label.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
+/** Label-map lookup: exact → case-insensitive → qualifier-stripped. */
+function matchLabelMap(label: string): string | null {
+  if (!label) return null;
+  const exact = MAX_LABEL_TO_LANGUAGE[label];
+  if (exact) return exact;
+
+  const lower = label.toLowerCase();
+  const ci =
+    LABEL_TO_LANGUAGE_LOWER.get(lower) ?? LOCALIZED_LABEL_TO_LANGUAGE_LOWER.get(lower);
+  if (ci) return ci;
+
+  const stripped = stripLabelQualifiers(label);
+  if (stripped && stripped !== label) {
+    const strippedExact =
+      MAX_LABEL_TO_LANGUAGE[stripped] ?? LOCALIZED_LABEL_TO_LANGUAGE[stripped];
+    if (strippedExact) return strippedExact;
+    const strippedCi =
+      LABEL_TO_LANGUAGE_LOWER.get(stripped.toLowerCase()) ??
+      LOCALIZED_LABEL_TO_LANGUAGE_LOWER.get(stripped.toLowerCase());
+    if (strippedCi) return strippedCi;
+  }
+  return null;
+}
+
+/**
+ * Plausible BCP-47-ish language tag. Rejects Max's locale *keys* such as
+ * `lang="ui-locale"`, which match the shape but are not languages (MAX-40).
+ */
+function isPlausibleLanguageTag(code: string): boolean {
+  if (!code || code.includes('locale')) return false;
+  return /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(code);
+}
+
+/**
+ * Normalize a Max subtitle button label/metadata to a comparable language tag.
+ *
+ * MAX-40: the label is authoritative. Previously a `lang`/`data-language`
+ * attribute won outright, so a UI-locale value beat the real `aria-label` and
+ * produced a wrong code (which the preferred-language gate then used to drop
+ * valid cues). attrLang is now a fallback, and only when it looks like a tag.
+ */
 export function normalizeMaxSubtitleLanguage(label: string, attrLang?: string | null): string {
-  if (attrLang) return normalizeLanguageCode(attrLang);
-  if (MAX_LABEL_TO_LANGUAGE[label]) return MAX_LABEL_TO_LANGUAGE[label];
-  const localized = LOCALIZED_LABEL_TO_LANGUAGE[label];
-  if (localized) return localized;
-  return normalizeLanguageCode(label.toLowerCase());
+  const trimmed = (label ?? '').trim();
+  const fromLabel = matchLabelMap(trimmed);
+  if (fromLabel) return fromLabel;
+
+  const labelCode = normalizeLanguageCode(trimmed.toLowerCase());
+  if (isPlausibleLanguageTag(labelCode)) return labelCode;
+
+  const attrCode = normalizeLanguageCode((attrLang ?? '').trim());
+  if (isPlausibleLanguageTag(attrCode)) return attrCode;
+
+  return labelCode || attrCode;
 }
 
 /** Normalize a language code: convert ISO 639-2 → 639-1 if known. */
@@ -126,3 +206,11 @@ const LOCALIZED_LABEL_TO_LANGUAGE: Record<string, string> = {
   '중국어 (번체)': 'zh-Hant',
   한국어: 'ko',
 };
+
+/** Lowercase label indexes for case-insensitive matching ('english' → 'en'). */
+const LABEL_TO_LANGUAGE_LOWER = new Map(
+  Object.entries(MAX_LABEL_TO_LANGUAGE).map(([label, code]) => [label.toLowerCase(), code]),
+);
+const LOCALIZED_LABEL_TO_LANGUAGE_LOWER = new Map(
+  Object.entries(LOCALIZED_LABEL_TO_LANGUAGE).map(([label, code]) => [label.toLowerCase(), code]),
+);

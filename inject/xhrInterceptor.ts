@@ -98,7 +98,13 @@ export class XhrInterceptor {
         __anyllmTranslateEventHandlers?: Map<string, EventListenerOrEventListenerObject[]>;
       };
 
-      if (xhr.__anyllmTranslateMatch && (type === 'load' || type === 'readystatechange')) {
+      // loadend must be held with load: the page uses it (directly or via
+      // promises) to read the response, and firing it before the translated
+      // body is in place hands the player untranslated cues (MAX-27).
+      if (
+        xhr.__anyllmTranslateMatch &&
+        (type === 'load' || type === 'readystatechange' || type === 'loadend')
+      ) {
         if (!xhr.__anyllmTranslateEventHandlers) {
           xhr.__anyllmTranslateEventHandlers = new Map();
         }
@@ -185,6 +191,7 @@ export class XhrInterceptor {
       // This is a subtitle request — intercept the response
       const originalOnReadyStateChange = this.onreadystatechange;
       const originalOnLoad = this.onload;
+      const originalOnLoadEnd = this.onloadend;
 
       // P2: do NOT suppress onreadystatechange entirely — players rely on
       // intermediate readyState transitions (1 OPENED, 2 HEADERS_RECEIVED,
@@ -200,14 +207,60 @@ export class XhrInterceptor {
         }
         // readyState 4 is replayed by replayHandlers() after translation.
       };
-      // onload fires only at readyState 4, so it must be held back too.
+      // onload/onloadend fire only at readyState 4, so they must be held back too.
       this.onload = null;
+      this.onloadend = null;
 
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const xhrRef = this;
 
+      /** Set once this readyState-4 delivery has been routed (interception or replay). */
+      let routed = false;
+      /**
+       * Set once the page's readyState-4 handlers have been replayed. Abort,
+       * timeout and the translation result can all arrive; without this guard
+       * the page would see `load`/`loadend` fire more than once (MAX-25/27).
+       */
+      let replayed = false;
+
+      /** Replay the divested page handlers with the (possibly translated) response. */
+      const replayHandlers = () => {
+        if (replayed) return;
+        replayed = true;
+
+        // Same order as the native event sequence: readystatechange(4) → load → loadend.
+        if (originalOnReadyStateChange) originalOnReadyStateChange.call(xhrRef, new Event('readystatechange'));
+        if (originalOnLoad) originalOnLoad.call(xhrRef, new ProgressEvent('load'));
+        if (originalOnLoadEnd) originalOnLoadEnd.call(xhrRef, new ProgressEvent('loadend'));
+
+        const eventHandlers = xhr.__anyllmTranslateEventHandlers;
+        if (eventHandlers) {
+          for (const h of eventHandlers.get('readystatechange') || []) {
+            if (typeof h === 'function') h.call(xhrRef, new Event('readystatechange'));
+            else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new Event('readystatechange'));
+          }
+          for (const h of eventHandlers.get('load') || []) {
+            if (typeof h === 'function') h.call(xhrRef, new ProgressEvent('load'));
+            else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new ProgressEvent('load'));
+          }
+          for (const h of eventHandlers.get('loadend') || []) {
+            if (typeof h === 'function') h.call(xhrRef, new ProgressEvent('loadend'));
+            else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new ProgressEvent('loadend'));
+          }
+        }
+      };
+
       const handleResponse = () => {
-        if (xhrRef.readyState !== 4 || xhrRef.status !== 200) return;
+        if (xhrRef.readyState !== 4 || routed) return;
+        routed = true;
+
+        // MAX-25: a non-200 response cannot be translated (error page, expired
+        // token, cache revalidation), but the page's handlers were divested at
+        // send() time — replay them now or the player's request never completes.
+        if (xhrRef.status !== 200) {
+          replayHandlers();
+          return;
+        }
 
         // P3: responseType 'json' (or 'arraybuffer'/'blob'/'document') makes
         // responseText throw InvalidStateError. Subtitle formats are text-based,
@@ -219,19 +272,7 @@ export class XhrInterceptor {
             url: xhr.__anyllmTranslateUrl,
             responseType: xhrRef.responseType,
           });
-          if (originalOnReadyStateChange) originalOnReadyStateChange.call(xhrRef, new Event('readystatechange'));
-          if (originalOnLoad) originalOnLoad.call(xhrRef, new ProgressEvent('load'));
-          const eventHandlers = xhr.__anyllmTranslateEventHandlers;
-          if (eventHandlers) {
-            for (const h of eventHandlers.get('readystatechange') || []) {
-              if (typeof h === 'function') h.call(xhrRef, new Event('readystatechange'));
-              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new Event('readystatechange'));
-            }
-            for (const h of eventHandlers.get('load') || []) {
-              if (typeof h === 'function') h.call(xhrRef, new ProgressEvent('load'));
-              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new ProgressEvent('load'));
-            }
-          }
+          replayHandlers();
           return;
         }
 
@@ -249,29 +290,6 @@ export class XhrInterceptor {
           platform: match.platform,
           extractedLanguage: match.language,
         });
-
-        /** Replay all captured handlers with the (possibly translated) response */
-        const replayHandlers = () => {
-          // Fire onreadystatechange property handler
-          if (originalOnReadyStateChange) originalOnReadyStateChange.call(xhrRef, new Event('readystatechange'));
-          // Fire onload property handler
-          if (originalOnLoad) originalOnLoad.call(xhrRef, new ProgressEvent('load'));
-
-          // Fire addEventListener-registered handlers
-          const eventHandlers = xhr.__anyllmTranslateEventHandlers;
-          if (eventHandlers) {
-            const rscHandlers = eventHandlers.get('readystatechange') || [];
-            for (const h of rscHandlers) {
-              if (typeof h === 'function') h.call(xhrRef, new Event('readystatechange'));
-              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new Event('readystatechange'));
-            }
-            const loadHandlers = eventHandlers.get('load') || [];
-            for (const h of loadHandlers) {
-              if (typeof h === 'function') h.call(xhrRef, new ProgressEvent('load'));
-              else if (typeof h === 'object' && 'handleEvent' in h) h.handleEvent(new ProgressEvent('load'));
-            }
-          }
-        };
 
         // Listen for translation result
         const expectedOrigin = window.location.origin;
@@ -333,7 +351,7 @@ export class XhrInterceptor {
         // Self-cleaning timeout — remove listener and replay with original content
         const timeoutId = setTimeout(() => {
           cleanup();
-          replayHandlers();
+          replayHandlers(); // no-op when the translation already replayed
         }, self.translationTimeoutMs);
 
         xhrRef.addEventListener('abort', abortHandler);

@@ -11,6 +11,7 @@
  */
 
 import { findPrimaryVideo } from '@/lib/findPrimaryVideo';
+import { showSubtitleToast } from '@/content/subtitleToast';
 import type { SubtitleCue } from '@/types/subtitle';
 import type { SubtitleFontSizeMode } from '@/types/config';
 import { requiredReadDuration } from '@/lib/subtitleTiming';
@@ -136,8 +137,27 @@ function showManualPopover(overlay: HTMLElement): boolean {
     popoverOverlay.showPopover();
     return true;
   } catch {
-    return overlay.hasAttribute('popover');
+    // MAX-29: showPopover() throwing means nothing was painted — and leaving
+    // the attribute behind would keep the element in the hidden
+    // "popover not showing" state, i.e. worse than not using popover at all.
+    // Drop the attribute so the overlay stays a normal (visible) element and
+    // report the failure to the caller.
+    overlay.removeAttribute('popover');
+    return false;
   }
+}
+
+/** One-time warning when a fullscreen video cannot host the overlay. */
+let fullscreenPopoverFallbackWarned = false;
+
+function warnFullscreenPopoverUnavailable(overlay: HTMLElement): void {
+  if (fullscreenPopoverFallbackWarned) return;
+  fullscreenPopoverFallbackWarned = true;
+  console.warn(
+    'AnyLLMTranslate: fullscreen subtitle overlay uses the Popover API, which is unavailable here',
+    { parent: overlay.parentElement?.tagName ?? null },
+  );
+  showSubtitleToast('Subtitles may not be visible in fullscreen on this browser.');
 }
 
 function hideManualPopover(overlay: HTMLElement): void {
@@ -219,7 +239,9 @@ function syncOverlayHost(overlay: HTMLElement, video: HTMLVideoElement): HTMLEle
       if (overlay.parentElement !== document.body) {
         document.body.appendChild(overlay);
       }
-      showManualPopover(overlay);
+      if (!showManualPopover(overlay)) {
+        warnFullscreenPopoverUnavailable(overlay);
+      }
       return null;
     }
 
@@ -283,6 +305,15 @@ function createOverlay(): HTMLElement {
   const translatedText = document.createElement('div');
   translatedText.className = 'anyllm-translate-subtitle-translated';
   textContainer.appendChild(translatedText);
+
+  // MAX-34: the box itself is click-through (it overlaps the player's control
+  // bar), so dragging is owned by this explicit handle. The mousedown listener
+  // lives on the text container and receives the handle's bubbled events.
+  const dragHandle = document.createElement('div');
+  dragHandle.className = 'anyllm-translate-subtitle-drag-handle';
+  dragHandle.setAttribute('aria-hidden', 'true');
+  dragHandle.title = 'Drag to reposition subtitles';
+  textContainer.appendChild(dragHandle);
 
   return overlay;
 }
@@ -755,5 +786,6 @@ export function cleanup(): void {
  */
 export function resetOverlayState(): void {
   cleanup();
+  fullscreenPopoverFallbackWarned = false;
   overlayState.config = { ...DEFAULT_CONFIG };
 }

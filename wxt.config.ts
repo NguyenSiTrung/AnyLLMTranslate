@@ -16,6 +16,11 @@ export default defineConfig({
       '*://*.media.max.com/*',
       '*://*.hbomax.com/*',
       '*://*.max.com/*',
+      // Max CDN edges + the HBO landing host the player redirects through, and
+      // the Microsoft delivery edge some Max clients stream from. Both are in
+      // the background subtitle fetch allow-list (MAX-39).
+      '*://*.hbo.com/*',
+      '*://*.delivery.mp.microsoft.com/*',
       // YouTube watch-page + timedtext fetch for Settings → Subtitle Studio
       // "Re-align from link" (pre-warms the AI re-align cache from a pasted URL).
       // No new install warning: content scripts already match <all_urls>.
