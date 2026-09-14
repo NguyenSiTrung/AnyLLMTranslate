@@ -31,6 +31,12 @@ export interface TranslationPiece {
    *  container; false for sidebar/nav content. Used to partition batches so
    *  article prose and chrome text don't interleave in the same LLM request. */
   inArticleContext?: boolean;
+  /**
+   * sm7n: the original plain source text (before rich encoding/splitting).
+   * The mutation-invalidation path compares live source text against this so
+   * split/rich pieces all invalidate together when the source group changes.
+   */
+  sourceText?: string;
 }
 
 /** Request to the translation service */
@@ -73,6 +79,8 @@ export interface TranslationRequest {
   termMemoryBlock?: string;
   /** When true, run one quality self-check re-prompt on obvious failures (FR-16). */
   enableQualityCheck?: boolean;
+  /** Cancels an in-flight provider request without retry or failover. */
+  signal?: AbortSignal;
 }
 
 /** Result from the translation service */

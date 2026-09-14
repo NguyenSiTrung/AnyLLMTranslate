@@ -76,6 +76,7 @@ describe('OpenAICompatibleService.translateStream', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     globalThis.fetch = originalFetch;
   });
 
@@ -226,5 +227,111 @@ describe('OpenAICompatibleService.translateStream', () => {
     // p2 falls back to its original text.
     expect(result.translations.get('p2')).toBe('World');
     }
+  });
+
+  it('rejects immediately when the caller abort signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const request = { ...makeRequest(new Map([['p1', 'Hi']])), signal: controller.signal };
+
+    const service = new OpenAICompatibleService(
+      makeConfig({ requestTimeoutMs: 60000 }),
+    );
+
+    const deadline = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('test deadline')), 100);
+    });
+
+    await expect(
+      Promise.race([
+        service.translateStream(request, () => {}),
+        deadline,
+      ]),
+    ).rejects.toThrow('cancelled');
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects with idle timeout and cancels the reader using fake timers', async () => {
+    vi.useFakeTimers();
+
+    const reader = {
+      read: vi.fn().mockImplementation(() => new Promise<never>(() => {})),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      releaseLock: vi.fn(),
+    };
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      body: { getReader: () => reader },
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue(''),
+      headers: new Headers(),
+    } as unknown as Response);
+
+    const service = new OpenAICompatibleService(makeConfig({ requestTimeoutMs: 50 }));
+    const p = service.translateStream(makeRequest(new Map([['p1', 'Hi']])), () => {});
+    const rejected = expect(p).rejects.toThrow('Stream response timed out after 50ms');
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await rejected;
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects immediately when non-stream translate receives an already-aborted signal and does not call fetch', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const service = new OpenAICompatibleService(makeConfig());
+
+    const request = {
+      ...makeRequest(new Map([['p1', 'Hi']])),
+      signal: controller.signal,
+    };
+
+    await expect(service.translate(request)).rejects.toThrow(/cancelled/i);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects and cancels reader when caller aborts after headers while read is pending', async () => {
+    const controller = new AbortController();
+    let onReadCalled: () => void = () => {};
+    const readCalled = new Promise<void>((resolve) => {
+      onReadCalled = resolve;
+    });
+    const reader = {
+      read: vi.fn().mockImplementation(() => {
+        onReadCalled();
+        return new Promise<never>(() => {});
+      }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      releaseLock: vi.fn(),
+    };
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      body: { getReader: () => reader },
+      json: vi.fn(),
+      text: vi.fn().mockResolvedValue(''),
+      headers: new Headers(),
+    } as unknown as Response);
+
+    const service = new OpenAICompatibleService(makeConfig({ requestTimeoutMs: 1000 }));
+    const p = service.translateStream(
+      { ...makeRequest(new Map([['p1', 'Hi']])), signal: controller.signal },
+      () => {},
+    );
+
+    await readCalled;
+    controller.abort();
+
+    await expect(p).rejects.toThrow(/cancelled/i);
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
   });
 });

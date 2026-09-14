@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractPieces, resetPieceCounter } from '../domWalker';
 import { __resetMatchCacheForTest } from '@/lib/domUtils';
+import { getRegisteredShadowRoots, clearShadowDomRoots } from '../shadowDomRoots';
 
 describe('domWalker — selector-match cache integration', () => {
   beforeEach(() => {
@@ -465,5 +466,167 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces[0].text).toContain('<z id=');
     expect(pieces[0].text).toContain('npm install');
     expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
+  });
+});
+
+describe('domWalker — shadow DOM walk (FR-23)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    clearShadowDomRoots();
+  });
+
+  it('include-scoped subtree containing an open shadow host extracts the shadow piece when enabled', () => {
+    const scoped = document.createElement('div');
+    scoped.className = 'scoped';
+    const lightP = document.createElement('p');
+    lightP.textContent = 'Light DOM paragraph text.';
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const shadowP = document.createElement('p');
+    shadowP.textContent = 'Shadow DOM paragraph text.';
+    shadow.appendChild(shadowP);
+    scoped.appendChild(lightP);
+    scoped.appendChild(host);
+    document.body.appendChild(scoped);
+
+    const pieces = extractPieces(document.body, {
+      includeSelectors: ['.scoped'],
+      enableShadowDomWalk: true,
+    });
+
+    const texts = pieces.map((piece) => piece.text);
+    expect(texts).toContain('Light DOM paragraph text.');
+    expect(texts).toContain('Shadow DOM paragraph text.');
+    const shadowPiece = pieces.find((piece) => piece.text === 'Shadow DOM paragraph text.');
+    expect(shadowPiece?.parentElement).toBe(shadowP);
+
+    // Flag off → the shadow subtree is never entered.
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const scoped2 = document.createElement('div');
+    scoped2.className = 'scoped';
+    const host2 = document.createElement('div');
+    const shadow2 = host2.attachShadow({ mode: 'open' });
+    const shadowP2 = document.createElement('p');
+    shadowP2.textContent = 'Hidden shadow paragraph.';
+    shadow2.appendChild(shadowP2);
+    scoped2.appendChild(host2);
+    document.body.appendChild(scoped2);
+
+    const offPieces = extractPieces(document.body, {
+      includeSelectors: ['.scoped'],
+    });
+    expect(offPieces.map((piece) => piece.text)).not.toContain('Hidden shadow paragraph.');
+  });
+
+  it('records the plain source text on every piece for later change comparison (sm7n)', () => {
+    const p = document.createElement('p');
+    p.textContent = 'Plain source paragraph text.';
+    document.body.appendChild(p);
+
+    const pieces = extractPieces(document.body, {});
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].sourceText).toBe('Plain source paragraph text.');
+  });
+
+  it('registers walked open shadow roots so display cleanup and watching can reach them', () => {
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    const shadowP = document.createElement('p');
+    shadowP.textContent = 'Shadow text needing registration.';
+    shadow.appendChild(shadowP);
+    document.body.appendChild(host);
+
+    const pieces = extractPieces(document.body, { enableShadowDomWalk: true });
+
+    expect(pieces.map((piece) => piece.text)).toContain('Shadow text needing registration.');
+    // Registered → displayScopes()/removeAllTranslations() and the post-flush
+    // observer sweep can reach the root, even when it attached after the
+    // MutationWatcher's delivery-time scan.
+    expect(getRegisteredShadowRoots()).toContain(shadow);
+  });
+});
+
+describe('domWalker — shared asideRegionChars across calls (t9dd)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    clearShadowDomRoots();
+  });
+
+  // 30 × ~53 chars ≈ 1590 chars — past the 1000-char per-region cap but each
+  // paragraph stays under the 67-char per-paragraph cap.
+  const buildAside = () => {
+    const aside = document.createElement('aside');
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('p');
+      p.textContent = `Sidebar link number ${String(i).padStart(2, '0')} with some extra text.`;
+      aside.appendChild(p);
+    }
+    return aside;
+  };
+
+  it('a caller-provided map keeps cumulative region caps across two extractPieces calls on the same aside', () => {
+    document.body.appendChild(buildAside());
+    const asideRegionChars = new Map<Element, number>();
+    const options = { enableAsideCaps: true, asideRegionChars };
+
+    const first = extractPieces(document.body, options);
+    expect(first.length).toBeGreaterThan(10);
+    expect(first.length).toBeLessThan(30);
+    const firstTotal = first.reduce((sum, piece) => sum + piece.text.length, 0);
+    expect(firstTotal).toBeGreaterThanOrEqual(1000);
+
+    // Same shared map: the region cap is already consumed — a second pass
+    // (e.g. a dynamic mutation re-extraction) must not restart accounting.
+    const second = extractPieces(document.body, options);
+    expect(second).toHaveLength(0);
+
+    // A fresh call WITHOUT the map re-extracts the same pieces — the pre-fix
+    // behavior where every pass restarted cumulative accounting.
+    const fresh = extractPieces(document.body, { enableAsideCaps: true });
+    expect(fresh.length).toBe(first.length);
+  });
+
+  it('include-selector recursion and open-shadow nested extraction forward the shared map', () => {
+    document.body.appendChild(buildAside());
+
+    const viaInclude = new Map<Element, number>();
+    const includeOptions = {
+      includeSelectors: ['aside'],
+      enableAsideCaps: true,
+      asideRegionChars: viaInclude,
+    };
+    const inc1 = extractPieces(document.body, includeOptions);
+    const inc2 = extractPieces(document.body, includeOptions);
+    expect(inc1.length).toBeGreaterThan(10);
+    // The nested include-scoped call must draw from the same map.
+    expect(inc2).toHaveLength(0);
+
+    // Shadow recursion: an aside inside an open shadow root shares the map.
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    clearShadowDomRoots();
+    const host = document.createElement('div');
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.appendChild(buildAside());
+    document.body.appendChild(host);
+
+    const viaShadow = new Map<Element, number>();
+    const shadowOptions = {
+      enableShadowDomWalk: true,
+      enableAsideCaps: true,
+      asideRegionChars: viaShadow,
+    };
+    const sh1 = extractPieces(document.body, shadowOptions);
+    const sh2 = extractPieces(document.body, shadowOptions);
+    expect(sh1.length).toBeGreaterThan(10);
+    expect(sh2).toHaveLength(0);
   });
 });

@@ -18,7 +18,15 @@ import {
   togglePageState,
   applyCustomTheme,
   clearCustomTheme,
+  findPieceElement,
+  applyInlineTranslation,
+  removePieceArtifacts,
 } from '@/content/translationDisplay';
+import {
+  registerShadowRoots,
+  getRegisteredShadowRoots,
+  clearShadowDomRoots,
+} from '@/content/shadowDomRoots';
 
 describe('translationDisplay', () => {
   beforeEach(() => {
@@ -269,7 +277,106 @@ describe('translationDisplay', () => {
       expect(document.querySelector('[data-anyllm-piece-id="piece-b"]')).not.toBeNull();
     });
 
+    it('sm7n: a translation owned by a nested marked original does not keep the outer original marked', () => {
+      // Outer marked original whose own translation is a following sibling,
+      // plus a nested marked original with its own translation inside outer.
+      const outer = document.createElement('div');
+      outer.appendChild(document.createTextNode('Outer source.'));
+      const nested = document.createElement('p');
+      nested.textContent = 'Nested source.';
+      const nestedT = document.createElement('div');
+      nestedT.setAttribute('data-anyllm-role', 'translation');
+      nestedT.setAttribute('data-anyllm-piece-id', 'nested-id');
+      nestedT.textContent = 'Bản dịch lồng.';
+      outer.appendChild(nested);
+      outer.appendChild(nestedT);
+      document.body.appendChild(outer);
+      applyTranslation(outer, 'outer-id', 'Bản dịch ngoài.');
+      nested.setAttribute('data-anyllm-role', 'original');
+      nested.setAttribute('data-anyllm-translated', '');
 
+      const outerT = document.querySelector('[data-anyllm-piece-id="outer-id"]')!;
+
+      // Removing the OUTER piece must clear only the outer markers — the
+      // nested translation is owned by the nested original, not by outer.
+      removeTranslation('outer-id');
+
+      expect(outerT.isConnected).toBe(false);
+      expect(outer.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(outer.hasAttribute('data-anyllm-translated')).toBe(false);
+      expect(nested.getAttribute('data-anyllm-role')).toBe('original');
+      expect(nested.hasAttribute('data-anyllm-translated')).toBe(true);
+      expect(nestedT.isConnected).toBe(true);
+    });
+  });
+
+  describe('removePieceArtifacts (sm7n)', () => {
+    it('clears the parent markers when the piece element is already gone (site replaced source)', () => {
+      const p = document.createElement('p');
+      p.textContent = 'Replaced source text.';
+      p.setAttribute('data-anyllm-role', 'original');
+      p.setAttribute('data-anyllm-translated', '');
+      document.body.appendChild(p);
+      // No [data-anyllm-piece-id] artifact exists — the site's textContent
+      // replacement already removed it. Markers must still be cleared so the
+      // parent can be re-extracted.
+      removePieceArtifacts('gone-id', p);
+      expect(p.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(p.hasAttribute('data-anyllm-translated')).toBe(false);
+    });
+
+    it('clears outer markers on invalidation while a nested marked original keeps its artifacts', () => {
+      const outer = document.createElement('div');
+      outer.appendChild(document.createTextNode('Outer source.'));
+      const nested = document.createElement('p');
+      nested.textContent = 'Nested source.';
+      nested.setAttribute('data-anyllm-role', 'original');
+      nested.setAttribute('data-anyllm-translated', '');
+      const nestedT = document.createElement('div');
+      nestedT.setAttribute('data-anyllm-role', 'translation');
+      nestedT.setAttribute('data-anyllm-piece-id', 'nested-id');
+      outer.appendChild(nested);
+      outer.appendChild(nestedT);
+      outer.setAttribute('data-anyllm-role', 'original');
+      outer.setAttribute('data-anyllm-translated', '');
+      const outerT = document.createElement('div');
+      outerT.setAttribute('data-anyllm-role', 'translation');
+      outerT.setAttribute('data-anyllm-piece-id', 'outer-id');
+      document.body.appendChild(outer);
+      document.body.appendChild(outerT);
+
+      removePieceArtifacts('outer-id', outer);
+
+      expect(outerT.isConnected).toBe(false);
+      expect(outer.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(outer.hasAttribute('data-anyllm-translated')).toBe(false);
+      expect(nested.getAttribute('data-anyllm-role')).toBe('original');
+      expect(nested.hasAttribute('data-anyllm-translated')).toBe(true);
+      expect(nestedT.isConnected).toBe(true);
+    });
+
+    it('keeps the parent marked while another piece still owns artifacts on it', () => {
+      const parent = document.createElement('div');
+      parent.textContent = 'Lead. Tail.';
+      parent.setAttribute('data-anyllm-role', 'original');
+      parent.setAttribute('data-anyllm-translated', '');
+      const leadT = document.createElement('div');
+      leadT.setAttribute('data-anyllm-role', 'translation');
+      leadT.setAttribute('data-anyllm-piece-id', 'lead-id');
+      const tailT = document.createElement('div');
+      tailT.setAttribute('data-anyllm-role', 'translation');
+      tailT.setAttribute('data-anyllm-piece-id', 'tail-id');
+      document.body.appendChild(parent);
+      document.body.appendChild(leadT);
+      document.body.appendChild(tailT);
+
+      removePieceArtifacts('tail-id', parent);
+
+      expect(tailT.isConnected).toBe(false);
+      // lead's translation is still owned by the parent — markers stay.
+      expect(leadT.isConnected).toBe(true);
+      expect(parent.hasAttribute('data-anyllm-translated')).toBe(true);
+    });
   });
 
   describe('removeAllTranslations', () => {
@@ -295,6 +402,131 @@ describe('translationDisplay', () => {
       setPageState('dual');
       expect(document.documentElement.getAttribute('data-anyllm-state')).toBe('dual');
       expect(getPageState()).toBe('dual');
+    });
+  });
+
+  describe('shadow DOM (FR-23)', () => {
+    beforeEach(() => {
+      clearShadowDomRoots();
+    });
+
+    function makeShadowParagraph(text: string): { host: HTMLElement; shadow: ShadowRoot; p: HTMLElement } {
+      const host = document.createElement('div');
+      const shadow = host.attachShadow({ mode: 'open' });
+      const p = document.createElement('p');
+      p.textContent = text;
+      shadow.appendChild(p);
+      document.body.appendChild(host);
+      return { host, shadow, p };
+    }
+
+    it('applies and finds translation elements inside a registered open root', () => {
+      const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
+      registerShadowRoots(document.body);
+
+      applyTranslation(p, 'shadow-piece-1', 'Đoạn văn trong bóng');
+
+      const el = shadow.querySelector('[data-anyllm-piece-id="shadow-piece-1"]');
+      expect(el).not.toBeNull();
+      expect(el?.textContent).toBe('Đoạn văn trong bóng');
+      expect(p.getAttribute('data-anyllm-role')).toBe('original');
+      expect(findPieceElement('shadow-piece-1')).toBe(el);
+
+      // Untracked nodes inside the registered root are reachable too — the
+      // default lookup must not stop at the shadow boundary.
+      const manual = document.createElement('span');
+      manual.setAttribute('data-anyllm-piece-id', 'shadow-manual');
+      shadow.appendChild(manual);
+      expect(findPieceElement('shadow-manual')).toBe(manual);
+    });
+
+    it('removeAllTranslations cleans markers/elements inside registered roots but keeps the registry', () => {
+      const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
+      registerShadowRoots(document.body);
+
+      applyTranslation(p, 'shadow-piece-2', 'Bản dịch');
+      p.setAttribute('data-anyllm-error', '');
+      setPageState('dual');
+
+      removeAllTranslations();
+
+      expect(shadow.querySelector('.anyllm-translate-translation')).toBeNull();
+      expect(shadow.querySelector('[data-anyllm-role="translation"]')).toBeNull();
+      expect(p.hasAttribute('data-anyllm-translated')).toBe(false);
+      expect(p.hasAttribute('data-anyllm-role')).toBe(false);
+      expect(p.hasAttribute('data-anyllm-error')).toBe(false);
+      expect(getPageState()).toBe('off');
+
+      // The registry is session-scoped: cleanup does not clear it (teardown does).
+      expect(getRegisteredShadowRoots()).toContain(shadow);
+
+      // Idempotent — a second pass is a no-op.
+      removeAllTranslations();
+      expect(shadow.querySelector('.anyllm-translate-translation')).toBeNull();
+    });
+
+    it('unwraps original wrappers inside registered roots', () => {
+      const host = document.createElement('div');
+      const shadow = host.attachShadow({ mode: 'open' });
+      const li = document.createElement('li');
+      li.textContent = 'List item in shadow.';
+      shadow.appendChild(li);
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
+
+      // LI parents take the contained path: children move into an original wrapper.
+      applyTranslation(li, 'shadow-li', 'Mục danh sách');
+      expect(li.querySelector('[data-anyllm-original-wrapper]')).not.toBeNull();
+
+      removeAllTranslations();
+
+      expect(li.querySelector('[data-anyllm-original-wrapper]')).toBeNull();
+      expect(li.textContent).toBe('List item in shadow.');
+    });
+
+    it('applyTheme syncs mask tabindex inside registered roots', () => {
+      const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
+      registerShadowRoots(document.body);
+      applyTranslation(p, 'shadow-piece-3', 'Bản dịch');
+
+      applyTheme('mask');
+      expect(
+        shadow.querySelector('.anyllm-translate-translation')?.getAttribute('tabindex'),
+      ).toBe('0');
+
+      applyTheme('bubble');
+      expect(
+        shadow.querySelector('.anyllm-translate-translation')?.hasAttribute('tabindex'),
+      ).toBe(false);
+    });
+
+    it('creates translation-only sibling clones inside registered roots', () => {
+      const { shadow, p } = makeShadowParagraph('Short shadow text.');
+      registerShadowRoots(document.body);
+
+      applyInlineTranslation(p, 'shadow-inline', 'Bản dịch ngắn', 'vi');
+      setPageState('translation-only');
+
+      const clone = shadow.querySelector('.anyllm-inline-translation-only-clone');
+      expect(clone).not.toBeNull();
+      expect(clone?.textContent).toContain('Bản dịch ngắn');
+
+      removeAllTranslations();
+      expect(shadow.querySelector('.anyllm-inline-bilingual')).toBeNull();
+    });
+
+    it('page-state mutations mirror onto registered shadow hosts', () => {
+      const { host } = makeShadowParagraph('Shadow paragraph text.');
+      registerShadowRoots(document.body);
+
+      applyTheme('mask');
+      expect(host.getAttribute('data-anyllm-theme')).toBe('mask');
+      applyPosition('above');
+      expect(host.getAttribute('data-anyllm-position')).toBe('above');
+      applyDarkMode('dark');
+      expect(host.classList.contains('anyllm-dark')).toBe(true);
+      setPageState('dual');
+      expect(host.getAttribute('data-anyllm-state')).toBe('dual');
     });
   });
 

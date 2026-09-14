@@ -1,3 +1,4 @@
+import { DATA_ATTRS } from '@/lib/constants';
 import { PLAYER_CHROME_HOST_CLASS, PLAYER_CHROME_BUTTON_CLASS } from './types';
 import { createChromeButton, type ChromeButtonState } from './button';
 
@@ -94,6 +95,9 @@ function appendChromeShadow(
   panelSlot: HTMLElement;
   setButtonState: (state: ChromeButtonState) => void;
 } {
+  // Mark extension ownership before attaching — shadow-root registration and
+  // mutation watching must never reach into the player chrome UI.
+  host.setAttribute(DATA_ATTRS.OWNED, '');
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = CHROME_SHADOW_CSS;

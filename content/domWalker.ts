@@ -6,6 +6,7 @@
 
 import type { TranslationPiece } from '@/types/translation';
 import { deduplicateAncestors, matchesCached, classifyInArticle, findAsideRegionRoot } from '@/lib/domUtils';
+import { registerShadowRoots } from './shadowDomRoots';
 import { encodeInlineHtml } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS, BODY_TRANSLATE_TAGS, ASIDE_MAX_TEXT_PER_PARAGRAPH, ASIDE_MAX_TEXT_PER_REGION } from '@/lib/constants';
 
@@ -32,6 +33,15 @@ export interface ExtractOptions {
   enableAsideCaps?: boolean;
   /** FR-23: When true, descend into open shadow roots during extraction. */
   enableShadowDomWalk?: boolean;
+  /**
+   * t9dd: shared cumulative per-aside-region char counts for FR-5 caps.
+   * Callers that run multiple extraction passes in one session (initial walk
+   * + dynamic mutation additions) must pass a single session-scoped map so
+   * dynamic sidebars cannot reset the region cap. Forwarded through
+   * include-selector recursion and open-shadow nested extraction.
+   * Defaults to a fresh map per call.
+   */
+  asideRegionChars?: Map<Element, number>;
 }
 
 /**
@@ -160,7 +170,10 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
       const nested = extractPieces(el, {
         excludeSelectors: options.excludeSelectors,
         enableRichTranslate: options.enableRichTranslate,
+        enableBodyTagWhitelist: options.enableBodyTagWhitelist,
         enableAsideCaps: options.enableAsideCaps,
+        enableShadowDomWalk: options.enableShadowDomWalk,
+        asideRegionChars: options.asideRegionChars,
       });
       allPieces.push(...nested);
     }
@@ -170,8 +183,9 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
   const pieces: TranslationPiece[] = [];
   let currentTextNodes: Text[] = [];
   let currentParent: Element | null = null;
-  // FR-5: per-region cumulative char tracker for aside caps.
-  const asideRegionChars = new Map<Element, number>();
+  // FR-5: per-region cumulative char tracker for aside caps. A caller-provided
+  // map (t9dd) keeps accounting cumulative across initial + dynamic passes.
+  const asideRegionChars = options.asideRegionChars ?? new Map<Element, number>();
 
   /** Find the deepest common ancestor element of a list of text nodes */
   function getCommonAncestor(nodes: Node[]): Element | null {
@@ -219,6 +233,13 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
 
     // Never anchor to <body> or <html> — in replace mode hiding those would blank the page
     if (anchorElement && (anchorElement.tagName === 'BODY' || anchorElement.tagName === 'HTML')) {
+      currentTextNodes = [];
+      return;
+    }
+
+    // FR-23: never anchor to a ShadowRoot — it has no tagName/setAttribute and
+    // would break display insertion downstream.
+    if (anchorElement && anchorElement.nodeType !== Node.ELEMENT_NODE) {
       currentTextNodes = [];
       return;
     }
@@ -271,6 +292,8 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
           // FR-19: attach variables so any <z> tags in this part still decode.
           ...(richVariables ? { variables: richVariables } : {}),
           inArticleContext,
+          // sm7n: split pieces share the full source group for comparison.
+          sourceText: trimmed,
         });
       }
     } else {
@@ -283,6 +306,8 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
         isTranslated: false,
         ...(richVariables ? { variables: richVariables } : {}),
         inArticleContext,
+        // sm7n: plain source before rich encoding — the invalidation baseline.
+        sourceText: trimmed,
       });
     }
 
@@ -353,17 +378,19 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
   // Flush remaining
   flushPiece();
 
-  // FR-23: optionally walk open shadow roots (web components).
-  if (options.enableShadowDomWalk && typeof (root as Element).querySelectorAll === 'function') {
-    const hosts = (root as Element).querySelectorAll?.('*') ?? [];
-    for (const host of hosts) {
-      const shadow = (host as Element & { shadowRoot?: ShadowRoot | null }).shadowRoot;
-      if (!shadow) continue;
+  // FR-23: optionally walk open shadow roots (web components). Discovery is
+  // already recursive, so nested calls must not re-walk shadow trees.
+  // registerShadowRoots (not bare collectOpenShadowRoots): discovered roots
+  // must reach displayScopes()/cleanup and the watcher's post-flush sweep —
+  // a root can attach after the delivery-time scan and attachShadow emits
+  // no mutation record.
+  if (options.enableShadowDomWalk && typeof (root as ParentNode).querySelectorAll === 'function') {
+    for (const shadow of registerShadowRoots(root as ParentNode)) {
       const nested = extractPieces(shadow as unknown as Element, {
         ...options,
         // Avoid re-applying body whitelist inside shadow trees.
         enableBodyTagWhitelist: false,
-        enableShadowDomWalk: true,
+        enableShadowDomWalk: false,
       });
       pieces.push(...nested);
     }

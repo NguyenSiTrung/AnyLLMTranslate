@@ -201,26 +201,32 @@ export class ProviderPoolCoordinator implements TranslationService {
   }
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
-    return this.dispatchWithFailover((service) => service.translate(request));
+    return this.dispatchWithFailover(
+      (service) => service.translate(request),
+      () => request.signal?.aborted === true,
+    );
   }
 
   async translateStream(
     request: TranslationRequest,
     onPiece: (id: string, text: string) => void,
   ): Promise<TranslationResult> {
-    return this.dispatchWithFailover((service) => {
-      if (service.translateStream) {
-        return service.translateStream(request, onPiece);
-      }
-      return service.translate(request).then((result) => {
-        if (result.success) {
-          for (const [id, text] of result.translations) {
-            onPiece(id, text);
-          }
+    return this.dispatchWithFailover(
+      (service) => {
+        if (service.translateStream) {
+          return service.translateStream(request, onPiece);
         }
-        return result;
-      });
-    });
+        return service.translate(request).then((result) => {
+          if (result.success) {
+            for (const [id, text] of result.translations) {
+              onPiece(id, text);
+            }
+          }
+          return result;
+        });
+      },
+      () => request.signal?.aborted === true,
+    );
   }
 
   async testConnection(
@@ -449,6 +455,7 @@ export class ProviderPoolCoordinator implements TranslationService {
 
   private async dispatchWithFailover<T>(
     call: (service: TranslationService) => Promise<T>,
+    isCancelled: () => boolean = () => false,
   ): Promise<T> {
     const now = this.clock();
     const healthy = healthySlots(this.slots, this.breaker, now);
@@ -550,12 +557,21 @@ export class ProviderPoolCoordinator implements TranslationService {
       member.service.setMax429Retries?.(otherUntriedHealthy ? 0 : null);
 
       try {
+        if (isCancelled()) {
+          throw new Error(ASR_REALIGN_CANCELLED);
+        }
         await this.applyKeyThrottle(slot);
+        if (isCancelled()) {
+          throw new Error(ASR_REALIGN_CANCELLED);
+        }
         const result = await call(member.service);
         this.breaker.recordSuccess(slot.slotId);
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
+        if (isCancelled()) {
+          throw new Error(ASR_REALIGN_CANCELLED);
+        }
         const statusCode = error instanceof ApiError ? error.statusCode : undefined;
         const kind = this.breaker.classifyFailure(statusCode);
         if (kind !== 'clientError') {

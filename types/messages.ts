@@ -570,8 +570,11 @@ export interface PdfStreamPiece {
 export interface PdfStreamDone {
   type: 'done';
   results: TranslationResultItem[];
-  /** True when missing ids were back-filled with source text (partial LLM response). */
+  /** True when missing ids were back-filled with source text (partial LLM
+   *  response) or some requested ids stayed unresolved alongside successes. */
   partial?: boolean;
+  /** Per-piece failures (negative-cache or failed batches) surfaced to the caller. */
+  failed?: Array<{ id: string; error: string }>;
 }
 
 /** Terminal error message (caller should fall back to non-streaming). */
@@ -834,7 +837,8 @@ export interface TranslationResultMessage {
   success: boolean;
   results?: TranslationResultItem[];
   error?: string;
-  /** True when at least one sub-batch returned a partial (back-filled) result (FR-2). */
+  /** True when at least one sub-batch returned a partial (back-filled) result
+   *  (FR-2), or when requested ids stayed unresolved/failed alongside successes. */
   partial?: boolean;
   /** Per-piece failures (from negative-cache hits or batch failures) so the content
    *  script can show error states per piece without a batch-level failure (FR-4). */
@@ -851,6 +855,14 @@ export interface TranslationResultMessage {
 export interface TranslationResultItem {
   id: string;
   translatedText: string;
+  /**
+   * True when this entry is a partial source back-fill: the provider omitted
+   * the id and the background filled it with the source text. Consumers must
+   * treat it as a retryable failure, not a real translation. Do NOT infer this
+   * from `partial` + text equality — a genuine source-identical translation
+   * would be mislabeled whenever an unrelated piece fails in the same flush.
+   */
+  backfilled?: boolean;
   /**
    * PDF pipeline content kind (optional elsewhere).
    * `math` / `figure` are kept verbatim and never masked in Layout mode.

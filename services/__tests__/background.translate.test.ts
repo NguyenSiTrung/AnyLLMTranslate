@@ -771,3 +771,361 @@ describe('handleTranslate — parallel sub-batches', () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(4);
   });
 });
+
+// ── Duplicate rehydration when the canonical piece fails (bedw) ─────────────
+// Regression: after dedupPiecesByText, a duplicate previously adopted the
+// canonical's freshResult when present — or fell back to its own SOURCE text
+// when the canonical had no result (failed batch). The aggregate could return
+// `success: true` without `partial`, so the content script accepted a source
+// echo as a real translation. Duplicates must instead surface as retryable
+// failures — and a partial source back-fill must not count as a genuine
+// canonical success.
+describe('handleTranslate — duplicate rehydration on canonical failure', () => {
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+  let getCachedFailure: ReturnType<typeof vi.fn>;
+  let cacheTranslation: ReturnType<typeof vi.fn>;
+  let cacheFailure: ReturnType<typeof vi.fn>;
+
+  // One piece per sub-batch so p1 and p2 land in different provider calls.
+  // (concurrencyLimit: 0 + safeKeyThrottleMigrated mirrors the parallel
+  // sub-batches suite so batches actually run as separate requests.)
+  const seedSinglePieceBatchSettings = (extra?: Record<string, unknown>): void => {
+    mockStorage['anyllm-translate-settings'] = {
+      maxTextGroupLengthPerRequest: 1,
+      maxTextLengthPerRequest: 5000,
+      safeKeyThrottleMigrated: true,
+      ...extra,
+      providers: [
+        {
+          id: 'p1',
+          displayName: 'Test',
+          baseUrl: 'https://api.example.com/v1',
+          model: 'test-model',
+          requiresApiKey: false,
+          temperature: 0.3,
+          maxTokens: 4096,
+          requestTimeoutMs: 60000,
+          enabled: true,
+          keys: [
+            {
+              id: 'k1',
+              apiKey: 'sk-test',
+              maxRpm: 0,
+              concurrencyLimit: 0,
+              interval: 0,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  /** Fetch stub that answers per-request based on the piece ids in the prompt. */
+  const stubFetchById = (responder: (ids: string[]) => string): void => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse((init?.body as string) ?? '{}') as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        const userMsg = body.messages?.find((m) => m.role === 'user');
+        const content = userMsg?.content ?? '';
+        const jsonStart = content.indexOf('{');
+        const ids =
+          jsonStart >= 0
+            ? Object.keys(
+                JSON.parse(content.slice(jsonStart)) as Record<string, string>,
+              )
+            : [];
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'test',
+            choices: [
+              {
+                message: { role: 'assistant', content: responder(ids) },
+                finish_reason: 'stop',
+              },
+            ],
+          }),
+          text: async () => '',
+        };
+      }),
+    );
+  };
+
+  /** Fetch stub returning a raw response-like object per request (per ids). */
+  const stubFetchRaw = (responder: (ids: string[]) => unknown): void => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse((init?.body as string) ?? '{}') as {
+          messages: Array<{ role: string; content: string }>;
+        };
+        const userMsg = body.messages?.find((m) => m.role === 'user');
+        const content = userMsg?.content ?? '';
+        const jsonStart = content.indexOf('{');
+        const ids =
+          jsonStart >= 0
+            ? Object.keys(
+                JSON.parse(content.slice(jsonStart)) as Record<string, string>,
+              )
+            : [];
+        return responder(ids);
+      }),
+    );
+  };
+
+  const okTranslationResponse = (translations: Record<string, string>) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      id: 'test',
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: JSON.stringify({ translations }),
+          },
+          finish_reason: 'stop',
+        },
+      ],
+    }),
+    text: async () => '',
+  });
+
+  const dupMsg = () =>
+    buildMsg([
+      { id: 'p1', text: 'Shared source' },
+      { id: 'p1dup', text: 'Shared source' }, // duplicate of p1 — never sent to the LLM
+      { id: 'p2', text: 'Unique source' },
+    ]);
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    getCachedFailure = mod.getCachedFailure as ReturnType<typeof vi.fn>;
+    cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
+    cacheFailure = mod.cacheFailure as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+    getCachedFailure.mockResolvedValue(null);
+  });
+
+  it('marks every duplicate failed when the canonical sub-batch fails — no source echo', async () => {
+    seedSinglePieceBatchSettings();
+    stubFetchById((ids) => {
+      // p1's sub-batch fails outright: unparseable content is a content-level
+      // failure ({success:false}), not a transport error → no pool failover.
+      if (ids.includes('p1')) return 'NOT-JSON-GARBAGE';
+      return JSON.stringify({ translations: { p2: 'T-Other' } });
+    });
+
+    const result = (await handleMessage(dupMsg(), fakeSender)) as {
+      success: boolean;
+      partial?: boolean;
+      results?: Array<{ id: string; translatedText: string }>;
+      failed?: Array<{ id: string; error: string }>;
+    };
+
+    expect(result.success).toBe(true);
+    // Some requested ids unresolved alongside the p2 success → partial.
+    expect(result.partial).toBe(true);
+    // The dup must NOT echo its source text as a "translation".
+    expect(result.results).toEqual([{ id: 'p2', translatedText: 'T-Other' }]);
+    // Both the canonical and the dup surface the canonical's failure error.
+    expect(result.failed).toEqual([
+      { id: 'p1', error: 'Failed to parse translation response as JSON' },
+      { id: 'p1dup', error: 'Failed to parse translation response as JSON' },
+    ]);
+    // The failed source text is never written to the success cache.
+    const cachedSources = cacheTranslation.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(cachedSources).not.toContain('Shared source');
+    expect(cachedSources).toContain('Unique source');
+  });
+
+  it('does not rehydrate a duplicate from a canonical partial source back-fill', async () => {
+    seedSinglePieceBatchSettings();
+    stubFetchById((ids) => {
+      // p1's sub-batch returns an empty map → the service back-fills p1 with
+      // its own source text and flags the result partial.
+      if (ids.includes('p1')) return JSON.stringify({ translations: {} });
+      return JSON.stringify({ translations: { p2: 'T-Other' } });
+    });
+
+    const result = (await handleMessage(dupMsg(), fakeSender)) as {
+      success: boolean;
+      partial?: boolean;
+      results?: Array<{
+        id: string;
+        translatedText: string;
+        backfilled?: boolean;
+      }>;
+      failed?: Array<{ id: string; error: string }>;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBe(true);
+    // The canonical keeps its source back-fill (documented partial behaviour)
+    // AND is explicitly marked so content never guesses via text equality…
+    expect(result.results?.find((r) => r.id === 'p1')).toEqual({
+      id: 'p1',
+      translatedText: 'Shared source',
+      backfilled: true,
+    });
+    expect(result.results?.find((r) => r.id === 'p2')).toEqual({
+      id: 'p2',
+      translatedText: 'T-Other',
+    });
+    // …but the dup must NOT inherit it — no source echo as a result.
+    expect(result.results?.find((r) => r.id === 'p1dup')).toBeUndefined();
+    expect(result.failed).toEqual([
+      { id: 'p1dup', error: 'Incomplete translation — click to retry' },
+    ]);
+    // The back-filled source is never written to the success cache.
+    const cachedSources = cacheTranslation.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(cachedSources).not.toContain('Shared source');
+  });
+
+  it('still rehydrates the duplicate when the canonical genuinely succeeds', async () => {
+    mockFetchTranslation({ translations: { p1: 'T-Shared', p2: 'T-Other' } });
+
+    const result = (await handleMessage(dupMsg(), fakeSender)) as {
+      success: boolean;
+      partial?: boolean;
+      results?: Array<{ id: string; translatedText: string }>;
+      failed?: Array<{ id: string; error: string }>;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBeUndefined();
+    expect(result.failed).toBeUndefined();
+    const byId = new Map(
+      result.results?.map((r) => [r.id, r.translatedText] as const),
+    );
+    expect(byId.get('p1')).toBe('T-Shared');
+    // The dup adopts the canonical's genuine translation — no extra LLM piece.
+    expect(byId.get('p1dup')).toBe('T-Shared');
+    expect(byId.get('p2')).toBe('T-Other');
+  });
+
+  it('keeps sibling successes when the canonical sub-batch THROWS — every dup becomes failed', async () => {
+    // Failure cache ON: thrown transport/pool errors must still NOT write
+    // failure-cache entries (only content-level {success:false} failures may).
+    seedSinglePieceBatchSettings({ enableFailureCache: true });
+    stubFetchRaw((ids) => {
+      if (ids.includes('p1')) {
+        // 404 → ApiError('Model not found'), classified 'clientError' by the
+        // pool: thrown through dispatch WITHOUT opening the single key's
+        // breaker, so the sibling sub-batch is unaffected regardless of the
+        // concurrent scheduling order.
+        return {
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          json: async () => ({}),
+          text: async () =>
+            JSON.stringify({ error: { message: 'Model not found' } }),
+        };
+      }
+      // Genuine source-identical translation — must NOT be marked backfilled.
+      return okTranslationResponse({ p2: 'Unique source' });
+    });
+
+    const result = (await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'Shared source' },
+        { id: 'p1dup', text: 'Shared source' }, // duplicate of p1
+        { id: 'p1dup2', text: 'Shared source' }, // second duplicate of p1
+        { id: 'p2', text: 'Unique source' },
+      ]),
+      fakeSender,
+    )) as {
+      success: boolean;
+      partial?: boolean;
+      results?: Array<{
+        id: string;
+        translatedText: string;
+        backfilled?: boolean;
+      }>;
+      failed?: Array<{ id: string; error: string }>;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBe(true);
+    // The sibling result survives the throw — and the exact match proves a
+    // genuine source-identical translation is NOT marked backfilled.
+    expect(result.results).toEqual([
+      { id: 'p2', translatedText: 'Unique source' },
+    ]);
+    // Canonical + BOTH dups surface the thrown error — no source echo.
+    expect(result.failed).toEqual([
+      { id: 'p1', error: 'Model not found' },
+      { id: 'p1dup', error: 'Model not found' },
+      { id: 'p1dup2', error: 'Model not found' },
+    ]);
+    // Thrown transport/pool errors are never failure-cached or success-cached.
+    expect(cacheFailure).not.toHaveBeenCalled();
+    const cachedSources = cacheTranslation.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(cachedSources).not.toContain('Shared source');
+  });
+
+  it('preserves pool retryAfter on an all-failed aggregate', async () => {
+    seedSinglePieceBatchSettings();
+    // 401 → 'auth' failure kind: opens the single key's breaker (~1h) and the
+    // pool throws PoolExhaustedError carrying openUntil.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: async () => ({}),
+        text: async () =>
+          JSON.stringify({ error: { message: 'Invalid API key' } }),
+      }),
+    );
+
+    const first = (await handleMessage(
+      buildMsg([{ id: 'x', text: 'First text' }]),
+      fakeSender,
+    )) as { success: boolean };
+    expect(first.success).toBe(false);
+
+    // Second request: the breaker is already open, so dispatch throws
+    // PoolExhaustedError up-front. The worker must convert it into per-piece
+    // failures and the aggregate must carry retryAfter for the cooldown UI.
+    const result = (await handleMessage(
+      buildMsg([{ id: 'y', text: 'Second text' }]),
+      fakeSender,
+    )) as {
+      success: boolean;
+      error?: string;
+      retryAfter?: number;
+      failed?: Array<{ id: string; error: string }>;
+    };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(result.retryAfter).toBeTypeOf('number');
+    expect(result.retryAfter!).toBeGreaterThan(Date.now());
+    expect(result.failed).toEqual([
+      {
+        id: 'y',
+        error:
+          'All providers are cooling down or rate-limited. Wait for cooldown, then retry.',
+      },
+    ]);
+  });
+});

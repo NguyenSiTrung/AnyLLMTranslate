@@ -46,6 +46,7 @@ import type {
   GetDomOutlineResult,
   OpenOptionsMessage,
 } from '@/types/messages';
+import type { TranslationRequest, TranslationResult } from '@/types/translation';
 import {
   buildSuggestSiteRuleDraft,
   tabUrlMatchesHostname,
@@ -87,7 +88,7 @@ import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fe
 import { ProviderPoolCoordinator, PoolExhaustedError } from '@/services/providerPool';
 import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
 import type { TranslationService } from '@/services/base';
-import { validateProviderConfig } from '@/services/base';
+import { validateProviderConfig, ASR_REALIGN_CANCELLED } from '@/services/base';
 import { getCachedTranslation, cacheTranslation, evictCache, clearCache, getCachedTranslationByKey, cacheTranslationByKey, getCachedFailure, cacheFailure, deleteCachedFailure } from '@/services/cacheManager';
 import {
   clearAllResumeSnapshots,
@@ -488,92 +489,62 @@ export function initWebStreamPortListener(): void {
   chrome.runtime.onConnect.addListener((port) => {
     if (port.name !== WEB_STREAM_PORT) return;
 
+    const controller = new AbortController();
+    let disconnected = false;
+
+    const safePost = (message: PdfStreamPortMessage): void => {
+      if (disconnected) return;
+      try {
+        port.postMessage(message);
+      } catch {
+        disconnected = true;
+        controller.abort();
+      }
+    };
+
+    port.onDisconnect.addListener(() => {
+      disconnected = true;
+      controller.abort();
+    });
+
     port.onMessage.addListener(async (msg: PdfStreamPortMessage) => {
       if (msg.type !== 'request') return;
+      if (disconnected) return;
       try {
-        const service = await initService();
-        if (!service.translateStream) {
-          // Content script falls back to non-streaming handleTranslate (records there).
-          port.postMessage({ type: 'error', error: 'Streaming not supported' } satisfies PdfStreamError);
-          return;
-        }
-        const settings = await loadSettings();
-        const glossaryBlock = formatGlossary(settings.glossary ?? []);
-        const texts = new Map(msg.pieces.map((p) => [p.id, p.text]));
-        // FR-21: stream path carries the same context / glossary / term memory
-        // as non-stream handleTranslate.
-        const result = await service.translateStream(
+        const onPiece = (id: string, text: string): void => {
+          safePost({ type: 'piece', id, text } satisfies PdfStreamPiece);
+        };
+        const result = await handleTranslate(
           {
-            texts,
+            action: 'translate',
+            pieces: msg.pieces,
             sourceLanguage: msg.sourceLanguage,
             targetLanguage: msg.targetLanguage,
-            glossaryBlock: glossaryBlock || undefined,
-            customSystemPrompt: settings.customSystemPrompt ?? null,
             pageContext: msg.pageContext,
             termMemoryBlock: msg.termMemoryBlock,
-            enableQualityCheck: settings.enableTranslationQualityCheck,
-          },
-          (id, text) => {
-            port.postMessage({ type: 'piece', id, text } satisfies PdfStreamPiece);
-          },
+            skipFailureCache: msg.skipFailureCache,
+          } as ExtensionMessage & { action: 'translate' },
+          port.sender,
+          { stream: true, signal: controller.signal, onPiece },
         );
-        const results: TranslationResultItem[] = result.success
-          ? Array.from(result.translations, ([id, translatedText]) => ({ id, translatedText }))
-          : [];
-        // FR-2/FR-7: write fresh translations to the success cache so resume +
-        // negative-cache lookups work the same as the non-streaming path.
         if (result.success) {
-          const { modelId: cacheModelId, fingerprint: cacheFp } =
-            resolveWebCacheScope(settings);
-          for (const { id, translatedText } of results) {
-            const piece = msg.pieces.find((p) => p.id === id);
-            if (piece) {
-              const isBackfilled = result.partial === true && translatedText === piece.text;
-              if (!isBackfilled) {
-                cacheTranslation(
-                  piece.text,
-                  translatedText,
-                  msg.sourceLanguage,
-                  msg.targetLanguage,
-                  cacheModelId,
-                  cacheFp,
-                ).catch(() => {});
-              }
-            }
-          }
-
-          // Stream path does not split cache before the LLM call — all pieces
-          // were sent. Success-only: error path falls back to handleTranslate.
-          const tabId = port.sender?.tab?.id;
-          const pageSession =
-            typeof tabId === 'number' && !translatedTabSessions.has(tabId);
-          if (pageSession && typeof tabId === 'number') {
-            translatedTabSessions.add(tabId);
-          }
-          const characters = msg.pieces.reduce((sum, p) => sum + p.text.length, 0);
-          recordUsage({
-            mode: 'page',
-            characters,
-            apiCalls: 1,
-            cacheHits: 0,
-            cacheMisses: msg.pieces.length,
-            cacheCharacters: 0,
-            ...(pageSession ? { pageSession: true } : {}),
-            host: hostFromSender(port.sender),
-            sourceLanguage: msg.sourceLanguage,
-            targetLanguage: msg.targetLanguage,
-            providerId: bestEffortProviderId(settings),
-          }).catch(() => {});
+          safePost({
+            type: 'done',
+            results: result.results ?? [],
+            ...(result.partial ? { partial: true } : {}),
+            ...(result.failed ? { failed: result.failed } : {}),
+          } satisfies PdfStreamDone);
+        } else {
+          safePost({
+            type: 'error',
+            error: result.error ?? 'Streaming translation failed',
+            ...(result.retryAfter !== undefined ? { retryAfter: result.retryAfter } : {}),
+          } satisfies PdfStreamError);
         }
-        port.postMessage({
-          type: 'done',
-          results,
-          ...(result.partial ? { partial: true } : {}),
-        } satisfies PdfStreamDone);
       } catch (err) {
-        // Error → content script falls back to handleTranslate (which records usage).
+        if (disconnected) return;
         const error = err instanceof Error ? err.message : 'Streaming translation failed';
-        port.postMessage({ type: 'error', error } satisfies PdfStreamError);
+        safePost({ type: 'error', error } satisfies PdfStreamError);
       }
     });
   });
@@ -807,9 +778,16 @@ async function initService(): Promise<TranslationService> {
   return coord;
 }
 
+interface WebTranslateExecution {
+  stream?: boolean;
+  signal?: AbortSignal;
+  onPiece?: (id: string, text: string) => void;
+}
+
 async function handleTranslate(
   message: ExtensionMessage & { action: 'translate' },
   sender?: chrome.runtime.MessageSender,
+  execution?: WebTranslateExecution,
 ): Promise<TranslationResultMessage> {
   // Route PDF translations through a dedicated semaphore so they don't
   // compete with regular page/subtitle translations for the same slots.
@@ -833,19 +811,28 @@ async function handleTranslate(
     // Track page translation (once per tab session). PDF uses mode 'pdf' on
     // usage events (pdfEvents) rather than pageSessions.
     const tabId = sender?.tab?.id;
-    if (tabId && !translatedTabSessions.has(tabId)) {
-      translatedTabSessions.add(tabId);
-      if (!isPdf) {
-        recordUsage({
-          mode: 'page',
-          pageSession: true,
-          host: hostFromSender(sender),
-          sourceLanguage: message.sourceLanguage,
-          targetLanguage: message.targetLanguage,
-        }).catch(() => {});
-      }
-    }
+    const signal = execution?.signal;
 
+    const throwIfCancelled = (): void => {
+      if (signal?.aborted) {
+        throw new Error(ASR_REALIGN_CANCELLED);
+      }
+    };
+    const recordPageSession = (): void => {
+      if (signal?.aborted || isPdf || typeof tabId !== 'number' || translatedTabSessions.has(tabId)) {
+        return;
+      }
+      translatedTabSessions.add(tabId);
+      recordUsage({
+        mode: 'page',
+        pageSession: true,
+        host: hostFromSender(sender),
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+      }).catch(() => {});
+    };
+
+    throwIfCancelled();
     const settings = await loadSettings();
     const glossaryBlock = formatGlossary(settings.glossary ?? []);
     const providerId = bestEffortProviderId(settings);
@@ -854,10 +841,12 @@ async function handleTranslate(
     const { modelId: cacheModelId, fingerprint: cacheFp } =
       resolveWebCacheScope(settings);
 
+    throwIfCancelled();
+
     // FR-1 + FR-5 (web-translate-v3): parallel success/failure cache lookups
     // per piece (Promise.all) — same semantics as serial, lower latency on
     // multi-piece viewport flushes.
-    const cacheOutcomes = await parallelCacheLookup(
+    const cacheLookupPromise = parallelCacheLookup(
       {
         pieces: message.pieces,
         sourceLanguage: message.sourceLanguage,
@@ -876,6 +865,10 @@ async function handleTranslate(
           deleteCachedFailure(text, src, tgt, cacheModelId, cacheFp),
       },
     );
+    const cacheOutcomes = await (signal
+      ? raceWithAbort(cacheLookupPromise, signal, ASR_REALIGN_CANCELLED)
+      : cacheLookupPromise);
+    throwIfCancelled();
     const originalById = new Map(message.pieces.map((p) => [p.id, p]));
     const {
       cachedResults,
@@ -887,6 +880,7 @@ async function handleTranslate(
     // If all pieces were cached or negative-cached, return immediately — no LLM call.
     // FR-4: surface negative-cached failures so the content script shows error states.
     if (uncachedPieces.length === 0) {
+      throwIfCancelled();
       if (cachedResults.length > 0) {
         recordUsage({
           mode: usageMode,
@@ -899,9 +893,14 @@ async function handleTranslate(
           providerId,
         }).catch(() => {});
       }
+      recordPageSession();
       return {
         success: true,
         results: cachedResults,
+        // Cached successes alongside negative-cached failures = partial.
+        ...(cachedResults.length > 0 && failedResults.length > 0
+          ? { partial: true }
+          : {}),
         ...(failedResults.length > 0 ? { failed: failedResults } : {}),
       };
     }
@@ -937,12 +936,23 @@ async function handleTranslate(
     const SUB_BATCH_CONCURRENCY = 3;
 
     type BatchOutcome = {
-      results: Array<{ id: string; translatedText: string }>;
+      results: TranslationResultItem[];
       failed: Array<{ id: string; error: string }>;
+      /** Ids whose results are partial source back-fills — not genuine
+       *  successes, so duplicate rehydration must never copy them. */
+      backfilled: string[];
+      /** True when the provider call THREW (transport/pool error) instead of
+       *  returning {success:false} — lets the aggregate preserve the old
+       *  no-stats fallback semantics when nothing succeeded. */
+      threw?: boolean;
       partial: boolean;
       error?: string;
+      /** Pool-cooling resume time when the batch died on PoolExhaustedError. */
+      retryAfter?: number;
       apiCalls: number;
     };
+
+    throwIfCancelled();
 
     const batchOutcomes = await runWithConcurrency(
       batches,
@@ -952,8 +962,10 @@ async function handleTranslate(
           texts.set(piece.id, piece.text);
         }
 
+        throwIfCancelled();
+
         const startedAt = Date.now();
-        const result = await service.translate({
+        const request: TranslationRequest = {
           texts,
           sourceLanguage: message.sourceLanguage,
           targetLanguage: message.targetLanguage,
@@ -962,7 +974,69 @@ async function handleTranslate(
           pageContext: message.pageContext,
           termMemoryBlock: message.termMemoryBlock,
           enableQualityCheck: settings.enableTranslationQualityCheck,
-        });
+          signal: execution?.signal,
+        };
+
+        // Bind to a local const: `service.translateStream` is optional, and TS
+        // cannot keep a property-access narrowing through the try block.
+        const translateStream = execution?.stream
+          ? service.translateStream?.bind(service)
+          : undefined;
+        if (execution?.stream && !translateStream) {
+          // Port callers fall back to non-streaming on this error — keep it a
+          // whole-request throw, not a per-batch failure.
+          throw new Error('Streaming not supported');
+        }
+
+        let result: TranslationResult;
+        try {
+          if (translateStream) {
+            const onPiece = (id: string, text: string): void => {
+              if (execution?.signal?.aborted) return;
+              execution?.onPiece?.(id, text);
+            };
+            result = await translateStream(request, onPiece);
+          } else {
+            result = await service.translate(request);
+          }
+        } catch (batchError) {
+          // Cancellation must tear down the whole request — never convert it
+          // into a per-batch failure outcome.
+          const errName =
+            batchError instanceof Error
+              ? batchError.name
+              : (batchError as { name?: unknown } | null | undefined)?.name;
+          const errMessage =
+            batchError instanceof Error ? batchError.message : String(batchError);
+          if (
+            signal?.aborted === true ||
+            errName === 'AbortError' ||
+            errMessage === ASR_REALIGN_CANCELLED
+          ) {
+            throw batchError;
+          }
+          // Thrown transport/pool errors (ApiError, PoolExhaustedError) must
+          // not sink sibling sub-batches — convert to per-piece failures like
+          // a content failure. No failure-cache writes: infra errors are never
+          // text-specific (matches the outer catch's no-cache semantics).
+          const batchRetryAfter = poolRetryAfter(batchError);
+          return {
+            results: [],
+            failed: batch.map((piece) => ({
+              id: piece.id,
+              error: errMessage || 'Translation failed',
+            })),
+            backfilled: [],
+            threw: true,
+            partial: false,
+            error: errMessage || 'Translation failed',
+            ...(batchRetryAfter !== undefined ? { retryAfter: batchRetryAfter } : {}),
+            apiCalls: 1,
+          };
+        }
+
+        throwIfCancelled();
+
         if (settings.enableAdaptiveBatching) {
           adaptiveBatchState = recordBatchLatency(
             adaptiveBatchState,
@@ -971,16 +1045,29 @@ async function handleTranslate(
         }
 
         if (result.success) {
-          const results: Array<{ id: string; translatedText: string }> = [];
+          const results: TranslationResultItem[] = [];
+          const backfilled: string[] = [];
           for (const [id, translatedText] of result.translations.entries()) {
-            results.push({ id, translatedText });
+            const piece = batch.find((p) => p.id === id);
+            // FR-7 (fixes #9): partial-result guard — never cache back-fills,
+            // and mark the item explicitly so consumers don't have to guess
+            // via `partial && text === source` (a genuine source-identical
+            // translation must not be mislabeled when a sibling fails).
+            const isBackfilled =
+              piece !== undefined &&
+              result.partial === true &&
+              translatedText === piece.text;
+            results.push(
+              isBackfilled
+                ? { id, translatedText, backfilled: true }
+                : { id, translatedText },
+            );
 
             // Write each fresh translation back to cache.
-            const piece = batch.find((p) => p.id === id);
             if (piece) {
-              // FR-7 (fixes #9): partial-result guard — never cache back-fills.
-              const isBackfilled = result.partial === true && translatedText === piece.text;
-              if (!isBackfilled) {
+              if (isBackfilled) {
+                backfilled.push(id);
+              } else {
                 await cacheTranslation(
                   piece.text,
                   translatedText,
@@ -995,6 +1082,7 @@ async function handleTranslate(
           return {
             results,
             failed: [],
+            backfilled,
             partial: result.partial === true,
             apiCalls: 1,
           };
@@ -1016,70 +1104,108 @@ async function handleTranslate(
             ).catch(() => {});
           }
         }
-        return { results: [], failed, partial: false, error, apiCalls: 1 };
+        return { results: [], failed, backfilled: [], partial: false, error, apiCalls: 1 };
       },
       { concurrency: SUB_BATCH_CONCURRENCY },
     );
 
-    const freshResults: Array<{ id: string; translatedText: string }> = [];
+    const freshResults: TranslationResultItem[] = [];
+    const backfilledIds = new Set<string>();
     let totalApiCalls = 0;
     let anyPartial = false;
     let lastError: string | undefined;
+    // Latest pool-cooling resume time across sub-batches that died on
+    // PoolExhaustedError — the binding constraint for a retry countdown.
+    let batchRetryAfter: number | undefined;
+    let anyThrew = false;
     for (const outcome of batchOutcomes) {
       totalApiCalls += outcome.apiCalls;
       if (outcome.partial) anyPartial = true;
       if (outcome.error) lastError = outcome.error;
+      if (outcome.threw) anyThrew = true;
+      if (outcome.retryAfter !== undefined) {
+        batchRetryAfter = Math.max(batchRetryAfter ?? 0, outcome.retryAfter);
+      }
       freshResults.push(...outcome.results);
       failedResults.push(...outcome.failed);
+      for (const id of outcome.backfilled) backfilledIds.add(id);
     }
 
-    // Re-hydrate duplicate ids: each dup adopts its canonical piece's translation.
+    // Re-hydrate duplicate ids: a dup may only adopt a GENUINE canonical
+    // success. When the canonical's batch failed, its id is absent from the
+    // results, or its result is a partial source back-fill, copying it would
+    // emit untranslated source text as a "translation". Surface the dup as a
+    // retryable failure instead — dups are never written to the success cache.
     if (dupes.size > 0) {
+      const freshTextById = new Map(
+        freshResults.map((r) => [r.id, r.translatedText] as const),
+      );
+      const failureById = new Map(
+        failedResults.map((f) => [f.id, f.error] as const),
+      );
       for (const [dupeId, canonicalId] of dupes) {
-        const canonical = freshResults.find((r) => r.id === canonicalId);
-        if (canonical) {
-          freshResults.push({ id: dupeId, translatedText: canonical.translatedText });
+        const canonicalText = freshTextById.get(canonicalId);
+        if (canonicalText !== undefined && !backfilledIds.has(canonicalId)) {
+          freshResults.push({ id: dupeId, translatedText: canonicalText });
         } else {
-          // Canonical didn't translate (e.g. its batch failed) — fall back to source.
-          const dupePiece = uncachedPieces.find((p) => p.id === dupeId);
-          if (dupePiece) {
-            freshResults.push({ id: dupeId, translatedText: dupePiece.text });
-          }
+          failedResults.push({
+            id: dupeId,
+            error:
+              failureById.get(canonicalId) ??
+              'Incomplete translation — click to retry',
+          });
         }
       }
     }
 
-    // Track translation stats (fire-and-forget)
-    const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
-    recordUsage({
-      mode: usageMode,
-      characters: totalChars,
-      apiCalls: totalApiCalls,
-      cacheHits: cachedResults.length,
-      cacheMisses: uncachedPieces.length,
-      cacheCharacters,
-      host,
-      sourceLanguage: message.sourceLanguage,
-      targetLanguage: message.targetLanguage,
-      providerId,
-    }).catch(() => {});
+    throwIfCancelled();
 
-    if (freshResults.length > 0) {
+    const hasResults = freshResults.length > 0 || cachedResults.length > 0;
+    // A thrown transport/pool error previously rejected the whole request
+    // before stats ran. When nothing succeeded and at least one sub-batch died
+    // that way, keep that contract — callers like the web-stream port treat it
+    // as a provider failure and fall back to non-streaming, which records its
+    // own usage. Mixed thrown + successful/cached outcomes still record.
+    if (hasResults || !anyThrew) {
+      // Track translation stats (fire-and-forget)
+      const totalChars = uncachedPieces.reduce((sum, p) => sum + p.text.length, 0);
+      recordUsage({
+        mode: usageMode,
+        characters: totalChars,
+        apiCalls: totalApiCalls,
+        cacheHits: cachedResults.length,
+        cacheMisses: uncachedPieces.length,
+        cacheCharacters,
+        host,
+        sourceLanguage: message.sourceLanguage,
+        targetLanguage: message.targetLanguage,
+        providerId,
+      }).catch(() => {});
+    }
+
+    if (hasResults) {
+      recordPageSession();
       return {
         success: true,
         results: [...cachedResults, ...freshResults],
-        // Only flag partial when at least one batch back-filled; omit otherwise
-        // so the default response shape stays `{ success, results }`.
-        ...(anyPartial ? { partial: true } : {}),
+        // Flag partial when a batch back-filled OR any requested id stayed
+        // unresolved/failed alongside the successes (dup rehydration can add
+        // failures even when every batch outcome reported success). Omit
+        // otherwise so the default shape stays `{ success, results }`.
+        ...(anyPartial || failedResults.length > 0 ? { partial: true } : {}),
         // FR-4: surface per-piece failures even on partial success so the content
         // script can show error states for negative-cached/failed pieces.
         ...(failedResults.length > 0 ? { failed: failedResults } : {}),
+        // Pool-cooling resume time when at least one sub-batch died on pool
+        // exhaustion — lets callers gate a retry countdown on partial work too.
+        ...(batchRetryAfter !== undefined ? { retryAfter: batchRetryAfter } : {}),
       };
     } else {
       return {
         success: false,
         error: lastError ?? 'Translation failed',
         ...(failedResults.length > 0 ? { failed: failedResults } : {}),
+        ...(batchRetryAfter !== undefined ? { retryAfter: batchRetryAfter } : {}),
       };
     }
   } catch (error) {
@@ -2084,10 +2210,11 @@ type SegmentFetchOutcome =
   | { ok: false; status: number; aborted: boolean };
 
 /** Reject as soon as `signal` aborts, so a stalled body read cannot hang. */
-function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal, reason?: string): Promise<T> {
+  const makeError = () => (reason ? new Error(reason) : new DOMException('aborted', 'AbortError'));
+  if (signal.aborted) return Promise.reject(makeError());
   const aborted = Promise.withResolvers<never>();
-  const onAbort = () => aborted.reject(new DOMException('aborted', 'AbortError'));
+  const onAbort = () => aborted.reject(makeError());
   signal.addEventListener('abort', onAbort, { once: true });
   return Promise.race([promise, aborted.promise]).finally(() => {
     signal.removeEventListener('abort', onAbort);

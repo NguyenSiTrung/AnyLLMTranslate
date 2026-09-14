@@ -37,6 +37,9 @@ describe('player chrome mounts', () => {
     const onToggle = vi.fn();
     const shell = createFloatingShell({ playerRoot: root, video, onToggle });
     expect(document.querySelector(`.${PLAYER_CHROME_HOST_CLASS}`)).toBeTruthy();
+    // The chrome host is extension-owned — its shadow root must never be
+    // registered for translation/extraction (data-anyllm-owned marker).
+    expect(shell.host.hasAttribute('data-anyllm-owned')).toBe(true);
     const btn = shell.shadow.querySelector(`.${PLAYER_CHROME_BUTTON_CLASS}`) as HTMLButtonElement;
     expect(btn).toBeTruthy();
     btn.click();
@@ -58,6 +61,7 @@ describe('player chrome mounts', () => {
     const onToggle2 = vi.fn();
     const native = createNativeShell({ mountNode: bar, onToggle: onToggle2 });
     expect(bar.querySelector(`.${PLAYER_CHROME_HOST_CLASS}`)).toBeTruthy();
+    expect(native.host.hasAttribute('data-anyllm-owned')).toBe(true);
     expect(native.getMountMode()).toBe('native');
     native.button.click();
     expect(onToggle2).toHaveBeenCalledTimes(1);

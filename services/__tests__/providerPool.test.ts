@@ -52,6 +52,16 @@ function makeStub(keyId: string, initialConfig: ProviderConfig): StubService {
       if (stub.nextOutcome.kind === 'fail') throw stub.nextOutcome.error;
       return stub.nextOutcome.result;
     },
+    async translateStream(_request: TranslationRequest, _onPiece: (id: string, text: string) => void) {
+      stub.callCount++;
+      if (stub.nextOutcome.kind === 'fail') throw stub.nextOutcome.error;
+      if (stub.nextOutcome.result.success) {
+        for (const [id, text] of stub.nextOutcome.result.translations) {
+          _onPiece(id, text);
+        }
+      }
+      return stub.nextOutcome.result;
+    },
     async testConnection() {
       stub.callCount++;
       if (stub.nextOutcome.kind === 'fail') throw stub.nextOutcome.error;
@@ -930,6 +940,121 @@ describe('ProviderPoolCoordinator', () => {
       }
       const modelsUsed = [...stubs.values()].filter((s) => s.callCount > 0).length;
       expect(modelsUsed).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('FR-1: stream cancellation does not failover or trip breakers', () => {
+    it('rethrows cancelled immediately and does not try a second slot', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      const controller = new AbortController();
+      controller.abort();
+      const request: TranslationRequest = {
+        ...baseRequest(),
+        signal: controller.signal,
+      };
+
+      setOutcome('k1', { kind: 'fail', error: new Error('cancelled') });
+      setOutcome('k2', {
+        kind: 'success',
+        result: { success: true, translations: new Map([['id1', 'from-k2']]) },
+      });
+
+      await expect(
+        coord.translateStream(request, () => {}),
+      ).rejects.toThrow(/cancelled/i);
+
+      // k2 must not have been tried as a failover.
+      expect(stubs.get('k2')?.callCount).toBe(0);
+      // No breaker should have opened for a user-initiated stop.
+      expect(coord.getKeyStatus('k1').open).toBe(false);
+      expect(coord.getKeyStatus('k2').open).toBe(false);
+    });
+
+    it('does not call a provider or trip a breaker when cancelled during the throttle wait', async () => {
+      const settings = twoKeySettings();
+      const firstProvider = settings.providers[0];
+      if (firstProvider) {
+        firstProvider.keys = [
+          { id: 'k1', apiKey: 'sk-1', maxRpm: 0, concurrencyLimit: 0, interval: 10, enabled: true },
+          { id: 'k2', apiKey: 'sk-2', maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true },
+        ];
+      }
+
+      const release: { resolve: () => void } = { resolve: () => {} };
+      const throttleBlocked = new Promise<void>((resolve) => {
+        release.resolve = resolve;
+      });
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+        delay: async () => {
+          await throttleBlocked;
+        },
+      });
+      coord.rebuild(settings);
+
+      // Prime lastDispatchAt for both slots and rotate cursor so stream lands on k1.
+      await coord.translate(baseRequest());
+      await coord.translate(baseRequest());
+      stubs.get('k1')!.callCount = 0;
+      stubs.get('k2')!.callCount = 0;
+
+      const controller = new AbortController();
+      const request: TranslationRequest = {
+        ...baseRequest(),
+        signal: controller.signal,
+      };
+
+      const callPromise = coord.translateStream(request, () => {});
+
+      // Let dispatch reach the throttle wait, then cancel before it is released.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      controller.abort();
+      release.resolve();
+
+      await expect(callPromise).rejects.toThrow(/cancelled/i);
+
+      expect(stubs.get('k1')?.callCount).toBe(0);
+      expect(stubs.get('k2')?.callCount).toBe(0);
+      expect(coord.getKeyStatus('k1').open).toBe(false);
+      expect(coord.getKeyStatus('k2').open).toBe(false);
+    });
+  });
+
+  describe('FR-1b: non-stream cancellation does not call provider or trip breaker', () => {
+    it('translate with an already-aborted signal rejects cancelled and does not call any slot', async () => {
+      const coord = new ProviderPoolCoordinator({
+        serviceFactory: factory,
+        clock: () => clockNow,
+      });
+      coord.rebuild(twoKeySettings());
+
+      const controller = new AbortController();
+      controller.abort();
+      const request: TranslationRequest = {
+        ...baseRequest(),
+        signal: controller.signal,
+      };
+
+      setOutcome('k1', { kind: 'fail', error: new Error('should not run') });
+      setOutcome('k2', {
+        kind: 'success',
+        result: { success: true, translations: new Map([['id1', 'from-k2']]) },
+      });
+
+      await expect(coord.translate(request)).rejects.toThrow(/cancelled/i);
+
+      expect(stubs.get('k1')?.callCount).toBe(0);
+      expect(stubs.get('k2')?.callCount).toBe(0);
+      expect(coord.getKeyStatus('k1').open).toBe(false);
+      expect(coord.getKeyStatus('k2').open).toBe(false);
     });
   });
 });

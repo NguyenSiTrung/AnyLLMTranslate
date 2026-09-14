@@ -6,6 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      'wxt/sandbox': path.resolve(__dirname, '__mocks__/wxt/sandbox.ts'),
     },
   },
   test: {

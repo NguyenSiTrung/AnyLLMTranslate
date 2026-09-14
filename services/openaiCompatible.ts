@@ -190,7 +190,7 @@ export class OpenAICompatibleService implements TranslationService {
     // fetchWithRetry throws ApiError on transport/auth/rate-limit failures.
     // We deliberately do NOT wrap it in try/catch — those errors must propagate
     // to the pool's failover layer (FR-1).
-    const response = await this.fetchCompletion(completionRequest);
+    const response = await this.fetchCompletion(completionRequest, request.signal);
     const rawMessageContent = response.choices[0]?.message?.content;
     let responseText = typeof rawMessageContent === 'string' ? rawMessageContent : '';
 
@@ -286,7 +286,7 @@ export class OpenAICompatibleService implements TranslationService {
           temperature: this.config.temperature,
           max_tokens: this.config.maxTokens,
         });
-        const repairResponse = await this.fetchCompletion(repairReq);
+        const repairResponse = await this.fetchCompletion(repairReq, request.signal);
         const repairText = repairResponse.choices[0]?.message?.content ?? '';
         if (repairText.trim()) {
           const repaired = parseTranslationResponse(repairText, missing);
@@ -328,7 +328,7 @@ export class OpenAICompatibleService implements TranslationService {
             temperature: this.config.temperature,
             max_tokens: this.config.maxTokens,
           });
-          const repairResponse = await this.fetchCompletion(repairReq);
+          const repairResponse = await this.fetchCompletion(repairReq, request.signal);
           const repairText = repairResponse.choices[0]?.message?.content ?? '';
           if (repairText.trim()) {
             const repaired = parseTranslationResponse(repairText, repairIds);
@@ -422,7 +422,7 @@ export class OpenAICompatibleService implements TranslationService {
     const knownIdsSet = expectedIds;
 
     // Transport/auth/rate-limit errors propagate (FR-1) — do NOT swallow.
-    const response = await this.fetchStream(completionRequest);
+    const response = await this.fetchStream(completionRequest, request.signal);
 
     // Consume the SSE stream, accumulating content and emitting completed pieces.
     let contentBuffer = '';
@@ -436,35 +436,51 @@ export class OpenAICompatibleService implements TranslationService {
     }
     const decoder = new TextDecoder();
     let sseBuffer = '';
-    let done = false;
+    const timeout = this.config.requestTimeoutMs ?? 60000;
 
-    while (!done) {
-      const { value, done: streamDone } = await reader.read();
-      done = streamDone;
-      if (value) {
-        sseBuffer += decoder.decode(value, { stream: true });
-        const { events, remainder } = parseSSEBuffer(sseBuffer);
-        sseBuffer = remainder;
+    try {
+      let done = false;
 
-        for (const event of events) {
-          if (event.type === 'done') {
-            done = true;
-            break;
+      while (!done) {
+        const { value, done: streamDone } = await this.readWithTimeout(
+          reader,
+          request.signal,
+          timeout,
+        );
+        done = streamDone;
+        if (value) {
+          sseBuffer += decoder.decode(value, { stream: true });
+          const { events, remainder } = parseSSEBuffer(sseBuffer);
+          sseBuffer = remainder;
+
+          for (const event of events) {
+            if (event.type === 'done') {
+              done = true;
+              break;
+            }
+            if (event.type === 'data') {
+              contentBuffer += extractDeltaContent(event.json);
+            }
           }
-          if (event.type === 'data') {
-            contentBuffer += extractDeltaContent(event.json);
+
+          // After accumulating new content, extract any newly-completed pieces.
+          const completed = extractCompletedPieces(contentBuffer, knownIdsSet);
+          for (const [id, text] of completed) {
+            const prev = emittedPieces.get(id);
+            if (prev !== text) {
+              emittedPieces.set(id, text);
+              onPiece(id, text);
+            }
           }
         }
-
-        // After accumulating new content, extract any newly-completed pieces.
-        const completed = extractCompletedPieces(contentBuffer, knownIdsSet);
-        for (const [id, text] of completed) {
-          const prev = emittedPieces.get(id);
-          if (prev !== text) {
-            emittedPieces.set(id, text);
-            onPiece(id, text);
-          }
-        }
+      }
+    } finally {
+      // Cancel the reader to release the stream lock; callers observe the result
+      // already thrown and this prevents a stalled body from keeping resources.
+      try {
+        await reader.cancel();
+      } catch {
+        /* stream already closed or reader released */
       }
     }
 
@@ -1066,6 +1082,68 @@ Rules:
   }
 
   /**
+   * Read one chunk from a stream reader with an idle deadline. A caller abort
+   * rejects immediately; a timeout cancels the reader and throws a clear error.
+   * Listener and timer are cleaned up for every read so we never leak.
+   */
+  private async readWithTimeout<T>(
+    reader: ReadableStreamDefaultReader<T>,
+    callerSignal: AbortSignal | undefined,
+    timeout: number,
+  ): Promise<ReadableStreamReadResult<T>> {
+    return new Promise((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let onAbort: (() => void) | undefined;
+
+      const cleanup = () => {
+        if (timer !== undefined) {
+          clearTimeout(timer);
+          timer = undefined;
+        }
+        if (onAbort && callerSignal) {
+          callerSignal.removeEventListener('abort', onAbort);
+          onAbort = undefined;
+        }
+      };
+
+      if (callerSignal?.aborted) {
+        cleanup();
+        reject(new Error(ASR_REALIGN_CANCELLED));
+        return;
+      }
+
+      const readPromise = reader.read();
+
+      const handleTimeout = () => {
+        cleanup();
+        reject(new Error(`Stream response timed out after ${timeout}ms`));
+      };
+
+      const handleAbort = () => {
+        cleanup();
+        reject(new Error(ASR_REALIGN_CANCELLED));
+      };
+
+      timer = setTimeout(handleTimeout, timeout);
+      if (callerSignal) {
+        onAbort = handleAbort;
+        callerSignal.addEventListener('abort', onAbort, { once: true });
+      }
+
+      readPromise.then(
+        (result) => {
+          cleanup();
+          resolve(result);
+        },
+        (error) => {
+          cleanup();
+          reject(error);
+        },
+      );
+    });
+  }
+
+  /**
    * Send a streaming request and return the raw Response for SSE consumption.
    * Used by {@link translateStream}. Does NOT retry on 5xx (the caller falls
    * back to non-streaming `translate()` on any error). Throws {@link ApiError}
@@ -1073,8 +1151,13 @@ Rules:
    *
    * Reuses the same rate-limiter, header, and AbortController setup as
    * fetchWithRetry but returns the Response body intact (not `.json()`-parsed).
+   * A caller abort is propagated into the request's AbortController and is
+   * reported as 'cancelled' instead of a timeout.
    */
-  private async fetchStream(request: ChatCompletionRequest): Promise<Response> {
+  private async fetchStream(
+    request: ChatCompletionRequest,
+    callerSignal?: AbortSignal,
+  ): Promise<Response> {
     const timeout = this.config.requestTimeoutMs ?? 60000;
     await this.rateLimiter.acquire(timeout);
 
@@ -1087,6 +1170,24 @@ Rules:
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
 
+    let callerAbortListener: (() => void) | undefined;
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (callerAbortListener && callerSignal) {
+        callerSignal.removeEventListener('abort', callerAbortListener);
+        callerAbortListener = undefined;
+      }
+    };
+
+    if (callerSignal?.aborted) {
+      cleanup();
+      throw new Error(ASR_REALIGN_CANCELLED);
+    }
+    if (callerSignal) {
+      callerAbortListener = () => controller.abort();
+      callerSignal.addEventListener('abort', callerAbortListener, { once: true });
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -1094,7 +1195,7 @@ Rules:
         body: JSON.stringify(request),
         signal: controller.signal,
       });
-      clearTimeout(timer);
+      cleanup();
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
@@ -1112,8 +1213,11 @@ Rules:
 
       return response;
     } catch (error) {
-      clearTimeout(timer);
+      cleanup();
       if (error instanceof Error && error.name === 'AbortError') {
+        if (callerSignal?.aborted) {
+          throw new Error(ASR_REALIGN_CANCELLED, { cause: error });
+        }
         throw new Error(`Stream request timed out after ${timeout}ms`, { cause: error });
       }
       throw error;

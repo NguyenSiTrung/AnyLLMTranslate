@@ -6,6 +6,7 @@
 import { DATA_ATTRS } from '@/lib/constants';
 import { scheduleDomWrite } from '@/lib/performance';
 import { decodeInlineHtml } from '@/lib/richTranslate';
+import { getRegisteredShadowRoots, syncShadowHostState } from './shadowDomRoots';
 import type { RichVariable } from '@/lib/richTranslate';
 import type { PageState } from '@/lib/constants';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
@@ -31,6 +32,69 @@ function escapePieceId(pieceId: string): string {
   return pieceId.replace(/["\\]/g, '\\$&');
 }
 
+/** FR-23: document plus every registered open shadow root — the scope for
+ *  display lookups and cleanup queries. */
+function displayScopes(): ParentNode[] {
+  return [document, ...getRegisteredShadowRoots()];
+}
+
+/** sm7n: extension-injected artifact nodes — translations, placeholders,
+ *  error chips, inline bilinguals/clones, and owned UI. */
+const ARTIFACT_SELECTOR =
+  `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}], ` +
+  `[${DATA_ATTRS.OWNED}], .anyllm-inline-bilingual, ` +
+  `.anyllm-inline-translation-only-clone`;
+
+/** sm7n: element carries the marked-original state. */
+function isMarkedOriginal(el: Element): boolean {
+  return (
+    el.hasAttribute(DATA_ATTRS.TRANSLATED) ||
+    el.getAttribute(DATA_ATTRS.ROLE) === 'original'
+  );
+}
+
+function isArtifactElement(el: Element): boolean {
+  return el.matches(ARTIFACT_SELECTOR);
+}
+
+/**
+ * sm7n: the marked original that OWNS an artifact element. A translation is
+ * owned by the nearest marked original it directly follows (sibling case —
+ * skipping other artifacts of the same original) or, when no marked sibling
+ * precedes it, by the marked ancestor that contains it (contained case).
+ * Crucially, an artifact sitting after a nested marked original belongs to
+ * that nested original — not to an outer marked element that merely
+ * contains both.
+ */
+function ownerOriginalFor(el: Element): Element | null {
+  let node: Element | null = el;
+  while (node) {
+    let sib = node.previousElementSibling;
+    while (sib) {
+      if (isMarkedOriginal(sib)) return sib;
+      if (!isArtifactElement(sib)) break;
+      sib = sib.previousElementSibling;
+    }
+    node = node.parentElement;
+    if (node && isMarkedOriginal(node)) return node;
+  }
+  return null;
+}
+
+/** sm7n: does `original` still own any artifact — a contained descendant
+ *  owned by it, or an artifact sibling directly after it. */
+function hasOwnedArtifacts(original: Element): boolean {
+  for (const artifact of original.querySelectorAll(ARTIFACT_SELECTOR)) {
+    if (ownerOriginalFor(artifact) === original) return true;
+  }
+  let sib = original.nextElementSibling;
+  while (sib && isArtifactElement(sib)) {
+    if (ownerOriginalFor(sib) === original) return true;
+    sib = sib.nextElementSibling;
+  }
+  return false;
+}
+
 /** FR-29: look up a piece element by id (map first, then escaped query). */
 export function findPieceElement(
   pieceId: string,
@@ -39,8 +103,13 @@ export function findPieceElement(
   const mapped = pieceElements.get(pieceId);
   if (mapped && mapped.isConnected) return mapped;
   if (mapped) pieceElements.delete(pieceId);
-  const el = root.querySelector(`[${DATA_ATTRS.PIECE_ID}="${escapePieceId(pieceId)}"]`);
-  return el instanceof HTMLElement ? el : null;
+  const selector = `[${DATA_ATTRS.PIECE_ID}="${escapePieceId(pieceId)}"]`;
+  const scopes = root === document ? displayScopes() : [root];
+  for (const scope of scopes) {
+    const el = scope.querySelector(selector);
+    if (el instanceof HTMLElement) return el;
+  }
+  return null;
 }
 
 function trackPieceElement(pieceId: string, el: HTMLElement): void {
@@ -84,7 +153,9 @@ export function applyTheme(theme: ThemeName): void {
   document.documentElement.setAttribute('data-anyllm-theme', theme);
   // Sync tabindex on existing translations so the mask theme stays
   // keyboard-accessible across theme switches in either direction.
-  const translations = document.querySelectorAll<HTMLElement>(`.anyllm-translate-translation`);
+  const translations = displayScopes().flatMap((scope) =>
+    Array.from(scope.querySelectorAll<HTMLElement>(`.anyllm-translate-translation`)),
+  );
   if (theme === 'mask') {
     for (const el of translations) {
       if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
@@ -95,6 +166,8 @@ export function applyTheme(theme: ThemeName): void {
       if (el.getAttribute('tabindex') === '0') el.removeAttribute('tabindex');
     }
   }
+  // Scoped styles use :host(...) — the host carries the theme attribute.
+  syncShadowHostState();
 }
 
 /** Apply custom CSS variables when custom theme is active */
@@ -127,6 +200,7 @@ export function clearCustomTheme(): void {
 /** Apply translation position attribute to document root */
 export function applyPosition(position: TranslationPosition): void {
   document.documentElement.setAttribute('data-anyllm-position', position);
+  syncShadowHostState();
 }
 
 /** Apply dark mode class to document root */
@@ -137,6 +211,7 @@ export function applyDarkMode(mode: DarkMode): void {
     document.documentElement.classList.remove('anyllm-dark');
   }
   // 'auto' mode relies on CSS @media (prefers-color-scheme: dark) — no class needed
+  syncShadowHostState();
 }
 
 function isAbovePosition(): boolean {
@@ -260,46 +335,48 @@ function syncInlineTranslationOnlySiblings(): void {
     return;
   }
 
-  const inlineTranslations = document.querySelectorAll(`.anyllm-inline-bilingual[${DATA_ATTRS.PIECE_ID}]`);
-  for (const inlineEl of inlineTranslations) {
-    const pieceId = inlineEl.getAttribute(DATA_ATTRS.PIECE_ID);
-    const parent = inlineEl.parentElement;
-    if (!pieceId || !parent) continue;
+  for (const scope of displayScopes()) {
+    const inlineTranslations = scope.querySelectorAll(`.anyllm-inline-bilingual[${DATA_ATTRS.PIECE_ID}]`);
+    for (const inlineEl of inlineTranslations) {
+      const pieceId = inlineEl.getAttribute(DATA_ATTRS.PIECE_ID);
+      const parent = inlineEl.parentElement;
+      if (!pieceId || !parent) continue;
 
-    const isLoading = inlineEl.classList.contains('anyllm-inline-bilingual-loading');
-    const isError = inlineEl.classList.contains('anyllm-inline-bilingual-error');
+      const isLoading = inlineEl.classList.contains('anyllm-inline-bilingual-loading');
+      const isError = inlineEl.classList.contains('anyllm-inline-bilingual-error');
 
-    const clone = document.createElement('span');
-    clone.setAttribute(INLINE_CLONE_ATTR, pieceId);
-    clone.setAttribute(DATA_ATTRS.ROLE, 'translation');
-    clone.setAttribute('dir', 'auto');
+      const clone = document.createElement('span');
+      clone.setAttribute(INLINE_CLONE_ATTR, pieceId);
+      clone.setAttribute(DATA_ATTRS.ROLE, 'translation');
+      clone.setAttribute('dir', 'auto');
 
-    if (isLoading) {
-      // Visible inline spinner sibling so loading remains visible even when
-      // the original short inline container is hidden in translation-only mode.
-      clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading anyllm-inline-translation-only-clone';
-      clone.setAttribute('role', 'status');
-      clone.setAttribute('aria-label', 'Translating');
-    } else if (isError) {
-      clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-error anyllm-inline-translation-only-clone';
-      clone.textContent = (inlineEl.textContent ?? '').trim() || ' (⚠ error)';
-      clone.setAttribute('role', 'alert');
-      const titleSrc = (inlineEl as HTMLElement).title;
-      if (titleSrc) (clone as HTMLElement).title = titleSrc;
-    } else {
-      clone.className = 'anyllm-inline-bilingual anyllm-inline-translation-only-clone';
-      clone.textContent = getInlineTranslationText(inlineEl);
-      const lang = inlineEl.getAttribute('lang');
-      if (lang) clone.setAttribute('lang', lang);
+      if (isLoading) {
+        // Visible inline spinner sibling so loading remains visible even when
+        // the original short inline container is hidden in translation-only mode.
+        clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-loading anyllm-inline-translation-only-clone';
+        clone.setAttribute('role', 'status');
+        clone.setAttribute('aria-label', 'Translating');
+      } else if (isError) {
+        clone.className = 'anyllm-inline-bilingual anyllm-inline-bilingual-error anyllm-inline-translation-only-clone';
+        clone.textContent = (inlineEl.textContent ?? '').trim() || ' (⚠ error)';
+        clone.setAttribute('role', 'alert');
+        const titleSrc = (inlineEl as HTMLElement).title;
+        if (titleSrc) (clone as HTMLElement).title = titleSrc;
+      } else {
+        clone.className = 'anyllm-inline-bilingual anyllm-inline-translation-only-clone';
+        clone.textContent = getInlineTranslationText(inlineEl);
+        const lang = inlineEl.getAttribute('lang');
+        if (lang) clone.setAttribute('lang', lang);
+      }
+
+      const originalWrapper = inlineEl.closest(`[${ORIGINAL_WRAPPER_ATTR}]`);
+      if (originalWrapper?.parentElement && needsContainedTranslation(originalWrapper.parentElement)) {
+        originalWrapper.after(clone);
+      } else {
+        parent.after(clone);
+      }
+      inlineCloneElements.add(clone);
     }
-
-    const originalWrapper = inlineEl.closest(`[${ORIGINAL_WRAPPER_ATTR}]`);
-    if (originalWrapper?.parentElement && needsContainedTranslation(originalWrapper.parentElement)) {
-      originalWrapper.after(clone);
-    } else {
-      parent.after(clone);
-    }
-    inlineCloneElements.add(clone);
   }
 }
 
@@ -707,29 +784,13 @@ export function removeTranslation(pieceId: string): void {
   if (!el) return;
   untrackPieceElement(pieceId);
 
-  // Determine the associated original element BEFORE removing the translation.
+  // Determine the marked original that OWNS this element BEFORE removing it.
   // Translations may be either a descendant of the marked original (contained
   // elements like <li>/<td>) or a sibling inserted after it (the common case
-  // for <p>/<div> blocks via insertAfterTranslationGroup).
-  let originalAncestor = el.closest(`[${DATA_ATTRS.TRANSLATED}]`) ?? null;
-  if (!originalAncestor) {
-    // Sibling case: walk backwards past any translation siblings to find the
-    // preceding original element (the paragraph the translation was appended to).
-    let prev = el.previousElementSibling;
-    while (prev) {
-      if (
-        prev.getAttribute(DATA_ATTRS.ROLE) === 'translation' ||
-        prev.hasAttribute(DATA_ATTRS.PIECE_ID)
-      ) {
-        prev = prev.previousElementSibling;
-        continue;
-      }
-      if (prev.hasAttribute(DATA_ATTRS.TRANSLATED)) {
-        originalAncestor = prev;
-      }
-      break;
-    }
-  }
+  // for <p>/<div> blocks via insertAfterTranslationGroup). Ownership — not
+  // mere containment — matters: an artifact after a nested marked original
+  // belongs to that nested original, not an outer marked ancestor (sm7n).
+  const originalAncestor = ownerOriginalFor(el);
 
   el.remove();
 
@@ -738,75 +799,105 @@ export function removeTranslation(pieceId: string): void {
   // every [TRANSLATED] element on the page and un-marked them all — wiping
   // markers for completely unrelated translations.
   if (!originalAncestor) return;
-
-  // Contained case: original holds translations as descendants.
-  const containedRemaining = originalAncestor.querySelectorAll(
-    `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}]`,
-  );
-  // Sibling case: original is followed by one or more translation siblings.
-  let siblingRemaining = false;
-  const next = originalAncestor.nextElementSibling;
-  while (next) {
-    if (
-      next.getAttribute(DATA_ATTRS.ROLE) === 'translation' ||
-      next.hasAttribute(DATA_ATTRS.PIECE_ID)
-    ) {
-      siblingRemaining = true;
-      break;
-    }
-    // Stop at the first non-translation sibling (next paragraph, etc.).
-    break;
-  }
-
-  if (containedRemaining.length === 0 && !siblingRemaining) {
+  if (!hasOwnedArtifacts(originalAncestor)) {
     originalAncestor.removeAttribute(DATA_ATTRS.ROLE);
     originalAncestor.removeAttribute(DATA_ATTRS.TRANSLATED);
   }
 }
 
-/** Remove all translations from the page */
-export function removeAllTranslations(): void {
-  // Remove all translation elements (block-level)
-  const translations = document.querySelectorAll(`[${DATA_ATTRS.ROLE}="translation"]`);
-  for (const el of translations) {
-    el.remove();
+/**
+ * sm7n: remove one piece's output/placeholder/inline clone and restore only
+ * the affected original — markers are cleared by removeTranslation when no
+ * artifacts remain, the contained original wrapper is unwrapped, and
+ * transient loading/error attrs are stripped. Never touches other pieces.
+ */
+export function removePieceArtifacts(pieceId: string, parentElement: Element): void {
+  // Translation-only sibling clones sit OUTSIDE the original — drop the
+  // clone tracked for this piece.
+  for (const clone of [...inlineCloneElements]) {
+    if (clone.getAttribute(INLINE_CLONE_ATTR) === pieceId) {
+      clone.remove();
+      inlineCloneElements.delete(clone);
+    }
   }
 
-  // Remove all inline bilingual elements (parenthetical style)
-  const inlineBilinguals = document.querySelectorAll('.anyllm-inline-bilingual');
-  for (const el of inlineBilinguals) {
-    el.remove();
+  removeTranslation(pieceId);
+
+  // The site may have already removed the piece element itself (e.g. a
+  // textContent replacement) — findPieceElement then returns null and
+  // removeTranslation is a no-op. Clear the parent's markers once no
+  // artifacts owned by it remain so the group can be re-extracted, while
+  // artifacts owned by a nested marked original keep that original marked.
+  if (isMarkedOriginal(parentElement) && !hasOwnedArtifacts(parentElement)) {
+    parentElement.removeAttribute(DATA_ATTRS.ROLE);
+    parentElement.removeAttribute(DATA_ATTRS.TRANSLATED);
   }
 
-  pieceElements.clear();
-  removeInlineTranslationOnlyClones();
-
-  // Clean up original markers
-  const originals = document.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
-  for (const original of originals) {
-    original.removeAttribute(DATA_ATTRS.ROLE);
-    original.removeAttribute(DATA_ATTRS.TRANSLATED);
-  }
-
-  const wrappers = document.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`);
-  for (const wrapper of wrappers) {
-    const parent = wrapper.parentElement;
-    if (!parent) continue;
+  // Contained case (LI/TD/TH): unwrap the original wrapper once no artifacts
+  // remain inside it, restoring raw source children to the parent.
+  const wrapper = parentElement.querySelector(`:scope > [${ORIGINAL_WRAPPER_ATTR}]`);
+  if (
+    wrapper &&
+    !wrapper.querySelector(
+      `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}], .anyllm-inline-bilingual`,
+    )
+  ) {
     while (wrapper.firstChild) {
-      parent.insertBefore(wrapper.firstChild, wrapper);
+      parentElement.insertBefore(wrapper.firstChild, wrapper);
     }
     wrapper.remove();
   }
 
-  // Clean up loading/error states on original elements (legacy data-anyllm-loading)
-  const loadingEls = document.querySelectorAll('[data-anyllm-loading]');
-  for (const el of loadingEls) {
-    el.removeAttribute('data-anyllm-loading');
+  // Transient loading/error state attrs on the original itself.
+  parentElement.removeAttribute('data-anyllm-loading');
+  parentElement.removeAttribute('data-anyllm-error');
+}
+
+/** Remove all translations from the page */
+export function removeAllTranslations(): void {
+  for (const scope of displayScopes()) {
+    // Remove all translation elements (block-level)
+    const translations = scope.querySelectorAll(`[${DATA_ATTRS.ROLE}="translation"]`);
+    for (const el of translations) {
+      el.remove();
+    }
+
+    // Remove all inline bilingual elements (parenthetical style)
+    const inlineBilinguals = scope.querySelectorAll('.anyllm-inline-bilingual');
+    for (const el of inlineBilinguals) {
+      el.remove();
+    }
+
+    // Clean up original markers
+    const originals = scope.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
+    for (const original of originals) {
+      original.removeAttribute(DATA_ATTRS.ROLE);
+      original.removeAttribute(DATA_ATTRS.TRANSLATED);
+    }
+
+    const wrappers = scope.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`);
+    for (const wrapper of wrappers) {
+      const parent = wrapper.parentElement;
+      if (!parent) continue;
+      while (wrapper.firstChild) {
+        parent.insertBefore(wrapper.firstChild, wrapper);
+      }
+      wrapper.remove();
+    }
+
+    // Clean up loading/error states on original elements (legacy data-anyllm-loading)
+    const loadingEls = scope.querySelectorAll('[data-anyllm-loading]');
+    for (const el of loadingEls) {
+      el.removeAttribute('data-anyllm-loading');
+    }
+    const errorEls = scope.querySelectorAll('[data-anyllm-error]');
+    for (const el of errorEls) {
+      el.removeAttribute('data-anyllm-error');
+    }
   }
-  const errorEls = document.querySelectorAll('[data-anyllm-error]');
-  for (const el of errorEls) {
-    el.removeAttribute('data-anyllm-error');
-  }
+
+  pieceElements.clear();
+  removeInlineTranslationOnlyClones();
 
   // Reset page state
   setPageState('off');
@@ -815,6 +906,7 @@ export function removeAllTranslations(): void {
 /** Set the page translation state */
 export function setPageState(state: PageState): void {
   document.documentElement.setAttribute(DATA_ATTRS.STATE, state);
+  syncShadowHostState();
   syncInlineTranslationOnlySiblings();
 }
 

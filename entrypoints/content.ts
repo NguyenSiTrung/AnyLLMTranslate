@@ -6,7 +6,7 @@
 
 import type { TranslationPiece } from '@/types/translation';
 import type { PageContext } from '@/types/config';
-import { extractPieces } from '@/content/domWalker';
+import { extractPieces, type ExtractOptions } from '@/content/domWalker';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import {
@@ -15,7 +15,8 @@ import {
   orderResultsByPieces,
   isPieceNearViewport,
 } from '@/content/chunkStability';
-import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
+import { applyTranslation, applyInlineTranslation, setPageState, removeAllTranslations, removeTranslation, removePieceArtifacts, getPageState, applyTheme, applyPosition, applyDarkMode, showLoadingPlaceholder, showInlineLoadingPlaceholder, setErrorState, setInlineErrorState, applyCustomTheme, clearCustomTheme } from '@/content/translationDisplay';
+import { registerShadowRoots, clearShadowDomRoots } from '@/content/shadowDomRoots';
 import { loadSettings, updateSettings } from '@/lib/config';
 import { loadSettingsCached, invalidateSessionSettingsCache } from '@/lib/sessionSettingsCache';
 import {
@@ -57,7 +58,7 @@ import {
 import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
-import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS } from '@/lib/constants';
+import { SHORT_PIECE_THRESHOLD, DATA_ATTRS, MUTATION_DEBOUNCE_MS, BODY_TRANSLATE_TAGS } from '@/lib/constants';
 import { enterPickerMode } from '@/content/sectionPicker';
 import { translateSection, removeAllSectionTranslations } from '@/content/sectionTranslate';
 import '@/styles/inject.css';
@@ -218,6 +219,76 @@ function contentKeyForPiece(piece: TranslationPiece): string {
   return contentKey(piece.parentElement, piece.text);
 }
 
+/** sm7n: live source text under a piece's parent — extension-injected
+ *  artifacts stripped so only site content is compared. */
+function liveSourceText(parent: Element): string {
+  const clone = parent.cloneNode(true) as Element;
+  clone
+    .querySelectorAll(
+      `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}], ` +
+        `[${DATA_ATTRS.OWNED}], .anyllm-inline-bilingual, ` +
+        `.anyllm-inline-translation-only-clone`,
+    )
+    .forEach((el) => el.remove());
+  return (clone.textContent ?? '').trim();
+}
+
+/**
+ * sm7n: per-group source comparison. Whole-parent text false-positives
+ * whenever a parent holds multiple source groups or nested marked blocks, so
+ * compare the piece's own text-node group first: unchanged only when every
+ * tracked node is still connected under the parent and rejoins to the
+ * recorded source. Falls back to whole-parent text for pieces without
+ * textNodes (legacy/restored/test pieces).
+ */
+function isPieceSourceUnchanged(piece: TranslationPiece): boolean {
+  const baseline = piece.sourceText ?? piece.text;
+  if (piece.textNodes.length > 0) {
+    const parent = piece.parentElement;
+    if (
+      piece.textNodes.some(
+        (node) => !node.isConnected || !parent.contains(node),
+      )
+    ) {
+      return false;
+    }
+    const live = piece.textNodes
+      .map((node) => node.textContent ?? '')
+      .join('')
+      .trim();
+    return live === baseline;
+  }
+  return liveSourceText(piece.parentElement) === baseline;
+}
+
+/** sm7n: ids invalidated by source edits or detached pruning — late
+ *  responses and placeholder passes must never apply to them. Cleared on
+ *  session teardown; registerPiece clears a recycled id. */
+const invalidatedPieceIds = new Set<string>();
+
+/** sm7n: true while the piece may still receive output. False for
+ *  invalidated ids and when the registry holds a different object for the
+ *  id; ad-hoc unregistered pieces (tests, direct calls) remain allowed. */
+function isPieceCurrent(piece: TranslationPiece): boolean {
+  if (invalidatedPieceIds.has(piece.id)) return false;
+  const registered = piecesById.get(piece.id);
+  if (registered !== undefined) return registered === piece;
+  return true;
+}
+
+/** sm7n: retire a tracked piece — remove its artifacts and clear all
+ *  registration/tracking so late responses and dedup cannot touch it. */
+function retirePiece(piece: TranslationPiece): void {
+  invalidatedPieceIds.add(piece.id);
+  removePieceArtifacts(piece.id, piece.parentElement);
+  unregisterPiece(piece);
+  const idx = allPieces.indexOf(piece);
+  if (idx !== -1) allPieces.splice(idx, 1);
+  handledContentKeys.delete(contentKeyForPiece(piece));
+  inFlightPieceIds.delete(piece.id);
+  viewportObserver?.release(piece.id);
+}
+
 function markContentHandled(piece: TranslationPiece): void {
   handledContentKeys.add(contentKeyForPiece(piece));
 }
@@ -283,6 +354,9 @@ const piecesById = new Map<string, TranslationPiece>();
 const piecesByParentText = new WeakMap<Element, Map<string, TranslationPiece>>();
 
 function registerPiece(piece: TranslationPiece): void {
+  // A recycled id (fresh extraction after a counter reset) must not inherit
+  // an earlier invalidation mark.
+  invalidatedPieceIds.delete(piece.id);
   piecesById.set(piece.id, piece);
   let byText = piecesByParentText.get(piece.parentElement);
   if (!byText) {
@@ -323,6 +397,7 @@ function pruneDetachedPieces(): number {
   for (const piece of allPieces) {
     if (!piece.parentElement.isConnected) {
       unregisterPiece(piece);
+      invalidatedPieceIds.add(piece.id);
       inFlightPieceIds.delete(piece.id);
       handledContentKeys.delete(contentKeyForPiece(piece));
       removed++;
@@ -338,30 +413,62 @@ function pruneDetachedPieces(): number {
 
 function extractDynamicPieces(
   element: Element,
-  includeSelectors: string[] | undefined,
-  excludeSelectors: string[],
-  enableRichTranslate?: boolean,
-  enableAsideCaps?: boolean,
+  /** t9dd: the session-scoped options object built in
+   *  startTranslationUnlocked — the same flags and the same cumulative
+   *  asideRegionChars map used by the initial extraction. */
+  options: ExtractOptions,
+  /** sm7n: re-extraction roots only — a deliberately invalidated (or
+   *  still-marked) source region must be walked even though it sits inside
+   *  markers. Normal dynamic additions still early-return inside marked
+   *  regions. Nested marked subtrees remain skipped by extractPieces. */
+  allowMarkedSource?: boolean,
 ): TranslationPiece[] {
   // Never re-walk regions that already have translations / original markers.
-  if (isInsideTranslatedRegion(element)) {
+  if (!allowMarkedSource && isInsideTranslatedRegion(element)) {
     return [];
   }
 
+  const excludeSelectors = options.excludeSelectors ?? [];
   if (excludeSelectors.some((selector) => selectorAppliesToElementOrAncestor(element, selector))) {
     return [];
   }
 
-  const rootIsIncluded = includeSelectors?.some((selector) =>
+  // t9dd/FR-4: the initial walk only descends into direct <body> children in
+  // BODY_TRANSLATE_TAGS. Dynamic roots keep that gate: find the delivered
+  // element's top-level ancestor under <body> and require its tag to be
+  // whitelisted. Nested non-whitelisted tags under a whitelisted body child
+  // remain allowed, matching initial extraction. Elements outside <body>
+  // (detached nodes, open shadow trees) are unaffected.
+  // Include scoping supersedes the body whitelist: initial extractPieces
+  // short-circuits on includeSelectors before the tag filter runs, so an
+  // include rule may legitimately select non-whitelisted top-level regions.
+  // Skipping the gate here keeps dynamic additions (and sm7n forced
+  // re-extraction) in parity with that initial behavior.
+  if (options.enableBodyTagWhitelist && !options.includeSelectors?.length) {
+    let topLevel = element;
+    while (topLevel.parentElement && topLevel.parentElement !== document.body) {
+      topLevel = topLevel.parentElement;
+    }
+    if (
+      topLevel.parentElement === document.body &&
+      !BODY_TRANSLATE_TAGS.has(topLevel.tagName)
+    ) {
+      return [];
+    }
+  }
+
+  const rootIsIncluded = options.includeSelectors?.some((selector) =>
     selectorAppliesToElementOrAncestor(element, selector),
   ) ?? false;
 
-  const extracted = extractPieces(element, {
-    includeSelectors: rootIsIncluded ? undefined : includeSelectors,
-    excludeSelectors,
-    enableRichTranslate,
-    enableAsideCaps,
-  });
+  const extracted = extractPieces(
+    element,
+    // Reuse the session options object so include/exclude/rich/body-whitelist/
+    // aside-caps/shadow flags AND the cumulative asideRegionChars map carry
+    // over. Only strip includeSelectors when the delivered root itself is
+    // already inside an included region (it becomes the scope root).
+    rootIsIncluded ? { ...options, includeSelectors: undefined } : options,
+  );
 
   // Drop pieces we already tracked (same parent + same text) — FR-7 index, not O(N×M).
   return extracted.filter((piece) => {
@@ -395,6 +502,8 @@ function streamTranslate(
     termMemoryBlock?: string;
     /** Session captured at request start — piece events must match (FR-1). */
     requestSession: number;
+    /** FR-4: bypass negative cache for user-initiated retries. */
+    skipFailureCache?: boolean;
   },
 ): Promise<TranslationResultMessage> {
   const requestSession = extras?.requestSession ?? sessionRegistry.current;
@@ -423,6 +532,7 @@ function streamTranslate(
       targetLanguage,
       pageContext: extras?.pageContext,
       termMemoryBlock: extras?.termMemoryBlock,
+      skipFailureCache: extras?.skipFailureCache,
     });
 
     port.onMessage.addListener((msg: {
@@ -432,6 +542,7 @@ function streamTranslate(
       results?: TranslationResultItem[];
       error?: string;
       partial?: boolean;
+      failed?: Array<{ id: string; error: string }>;
     }) => {
       // FR-1: drop every stream event (including piece) when session advanced.
       if (!sessionRegistry.isCurrent(requestSession)) {
@@ -444,8 +555,10 @@ function streamTranslate(
       }
       if (msg.type === 'piece' && msg.id && msg.text) {
         // Incremental in-place update: find the piece + swap its spinner.
+        // sm7n: a piece invalidated mid-flight is no longer current — its
+        // late deltas must not write to the DOM.
         const piece = pieceById.get(msg.id);
-        if (piece) {
+        if (piece && isPieceCurrent(piece)) {
           // Each streamed delta changes page height — keep the reading
           // position stable while chunks stream in.
           const pieceAnchor = captureScrollAnchor([piece]);
@@ -466,6 +579,7 @@ function streamTranslate(
           success: true,
           results: msg.results ?? results,
           ...(msg.partial ? { partial: true } : {}),
+          ...(msg.failed ? { failed: msg.failed } : {}),
         });
       } else if (msg.type === 'error') {
         settled = true;
@@ -538,8 +652,11 @@ async function translatePieces(
     return;
   }
 
-  // Drop pieces already done or already mid-request (viewport + mutation races).
-  const workPieces = pieces.filter((p) => !p.isTranslated && !inFlightPieceIds.has(p.id));
+  // Drop pieces already done, already mid-request (viewport + mutation
+  // races), or invalidated by a source edit.
+  let workPieces = pieces.filter(
+    (p) => !p.isTranslated && !inFlightPieceIds.has(p.id) && isPieceCurrent(p),
+  );
   if (workPieces.length === 0) return;
 
   for (const piece of workPieces) {
@@ -560,31 +677,48 @@ async function translatePieces(
     return;
   }
 
-  // Load settings before the placeholder loop so the compact-inline flag
-  // gates which spinner style each piece gets (short → inline, long → block).
-  // FR-5: session-scoped cache avoids repeated chrome.storage reads per batch.
-  const settings = await loadSettingsCached();
-  const compactInlineEnabled = settings.enableCompactInlineForShortText;
-
-  // Show spinner placeholder for each piece immediately (before async call)
-  // Short pieces get compact inline spinner, long pieces get block spinner.
-  // Spinners change page height — capture a scroll anchor first so a mid-page
-  // translate start does not jump the user's reading position.
-  const spinnerAnchor = captureScrollAnchor(workPieces);
-  for (const piece of workPieces) {
-    if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
-      showInlineLoadingPlaceholder(piece.parentElement, piece.id);
-    } else {
-      showLoadingPlaceholder(piece.parentElement, piece.id);
-    }
-  }
-  restoreScrollAnchor(spinnerAnchor);
-
   /** Pieces to silently re-attempt once after this call fully cleans up. */
   let pendingAutoRetry: TranslationPiece[] | null = null;
+  let requestIncremented = false;
+  let compactInlineEnabled = false;
 
   try {
+    // Load settings before the placeholder loop so the compact-inline flag
+    // gates which spinner style each piece gets (short → inline, long → block).
+    // FR-5: session-scoped cache avoids repeated chrome.storage reads per batch.
+    const settings = await loadSettingsCached();
+    if (!sessionRegistry.isCurrent(requestSession)) {
+      return;
+    }
+    compactInlineEnabled = settings.enableCompactInlineForShortText;
+
+    // Guard again before inserting placeholders — stale work must not touch the DOM.
+    if (!sessionRegistry.isCurrent(requestSession)) {
+      return;
+    }
+    // sm7n: invalidation can land during the settings await — drop dead
+    // pieces before any placeholder or request goes out.
+    workPieces = workPieces.filter(isPieceCurrent);
+    if (workPieces.length === 0) {
+      return;
+    }
+
+    // Show spinner placeholder for each piece immediately (before async call)
+    // Short pieces get compact inline spinner, long pieces get block spinner.
+    // Spinners change page height — capture a scroll anchor first so a mid-page
+    // translate start does not jump the user's reading position.
+    const spinnerAnchor = captureScrollAnchor(workPieces);
+    for (const piece of workPieces) {
+      if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
+        showInlineLoadingPlaceholder(piece.parentElement, piece.id);
+      } else {
+        showLoadingPlaceholder(piece.parentElement, piece.id);
+      }
+    }
+    restoreScrollAnchor(spinnerAnchor);
+
     activeRequests++;
+    requestIncremented = true;
     // Broadcast translating status immediately
     sendStatusUpdate();
 
@@ -626,6 +760,16 @@ async function translatePieces(
       }
     }
 
+    // Category work may race with a Stop/restart — drop stale work before any LLM call.
+    if (!sessionRegistry.isCurrent(requestSession)) {
+      return;
+    }
+    // sm7n: invalidation can also land during async category/detection work.
+    workPieces = workPieces.filter(isPieceCurrent);
+    if (workPieces.length === 0) {
+      return;
+    }
+
     // FR-3 / FR-13: source-language gate. When detection is on and sourceLanguage
     // is 'auto', skip pieces already in the target language. Prefer translating
     // unnecessarily over silent skip of valid foreign text (higher confidence bar).
@@ -646,8 +790,9 @@ async function translatePieces(
           piece.isTranslated = true;
           piece.translatedText = piece.text;
           markContentHandled(piece);
-          const el = document.querySelector(`[${DATA_ATTRS.PIECE_ID}="${piece.id}"]`);
-          if (el) el.remove();
+          // removeTranslation uses the scope-aware lookup so placeholders
+          // inside registered shadow roots are removed and untracked too.
+          removeTranslation(piece.id);
           return false;
         }
         return true;
@@ -674,12 +819,20 @@ async function translatePieces(
         settings.sourceLanguage,
         settings.targetLanguage,
         settings.enableCompactInlineForShortText,
-        { pageContext, termMemoryBlock, requestSession },
+        { pageContext, termMemoryBlock, requestSession, skipFailureCache },
       );
       if (streamed.success) {
         response = streamed;
       } else {
-        const unfinished = translatablePieces.filter((p) => !p.isTranslated);
+        // Stale/disconnected streams must not fall back to paid non-stream calls.
+        if (!sessionRegistry.isCurrent(requestSession)) {
+          return;
+        }
+        // sm7n: pieces invalidated while the stream ran are unregistered —
+        // exclude them so no fallback request goes out for dead ids.
+        const unfinished = translatablePieces.filter(
+          (p) => !p.isTranslated && isPieceCurrent(p),
+        );
         if (unfinished.length === 0) {
           // All pieces already applied via stream deltas — treat as success.
           response = {
@@ -745,12 +898,16 @@ async function translatePieces(
       const applyAnchor = captureScrollAnchor(workPieces);
       for (const result of orderedResults) {
         const piece = workPieces.find((p) => p.id === result.id);
-        if (!piece) continue;
+        // sm7n: skip results for pieces invalidated while the request ran.
+        if (!piece || !isPieceCurrent(piece)) continue;
 
-        // Partial LLM responses back-fill missing ids with the source text.
-        // Injecting that as a bilingual line looks like duplicate content.
-        // Leave a retryable error instead of echoing the original below itself.
-        if (response.partial === true && result.translatedText === piece.text) {
+        // Partial LLM responses back-fill missing ids with the source text —
+        // the background marks those items `backfilled`. Injecting one as a
+        // bilingual line looks like duplicate content, so leave a retryable
+        // error instead. (The explicit marker is required: `partial` also
+        // covers unresolved sibling ids, so text equality alone would mislabel
+        // genuine source-identical translations as incomplete.)
+        if (result.backfilled === true) {
           applyPieceError(piece, 'Incomplete translation — click to retry', compactInlineEnabled);
           continue;
         }
@@ -777,7 +934,7 @@ async function translatePieces(
         let anyTransient = false;
         for (const failure of response.failed) {
           const piece = workPieces.find((p) => p.id === failure.id);
-          if (!piece || piece.isTranslated) continue;
+          if (!piece || piece.isTranslated || !isPieceCurrent(piece)) continue;
           failedPieces.push(piece);
           if (isTransientTranslationError(failure.error)) {
             anyTransient = true;
@@ -788,7 +945,7 @@ async function translatePieces(
         } else {
           for (const failure of response.failed) {
             const piece = workPieces.find((p) => p.id === failure.id);
-            if (!piece || piece.isTranslated) continue;
+            if (!piece || piece.isTranslated || !isPieceCurrent(piece)) continue;
             applyPieceError(piece, failure.error, compactInlineEnabled);
             if (isSystemicFailureMessage(failure.error)) {
               enterSystemicPause(failure.error);
@@ -800,10 +957,11 @@ async function translatePieces(
       // Silent one-shot auto-retry for transient pool/network failures so a
       // concurrent success-cache fill or brief blip doesn't force a manual click.
       if (!autoRetriedOnce && isTransientTranslationError(response.error)) {
-        pendingAutoRetry = workPieces.filter((p) => !p.isTranslated);
+        pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
       } else {
         showTranslationErrorNotification(response.error);
         for (const piece of workPieces) {
+          if (!isPieceCurrent(piece)) continue;
           applyPieceError(piece, response.error, compactInlineEnabled);
         }
         if (isSystemicFailureMessage(response.error)) {
@@ -817,10 +975,11 @@ async function translatePieces(
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (!autoRetriedOnce && isTransientTranslationError(message)) {
-      pendingAutoRetry = workPieces.filter((p) => !p.isTranslated);
+      pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
     } else {
       showTranslationErrorNotification(message);
       for (const piece of workPieces) {
+        if (!isPieceCurrent(piece)) continue;
         applyPieceError(piece, message, compactInlineEnabled);
       }
       if (isSystemicFailureMessage(message)) {
@@ -828,10 +987,14 @@ async function translatePieces(
       }
     }
   } finally {
-    for (const piece of workPieces) {
+    // Iterate the original set — workPieces may have been re-filtered after
+    // awaits; in-flight ids for dropped pieces must still be released.
+    for (const piece of pieces) {
       inFlightPieceIds.delete(piece.id);
     }
-    activeRequests = Math.max(0, activeRequests - 1);
+    if (requestIncremented && sessionRegistry.isCurrent(requestSession)) {
+      activeRequests = Math.max(0, activeRequests - 1);
+    }
     sendStatusUpdate();
   }
 
@@ -979,8 +1142,8 @@ function sendStatusUpdate(): void {
   }
 }
 
-/** FR-7: one-time flag so the pagehide/beforeunload snapshot writer is registered once per session. */
-let resumeSnapshotWriterRegistered = false;
+/** FR-7: the live pagehide/beforeunload snapshot writer for this session. */
+let resumeSnapshotWriter: EventListener | null = null;
 
 /**
  * FR-7: restore already-translated pieces from a prior session's snapshot.
@@ -1087,10 +1250,9 @@ function writeResumeSnapshot(options?: { awaitable?: boolean }): void | Promise<
   if (options?.awaitable) return work;
 }
 
-/** Register the pagehide/beforeunload snapshot writer once per session (FR-7). */
+/** Register the pagehide/beforeunload snapshot writer for the active session (FR-7). */
 function registerResumeSnapshotWriter(): void {
-  if (resumeSnapshotWriterRegistered) return;
-  resumeSnapshotWriterRegistered = true;
+  unregisterResumeSnapshotWriter();
   // Wrapper: writeResumeSnapshot has an overload taking options, so it is not a
   // valid EventListener by itself — always call the zero-arg form on unload.
   const onUnload = (): void => {
@@ -1098,11 +1260,45 @@ function registerResumeSnapshotWriter(): void {
   };
   window.addEventListener('pagehide', onUnload, { once: false });
   window.addEventListener('beforeunload', onUnload, { once: false });
+  resumeSnapshotWriter = onUnload;
+}
+
+function unregisterResumeSnapshotWriter(): void {
+  if (!resumeSnapshotWriter) return;
+  window.removeEventListener('pagehide', resumeSnapshotWriter);
+  window.removeEventListener('beforeunload', resumeSnapshotWriter);
+  resumeSnapshotWriter = null;
 }
 
 /** Start translation on the current page (serialized via lifecycle mutex — FR-3). */
 export async function startTranslation(): Promise<void> {
   return lifecycleMutex.run(() => startTranslationUnlocked());
+}
+
+function teardownPageTranslationSession(): void {
+  if (viewportObserver) {
+    viewportObserver.disconnect();
+    viewportObserver = null;
+  }
+  if (mutationWatcher) {
+    mutationWatcher.stop();
+    mutationWatcher = null;
+  }
+  unregisterResumeSnapshotWriter();
+  removeAllTranslations();
+  removeAllSectionTranslations();
+  // FR-23: translations are gone — now the tracked-root registry can reset.
+  clearShadowDomRoots();
+  hideTranslationErrorNotification();
+  hideSystemicPauseBanner();
+  hideMiniProgress();
+  replaceAllPieces([]);
+  activeRequests = 0;
+  inFlightPieceIds.clear();
+  invalidatedPieceIds.clear();
+  handledContentKeys.clear();
+  systemicPause = false;
+  sessionTermMemory = [];
 }
 
 async function startTranslationUnlocked(): Promise<void> {
@@ -1114,23 +1310,8 @@ async function startTranslationUnlocked(): Promise<void> {
   // Tear down any existing viewport observer / mutation watcher from a
   // prior start. Repeated startTranslation calls (e.g. via popup spam,
   // SPA re-routes, or auto-translate firing twice) must not leak observers.
-  if (viewportObserver) {
-    viewportObserver.disconnect();
-    viewportObserver = null;
-  }
-  if (mutationWatcher) {
-    mutationWatcher.stop();
-    mutationWatcher = null;
-  }
   // Reset accounting so progress reflects this session's pieces only.
-  replaceAllPieces([]);
-  activeRequests = 0;
-  inFlightPieceIds.clear();
-  handledContentKeys.clear();
-  systemicPause = false;
-  sessionTermMemory = [];
-  hideTranslationErrorNotification();
-  hideSystemicPauseBanner();
+  teardownPageTranslationSession();
 
   // Load settings to apply visual settings (session-scoped cache for FR-5)
   invalidateSessionSettingsCache();
@@ -1174,16 +1355,28 @@ async function startTranslationUnlocked(): Promise<void> {
     baseExcludes,
     matchingRule?.excludeSelectors,
   );
+  // t9dd: one ExtractOptions value per session — the initial walk and every
+  // dynamic mutation pass share the same flags and the same cumulative
+  // asideRegionChars map, so dynamic sidebars cannot reset FR-5 region caps
+  // and the FR-4 body whitelist applies to top-level additions.
+  const extractOptions: ExtractOptions = {
+    includeSelectors: matchingRule?.includeSelectors,
+    excludeSelectors: effectiveExcludes,
+    enableRichTranslate: settings.enableRichTranslate,
+    enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
+    enableAsideCaps: settings.enableAsideCaps,
+    enableShadowDomWalk: settings.enableShadowDomWalk,
+    asideRegionChars: new Map<Element, number>(),
+  };
   replaceAllPieces(
-    extractPieces(document.body, {
-      includeSelectors: matchingRule?.includeSelectors,
-      excludeSelectors: effectiveExcludes,
-      enableRichTranslate: settings.enableRichTranslate,
-      enableBodyTagWhitelist: settings.enableBodyTagWhitelist,
-      enableAsideCaps: settings.enableAsideCaps,
-      enableShadowDomWalk: settings.enableShadowDomWalk,
-    }),
+    extractPieces(document.body, extractOptions),
   );
+
+  // FR-23: register open roots discovered during extraction so display
+  // cleanup, style injection, and the mutation watcher share one registry.
+  if (settings.enableShadowDomWalk) {
+    registerShadowRoots(document.body);
+  }
 
   // Set page state based on displayMode setting
   setPageState(settings.displayMode === 'translation-only' ? 'translation-only' : 'dual');
@@ -1250,9 +1443,88 @@ async function startTranslationUnlocked(): Promise<void> {
       // FR-7: prune detached nodes on every mutation flush.
       pruneDetachedPieces();
 
-      const newPieces = addedElements.flatMap((element) =>
-        extractDynamicPieces(element, matchingRule?.includeSelectors, effectiveExcludes, settings.enableRichTranslate, settings.enableAsideCaps),
-      );
+      // sm7n: source-change invalidation. The watcher delivers the marked
+      // original host (or a container/descendant of a tracked piece's
+      // parent). Compare each piece's own source group; only changed groups
+      // invalidate — stale output/markers are removed once per piece and the
+      // parent is re-extracted as a fresh root.
+      const forcedRoots = new Set<Element>();
+      // sm7n: the delivered element itself may be a marked source host — e.g.
+      // a contained LI/TD/TH original wrapper. Force-re-extract it directly:
+      // walking its (unmarked) LI parent would REJECT the marked wrapper
+      // subtree, and as a normal root it would early-return inside the marked
+      // region — so site appends inside the wrapper would never translate.
+      const isMarkedHost = (el: Element) =>
+        el.getAttribute(DATA_ATTRS.ROLE) === 'original' ||
+        el.hasAttribute(DATA_ATTRS.TRANSLATED);
+      for (const el of addedElements) {
+        if (isMarkedHost(el)) forcedRoots.add(el);
+      }
+      for (const piece of [...allPieces]) {
+        const parent = piece.parentElement;
+        if (!parent.isConnected) continue;
+        let affected = false;
+        let markedHostDelivered = false;
+        for (const el of addedElements) {
+          if (!(el === parent || parent.contains(el) || el.contains(parent))) {
+            continue;
+          }
+          affected = true;
+          if (isMarkedHost(el)) {
+            markedHostDelivered = true;
+          }
+        }
+        if (!affected) continue;
+        // A marked original/source host was delivered: queue the parent for
+        // forced re-extraction even when this piece's group is unchanged —
+        // appended site text must still surface as new work while unchanged
+        // groups are filtered by piecesByParentText.
+        if (markedHostDelivered) forcedRoots.add(parent);
+        if (isPieceSourceUnchanged(piece)) continue;
+        retirePiece(piece);
+        forcedRoots.add(parent);
+      }
+
+      const normalRoots = addedElements.filter((el) => !forcedRoots.has(el));
+      const extracted = [
+        ...normalRoots.flatMap((element) =>
+          extractDynamicPieces(element, extractOptions),
+        ),
+        ...[...forcedRoots].flatMap((element) =>
+          extractDynamicPieces(element, extractOptions, /* allowMarkedSource */ true),
+        ),
+      ];
+      // FR-23: one flush may contain a host and an element inside its open
+      // shadow root — deduplicateAncestors can't cross shadow boundaries and
+      // piecesByParentText only fills at appendPieces, so the same
+      // parent+text can arrive twice under different ids. Keep the first.
+      const seenKeys = new Set<string>();
+      const newPieces = extracted.filter((piece) => {
+        const key = contentKeyForPiece(piece);
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      });
+
+      // sm7n: merge subsumption — a re-extracted piece may share text nodes
+      // with a still-registered piece whose own group text was unchanged
+      // (e.g. a site appended a text node to a marked paragraph). The new
+      // piece subsumes the old group; retire the old piece so its output
+      // does not overlap the merged translation or accumulate on repeats.
+      if (newPieces.length > 0) {
+        const newNodeSets = newPieces.map((piece) => new Set(piece.textNodes));
+        for (const stale of [...allPieces]) {
+          const subsumed = newPieces.some(
+            (piece, i) =>
+              piece !== stale &&
+              stale.textNodes.some((node) => newNodeSets[i]!.has(node)),
+          );
+          if (subsumed) {
+            retirePiece(stale);
+          }
+        }
+      }
+
       if (newPieces.length === 0) {
         sendStatusUpdate();
         return;
@@ -1271,6 +1543,7 @@ async function startTranslationUnlocked(): Promise<void> {
       if (getPageState() === 'off') return;
       void startTranslation();
     },
+    settings.enableShadowDomWalk,
   );
   mutationWatcher.start(document.body);
 }
@@ -1297,7 +1570,6 @@ function stopTranslationUnlocked(): void {
 
   // FR-2: snapshot BEFORE clearing pieces (writeResumeSnapshot freezes a copy).
   writeResumeSnapshot();
-  resumeSnapshotWriterRegistered = false;
 
   // Clean up visual settings
   document.documentElement.removeAttribute('data-anyllm-theme');
@@ -1305,27 +1577,9 @@ function stopTranslationUnlocked(): void {
   document.documentElement.removeAttribute('data-anyllm-position');
   document.documentElement.classList.remove('anyllm-dark');
 
-  if (viewportObserver) {
-    viewportObserver.disconnect();
-    viewportObserver = null;
-  }
-  if (mutationWatcher) {
-    mutationWatcher.stop();
-    mutationWatcher = null;
-  }
-  removeAllTranslations();
-  removeAllSectionTranslations();
+  teardownPageTranslationSession();
   clearHoverCache();
   hideAutoTranslateNotification();
-  hideTranslationErrorNotification();
-  hideSystemicPauseBanner();
-  hideMiniProgress();
-  replaceAllPieces([]);
-  activeRequests = 0;
-  inFlightPieceIds.clear();
-  handledContentKeys.clear();
-  systemicPause = false;
-  sessionTermMemory = [];
   invalidateSessionSettingsCache();
 
   chrome.runtime.sendMessage({ action: 'restore' }).catch(() => {});
@@ -1532,6 +1786,7 @@ function destroyZombie(): void {
     try { mutationWatcher.stop(); } catch { /* noop */ }
     mutationWatcher = null;
   }
+  try { unregisterResumeSnapshotWriter(); } catch { /* noop */ }
   if (coordinatorCleanup) {
     try { coordinatorCleanup(); } catch { /* noop */ }
     coordinatorCleanup = null;
@@ -1570,12 +1825,23 @@ function destroyZombie(): void {
   // Clear UI / translations
   try { removeAllTranslations(); } catch { /* noop */ }
   try { removeAllSectionTranslations(); } catch { /* noop */ }
+  try { clearShadowDomRoots(); } catch { /* noop */ }
   try { clearHoverCache(); } catch { /* noop */ }
   try { hideAutoTranslateNotification(); } catch { /* noop */ }
 
   replaceAllPieces([]);
+  invalidatedPieceIds.clear();
   activeRequests = 0;
 }
+
+/** Narrow test seam for the real translatePieces lifecycle without booting WXT. */
+export const __contentTranslationTestHooks = {
+  translatePieces,
+  startTranslation,
+  getActiveRequests: () => activeRequests,
+  stopTranslationAsync,
+  destroyZombie,
+};
 
 // Content script definition for WXT
 export default defineContentScript({

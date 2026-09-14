@@ -80,6 +80,8 @@ export const DATA_ATTRS = {
   PIECE_ID: 'data-anyllm-piece-id',
   /** Marks an element as translated */
   TRANSLATED: 'data-anyllm-translated',
+  /** Marks an element (and its subtree/shadow root) as extension-owned UI */
+  OWNED: 'data-anyllm-owned',
 } as const;
 
 /** Translation page states */
