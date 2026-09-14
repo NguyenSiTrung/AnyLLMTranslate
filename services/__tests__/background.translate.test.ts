@@ -8,6 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleMessage, __resetTranslationServiceForTest, __resetSettingsCacheForTest } from '../background';
 import { ProviderPoolCoordinator } from '../providerPool';
+import type * as __Mod0 from '@/services/providerPool';
 
 // ── Shared mock state ───────────────────────────────────────────────────────
 const mockStorage: Record<string, unknown> = {};
@@ -42,6 +43,18 @@ vi.mock('@/services/cacheManager', () => ({
   cacheFailure: vi.fn().mockResolvedValue(undefined),
   deleteCachedFailure: vi.fn().mockResolvedValue(undefined),
 }));
+
+// The pool's per-key throttle (interval, default 500ms after the 0/0/0 → safe
+// upgrade) is a wall-clock sleep; tests assert dispatch behavior, not timing.
+vi.mock('@/services/providerPool', async (importOriginal) => {
+  const actual = await importOriginal<typeof __Mod0>();
+  class TestCoordinator extends actual.ProviderPoolCoordinator {
+    constructor() {
+      super({ delay: () => Promise.resolve() });
+    }
+  }
+  return { ...actual, ProviderPoolCoordinator: TestCoordinator };
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function mockFetchTranslation(responseBody: object) {

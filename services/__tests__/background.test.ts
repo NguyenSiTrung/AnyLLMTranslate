@@ -15,6 +15,8 @@ import {
   isHostCoveredByDeclaredPermissions,
   SUBTITLE_FETCH_TIMEOUT_MS,
 } from '../background';
+import type * as __Mod0 from '@/services/providerPool';
+import type * as __Mod1 from '@/lib/subtitleRetry';
 
 // Mock chrome APIs
 const mockStorage: Record<string, unknown> = {};
@@ -76,6 +78,28 @@ vi.mock('@/services/cacheManager', async (importOriginal) => {
     ...actual,
     getCachedTranslationByKey: vi.fn().mockResolvedValue(null),
     cacheTranslationByKey: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+// The pool's per-key throttle (interval, default 500ms after the 0/0/0 → safe
+// upgrade) and the chunk-level retry backoff (baseDelayMs 500) are wall-clock
+// sleeps. Tests assert retry/failover *behavior*, not timing, so substitute an
+// instant delay: dispatch order, breaker state, and retry counts are unchanged.
+vi.mock('@/services/providerPool', async (importOriginal) => {
+  const actual = await importOriginal<typeof __Mod0>();
+  class TestCoordinator extends actual.ProviderPoolCoordinator {
+    constructor() {
+      super({ delay: () => Promise.resolve() });
+    }
+  }
+  return { ...actual, ProviderPoolCoordinator: TestCoordinator };
+});
+vi.mock('@/lib/subtitleRetry', async (importOriginal) => {
+  const actual = await importOriginal<typeof __Mod1>();
+  return {
+    ...actual,
+    withRetry: (fn: () => Promise<unknown>, opts: Parameters<typeof actual.withRetry>[1]) =>
+      actual.withRetry(fn, { ...opts, baseDelayMs: 0 }),
   };
 });
 

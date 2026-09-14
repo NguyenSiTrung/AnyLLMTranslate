@@ -6,6 +6,7 @@ import {
   __resetSettingsCacheForTest,
 } from '../background';
 import { getStatsV2, resetStats } from '../statsCollector';
+import type * as __Mod0 from '@/services/providerPool';
 
 const mockStorage: Record<string, unknown> = {};
 /** Per-store maps so stats prune cannot delete translation cache keys (mirrors real multi-DB IDB). */
@@ -86,6 +87,18 @@ vi.mock('@/services/filmGlossaryStore', () => ({
   saveFilmGlossary: vi.fn().mockResolvedValue(undefined),
   FILM_GLOSSARY_STORAGE_KEY: 'anyllm-film-glossary',
 }));
+
+// The pool's per-key throttle (interval, default 500ms after the 0/0/0 → safe
+// upgrade) is a wall-clock sleep; tests assert dispatch behavior, not timing.
+vi.mock('@/services/providerPool', async (importOriginal) => {
+  const actual = await importOriginal<typeof __Mod0>();
+  class TestCoordinator extends actual.ProviderPoolCoordinator {
+    constructor() {
+      super({ delay: () => Promise.resolve() });
+    }
+  }
+  return { ...actual, ProviderPoolCoordinator: TestCoordinator };
+});
 
 function mockFetch(content: string) {
   vi.stubGlobal(

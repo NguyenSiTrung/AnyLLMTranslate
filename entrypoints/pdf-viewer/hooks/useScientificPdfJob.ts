@@ -123,6 +123,8 @@ async function countPdfPages(bytes: Uint8Array): Promise<number> {
 export interface UseScientificPdfJobOptions {
   pdfUrl: string;
   fileName?: string;
+  /** Status poll interval (default 1500ms). Tests pass a small value. */
+  pollIntervalMs?: number;
 }
 
 export interface UseScientificPdfJobResult {
@@ -174,6 +176,7 @@ export interface UseScientificPdfJobResult {
 export function useScientificPdfJob({
   pdfUrl,
   fileName = 'document.pdf',
+  pollIntervalMs = 1500,
 }: UseScientificPdfJobOptions): UseScientificPdfJobResult {
   const [progress, setProgress] = useState<ScientificJobProgress>(IDLE);
   // Clear accumulated runs when the document changes.
@@ -388,7 +391,7 @@ export function useScientificPdfJob({
       log: `Job ${jobId} queued — translating…`,
     });
 
-    const pollMs = 1500;
+    const pollMs = pollIntervalMs;
     const maxPolls = 600;
     let lastMsg = '';
     for (let i = 0; i < maxPolls; i++) {
@@ -595,7 +598,7 @@ export function useScientificPdfJob({
       jobId,
       log: 'Timed out waiting for job',
     });
-  }, [pdfUrl, fileName, refreshHealth, reset, push]);
+  }, [pdfUrl, fileName, pollIntervalMs, refreshHealth, reset, push]);
 
   const resolveResultUrl = useCallback((prefer: 'dual' | 'mono' = 'dual'): string | null => {
     const url =

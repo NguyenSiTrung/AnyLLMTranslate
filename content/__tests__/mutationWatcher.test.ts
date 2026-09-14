@@ -18,7 +18,7 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     // Scenario 1: <body> replaced with a new node
     const onMutation = vi.fn();
     const onBodySwapped = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 100, onBodySwapped);
+    const watcher = new MutationWatcher(onMutation, 5, onBodySwapped);
     watcher.start(document.body);
 
     const oldBody = document.body;
@@ -27,7 +27,7 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     document.documentElement.replaceChild(newBody, oldBody);
 
     // Allow MutationObserver microtask + 100ms debounce to fire
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onBodySwapped).toHaveBeenCalledTimes(1);
     watcher.stop();
@@ -35,20 +35,20 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     // Scenario 2: body removed and re-added
     const onMutation2 = vi.fn();
     const onBodySwapped2 = vi.fn();
-    const watcher2 = new MutationWatcher(onMutation2, 100, onBodySwapped2);
+    const watcher2 = new MutationWatcher(onMutation2, 5, onBodySwapped2);
     watcher2.start(document.body);
 
     const currentBody = document.body;
     document.documentElement.removeChild(currentBody);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
 
     const readdedBody = document.createElement('body');
     readdedBody.innerHTML = '<p>Re-added body</p>';
     document.documentElement.appendChild(readdedBody);
 
     // Wait for debounce (100ms) + buffer
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onBodySwapped2).toHaveBeenCalledTimes(1);
     watcher2.stop();
@@ -56,7 +56,7 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     // Mutations under <html> or inside the current body are not body swaps.
     const onMutation3 = vi.fn();
     const onBodySwapped3 = vi.fn();
-    const watcher3 = new MutationWatcher(onMutation3, 100, onBodySwapped3);
+    const watcher3 = new MutationWatcher(onMutation3, 5, onBodySwapped3);
     watcher3.start(document.body);
 
     // Add a <div> to <head> (child of <html>, but not a body swap)
@@ -64,7 +64,7 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     div.textContent = 'Head content';
     document.head.appendChild(div);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onBodySwapped3).not.toHaveBeenCalled();
 
@@ -73,7 +73,7 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     p.textContent = 'New paragraph';
     document.body.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onBodySwapped3).not.toHaveBeenCalled();
     watcher3.stop();
@@ -81,44 +81,44 @@ describe('MutationWatcher — body-swap detection (FR-1)', () => {
     // Repeated mutations on one replacement body still fire only once.
     const onMutation4 = vi.fn();
     const onBodySwapped4 = vi.fn();
-    const watcher4 = new MutationWatcher(onMutation4, 100, onBodySwapped4);
+    const watcher4 = new MutationWatcher(onMutation4, 5, onBodySwapped4);
     watcher4.start(document.body);
     const oldBody4 = document.body;
     const newBody4 = document.createElement('body');
     document.documentElement.replaceChild(newBody4, oldBody4);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     const p4 = document.createElement('p');
     p4.textContent = 'Content in new body';
     newBody4.appendChild(p4);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onBodySwapped4).toHaveBeenCalledTimes(1);
     watcher4.stop();
 
     // Stopping both observers prevents later body replacement callbacks.
     const onMutation5 = vi.fn();
     const onBodySwapped5 = vi.fn();
-    const watcher5 = new MutationWatcher(onMutation5, 100, onBodySwapped5);
+    const watcher5 = new MutationWatcher(onMutation5, 5, onBodySwapped5);
     watcher5.start(document.body);
     watcher5.stop();
     const oldBody5 = document.body;
     const newBody5 = document.createElement('body');
     document.documentElement.replaceChild(newBody5, oldBody5);
 
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onBodySwapped5).not.toHaveBeenCalled();
 
     // Normal content changes still reach onMutation when body-swap mode is on.
     const onMutation6 = vi.fn();
     const onBodySwapped6 = vi.fn();
-    const watcher6 = new MutationWatcher(onMutation6, 50, onBodySwapped6);
+    const watcher6 = new MutationWatcher(onMutation6, 5, onBodySwapped6);
     watcher6.start(document.body);
     const p6 = document.createElement('p');
     p6.textContent = 'A new paragraph with text.';
     document.body.appendChild(p6);
 
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation6).toHaveBeenCalled();
     expect(onBodySwapped6).not.toHaveBeenCalled();
     watcher6.stop();
@@ -132,7 +132,7 @@ describe('MutationWatcher — skip already-translated regions', () => {
 
   it('does not re-queue children moved into a marked original wrapper', async () => {
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30);
+    const watcher = new MutationWatcher(onMutation, 5);
     watcher.start(document.body);
 
     const li = document.createElement('li');
@@ -142,7 +142,7 @@ describe('MutationWatcher — skip already-translated regions', () => {
     document.body.appendChild(li);
 
     // Allow the initial add to flush (if any)
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     // Simulate ensureOriginalWrapper: mark wrapper as original/translated and
@@ -155,14 +155,14 @@ describe('MutationWatcher — skip already-translated regions', () => {
     }
     li.appendChild(wrapper);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).not.toHaveBeenCalled();
     watcher.stop();
 
     document.body.innerHTML = '';
     const onMutation2 = vi.fn();
-    const watcher2 = new MutationWatcher(onMutation2, 30);
+    const watcher2 = new MutationWatcher(onMutation2, 5);
     watcher2.start(document.body);
 
     const p = document.createElement('p');
@@ -172,12 +172,12 @@ describe('MutationWatcher — skip already-translated regions', () => {
     p.appendChild(text);
     document.body.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation2.mockClear();
 
     text.textContent = 'Hello world text content updated';
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     // sm7n: site text edits inside a marked original DO surface — the
     // original host is delivered so source-vs-tracked comparison can run.
@@ -188,7 +188,7 @@ describe('MutationWatcher — skip already-translated regions', () => {
 
     document.body.innerHTML = '';
     const onMutation3 = vi.fn();
-    const watcher3 = new MutationWatcher(onMutation3, 30);
+    const watcher3 = new MutationWatcher(onMutation3, 5);
     watcher3.start(document.body);
 
     const existing = document.createElement('p');
@@ -196,14 +196,14 @@ describe('MutationWatcher — skip already-translated regions', () => {
     existing.textContent = 'Already translated paragraph';
     document.body.appendChild(existing);
 
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation3.mockClear();
 
     const fresh = document.createElement('p');
     fresh.textContent = 'Brand new dynamic paragraph content.';
     document.body.appendChild(fresh);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation3).toHaveBeenCalled();
     const added = onMutation3.mock.calls[0][0] as Element[];
@@ -235,14 +235,14 @@ describe('MutationWatcher — source-region invalidation (sm7n)', () => {
     document.body.append(p, translation);
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30);
+    const watcher = new MutationWatcher(onMutation, 5);
     watcher.start(document.body);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     // Site edits the source text inside the marked original.
     text.textContent = 'Original paragraph text — edited by the site.';
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).toHaveBeenCalled();
     const delivered = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
@@ -255,9 +255,9 @@ describe('MutationWatcher — source-region invalidation (sm7n)', () => {
     document.body.appendChild(p);
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30);
+    const watcher = new MutationWatcher(onMutation, 5);
     watcher.start(document.body);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     // Injected artifact added under the original — extension-owned, no work.
@@ -267,24 +267,24 @@ describe('MutationWatcher — source-region invalidation (sm7n)', () => {
     const inlineText = document.createTextNode(' (bản dịch)');
     inline.appendChild(inlineText);
     p.appendChild(inline);
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).not.toHaveBeenCalled();
 
     // characterData inside the injected artifact — still no work.
     inlineText.textContent = ' (bản dịch cập nhật)';
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).not.toHaveBeenCalled();
 
     // Artifact removal under the original — no work either.
     inline.remove();
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).not.toHaveBeenCalled();
 
     // A site element added under the original — the original host is queued.
     const bold = document.createElement('b');
     bold.textContent = 'site-added';
     p.appendChild(bold);
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).toHaveBeenCalled();
     const delivered = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
     expect(delivered).toContain(p);
@@ -314,18 +314,18 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     registerShadowRoots(document.body);
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
 
     // Clear any initial flush before appending inside the shadow root.
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     const p = document.createElement('p');
     p.textContent = 'Paragraph added inside the shadow root.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).toHaveBeenCalled();
     const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
@@ -335,21 +335,21 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
 
   it('observes a dynamically added open shadow host, including later shadow children', async () => {
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
 
     const { host, shadow } = makeShadowHost();
     document.body.appendChild(host);
 
     // Wait for the host-add mutation to register/observe the new root.
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     const p = document.createElement('p');
     p.textContent = 'Later shadow child paragraph.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).toHaveBeenCalled();
     const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
@@ -361,7 +361,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     const p2 = document.createElement('p');
     p2.textContent = 'Post-stop shadow paragraph.';
     shadow.appendChild(p2);
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).not.toHaveBeenCalled();
   });
 
@@ -371,17 +371,17 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     registerShadowRoots(document.body);
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30);
+    const watcher = new MutationWatcher(onMutation, 5);
     watcher.start(document.body);
 
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     const p = document.createElement('p');
     p.textContent = 'Unobserved shadow paragraph.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).not.toHaveBeenCalled();
     watcher.stop();
@@ -393,11 +393,11 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     host.setAttribute('data-anyllm-role', 'translation');
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
     document.body.appendChild(host);
 
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     // The root must not have been registered/observed — later shadow-child
@@ -406,7 +406,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     p.textContent = 'Paragraph inside extension-owned shadow.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).not.toHaveBeenCalled();
     expect(getRegisteredShadowRoots()).not.toContain(shadow);
@@ -419,10 +419,10 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     registerShadowRoots(document.body);
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
 
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     // Detach the host, then force a document flush so the stale observer is
@@ -432,7 +432,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     trigger.textContent = 'Document mutation forcing a flush.';
     document.body.appendChild(trigger);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(getRegisteredShadowRoots()).toContain(shadow);
     onMutation.mockClear();
 
@@ -441,7 +441,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     p.textContent = 'Post-detach shadow paragraph.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).not.toHaveBeenCalled();
     watcher.stop();
   });
@@ -451,19 +451,19 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     host.setAttribute(DATA_ATTRS.OWNED, '');
 
     const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
 
     // Dynamic add — the owned marker makes isExtensionOwned skip the scan.
     document.body.appendChild(host);
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 25));
     onMutation.mockClear();
 
     const p = document.createElement('p');
     p.textContent = 'Paragraph inside an owned shadow root.';
     shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
 
     expect(onMutation).not.toHaveBeenCalled();
     expect(getRegisteredShadowRoots()).not.toContain(shadow);
@@ -487,7 +487,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
       lateShadow = lateHost.attachShadow({ mode: 'open' });
       registerShadowRoots(container);
     });
-    const watcher = new MutationWatcher(onMutation, 30, undefined, true);
+    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
     watcher.start(document.body);
 
     // Trigger one flush — the callback registers the late root.
@@ -495,7 +495,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     trigger.textContent = 'Trigger paragraph for the flush.';
     document.body.appendChild(trigger);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).toHaveBeenCalledTimes(1);
     onMutation.mockClear();
 
@@ -503,7 +503,7 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     p.textContent = 'Inside the callback-registered root.';
     lateShadow!.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 25));
     expect(onMutation).toHaveBeenCalled();
     const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
     expect(added.some((el) => el === p || el.contains(p))).toBe(true);

@@ -824,6 +824,15 @@ Rules:
     return this.max429RetriesOverride ?? OpenAICompatibleService.MAX_429_RETRIES;
   }
 
+  /** Generic 5xx/network retry backoff base (ms); test-overridable. */
+  private static RETRY_BASE_DELAY_MS = 500;
+
+  /** Test override: zero the generic 5xx/network retry backoff so tests don't
+   *  wait through real backoff timers. Restore in afterEach. */
+  static __setRetryBackoffForTest(zero: boolean): void {
+    OpenAICompatibleService.RETRY_BASE_DELAY_MS = zero ? 0 : 500;
+  }
+
   /** Test override: set all 429 retry delays to near-zero so integration
    *  tests don't wait through real backoff timers. Restore in afterEach. */
   static __set429DelaysForTest(zero: boolean): void {
@@ -1004,7 +1013,7 @@ Rules:
         // Retry on 5xx or network-like errors, but NOT on 4xx client errors
         const shouldRetry = response.status >= 500 && attempt <= maxRetries;
         if (shouldRetry) {
-          const backoff = 500 * Math.pow(2, attempt - 1);
+          const backoff = OpenAICompatibleService.RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
           await new Promise((resolve) => setTimeout(resolve, backoff));
           return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts, callerSignal);
         }
@@ -1028,7 +1037,7 @@ Rules:
       // not fragile string matching on error.message).
       const isClientError = error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500;
       if (attempt <= maxRetries && !isClientError && !callerSignal?.aborted) {
-        const backoff = 500 * Math.pow(2, attempt - 1);
+        const backoff = OpenAICompatibleService.RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
         await new Promise((resolve) => setTimeout(resolve, backoff));
         return this.fetchWithRetry(request, maxRetries, attempt + 1, rateLimitAttempts, callerSignal);
       }

@@ -1,7 +1,4 @@
-/**
- * Tests: API key encryption at rest
- */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   encryptApiKey,
   decryptApiKey,
@@ -9,6 +6,11 @@ import {
   __resetSaltCacheForTest,
 } from '@/lib/crypto';
 import { STORAGE_KEYS } from '@/lib/constants';
+import { passphraseStrength } from '../passphraseStrength';
+
+/**
+ * Tests: API key encryption at rest
+ */
 
 /** In-memory chrome.storage.local backing store for salt persistence tests. */
 function installStorageMock(): Record<string, unknown> {
@@ -91,5 +93,25 @@ describe('crypto — API key encryption', () => {
     const fail = await decryptApiKeyResult(rotated);
     expect(fail.ok).toBe(false);
     expect(fail.value).toBe('');
+  });
+});
+
+describe('passphraseStrength', () => {
+  it('returns null for empty input (meter hidden) and classifies weak, fair, and strong passphrases by length and character classes', () => {
+    expect(passphraseStrength('')).toBeNull();
+
+    // weak: under 8 chars, or 8+ with a single class below 12 chars
+    expect(passphraseStrength('abc')).toBe('weak');
+    expect(passphraseStrength('abcdefgh')).toBe('weak');
+
+    // fair: 8+ with two classes, or 12+ with fewer than three classes
+    expect(passphraseStrength('abcd1234')).toBe('fair');
+    expect(passphraseStrength('Abcdefgh')).toBe('fair');
+    expect(passphraseStrength('abcdefghijkl')).toBe('fair');
+    expect(passphraseStrength('abcdefghij12')).toBe('fair');
+
+    // strong: 12+ chars with three or more classes
+    expect(passphraseStrength('Abcdefg12345')).toBe('strong');
+    expect(passphraseStrength('abcd1234!@#$')).toBe('strong');
   });
 });

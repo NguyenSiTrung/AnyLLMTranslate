@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PDF_STREAM_PORT, WEB_STREAM_PORT } from '@/types/messages';
+import type * as __Mod0 from '@/services/providerPool';
 
 const recordUsage = vi.fn().mockResolvedValue(undefined);
 
@@ -22,6 +23,18 @@ vi.mock('@/services/cacheManager', () => ({
   getCachedTranslationByKey: vi.fn(),
   cacheTranslationByKey: vi.fn(),
 }));
+
+// The pool's per-key throttle (interval, default 500ms after the 0/0/0 → safe
+// upgrade) is a wall-clock sleep; tests assert dispatch behavior, not timing.
+vi.mock('@/services/providerPool', async (importOriginal) => {
+  const actual = await importOriginal<typeof __Mod0>();
+  class TestCoordinator extends actual.ProviderPoolCoordinator {
+    constructor() {
+      super({ delay: () => Promise.resolve() });
+    }
+  }
+  return { ...actual, ProviderPoolCoordinator: TestCoordinator };
+});
 
 const mockStorage: Record<string, unknown> = {};
 const connectListeners: Array<(port: chrome.runtime.Port) => void> = [];
@@ -412,8 +425,13 @@ describe('stream port recordUsage', () => {
       targetLanguage: 'vi',
     });
 
-    // Give the message a tick to start the fetch, then disconnect.
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Wait until the fetch actually starts (signal captured), then disconnect.
+    // A fixed sleep races the dispatch pipeline: with instant pool delays the
+    // cancellation check can fire before fetch is ever invoked.
+    const fetchStartDeadline = Date.now() + 2000;
+    while (capturedSignal === undefined && Date.now() < fetchStartDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     disconnect();
     await request;
 

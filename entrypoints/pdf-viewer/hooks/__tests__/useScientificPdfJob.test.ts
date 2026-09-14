@@ -62,7 +62,7 @@ describe('useScientificPdfJob', () => {
     // refreshHealth sets ready when health ok
     sendMessage.mockResolvedValueOnce({ success: true, status: 'ok' });
     const healthy = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     let ok = false;
     await act(async () => {
@@ -76,7 +76,7 @@ describe('useScientificPdfJob', () => {
     // startJob fails open with offline when health fails
     sendMessage.mockResolvedValueOnce({ success: false, error: 'offline', code: 'offline' });
     const offline = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     await act(async () => {
       await offline.result.current.startJob();
@@ -100,7 +100,11 @@ describe('useScientificPdfJob', () => {
     );
 
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     await act(async () => {
       await result.current.startJob();
@@ -111,7 +115,7 @@ describe('useScientificPdfJob', () => {
 
   it('resolveResultUrl / resolveResultBlob / openResultInViewer return null when no artifacts', () => {
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     expect(result.current.resolveResultUrl('mono')).toBeNull();
     expect(result.current.resolveResultBlob('dual')).toBeNull();
@@ -121,7 +125,7 @@ describe('useScientificPdfJob', () => {
 
   it('dismissProgress clears stage without requiring artifacts', () => {
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     act(() => {
       result.current.dismissProgress();
@@ -136,7 +140,7 @@ describe('useScientificPdfJob', () => {
     // just ensure openInNewTab does not throw when no url.
     const create = vi.mocked(chrome.tabs.create);
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf' }),
+      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     act(() => {
       expect(result.current.openResultInViewer('mono', { openInNewTab: true })).toBeNull();
@@ -151,7 +155,11 @@ describe('useScientificPdfJob', () => {
     stubPdfFetch();
 
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     await act(async () => {
       await result.current.startJob({ pages: '1-3, 5' });
@@ -170,7 +178,11 @@ describe('useScientificPdfJob', () => {
     stubPdfFetch();
 
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     await act(async () => {
       await result.current.startJob();
@@ -199,7 +211,11 @@ describe('useScientificPdfJob', () => {
     stubPdfFetch();
 
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     await act(async () => {
       await result.current.startJob({ pages: '1-3, 5' });
@@ -223,7 +239,11 @@ describe('useScientificPdfJob', () => {
     const b64 = (s: string) => btoa(s);
     // Run 1 (pages 1-2) succeeds.
     const run1 = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     sendMessage
       .mockResolvedValueOnce({ success: true, status: 'ok' })
@@ -277,7 +297,11 @@ describe('useScientificPdfJob', () => {
     URL.revokeObjectURL = vi.fn();
     const b64 = (s: string) => btoa(s);
     const { result } = renderHook(() =>
-      useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', fileName: 'a.pdf' }),
+      useScientificPdfJob({
+      pdfUrl: 'https://example.com/a.pdf',
+      fileName: 'a.pdf',
+      pollIntervalMs: 1,
+    }),
     );
     sendMessage
       .mockResolvedValueOnce({ success: true, status: 'ok' })

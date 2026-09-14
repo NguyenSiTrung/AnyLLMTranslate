@@ -1,7 +1,4 @@
-/**
- * @vitest-environment jsdom
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   computeResumeKey,
   serializeSnapshot,
@@ -11,6 +8,23 @@ import {
   RESUME_TTL_DAYS,
   type WebResumeSnapshot,
 } from '../webResume';
+import {
+  resumeIdentityKey,
+  parentPathFromElement,
+  matchResumeTranslations,
+} from '@/lib/resumeIdentity';
+import {
+  computeTranslationStatus,
+  countVisiblePending,
+  collectNearViewportPieceIds,
+  formatProgressLabel,
+  formatProgressDetail,
+  isReadingAreaReady,
+} from '@/lib/webTranslateStatus';
+
+/**
+ * @vitest-environment jsdom
+ */
 
 /** In-memory idb-keyval stand-in so save/load/clear exercise real store logic. */
 const idbStores = new Map<string, Map<string, unknown>>();
@@ -110,5 +124,223 @@ describe('webResume', () => {
 
     await clearAllResumeSnapshots();
     expect(await loadSnapshot(stored.url, stored.contentHash)).toBeNull();
+  });
+});
+
+describe('resumeIdentity', () => {
+  it('normalizes keys/paths and matches by parentPath or text-only fallback', () => {
+    expect(
+      resumeIdentityKey({ text: '  Hello   world  ', parentPath: 'body>p' }),
+    ).toBe('body>p::Hello world');
+
+    const p = {
+      tagName: 'P',
+      parentElement: {
+        tagName: 'ARTICLE',
+        parentElement: { tagName: 'BODY', parentElement: null },
+      },
+    };
+    expect(parentPathFromElement(p)).toBe('body>article>p');
+
+    const live = [
+      { text: 'Same', parentPath: 'body>main>p' },
+      { text: 'Same', parentPath: 'body>aside>p' },
+    ];
+    const snap = [
+      {
+        text: 'Same',
+        parentPath: 'body>main>p',
+        translatedText: 'Main-T',
+        status: 'translated',
+      },
+      {
+        text: 'Same',
+        parentPath: 'body>aside>p',
+        translatedText: 'Aside-T',
+        status: 'translated',
+      },
+    ];
+    const map = matchResumeTranslations(live, snap);
+    expect(map.get(0)).toBe('Main-T');
+    expect(map.get(1)).toBe('Aside-T');
+
+    const legacyLive = [
+      { text: 'Hello', parentPath: 'body>p' },
+      { text: 'World', parentPath: 'body>p' },
+    ];
+    const legacySnap = [
+      { text: 'Hello', translatedText: 'Xin chào', status: 'translated' },
+    ];
+    const legacyMap = matchResumeTranslations(legacyLive, legacySnap);
+    expect(legacyMap.get(0)).toBe('Xin chào');
+    expect(legacyMap.has(1)).toBe(false);
+  });
+});
+
+describe('webTranslateStatus', () => {
+  const basePieces = [
+    { id: '1', isTranslated: true },
+    { id: '2', isTranslated: true },
+    { id: '3', isTranslated: false },
+    { id: '4', isTranslated: false },
+  ];
+
+  it('computeTranslationStatus covers idle / translating / done states; countVisiblePending unions without double-counting', () => {
+    const pendingPieces = [
+      { id: 'a', isTranslated: false },
+      { id: 'b', isTranslated: false },
+      { id: 'c', isTranslated: true },
+      { id: 'd', isTranslated: false },
+    ];
+    expect(countVisiblePending(pendingPieces, new Set(['a']), new Set(['b']))).toBe(2);
+    expect(countVisiblePending([{ id: 'a', isTranslated: false }], new Set(['a']), new Set(['a']))).toBe(
+      1,
+    );
+    expect(countVisiblePending([{ id: 'a', isTranslated: true }], new Set(['a']), new Set())).toBe(0);
+
+    expect(
+      computeTranslationStatus({
+        pageState: 'off',
+        pieces: basePieces,
+        activeRequests: 0,
+        visiblePieceIds: new Set(['3']),
+        inFlightPieceIds: new Set(),
+      }),
+    ).toMatchObject({ status: 'idle', viewportComplete: true, visiblePending: 0 });
+
+    const translating = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: basePieces,
+      activeRequests: 1,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(['3']),
+    });
+    expect(translating).toMatchObject({
+      status: 'translating',
+      viewportComplete: false,
+      visiblePending: 1,
+      translatedCount: 2,
+      totalCount: 4,
+    });
+
+    expect(
+      computeTranslationStatus({
+        pageState: 'dual',
+        pieces: basePieces,
+        activeRequests: 0,
+        visiblePieceIds: new Set(['3']),
+        inFlightPieceIds: new Set(),
+      }).status,
+    ).toBe('translating');
+
+    const offScreen = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: basePieces,
+      activeRequests: 0,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(),
+    });
+    expect(offScreen).toMatchObject({
+      status: 'done',
+      viewportComplete: true,
+      visiblePending: 0,
+      translatedCount: 2,
+      totalCount: 4,
+    });
+    expect(isReadingAreaReady(offScreen)).toBe(true);
+
+    const allDone = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: [
+        { id: '1', isTranslated: true },
+        { id: '2', isTranslated: true },
+      ],
+      activeRequests: 0,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(),
+    });
+    expect(allDone.status).toBe('done');
+    expect(isReadingAreaReady(allDone)).toBe(false);
+
+    expect(
+      computeTranslationStatus({
+        pageState: 'dual',
+        pieces: [],
+        activeRequests: 0,
+        visiblePieceIds: new Set(),
+        inFlightPieceIds: new Set(),
+      }),
+    ).toMatchObject({ status: 'idle', totalCount: 0 });
+  });
+
+  it('formatProgressLabel/Detail for active, reading-area-ready, complete, and error', () => {
+    const active = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: [
+        { id: '1', isTranslated: true },
+        { id: '2', isTranslated: false },
+      ],
+      activeRequests: 1,
+      visiblePieceIds: new Set(['2']),
+      inFlightPieceIds: new Set(['2']),
+    });
+    expect(formatProgressLabel(active)).toBe('Translating...');
+    expect(formatProgressDetail(active)).toBe('1 of 2 completed');
+
+    const ready = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: [
+        { id: '1', isTranslated: true },
+        { id: '2', isTranslated: false },
+        { id: '3', isTranslated: false },
+      ],
+      activeRequests: 0,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(),
+    });
+    expect(formatProgressLabel(ready)).toBe('Reading area ready');
+    expect(formatProgressDetail(ready)).toBe('1 of 3 done · 2 more as you scroll');
+
+    const done = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: [
+        { id: '1', isTranslated: true },
+        { id: '2', isTranslated: true },
+      ],
+      activeRequests: 0,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(),
+    });
+    expect(formatProgressLabel(done)).toBe('Translation Complete');
+    expect(formatProgressDetail(done)).toBe('2 of 2 completed');
+
+    const err = computeTranslationStatus({
+      pageState: 'dual',
+      pieces: [{ id: '1', isTranslated: false }],
+      activeRequests: 0,
+      visiblePieceIds: new Set(),
+      inFlightPieceIds: new Set(),
+    });
+    expect(formatProgressLabel(err, 'Pool exhausted')).toBe('Translation Error');
+  });
+
+  it('collectNearViewportPieceIds includes margin and excludes translated/far pieces', () => {
+    expect([
+      ...collectNearViewportPieceIds(
+        [
+          { id: 'in', isTranslated: false, getRect: () => ({ top: 100, bottom: 200 }) },
+          { id: 'below', isTranslated: false, getRect: () => ({ top: 2000, bottom: 2100 }) },
+          { id: 'done', isTranslated: true, getRect: () => ({ top: 50, bottom: 80 }) },
+        ],
+        { marginPx: 200, viewportHeight: 800 },
+      ),
+    ]).toEqual(['in']);
+
+    expect(
+      collectNearViewportPieceIds(
+        [{ id: 'above', isTranslated: false, getRect: () => ({ top: -150, bottom: -50 }) }],
+        { marginPx: 200, viewportHeight: 800 },
+      ).has('above'),
+    ).toBe(true);
   });
 });
