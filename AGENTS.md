@@ -115,3 +115,48 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Git Policy (overrides the managed Beads blocks above)
+
+This project runs Conductor tracks and Superpowers plans. Both commit per task.
+`conductor/workflow.md` mandates "Commit after: Each task completion" (see its
+Task Completion, Commit Convention, and Definition of Done sections), and the
+Superpowers `writing-plans` and `subagent-driven-development` skills mandate the
+same per task. The managed Beads blocks state they do not override repository,
+user, or orchestrator instructions — and the block template already treats
+commit/push as repository-profile-controlled handoff actions — so this section
+wins wherever they conflict — including against Conductor command docs and any
+Superpowers or Conductor skill/reference text. `bd setup` regenerates only the
+text between its BEGIN/END markers, so this section sits outside them and
+survives regeneration.
+
+- **Commit per task: ALLOWED, no approval needed.** `conductor/workflow.md`
+  Task Completion mandates a commit after each task completes and its tests
+  pass, with the task summary recorded via `git notes add -m "..."`; commit
+  messages follow Conventional Commits (its Commit Convention section).
+  Superpowers `writing-plans` puts a `Step 5: Commit` in every task, and
+  `subagent-driven-development` implementers implement, test, and commit per
+  task. Do not defer these commits to session end.
+- **`git push`: NEVER** unless the current user request asks for it.
+  `conductor/SKILL.md` states Conductor commits locally and never pushes; the
+  user decides when to push. This overrides the team-maintainer session-close
+  snippet (`git pull --rebase` / `bd dolt push` / `git push`) above.
+- **`git pull` / `git fetch`: NEVER automatically** — no auto-rebase, no
+  auto-sync at session end. Exception: run them when the user explicitly selects
+  an option that requires it, e.g. Option 1 "Merge back locally" in
+  `finishing-a-development-branch`, which is `git pull` then `git merge`.
+- **Branch integration** (merge / open PR / keep as-is) stays exactly as the
+  `finishing-a-development-branch` menu defines it — the user picks, and work is
+  discarded only on the typed word `discard`.
+- **`bd dolt push`: NOT per task.** Run once when the user asks, normally at
+  session end, alongside `bd close` and note updates.
+- **`bd close` / `bd update --notes`** for the task just finished: run as normal
+  during the session — task tracking is not gated by this policy.
+- **`bd sync`: NEVER.** `bd sync` is documented as "Pull, check for conflicts,
+  repair is_blocked, and push" — it pulls *and* pushes in one call. Use
+  `bd dolt push` alone, and only when the user asks.
+- **Beads export rides the task commit.** `.beads/issues.jsonl` and
+  `.beads/interactions.jsonl` are git-tracked; when a task's `bd` updates changed
+  them, stage them with that task's commit. Never stage `.beads/embeddeddolt/`,
+  `.beads/dolt/`, or `.beads/backup/` — gitignored runtime state.
+- Everything else in the managed Beads blocks stands unchanged.
