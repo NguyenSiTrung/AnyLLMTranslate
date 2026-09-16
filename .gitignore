@@ -48,5 +48,9 @@ ImmersiveTransalteExtensionCode/
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
 
+# Beads schema-migration gate flock names — never deleted by bd (the pattern
+# below is the one `bd doctor --fix` installs). Runtime state, not tracked.
+*.gate.lock*
+
 # Smoke test files flagged by AV
 **/tests/test_smoke.py
