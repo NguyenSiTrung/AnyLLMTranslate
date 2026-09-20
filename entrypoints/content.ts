@@ -1868,9 +1868,12 @@ export default defineContentScript({
     coordinatorCleanup = startCoordinator();
     playerChromeCleanup = startPlayerChrome();
 
-    // Attach inline-translate key listeners immediately (defaults), then apply
-    // stored settings. Waiting on loadSettings() first delayed gesture capture.
+    // Attach inline-translate key listeners immediately, then apply stored
+    // settings. Waiting on loadSettings() first delayed gesture capture, so the
+    // feature starts inert and initInteractionFeatures() enables it — a user
+    // who turned it off must not get translations in the gap.
     _inlineTranslateCleanup = initInlineTranslate();
+    setInlineTranslateEnabled(false);
     await initInteractionFeatures();
 
     // Auto-translate: check site rules for matching hostname

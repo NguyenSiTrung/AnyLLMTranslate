@@ -568,7 +568,7 @@ describe('error recovery', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     expect(undoMap.has(input)).toBe(true);
-    expect(undoMap.get(input)).toBe('hello   ');
+    expect(undoMap.get(input)?.text).toBe('hello   ');
 
     // Scenario 2: on error, the original text is restored
     const input2 = createFocusedInput('hello   ');

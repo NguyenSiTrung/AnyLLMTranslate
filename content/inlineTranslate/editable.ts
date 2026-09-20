@@ -175,7 +175,94 @@ export function getElementText(el: HTMLElement): string {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     return el.value;
   }
-  return el.textContent ?? '';
+  return readContentEditableText(el);
+}
+
+/** Block-level tags that terminate a visual line inside a contentEditable. */
+const BLOCK_TAGS = new Set([
+  'ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'DD', 'DETAILS', 'DIV', 'DL', 'DT',
+  'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4',
+  'H5', 'H6', 'HEADER', 'HR', 'LI', 'MAIN', 'NAV', 'OL', 'P', 'PRE', 'SECTION',
+  'SUMMARY', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD', 'TR', 'UL',
+]);
+
+/**
+ * Placeholder / decoration nodes that editors render *inside* the editable.
+ * Their text is not part of the draft (Slate renders its placeholder as a real
+ * span with text; reading it made an empty composer look non-empty).
+ */
+const PLACEHOLDER_SELECTOR = [
+  '[data-slate-placeholder]',
+  '[data-lexical-placeholder]',
+  '[data-placeholder]',
+  '[data-anyllm-skip]',
+  '.slate-placeholder',
+  '.ProseMirror-placeholder',
+  '.ql-placeholder',
+].join(',');
+
+/** Whether a descendant node is editor chrome (placeholder, decoration) we must ignore. */
+export function isPlaceholderNode(el: Element): boolean {
+  if (el.getAttribute('aria-hidden') === 'true') return true;
+  return el.matches(PLACEHOLDER_SELECTOR);
+}
+
+/**
+ * Read contentEditable content as the user sees it: one line per block,
+ * `alt` text for images, newlines for `<br>`, placeholders skipped.
+ *
+ * `textContent` glues `<p>a</p><p>b</p>` into `"ab"`, which silently corrupted
+ * every multi-line draft sent for translation and every write-back check.
+ */
+export function readContentEditableText(root: Node): string {
+  let out = '';
+
+  const walk = (node: Node, isRoot: boolean): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.nodeValue ?? '';
+      return;
+    }
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+      for (const child of Array.from(node.childNodes)) walk(child, false);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const el = node as Element;
+    // The root itself may carry a data-placeholder attribute for CSS ::before.
+    if (!isRoot && isPlaceholderNode(el)) return;
+
+    const tag = el.tagName;
+    if (tag === 'BR') {
+      out += '\n';
+      return;
+    }
+    if (tag === 'IMG') {
+      const alt = el.getAttribute('alt');
+      if (alt) out += alt;
+      return;
+    }
+
+    const block = BLOCK_TAGS.has(tag);
+    if (block) out += '\n';
+    for (const child of Array.from(el.childNodes)) walk(child, false);
+    if (block) out += '\n';
+  };
+
+  walk(root, true);
+
+  return out
+    .replace(/\u00a0/g, ' ')
+    // Blocks each contribute a boundary newline; adjacent blocks would
+    // otherwise double it. Runs collapse so a read is stable and comparable.
+    .replace(/\n{2,}/g, '\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '');
+}
+
+/** Whether a node subtree carries draft text (used for caret-at-end checks). */
+function hasDraftText(node: Node): boolean {
+  return readContentEditableText(node).trim().length > 0;
 }
 
 /**
@@ -206,17 +293,68 @@ export function isCaretAtEnd(el: HTMLElement): boolean {
     if (!anchorEl || !el.contains(anchorEl)) {
       return true;
     }
-    // Collapse check: caret (not range selection) near end of content
     if (!range.collapsed) return false;
-    const pre = range.cloneRange();
-    pre.selectNodeContents(el);
-    pre.setEnd(range.endContainer, range.endOffset);
-    const textBefore = pre.toString();
-    const full = el.textContent ?? '';
-    return textBefore.length >= full.length;
+    // Block-aware "nothing meaningful after the caret" — comparing raw string
+    // lengths broke on multi-paragraph drafts once reads started inserting
+    // newlines at block boundaries.
+    const after = el.ownerDocument.createRange();
+    after.setStart(range.endContainer, range.endOffset);
+    after.setEndAfter(el);
+    return !hasDraftText(after.cloneContents());
   } catch {
     return true;
   }
+}
+
+/**
+ * Whether focus currently sits on (or inside) `el`.
+ * Used to refuse write-backs that would steal focus from wherever the user
+ * moved on to while the translation was in flight.
+ */
+export function isFocusedWithin(el: HTMLElement): boolean {
+  try {
+    const doc = el.ownerDocument;
+    const active = getDeepActiveElement(doc, true);
+    if (!active) return false;
+    if (active === el || el.contains(active)) return true;
+    // Selection inside the element also counts (some editors focus a child).
+    const sel = doc.getSelection?.();
+    if (sel && sel.rangeCount > 0) {
+      const anchor = sel.anchorNode;
+      const anchorEl = anchor?.nodeType === Node.ELEMENT_NODE ? (anchor as Element) : anchor?.parentElement;
+      if (anchorEl && (anchorEl === el || el.contains(anchorEl))) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Editors that own their DOM (ProseMirror, Lexical, Slate, Draft.js, Quill).
+ *
+ * Measured in Chrome 153: ProseMirror reverts or ignores every DOM-level write
+ * (native `execCommand`, synthetic `beforeinput`/`input`, manual DOM inserts,
+ * `innerHTML`) and Lexical duplicates text when both `beforeinput` and `input`
+ * are dispatched. Writing to these composers corrupts or desyncs the draft, so
+ * inline translate refuses to touch them and hands the translation to the user
+ * instead.
+ */
+const FRAMEWORK_OWNED_SELECTOR = [
+  '.ProseMirror',
+  '[data-lexical-editor]',
+  '[data-lexical-text]',
+  '[data-slate-editor]',
+  '[data-slate-node]',
+  '[data-slate-void]',
+  '[data-block="true"]',
+  '[data-contents="true"]',
+  '.ql-editor',
+].join(',');
+
+export function isFrameworkOwnedEditor(el: HTMLElement): boolean {
+  if (el.matches(FRAMEWORK_OWNED_SELECTOR)) return true;
+  return el.querySelector(FRAMEWORK_OWNED_SELECTOR) !== null;
 }
 
 /** Whether the element is still connected and editable for write-back */

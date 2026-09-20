@@ -854,6 +854,79 @@ html:not([data-anyllm-state]) .anyllm-inline-bilingual {
   }
 }
 
+/* ===== Inline Translate — Copy Panel (framework-owned composers) ===== */
+
+.anyllm-inline-copy-panel {
+  all: initial;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: fixed;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e2e8f0;
+  pointer-events: auto;
+  z-index: 2147483647;
+}
+
+.anyllm-inline-copy-panel__message {
+  padding-right: 16px;
+  color: #fca5a5;
+  font-size: 11px;
+}
+
+.anyllm-inline-copy-panel__text {
+  max-height: 120px;
+  overflow: auto;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #f1f5f9;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.anyllm-inline-copy-panel__copy,
+.anyllm-inline-copy-panel__close {
+  all: unset;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: center;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.anyllm-inline-copy-panel__copy {
+  padding: 4px 8px;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.anyllm-inline-copy-panel__copy:hover {
+  background: #1d4ed8;
+}
+
+.anyllm-inline-copy-panel__close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 0 4px;
+  color: #94a3b8;
+}
+
+.anyllm-inline-copy-panel__close:hover {
+  color: #e2e8f0;
+}
+
 /* Auto-translate notification bar */
 [data-anyllm-role="auto-translate-notification"] {
   position: fixed;

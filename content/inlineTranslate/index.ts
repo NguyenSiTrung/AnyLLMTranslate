@@ -15,7 +15,6 @@ import {
   getElementText,
   isCaretAtEnd,
   isCodeEditor,
-  isEditableElement,
   isPasswordField,
   resolveEditableHost,
 } from './editable';
@@ -24,15 +23,13 @@ import {
   isCurrentPageBlocked,
   resolveBlocklistPatterns,
 } from './blocklist';
-import { removeToast, PULSING_CLASS, TOAST_CLASS, getActiveToast } from './feedback';
-import { replaceElementText } from './writeback';
+import { removeToast, getActiveToast } from './feedback';
+import { isSyntheticInlineEvent, replaceElementText } from './writeback';
 import {
   cancelActiveRequest,
   isInlineTranslating,
   onUserInputDuringTranslate,
   runInlineTranslate,
-  tryFallbackUndo,
-  undoMap,
 } from './orchestrate';
 import {
   DEFAULT_RUNTIME_CONFIG,
@@ -122,16 +119,35 @@ function ensureGesture(): GestureController {
           const host = resolveEditableHost(el) ?? el;
           return getElementText(host);
         },
+        // Shadow DOM: event.target is retargeted to the host, so resolve the
+        // deepest node to find composers inside web components.
+        resolveTarget: resolveEventTarget,
       },
     );
   }
   return gesture;
 }
 
+/**
+ * Resolve the deepest event target, crossing shadow boundaries.
+ *
+ * `event.target` is retargeted to the shadow *host* for events that cross a
+ * shadow root, which made composers inside web components look non-editable.
+ */
+export function resolveEventTarget(event: Event): Element | null {
+  try {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : null;
+    const first = path && path.length > 0 ? path[0] : event.target;
+    return first instanceof Element ? first : null;
+  } catch {
+    return event.target instanceof Element ? event.target : null;
+  }
+}
+
 function onKeyDown(event: KeyboardEvent): void {
   // Cancel-on-type: any non-trigger key while translating
   if (isInlineTranslating() && !isTriggerKey(event, config.triggerKey)) {
-    onUserInputDuringTranslate(event.target as Element);
+    onUserInputDuringTranslate(resolveEventTarget(event), event);
   }
   ensureGesture().onKeyDown(event);
 }
@@ -145,11 +161,26 @@ function onCompositionEnd(event: Event): void {
 }
 
 function onInput(event: Event): void {
-  // Ignore synthetic events from our own write-back (isWritingBack guard inside)
+  // Our own write-back events must not cancel the request they belong to.
+  if (isSyntheticInlineEvent(event)) return;
   if (isInlineTranslating()) {
-    onUserInputDuringTranslate(event.target as Element);
+    onUserInputDuringTranslate(resolveEventTarget(event), event);
   }
   ensureGesture().onInput(event);
+}
+
+/**
+ * Cancel when focus moves off the field we are translating — writing later
+ * would either land in a stale field or drag focus back from where the user
+ * moved on to.
+ */
+function onFocusIn(event: Event): void {
+  if (!isInlineTranslating()) return;
+  const target = resolveEventTarget(event);
+  const active = getDeepActiveElement(document, true);
+  if (!active || target == null) return;
+  if (target === active || active.contains(target)) return;
+  cancelActiveRequest('focus-lost');
 }
 
 /** Update the inline translate configuration at runtime */
@@ -212,21 +243,24 @@ export async function translateFocusedInput(): Promise<void> {
 
 /** Initialize the inline translate feature. Returns a cleanup function. */
 export function initInlineTranslate(): () => void {
+  const detach = (): void => {
+    if (!listenersAttached) return;
+    window.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('compositionstart', onCompositionStart, true);
+    document.removeEventListener('compositionend', onCompositionEnd, true);
+    document.removeEventListener('input', onInput, true);
+    document.removeEventListener('focusin', onFocusIn, true);
+    gesture?.dispose();
+    gesture = null;
+    removeToast();
+    cancelActiveRequest('cleanup');
+    listenersAttached = false;
+  };
+
   if (listenersAttached) {
     // Already live — return a real cleanup so callers can still tear down.
-    return () => {
-      if (!listenersAttached) return;
-      window.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('compositionstart', onCompositionStart, true);
-      document.removeEventListener('compositionend', onCompositionEnd, true);
-      document.removeEventListener('input', onInput, true);
-      gesture?.dispose();
-      gesture = null;
-      removeToast();
-      cancelActiveRequest('cleanup');
-      listenersAttached = false;
-    };
+    return detach;
   }
   ensureGesture();
 
@@ -237,23 +271,12 @@ export function initInlineTranslate(): () => void {
   document.addEventListener('compositionstart', onCompositionStart, true);
   document.addEventListener('compositionend', onCompositionEnd, true);
   document.addEventListener('input', onInput, true);
+  document.addEventListener('focusin', onFocusIn, true);
   listenersAttached = true;
 
   console.log('[AnyLLMTranslate:inline] Initialized — config:', { ...config });
 
-  return () => {
-    if (!listenersAttached) return;
-    window.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('compositionstart', onCompositionStart, true);
-    document.removeEventListener('compositionend', onCompositionEnd, true);
-    document.removeEventListener('input', onInput, true);
-    gesture?.dispose();
-    gesture = null;
-    removeToast();
-    cancelActiveRequest('cleanup');
-    listenersAttached = false;
-  };
+  return detach;
 }
 
 // Re-exports for tests and content script
@@ -265,12 +288,18 @@ export {
   isCaretAtEnd,
   isPasswordField,
   resolveEditableHost,
-};
+} from './editable';
+export {
+  isFrameworkOwnedEditor,
+  isFocusedWithin,
+  readContentEditableText,
+  isPlaceholderNode,
+} from './editable';
 export { replaceElementText };
-export { undoMap, isInlineTranslating, tryFallbackUndo, cancelActiveRequest };
-export { PULSING_CLASS, TOAST_CLASS, removeToast, getActiveToast };
+export { undoMap, isInlineTranslating, tryFallbackUndo, cancelActiveRequest, lastWrittenMap } from './orchestrate';
+export { PULSING_CLASS, TOAST_CLASS, COPY_PANEL_CLASS, removeToast, getActiveToast, showCopyPanel, removeCopyPanel } from './feedback';
 export { isUrlBlocked, isCurrentPageBlocked, resolveBlocklistPatterns } from './blocklist';
-export { joinDualMode, writeElementText, writeElementTextAsync } from './writeback';
+export { joinDualMode, writeElementText, writeElementTextAsync, verifyWrite, isSyntheticInlineEvent } from './writeback';
 export { createGestureController, isTriggerKey, isTriggerInsertData } from './gesture';
 export { parseLanguagePrefix } from '@/lib/inlineTranslatePrefix';
 

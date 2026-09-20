@@ -1,3 +1,5 @@
+import { isValidLanguageCode } from './languages';
+
 /**
  * Language-prefix parsing for inline input translation.
  * Leading tokens like `/en` or `/中文` override the target language for one request.
@@ -134,8 +136,9 @@ export function parseLanguagePrefix(
   const resolved =
     aliases[token] ??
     aliases[token.toLowerCase()] ??
-    // bare ISO codes not in table (2–3 letters)
-    (/^[a-z]{2,3}(-[a-zA-Z]{2,4})?$/i.test(token) ? normalizeBareCode(token) : undefined);
+    // bare ISO codes not in the alias table (2–3 letters), validated against
+    // the supported language list so `/lol that is funny` keeps its text
+    resolveBareLanguageCode(token);
 
   if (!resolved) {
     return { body: text };
@@ -157,4 +160,18 @@ function normalizeBareCode(token: string): string {
   const parts = token.split('-');
   if (parts.length === 1) return parts[0].toLowerCase();
   return `${parts[0].toLowerCase()}-${parts[1]}`;
+}
+
+/**
+ * Resolve a bare code only when it names a language the extension supports.
+ *
+ * The old shape matched any 2–3 letter token, so `/lol that is funny` was read
+ * as a language prefix and silently ate the text.
+ */
+function resolveBareLanguageCode(token: string): string | undefined {
+  if (!/^[a-z]{2,3}(-[a-zA-Z]{2,4})?$/i.test(token)) return undefined;
+  const code = normalizeBareCode(token);
+  // 'auto' is a source-detection marker, never a valid target.
+  if (code === 'auto') return undefined;
+  return isValidLanguageCode(code) ? code : undefined;
 }

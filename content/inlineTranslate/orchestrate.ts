@@ -1,5 +1,8 @@
 /**
  * Race-safe orchestration: snapshot → translate → verify → write-back.
+ *
+ * The draft is never mutated before the translation arrives: a failed request
+ * or a refused write must leave exactly what the user typed.
  */
 
 import { loadSettings } from '@/lib/config';
@@ -9,6 +12,8 @@ import {
   getElementText,
   isEditableElement,
   isCodeEditor,
+  isFocusedWithin,
+  isFrameworkOwnedEditor,
   isPasswordField,
   isStillWritable,
 } from './editable';
@@ -16,18 +21,32 @@ import {
   addPulsingBorder,
   clearFeedback,
   removePulsingBorder,
+  removeToast,
   scheduleToastDismiss,
+  showCopyPanel,
   showToast,
 } from './feedback';
-import { joinDualMode, writeElementText, writeElementTextAsync } from './writeback';
+import {
+  isSyntheticInlineEvent,
+  joinDualMode,
+  verifyWrite,
+  writeElementText,
+  writeElementTextAsync,
+} from './writeback';
 import type { WriteBackResult } from './writeback';
 import type { InlineTranslateRuntimeConfig } from './types';
+
+/** A stalled request must not leave the field stuck in "Translating…". */
+export const INLINE_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Fallback undo only applies while the translation is still recent. */
+export const UNDO_WINDOW_MS = 5 * 60 * 1000;
 
 /** Async helper for CE framework sync (ChatGPT etc.) with fallback to sync */
 async function writeSafeAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
   isWritingBack = true;
   try {
-    // Prefer async path for contentEditable to allow Lexical/ProseMirror to reconcile via events
+    // Prefer async path for contentEditable to allow editors to reconcile via events
     if (el.isContentEditable || el.contentEditable === 'true') {
       return await writeElementTextAsync(el, text);
     }
@@ -37,7 +56,32 @@ async function writeSafeAsync(el: HTMLElement, text: string): Promise<WriteBackR
   }
 }
 
-
+/**
+ * Await a background response with a timeout so a lost message cannot leave the
+ * feature in a permanent "Translating…" state.
+ */
+function sendTranslateRequest(message: unknown, timeoutMs = INLINE_REQUEST_TIMEOUT_MS): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`inline translate request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    try {
+      Promise.resolve(chrome.runtime.sendMessage(message)).then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    } catch (error) {
+      clearTimeout(timer);
+      reject(error);
+    }
+  });
+}
 
 export interface OrchestrateOptions {
   /** Skip stripping trailing trigger characters (e.g. Alt+I path) */
@@ -46,15 +90,26 @@ export interface OrchestrateOptions {
   element?: HTMLElement | null;
 }
 
-/** Fallback undo: element → original text before last successful/attempted translation */
-export const undoMap = new WeakMap<Element, string>();
+/** Original draft per element, captured before the first successful write. */
+export interface UndoEntry {
+  text: string;
+  /** Original markup for contentEditable fields (null for input/textarea). */
+  html: string | null;
+}
+
+/** Fallback undo: element → original draft before the last translation */
+export const undoMap = new WeakMap<Element, UndoEntry>();
 
 /**
- * Last successful write-back text per element. Fallback undo only runs when the
- * field still holds this value (user has not edited). If they typed/deleted,
- * re-trigger translates the new content instead of restoring the original.
+ * Last successful write-back per element. Fallback undo only runs when the
+ * field still holds this value *and* the write happened recently. If the user
+ * typed/deleted, re-trigger translates the new content instead of restoring the
+ * original.
  */
-export const lastWrittenMap = new WeakMap<Element, string>();
+export const lastWrittenMap = new WeakMap<Element, { text: string; at: number }>();
+
+/** Elements already watched for draft edits (listener attached once). */
+const undoWatchAttached = new WeakSet<Element>();
 
 let isTranslating = false;
 /** True while our own write-back dispatches synthetic input/change events */
@@ -74,6 +129,24 @@ export function isInlineWritingBack(): boolean {
   return isWritingBack;
 }
 
+/**
+ * Any real edit to the field invalidates the fallback-undo state: the draft is
+ * no longer the translation we wrote, so restoring the old original would
+ * destroy what the user just typed.
+ */
+function attachUndoInvalidation(el: HTMLElement): void {
+  if (undoWatchAttached.has(el)) return;
+  undoWatchAttached.add(el);
+  el.addEventListener(
+    'input',
+    (event) => {
+      if (isSyntheticInlineEvent(event)) return;
+      clearInlineTranslateState(el);
+    },
+    true,
+  );
+}
+
 /** Cancel in-flight request (user typed / focus left) */
 export function cancelActiveRequest(reason = 'cancelled'): void {
   if (!isTranslating) return;
@@ -91,16 +164,6 @@ export function cancelActiveRequest(reason = 'cancelled'): void {
   activeElement = null;
 }
 
-function writeSafe(el: HTMLElement, text: string): WriteBackResult {
-  isWritingBack = true;
-  try {
-    return writeElementText(el, text);
-  } finally {
-    isWritingBack = false;
-  }
-}
-
-
 function stripTrailingTrigger(text: string, key: string, count: number): string {
   let result = text;
   for (let i = 0; i < count; i++) {
@@ -112,28 +175,44 @@ function stripTrailingTrigger(text: string, key: string, count: number): string 
 }
 
 /**
- * Attempt fallback undo: restore undoMap original if present.
+ * Attempt fallback undo: restore the original draft if present.
+ *
+ * contentEditable fields are restored from the captured markup so mentions,
+ * links and emoji survive; input/textarea go through the normal write path.
  * Returns true if restored.
  */
 export function tryFallbackUndo(el: HTMLElement): boolean {
-  const original = undoMap.get(el);
-  if (original == null) return false;
-  const result = writeElementText(el, original);
-  if (result.success) {
-    undoMap.delete(el);
-    lastWrittenMap.delete(el);
-    el.removeAttribute('data-anyllm-inline-translated');
-    showToast(el, 'Restored original', 'success');
-    scheduleToastDismiss(2000);
-    return true;
+  const entry = undoMap.get(el);
+  if (!entry) return false;
+
+  const isTextControl = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+  let restored = false;
+  if (entry.html != null && !isTextControl && !isFrameworkOwnedEditor(el)) {
+    try {
+      el.innerHTML = entry.html;
+      restored = verifyWrite(el, entry.text);
+    } catch {
+      restored = false;
+    }
   }
-  return false;
+  if (!restored) {
+    restored = writeElementText(el, entry.text).success;
+  }
+  if (!restored) return false;
+
+  undoMap.delete(el);
+  lastWrittenMap.delete(el);
+  el.removeAttribute('data-anyllm-inline-translated');
+  showToast(el, 'Restored original', 'success');
+  scheduleToastDismiss(2000);
+  return true;
 }
 
 /**
  * True only when the field still contains the last successful translation
  * (ignoring trailing trigger keys from the current gesture). If the user
- * edited after translate, returns false so we re-translate instead of undo.
+ * edited after translate — or the write is old — returns false so we
+ * re-translate instead of undo.
  */
 export function shouldFallbackUndo(
   el: HTMLElement,
@@ -143,7 +222,8 @@ export function shouldFallbackUndo(
   if (!undoMap.has(el)) return false;
   const lastWritten = lastWrittenMap.get(el);
   if (lastWritten == null) return false;
-  return currentTextAfterStrip === lastWritten;
+  if (Date.now() - lastWritten.at >= UNDO_WINDOW_MS) return false;
+  return currentTextAfterStrip === lastWritten.text;
 }
 
 /** Clear translate/undo bookkeeping so the next trigger always translates. */
@@ -196,9 +276,8 @@ export async function runInlineTranslate(
     rawText = stripTrailingTrigger(rawText, config.triggerKey, config.tapCount);
   }
 
-  // Snapshot identity + text before any mutation
+  // Snapshot identity before any mutation
   const snapshotEl = targetEl;
-  const snapshotRaw = rawText;
 
   // Language prefix
   const prefixResult = parseLanguagePrefix(rawText.trimStart(), {
@@ -238,19 +317,19 @@ export async function runInlineTranslate(
     targetLanguageOverride,
   });
 
+  // Capture the draft exactly as typed — the field is not touched until the
+  // translation arrives, so a failure cannot lose the user's draft.
   const originalText = getElementText(targetEl);
-  undoMap.set(targetEl, originalText);
-
-  // Strip trailing triggers / prefix from field immediately
-  const preTranslateDisplay = options.skipStripTrailing
-    ? prefixResult.body.trim() || text
-    : text;
-  // Show body (without prefix) before request (sync — keep gesture timing fast; framework sync for final write is critical)
-  writeSafe(targetEl, preTranslateDisplay);
+  const originalHtml =
+    targetEl instanceof HTMLInputElement || targetEl instanceof HTMLTextAreaElement
+      ? null
+      : targetEl.innerHTML;
+  const wasFocused = isFocusedWithin(targetEl);
+  attachUndoInvalidation(targetEl);
 
   const reqId = ++requestSeq;
   activeRequestId = reqId;
-  activeSnapshotText = getElementText(targetEl);
+  activeSnapshotText = originalText;
   activeElement = targetEl;
   isTranslating = true;
   addPulsingBorder(targetEl);
@@ -281,12 +360,12 @@ export async function runInlineTranslate(
       targetLanguage,
     });
 
-    const response = await chrome.runtime.sendMessage({
+    const response = (await sendTranslateRequest({
       action: 'translateSelection',
       text,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage,
-    });
+    })) as { success?: boolean; translatedText?: string; error?: string } | undefined;
 
     // Abort if cancelled or identity/text changed
     if (activeRequestId !== reqId) {
@@ -301,29 +380,42 @@ export async function runInlineTranslate(
       cancelActiveRequest('user-edited-after-response');
       return;
     }
+    // The user moved to another field while we were translating: writing now
+    // (or focusing the old field to write) would yank them back.
+    if (wasFocused && !isFocusedWithin(snapshotEl)) {
+      cancelActiveRequest('focus-lost');
+      return;
+    }
+
     if (response?.success && response.translatedText) {
       let out: string = response.translatedText;
       if (config.dualMode) {
         out = joinDualMode(text, response.translatedText, snapshotEl);
       }
       const write = await writeSafeAsync(snapshotEl, out);
-      if (!write.success) {
-        await writeSafeAsync(snapshotEl, originalText);
-        showToast(snapshotEl, '⚠ Write failed', 'error');
-        console.warn('[AnyLLMTranslate:inline] write-back failed');
-      } else {
+      if (write.success) {
+        undoMap.set(snapshotEl, { text: originalText, html: originalHtml });
+        lastWrittenMap.set(snapshotEl, { text: out, at: Date.now() });
         snapshotEl.setAttribute('data-anyllm-inline-translated', '1');
-        lastWrittenMap.set(snapshotEl, out);
         showToast(snapshotEl, 'Translated ✓', 'success');
+      } else if (write.reason === 'framework-editor') {
+        // The editor owns its DOM; writing would corrupt or be reverted.
+        removeToast();
+        showCopyPanel(snapshotEl, out, {
+          message: "⚠ Can't edit this composer — copy the translation",
+        });
+        console.warn('[AnyLLMTranslate:inline] write-back refused: framework-owned editor');
+      } else {
+        removeToast();
+        showCopyPanel(snapshotEl, out, { message: '⚠ Write failed — copy the translation' });
+        console.warn('[AnyLLMTranslate:inline] write-back failed', write.reason);
       }
     } else {
-      await writeSafeAsync(snapshotEl, originalText);
       showToast(snapshotEl, '⚠ Translation failed', 'error');
       console.warn('[AnyLLMTranslate:inline] translation failed', response);
     }
   } catch (error) {
     if (activeRequestId === reqId && snapshotEl.isConnected) {
-      await writeSafeAsync(snapshotEl, originalText);
       showToast(snapshotEl, '⚠ Translation failed', 'error');
     }
     console.error('[AnyLLMTranslate:inline] translation error', error);
@@ -337,15 +429,16 @@ export async function runInlineTranslate(
       scheduleToastDismiss(2000);
     }
   }
-
-  void snapshotRaw;
 }
 
 /**
  * Notify that the user typed in the active field — cancel if translating.
+ * Our own synthetic write-back events must not cancel anything.
  */
-export function onUserInputDuringTranslate(el: Element | null): void {
-  if (!isTranslating || !activeElement || isWritingBack) return;
+export function onUserInputDuringTranslate(el: Element | null, event?: Event): void {
+  if (!isTranslating || !activeElement) return;
+  if (event && isSyntheticInlineEvent(event)) return;
+  if (isWritingBack) return;
   if (el === activeElement || (el && activeElement.contains(el))) {
     cancelActiveRequest('user-input');
   }

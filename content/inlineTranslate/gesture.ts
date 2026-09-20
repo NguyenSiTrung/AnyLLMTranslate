@@ -26,6 +26,12 @@ export interface GestureCallbacks {
   isCaretAtEnd?: (el: HTMLElement) => boolean;
   /** Optional: get field text to skip empty */
   getText?: (el: HTMLElement) => string;
+  /**
+   * Optional: deepest event target. `event.target` is retargeted to the shadow
+   * host when the event crosses a shadow boundary, which hides web-component
+   * composers from the gesture.
+   */
+  resolveTarget?: (event: Event) => Element | null;
   now?: () => number;
 }
 
@@ -159,6 +165,19 @@ export function createGestureController(
     }
   }
 
+  /** Deepest target for an event (shadow-aware when the caller provides it). */
+  function eventTarget(event: Event): Element | null {
+    if (callbacks.resolveTarget) {
+      try {
+        const resolved = callbacks.resolveTarget(event);
+        if (resolved) return resolved;
+      } catch {
+        // fall back to the (possibly retargeted) event.target
+      }
+    }
+    return event.target as Element | null;
+  }
+
   /**
    * Shared guards for keydown / input trigger paths.
    * Returns the target to count against, or null to ignore.
@@ -221,7 +240,7 @@ export function createGestureController(
       return;
     }
 
-    const target = resolveCountTarget(event.target as Element | null);
+    const target = resolveCountTarget(eventTarget(event));
     if (!target) return;
 
     // Suppress the following input insertText for this physical press.
@@ -285,7 +304,7 @@ export function createGestureController(
       process.env.VITEST === 'true';
     if (!event.isTrusted && !isTestEnv) return;
 
-    const target = resolveCountTarget(event.target as Element | null);
+    const target = resolveCountTarget(eventTarget(event));
     if (!target) return;
 
     acceptTap(target);
