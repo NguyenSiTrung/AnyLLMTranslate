@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# Orb setup for AnyLLMTranslate.
+#
+# Runs once for a fresh orb and again whenever Amp refreshes a stale snapshot,
+# so it must be non-interactive, idempotent, and quick on a warm filesystem.
+# Everything it installs (node_modules, .wxt types, the bridge venv) is part of
+# the orb snapshot, so warm runs only revalidate. Never start a foreground
+# server, watcher, or other long-lived process here: those are stopped before
+# the snapshot is taken. Declare long-lived services in .amp/services.yaml.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+bridge_dir="$repo_root/services/scientific-pdf-bridge"
+venv_dir="$bridge_dir/.venv"
+
+log() { printf '\n==> %s\n' "$*"; }
+
+timed() {
+  local label="$1" start=$SECONDS
+  shift
+  log "$label"
+  "$@"
+  printf '    done in %ss\n' "$((SECONDS - start))"
+}
+
+log "AnyLLMTranslate orb setup"
+printf '    repo:   %s\n' "$repo_root"
+printf '    node:   %s\n' "$(node --version 2>/dev/null || echo missing)"
+printf '    pnpm:   %s\n' "$(pnpm --version 2>/dev/null || echo missing)"
+printf '    python: %s\n' "$(python3 --version 2>/dev/null || echo missing)"
+
+# ---------------------------------------------------------------------------
+# Extension dependencies
+#
+# README/CONTRIBUTING document pnpm as this repo's package manager and
+# pnpm-lock.yaml is the lockfile kept in sync with package.json. A warm run
+# revalidates node_modules against the lockfile in ~50ms, so no dependency
+# fingerprint or cache marker is needed: the install itself is the cheap check.
+# ---------------------------------------------------------------------------
+if ! command -v pnpm >/dev/null 2>&1; then
+  log "pnpm is missing; enabling it through corepack"
+  corepack enable pnpm
+fi
+
+timed "Installing extension dependencies (pnpm install --frozen-lockfile)" \
+  pnpm install --frozen-lockfile
+# pnpm skips package.json's `postinstall` when the lockfile is already satisfied,
+# so generate the WXT types explicitly. The root tsconfig extends
+# .wxt/tsconfig.json, and a refreshed snapshot can otherwise carry types that
+# were generated from an older wxt.config.ts.
+timed "Generating WXT types (wxt prepare)" pnpm exec wxt prepare
+
+# ---------------------------------------------------------------------------
+# Scientific PDF bridge (services/scientific-pdf-bridge)
+#
+# A Python service normally run through Docker, but orbs have no Docker daemon,
+# so this venv is how its API and tests run here. pdf2zh itself is deliberately
+# NOT installed: it is a large dependency tree plus model downloads, and the
+# bridge test suite runs with MOCK_TRANSLATE=1. Real pdf2zh translation needs
+# the Docker image (or a manual install on a machine with a Docker daemon).
+# ---------------------------------------------------------------------------
+if [ ! -x "$venv_dir/bin/python" ]; then
+  log "Creating the bridge virtualenv"
+  bridge_python="$(command -v python3.11 || command -v python3 || true)"
+  if [ -z "$bridge_python" ]; then
+    printf 'ERROR: no python3 interpreter found for the bridge venv\n' >&2
+    exit 1
+  fi
+  if command -v uv >/dev/null 2>&1; then
+    uv venv --python "$bridge_python" "$venv_dir"
+  else
+    "$bridge_python" -m venv "$venv_dir"
+  fi
+fi
+
+if command -v uv >/dev/null 2>&1; then
+  timed "Installing bridge dependencies (requirements.txt + requirements-dev.txt)" \
+    uv pip install --python "$venv_dir/bin/python" \
+      -r "$bridge_dir/requirements.txt" -r "$bridge_dir/requirements-dev.txt"
+else
+  timed "Installing bridge dependencies (requirements.txt + requirements-dev.txt)" \
+    "$venv_dir/bin/python" -m pip install --disable-pip-version-check --quiet \
+      -r "$bridge_dir/requirements.txt" -r "$bridge_dir/requirements-dev.txt"
+fi
+
+# ---------------------------------------------------------------------------
+# bd (beads) task tracker
+#
+# AGENTS.md makes bd the task tracker for this repo and the orb base image does
+# not ship it, so install it the way .beads/README.md documents. The local Dolt
+# database is intentionally left alone: `bd prime` hydrates it from the current
+# .beads/issues.jsonl, and a pre-warmed database would silently shadow a newer
+# export. Best-effort only: this must not block the snapshot that carries the
+# extension toolchain.
+# ---------------------------------------------------------------------------
+if ! command -v bd >/dev/null 2>&1; then
+  log "Installing bd (beads)"
+  if ! curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash; then
+    printf 'WARNING: bd install failed; beads task tracking is unavailable in this orb.\n' >&2
+  fi
+fi
+
+if command -v bd >/dev/null 2>&1; then
+  # bd warns on every command while .beads is group/world readable.
+  chmod 700 .beads 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# Verify what agents depend on, so a broken snapshot fails here instead of in
+# the middle of the first task.
+# ---------------------------------------------------------------------------
+log "Verifying toolchain"
+for tool in node_modules/.bin/wxt node_modules/.bin/vitest node_modules/.bin/tsc "$venv_dir/bin/python"; do
+  if [ ! -x "$tool" ]; then
+    printf 'ERROR: expected executable missing: %s\n' "$tool" >&2
+    exit 1
+  fi
+done
+if [ ! -f .wxt/tsconfig.json ]; then
+  printf 'ERROR: .wxt/tsconfig.json missing; wxt prepare did not run\n' >&2
+  exit 1
+fi
+if ! "$venv_dir/bin/python" -c 'import fastapi, pytest'; then
+  printf 'ERROR: the bridge venv is incomplete\n' >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Orb-specific agent guidance.
+#
+# Appended once (never overwritten) so the user's global instructions stay
+# intact. This is kept out of the repository on purpose: it is only true inside
+# an orb.
+# ---------------------------------------------------------------------------
+guidance="$HOME/.config/amp/AGENTS.md"
+guidance_marker="<!-- anyllmtranslate-orb-guidance -->"
+if ! grep -Fq "$guidance_marker" "$guidance" 2>/dev/null; then
+  log "Writing orb guidance to $guidance"
+  mkdir -p "$(dirname "$guidance")"
+  cat >>"$guidance" <<'GUIDANCE'
+
+<!-- anyllmtranslate-orb-guidance -->
+## AnyLLMTranslate orb environment (written by .agents/setup)
+
+- Dependencies are already installed; do not reinstall them. `node_modules/`, the
+  generated `.wxt/` types, and `services/scientific-pdf-bridge/.venv` are part of the orb
+  snapshot, and `pnpm install --frozen-lockfile` is a ~50ms no-op on a warm snapshot.
+- Node.js and pnpm come from the orb base image and satisfy `engines.node >= 20.12.0`.
+  `.nvmrc` pins 22 but nothing enforces it, and the full test suite passes as-is.
+- Reliable gates: `pnpm test` (full Vitest suite, ~40s), `pnpm test:fast`, `pnpm compile`
+  (`tsc --noEmit`). `pnpm lint` currently reports ~45 pre-existing errors on `master`
+  (mostly `@typescript-eslint/no-explicit-any`), so treat it as advisory and fix only
+  what your change touches.
+- Scientific PDF bridge: orbs have no Docker daemon, so the compose path in
+  `docs/scientific-pdf-setup.md` cannot run here. Use the prebuilt venv instead:
+  - tests: `services/scientific-pdf-bridge/.venv/bin/python -m pytest -q`
+  - API in mock mode: `cd services/scientific-pdf-bridge && MOCK_TRANSLATE=1 .venv/bin/python -m uvicorn app.main:app --port 17890`
+  Real pdf2zh translation is not installed (too heavy for a snapshot).
+- `bd` (beads) is installed. Run `bd prime` first: it hydrates the local Dolt database
+  from `.beads/issues.jsonl`. The repository's Git Policy still applies, so run
+  `bd dolt push` only when the user asks for it.
+GUIDANCE
+fi
+
+log "Setup complete in ${SECONDS}s"
+printf '    Node deps:   node_modules/ from pnpm-lock.yaml\n'
+printf '    WXT types:   .wxt/\n'
+printf '    Bridge venv: %s\n' "${venv_dir#"$repo_root"/}"
+printf '    Beads:       %s\n' "$(command -v bd || echo 'not installed')"

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Orb resume for AnyLLMTranslate.
+#
+# Amp runs this after initial activation and every time a paused orb wakes, and
+# waits at most 10 seconds for it. Keep it to fast, idempotent local repair:
+# no installs, no network, no long-lived processes. Dependency installation
+# belongs in .agents/setup, which also regenerates .wxt/ after a snapshot refresh.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+# .wxt/ holds generated WXT types plus the tsconfig that `pnpm compile` and
+# editors read through the root tsconfig. A checkout that never ran setup has
+# none, and regenerating it needs no network and no install.
+if [ ! -f .wxt/tsconfig.json ] && [ -x node_modules/.bin/wxt ]; then
+  node_modules/.bin/wxt prepare >/dev/null 2>&1 ||
+    printf 'warning: "wxt prepare" failed; run it manually if type errors appear\n' >&2
+fi
+
+# Nothing in this repo needs authentication or a service connection at wake-up.
+# Report anything resume must not repair by installing, instead of failing
+# silently or spending the wake-up window on it.
+missing=""
+[ -d node_modules ] || missing="$missing node_modules/"
+[ -f .wxt/tsconfig.json ] || missing="$missing .wxt/"
+[ -x services/scientific-pdf-bridge/.venv/bin/python ] || missing="$missing services/scientific-pdf-bridge/.venv/"
+if [ -n "$missing" ]; then
+  printf 'warning: orb snapshot is missing%s; run .agents/setup before working\n' "$missing" >&2
+fi

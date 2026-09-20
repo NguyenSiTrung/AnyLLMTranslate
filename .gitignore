@@ -54,3 +54,6 @@ ImmersiveTransalteExtensionCode/
 
 # Smoke test files flagged by AV
 **/tests/test_smoke.py
+
+# Amp orb runtime state (portal registrations, service state)
+.amp/portals/*
