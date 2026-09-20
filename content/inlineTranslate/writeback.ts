@@ -394,9 +394,6 @@ export function writeElementText(el: HTMLElement, text: string): WriteBackResult
  * reverts a manual mutation.
  */
 export async function writeElementTextAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
-  if (isVitestEnv()) {
-    return writeElementText(el, text);
-  }
   if (isFrameworkOwnedEditor(el)) {
     return { success: false, reason: 'framework-editor' };
   }
