@@ -20,6 +20,7 @@ import {
 import {
   addPulsingBorder,
   clearFeedback,
+  removeCopyPanel,
   removePulsingBorder,
   removeToast,
   scheduleToastDismiss,
@@ -333,6 +334,8 @@ export async function runInlineTranslate(
   activeElement = targetEl;
   isTranslating = true;
   addPulsingBorder(targetEl);
+  // A fresh run supersedes any stale copy panel still floating near the field.
+  removeCopyPanel();
   showToast(targetEl, 'Translating...', 'loading');
 
   try {
@@ -399,15 +402,18 @@ export async function runInlineTranslate(
         snapshotEl.setAttribute('data-anyllm-inline-translated', '1');
         showToast(snapshotEl, 'Translated ✓', 'success');
       } else if (write.reason === 'framework-editor') {
-        // The editor owns its DOM; writing would corrupt or be reverted.
+        // The editor owns its DOM and exposes no usable API; writing would
+        // corrupt or be reverted — hand the translation over for a real paste.
         removeToast();
         showCopyPanel(snapshotEl, out, {
-          message: "⚠ Can't edit this composer — copy the translation",
+          message: "Can't edit this composer directly",
         });
         console.warn('[AnyLLMTranslate:inline] write-back refused: framework-owned editor');
       } else {
         removeToast();
-        showCopyPanel(snapshotEl, out, { message: '⚠ Write failed — copy the translation' });
+        showCopyPanel(snapshotEl, out, {
+          message: "Couldn't write the translation into this field",
+        });
         console.warn('[AnyLLMTranslate:inline] write-back failed', write.reason);
       }
     } else {

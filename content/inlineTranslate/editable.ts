@@ -12,6 +12,12 @@ const EDITABLE_INPUT_TYPES = new Set(['text', 'search', 'url', 'email', 'tel']);
 export function isEditableElement(el: Element | null): el is HTMLElement {
   if (!el || !(el instanceof HTMLElement)) return false;
 
+  // Our own interactive UI (copy-panel textarea, scratch fields) must never
+  // become a translate target — typing there feeds the gesture detector.
+  // (data-anyllm-role is NOT usable here: page translation stamps it on
+  // original/translated content nodes.)
+  if (el.closest('[data-anyllm-ui]')) return false;
+
   // contentEditable (property + attribute for jsdom)
   if (el.isContentEditable || el.contentEditable === 'true') {
     // contentEditable with aria-readonly

@@ -860,15 +860,15 @@ html:not([data-anyllm-state]) .anyllm-inline-bilingual {
   all: initial;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   position: fixed;
-  min-width: 200px;
-  max-width: 320px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: #1e293b;
   border: 1px solid #334155;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 12px;
   line-height: 1.4;
@@ -877,50 +877,86 @@ html:not([data-anyllm-state]) .anyllm-inline-bilingual {
   z-index: 2147483647;
 }
 
+.anyllm-inline-copy-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.anyllm-inline-copy-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+
 .anyllm-inline-copy-panel__message {
-  padding-right: 16px;
   color: #fca5a5;
   font-size: 11px;
 }
 
 .anyllm-inline-copy-panel__text {
-  max-height: 120px;
+  all: unset;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 140px;
   overflow: auto;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #334155;
   background: #0f172a;
   color: #f1f5f9;
-  white-space: pre-wrap;
-  word-break: break-word;
-  user-select: text;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.anyllm-inline-copy-panel__text:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.anyllm-inline-copy-panel__actions {
+  display: flex;
+  gap: 6px;
 }
 
 .anyllm-inline-copy-panel__copy,
 .anyllm-inline-copy-panel__close {
   all: unset;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   text-align: center;
   font-family: inherit;
-  font-size: 11px;
 }
 
 .anyllm-inline-copy-panel__copy {
-  padding: 4px 8px;
+  flex: 1;
+  padding: 6px 10px;
   background: #2563eb;
   color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .anyllm-inline-copy-panel__copy:hover {
   background: #1d4ed8;
 }
 
+.anyllm-inline-copy-panel__hint {
+  color: #94a3b8;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
 .anyllm-inline-copy-panel__close {
-  position: absolute;
-  top: 4px;
-  right: 6px;
   padding: 0 4px;
   color: #94a3b8;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .anyllm-inline-copy-panel__close:hover {

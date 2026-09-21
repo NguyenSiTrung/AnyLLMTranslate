@@ -15,7 +15,8 @@ export type WriteStrategyName =
   | 'execCommand-html'
   | 'ce-event-only'
   | 'insertText-events'
-  | 'direct-assign';
+  | 'direct-assign'
+  | 'framework-api';
 
 export type WriteFailureReason = 'framework-editor' | 'partial-change' | 'verify-failed';
 
@@ -181,6 +182,26 @@ function dispatchInputOnly(el: HTMLElement, data: string): void {
   dispatchInlineEvent(el, new Event('change', { bubbles: true }));
 }
 
+/** Shared select-all mechanics; focus policy is the caller's job. */
+function selectContents(el: HTMLElement): void {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    el.select();
+    try {
+      el.setSelectionRange(0, el.value.length);
+    } catch {
+      // Some input types (e.g. email/number in some browsers) throw on setSelectionRange
+    }
+    return;
+  }
+  const sel = el.ownerDocument?.defaultView?.getSelection() ?? window.getSelection();
+  if (sel) {
+    const range = (el.ownerDocument ?? document).createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
 /**
  * Select the whole field *without stealing focus*.
  * Returns false when the field is not focused — selection-based strategies
@@ -190,23 +211,27 @@ function dispatchInputOnly(el: HTMLElement, data: string): void {
 function selectAll(el: HTMLElement): boolean {
   if (!isFocusedWithin(el)) return false;
   el.focus();
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    el.select();
-    try {
-      el.setSelectionRange(0, el.value.length);
-    } catch {
-      // Some input types (e.g. email/number in some browsers) throw on setSelectionRange
-    }
-    return true;
-  }
-  const sel = el.ownerDocument?.defaultView?.getSelection() ?? window.getSelection();
-  if (sel) {
-    const range = (el.ownerDocument ?? document).createRange();
-    range.selectNodeContents(el);
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
+  selectContents(el);
   return true;
+}
+
+/**
+ * Focus the field and select its whole contents.
+ *
+ * Used by the copy panel's "copy & select" flow: the draft is selected so a
+ * real user paste (Ctrl+V/⌘V) replaces it through the editor's own pipeline —
+ * the one write path that works on every framework composer. The click is
+ * user-initiated, so taking focus is intended here.
+ */
+export function focusAndSelectContents(el: HTMLElement): boolean {
+  if (!el.isConnected) return false;
+  try {
+    el.focus();
+    selectContents(el);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function collapseSelectionAtEnd(el: HTMLElement): void {
@@ -323,6 +348,78 @@ function strategyDirectAssign(el: HTMLElement, text: string): boolean {
   return true;
 }
 
+interface QuillLike {
+  setText(text: string): unknown;
+  getText(index?: number, length?: number): string;
+  getLength?(): number;
+  setSelection?(index: number, length?: number): unknown;
+}
+
+/**
+ * Quill keeps its editor instance on the `.ql-container` element as `__quill`
+ * (the same lookup `Quill.find` performs). Walk ancestors so custom wrappers
+ * around the container still resolve.
+ */
+function findQuillInstance(el: HTMLElement): QuillLike | null {
+  if (!el.classList.contains('ql-editor')) return null;
+  let node: HTMLElement | null = el;
+  for (let depth = 0; node && depth < 8; depth += 1) {
+    const candidate = (node as HTMLElement & { __quill?: unknown }).__quill;
+    if (
+      candidate != null &&
+      typeof candidate === 'object' &&
+      typeof (candidate as QuillLike).setText === 'function' &&
+      typeof (candidate as QuillLike).getText === 'function'
+    ) {
+      return candidate as QuillLike;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Write through a framework editor's own API — currently Quill (`setText`
+ * goes through Quill's model, so DOM and internal state stay in sync and the
+ * change lands in the editor's undo history, unlike DOM-level writes which
+ * Quill's mutation reconciliation can mangle).
+ *
+ * Refusal result when no usable API is exposed or the write does not verify —
+ * callers then fall back to the copy panel exactly as before.
+ */
+function frameworkApiWrite(el: HTMLElement, text: string): WriteBackResult {
+  const quill = findQuillInstance(el);
+  if (!quill) return { success: false, reason: 'framework-editor' };
+
+  try {
+    quill.setText(text);
+    // Caret to the end so the next keystroke lands after the translation.
+    if (typeof quill.getLength === 'function' && typeof quill.setSelection === 'function') {
+      try {
+        quill.setSelection(Math.max(0, quill.getLength() - 1), 0);
+      } catch {
+        // Selection is a nicety — never fail the write over it.
+      }
+    }
+  } catch {
+    return { success: false, reason: 'framework-editor' };
+  }
+
+  // Prefer the editor's own model for verification (exact for interior blank
+  // lines our DOM reader collapses); fall back to the DOM read.
+  const modelMatches = (() => {
+    try {
+      return quill.getText().replace(/\n+$/, '') === text;
+    } catch {
+      return false;
+    }
+  })();
+  if (modelMatches || verifyWrite(el, text)) {
+    return { success: true, strategy: 'framework-api', writtenText: text };
+  }
+  return { success: false, reason: 'framework-editor' };
+}
+
 /**
  * Verify a write with an exact text comparison.
  *
@@ -348,7 +445,7 @@ function isTextControl(el: HTMLElement): el is HTMLInputElement | HTMLTextAreaEl
  * stacking another strategy on a half-applied edit is what corrupted drafts.
  */
 export function writeElementText(el: HTMLElement, text: string): WriteBackResult {
-  if (isFrameworkOwnedEditor(el)) return { success: false, reason: 'framework-editor' };
+  if (isFrameworkOwnedEditor(el)) return frameworkApiWrite(el, text);
 
   const before = getElementText(el);
   const strategies: Array<{ name: WriteStrategyName; run: () => boolean }> = isTextControl(el)
@@ -395,7 +492,7 @@ export function writeElementText(el: HTMLElement, text: string): WriteBackResult
  */
 export async function writeElementTextAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
   if (isFrameworkOwnedEditor(el)) {
-    return { success: false, reason: 'framework-editor' };
+    return frameworkApiWrite(el, text);
   }
 
   const before = getElementText(el);
