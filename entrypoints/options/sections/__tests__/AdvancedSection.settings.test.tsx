@@ -93,40 +93,10 @@ describe('AdvancedSection settings', () => {
     expect(prompt).toHaveValue(DEFAULT_SYSTEM_PROMPT_TEMPLATE);
   });
 
-  it('persists translation behavior toggles through their existing keys', () => {
-    const { updateSettings } = renderAdvanced();
-    fireEvent.click(
-      screen.getByRole('switch', { name: /streaming translation/i }),
-    );
-    expect(updateSettings).toHaveBeenCalledWith({
-      enableStreamingTranslation: false,
-    });
-    fireEvent.click(
-      screen.getByRole('switch', { name: /source-language detection/i }),
-    );
-    expect(updateSettings).toHaveBeenCalledWith({
-      enableSourceLanguageDetection: false,
-    });
-  });
-
-  it('disables category controls until context awareness is enabled', () => {
-    renderAdvanced({ enableContextAwareTranslation: false });
-    expect(
-      screen.getByRole('switch', { name: /page category detection/i }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByLabelText(/detection mode/i),
-    ).not.toBeInTheDocument();
-  });
-
-  it('does not persist an invalid cache lifetime', () => {
-    const { updateSettings } = renderAdvanced();
-    const ttl = screen.getByLabelText(/cache lifetime/i);
-    fireEvent.change(ttl, { target: { value: '0' } });
-    fireEvent.blur(ttl);
-    expect(screen.getByText(/between 1 and 365 days/i)).toBeInTheDocument();
-    expect(updateSettings).not.toHaveBeenCalledWith({ cacheTTLDays: 0 });
-  });
+  // Behavior toggles, context-gating, and invalid cache-lifetime validation are
+  // covered by the extracted card tests:
+  // advanced/__tests__/advancedCards.test.tsx and
+  // advanced/__tests__/PerformanceCard.test.tsx.
 
   it('confirms cache clearing and keeps configuration', () => {
     renderAdvanced();

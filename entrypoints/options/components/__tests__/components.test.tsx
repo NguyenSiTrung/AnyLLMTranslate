@@ -7,21 +7,19 @@ import { ProviderKeyRow } from '../ProviderKeyRow';
 import type { PoolKey, PoolProvider } from '@/types/config';
 import type { KeyChipView } from '@/lib/poolDashboardStatus';
 
-describe('KeyCapSequence', () => {
-  it('renders nothing for empty shortcut and chips for chords', () => {
+// @vitest-environment jsdom
+
+describe('KeyCapSequence / ProviderCatalogRows', () => {
+  it('renders key-cap chips for chords, and filters provider catalog rows / calls onSelect', () => {
+    // facet: renders nothing for empty shortcut and chips for chords
     const { container, rerender } = render(<KeyCapSequence shortcut="" />);
     expect(container).toBeEmptyDOMElement();
     rerender(<KeyCapSequence shortcut="Alt+A" />);
     expect(screen.getByLabelText('Shortcut Alt+A')).toBeInTheDocument();
     expect(screen.getByText('Alt')).toBeInTheDocument();
     expect(screen.getByText('A')).toBeInTheDocument();
-  });
-});
 
-// @vitest-environment jsdom
-
-describe('ProviderCatalogRows', () => {
-  it('filters to local category and calls onSelect', () => {
+    // facet: filters to local category and calls onSelect
     const onSelect = vi.fn();
     const onFilterChange = vi.fn();
     render(

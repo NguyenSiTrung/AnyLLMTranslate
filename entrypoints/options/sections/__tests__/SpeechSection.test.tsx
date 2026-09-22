@@ -5,7 +5,7 @@
  * updated for the progressive quick-setup → disclosure → drawer UX.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { DEFAULT_SETTINGS, type ExtensionSettings, type PoolProvider } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { ToastProvider } from '@/ui/ToastProvider';
@@ -55,7 +55,8 @@ describe('SpeechSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders a first-class enable panel and persists the master switch', () => {
+  it('renders the enable panel and persists the master switch, and disables dependent controls while off', () => {
+    // facet: renders a first-class enable panel and persists the master switch
     const updateSettings = renderSpeechSection();
     expect(screen.getByRole('heading', { name: 'Speech' })).toBeInTheDocument();
     expect(screen.getAllByRole('switch', { name: /enable speak/i })).toHaveLength(1);
@@ -63,10 +64,10 @@ describe('SpeechSection', () => {
     expect(updateSettings).toHaveBeenCalledWith({
       tts: expect.objectContaining({ enabled: false }),
     });
-  });
+    cleanup();
 
-  it('natively disables dependent controls while Speak is off', () => {
-    const updateSettings = renderSpeechSection({
+    // facet: natively disables dependent controls while Speak is off
+    const updateSettingsOff = renderSpeechSection({
       tts: { ...DEFAULT_SETTINGS.tts, enabled: false },
     });
 
@@ -77,12 +78,13 @@ describe('SpeechSection', () => {
     expect(screen.getByRole('button', { name: /test voice/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('switch', { name: /enable speak/i }));
-    expect(updateSettings).toHaveBeenCalledWith({
+    expect(updateSettingsOff).toHaveBeenCalledWith({
       tts: expect.objectContaining({ enabled: true }),
     });
   });
 
-  it('shows quick setup before provider details and labels backends for users', () => {
+  it('shows quick setup before provider details, and hides provider setup for browser-only speech', () => {
+    // facet: shows quick setup before provider details and labels backends for users
     renderSpeechSection();
     const backend = screen.getByRole('radiogroup', { name: /speech source/i });
     expect(backend).toHaveTextContent('Automatic');
@@ -90,15 +92,15 @@ describe('SpeechSection', () => {
     expect(backend).toHaveTextContent('AI voice');
     expect(screen.getByRole('button', { name: /advanced provider settings/i }))
       .toHaveAttribute('aria-expanded', 'false');
-  });
+    cleanup();
 
-  it('hides provider setup for browser-only speech', () => {
+    // facet: hides provider setup for browser-only speech
     renderSpeechSection({
       tts: { ...DEFAULT_SETTINGS.tts, preferredBackend: 'browser' },
     });
 
-    const backend = screen.getByRole('radiogroup', { name: /speech source/i });
-    expect(within(backend).getByRole('radio', { name: /browser voice/i }))
+    const browserBackend = screen.getByRole('radiogroup', { name: /speech source/i });
+    expect(within(browserBackend).getByRole('radio', { name: /browser voice/i }))
       .toHaveAttribute('aria-checked', 'true');
     expect(
       screen.queryByRole('button', { name: /advanced provider settings/i }),

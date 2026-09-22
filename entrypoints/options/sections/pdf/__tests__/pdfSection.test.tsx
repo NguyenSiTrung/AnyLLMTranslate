@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DEFAULT_PDF_SETTINGS, DEFAULT_SCIENTIFIC_PDF_SETTINGS } from '@/types/config';
 import { PdfBridgeSettings } from '../PdfBridgeSettings';
 import { PdfOpenBehavior } from '../PdfOpenBehavior';
@@ -119,7 +119,8 @@ describe('PdfOpenBehavior', () => {
  */
 
 describe('PdfSiteExceptions', () => {
-  it('adds normalized hosts and removes chips', () => {
+  it('adds normalized hosts and removes chips, and rejects invalid input inline', () => {
+    // facet: adds normalized hosts and removes chips
     const onChange = vi.fn();
     render(<PdfSiteExceptions value={['arxiv.org']} onChange={onChange} />);
 
@@ -131,18 +132,18 @@ describe('PdfSiteExceptions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /remove arxiv\.org/i }));
     expect(onChange).toHaveBeenCalledWith([]);
-  });
+    cleanup();
 
-  it('rejects invalid input inline without calling onChange', () => {
-    const onChange = vi.fn();
-    render(<PdfSiteExceptions value={[]} onChange={onChange} />);
+    // facet: rejects invalid input inline without calling onChange
+    const invalidOnChange = vi.fn();
+    render(<PdfSiteExceptions value={[]} onChange={invalidOnChange} />);
 
     fireEvent.change(screen.getByLabelText(/site to exclude/i), {
       target: { value: 'not a host' },
     });
     fireEvent.click(screen.getByRole('button', { name: /add site/i }));
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(invalidOnChange).not.toHaveBeenCalled();
     expect(screen.getByText(/valid http/i)).toBeInTheDocument();
   });
 });
@@ -166,13 +167,17 @@ function renderPanel(status: 'not_configured' | 'offline' | 'ready') {
 }
 
 describe('PdfStatusPanel', () => {
-  it.each([
-    ['not_configured', 'Not configured', 'Set up PDF translation'],
-    ['offline', 'Bridge offline', 'Check connection'],
-    ['ready', 'Ready', 'How to translate a PDF'],
-  ] as const)('renders %s state with its primary action', (status, label, action) => {
-    renderPanel(status);
-    expect(screen.getByText(label)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: action })).toBeInTheDocument();
+  it('renders each state with its primary action', () => {
+    const cases = [
+      ['not_configured', 'Not configured', 'Set up PDF translation'],
+      ['offline', 'Bridge offline', 'Check connection'],
+      ['ready', 'Ready', 'How to translate a PDF'],
+    ] as const;
+    for (const [status, label, action] of cases) {
+      cleanup();
+      renderPanel(status);
+      expect(screen.getByText(label), status).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: action }), status).toBeInTheDocument();
+    }
   });
 });

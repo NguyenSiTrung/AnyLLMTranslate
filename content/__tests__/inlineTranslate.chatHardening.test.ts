@@ -99,43 +99,49 @@ function placeCaretInTextNode(node: Node, offset: number): void {
 /* ── Task 1: reads ─────────────────────────────────────────────── */
 
 describe('chat composer reads', () => {
-  it('reads multi-paragraph drafts with newline separators', () => {
+  it('reads multi-paragraph, <br>, and div-per-line drafts as newline-separated text', () => {
+    // facet: multi-paragraph drafts
     const ce = composer('<p>Hello world</p><p>Second paragraph</p>');
     expect(getElementText(ce)).toBe('Hello world\nSecond paragraph');
-  });
 
-  it('reads <br> separated drafts with newlines', () => {
+    // facet: <br> separated drafts
     expect(getElementText(composer('Hello<br>World'))).toBe('Hello\nWorld');
-  });
 
-  it('reads div-per-line drafts (WhatsApp/Telegram shape)', () => {
+    // facet: div-per-line drafts (WhatsApp/Telegram shape)
     expect(getElementText(composer('<div>Line one</div><div>Line two</div>'))).toBe('Line one\nLine two');
   });
 
-  it('ignores placeholder text rendered inside the editable', () => {
+  it('ignores placeholder text and aria-hidden decoration', () => {
+    // facet: placeholder text rendered inside the editable
     const ce = composer(
       '<span contenteditable="false" data-slate-placeholder="true">Message #general</span><p><br></p>',
     );
     expect(getElementText(ce)).toBe('');
-  });
 
-  it('ignores aria-hidden decoration', () => {
+    // facet: aria-hidden decoration
     expect(getElementText(composer('<p>Real<span aria-hidden="true">hidden</span></p>'))).toBe('Real');
   });
 
-  it('keeps mention text and emoji alt text', () => {
+  it('keeps mention text and emoji alt text, and normalizes non-breaking spaces', () => {
+    // facet: mention text and emoji alt text
     const ce = composer('<p>Hi <span data-slate-void="true">@alice</span> <img alt="🎉" src="x"></p>');
     expect(getElementText(ce)).toBe('Hi @alice 🎉');
-  });
 
-  it('normalizes non-breaking spaces', () => {
+    // facet: non-breaking spaces
     expect(getElementText(composer('<p>Hello\u00a0world</p>'))).toBe('Hello world');
   });
 
-  it('treats a caret at the end as at-end', () => {
+  it('treats a caret at the end of a single- or multi-paragraph draft as at-end', () => {
+    // facet: caret at the end of a single paragraph
     const ce = composer('<p>Hello</p>');
     placeCaretInTextNode(ce.querySelector('p')!.firstChild!, 5);
     expect(isCaretAtEnd(ce)).toBe(true);
+
+    // facet: caret at the end of a multi-paragraph draft
+    const multi = composer('<p>First</p><p>Second</p>');
+    const last = multi.querySelectorAll('p')[1].firstChild!;
+    placeCaretInTextNode(last, 6);
+    expect(isCaretAtEnd(multi)).toBe(true);
   });
 
   it('rejects a caret in the middle of a paragraph', () => {
@@ -143,44 +149,37 @@ describe('chat composer reads', () => {
     placeCaretInTextNode(ce.querySelector('p')!.firstChild!, 5);
     expect(isCaretAtEnd(ce)).toBe(false);
   });
-
-  it('accepts a caret at the end of a multi-paragraph draft', () => {
-    const ce = composer('<p>First</p><p>Second</p>');
-    const last = ce.querySelectorAll('p')[1].firstChild!;
-    placeCaretInTextNode(last, 6);
-    expect(isCaretAtEnd(ce)).toBe(true);
-  });
 });
 
 /* ── Task 2: write safety ──────────────────────────────────────── */
 
 describe('write-back safety', () => {
-  it('detects framework-owned composers', () => {
+  it('detects framework-owned composers and refuses to write into them (sync and async)', async () => {
+    // facet: framework ownership detection
     expect(isFrameworkOwnedEditor(composer('<p>x</p>'))).toBe(false);
     const pm = composer('<p>x</p>');
     pm.classList.add('ProseMirror');
     expect(isFrameworkOwnedEditor(pm)).toBe(true);
     expect(isFrameworkOwnedEditor(composer('<p><span data-lexical-text="true">x</span></p>'))).toBe(true);
     expect(isFrameworkOwnedEditor(composer('<div data-slate-editor="true">x</div>'))).toBe(true);
-  });
 
-  it('does not write into a framework-owned composer', async () => {
-    const ce = composer('<p>Hello</p>');
-    ce.classList.add('ProseMirror');
-    const res = await writeElementTextAsync(ce, 'Xin chào');
+    // facet: the async write refuses a framework-owned composer
+    const asyncCe = composer('<p>Hello</p>');
+    asyncCe.classList.add('ProseMirror');
+    const res = await writeElementTextAsync(asyncCe, 'Xin chào');
     expect(res.success).toBe(false);
     expect(res.reason).toBe('framework-editor');
-    expect(ce.textContent).toBe('Hello');
+    expect(asyncCe.textContent).toBe('Hello');
+
+    // facet: the sync write refuses it too
+    const syncCe = composer('<p>Hello</p>');
+    syncCe.classList.add('ProseMirror');
+    expect(writeElementText(syncCe, 'Xin chào')).toEqual({ success: false, reason: 'framework-editor' });
+    expect(syncCe.textContent).toBe('Hello');
   });
 
-  it('does not write into a framework-owned composer synchronously either', () => {
-    const ce = composer('<p>Hello</p>');
-    ce.classList.add('ProseMirror');
-    expect(writeElementText(ce, 'Xin chào')).toEqual({ success: false, reason: 'framework-editor' });
-    expect(ce.textContent).toBe('Hello');
-  });
-
-  it('does not dispatch input after a prevented beforeinput', () => {
+  it('does not dispatch input after a prevented beforeinput and stops after a partial change', () => {
+    // facet: a prevented beforeinput suppresses the input event
     const ce = composer('<p>Hello</p>');
     ce.addEventListener('beforeinput', (e) => e.preventDefault());
     const inputs: string[] = [];
@@ -188,30 +187,29 @@ describe('write-back safety', () => {
     const res = writeElementText(ce, 'Xin chào');
     expect(inputs).toEqual([]);
     expect(res.success).toBe(false);
-  });
 
-  it('stops the chain after a partial change instead of stacking strategies', () => {
-    const ce = composer('<p>Hello</p>');
-    ce.addEventListener('beforeinput', (e) => {
+    // facet: a partial change stops the strategy chain instead of stacking
+    const partial = composer('<p>Hello</p>');
+    partial.addEventListener('beforeinput', (e) => {
       e.preventDefault();
-      ce.querySelector('p')!.textContent = 'PARTIAL';
+      partial.querySelector('p')!.textContent = 'PARTIAL';
     });
-    const res = writeElementText(ce, 'Xin chào');
-    expect(res.success).toBe(false);
-    expect(res.reason).toBe('partial-change');
-    expect(ce.textContent).toBe('PARTIAL');
+    const partialRes = writeElementText(partial, 'Xin chào');
+    expect(partialRes.success).toBe(false);
+    expect(partialRes.reason).toBe('partial-change');
+    expect(partial.textContent).toBe('PARTIAL');
   });
 
-  it('verifies exactly — a whitespace-only difference is not a success', () => {
+  it('verifies writes exactly through the block-aware reader', () => {
+    // facet: a whitespace-only difference is not a success
     const ce = composer('<p>Hello world   </p>');
     expect(verifyWrite(ce, 'Hello world')).toBe(false);
     expect(verifyWrite(ce, 'Hello world   ')).toBe(true);
-  });
 
-  it('verifies multi-line content through the block-aware reader', () => {
-    const ce = composer('<p>a</p><p>b</p>');
-    expect(verifyWrite(ce, 'a\nb')).toBe(true);
-    expect(verifyWrite(ce, 'ab')).toBe(false);
+    // facet: multi-line content is compared block-aware
+    const multi = composer('<p>a</p><p>b</p>');
+    expect(verifyWrite(multi, 'a\nb')).toBe(true);
+    expect(verifyWrite(multi, 'ab')).toBe(false);
   });
 
   it('marks the events it dispatches as synthetic', () => {
@@ -223,26 +221,25 @@ describe('write-back safety', () => {
     expect(seen.every(Boolean)).toBe(true);
   });
 
-  it('writes plain contentEditable composers', () => {
+  it('writes plain contentEditable composers (single and multi-line) and textareas', () => {
+    // facet: plain single-line contentEditable
     const ce = composer('<p>Hello</p>');
     const res = writeElementText(ce, 'Xin chào');
     expect(res.success).toBe(true);
     expect(getElementText(ce)).toBe('Xin chào');
-  });
 
-  it('writes multi-line content into a plain contentEditable', () => {
-    const ce = composer('<p>Hello</p>');
-    const res = writeElementText(ce, 'Xin chào\nThế giới');
-    expect(res.success).toBe(true);
-    expect(getElementText(ce)).toBe('Xin chào\nThế giới');
-  });
+    // facet: multi-line contentEditable
+    const multi = composer('<p>Hello</p>');
+    const multiRes = writeElementText(multi, 'Xin chào\nThế giới');
+    expect(multiRes.success).toBe(true);
+    expect(getElementText(multi)).toBe('Xin chào\nThế giới');
 
-  it('writes textareas', () => {
+    // facet: textareas
     const ta = document.createElement('textarea');
     ta.value = 'Hello world';
     document.body.appendChild(ta);
-    const res = writeElementText(ta, 'Xin chào');
-    expect(res.success).toBe(true);
+    const taRes = writeElementText(ta, 'Xin chào');
+    expect(taRes.success).toBe(true);
     expect(ta.value).toBe('Xin chào');
   });
 });
@@ -250,7 +247,8 @@ describe('write-back safety', () => {
 /* ── Task 3: draft integrity ───────────────────────────────────── */
 
 describe('draft integrity', () => {
-  it('never rewrites the draft before the translation arrives', async () => {
+  it('never rewrites the draft before the translation arrives and leaves it untouched when the composer cannot be written', async () => {
+    // facet: the draft stays exactly as typed until the response lands
     const ce = composer('<p>Hello   </p>');
     let release: (v: unknown) => void = () => {};
     mockSendMessage.mockReturnValueOnce(new Promise((r) => { release = r; }));
@@ -262,22 +260,22 @@ describe('draft integrity', () => {
     release({ success: true, translatedText: 'Xin chào' });
     await pending;
     expect(getElementText(ce)).toBe('Xin chào');
-  });
 
-  it('leaves the draft untouched when the composer cannot be written', async () => {
-    const ce = composer('<p>Hello   </p>');
-    ce.classList.add('ProseMirror');
+    // facet: an unwritable composer keeps the draft and offers the copy panel
+    const locked = composer('<p>Hello   </p>');
+    locked.classList.add('ProseMirror');
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'Xin chào' });
 
-    await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: false });
+    await runInlineTranslate(cfg(), { element: locked, skipStripTrailing: false });
 
-    expect(ce.textContent).toBe('Hello   ');
+    expect(locked.textContent).toBe('Hello   ');
     const panel = document.querySelector('.anyllm-inline-copy-panel');
     expect(panel).not.toBeNull();
     expect(panel!.textContent).toContain('Xin chào');
   });
 
-  it('stores the original markup for undo and restores it', async () => {
+  it('stores the original markup for undo, restores it, and keeps the draft when the translation fails', async () => {
+    // facet: original markup is stored and restored via fallback undo
     const ce = composer('<p>Hi <span class="mention">@alice</span></p>');
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'Chào @alice' });
 
@@ -287,15 +285,14 @@ describe('draft integrity', () => {
 
     expect(tryFallbackUndo(ce)).toBe(true);
     expect(ce.querySelector('.mention')).not.toBeNull();
-  });
 
-  it('keeps the draft when the translation fails', async () => {
-    const ce = composer('<p>Hello</p>');
+    // facet: a failed translation leaves the draft intact and reports the error
+    const failed = composer('<p>Hello</p>');
     mockSendMessage.mockResolvedValueOnce({ success: false, error: 'API error' });
 
-    await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: true });
+    await runInlineTranslate(cfg(), { element: failed, skipStripTrailing: true });
 
-    expect(ce.textContent).toBe('Hello');
+    expect(failed.textContent).toBe('Hello');
     expect(document.querySelector(`.${TOAST_CLASS}`)?.textContent).toContain('Translation failed');
   });
 });
@@ -303,7 +300,8 @@ describe('draft integrity', () => {
 /* ── Task 4: undo identity ─────────────────────────────────────── */
 
 describe('undo identity', () => {
-  it('does not restore a previous original over a new draft that matches the last translation', async () => {
+  it('does not restore a previous original over a new draft that matches the last translation, and expires stale undo state', async () => {
+    // facet: a fresh draft equal to the last translation is translated, not undone
     const ce = composer('<p>Hello</p>');
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'Xin chào' });
     await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: true });
@@ -322,21 +320,20 @@ describe('undo identity', () => {
 
     expect(getElementText(ce)).toBe('Chào nhé');
     expect(mockSendMessage).toHaveBeenCalledTimes(2);
-  });
 
-  it('expires stale undo state', async () => {
-    const ce = composer('<p>Hello</p>');
+    // facet: undo state older than the expiry window does not undo
+    const stale = composer('<p>Hello</p>');
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'Xin chào' });
-    await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: true });
+    await runInlineTranslate(cfg(), { element: stale, skipStripTrailing: true });
 
-    const entry = lastWrittenMap.get(ce);
+    const entry = lastWrittenMap.get(stale);
     expect(entry).toBeTruthy();
-    lastWrittenMap.set(ce, { text: entry!.text, at: Date.now() - 6 * 60 * 1000 });
+    lastWrittenMap.set(stale, { text: entry!.text, at: Date.now() - 6 * 60 * 1000 });
 
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'Chào nhé' });
-    await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: true });
+    await runInlineTranslate(cfg(), { element: stale, skipStripTrailing: true });
 
-    expect(getElementText(ce)).toBe('Chào nhé');
+    expect(getElementText(stale)).toBe('Chào nhé');
   });
 });
 
@@ -403,7 +400,8 @@ describe('cancel-on-type during write-back', () => {
     return input;
   }
 
-  it('does not cancel itself from its own synthetic write-back events', async () => {
+  it('does not cancel itself from its own synthetic write-back events, but cancels when the user really types while a request is in flight', async () => {
+    // facet: its own synthetic write-back events must not cancel the flow
     const input = focusedInput('hello   ');
     mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'xin chào' });
 
@@ -414,25 +412,24 @@ describe('cancel-on-type during write-back', () => {
 
     expect(input.value).toBe('xin chào');
     expect(document.querySelector(`.${TOAST_CLASS}`)?.textContent).toBe('Translated ✓');
-  });
 
-  it('cancels when the user really types while a request is in flight', async () => {
-    const input = focusedInput('hello   ');
+    // facet: a real keystroke while the request is in flight cancels the write-back
+    const typed = focusedInput('hello   ');
     let release: (v: unknown) => void = () => {};
     mockSendMessage.mockReturnValueOnce(new Promise((r) => { release = r; }));
 
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
-    fireKeydown(input, ' ');
+    fireKeydown(typed, ' ');
+    fireKeydown(typed, ' ');
+    fireKeydown(typed, ' ');
     await vi.advanceTimersByTimeAsync(10);
 
-    input.value = 'hello world!';
-    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '!' }));
+    typed.value = 'hello world!';
+    typed.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '!' }));
 
     release({ success: true, translatedText: 'xin chào' });
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(input.value).toBe('hello world!');
+    expect(typed.value).toBe('hello world!');
   });
 });
 

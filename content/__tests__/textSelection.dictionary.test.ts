@@ -78,7 +78,8 @@ describe('textSelection dictionary UI', () => {
   });
 
   describe('applySelectionResponse', () => {
-    it('renders dictionary layout when mode is dictionary with fields', () => {
+    it('renders dictionary layout with fields, and sentence layout when fields are absent (fail-open plain text)', () => {
+      // facet: dictionary mode with fields renders the dictionary UI
       seedTooltip();
 
       applySelectionResponse('hello', {
@@ -97,10 +98,8 @@ describe('textSelection dictionary UI', () => {
         '/həˈloʊ/',
       );
       expect(document.querySelector(`.${TOOLTIP_CLASS}`)).toBeTruthy();
-    });
 
-    it('renders sentence layout when dictionary fields absent (fail-open plain text)', () => {
-      // Scenario 1: sentence mode without dictionary fields → no dictionary UI
+      // facet: sentence mode without dictionary fields → no dictionary UI
       seedTooltip();
 
       applySelectionResponse('A long sentence about many things.', {
@@ -114,7 +113,7 @@ describe('textSelection dictionary UI', () => {
         document.querySelector('[data-anyllm-role="selection-translation"]')?.textContent,
       ).toBe('Một câu dài về nhiều thứ.');
 
-      // Scenario 2: fail-open — raw sentence-mode text renders as-is
+      // facet: fail-open — raw sentence-mode text renders as-is
       seedTooltip();
 
       applySelectionResponse('hello', {

@@ -22,13 +22,20 @@ function renderCard(overrides: Partial<typeof DEFAULT_SUBTITLE_SETTINGS> = {}) {
 }
 
 describe('AppearanceCard — style presets', () => {
-  it('renders five preset chips with Classic active by default', () => {
-    renderCard();
+  it('renders five preset chips with Classic active by default, and customize controls write style overrides', () => {
+    const { onUpdate } = renderCard();
+    // facet: renders five preset chips with Classic active by default.
     for (const label of ['Classic', 'Netflix', 'White on black', 'Yellow on black', 'Black on white']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: 'Classic' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Netflix' })).toHaveAttribute('aria-pressed', 'false');
+
+    // facet: customize controls write style overrides.
+    fireEvent.click(screen.getByRole('button', { name: /Customize/i }));
+    const color = screen.getByLabelText('Text color') as HTMLInputElement;
+    fireEvent.change(color, { target: { value: '#f5c518' } });
+    expect(onUpdate).toHaveBeenCalledWith({ styleOverrides: { textColor: '#f5c518' } });
   });
 
   it('picking a preset updates settings and clears overrides', () => {
@@ -52,22 +59,15 @@ describe('AppearanceCard — style presets', () => {
     expect(screen.queryByText('Custom')).not.toBeInTheDocument();
   });
 
-  it('customize controls write style overrides', () => {
-    const { onUpdate } = renderCard();
-    fireEvent.click(screen.getByRole('button', { name: /Customize/i }));
-    const color = screen.getByLabelText('Text color') as HTMLInputElement;
-    fireEvent.change(color, { target: { value: '#f5c518' } });
-    expect(onUpdate).toHaveBeenCalledWith({ styleOverrides: { textColor: '#f5c518' } });
-  });
+  it('dims the backdrop slider for none background styles and keeps it enabled for box styles', () => {
+    // facet: dims the backdrop slider when the effective background style is none.
+    const none = renderCard({ stylePreset: 'netflix' });
+    expect(none.container.querySelector('.opacity-50')).not.toBeNull();
+    none.unmount();
 
-  it('dims the backdrop slider when the effective background style is none', () => {
-    const { container } = renderCard({ stylePreset: 'netflix' });
-    expect(container.querySelector('.opacity-50')).not.toBeNull();
-  });
-
-  it('keeps the backdrop slider enabled for box styles', () => {
-    const { container } = renderCard({ stylePreset: 'classic' });
-    expect(container.querySelector('.opacity-50')).toBeNull();
+    // facet: keeps the backdrop slider enabled for box styles.
+    const box = renderCard({ stylePreset: 'classic' });
+    expect(box.container.querySelector('.opacity-50')).toBeNull();
   });
 });
 

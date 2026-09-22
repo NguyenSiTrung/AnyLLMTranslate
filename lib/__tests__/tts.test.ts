@@ -112,7 +112,8 @@ describe('listTtsVoices helpers', () => {
  */
 
 describe('fetchProviderSpeech', () => {
-  it('returns audio for successful speech requests and diagnostics for failures', async () => {
+  it('handles success/diagnostics, optional voice fields, pre-request validation, and the Mistral dialect', async () => {
+    // facet: returns audio for successful speech requests and diagnostics for failures
     const audio = new Uint8Array([1, 2, 3, 4]).buffer;
     const successFetch = vi.fn(async () =>
       new Response(audio, {
@@ -171,9 +172,8 @@ describe('fetchProviderSpeech', () => {
       expect(errorResult.error).toMatch(/401/);
       expect(errorResult.error).toMatch(/bad key/);
     }
-  });
 
-  it('builds OpenAI request bodies with optional voice fields', async () => {
+    // facet: builds OpenAI request bodies with optional voice fields
     const optionalVoiceFetch = vi.fn(async () =>
       new Response(new Uint8Array([1]).buffer, {
         status: 200,
@@ -193,11 +193,11 @@ describe('fetchProviderSpeech', () => {
       optionalVoiceFetch as unknown as typeof fetch,
     );
 
-    const init = (optionalVoiceFetch.mock.calls[0] as unknown as [string, RequestInit])[1];
-    const body = JSON.parse(init.body as string);
-    expect(body.model).toBe('tts-1');
-    expect(body.speed).toBe(1.2);
-    expect(body).not.toHaveProperty('voice');
+    const optionalInit = (optionalVoiceFetch.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const optionalBody = JSON.parse(optionalInit.body as string);
+    expect(optionalBody.model).toBe('tts-1');
+    expect(optionalBody.speed).toBe(1.2);
+    expect(optionalBody).not.toHaveProperty('voice');
 
     const requiredVoiceFetch = vi.fn(async () =>
       new Response(new Uint8Array([1]).buffer, {
@@ -221,11 +221,10 @@ describe('fetchProviderSpeech', () => {
     const voiceInit = (requiredVoiceFetch.mock.calls[0] as unknown as [string, RequestInit])[1];
     const voiceBody = JSON.parse(voiceInit.body as string);
     expect(voiceBody.voice).toBe('alloy');
-  });
 
-  it('rejects missing models and Mistral voice IDs before making a request', async () => {
+    // facet: rejects missing models and Mistral voice IDs before making a request
     const fetchImpl = vi.fn();
-    const result = await fetchProviderSpeech(
+    const missingModelResult = await fetchProviderSpeech(
       'Hello',
       {
         baseUrl: 'https://api.openai.com/v1',
@@ -236,9 +235,9 @@ describe('fetchProviderSpeech', () => {
       },
       fetchImpl as unknown as typeof fetch,
     );
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toMatch(/model/i);
+    expect(missingModelResult.success).toBe(false);
+    if (!missingModelResult.success) {
+      expect(missingModelResult.error).toMatch(/model/i);
     }
     expect(fetchImpl).not.toHaveBeenCalled();
 
@@ -259,9 +258,9 @@ describe('fetchProviderSpeech', () => {
       expect(mistralResult.error).toMatch(/voice_id/i);
     }
     expect(mistralFetch).not.toHaveBeenCalled();
-  });
 
-  it('detects Mistral dialects, normalizes Voxtral model aliases, and sends Mistral voice_id bodies with audio_data decoding', async () => {
+    // facet: detects Mistral dialects, normalizes Voxtral model aliases, and sends
+    // Mistral voice_id bodies with audio_data decoding
     expect(detectTtsDialect('https://api.mistral.ai/v1', 'x')).toBe('mistral');
     expect(detectTtsDialect('https://api.openai.com/v1', 'tts-1')).toBe('openai');
     expect(detectTtsDialect('https://proxy.example/v1', 'voxtral-mini-tts-latest')).toBe(
@@ -278,14 +277,14 @@ describe('fetchProviderSpeech', () => {
     );
 
     const audioB64 = btoa(String.fromCharCode(9, 8, 7));
-    const fetchImpl = vi.fn(async () =>
+    const mistralBodyFetch = vi.fn(async () =>
       new Response(JSON.stringify({ audio_data: audioB64 }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
     );
 
-    const result = await fetchProviderSpeech(
+    const mistralDialectResult = await fetchProviderSpeech(
       'Bonjour',
       {
         baseUrl: 'https://api.mistral.ai/v1',
@@ -294,22 +293,22 @@ describe('fetchProviderSpeech', () => {
         voice: 'voice-abc',
         rate: 1,
       },
-      fetchImpl as unknown as typeof fetch,
+      mistralBodyFetch as unknown as typeof fetch,
     );
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.audioBase64).toBe(audioB64);
-      expect(result.mimeType).toBe('audio/mpeg');
+    expect(mistralDialectResult.success).toBe(true);
+    if (mistralDialectResult.success) {
+      expect(mistralDialectResult.audioBase64).toBe(audioB64);
+      expect(mistralDialectResult.mimeType).toBe('audio/mpeg');
     }
-    const call = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
-    expect(call[0]).toBe('https://api.mistral.ai/v1/audio/speech');
-    const body = JSON.parse(call[1].body as string);
-    expect(body.model).toBe(MISTRAL_VOXTRAL_MINI_TTS_MODEL);
-    expect(body.voice_id).toBe('voice-abc');
-    expect(body).not.toHaveProperty('voice');
-    expect(body).not.toHaveProperty('speed');
-    expect(body.stream).toBe(false);
+    const mistralCall = mistralBodyFetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(mistralCall[0]).toBe('https://api.mistral.ai/v1/audio/speech');
+    const mistralBody = JSON.parse(mistralCall[1].body as string);
+    expect(mistralBody.model).toBe(MISTRAL_VOXTRAL_MINI_TTS_MODEL);
+    expect(mistralBody.voice_id).toBe('voice-abc');
+    expect(mistralBody).not.toHaveProperty('voice');
+    expect(mistralBody).not.toHaveProperty('speed');
+    expect(mistralBody.stream).toBe(false);
   });
 });
 

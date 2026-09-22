@@ -47,8 +47,18 @@ const outline: DomOutline = {
   ],
 };
 
-describe('heuristicDraftFromOutline', () => {
-  it('builds include/exclude selectors and hostname pattern', () => {
+const draft: SuggestSiteRuleDraft = {
+  hostname: 'example.com',
+  includeSelectors: ['main', 'article'],
+  excludeSelectors: ['nav'],
+  source: 'tab',
+  category: 'Tech',
+  alwaysTranslate: true,
+};
+
+describe('heuristicDraftFromOutline / mergeSuggestDraftIntoRuleForm', () => {
+  it('builds include/exclude selectors and hostname pattern, and applies draft fields for add/edit', () => {
+    // facet: heuristicDraftFromOutline builds include/exclude selectors and hostname pattern
     const d = heuristicDraftFromOutline(outline, 'tab');
     expect(d.source).toBe('tab');
     expect(d.hostname).toBe('*.example.com');
@@ -61,20 +71,9 @@ describe('heuristicDraftFromOutline', () => {
       ),
     ).toBe(true);
     expect(d.warnings).toEqual(expect.arrayContaining(['heuristic_only']));
-  });
-});
 
-const draft: SuggestSiteRuleDraft = {
-  hostname: 'example.com',
-  includeSelectors: ['main', 'article'],
-  excludeSelectors: ['nav'],
-  source: 'tab',
-  category: 'Tech',
-  alwaysTranslate: true,
-};
-
-describe('mergeSuggestDraftIntoRuleForm', () => {
-  it('applies draft fields for add/edit while preserving non-default mode settings', () => {
+    // facet: mergeSuggestDraftIntoRuleForm applies draft fields for add/edit while
+    // preserving non-default mode settings
     const form = {
       hostname: '',
       includeSelectors: [] as string[],
@@ -127,8 +126,9 @@ const sampleOutline: DomOutline = {
 };
 
 describe('buildSuggestSiteRuleDraft', () => {
-  it('prefers open tab and uses LLM JSON', async () => {
-    const r = await buildSuggestSiteRuleDraft({
+  it('prefers the open tab/LLM JSON, falls back to loadUrl+heuristics, and errors on bad URLs/capture failures', async () => {
+    // facet: prefers open tab and uses LLM JSON
+    const tabResult = await buildSuggestSiteRuleDraft({
       urlInput: 'https://example.com',
       findOpenTabOutline: async () => sampleOutline,
       loadUrlOutline: async () => {
@@ -142,15 +142,14 @@ describe('buildSuggestSiteRuleDraft', () => {
           rationale: 'Main column',
         }),
     });
-    expect(r.success).toBe(true);
-    expect(r.draft?.source).toBe('tab');
-    expect(r.draft?.includeSelectors).toContain('main');
-    expect(r.draft?.warnings ?? []).not.toContain('heuristic_only');
-    expect(r.draft?.rationale).toMatch(/main/i);
-  });
+    expect(tabResult.success).toBe(true);
+    expect(tabResult.draft?.source).toBe('tab');
+    expect(tabResult.draft?.includeSelectors).toContain('main');
+    expect(tabResult.draft?.warnings ?? []).not.toContain('heuristic_only');
+    expect(tabResult.draft?.rationale).toMatch(/main/i);
 
-  it('falls back to loadUrl and heuristics when LLM null', async () => {
-    const r = await buildSuggestSiteRuleDraft({
+    // facet: falls back to loadUrl and heuristics when LLM null
+    const fetchResult = await buildSuggestSiteRuleDraft({
       urlInput: 'https://docs.example.com/x',
       findOpenTabOutline: async () => null,
       loadUrlOutline: async () => ({
@@ -163,15 +162,14 @@ describe('buildSuggestSiteRuleDraft', () => {
       }),
       runLlm: async () => null,
     });
-    expect(r.success).toBe(true);
-    expect(r.draft?.source).toBe('fetch');
-    expect(r.draft?.warnings).toEqual(
+    expect(fetchResult.success).toBe(true);
+    expect(fetchResult.draft?.source).toBe('fetch');
+    expect(fetchResult.draft?.warnings).toEqual(
       expect.arrayContaining(['heuristic_only', 'loaded_in_temp_tab']),
     );
-  });
 
-  it('errors on bad URLs and when capture fails', async () => {
-    const r = await buildSuggestSiteRuleDraft({
+    // facet: errors on bad URLs and when capture fails
+    const badResult = await buildSuggestSiteRuleDraft({
       urlInput: 'javascript:alert(1)',
       findOpenTabOutline: async () => null,
       loadUrlOutline: async () => {
@@ -179,10 +177,10 @@ describe('buildSuggestSiteRuleDraft', () => {
       },
       runLlm: async () => null,
     });
-    expect(r.success).toBe(false);
-    expect(r.error).toBeTruthy();
+    expect(badResult.success).toBe(false);
+    expect(badResult.error).toBeTruthy();
 
-    const r2 = await buildSuggestSiteRuleDraft({
+    const failedResult = await buildSuggestSiteRuleDraft({
       urlInput: 'https://example.com',
       findOpenTabOutline: async () => null,
       loadUrlOutline: async () => {
@@ -190,7 +188,7 @@ describe('buildSuggestSiteRuleDraft', () => {
       },
       runLlm: async () => null,
     });
-    expect(r2.success).toBe(false);
+    expect(failedResult.success).toBe(false);
   });
 });
 

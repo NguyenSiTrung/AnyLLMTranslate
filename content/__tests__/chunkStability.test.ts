@@ -45,8 +45,9 @@ describe('chunkStability', () => {
     vi.restoreAllMocks();
   });
 
-  describe('orderResultsByPieces', () => {
-    it('orders results into piece reading order, trails unknown ids, and does not mutate inputs', () => {
+  describe('orderResultsByPieces / pickScrollAnchor', () => {
+    it('orders results into piece reading order, and picks the bottom-most piece in the viewport band', () => {
+      // facet: ordering trails unknown ids and does not mutate inputs
       const pieces = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
       const results = [
         { id: 'c', translatedText: 'C' },
@@ -62,11 +63,8 @@ describe('chunkStability', () => {
       const ordered = orderResultsByPieces(unknownResults, [{ id: 'a' }, { id: 'b' }]);
       expect(ordered.map((r) => r.id)).toEqual(['a', 'zzz']);
       expect(unknownResults.map((r) => r.id)).toEqual(['zzz', 'a']);
-    });
-  });
 
-  describe('pickScrollAnchor', () => {
-    it('picks the bottom-most piece in the viewport band, excludes below-fold + margin pieces, and returns null for below-fold or detached pieces', () => {
+      // facet: pickScrollAnchor excludes below-fold + margin pieces, and returns null for below-fold or detached pieces
       const above = document.createElement('p');
       const mid = document.createElement('p');
       const bottom = document.createElement('p');

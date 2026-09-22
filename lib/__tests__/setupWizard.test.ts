@@ -15,7 +15,8 @@ import { getCatalogEntryById } from '@/lib/openAiCompatibleCatalog';
 import { getProviderReadiness } from '@/lib/providerReadiness';
 
 describe('setupWizard steps', () => {
-  it('exposes four steps in order; wizardStepIndex is 1-based', () => {
+  it('exposes the ordered steps, normalizes legacy/new ids, and resolves the entry step', () => {
+    // facet: exposes four steps in order; wizardStepIndex is 1-based
     expect(WIZARD_STEPS).toEqual(['welcome', 'connect', 'verify', 'ready']);
     expect(WIZARD_STEP_LABELS.welcome).toBe('Welcome');
     expect(WIZARD_STEP_LABELS.connect).toBe('Connect');
@@ -24,9 +25,8 @@ describe('setupWizard steps', () => {
 
     expect(wizardStepIndex('welcome')).toBe(1);
     expect(wizardStepIndex('ready')).toBe(4);
-  });
 
-  it('normalizeWizardStep maps legacy and new ids', () => {
+    // facet: normalizeWizardStep maps legacy and new ids
     expect(normalizeWizardStep('welcome')).toBe('welcome');
     expect(normalizeWizardStep('connect')).toBe('connect');
     expect(normalizeWizardStep('verify')).toBe('verify');
@@ -37,9 +37,9 @@ describe('setupWizard steps', () => {
     expect(normalizeWizardStep('done')).toBe('ready');
     expect(normalizeWizardStep('nope')).toBeNull();
     expect(normalizeWizardStep(undefined)).toBeNull();
-  });
 
-  it('resolveWizardEntryStep: first run, completed reopen, resume lastStep, legacy ids, and ready-without-complete', () => {
+    // facet: resolveWizardEntryStep: first run, completed reopen, resume lastStep,
+    // legacy ids, and ready-without-complete
     expect(resolveWizardEntryStep({ completed: false, skipped: false })).toBe('welcome');
 
     expect(

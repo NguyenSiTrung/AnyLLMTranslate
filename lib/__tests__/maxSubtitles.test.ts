@@ -681,30 +681,35 @@ function makeTrackButton(attrs: Record<string, string>, labelText?: string): HTM
 }
 
 describe('isTrackOptionChecked', () => {
-  it.each([
-    ['aria-checked', 'true'],
-    ['aria-selected', 'true'],
-    ['aria-pressed', 'true'],
-    ['data-state', 'checked'],
-  ])('treats %s="%s" as the checked track', (attr, value) => {
-    const el = document.createElement('button');
-    el.setAttribute(attr, value);
-    expect(isTrackOptionChecked(el)).toBe(true);
-  });
+  it('treats each checked-state attribute as the checked track, everything else as unchecked', () => {
+    // Each of these attributes marks the track as checked.
+    const checkedCases: Array<[string, string]> = [
+      ['aria-checked', 'true'],
+      ['aria-selected', 'true'],
+      ['aria-pressed', 'true'],
+      ['data-state', 'checked'],
+    ];
+    for (const [attr, value] of checkedCases) {
+      const el = document.createElement('button');
+      el.setAttribute(attr, value);
+      expect(isTrackOptionChecked(el), `${attr}="${value}"`).toBe(true);
+    }
 
-  it.each([
-    ['aria-checked', 'false'],
-    ['aria-selected', 'false'],
-    ['aria-pressed', 'false'],
-    ['data-state', 'unchecked'],
-    ['data-state', ''],
-  ])('treats %s="%s" as unchecked', (attr, value) => {
-    const el = document.createElement('button');
-    el.setAttribute(attr, value);
-    expect(isTrackOptionChecked(el)).toBe(false);
-  });
+    // Each of these values leaves the track unchecked.
+    const uncheckedCases: Array<[string, string]> = [
+      ['aria-checked', 'false'],
+      ['aria-selected', 'false'],
+      ['aria-pressed', 'false'],
+      ['data-state', 'unchecked'],
+      ['data-state', ''],
+    ];
+    for (const [attr, value] of uncheckedCases) {
+      const el = document.createElement('button');
+      el.setAttribute(attr, value);
+      expect(isTrackOptionChecked(el), `${attr}="${value}"`).toBe(false);
+    }
 
-  it('is false without any checked-state attribute', () => {
+    // No checked-state attribute at all.
     expect(isTrackOptionChecked(document.createElement('button'))).toBe(false);
   });
 });
@@ -714,57 +719,53 @@ describe('readMaxActiveSubtitleLanguage', () => {
     document.body.innerHTML = '';
   });
 
-  it('reads the label of a track marked with data-state="checked"', () => {
+  it('reads the checked track label and reports "" for unchecked or Off selections', () => {
+    // data-state="checked" track.
     makeTrackButton({ 'data-state': 'checked', 'aria-label': 'English' });
     expect(readMaxActiveSubtitleLanguage()).toBe('en');
-  });
 
-  it('reads the label of a track marked aria-pressed', () => {
+    // aria-pressed track.
+    document.body.innerHTML = '';
     makeTrackButton({ 'aria-pressed': 'true', 'aria-label': 'Français' });
     expect(readMaxActiveSubtitleLanguage()).toBe('fr');
-  });
 
-  it('detects the checked state when it sits on a nested element', () => {
+    // Checked state on a nested element.
+    document.body.innerHTML = '';
     const btn = makeTrackButton({ 'aria-label': 'Deutsch' });
     const inner = document.createElement('span');
     inner.setAttribute('aria-checked', 'true');
     btn.appendChild(inner);
-
     expect(readMaxActiveSubtitleLanguage()).toBe('de');
-  });
 
-  it('ignores unchecked tracks and reports "" for an Off selection', () => {
+    // Ignores unchecked tracks and reports "" for an Off selection.
+    document.body.innerHTML = '';
     makeTrackButton({ 'aria-checked': 'false', 'aria-label': 'English' });
     makeTrackButton({ 'aria-checked': 'true', 'aria-label': 'Off' });
-
     expect(readMaxActiveSubtitleLanguage()).toBe('');
   });
 });
 
 describe('normalizeMaxSubtitleLanguage', () => {
-  it('prefers a label-map hit over a junk attrLang', () => {
+  it('prefers a label-map hit, falls back to attrLang, and retries after stripping qualifiers', () => {
+    // A label-map hit wins over a junk attrLang.
     expect(normalizeMaxSubtitleLanguage('English', 'ui-locale')).toBe('en');
     expect(normalizeMaxSubtitleLanguage('Français', 'ui-locale')).toBe('fr');
-  });
 
-  it('uses attrLang when the label is unknown', () => {
+    // attrLang is used when the label is unknown.
     expect(normalizeMaxSubtitleLanguage('Unknown caption label', 'es-419')).toBe('es-419');
     expect(normalizeMaxSubtitleLanguage('', 'pt-BR')).toBe('pt-br');
-  });
 
-  it('strips parenthetical qualifiers and retries the map', () => {
+    // Parenthetical qualifiers are stripped and the map retried.
     expect(normalizeMaxSubtitleLanguage('English (CC)')).toBe('en');
     expect(normalizeMaxSubtitleLanguage('German (Germany)')).toBe('de');
     // A qualifier that is itself part of a known label must still win exactly.
     expect(normalizeMaxSubtitleLanguage('Spanish (Latin America)')).toBe('es');
-  });
 
-  it('matches labels case-insensitively', () => {
+    // Labels match case-insensitively.
     expect(normalizeMaxSubtitleLanguage('english')).toBe('en');
     expect(normalizeMaxSubtitleLanguage('CHINESE (SIMPLIFIED)')).toBe('zh-Hans');
-  });
 
-  it('ignores a junk attrLang when the label is unrecognized too', () => {
+    // A junk attrLang is ignored when the label is unrecognized too.
     expect(normalizeMaxSubtitleLanguage('Director commentary', 'ui-locale')).toBe(
       'director commentary',
     );

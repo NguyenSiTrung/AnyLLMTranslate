@@ -92,13 +92,13 @@ describe('initKeyboardShortcuts', () => {
     expect(enterPickerMode).toHaveBeenCalled();
   });
 
-  it('dismisses tooltip on Escape', () => {
+  it('dismisses tooltip on Escape and does not fire letter shortcuts without Alt', () => {
+    // facet: Escape dismisses the tooltip + translate button
     dispatchKeydown({ key: 'Escape', code: 'Escape' });
     expect(removeTooltip).toHaveBeenCalled();
     expect(removeTranslateButton).toHaveBeenCalled();
-  });
 
-  it('does not fire when Alt is missing for letter shortcuts', () => {
+    // facet: letter shortcuts require Alt
     dispatchKeydown({ key: 'h', code: 'KeyH', altKey: false });
     expect(setHoverTranslateEnabled).not.toHaveBeenCalled();
   });

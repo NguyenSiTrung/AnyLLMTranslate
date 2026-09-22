@@ -45,7 +45,7 @@ describe('testConnection thinking probe', () => {
     vi.restoreAllMocks();
   });
 
-  it('covers generic and provider-dialect thinking controls, detection, and auto-mode behavior', async () => {
+  it('covers thinking controls/detection/auto-mode, retries without rejected controls, and probe budget/empty-or-reasoning responses', async () => {
     // Generic: off → enable_thinking + kwargs; verdict disable-success.
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
@@ -239,9 +239,9 @@ describe('testConnection thinking probe', () => {
     );
     expect(zenResult.overall).toBe(true);
     expect(zenResult.thinking?.controlsSent).toBe(true);
-  });
 
-  it('retries without rejected thinking controls and validates probe budget/empty or reasoning-only responses', async () => {
+    // facet: retries without rejected thinking controls and validates probe
+    // budget/empty or reasoning-only responses.
     // Controls rejection: 400 → retry without controls; verdict controls-rejected.
     let translationCalls = 0;
     const rejectFetch = vi.fn(async (url: string, init?: RequestInit) => {
@@ -299,7 +299,7 @@ describe('testConnection thinking probe', () => {
     // Reasoning burned the completion budget — empty content with a reasoning
     // field and finish_reason length hints at disabling thinking.
     vi.unstubAllGlobals();
-    const reasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
+    const budgetReasoningFetch = vi.fn(async (url: string, init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/models')) return okJson({ data: [{ id: 'step-3.7-flash' }] });
       const body = JSON.parse(String(init?.body ?? '{}')) as { max_tokens?: number };
@@ -322,7 +322,7 @@ describe('testConnection thinking probe', () => {
         usage: { prompt_tokens: 42, completion_tokens: 200, total_tokens: 242 },
       });
     });
-    vi.stubGlobal('fetch', reasoningFetch);
+    vi.stubGlobal('fetch', budgetReasoningFetch);
 
     const budgetResult = await testConnection(
       baseConfig({

@@ -367,7 +367,8 @@ describe('shouldAcceptTabScopedMessage', () => {
 });
 
 describe('getUnsupportedPageInfo', () => {
-  it("returns the can't-be-translated message for missing tabs, chrome:// pages, and browser stores", () => {
+  it("returns unsupported-page copy for missing/chrome/store/PDF tabs and allows normal https pages", () => {
+    // facet: returns the can't-be-translated message for missing tabs, chrome:// pages, and browser stores
     const missing = getUnsupportedPageInfo(undefined);
     expect(missing?.title).toMatch(/can't be translated/i);
 
@@ -379,15 +380,13 @@ describe('getUnsupportedPageInfo', () => {
       url: 'https://chromewebstore.google.com/detail/foo',
     } as chrome.tabs.Tab);
     expect(webStore).not.toBeNull();
-  });
 
-  it('allows normal https pages', () => {
+    // facet: allows normal https pages
     expect(
       getUnsupportedPageInfo({ id: 1, url: 'https://example.com/page' } as chrome.tabs.Tab),
     ).toBeNull();
-  });
 
-  it('returns PDF viewer special copy', () => {
+    // facet: returns PDF viewer special copy
     const info = getUnsupportedPageInfo({
       id: 1,
       url: 'chrome-extension://abcdef/pdf-viewer.html?file=https%3A%2F%2Fx.com%2Fa.pdf',
@@ -434,7 +433,8 @@ describe('openOptionsWindow', () => {
     );
   });
 
-  it('focuses the existing settings window instead of creating another', async () => {
+  it('focuses the existing settings window, and navigates its tab when a deep link is requested', async () => {
+    // facet: focuses the existing settings window instead of creating another
     const { getAll, update, create, tabsUpdate } = mockChrome();
     getAll.mockResolvedValue([
       {
@@ -449,11 +449,11 @@ describe('openOptionsWindow', () => {
     expect(update).toHaveBeenCalledWith(7, { focused: true });
     expect(tabsUpdate).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
-  });
 
-  it('navigates the existing tab when a deep link is requested', async () => {
-    const { getAll, update, tabsUpdate, create } = mockChrome();
-    getAll.mockResolvedValue([
+    // facet: navigates the existing tab when a deep link is requested
+    const { getAll: getAllDeep, update: updateDeep, tabsUpdate: tabsUpdateDeep, create: createDeep } =
+      mockChrome();
+    getAllDeep.mockResolvedValue([
       {
         id: 7,
         focused: false,
@@ -463,15 +463,16 @@ describe('openOptionsWindow', () => {
 
     await openOptionsWindow('?setup=1&step=connect');
 
-    expect(update).toHaveBeenCalledWith(7, { focused: true });
-    expect(tabsUpdate).toHaveBeenCalledWith(11, {
+    expect(updateDeep).toHaveBeenCalledWith(7, { focused: true });
+    expect(tabsUpdateDeep).toHaveBeenCalledWith(11, {
       url: `${BASE}?setup=1&step=connect`,
       active: true,
     });
-    expect(create).not.toHaveBeenCalled();
+    expect(createDeep).not.toHaveBeenCalled();
   });
 
-  it('creates a new window when existing windows have no options tab', async () => {
+  it('creates a new window when no options tab exists and falls back to creating when getAll rejects', async () => {
+    // facet: creates a new window when existing windows have no options tab
     const { getAll, create } = mockChrome();
     getAll.mockResolvedValue([
       {
@@ -484,14 +485,13 @@ describe('openOptionsWindow', () => {
     await openOptionsWindow();
 
     expect(create).toHaveBeenCalledTimes(1);
-  });
 
-  it('falls back to creating a window when getAll rejects', async () => {
-    const { getAll, create } = mockChrome();
-    getAll.mockRejectedValue(new Error('boom'));
+    // facet: falls back to creating a window when getAll rejects
+    const { getAll: getAllRejected, create: createRejected } = mockChrome();
+    getAllRejected.mockRejectedValue(new Error('boom'));
 
     await openOptionsWindow();
 
-    expect(create).toHaveBeenCalledTimes(1);
+    expect(createRejected).toHaveBeenCalledTimes(1);
   });
 });

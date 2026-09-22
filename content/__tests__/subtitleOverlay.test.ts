@@ -479,58 +479,67 @@ describe('subtitleOverlay — scroll/resize repositioning + drag-offset clamping
     return { video, rectAt };
   }
 
-  it('follows the video rect across page scrolls (Udemy side-tab layout shift)', () => {
-    const { video, rectAt } = setupVideo();
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.style.top).toBe('300px');
-    expect(overlay.style.left).toBe('200px');
+  it('follows the video rect across scrolls and resizes, and coalesces bursts of scroll events into one reposition per frame', () => {
+    // facet: follows the video rect across page scrolls (Udemy side-tab layout shift)
+    {
+      const { video, rectAt } = setupVideo();
+      initializeOverlay(MOCK_CUES, {}, video);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+      expect(overlay.style.top).toBe('300px');
+      expect(overlay.style.left).toBe('200px');
 
-    rectAt(120, 40); // user scrolled — video moved up-left without resizing
-    window.dispatchEvent(new Event('scroll'));
-    rafQueue.splice(0).forEach((cb) => cb(0));
-    expect(overlay.style.top).toBe('120px');
-    expect(overlay.style.left).toBe('40px');
+      rectAt(120, 40); // user scrolled — video moved up-left without resizing
+      window.dispatchEvent(new Event('scroll'));
+      rafQueue.splice(0).forEach((cb) => cb(0));
+      expect(overlay.style.top).toBe('120px');
+      expect(overlay.style.left).toBe('40px');
+    }
+
+    // facet: follows the video rect on window resize
+    {
+      const { video, rectAt } = setupVideo();
+      initializeOverlay(MOCK_CUES, {}, video);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+
+      rectAt(50, 10);
+      window.dispatchEvent(new Event('resize'));
+      rafQueue.splice(0).forEach((cb) => cb(0));
+      expect(overlay.style.top).toBe('50px');
+      expect(overlay.style.left).toBe('10px');
+    }
+
+    // facet: coalesces bursts of scroll events into one reposition per frame
+    {
+      const { video } = setupVideo();
+      initializeOverlay(MOCK_CUES, {}, video);
+
+      window.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new Event('scroll'));
+      expect(rafQueue.length).toBe(1);
+    }
   });
 
-  it('follows the video rect on window resize', () => {
-    const { video, rectAt } = setupVideo();
-    initializeOverlay(MOCK_CUES, {}, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+  it('clamps drag offsets so the text box cannot leave the video box, and keeps in-range offsets untouched', () => {
+    // facet: clamps drag offsets so the text box cannot leave the video box
+    {
+      const { video } = setupVideo();
+      initializeOverlay(MOCK_CUES, { offsetX: 5000, offsetY: -9000 }, video);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+      // 800x600 video → offsets clamp to ±400 / ±300.
+      expect(overlay.style.transform).toBe('translate(400px, -300px)');
 
-    rectAt(50, 10);
-    window.dispatchEvent(new Event('resize'));
-    rafQueue.splice(0).forEach((cb) => cb(0));
-    expect(overlay.style.top).toBe('50px');
-    expect(overlay.style.left).toBe('10px');
-  });
+      updateConfig({ offsetX: -6000, offsetY: 7500 });
+      expect(overlay.style.transform).toBe('translate(-400px, 300px)');
+    }
 
-  it('coalesces bursts of scroll events into one reposition per frame', () => {
-    const { video } = setupVideo();
-    initializeOverlay(MOCK_CUES, {}, video);
-
-    window.dispatchEvent(new Event('scroll'));
-    window.dispatchEvent(new Event('scroll'));
-    window.dispatchEvent(new Event('scroll'));
-    expect(rafQueue.length).toBe(1);
-  });
-
-  it('clamps drag offsets so the text box cannot leave the video box', () => {
-    const { video } = setupVideo();
-    initializeOverlay(MOCK_CUES, { offsetX: 5000, offsetY: -9000 }, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    // 800x600 video → offsets clamp to ±400 / ±300.
-    expect(overlay.style.transform).toBe('translate(400px, -300px)');
-
-    updateConfig({ offsetX: -6000, offsetY: 7500 });
-    expect(overlay.style.transform).toBe('translate(-400px, 300px)');
-  });
-
-  it('keeps in-range drag offsets untouched', () => {
-    const { video } = setupVideo();
-    initializeOverlay(MOCK_CUES, { offsetX: 120, offsetY: -80 }, video);
-    const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
-    expect(overlay.style.transform).toBe('translate(120px, -80px)');
+    // facet: keeps in-range drag offsets untouched
+    {
+      const { video } = setupVideo();
+      initializeOverlay(MOCK_CUES, { offsetX: 120, offsetY: -80 }, video);
+      const overlay = document.querySelector('.anyllm-translate-subtitle-overlay') as HTMLElement;
+      expect(overlay.style.transform).toBe('translate(120px, -80px)');
+    }
   });
 });
 
@@ -602,29 +611,33 @@ describe('subtitleOverlay — fullscreen popover fallback + drag handle (MAX-29/
     }
   });
 
-  it('renders an explicit drag handle inside the text box', () => {
-    initializeOverlay(MOCK_CUES, {}, video);
-    const textContainer = document.querySelector('.anyllm-translate-subtitle-text') as HTMLElement;
-    const handle = textContainer.querySelector('.anyllm-translate-subtitle-drag-handle');
+  it('renders an explicit drag handle inside the text box and keeps the box click-through with only the handle interactive', () => {
+    // facet: renders an explicit drag handle inside the text box
+    {
+      initializeOverlay(MOCK_CUES, {}, video);
+      const textContainer = document.querySelector('.anyllm-translate-subtitle-text') as HTMLElement;
+      const handle = textContainer.querySelector('.anyllm-translate-subtitle-drag-handle');
 
-    expect(handle).not.toBeNull();
-    expect(handle?.parentElement).toBe(textContainer);
-  });
+      expect(handle).not.toBeNull();
+      expect(handle?.parentElement).toBe(textContainer);
+    }
 
-  it('keeps the subtitle box click-through and only the drag handle interactive', () => {
-    // MAX-34: while a cue is visible the bottom-centred box overlaps the
-    // player's control bar, so the box itself must never be a hit target.
-    const boxBlocks = cssBlocksFor('.anyllm-translate-subtitle-text');
-    expect(boxBlocks.length).toBeGreaterThan(0);
-    expect(boxBlocks.some((block) => /pointer-events:\s*none/.test(block))).toBe(true);
-    expect(boxBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(false);
+    // facet: keeps the subtitle box click-through and only the drag handle interactive
+    {
+      // MAX-34: while a cue is visible the bottom-centred box overlaps the
+      // player's control bar, so the box itself must never be a hit target.
+      const boxBlocks = cssBlocksFor('.anyllm-translate-subtitle-text');
+      expect(boxBlocks.length).toBeGreaterThan(0);
+      expect(boxBlocks.some((block) => /pointer-events:\s*none/.test(block))).toBe(true);
+      expect(boxBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(false);
 
-    const handleBlocks = cssBlocksFor('.anyllm-translate-subtitle-drag-handle');
-    expect(handleBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(true);
+      const handleBlocks = cssBlocksFor('.anyllm-translate-subtitle-drag-handle');
+      expect(handleBlocks.some((block) => /pointer-events:\s*auto/.test(block))).toBe(true);
 
-    // Hidden overlays stay fully click-through, handle included.
-    expect(SUBTITLE_CSS).toMatch(
-      /:not\(\.anyllm-translate-subtitle-visible\)[^{]*\.anyllm-translate-subtitle-drag-handle/,
-    );
+      // Hidden overlays stay fully click-through, handle included.
+      expect(SUBTITLE_CSS).toMatch(
+        /:not\(\.anyllm-translate-subtitle-visible\)[^{]*\.anyllm-translate-subtitle-drag-handle/,
+      );
+    }
   });
 });

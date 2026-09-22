@@ -1,4 +1,15 @@
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
+
+// Global safety net for the one failure mode that can turn a single slow test
+// into a whole-file wipeout: a test that installs fake timers and then times
+// out or throws before its own restore runs. Every later test in the file then
+// awaits a `setTimeout` that never fires and burns its own full timeout —
+// `services/__tests__/background.test.ts` lost ~60s and 5 tests to exactly
+// this. Files that install fake timers should still restore them in their own
+// `afterEach`/`finally`; this only guarantees the hand-back.
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 // Mock WXT defineContentScript
 (globalThis as unknown as Record<string, unknown>).defineContentScript = vi.fn();

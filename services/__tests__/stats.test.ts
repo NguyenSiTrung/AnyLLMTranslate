@@ -105,13 +105,14 @@ function makeDay(
   };
 }
 
-describe('statsIdb', () => {
+describe('statsIdb + stats migration', () => {
   beforeEach(() => {
     memoryIdb.clear();
+    for (const k of Object.keys(chromeLocal)) delete chromeLocal[k];
     vi.clearAllMocks();
   });
 
-  it('CRUD lifecycle: round-trips records, lists all days, deletes before cutoff, and clears the store', async () => {
+  it('CRUD lifecycle: round-trips records, lists all days, deletes before cutoff, and clears the store; returns defaults when empty and migrates v1 lifetime/daily into v2 + IDB', async () => {
     // Round-trip + list all stored days.
     const day = emptyDay('2026-07-01');
     day.totals.characters = 42;
@@ -135,17 +136,9 @@ describe('statsIdb', () => {
 
     await clearAllDailyRecords();
     await expect(getDailyRecord('2026-07-01')).resolves.toBeUndefined();
-  });
-});
 
-describe('stats migration', () => {
-  beforeEach(() => {
-    memoryIdb.clear();
-    for (const k of Object.keys(chromeLocal)) delete chromeLocal[k];
-    vi.clearAllMocks();
-  });
-
-  it('returns defaults when empty and migrates v1 lifetime/daily into v2 + IDB', async () => {
+    // facet: stats migration returns defaults when empty and migrates v1
+    // lifetime/daily into v2 + IDB.
     const empty = await getStatsV2();
     expect(empty.version).toBe(2);
     expect(empty.lifetime.characters).toBe(0);
@@ -171,10 +164,10 @@ describe('stats migration', () => {
     expect(stats.lifetime.apiCalls).toBe(3);
     expect(stats.lifetime.pageSessions).toBe(4);
     expect(stats.lifetime.subtitleCues).toBe(5);
-    const day = await getDailyRecord('2026-07-01');
-    expect(day?.totals.characters).toBe(50);
-    expect(day?.totals.apiCalls).toBe(1);
-    expect(day?.byHost).toEqual({});
+    const migratedDay = await getDailyRecord('2026-07-01');
+    expect(migratedDay?.totals.characters).toBe(50);
+    expect(migratedDay?.totals.apiCalls).toBe(1);
+    expect(migratedDay?.byHost).toEqual({});
   });
 });
 
@@ -250,7 +243,7 @@ describe('recordUsage', () => {
     expect(day2?.totals.selectionEvents).toBe(1);
   });
 
-  it('resetStats clears storage/IDB and serializes behind pending recordUsage', async () => {
+  it('resetStats clears storage/IDB and serializes behind pending recordUsage; retentionCutoffYmd and recordUsage prune so at most retentionDays remain', async () => {
     await recordUsage({ mode: 'page', characters: 1, apiCalls: 1 });
     await resetStats();
     const cleared = await getStatsV2();
@@ -280,9 +273,28 @@ describe('recordUsage', () => {
     await p2;
     const stats = await getStatsV2();
     expect(stats.lifetime.characters).toBe(0);
-  });
 
-  it('retentionCutoffYmd and recordUsage prune so at most retentionDays remain', async () => {
+    // facet: retentionCutoffYmd and recordUsage prune so at most retentionDays remain.
+    // Reset the deferred set mock and IDB state left by the serialization check
+    // above (mirrors the suite beforeEach) so the prune assertions start clean.
+    memoryIdb.clear();
+    for (const k of Object.keys(chromeLocal)) delete chromeLocal[k];
+    vi.clearAllMocks();
+    (chrome.storage.local.set as ReturnType<typeof vi.fn>).mockImplementation(
+      async (data: Record<string, unknown>) => {
+        Object.assign(chromeLocal, data);
+      },
+    );
+    (chrome.storage.local.get as ReturnType<typeof vi.fn>).mockImplementation(
+      async (key: string) =>
+        chromeLocal[key] !== undefined ? { [key]: chromeLocal[key] } : {},
+    );
+    (chrome.storage.local.remove as ReturnType<typeof vi.fn>).mockImplementation(
+      async (key: string) => {
+        delete chromeLocal[key];
+      },
+    );
+
     // Fixed local noon avoids DST edge cases around midnight.
     const todayFixed = new Date(2026, 6, 9, 12, 0, 0); // 2026-07-09 local
     expect(retentionCutoffYmd(30, todayFixed)).toBe('2026-06-10'); // today - 29

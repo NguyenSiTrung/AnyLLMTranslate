@@ -15,6 +15,14 @@ export default defineConfig({
     // Keep jsdom and Web Crypto-heavy files from timing out on oversubscribed
     // hosts while preserving bounded file-level parallelism.
     maxWorkers: 4,
+    // Worker threads instead of the default child-process pool. The suite is
+    // dominated by per-file setup (transform + collect + jsdom environment),
+    // not by test execution, so paying a process fork per file was the single
+    // largest cost: on a 4-core host the same suite measured 117s with 5
+    // load-sensitive failures under `forks` and 63s all-green under `threads`.
+    // `isolate` stays at its default, so each file still gets a fresh module
+    // graph and no cross-file global leakage.
+    pool: 'threads',
     environmentMatchGlobs: [
       ['entrypoints/**/__tests__/**/*.test.{ts,tsx}', 'jsdom'],
       ['entrypoints/**/*.test.{ts,tsx}', 'jsdom'],

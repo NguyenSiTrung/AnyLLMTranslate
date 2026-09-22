@@ -341,20 +341,18 @@ describe('ScientificJobModal', () => {
     expect(onOpenSetup).toHaveBeenCalled();
   });
 
-  it('setup: defaults to all pages and starts a whole-document job', () => {
+  it('setup: defaults to all pages, and selected pages summarize and start with the raw selection', () => {
     const onStart = vi.fn();
     renderSetup({ onStart });
+    // facet: defaults to all pages and starts a whole-document job.
     expect(screen.getByRole('radio', { name: /all pages/i })).toHaveAttribute(
       'aria-checked',
       'true',
     );
     fireEvent.click(screen.getByRole('button', { name: /start translation/i }));
     expect(onStart).toHaveBeenCalledWith(undefined, undefined);
-  });
 
-  it('setup: selected pages summarize and start with the raw selection', () => {
-    const onStart = vi.fn();
-    renderSetup({ onStart });
+    // facet: selected pages summarize and start with the raw selection.
     fireEvent.click(screen.getByRole('radio', { name: /selected pages/i }));
     fireEvent.change(screen.getByRole('textbox', { name: /page selection/i }), {
       target: { value: '1-3, 5' },
@@ -364,9 +362,10 @@ describe('ScientificJobModal', () => {
     expect(onStart).toHaveBeenCalledWith('1-3, 5', undefined);
   });
 
-  it('setup: invalid or out-of-range selection disables start and shows the error', () => {
+  it('setup: invalid selection disables start and shows the error, and an unknown page count skips the range check', () => {
     const onStart = vi.fn();
-    renderSetup({ onStart });
+    const invalid = renderSetup({ onStart });
+    // facet: invalid or out-of-range selection disables start and shows the error.
     fireEvent.click(screen.getByRole('radio', { name: /selected pages/i }));
     const input = screen.getByRole('textbox', { name: /page selection/i });
 
@@ -378,10 +377,9 @@ describe('ScientificJobModal', () => {
     expect(screen.getByText(/"abc" is not a valid page or range/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start translation/i })).toBeDisabled();
     expect(onStart).not.toHaveBeenCalled();
-  });
+    invalid.unmount();
 
-  it('setup: skips the range check while the page count is still unknown', () => {
-    const onStart = vi.fn();
+    // facet: skips the range check while the page count is still unknown.
     renderSetup({ numPages: 0, onStart });
     fireEvent.click(screen.getByRole('radio', { name: /selected pages/i }));
     fireEvent.change(screen.getByRole('textbox', { name: /page selection/i }), {
@@ -392,10 +390,11 @@ describe('ScientificJobModal', () => {
     expect(onStart).toHaveBeenCalledWith('99', undefined);
   });
 
-  it('setup: cancel closes the dialog without starting', () => {
+  it('setup: cancel closes without starting, and the merge toggle follows previous runs', () => {
+    // facet: cancel closes the dialog without starting.
     const onStart = vi.fn();
     const onClose = vi.fn();
-    render(
+    const cancelled = render(
       <ScientificJobModal
         progress={setupProgress()}
         fileName="paper.pdf"
@@ -410,22 +409,22 @@ describe('ScientificJobModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onClose).toHaveBeenCalled();
     expect(onStart).not.toHaveBeenCalled();
-  });
+    cancelled.unmount();
 
-  it('setup: merge toggle hidden without a previous run, default-on with one', () => {
-    const onStart = vi.fn();
-    const first = renderSetup({ hasPreviousRun: false, onStart });
+    // facet: merge toggle hidden without a previous run, default-on with one.
+    const onStartWithMerge = vi.fn();
+    const first = renderSetup({ hasPreviousRun: false, onStart: onStartWithMerge });
     expect(screen.queryByRole('checkbox', { name: /add to previous translation/i })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /start translation/i }));
-    expect(onStart).toHaveBeenCalledWith(undefined, undefined);
+    expect(onStartWithMerge).toHaveBeenCalledWith(undefined, undefined);
     first.unmount();
 
-    renderSetup({ hasPreviousRun: true, onStart });
+    renderSetup({ hasPreviousRun: true, onStart: onStartWithMerge });
     const toggle = screen.getByRole('checkbox', { name: /add to previous translation/i });
     expect(toggle).toHaveProperty('checked', true);
     fireEvent.click(toggle);
     fireEvent.click(screen.getByRole('button', { name: /start translation/i }));
-    expect(onStart).toHaveBeenCalledWith(undefined, { mergeWithPrevious: false });
+    expect(onStartWithMerge).toHaveBeenCalledWith(undefined, { mergeWithPrevious: false });
   });
 
   it('done: shows the result summary when provided', () => {
@@ -448,15 +447,15 @@ describe('ScientificJobModal', () => {
 });
 
 describe('pdfShellMode', () => {
-  it('starts in reader focused on source', () => {
+  it('starts in reader focused on source, and open translated moves to result focus', () => {
+    // facet: starts in reader focused on source.
     expect(initialSessionState()).toEqual({
       shellMode: 'reader',
       readerFocus: 'source',
       resultKind: null,
     });
-  });
 
-  it('open translated → reader + result focus', () => {
+    // facet: open translated → reader + result focus.
     const next = applyOpenTranslated(initialSessionState(), 'mono');
     expect(next).toEqual({
       shellMode: 'reader',
@@ -465,27 +464,27 @@ describe('pdfShellMode', () => {
     });
   });
 
-  it('open compare → compare mode + stores kind; dual uses bilingual label', () => {
+  it('open compare stores kind with a bilingual dual label, and switching back keeps result focus', () => {
+    // facet: open compare → compare mode + stores kind; dual uses bilingual label.
     const next = applyOpenCompare(initialSessionState(), 'mono');
     expect(next.shellMode).toBe('compare');
     expect(next.resultKind).toBe('mono');
 
     expect(compareRightLabel('dual')).toMatch(/bilingual/i);
     expect(compareRightLabel('mono')).toBe('Translated');
+
+    // facet: switching to reader from compare keeps result focus if result exists.
+    const compared = applyOpenCompare(initialSessionState(), 'mono');
+    const back = applyShellMode(compared, 'reader');
+    expect(back.shellMode).toBe('reader');
+    expect(back.readerFocus).toBe('result');
+    expect(back.resultKind).toBe('mono');
   });
 
   it('reader label follows focus', () => {
     expect(readerPaneLabel('source', null)).toBe('Original');
     expect(readerPaneLabel('result', 'mono')).toBe('Translated');
     expect(readerPaneLabel('result', 'dual')).toMatch(/bilingual/i);
-  });
-
-  it('switching to reader from compare keeps result focus if result exists', () => {
-    const compared = applyOpenCompare(initialSessionState(), 'mono');
-    const back = applyShellMode(compared, 'reader');
-    expect(back.shellMode).toBe('reader');
-    expect(back.readerFocus).toBe('result');
-    expect(back.resultKind).toBe('mono');
   });
 });
 
@@ -548,28 +547,26 @@ describe('pdfDualExport', () => {
   });
 
   describe('resolveSubsetPagePairs — subset translation mapping', () => {
-    it('pairs each mono page with its mapped original page', () => {
+    it('pairs mono pages with mapped originals, marks missing pairs, clamps out-of-range indices, and handles an empty mapping', () => {
+      // facet: pairs each mono page with its mapped original page.
       expect(resolveSubsetPagePairs([4, 0, 1], 5, 3)).toEqual([
         { originalIndex: 4, translatedIndex: 0, missingTranslated: false },
         { originalIndex: 0, translatedIndex: 1, missingTranslated: false },
         { originalIndex: 1, translatedIndex: 2, missingTranslated: false },
       ]);
-    });
 
-    it('marks pairs missing when mono has fewer pages than the mapping', () => {
+      // facet: marks pairs missing when mono has fewer pages than the mapping.
       expect(resolveSubsetPagePairs([0, 2], 3, 1)).toEqual([
         { originalIndex: 0, translatedIndex: 0, missingTranslated: false },
         { originalIndex: 2, translatedIndex: null, missingTranslated: true },
       ]);
-    });
 
-    it('clamps out-of-range original indices defensively', () => {
+      // facet: clamps out-of-range original indices defensively.
       expect(resolveSubsetPagePairs([7], 3, 1)).toEqual([
         { originalIndex: 2, translatedIndex: 0, missingTranslated: false },
       ]);
-    });
 
-    it('returns no pairs for an empty mapping', () => {
+      // facet: returns no pairs for an empty mapping.
       expect(resolveSubsetPagePairs([], 3, 2)).toEqual([]);
     });
   });
@@ -602,65 +599,71 @@ describe('pdfDualExport', () => {
   });
 
   describe('buildMergedMonoPdf — accumulate translated ranges', () => {
-    it('fills the whole original from two runs, latest wins on overlap', async () => {
-      // Original: 16 pages, widths 101..116.
-      const originalBytes = await makeDoc(Array.from({ length: 16 }, (_, i) => 101 + i));
-      // Run 1 translated pages 1-5 (widths 201..205, one per original page).
-      const run1 = await makeDoc(Array.from({ length: 5 }, (_, i) => 201 + i));
-      // Run 2 translated pages 4-16 (widths 304..316) — overlaps run 1 on 4-5.
-      const run2 = await makeDoc(Array.from({ length: 13 }, (_, i) => 304 + i));
+    it('merges runs latest-wins, embeds uncovered originals, ignores out-of-range mappings, and returns the original with no runs', async () => {
+      // facet: fills the whole original from two runs, latest wins on overlap.
+      {
+        // Original: 16 pages, widths 101..116.
+        const originalBytes = await makeDoc(Array.from({ length: 16 }, (_, i) => 101 + i));
+        // Run 1 translated pages 1-5 (widths 201..205, one per original page).
+        const run1 = await makeDoc(Array.from({ length: 5 }, (_, i) => 201 + i));
+        // Run 2 translated pages 4-16 (widths 304..316) — overlaps run 1 on 4-5.
+        const run2 = await makeDoc(Array.from({ length: 13 }, (_, i) => 304 + i));
 
-      const bytes = await buildMergedMonoPdf({
-        originalBytes,
-        runs: [
-          { monoBytes: run1, monoToOriginalIndex: [0, 1, 2, 3, 4] },
-          { monoBytes: run2, monoToOriginalIndex: Array.from({ length: 13 }, (_, i) => 3 + i) },
-        ],
-      });
-
-      const out = await PDFDocument.load(bytes);
-      expect(out.getPageCount()).toBe(16);
-      // Pages 1-3 from run 1 (2xx), pages 4-16 from run 2 (3xx, latest wins).
-      const widths = Array.from({ length: 16 }, (_, i) => out.getPage(i).getWidth());
-      expect(widths.slice(0, 3)).toEqual([201, 202, 203]);
-      expect(widths.slice(3)).toEqual(Array.from({ length: 13 }, (_, i) => 304 + i));
-    });
-
-    it('embeds the original page when no run covered it', async () => {
-      const originalBytes = await makeDoc([101, 102, 103]);
-      const run1 = await makeDoc([201]); // translated page 2 only
-
-      const out = await PDFDocument.load(
-        await buildMergedMonoPdf({
+        const bytes = await buildMergedMonoPdf({
           originalBytes,
-          runs: [{ monoBytes: run1, monoToOriginalIndex: [1] }],
-        }),
-      );
-      expect(out.getPageCount()).toBe(3);
-      expect(out.getPage(0).getWidth()).toBe(101); // original
-      expect(out.getPage(1).getWidth()).toBe(201); // translated
-      expect(out.getPage(2).getWidth()).toBe(103); // original
-    });
+          runs: [
+            { monoBytes: run1, monoToOriginalIndex: [0, 1, 2, 3, 4] },
+            { monoBytes: run2, monoToOriginalIndex: Array.from({ length: 13 }, (_, i) => 3 + i) },
+          ],
+        });
 
-    it('ignores mappings pointing beyond the mono document', async () => {
-      const originalBytes = await makeDoc([101]);
-      const run1 = await makeDoc([201]);
-      const out = await PDFDocument.load(
-        await buildMergedMonoPdf({
-          originalBytes,
-          runs: [{ monoBytes: run1, monoToOriginalIndex: [0, 5, 9] }], // 5, 9 don't exist
-        }),
-      );
-      expect(out.getPageCount()).toBe(1);
-      expect(out.getPage(0).getWidth()).toBe(201);
-    });
+        const out = await PDFDocument.load(bytes);
+        expect(out.getPageCount()).toBe(16);
+        // Pages 1-3 from run 1 (2xx), pages 4-16 from run 2 (3xx, latest wins).
+        const widths = Array.from({ length: 16 }, (_, i) => out.getPage(i).getWidth());
+        expect(widths.slice(0, 3)).toEqual([201, 202, 203]);
+        expect(widths.slice(3)).toEqual(Array.from({ length: 13 }, (_, i) => 304 + i));
+      }
 
-    it('returns just the original when there are no runs', async () => {
-      const originalBytes = await makeDoc([101, 102]);
-      const out = await PDFDocument.load(
-        await buildMergedMonoPdf({ originalBytes, runs: [] }),
-      );
-      expect(out.getPageCount()).toBe(2);
+      // facet: embeds the original page when no run covered it.
+      {
+        const originalBytes = await makeDoc([101, 102, 103]);
+        const run1 = await makeDoc([201]); // translated page 2 only
+
+        const out = await PDFDocument.load(
+          await buildMergedMonoPdf({
+            originalBytes,
+            runs: [{ monoBytes: run1, monoToOriginalIndex: [1] }],
+          }),
+        );
+        expect(out.getPageCount()).toBe(3);
+        expect(out.getPage(0).getWidth()).toBe(101); // original
+        expect(out.getPage(1).getWidth()).toBe(201); // translated
+        expect(out.getPage(2).getWidth()).toBe(103); // original
+      }
+
+      // facet: ignores mappings pointing beyond the mono document.
+      {
+        const originalBytes = await makeDoc([101]);
+        const run1 = await makeDoc([201]);
+        const out = await PDFDocument.load(
+          await buildMergedMonoPdf({
+            originalBytes,
+            runs: [{ monoBytes: run1, monoToOriginalIndex: [0, 5, 9] }], // 5, 9 don't exist
+          }),
+        );
+        expect(out.getPageCount()).toBe(1);
+        expect(out.getPage(0).getWidth()).toBe(201);
+      }
+
+      // facet: returns just the original when there are no runs.
+      {
+        const originalBytes = await makeDoc([101, 102]);
+        const out = await PDFDocument.load(
+          await buildMergedMonoPdf({ originalBytes, runs: [] }),
+        );
+        expect(out.getPageCount()).toBe(2);
+      }
     });
   });
 });

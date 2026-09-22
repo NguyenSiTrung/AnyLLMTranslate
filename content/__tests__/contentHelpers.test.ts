@@ -290,110 +290,114 @@ describe('pageContext category detection helpers', () => {
     expect(categoryState.isCategoryDetectionInFlight()).toBe(false);
   });
 
-  it('clears stale auto category when the page URL changes, and does not let weak heuristic results permanently block LLM detection', async () => {
-    const { categoryState } = await loadModules();
-    categoryState.setAutoDetectedCategory('News', 'llm');
-    expect(categoryState.getAutoDetectedCategory()).toBe('News');
+  it('clears stale auto category on URL change, refines weak heuristics, and skips the LLM for locked/cached sources while normalizing responses', async () => {
+    // facet: clears stale auto category when the page URL changes, and does not let weak heuristic results permanently block LLM detection
+    {
+      const { categoryState } = await loadModules();
+      categoryState.setAutoDetectedCategory('News', 'llm');
+      expect(categoryState.getAutoDetectedCategory()).toBe('News');
 
-    window.history.replaceState({}, '', '/other-page');
-    categoryState.invalidateCategoryIfUrlChanged();
+      window.history.replaceState({}, '', '/other-page');
+      categoryState.invalidateCategoryIfUrlChanged();
 
-    expect(categoryState.getAutoDetectedCategory()).toBeUndefined();
-    expect(categoryState.getAutoDetectedSource()).toBeUndefined();
+      expect(categoryState.getAutoDetectedCategory()).toBeUndefined();
+      expect(categoryState.getAutoDetectedSource()).toBeUndefined();
 
-    // Weak heuristic (meta description) should be available immediately but
-    // must not skip LLM refinement.
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Technology News' }),
-      },
-    });
+      // Weak heuristic (meta description) should be available immediately but
+      // must not skip LLM refinement.
+      vi.stubGlobal('chrome', {
+        runtime: {
+          sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'Technology News' }),
+        },
+      });
 
-    document.head.innerHTML = `<meta name="description" content="breaking news headlines journalism">`;
-    const { categoryState: state2, pageContext } = await loadModules();
+      document.head.innerHTML = `<meta name="description" content="breaking news headlines journalism">`;
+      const { categoryState: state2, pageContext } = await loadModules();
 
-    const heuristic = pageContext.extractPageContext(document, true).category;
-    expect(heuristic).toBe('News');
-    state2.setAutoDetectedCategory(heuristic, 'heuristic');
+      const heuristic = pageContext.extractPageContext(document, true).category;
+      expect(heuristic).toBe('News');
+      state2.setAutoDetectedCategory(heuristic, 'heuristic');
 
-    const onDetected = vi.fn();
-    await pageContext.triggerAutoCategoryDetection(
-      settings({ llmCategoryDetectionMode: 'blocking' }),
-      undefined,
-      onDetected,
-    );
-    expect(chrome.runtime.sendMessage).toHaveBeenCalled();
-    expect(onDetected).toHaveBeenCalledWith('Technology News');
-    expect(state2.getAutoDetectedCategory()).toBe('Technology News');
-    expect(state2.getAutoDetectedSource()).toBe('llm');
-  });
+      const onDetected = vi.fn();
+      await pageContext.triggerAutoCategoryDetection(
+        settings({ llmCategoryDetectionMode: 'blocking' }),
+        undefined,
+        onDetected,
+      );
+      expect(chrome.runtime.sendMessage).toHaveBeenCalled();
+      expect(onDetected).toHaveBeenCalledWith('Technology News');
+      expect(state2.getAutoDetectedCategory()).toBe('Technology News');
+      expect(state2.getAutoDetectedSource()).toBe('llm');
+    }
 
-  it('skips the LLM when a domain-map/prior-LLM category is locked or the session cache has the host, and normalizes LLM responses through detectLLMCategoryIfNeeded', async () => {
-    vi.stubGlobal('chrome', {
-      runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
-    });
-    const { categoryState, pageContext } = await loadModules();
+    // facet: skips the LLM when a domain-map/prior-LLM category is locked or the session cache has the host, and normalizes LLM responses through detectLLMCategoryIfNeeded
+    {
+      vi.stubGlobal('chrome', {
+        runtime: { sendMessage: vi.fn().mockResolvedValue({ success: true, category: 'News' }) },
+      });
+      const { categoryState, pageContext } = await loadModules();
 
-    // Scenario 1: domain-map lock → no LLM call.
-    categoryState.setAutoDetectedCategory('Video Platform', 'domain');
-    await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+      // Scenario 1: domain-map lock → no LLM call.
+      categoryState.setAutoDetectedCategory('Video Platform', 'domain');
+      await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 
-    // Scenario 2: prior LLM category lock → no LLM call.
-    categoryState._resetCategoryState();
-    categoryState.setAutoDetectedCategory('News', 'llm');
-    await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+      // Scenario 2: prior LLM category lock → no LLM call.
+      categoryState._resetCategoryState();
+      categoryState.setAutoDetectedCategory('News', 'llm');
+      await pageContext.triggerAutoCategoryDetection(settings(), undefined, vi.fn());
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
 
-    // Scenario 3: session host cache → cached category wins, no LLM call.
-    const store = new Map<string, string>();
-    vi.stubGlobal('sessionStorage', {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => {
-        store.set(k, v);
-      },
-      removeItem: (k: string) => {
-        store.delete(k);
-      },
-    });
-    categoryState._resetCategoryState();
-    pageContext.writeCategorySessionCache(window.location.hostname, 'Academic Research');
+      // Scenario 3: session host cache → cached category wins, no LLM call.
+      const store = new Map<string, string>();
+      vi.stubGlobal('sessionStorage', {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, v);
+        },
+        removeItem: (k: string) => {
+          store.delete(k);
+        },
+      });
+      categoryState._resetCategoryState();
+      pageContext.writeCategorySessionCache(window.location.hostname, 'Academic Research');
 
-    const onDetected = vi.fn();
-    await pageContext.triggerAutoCategoryDetection(
-      settings({ llmCategoryDetectionMode: 'blocking' }),
-      undefined,
-      onDetected,
-    );
+      const onDetected = vi.fn();
+      await pageContext.triggerAutoCategoryDetection(
+        settings({ llmCategoryDetectionMode: 'blocking' }),
+        undefined,
+        onDetected,
+      );
 
-    expect(onDetected).toHaveBeenCalledWith('Academic Research');
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
-    expect(categoryState.getAutoDetectedCategory()).toBe('Academic Research');
-    expect(categoryState.getAutoDetectedSource()).toBe('cache');
+      expect(onDetected).toHaveBeenCalledWith('Academic Research');
+      expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+      expect(categoryState.getAutoDetectedCategory()).toBe('Academic Research');
+      expect(categoryState.getAutoDetectedSource()).toBe('cache');
 
-    // Direct normalization through detectLLMCategoryIfNeeded (blocking mode).
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: vi.fn().mockResolvedValue({
-          success: true,
-          category: 'software development',
-        }),
-      },
-    });
-    const { pageContext: pc2 } = await loadModules();
-    const ctx: PageContext = { title: 't', description: 'd', domain: 'example.com' };
-    const onDetected2 = vi.fn();
+      // Direct normalization through detectLLMCategoryIfNeeded (blocking mode).
+      vi.stubGlobal('chrome', {
+        runtime: {
+          sendMessage: vi.fn().mockResolvedValue({
+            success: true,
+            category: 'software development',
+          }),
+        },
+      });
+      const { pageContext: pc2 } = await loadModules();
+      const ctx: PageContext = { title: 't', description: 'd', domain: 'example.com' };
+      const onDetected2 = vi.fn();
 
-    await pc2.detectLLMCategoryIfNeeded(
-      ctx,
-      settings({ llmCategoryDetectionMode: 'blocking' }),
-      undefined,
-      undefined,
-      onDetected2,
-    );
+      await pc2.detectLLMCategoryIfNeeded(
+        ctx,
+        settings({ llmCategoryDetectionMode: 'blocking' }),
+        undefined,
+        undefined,
+        onDetected2,
+      );
 
-    expect(onDetected2).toHaveBeenCalledWith('Software Development');
-    expect(ctx.category).toBe('Software Development');
+      expect(onDetected2).toHaveBeenCalledWith('Software Development');
+      expect(ctx.category).toBe('Software Development');
+    }
   });
 });
 
@@ -412,35 +416,85 @@ describe('systemic pause sticky banner', () => {
     document.body.innerHTML = '';
   });
 
-  it('shows sticky banner with message and action buttons', () => {
-    const onRetry = vi.fn();
-    const onDismiss = vi.fn();
-    const onOpenSettings = vi.fn();
+  it('shows a sticky banner with message/action buttons, and wires Retry/Dismiss/Open settings', () => {
+    // facet: shows sticky banner with message and action buttons
+    {
+      const onRetry = vi.fn();
+      const onDismiss = vi.fn();
+      const onOpenSettings = vi.fn();
 
-    showSystemicPauseBanner({
-      message: 'All providers rate-limited',
-      onRetry,
-      onDismiss,
-      onOpenSettings,
-    });
+      showSystemicPauseBanner({
+        message: 'All providers rate-limited',
+        onRetry,
+        onDismiss,
+        onOpenSettings,
+      });
 
-    expect(isSystemicPauseBannerVisible()).toBe(true);
-    const bar = document.querySelector('[data-anyllm-role="systemic-pause-banner"]');
-    expect(bar).toBeTruthy();
-    expect(bar?.textContent).toContain('All providers rate-limited');
-    expect(bar?.querySelector('.anyllm-systemic-pause-retry')?.textContent).toBe('Retry');
-    expect(bar?.querySelector('.anyllm-systemic-pause-dismiss')?.textContent).toBe('Dismiss');
-    expect(bar?.querySelector('.anyllm-systemic-pause-settings')?.textContent).toBe(
-      'Open settings',
-    );
+      expect(isSystemicPauseBannerVisible()).toBe(true);
+      const bar = document.querySelector('[data-anyllm-role="systemic-pause-banner"]');
+      expect(bar).toBeTruthy();
+      expect(bar?.textContent).toContain('All providers rate-limited');
+      expect(bar?.querySelector('.anyllm-systemic-pause-retry')?.textContent).toBe('Retry');
+      expect(bar?.querySelector('.anyllm-systemic-pause-dismiss')?.textContent).toBe('Dismiss');
+      expect(bar?.querySelector('.anyllm-systemic-pause-settings')?.textContent).toBe(
+        'Open settings',
+      );
 
-    // hideSystemicPauseBanner removes the bar
-    hideSystemicPauseBanner();
-    expect(isSystemicPauseBannerVisible()).toBe(false);
-    expect(document.querySelector('[data-anyllm-role="systemic-pause-banner"]')).toBeNull();
+      // hideSystemicPauseBanner removes the bar
+      hideSystemicPauseBanner();
+      expect(isSystemicPauseBannerVisible()).toBe(false);
+      expect(document.querySelector('[data-anyllm-role="systemic-pause-banner"]')).toBeNull();
+    }
+
+    // facet: action buttons invoke callbacks — Retry/Dismiss remove the banner, Open settings does not
+    {
+      // Retry
+      const onRetry = vi.fn();
+      showSystemicPauseBanner({
+        message: 'err',
+        onRetry,
+        onDismiss: () => {},
+      });
+      const retry = document.querySelector(
+        '.anyllm-systemic-pause-retry',
+      ) as HTMLButtonElement;
+      retry.click();
+      expect(onRetry).toHaveBeenCalledTimes(1);
+      expect(isSystemicPauseBannerVisible()).toBe(false);
+
+      // Dismiss
+      const onDismiss = vi.fn();
+      showSystemicPauseBanner({
+        message: 'err',
+        onRetry: () => {},
+        onDismiss,
+      });
+      const dismiss = document.querySelector(
+        '.anyllm-systemic-pause-dismiss',
+      ) as HTMLButtonElement;
+      dismiss.click();
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+      expect(isSystemicPauseBannerVisible()).toBe(false);
+
+      // Open settings
+      const onOpenSettings = vi.fn();
+      showSystemicPauseBanner({
+        message: 'err',
+        onRetry: () => {},
+        onDismiss: () => {},
+        onOpenSettings,
+      });
+      const settings = document.querySelector(
+        '.anyllm-systemic-pause-settings',
+      ) as HTMLButtonElement;
+      settings.click();
+      expect(onOpenSettings).toHaveBeenCalledTimes(1);
+      expect(isSystemicPauseBannerVisible()).toBe(true);
+    }
   });
 
-  it('does not auto-dismiss (sticky until action)', async () => {
+  it('does not auto-dismiss the sticky banner and replaces an ephemeral error toast', async () => {
+    // facet: does not auto-dismiss (sticky until action)
     vi.useFakeTimers();
     showSystemicPauseBanner({
       message: 'Pool exhausted',
@@ -450,54 +504,8 @@ describe('systemic pause sticky banner', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(isSystemicPauseBannerVisible()).toBe(true);
     vi.useRealTimers();
-  });
 
-  it('action buttons invoke callbacks — Retry/Dismiss remove the banner, Open settings does not', () => {
-    // Retry
-    const onRetry = vi.fn();
-    showSystemicPauseBanner({
-      message: 'err',
-      onRetry,
-      onDismiss: () => {},
-    });
-    const retry = document.querySelector(
-      '.anyllm-systemic-pause-retry',
-    ) as HTMLButtonElement;
-    retry.click();
-    expect(onRetry).toHaveBeenCalledTimes(1);
-    expect(isSystemicPauseBannerVisible()).toBe(false);
-
-    // Dismiss
-    const onDismiss = vi.fn();
-    showSystemicPauseBanner({
-      message: 'err',
-      onRetry: () => {},
-      onDismiss,
-    });
-    const dismiss = document.querySelector(
-      '.anyllm-systemic-pause-dismiss',
-    ) as HTMLButtonElement;
-    dismiss.click();
-    expect(onDismiss).toHaveBeenCalledTimes(1);
-    expect(isSystemicPauseBannerVisible()).toBe(false);
-
-    // Open settings
-    const onOpenSettings = vi.fn();
-    showSystemicPauseBanner({
-      message: 'err',
-      onRetry: () => {},
-      onDismiss: () => {},
-      onOpenSettings,
-    });
-    const settings = document.querySelector(
-      '.anyllm-systemic-pause-settings',
-    ) as HTMLButtonElement;
-    settings.click();
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(isSystemicPauseBannerVisible()).toBe(true);
-  });
-
-  it('replaces ephemeral error toast when sticky banner is shown', () => {
+    // facet: replaces ephemeral error toast when sticky banner is shown
     showTranslationErrorNotification('temporary');
     expect(
       document.querySelector('[data-anyllm-role="translation-error-notification"]'),
@@ -574,89 +582,97 @@ describe('subtitleControls — per-host drag offsets', () => {
       configurable: true,
     });
   });
-  it('stores drag offsets per hostname and does not leak them across sites', async () => {
-    setOffset(120, -60);
-    await vi.waitFor(() => {
-      const map = storageData.get('anyllm-translate-subtitle-offsets') as
-        | Record<string, { offsetX: number }>
-        | undefined;
-      expect(map?.['www.udemy.com']?.offsetX).toBe(120);
-    });
+  it('stores drag offsets per hostname, does not leak them across sites, and keeps style preferences global', async () => {
+    // facet: stores drag offsets per hostname and does not leak them across sites
+    {
+      setOffset(120, -60);
+      await vi.waitFor(() => {
+        const map = storageData.get('anyllm-translate-subtitle-offsets') as
+          | Record<string, { offsetX: number }>
+          | undefined;
+        expect(map?.['www.udemy.com']?.offsetX).toBe(120);
+      });
 
-    // Same host reload: offset restored.
-    const onUdemy = await loadPreferences();
-    expect(onUdemy.offsetX).toBe(120);
-    expect(onUdemy.offsetY).toBe(-60);
+      // Same host reload: offset restored.
+      const onUdemy = await loadPreferences();
+      expect(onUdemy.offsetX).toBe(120);
+      expect(onUdemy.offsetY).toBe(-60);
 
-    // Different host: no offset applied.
-    setHostname('www.youtube.com');
-    const onYoutube = await loadPreferences();
-    expect(onYoutube.offsetX).toBe(0);
-    expect(onYoutube.offsetY).toBe(0);
+      // Different host: no offset applied.
+      setHostname('www.youtube.com');
+      const onYoutube = await loadPreferences();
+      expect(onYoutube.offsetX).toBe(0);
+      expect(onYoutube.offsetY).toBe(0);
 
-    // Each host evolves independently.
-    setOffset(-40, 30);
-    await vi.waitFor(() => {
-      const map = storageData.get('anyllm-translate-subtitle-offsets') as
-        | Record<string, { offsetX: number }>
-        | undefined;
-      expect(map?.['www.youtube.com']?.offsetX).toBe(-40);
-    });
-    setHostname('www.udemy.com');
-    const udemyAgain = await loadPreferences();
-    expect(udemyAgain.offsetX).toBe(120);
-    expect(udemyAgain.offsetY).toBe(-60);
+      // Each host evolves independently.
+      setOffset(-40, 30);
+      await vi.waitFor(() => {
+        const map = storageData.get('anyllm-translate-subtitle-offsets') as
+          | Record<string, { offsetX: number }>
+          | undefined;
+        expect(map?.['www.youtube.com']?.offsetX).toBe(-40);
+      });
+      setHostname('www.udemy.com');
+      const udemyAgain = await loadPreferences();
+      expect(udemyAgain.offsetX).toBe(120);
+      expect(udemyAgain.offsetY).toBe(-60);
+    }
+
+    // facet: keeps style preferences global across hosts
+    {
+      setHostname('www.youtube.com');
+      setFontSize(24);
+      await vi.waitFor(() => expect(storageSet).toHaveBeenCalled());
+
+      setHostname('www.udemy.com');
+      const prefs = await loadPreferences();
+      expect(prefs.fontSize).toBe(24);
+    }
   });
 
-  it('ignores legacy cross-site offsets stored in the shared prefs blob', async () => {
-    // Simulate an old-version write: offsets inside the global blob.
-    await savePreferences({
-      fontSize: 16,
-      fontSizeMode: 'fixed',
-      position: 'bottom',
-      backgroundOpacity: 0.7,
-      offsetX: 999,
-      offsetY: -999,
-      fontFamily: 'system',
-      textColor: 'rgba(255,255,255,1)',
-      originalTextColor: 'rgba(255,255,255,0.6)',
-      backgroundColor: '0,0,0',
-      borderRadius: 8,
-      textShadow: '0 1px 3px rgba(0,0,0,0.5)',
-      displayMode: 'bilingual',
-    });
+  it('ignores legacy cross-site offsets in the shared prefs blob and coalesces a drag burst into one persisted offset', async () => {
+    // facet: ignores legacy cross-site offsets stored in the shared prefs blob
+    {
+      // Simulate an old-version write: offsets inside the global blob.
+      await savePreferences({
+        fontSize: 16,
+        fontSizeMode: 'fixed',
+        position: 'bottom',
+        backgroundOpacity: 0.7,
+        offsetX: 999,
+        offsetY: -999,
+        fontFamily: 'system',
+        textColor: 'rgba(255,255,255,1)',
+        originalTextColor: 'rgba(255,255,255,0.6)',
+        backgroundColor: '0,0,0',
+        borderRadius: 8,
+        textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+        displayMode: 'bilingual',
+      });
 
-    const prefs = await loadPreferences();
-    expect(prefs.offsetX).toBe(0);
-    expect(prefs.offsetY).toBe(0);
-    // Style fields from the blob still load globally.
-    expect(prefs.fontSize).toBe(16);
-  });
+      const prefs = await loadPreferences();
+      expect(prefs.offsetX).toBe(0);
+      expect(prefs.offsetY).toBe(0);
+      // Style fields from the blob still load globally.
+      expect(prefs.fontSize).toBe(16);
+    }
 
-  it('keeps style preferences global across hosts', async () => {
-    setHostname('www.youtube.com');
-    setFontSize(24);
-    await vi.waitFor(() => expect(storageSet).toHaveBeenCalled());
+    // facet: coalesces a drag burst into one persisted offset on flush
+    {
+      setOffset(10, 10);
+      setOffset(40, -20);
+      setOffset(80, -35);
+      // Debounced: nothing written yet mid-drag (the burst above is synchronous).
+      expect(storageData.has('anyllm-translate-subtitle-offsets')).toBe(false);
 
-    setHostname('www.udemy.com');
-    const prefs = await loadPreferences();
-    expect(prefs.fontSize).toBe(24);
-  });
-
-  it('coalesces a drag burst into one persisted offset on flush', async () => {
-    setOffset(10, 10);
-    setOffset(40, -20);
-    setOffset(80, -35);
-    // Debounced: nothing written yet mid-drag (the burst above is synchronous).
-    expect(storageData.has('anyllm-translate-subtitle-offsets')).toBe(false);
-
-    flushPendingOffsetSave();
-    await vi.waitFor(() => {
-      const map = storageData.get('anyllm-translate-subtitle-offsets') as
-        | Record<string, { offsetX: number; offsetY: number }>
-        | undefined;
-      expect(map?.['www.udemy.com']).toEqual({ offsetX: 80, offsetY: -35 });
-    });
-    resetDragState();
+      flushPendingOffsetSave();
+      await vi.waitFor(() => {
+        const map = storageData.get('anyllm-translate-subtitle-offsets') as
+          | Record<string, { offsetX: number; offsetY: number }>
+          | undefined;
+        expect(map?.['www.udemy.com']).toEqual({ offsetX: 80, offsetY: -35 });
+      });
+      resetDragState();
+    }
   });
 });

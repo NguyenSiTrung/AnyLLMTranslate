@@ -85,14 +85,15 @@ describe('pdf-viewer App page selection wiring', () => {
     window.history.replaceState(null, '', '?file=https%3A%2F%2Fexample.com%2Fa.pdf');
   });
 
-  it('Translate opens the setup stage without starting the job', () => {
-    render(<App />);
+  it('Translate opens the setup stage without starting, and Start launches with no page selection by default', () => {
+    // facet: Translate opens the setup stage without starting the job
+    const first = render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^translate$/i }));
     expect(screen.getByRole('button', { name: /start translation/i })).toBeInTheDocument();
     expect(scientific.startJob).not.toHaveBeenCalled();
-  });
+    first.unmount();
 
-  it('Start translation launches the job with no page selection by default', () => {
+    // facet: Start translation launches the job with no page selection by default
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /^translate$/i }));
     fireEvent.click(screen.getByRole('button', { name: /start translation/i }));

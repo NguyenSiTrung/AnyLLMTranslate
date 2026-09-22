@@ -308,166 +308,190 @@ describe('MutationWatcher — shadow DOM observation (FR-23)', () => {
     return { host, shadow };
   }
 
-  it('observes mutations inside a registered open shadow root', async () => {
-    const { host, shadow } = makeShadowHost();
-    document.body.appendChild(host);
-    registerShadowRoots(document.body);
+  it('observes mutations inside a registered open shadow root and a dynamically added open shadow host', async () => {
+    // facet: observes mutations inside a registered open shadow root
+    {
+      const { host, shadow } = makeShadowHost();
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
 
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
-    watcher.start(document.body);
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5, undefined, true);
+      watcher.start(document.body);
 
-    // Clear any initial flush before appending inside the shadow root.
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
+      // Clear any initial flush before appending inside the shadow root.
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
 
-    const p = document.createElement('p');
-    p.textContent = 'Paragraph added inside the shadow root.';
-    shadow.appendChild(p);
+      const p = document.createElement('p');
+      p.textContent = 'Paragraph added inside the shadow root.';
+      shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 25));
 
-    expect(onMutation).toHaveBeenCalled();
-    const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
-    expect(added.some((el) => el === p || el.contains(p))).toBe(true);
-    watcher.stop();
+      expect(onMutation).toHaveBeenCalled();
+      const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
+      expect(added.some((el) => el === p || el.contains(p))).toBe(true);
+      watcher.stop();
+    }
+
+    // Reset document + registry between folded facets (mirrors the describe's beforeEach).
+    document.documentElement.innerHTML = '<head></head><body></body>';
+    clearShadowDomRoots();
+
+    // facet: observes a dynamically added open shadow host, including later shadow children
+    {
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5, undefined, true);
+      watcher.start(document.body);
+
+      const { host, shadow } = makeShadowHost();
+      document.body.appendChild(host);
+
+      // Wait for the host-add mutation to register/observe the new root.
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
+
+      const p = document.createElement('p');
+      p.textContent = 'Later shadow child paragraph.';
+      shadow.appendChild(p);
+
+      await new Promise((r) => setTimeout(r, 25));
+
+      expect(onMutation).toHaveBeenCalled();
+      const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
+      expect(added.some((el) => el === p || el.contains(p))).toBe(true);
+
+      // stop() disconnects shadow observers too.
+      watcher.stop();
+      onMutation.mockClear();
+      const p2 = document.createElement('p');
+      p2.textContent = 'Post-stop shadow paragraph.';
+      shadow.appendChild(p2);
+      await new Promise((r) => setTimeout(r, 25));
+      expect(onMutation).not.toHaveBeenCalled();
+    }
   });
 
-  it('observes a dynamically added open shadow host, including later shadow children', async () => {
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
-    watcher.start(document.body);
+  it('does not observe shadow roots when the option is off or under extension-owned added elements', async () => {
+    // facet: does not observe shadow roots when the option is off
+    {
+      const { host, shadow } = makeShadowHost();
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
 
-    const { host, shadow } = makeShadowHost();
-    document.body.appendChild(host);
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5);
+      watcher.start(document.body);
 
-    // Wait for the host-add mutation to register/observe the new root.
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
 
-    const p = document.createElement('p');
-    p.textContent = 'Later shadow child paragraph.';
-    shadow.appendChild(p);
+      const p = document.createElement('p');
+      p.textContent = 'Unobserved shadow paragraph.';
+      shadow.appendChild(p);
 
-    await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 25));
 
-    expect(onMutation).toHaveBeenCalled();
-    const added = onMutation.mock.calls.flatMap((call) => call[0] as Element[]);
-    expect(added.some((el) => el === p || el.contains(p))).toBe(true);
+      expect(onMutation).not.toHaveBeenCalled();
+      watcher.stop();
+    }
 
-    // stop() disconnects shadow observers too.
-    watcher.stop();
-    onMutation.mockClear();
-    const p2 = document.createElement('p');
-    p2.textContent = 'Post-stop shadow paragraph.';
-    shadow.appendChild(p2);
-    await new Promise((r) => setTimeout(r, 25));
-    expect(onMutation).not.toHaveBeenCalled();
+    // Reset document + registry between folded facets (mirrors the describe's beforeEach).
+    document.documentElement.innerHTML = '<head></head><body></body>';
+    clearShadowDomRoots();
+
+    // facet: does not scan or observe shadow roots under extension-owned added elements
+    {
+      const { host, shadow } = makeShadowHost();
+      // Extension-owned subtree — the watcher's own injected content.
+      host.setAttribute('data-anyllm-role', 'translation');
+
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5, undefined, true);
+      watcher.start(document.body);
+      document.body.appendChild(host);
+
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
+
+      // The root must not have been registered/observed — later shadow-child
+      // mutations inside extension-owned content are never queued.
+      const p = document.createElement('p');
+      p.textContent = 'Paragraph inside extension-owned shadow.';
+      shadow.appendChild(p);
+
+      await new Promise((r) => setTimeout(r, 25));
+
+      expect(onMutation).not.toHaveBeenCalled();
+      expect(getRegisteredShadowRoots()).not.toContain(shadow);
+      watcher.stop();
+    }
   });
 
-  it('does not observe shadow roots when the option is off', async () => {
-    const { host, shadow } = makeShadowHost();
-    document.body.appendChild(host);
-    registerShadowRoots(document.body);
+  it('prunes observers for detached shadow roots and skips roots on data-anyllm-owned hosts', async () => {
+    // facet: prunes observers for detached shadow roots during flush
+    {
+      const { host, shadow } = makeShadowHost();
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
 
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5);
-    watcher.start(document.body);
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5, undefined, true);
+      watcher.start(document.body);
 
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
 
-    const p = document.createElement('p');
-    p.textContent = 'Unobserved shadow paragraph.';
-    shadow.appendChild(p);
+      // Detach the host, then force a document flush so the stale observer is
+      // pruned. The registry keeps the root so teardown cleanup still works.
+      host.remove();
+      const trigger = document.createElement('p');
+      trigger.textContent = 'Document mutation forcing a flush.';
+      document.body.appendChild(trigger);
 
-    await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 25));
+      expect(getRegisteredShadowRoots()).toContain(shadow);
+      onMutation.mockClear();
 
-    expect(onMutation).not.toHaveBeenCalled();
-    watcher.stop();
-  });
+      // The pruned observer no longer delivers shadow mutations.
+      const p = document.createElement('p');
+      p.textContent = 'Post-detach shadow paragraph.';
+      shadow.appendChild(p);
 
-  it('does not scan or observe shadow roots under extension-owned added elements', async () => {
-    const { host, shadow } = makeShadowHost();
-    // Extension-owned subtree — the watcher's own injected content.
-    host.setAttribute('data-anyllm-role', 'translation');
+      await new Promise((r) => setTimeout(r, 25));
+      expect(onMutation).not.toHaveBeenCalled();
+      watcher.stop();
+    }
 
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
-    watcher.start(document.body);
-    document.body.appendChild(host);
+    // Reset document + registry between folded facets (mirrors the describe's beforeEach).
+    document.documentElement.innerHTML = '<head></head><body></body>';
+    clearShadowDomRoots();
 
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
+    // facet: does not observe shadow roots on elements marked data-anyllm-owned
+    {
+      const { host, shadow } = makeShadowHost();
+      host.setAttribute(DATA_ATTRS.OWNED, '');
 
-    // The root must not have been registered/observed — later shadow-child
-    // mutations inside extension-owned content are never queued.
-    const p = document.createElement('p');
-    p.textContent = 'Paragraph inside extension-owned shadow.';
-    shadow.appendChild(p);
+      const onMutation = vi.fn();
+      const watcher = new MutationWatcher(onMutation, 5, undefined, true);
+      watcher.start(document.body);
 
-    await new Promise((r) => setTimeout(r, 25));
+      // Dynamic add — the owned marker makes isExtensionOwned skip the scan.
+      document.body.appendChild(host);
+      await new Promise((r) => setTimeout(r, 25));
+      onMutation.mockClear();
 
-    expect(onMutation).not.toHaveBeenCalled();
-    expect(getRegisteredShadowRoots()).not.toContain(shadow);
-    watcher.stop();
-  });
+      const p = document.createElement('p');
+      p.textContent = 'Paragraph inside an owned shadow root.';
+      shadow.appendChild(p);
 
-  it('prunes observers for detached shadow roots during flush', async () => {
-    const { host, shadow } = makeShadowHost();
-    document.body.appendChild(host);
-    registerShadowRoots(document.body);
+      await new Promise((r) => setTimeout(r, 25));
 
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
-    watcher.start(document.body);
-
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
-
-    // Detach the host, then force a document flush so the stale observer is
-    // pruned. The registry keeps the root so teardown cleanup still works.
-    host.remove();
-    const trigger = document.createElement('p');
-    trigger.textContent = 'Document mutation forcing a flush.';
-    document.body.appendChild(trigger);
-
-    await new Promise((r) => setTimeout(r, 25));
-    expect(getRegisteredShadowRoots()).toContain(shadow);
-    onMutation.mockClear();
-
-    // The pruned observer no longer delivers shadow mutations.
-    const p = document.createElement('p');
-    p.textContent = 'Post-detach shadow paragraph.';
-    shadow.appendChild(p);
-
-    await new Promise((r) => setTimeout(r, 25));
-    expect(onMutation).not.toHaveBeenCalled();
-    watcher.stop();
-  });
-
-  it('does not observe shadow roots on elements marked data-anyllm-owned', async () => {
-    const { host, shadow } = makeShadowHost();
-    host.setAttribute(DATA_ATTRS.OWNED, '');
-
-    const onMutation = vi.fn();
-    const watcher = new MutationWatcher(onMutation, 5, undefined, true);
-    watcher.start(document.body);
-
-    // Dynamic add — the owned marker makes isExtensionOwned skip the scan.
-    document.body.appendChild(host);
-    await new Promise((r) => setTimeout(r, 25));
-    onMutation.mockClear();
-
-    const p = document.createElement('p');
-    p.textContent = 'Paragraph inside an owned shadow root.';
-    shadow.appendChild(p);
-
-    await new Promise((r) => setTimeout(r, 25));
-
-    expect(onMutation).not.toHaveBeenCalled();
-    expect(getRegisteredShadowRoots()).not.toContain(shadow);
-    watcher.stop();
+      expect(onMutation).not.toHaveBeenCalled();
+      expect(getRegisteredShadowRoots()).not.toContain(shadow);
+      watcher.stop();
+    }
   });
 
   it('observes a root registered during the onMutation callback — attachShadow emits no mutation', async () => {

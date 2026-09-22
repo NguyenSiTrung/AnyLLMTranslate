@@ -153,7 +153,9 @@ function dynamicMockStreamFetch(): void {
           const json = userContent.slice(firstBrace, lastBrace + 1);
           const entries = JSON.parse(json) as Record<string, string>;
           ids.push(...Object.keys(entries));
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
       const translations = Object.fromEntries(ids.map((id) => [id, `translated-${id}`]));
       const content = JSON.stringify(translations);
@@ -450,7 +452,7 @@ describe('stream port recordUsage', () => {
   });
 
   describe('FR-1: streaming pipeline through handleTranslate', () => {
-    it('success cache hit: mixed cached + uncached only sends uncached to provider', async () => {
+    it('success cache hit: mixed cached + uncached only sends uncached to provider; negative cache hit: mixed failure + uncached only sends the uncached to provider', async () => {
       dynamicMockStreamFetch();
       getCachedTranslation.mockImplementation((text: string) => {
         if (text === 'Hello') return Promise.resolve('Xin chào');
@@ -475,7 +477,7 @@ describe('stream port recordUsage', () => {
 
       expect(fetch).toHaveBeenCalledTimes(1);
 
-      const body = JSON.parse((fetch as any).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
+      const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
       const prompt = body.messages?.[body.messages.length - 1]?.content ?? '';
       expect(prompt).not.toContain('"p1"');
       expect(prompt).not.toContain('Hello');
@@ -497,49 +499,52 @@ describe('stream port recordUsage', () => {
         cacheHits: 1,
         cacheMisses: 1,
       });
+
+      // facet: negative cache hit: mixed failure + uncached only sends the
+      // uncached to provider.
+      {
+        getCachedTranslation.mockReset().mockResolvedValue(null);
+        dynamicMockStreamFetch();
+        getCachedFailure.mockImplementation((text: string) => {
+          if (text === 'Hello') return Promise.resolve('cached failure');
+          return Promise.resolve(null);
+        });
+
+        const sender = {
+          tab: { id: 45, url: 'https://news.example.com/article' },
+        } as chrome.runtime.MessageSender;
+        const { port, posted, deliver } = makePort(WEB_STREAM_PORT, sender);
+        fireConnect(port);
+
+        await deliver({
+          type: 'request',
+          pieces: [
+            { id: 'p1', text: 'Hello' },
+            { id: 'p2', text: 'World' },
+          ],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        });
+
+        expect(fetch).toHaveBeenCalledTimes(1);
+
+        const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
+        const prompt = body.messages?.[body.messages.length - 1]?.content ?? '';
+        expect(prompt).not.toContain('"p1"');
+        expect(prompt).not.toContain('Hello');
+        expect(prompt).toContain('"p2"');
+        expect(prompt).toContain('World');
+
+        const done = posted.find((m) => (m as { type: string }).type === 'done') as { type: string; results: Array<{ id: string; translatedText: string }>; failed?: Array<{ id: string; error: string }> } | undefined;
+        expect(done).toBeDefined();
+        expect(done?.results).toHaveLength(1);
+        expect(done?.results.find((r) => r.id === 'p2')?.translatedText).toBe('translated-p2');
+        expect(done?.failed).toHaveLength(1);
+        expect(done?.failed?.some((f) => f.id === 'p1' && f.error === 'cached failure')).toBe(true);
+      }
     });
 
-    it('negative cache hit: mixed failure + uncached only sends the uncached to provider', async () => {
-      dynamicMockStreamFetch();
-      getCachedFailure.mockImplementation((text: string) => {
-        if (text === 'Hello') return Promise.resolve('cached failure');
-        return Promise.resolve(null);
-      });
-
-      const sender = {
-        tab: { id: 45, url: 'https://news.example.com/article' },
-      } as chrome.runtime.MessageSender;
-      const { port, posted, deliver } = makePort(WEB_STREAM_PORT, sender);
-      fireConnect(port);
-
-      await deliver({
-        type: 'request',
-        pieces: [
-          { id: 'p1', text: 'Hello' },
-          { id: 'p2', text: 'World' },
-        ],
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-      });
-
-      expect(fetch).toHaveBeenCalledTimes(1);
-
-      const body = JSON.parse((fetch as any).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
-      const prompt = body.messages?.[body.messages.length - 1]?.content ?? '';
-      expect(prompt).not.toContain('"p1"');
-      expect(prompt).not.toContain('Hello');
-      expect(prompt).toContain('"p2"');
-      expect(prompt).toContain('World');
-
-      const done = posted.find((m) => (m as { type: string }).type === 'done') as { type: string; results: Array<{ id: string; translatedText: string }>; failed?: Array<{ id: string; error: string }> } | undefined;
-      expect(done).toBeDefined();
-      expect(done?.results).toHaveLength(1);
-      expect(done?.results.find((r) => r.id === 'p2')?.translatedText).toBe('translated-p2');
-      expect(done?.failed).toHaveLength(1);
-      expect(done?.failed?.some((f) => f.id === 'p1' && f.error === 'cached failure')).toBe(true);
-    });
-
-    it('dedupes identical source text: canonical sent once, both ids resolved in done', async () => {
+    it('dedupes identical source text: canonical sent once, both ids resolved in done; bedw: thrown canonical sub-batch keeps sibling result; dup surfaces as failed', async () => {
       dynamicMockStreamFetch();
 
       const sender = {
@@ -560,7 +565,7 @@ describe('stream port recordUsage', () => {
 
       expect(fetch).toHaveBeenCalledTimes(1);
 
-      const body = JSON.parse((fetch as any).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
+      const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body ?? '{}') as { messages?: Array<{ content: string }> };
       const prompt = body.messages?.[body.messages.length - 1]?.content ?? '';
       // Only the canonical id should appear in the prompt; the duplicate must not be sent.
       const sentP1 = prompt.includes('"p1"');
@@ -577,11 +582,12 @@ describe('stream port recordUsage', () => {
       expect(done?.results.find((r) => r.id === 'p2')).toBeDefined();
       const t = done?.results.find((r) => r.id === 'p1')?.translatedText;
       expect(done?.results.find((r) => r.id === 'p2')?.translatedText).toBe(t);
-    });
 
-    it('bedw: thrown canonical sub-batch keeps sibling result; dup surfaces as failed', async () => {
+      // facet: bedw: thrown canonical sub-batch keeps sibling result; dup
+      // surfaces as failed.
       // One piece per sub-batch so the canonical and sibling are separate
       // streaming requests (mirrors the batch-budget test setup below).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const base = mockStorage['anyllm-translate-settings'] as Record<string, any>;
       base.maxTextGroupLengthPerRequest = 1;
       base.maxTextLengthPerRequest = 5000;
@@ -600,7 +606,9 @@ describe('stream port recordUsage', () => {
           if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
             try {
               ids = Object.keys(JSON.parse(userContent.slice(firstBrace, lastBrace + 1)) as Record<string, string>);
-            } catch {}
+            } catch {
+              /* ignore */
+            }
           }
           if (ids.includes('p1')) {
             // 404 → ApiError classified 'clientError': thrown through dispatch
@@ -632,15 +640,18 @@ describe('stream port recordUsage', () => {
         }),
       );
 
-      const sender = {
+      const bedwSender = {
         // Tab 51 — 49 is claimed by the all-cached page-session test below and
         // translatedTabSessions persists for the module's lifetime.
         tab: { id: 51, url: 'https://news.example.com/article' },
       } as chrome.runtime.MessageSender;
-      const { port, posted, deliver } = makePort(WEB_STREAM_PORT, sender);
-      fireConnect(port);
+      const { port: bedwPort, posted: bedwPosted, deliver: bedwDeliver } = makePort(
+        WEB_STREAM_PORT,
+        bedwSender,
+      );
+      fireConnect(bedwPort);
 
-      await deliver({
+      await bedwDeliver({
         type: 'request',
         pieces: [
           { id: 'p1', text: 'same' },
@@ -651,7 +662,7 @@ describe('stream port recordUsage', () => {
         targetLanguage: 'vi',
       });
 
-      const done = posted.find((m) => (m as { type: string }).type === 'done') as
+      const bedwDone = bedwPosted.find((m) => (m as { type: string }).type === 'done') as
         | {
             type: string;
             results: Array<{ id: string; translatedText: string }>;
@@ -661,22 +672,22 @@ describe('stream port recordUsage', () => {
         | undefined;
       // The thrown sub-batch must not sink the request: done (not error),
       // sibling result retained, canonical + dup surface as failed entries.
-      expect(done).toBeDefined();
-      expect(done?.partial).toBe(true);
-      expect(done?.results).toEqual([{ id: 'p2', translatedText: 'translated-p2' }]);
-      expect(done?.failed).toEqual([
+      expect(bedwDone).toBeDefined();
+      expect(bedwDone?.partial).toBe(true);
+      expect(bedwDone?.results).toEqual([{ id: 'p2', translatedText: 'translated-p2' }]);
+      expect(bedwDone?.failed).toEqual([
         { id: 'p1', error: 'Model not found' },
         { id: 'p1dup', error: 'Model not found' },
       ]);
     });
 
-    it('splits in-article and out-of-article pieces into separate provider requests', async () => {
+    it('splits in-article and out-of-article pieces into separate provider requests; respects provider batch budgets: count <=2, chars <=6, singleton oversized', async () => {
       dynamicMockStreamFetch();
 
       const sender = {
         tab: { id: 47, url: 'https://news.example.com/article' },
       } as chrome.runtime.MessageSender;
-      const { port, posted, deliver } = makePort(WEB_STREAM_PORT, sender);
+      const { port, deliver } = makePort(WEB_STREAM_PORT, sender);
       fireConnect(port);
 
       await deliver({
@@ -703,9 +714,10 @@ describe('stream port recordUsage', () => {
         const hasOut = content.includes('out of article');
         expect(hasIn && hasOut).toBe(false);
       }
-    });
 
-    it('respects provider batch budgets: count <=2, chars <=6, singleton oversized', async () => {
+      // facet: respects provider batch budgets: count <=2, chars <=6, singleton
+      // oversized.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const base = mockStorage['anyllm-translate-settings'] as Record<string, any>;
       base.enableAdaptiveBatching = false;
       base.maxTextGroupLengthPerRequest = 4;
@@ -717,13 +729,16 @@ describe('stream port recordUsage', () => {
       __resetTranslationServiceForTest();
       dynamicMockStreamFetch();
 
-      const sender = {
+      const budgetSender = {
         tab: { id: 48, url: 'https://news.example.com/article' },
       } as chrome.runtime.MessageSender;
-      const { port, posted, deliver } = makePort(WEB_STREAM_PORT, sender);
-      fireConnect(port);
+      const { port: budgetPort, deliver: budgetDeliver } = makePort(
+        WEB_STREAM_PORT,
+        budgetSender,
+      );
+      fireConnect(budgetPort);
 
-      await deliver({
+      await budgetDeliver({
         type: 'request',
         pieces: [
           { id: 'p1', text: 'ab' },
@@ -737,7 +752,7 @@ describe('stream port recordUsage', () => {
       expect(fetch).toHaveBeenCalledTimes(2);
 
       const requests: Record<string, string>[] = [];
-      for (const call of (fetch as any).mock.calls) {
+      for (const call of (fetch as ReturnType<typeof vi.fn>).mock.calls) {
         const body = JSON.parse(call[1]?.body ?? '{}') as { messages?: Array<{ content: string }> };
         const content = body.messages?.[body.messages.length - 1]?.content ?? '';
         const firstBrace = content.indexOf('{');
@@ -745,7 +760,9 @@ describe('stream port recordUsage', () => {
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
           try {
             requests.push(JSON.parse(content.slice(firstBrace, lastBrace + 1)));
-          } catch {}
+          } catch {
+            /* ignore */
+          }
         }
       }
 

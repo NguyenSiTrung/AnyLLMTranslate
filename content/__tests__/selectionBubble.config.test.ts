@@ -122,7 +122,8 @@ describe('SpeakController', () => {
     await expect(c2.speakSmart('hello')).rejects.toThrow(/disabled/i);
   });
 
-  it('speakSmart prefers browser voice matching lang over provider TTS', async () => {
+  it('speakSmart prefers a matching browser voice over provider TTS, uses the provider when overridden, and ignores overrides when preferredBackend is browser', async () => {
+    // facet: a matching browser voice wins over provider TTS
     const sendMessage = vi.fn();
     vi.stubGlobal('chrome', {
       runtime: { sendMessage },
@@ -280,11 +281,11 @@ describe('SpeakController', () => {
       }),
     );
     expect(speakMock.mock.calls.length).toBe(speakCallsBefore);
-  });
 
-  it('speakSmart ignores language override when preferredBackend is browser', async () => {
-    const sendMessage = vi.fn();
-    vi.stubGlobal('chrome', { runtime: { sendMessage } });
+    // facet: when preferredBackend is 'browser', a language override is ignored
+    speakMock.mockClear();
+    const sendMessage3 = vi.fn();
+    vi.stubGlobal('chrome', { runtime: { sendMessage: sendMessage3 } });
     vi.mocked(loadSettings).mockResolvedValue({
       tts: {
         enabled: true,
@@ -334,10 +335,10 @@ describe('SpeakController', () => {
       },
     } as never);
 
-    const c = new SpeakController();
-    const result = await c.speakSmart('hello', 'en');
-    expect(result).toEqual({ backend: 'browser' });
-    expect(sendMessage).not.toHaveBeenCalled();
+    const c3 = new SpeakController();
+    const result3 = await c3.speakSmart('hello', 'en');
+    expect(result3).toEqual({ backend: 'browser' });
+    expect(sendMessage3).not.toHaveBeenCalled();
     expect(speakMock).toHaveBeenCalledOnce();
   });
 });

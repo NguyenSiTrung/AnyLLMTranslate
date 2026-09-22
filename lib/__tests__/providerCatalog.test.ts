@@ -29,8 +29,9 @@ import type { PoolProvider } from '@/types/config';
  */
 
 
-describe('modelListing', () => {
-  it('parses model lists, filters ids, and builds pagination URLs', () => {
+describe('modelListing / openAiCompatibleCatalog', () => {
+  it('parses model lists/pagination URLs and lists/filters providers with identity/category groups', () => {
+    // facet: parses model lists, filters ids, and builds pagination URLs
     expect(
       parseModelsListResponse({
         object: 'list',
@@ -83,11 +84,9 @@ describe('modelListing', () => {
 
     expect(MAX_MODEL_LIST_PAGES).toBeGreaterThanOrEqual(5);
     expect(MAX_MODEL_LIST_PAGES).toBeLessThanOrEqual(50);
-  });
-});
 
-describe('openAiCompatibleCatalog', () => {
-  it('lists/filters providers, resolves key URLs, identity fallbacks, category groups, and includes the OpenCode Go entry', () => {
+    // facet: lists/filters providers, resolves key URLs, identity fallbacks,
+    // category groups, and includes the OpenCode Go entry
     const ids = OPENAI_COMPATIBLE_CATALOG.map((e) => e.id);
     expect(ids).toContain('openrouter');
     expect(ids).toContain('ollama');

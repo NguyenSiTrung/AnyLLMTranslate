@@ -107,7 +107,8 @@ describe('ViewportObserver', () => {
     vi.useRealTimers();
   });
 
-  it('dispatches untranslated pieces once when they enter the viewport, and does not re-dispatch the same piece id until released', () => {
+  it('dispatches each piece id once until released, and dedupes pending ids within a batch window', () => {
+    // facet: dispatches untranslated pieces once when they enter the viewport, and does not re-dispatch the same piece id until released
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50);
     const p = document.createElement('p');
@@ -115,7 +116,7 @@ describe('ViewportObserver', () => {
     const piece = makePiece('a', p);
     observer.observe(piece);
 
-    const mock = MockIntersectionObserver.instances[0];
+    const mock = MockIntersectionObserver.instances.at(-1)!;
     mock.fire(p, true);
     vi.advanceTimersByTime(50);
 
@@ -135,11 +136,10 @@ describe('ViewportObserver', () => {
     vi.advanceTimersByTime(50);
     expect(onVisible).toHaveBeenCalledTimes(2);
     observer.disconnect();
-  });
 
-  it('dedupes pending piece ids within the same batch window', () => {
-    const onVisible = vi.fn();
-    const observer = new ViewportObserver(onVisible, 50);
+    // facet: dedupes pending piece ids within the same batch window
+    const dedupeVisible = vi.fn();
+    const dedupeObserver = new ViewportObserver(dedupeVisible, 50);
     const p1 = document.createElement('p');
     const p2 = document.createElement('p');
     document.body.appendChild(p1);
@@ -150,33 +150,34 @@ describe('ViewportObserver', () => {
     // observe two pieces with the same id (shouldn't happen) — filter by id.
     const a = makePiece('x', p1);
     const aDup = makePiece('x', p2);
-    observer.observe(a);
+    dedupeObserver.observe(a);
     // Force both into pending by direct map manipulation is hard; fire both
     // after observing separately with release between... simpler: two fires
     // of same target shouldn't happen after unobserve.
 
-    const mock = MockIntersectionObserver.instances[0];
+    const dedupeMock = MockIntersectionObserver.instances.at(-1)!;
     // Manually put dups into pending by observing a and firing, then
     // releasing and re-observing aDup with same id before flush.
-    observer.observe(a);
-    mock.fire(p1, true);
+    dedupeObserver.observe(a);
+    dedupeMock.fire(p1, true);
     // Before flush, release and re-queue same id via aDup
-    observer.release('x');
-    observer.observe(aDup);
-    mock.fire(p2, true);
+    dedupeObserver.release('x');
+    dedupeObserver.observe(aDup);
+    dedupeMock.fire(p2, true);
     vi.advanceTimersByTime(50);
 
-    expect(onVisible).toHaveBeenCalledTimes(1);
-    const batch = onVisible.mock.calls[0][0] as TranslationPiece[];
+    expect(dedupeVisible).toHaveBeenCalledTimes(1);
+    const batch = dedupeVisible.mock.calls[0][0] as TranslationPiece[];
     expect(batch).toHaveLength(1);
     expect(batch[0].id).toBe('x');
-    observer.disconnect();
+    dedupeObserver.disconnect();
   });
 
-  it('caps per-flush dispatch and drains the remainder in later windows', () => {
+  it('caps per-flush dispatch, drains later windows, and holds dispatch while paused', () => {
+    // facet: caps per-flush dispatch and drains the remainder in later windows
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50, 3);
-    const mock = MockIntersectionObserver.instances[0];
+    const mock = MockIntersectionObserver.instances.at(-1)!;
 
     const pieces: TranslationPiece[] = [];
     for (let i = 0; i < 10; i++) {
@@ -210,33 +211,32 @@ describe('ViewportObserver', () => {
     const allDispatched = onVisible.mock.calls.flatMap((c) => c[0] as TranslationPiece[]);
     expect(allDispatched).toHaveLength(10);
     observer.disconnect();
-  });
 
-  it('when paused does not dispatch; on unpause redispatch currently visible tracked pieces', () => {
-    const onVisible = vi.fn();
-    const observer = new ViewportObserver(onVisible, 50);
-    const p = document.createElement('p');
+    // facet: when paused does not dispatch; on unpause redispatch currently visible tracked pieces
+    const pausedVisible = vi.fn();
+    const pausedObserver = new ViewportObserver(pausedVisible, 50);
+    const pausedP = document.createElement('p');
     // jsdom getBoundingClientRect defaults to all zeros — treat as visible
     // with our margin check (bottom >= -200 && top <= height+200).
-    document.body.appendChild(p);
-    const piece = makePiece('a', p);
-    observer.observe(piece);
-    observer.setPaused(true);
+    document.body.appendChild(pausedP);
+    const pausedPiece = makePiece('a', pausedP);
+    pausedObserver.observe(pausedPiece);
+    pausedObserver.setPaused(true);
 
-    const mock = MockIntersectionObserver.instances[0];
-    mock.fire(p, true);
+    const pausedMock = MockIntersectionObserver.instances.at(-1)!;
+    pausedMock.fire(pausedP, true);
     vi.advanceTimersByTime(50);
 
-    expect(onVisible).not.toHaveBeenCalled();
+    expect(pausedVisible).not.toHaveBeenCalled();
     // Still tracked
-    expect(mock.observed.has(p)).toBe(true);
+    expect(pausedMock.observed.has(pausedP)).toBe(true);
 
-    observer.setPaused(false);
+    pausedObserver.setPaused(false);
     vi.advanceTimersByTime(50);
 
-    expect(onVisible).toHaveBeenCalledTimes(1);
-    expect(onVisible.mock.calls[0][0][0].id).toBe('a');
-    observer.disconnect();
+    expect(pausedVisible).toHaveBeenCalledTimes(1);
+    expect(pausedVisible.mock.calls[0][0][0].id).toBe('a');
+    pausedObserver.disconnect();
   });
 });
 
@@ -260,7 +260,8 @@ describe('domWalker — selector-match cache integration', () => {
     __resetMatchCacheForTest();
   });
 
-  it('preserves cached selector matching and extraction results', () => {
+  it('preserves cached selector matching and extraction results, and tags inArticleContext by region (FR-3)', () => {
+    // facet: preserves cached selector matching and extraction results
     // Build a tree with 10 <p> elements, all sharing class "sidebar".
     // Exclude selector ".sidebar" should cache after the first match.
     const container = document.createElement('div');
@@ -346,14 +347,16 @@ describe('domWalker — selector-match cache integration', () => {
     // nav excluded, .ad excluded; only the article paragraph remains
     expect(pieces.length).toBe(1);
     expect(pieces[0].text).toBe('Article paragraph one.');
-  });
 
-  it('tags inArticleContext for article/main vs outside/nav/sidebar (FR-3)', () => {
-    const article = document.createElement('article');
+    // facet: tags inArticleContext for article/main vs outside/nav/sidebar (FR-3)
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    const articleRegion = document.createElement('article');
     const ap = document.createElement('p');
     ap.textContent = 'Article body text.';
-    article.appendChild(ap);
-    document.body.appendChild(article);
+    articleRegion.appendChild(ap);
+    document.body.appendChild(articleRegion);
     expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(true);
 
     document.body.innerHTML = '';
@@ -376,26 +379,26 @@ describe('domWalker — selector-match cache integration', () => {
 
     document.body.innerHTML = '';
     resetPieceCounter();
-    const nav = document.createElement('nav');
+    const navRegion = document.createElement('nav');
     const div = document.createElement('div');
     const a = document.createElement('a');
     a.textContent = 'Navigation link text';
     div.appendChild(a);
-    nav.appendChild(div);
-    document.body.appendChild(nav);
+    navRegion.appendChild(div);
+    document.body.appendChild(navRegion);
     expect(extractPieces(document.body, {})[0]!.inArticleContext).toBe(false);
 
     document.body.innerHTML = '';
     resetPieceCounter();
     const art2 = document.createElement('article');
-    const p1 = document.createElement('p');
-    p1.textContent = 'Article paragraph.';
-    art2.appendChild(p1);
+    const regionP1 = document.createElement('p');
+    regionP1.textContent = 'Article paragraph.';
+    art2.appendChild(regionP1);
     document.body.appendChild(art2);
     const aside2 = document.createElement('aside');
-    const p2 = document.createElement('p');
-    p2.textContent = 'Sidebar paragraph.';
-    aside2.appendChild(p2);
+    const regionP2 = document.createElement('p');
+    regionP2.textContent = 'Sidebar paragraph.';
+    aside2.appendChild(regionP2);
     document.body.appendChild(aside2);
     const mixed = extractPieces(document.body, {});
     expect(mixed).toHaveLength(2);
@@ -583,7 +586,8 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     __resetMatchCacheForTest();
   });
 
-  it('keeps excluded inline content (code, span.term, translate="no") in the sentence and hard-skips block containers', () => {
+  it('keeps excluded inline content and rich placeholders in the sentence while hard-skipping block containers', () => {
+    // facet: keeps excluded inline content (code, span.term, translate="no") in the sentence and hard-skips block containers
     // Scenario 1: plain exclude keeps the code paths in the piece text
     const p = document.createElement('p');
     p.innerHTML =
@@ -670,9 +674,11 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     expect(pieces).toHaveLength(1);
     expect(pieces[0].text).toContain('Settings → Advanced');
     expect(pieces[0].text).toMatch(/Open .* to configure/);
-  });
 
-  it('keeps GitHub-like rich placeholders and nested rich extraction for excluded code', () => {
+    // facet: keeps GitHub-like rich placeholders and nested rich extraction for excluded code
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
     // Scenario 1: GitHub-like — include markdown-body + exclude code with rich
     // translate keeps the paths as rich placeholders
     const md = document.createElement('div');
@@ -684,16 +690,16 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     md.appendChild(mp);
     document.body.appendChild(md);
 
-    let pieces = extractPieces(document.body, {
+    let richPieces = extractPieces(document.body, {
       includeSelectors: ['.markdown-body'],
       excludeSelectors: ['.highlight', 'pre', 'code'],
       enableRichTranslate: true,
     });
 
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('~/.config/sway/config');
-    expect(pieces[0].text).toContain('~/.config/i3/config');
-    expect(pieces[0].variables?.length).toBeGreaterThanOrEqual(2);
+    expect(richPieces).toHaveLength(1);
+    expect(richPieces[0].text).toContain('~/.config/sway/config');
+    expect(richPieces[0].text).toContain('~/.config/i3/config');
+    expect(richPieces[0].variables?.length).toBeGreaterThanOrEqual(2);
 
     // Scenario 2: nested rich extraction emits placeholder tags + CODE variables
     document.body.innerHTML = '';
@@ -701,21 +707,21 @@ describe('domWalker — inline exclude soft-skip (keep in paragraph)', () => {
     __resetMatchCacheForTest();
     const md2 = document.createElement('div');
     md2.className = 'markdown-body';
-    const p2 = document.createElement('p');
-    p2.innerHTML = 'Run <code>npm install</code> first.';
-    md2.appendChild(p2);
+    const richP2 = document.createElement('p');
+    richP2.innerHTML = 'Run <code>npm install</code> first.';
+    md2.appendChild(richP2);
     document.body.appendChild(md2);
 
-    pieces = extractPieces(document.body, {
+    richPieces = extractPieces(document.body, {
       includeSelectors: ['.markdown-body'],
       excludeSelectors: ['code', 'pre'],
       enableRichTranslate: true,
     });
 
-    expect(pieces).toHaveLength(1);
-    expect(pieces[0].text).toContain('<z id=');
-    expect(pieces[0].text).toContain('npm install');
-    expect(pieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
+    expect(richPieces).toHaveLength(1);
+    expect(richPieces[0].text).toContain('<z id=');
+    expect(richPieces[0].text).toContain('npm install');
+    expect(richPieces[0].variables?.some((v) => v.tag === 'CODE')).toBe(true);
   });
 });
 
@@ -772,7 +778,8 @@ describe('domWalker — shadow DOM walk (FR-23)', () => {
     expect(offPieces.map((piece) => piece.text)).not.toContain('Hidden shadow paragraph.');
   });
 
-  it('records the plain source text on every piece for later change comparison (sm7n)', () => {
+  it('records the plain source text on every piece and registers walked open shadow roots (sm7n)', () => {
+    // facet: records the plain source text on every piece for later change comparison (sm7n)
     const p = document.createElement('p');
     p.textContent = 'Plain source paragraph text.';
     document.body.appendChild(p);
@@ -781,9 +788,12 @@ describe('domWalker — shadow DOM walk (FR-23)', () => {
 
     expect(pieces).toHaveLength(1);
     expect(pieces[0].sourceText).toBe('Plain source paragraph text.');
-  });
 
-  it('registers walked open shadow roots so display cleanup and watching can reach them', () => {
+    // facet: registers walked open shadow roots so display cleanup and watching can reach them
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    clearShadowDomRoots();
     const host = document.createElement('div');
     const shadow = host.attachShadow({ mode: 'open' });
     const shadowP = document.createElement('p');
@@ -791,9 +801,9 @@ describe('domWalker — shadow DOM walk (FR-23)', () => {
     shadow.appendChild(shadowP);
     document.body.appendChild(host);
 
-    const pieces = extractPieces(document.body, { enableShadowDomWalk: true });
+    const shadowPieces = extractPieces(document.body, { enableShadowDomWalk: true });
 
-    expect(pieces.map((piece) => piece.text)).toContain('Shadow text needing registration.');
+    expect(shadowPieces.map((piece) => piece.text)).toContain('Shadow text needing registration.');
     // Registered → displayScopes()/removeAllTranslations() and the post-flush
     // observer sweep can reach the root, even when it attached after the
     // MutationWatcher's delivery-time scan.
@@ -821,7 +831,8 @@ describe('domWalker — shared asideRegionChars across calls (t9dd)', () => {
     return aside;
   };
 
-  it('a caller-provided map keeps cumulative region caps across two extractPieces calls on the same aside', () => {
+  it('a caller-provided map keeps cumulative region caps across repeated calls, include recursion, and shadow extraction', () => {
+    // facet: a caller-provided map keeps cumulative region caps across two extractPieces calls on the same aside
     document.body.appendChild(buildAside());
     const asideRegionChars = new Map<Element, number>();
     const options = { enableAsideCaps: true, asideRegionChars };
@@ -841,9 +852,12 @@ describe('domWalker — shared asideRegionChars across calls (t9dd)', () => {
     // behavior where every pass restarted cumulative accounting.
     const fresh = extractPieces(document.body, { enableAsideCaps: true });
     expect(fresh.length).toBe(first.length);
-  });
 
-  it('include-selector recursion and open-shadow nested extraction forward the shared map', () => {
+    // facet: include-selector recursion and open-shadow nested extraction forward the shared map
+    document.body.innerHTML = '';
+    resetPieceCounter();
+    __resetMatchCacheForTest();
+    clearShadowDomRoots();
     document.body.appendChild(buildAside());
 
     const viaInclude = new Map<Element, number>();

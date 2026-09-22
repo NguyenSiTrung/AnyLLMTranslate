@@ -42,15 +42,14 @@ describe('PrealignFromLinkCard', () => {
     sendMessage.mockResolvedValue({ success: true, outcome: 'realigned' });
   });
 
-  it('renders the URL input, run button, and token-cost note', () => {
+  it('renders the URL input, run button, and token-cost note, and rejects an invalid URL client-side', async () => {
     render(<PrealignFromLinkCard disabled={false} />);
+    // facet: renders the URL input, run button, and token-cost note.
     expect(screen.getByLabelText(/YouTube link/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Re-align now/i })).toBeInTheDocument();
     expect(screen.getByText(/token/i)).toBeInTheDocument();
-  });
 
-  it('rejects an invalid URL client-side without messaging the background', async () => {
-    render(<PrealignFromLinkCard disabled={false} />);
+    // facet: rejects an invalid URL client-side without messaging the background.
     fireEvent.change(screen.getByLabelText(/YouTube link/i), {
       target: { value: 'https://example.com/nope' },
     });
@@ -234,25 +233,7 @@ describe('SavedCaptionRealignsCard', () => {
     });
   });
 
-  it('force re-run deletes key', async () => {
-    sendMessage.mockImplementation(async (msg: { action?: string }) => {
-      if (msg?.action === 'LIST_ASR_REALIGN_CACHE') {
-        return { success: true, entries: [sampleEntry] };
-      }
-      return { success: true };
-    });
-    render(<SavedCaptionRealignsCard />);
-    await waitFor(() => expect(screen.getByText('Sample Video')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Force re-run/i }));
-    await waitFor(() => {
-      expect(sendMessage).toHaveBeenCalledWith({
-        action: 'DELETE_ASR_REALIGN_CACHE',
-        key: sampleEntry.key,
-      });
-    });
-  });
-
-  it('clear all confirms and clears', async () => {
+  it('force re-run deletes the key, and clear all confirms and clears', async () => {
     sendMessage.mockImplementation(async (msg: { action?: string }) => {
       if (msg?.action === 'LIST_ASR_REALIGN_CACHE') {
         return { success: true, entries: [sampleEntry] };
@@ -263,6 +244,18 @@ describe('SavedCaptionRealignsCard', () => {
       return { success: true };
     });
     render(<SavedCaptionRealignsCard />);
+    await waitFor(() => expect(screen.getByText('Sample Video')).toBeInTheDocument());
+
+    // facet: force re-run deletes key.
+    fireEvent.click(screen.getByRole('button', { name: /Force re-run/i }));
+    await waitFor(() => {
+      expect(sendMessage).toHaveBeenCalledWith({
+        action: 'DELETE_ASR_REALIGN_CACHE',
+        key: sampleEntry.key,
+      });
+    });
+
+    // facet: clear all confirms and clears.
     await waitFor(() => expect(screen.getByText('Sample Video')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Clear all/i }));
     expect(screen.getByText(/Clear all saved re-aligns/i)).toBeInTheDocument();

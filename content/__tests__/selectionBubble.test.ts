@@ -74,8 +74,9 @@ describe('buildFooterActions', () => {
  * @vitest-environment jsdom
  */
 
-describe('buildDictionaryContent', () => {
-  it('renders section labels, word, phonetic, pos, translation, context', () => {
+describe('buildDictionaryContent / buildSentenceContent', () => {
+  it('renders dictionary section labels, and shows a sentence translation with a collapsible original', () => {
+    // facet: dictionary layout — labels, word, phonetic, pos, translation, context
     const el = buildDictionaryContent(
       'hello',
       {
@@ -105,28 +106,20 @@ describe('buildDictionaryContent', () => {
     expect(el.textContent).toMatch(/Definitions/i);
     expect(el.textContent).toMatch(/In this context/i);
     expect(el.querySelector('.anyllm-tooltip-actions')).toBeNull();
-  });
-});
 
-/**
- * @vitest-environment jsdom
- */
-
-describe('buildSentenceContent', () => {
-  it('shows translation with collapsed original by default and the original when expanded', () => {
-    // Collapsed by default: translation visible, original hidden until toggled
+    // facet: sentence layout — translation visible, original collapsed by default, shown when expanded
     const onToggle = vi.fn();
-    const el = buildSentenceContent({
+    const sentence = buildSentenceContent({
       translatedText: 'Xin chào',
       originalText: 'Hello',
       originalExpanded: false,
       onToggleOriginal: onToggle,
     });
-    expect(el.querySelector('[data-anyllm-role="selection-translation"]')?.textContent).toBe(
+    expect(sentence.querySelector('[data-anyllm-role="selection-translation"]')?.textContent).toBe(
       'Xin chào',
     );
-    expect(el.querySelector('[data-anyllm-role="selection-original"]')).toBeNull();
-    const toggle = el.querySelector(
+    expect(sentence.querySelector('[data-anyllm-role="selection-original"]')).toBeNull();
+    const toggle = sentence.querySelector(
       '[data-anyllm-role="selection-original-toggle"]',
     ) as HTMLButtonElement;
     expect(toggle.getAttribute('aria-expanded')).toBe('false');

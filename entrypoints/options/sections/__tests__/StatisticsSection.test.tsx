@@ -148,7 +148,7 @@ describe('StatisticsSection', () => {
     mockedBuildCsv.mockReturnValue('date,characters\n');
   });
 
-  it('loading skeleton → KPIs; empty guidance; error + retry', async () => {
+  it('loading skeleton → KPIs; empty guidance; error + retry; period/export/host-off/retention/reset/insights', async () => {
     let resolveStats!: (value: TranslationStatsV2) => void;
     let resolveDays!: (value: DailyStatRecord[]) => void;
 
@@ -222,7 +222,7 @@ describe('StatisticsSection', () => {
     const callsBeforeError = mockedGetStatsV2.mock.calls.length;
     mockedGetStatsV2.mockRejectedValue(new Error('storage failed'));
     mockedLoadDays.mockResolvedValue([]);
-    render(<StatisticsSection />);
+    const errorView = render(<StatisticsSection />);
     await waitFor(() => {
       expect(screen.getByText(/unable to load statistics/i)).toBeInTheDocument();
     });
@@ -235,11 +235,11 @@ describe('StatisticsSection', () => {
     });
     // Initial failed load + retry
     expect(mockedGetStatsV2.mock.calls.length).toBe(callsBeforeError + 2);
-  });
+    errorView.unmount();
 
-  it('period/export/host-off/retention/reset/insights interactions', async () => {
-    const { summary, days } = setupPopulatedMocks();
-    const { unmount } = render(<StatisticsSection />);
+    // facet: period/export/host-off/retention/reset/insights interactions
+    const { summary: populatedSummary, days: populatedDays } = setupPopulatedMocks();
+    const { unmount: unmountPopulated } = render(<StatisticsSection />);
 
     await waitFor(() => {
       expect(screen.getByRole('radiogroup', { name: /period/i })).toBeInTheDocument();
@@ -259,7 +259,7 @@ describe('StatisticsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /export/i }));
     const jsonItem = await screen.findByRole('menuitem', { name: /export json/i });
     fireEvent.click(jsonItem);
-    expect(mockedBuildJson).toHaveBeenCalledWith({ summary, daily: days });
+    expect(mockedBuildJson).toHaveBeenCalledWith({ summary: populatedSummary, daily: populatedDays });
     expect(mockedTriggerDownload).toHaveBeenCalledWith(
       expect.stringMatching(/^anyllm-stats-\d{4}-\d{2}-\d{2}\.json$/),
       '{"lifetime":{}}',
@@ -268,7 +268,7 @@ describe('StatisticsSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /export/i }));
     const csvItem = await screen.findByRole('menuitem', { name: /export csv/i });
     fireEvent.click(csvItem);
-    expect(mockedBuildCsv).toHaveBeenCalledWith(days);
+    expect(mockedBuildCsv).toHaveBeenCalledWith(populatedDays);
     expect(mockedTriggerDownload).toHaveBeenCalledWith(
       expect.stringMatching(/^anyllm-stats-daily-\d{4}-\d{2}-\d{2}\.csv$/),
       'date,characters\n',
@@ -313,7 +313,7 @@ describe('StatisticsSection', () => {
     await waitFor(() => {
       expect(mockedResetStats).toHaveBeenCalled();
     });
-    unmount();
+    unmountPopulated();
 
     // Host-off CTA
     setupPopulatedMocks({

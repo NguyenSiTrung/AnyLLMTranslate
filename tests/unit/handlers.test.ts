@@ -130,7 +130,8 @@ describe('LinkedInHandler', () => {
     ],
   });
 
-  it('detects LinkedIn hosts and gates watch pages on /learning/', () => {
+  it('detects LinkedIn hosts, gates watch pages on /learning/, and matches the detailedCourses API, ambry captions, and legacy .vtt URLs', () => {
+    // Facet: host detection + watch-page gating on /learning/.
     const handler = new LinkedInHandler();
     expect(handler.detect()).toBe(true);
     expect(handler.isWatchPage()).toBe(true);
@@ -141,10 +142,8 @@ describe('LinkedInHandler', () => {
       configurable: true,
     });
     expect(handler.isWatchPage()).toBe(false);
-  });
 
-  it('matches the detailedCourses transcript API, ambry captions, and legacy .vtt URLs', () => {
-    const handler = new LinkedInHandler();
+    // Facet: URL patterns (detailedCourses API, ambry captions, legacy .vtt).
     const patterns = handler.getPatterns();
     const [coursesPattern, ambryPattern, vttPattern] = patterns;
     expect(coursesPattern.pattern.test(DETAILED_COURSES_URL)).toBe(true);
@@ -164,7 +163,8 @@ describe('LinkedInHandler', () => {
     }
   });
 
-  it('parses detailedCourses transcript JSON into timed cues, with duration+2s fallback and empty results for invalid input', () => {
+  it('parses detailedCourses transcript JSON into timed cues and transforms JSON transcripts and legacy VTT bodies', () => {
+    // Facet: parseLinkedInTranscriptJson timing + duration+2s fallback + invalid input.
     const cues = parseLinkedInTranscriptJson(TRANSCRIPT_JSON);
     expect(cues).toEqual([
       { startTime: 0, endTime: 2.5, text: 'Welcome to the course.' },
@@ -191,9 +191,8 @@ describe('LinkedInHandler', () => {
     expect(parseLinkedInTranscriptJson(listing)).toEqual([]);
     expect(parseLinkedInTranscriptJson('not json')).toEqual([]);
     expect(parseLinkedInTranscriptJson('[]')).toEqual([]);
-  });
 
-  it('transforms both JSON transcripts and legacy VTT bodies', () => {
+    // Facet: handler.transformResponse for JSON and legacy VTT bodies.
     const handler = new LinkedInHandler();
     const jsonCues = handler.transformResponse(TRANSCRIPT_JSON, 'application/json', DETAILED_COURSES_URL);
     expect(jsonCues.length).toBe(3);
@@ -269,12 +268,16 @@ describe('HboMaxHandler.getDomCueSource', () => {
     expect(source.captionWindowSelector).toBe('[data-testid="caption_renderer_overlay"]');
   });
 
-  it('declares the cue root as the observed ancestor and the aria-checked track button for switches', () => {
+  it('declares the cue root/track-switch selectors and extracts the video id from the watch URL', () => {
     const source = new HboMaxHandler().getDomCueSource();
 
+    // Facet: observed ancestor + aria-checked track-switch button.
     expect(source.observeRootSelector).toBe('[data-testid="caption_renderer_overlay"]');
     expect(source.trackSwitchSelector).toBe('[data-testid="player-ux-text-track-button"]');
     expect(source.trackSwitchAttribute).toBe('aria-checked');
+
+    // Facet: video id from the watch URL.
+    expect(source.videoIdExtractor?.()).toBe('abc-123');
   });
 
   it('reads the active language from the checked track button', () => {
@@ -286,11 +289,6 @@ describe('HboMaxHandler.getDomCueSource', () => {
 
     const source = new HboMaxHandler().getDomCueSource();
     expect(source.readActiveLanguage()).toBe('en');
-  });
-
-  it('extracts the video id from the watch URL', () => {
-    const source = new HboMaxHandler().getDomCueSource();
-    expect(source.videoIdExtractor?.()).toBe('abc-123');
   });
 });
 
@@ -319,9 +317,10 @@ describe('HboMaxHandler detection, patterns and track extraction', () => {
     document.body.innerHTML = '';
   });
 
-  it('detects every Max-owned host shape and rejects look-alike hosts', () => {
+  it('detects every Max-owned host shape and rejects look-alikes, and treats only /video/watch/ paths as watch pages', () => {
     const handler = new HboMaxHandler();
 
+    // Facet: host detection over Max-owned and look-alike hosts.
     for (const host of [
       'max.com',
       'www.max.com',
@@ -343,11 +342,8 @@ describe('HboMaxHandler detection, patterns and track extraction', () => {
       setLocation(host);
       expect(handler.detect(), host).toBe(false);
     }
-  });
 
-  it('treats only /video/watch/ paths as watch pages', () => {
-    const handler = new HboMaxHandler();
-
+    // Facet: watch-page gating on /video/watch/.
     setLocation('www.max.com', '/video/watch/abc-123');
     expect(handler.isWatchPage()).toBe(true);
 
@@ -357,7 +353,8 @@ describe('HboMaxHandler detection, patterns and track extraction', () => {
     expect(handler.isWatchPage()).toBe(false);
   });
 
-  it('exposes the .vtt pattern with a track-id language extractor and the manifest patterns', () => {
+  it('exposes the .vtt + manifest patterns and extracts DOM tracks (skipping Off), returning none without the caption menu', () => {
+    // Facet: .vtt pattern + track-id language extractor + manifest patterns.
     const handler = new HboMaxHandler();
 
     const [vttPattern] = handler.getPatterns();
@@ -388,9 +385,8 @@ describe('HboMaxHandler detection, patterns and track extraction', () => {
         p.pattern.test('https://akm.asia.prd.media.max.com/fadb6e8d?manifest-params=TOKEN'),
       ),
     ).toBe(true);
-  });
 
-  it('extracts DOM tracks with localized labels and skips the Off entry', () => {
+    // Facet: DOM track extraction with localized labels, skipping the Off entry.
     setLocation('www.max.com', '/video/watch/abc-123');
     document.body.innerHTML = `
       <button data-testid="player-ux-text-track-button" aria-checked="true" aria-label="English"></button>
@@ -408,9 +404,8 @@ describe('HboMaxHandler detection, patterns and track extraction', () => {
     expect(tracks.every((track) => track.platform === 'hbomax')).toBe(true);
     expect(tracks.every((track) => track.videoId === 'abc-123')).toBe(true);
     expect(tracks.every((track) => track.url === undefined)).toBe(true);
-  });
 
-  it('returns no tracks when the player has not rendered the caption menu', () => {
+    // Facet: no tracks when the player has not rendered the caption menu.
     document.body.innerHTML = '<div></div>';
     expect(new HboMaxHandler().extractAvailableTracks('', '', '')).toEqual([]);
   });
@@ -444,7 +439,7 @@ const INTERCEPTED_PLATFORM_IDS = [
 ];
 
 describe('subtitle handler world parity', () => {
-  it('registers exactly the platform ids the MAIN world can intercept, in order', () => {
+  it('registers exactly the platform ids the MAIN world can intercept, in order, and returns fresh handler instances per call', () => {
     // Both worlds build from this one factory, so the drift this file used to
     // guard against is now structural. What is pinned here is the factory's
     // content and order: dropping a handler (or reordering `generic` out of the
@@ -452,9 +447,8 @@ describe('subtitle handler world parity', () => {
     expect(handlerPlatformIds(createIsolatedWorldHandlers())).toEqual(
       INTERCEPTED_PLATFORM_IDS,
     );
-  });
 
-  it('returns fresh handler instances per call', () => {
+    // Facet: each call builds fresh instances (no shared state between worlds).
     const first = createIsolatedWorldHandlers();
     const second = createIsolatedWorldHandlers();
     expect(first[0]).not.toBe(second[0]);
@@ -598,7 +592,8 @@ describe('DeepLearningAi language helpers', () => {
 });
 
 describe('extractDeepLearningAiVideoData', () => {
-  it('finds the lesson video tracks inside the embedded __NEXT_DATA__ shape', () => {
+  it('finds lesson video tracks in the embedded __NEXT_DATA__ shape and accepts bare, nested, and subtitle-map payload shapes; returns null without video data', () => {
+    // Facet: lesson video tracks inside the embedded __NEXT_DATA__ shape.
     const result = extractDeepLearningAiVideoData(makeNextDataFixture());
     expect(result).not.toBeNull();
     expect(result?.videoId).toBe('10172096');
@@ -622,9 +617,8 @@ describe('extractDeepLearningAiVideoData', () => {
     // Thumbnail/chapter VTTs must never become tracks.
     expect(result?.tracks.some((t) => t.url === THUMBNAIL_VTT)).toBe(false);
     expect(result?.tracks.some((t) => t.url === CHAPTER_VTT)).toBe(false);
-  });
 
-  it('accepts bare, nested, and subtitle-map payload shapes; returns null for payloads without video data', () => {
+    // Facet: bare, nested, and subtitle-map payload shapes.
     const video = {
       videoId: 42,
       tracks: [{ kind: 'subtitles', label: 'English', src: ENG_VTT, srcLang: 'en-us' }],
@@ -657,6 +651,7 @@ describe('extractDeepLearningAiVideoData', () => {
       },
     ]);
 
+    // Facet: payloads without video data return null.
     expect(extractDeepLearningAiVideoData(null)).toBeNull();
     expect(extractDeepLearningAiVideoData('not json')).toBeNull();
     expect(extractDeepLearningAiVideoData({})).toBeNull();
@@ -701,7 +696,8 @@ describe('DeepLearningAiHandler', () => {
     document.body.innerHTML = '';
   });
 
-  it('detects DLAI hosts and gates watch pages on /lesson', () => {
+  it('detects DLAI hosts and gates /lesson, exposes CDN VTT + metadata patterns, extracts tRPC/DOM tracks, and parses VTT cues', () => {
+    // Facet: host detection + watch-page gating on /lesson.
     const handler = new DeepLearningAiHandler();
     expect(handler.platform).toBe(DEEP_LEARNING_AI_PLATFORM);
     expect(handler.detect()).toBe(true);
@@ -712,10 +708,8 @@ describe('DeepLearningAiHandler', () => {
 
     setLocation('youtube.com', '/lesson/x');
     expect(handler.detect()).toBe(false);
-  });
 
-  it('intercepts only DLAI CDN subtitle VTTs, never manifests or thumbnails', () => {
-    const handler = new DeepLearningAiHandler();
+    // Facet: intercepts only DLAI CDN subtitle VTTs, never manifests or thumbnails.
     const patterns = handler.getPatterns();
     expect(patterns).toHaveLength(1);
     const { pattern, languageExtractor } = patterns[0]!;
@@ -735,10 +729,8 @@ describe('DeepLearningAiHandler', () => {
 
     expect(languageExtractor?.(new URL(ENG_VTT))).toBe('en');
     expect(languageExtractor?.(new URL(JPN_VTT))).toBe('ja');
-  });
 
-  it('matches tRPC getLessonVideo and Next.js _next/data metadata endpoints, rejects non-metadata URLs', () => {
-    const handler = new DeepLearningAiHandler();
+    // Facet: tRPC getLessonVideo + Next.js _next/data metadata endpoints.
     const metadata = handler.getMetadataPatterns();
     expect(metadata[0]!.pattern.test(
       'https://learn.deeplearning.ai/api/trpc/course.getLessonVideo?batch=1&input=%7B%220%22%3A%7B%22videoId%22%3A10172096%7D%7D',
@@ -761,13 +753,11 @@ describe('DeepLearningAiHandler', () => {
     expect(nextData?.pattern.test(
       'https://learn.deeplearning.ai/learnext/_next/data/build-id/courses/agentic-ai.json',
     )).toBe(false);
-  });
 
-  it('extracts tracks from intercepted tRPC bodies and embedded __NEXT_DATA__ DOM payloads', () => {
+    // Facet: tracks from intercepted tRPC bodies + embedded __NEXT_DATA__ DOM payloads.
     document.body.innerHTML = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
       makeNextDataFixture(),
     )}</script>`;
-    const handler = new DeepLearningAiHandler();
 
     const body = JSON.stringify({
       result: { 0: { data: { video: {
@@ -790,10 +780,8 @@ describe('DeepLearningAiHandler', () => {
 
     document.body.innerHTML = '';
     expect(handler.extractAvailableTracks('', 'application/json', '')).toEqual([]);
-  });
 
-  it('parses intercepted VTT bodies into cues', () => {
-    const handler = new DeepLearningAiHandler();
+    // Facet: parse intercepted VTT bodies into cues.
     const vtt = [
       'WEBVTT',
       '',
@@ -912,7 +900,9 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
     }
   });
 
-  it('stays silent and exhausts the retry budget when __NEXT_DATA__ is absent or carries no lesson video data', () => {
+  it('stays silent and exhausts the retry budget when __NEXT_DATA__ is absent or carries no lesson video data, and cleanup stops pending retries', () => {
+    // Facet: absent payload, or a payload without lesson video data — silent
+    // across the full 100 retries × 100ms discovery budget.
     const run = (payload?: string): void => {
       if (payload) document.body.innerHTML = payload;
       const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
@@ -930,9 +920,9 @@ describe('startDeepLearningAiMetadataDiscovery', () => {
 
     run();
     run(`<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"trpcState":{"json":{"queries":[]}}}}}</script>`);
-  });
 
-  it('cleanup stops pending retries', () => {
+    // Facet: cleanup() cancels the pending retry — a payload injected after
+    // teardown is never emitted.
     const cleanup = startDeepLearningAiMetadataDiscovery(bridge as unknown as MessageBridgeSender);
     vi.advanceTimersByTime(250);
     cleanup();

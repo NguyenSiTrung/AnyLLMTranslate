@@ -450,8 +450,10 @@ describe('encryptBackup / decryptBackup', () => {
   });
 });
 
-describe('detectFormat', () => {
-  it('detects the encrypted envelope and treats plain settings, foreign formats, and non-JSON as plain', () => {
+describe('detectFormat / sanitizeImportObject / serializeSettings', () => {
+  it('detects envelopes, splits import keys safely, and emits pretty JSON containing every key', () => {
+    // facet: detectFormat detects the encrypted envelope and treats plain settings,
+    // foreign formats, and non-JSON as plain.
     expect(
       detectFormat(
         JSON.stringify({
@@ -466,11 +468,9 @@ describe('detectFormat', () => {
     expect(detectFormat(JSON.stringify({ targetLanguage: 'ja' }))).toBe('plain');
     expect(detectFormat('{"format":"not-ours","ciphertext":"x"}')).toBe('plain');
     expect(detectFormat('not json at all')).toBe('plain');
-  });
-});
 
-describe('sanitizeImportObject', () => {
-  it('splits recognized vs ignored keys, drops prototype-pollution keys, and rejects non-object payloads', () => {
+    // facet: sanitizeImportObject splits recognized vs ignored keys, drops
+    // prototype-pollution keys, and rejects non-object payloads.
     const parsed = {
       targetLanguage: 'ja',
       unknownSetting: 1,
@@ -493,16 +493,13 @@ describe('sanitizeImportObject', () => {
     const { recognized: fullRec, ignored: fullIgn } = sanitizeImportObject(fullSettings());
     expect(fullIgn).toEqual([]);
     expect(fullRec['providers']).toEqual(fullSettings().providers);
-  });
-});
 
-describe('serializeSettings', () => {
-  it('emits pretty JSON containing every key', () => {
+    // facet: serializeSettings emits pretty JSON containing every key.
     const text = serializeSettings(fullSettings());
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    expect(parsed['providers']).toBeTruthy();
-    expect(parsed['pdfSettings']).toBeTruthy();
-    expect(parsed['scientificPdf']).toBeTruthy();
+    const serialized = JSON.parse(text) as Record<string, unknown>;
+    expect(serialized['providers']).toBeTruthy();
+    expect(serialized['pdfSettings']).toBeTruthy();
+    expect(serialized['scientificPdf']).toBeTruthy();
     expect(text).toContain('\n  ');
   });
 });
@@ -536,7 +533,7 @@ describe('deepEqual', () => {
   });
 });
 
-describe('computeImportImpact', () => {
+describe('computeImportImpact / pickKnownSettings', () => {
   const customized = (): ExtensionSettings => ({
     ...DEFAULT_SETTINGS,
     targetLanguage: 'ja',
@@ -545,7 +542,9 @@ describe('computeImportImpact', () => {
     siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
   });
 
-  it('computes merge changes and replace resets without warning for built-in rules', () => {
+  it('computes merge/replace impacts and picks every DEFAULT_SETTINGS key while excluding store internals', () => {
+    // facet: computeImportImpact computes merge changes and replace resets
+    // without warning for built-in rules.
     const mergeImpact = computeImportImpact(customized(), { targetLanguage: 'ko' }, 'merge');
     expect(mergeImpact.changed).toEqual(['targetLanguage']);
     expect(mergeImpact.resetToDefaults).toEqual([]);
@@ -586,11 +585,9 @@ describe('computeImportImpact', () => {
     // Nothing customized -> no warnings.
     const untouched = { ...DEFAULT_SETTINGS, siteRules: BUILT_IN_RULES.map((r) => ({ ...r })) };
     expect(computeImportImpact(untouched, {}, 'replace').resetToDefaults).toEqual([]);
-  });
-});
 
-describe('pickKnownSettings', () => {
-  it('picks every DEFAULT_SETTINGS key, excludes store internals, and falls back to DEFAULT_SETTINGS for missing keys', () => {
+    // facet: pickKnownSettings picks every DEFAULT_SETTINGS key, excludes store
+    // internals, and falls back to DEFAULT_SETTINGS for missing keys.
     const state = {
       ...DEFAULT_SETTINGS,
       safeKeyThrottleMigrated: true,

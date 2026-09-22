@@ -113,37 +113,36 @@ describe('useScientificPdfJob', () => {
     expect(result.current.progress.error).toMatch(/pool not ready|Could not start/i);
   });
 
-  it('resolveResultUrl / resolveResultBlob / openResultInViewer return null when no artifacts', () => {
-    const { result } = renderHook(() =>
+  it('artifact resolvers return null, dismissProgress clears the stage, and openInNewTab is a no-op without url', async () => {
+    // facet: resolveResultUrl / resolveResultBlob / openResultInViewer return null when no artifacts
+    const { result: noArtifacts } = renderHook(() =>
       useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
-    expect(result.current.resolveResultUrl('mono')).toBeNull();
-    expect(result.current.resolveResultBlob('dual')).toBeNull();
-    expect(result.current.openResultInViewer('dual')).toBeNull();
+    expect(noArtifacts.current.resolveResultUrl('mono')).toBeNull();
+    expect(noArtifacts.current.resolveResultBlob('dual')).toBeNull();
+    expect(noArtifacts.current.openResultInViewer('dual')).toBeNull();
     expect(chrome.tabs.create).not.toHaveBeenCalled();
-  });
 
-  it('dismissProgress clears stage without requiring artifacts', () => {
-    const { result } = renderHook(() =>
+    // facet: dismissProgress clears stage without requiring artifacts
+    const { result: dismissed } = renderHook(() =>
       useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     act(() => {
-      result.current.dismissProgress();
+      dismissed.current.dismissProgress();
     });
-    expect(result.current.progress.stage).toBe('idle');
-  });
+    expect(dismissed.current.progress.stage).toBe('idle');
 
-  it('openResultInViewer with openInNewTab calls tabs.create when url exists', async () => {
+    // facet: openResultInViewer with openInNewTab calls tabs.create when url exists
     // Simulate a completed job by writing through startJob success path is heavy;
     // instead verify openInNewTab is a no-op without url, and getURL is used when forced
     // after manually stubbing via downloading path would need full poll. Skip full job —
     // just ensure openInNewTab does not throw when no url.
     const create = vi.mocked(chrome.tabs.create);
-    const { result } = renderHook(() =>
+    const { result: opened } = renderHook(() =>
       useScientificPdfJob({ pdfUrl: 'https://example.com/a.pdf', pollIntervalMs: 1 }),
     );
     act(() => {
-      expect(result.current.openResultInViewer('mono', { openInNewTab: true })).toBeNull();
+      expect(opened.current.openResultInViewer('mono', { openInNewTab: true })).toBeNull();
     });
     expect(create).not.toHaveBeenCalled();
   });

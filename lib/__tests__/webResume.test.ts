@@ -185,7 +185,9 @@ describe('webTranslateStatus', () => {
     { id: '4', isTranslated: false },
   ];
 
-  it('computeTranslationStatus covers idle / translating / done states; countVisiblePending unions without double-counting', () => {
+  it('computes translation status, counts visible pending, and formats progress labels/details', () => {
+    // facet: computeTranslationStatus covers idle / translating / done states;
+    // countVisiblePending unions without double-counting
     const pendingPieces = [
       { id: 'a', isTranslated: false },
       { id: 'b', isTranslated: false },
@@ -271,9 +273,8 @@ describe('webTranslateStatus', () => {
         inFlightPieceIds: new Set(),
       }),
     ).toMatchObject({ status: 'idle', totalCount: 0 });
-  });
 
-  it('formatProgressLabel/Detail for active, reading-area-ready, complete, and error', () => {
+    // facet: formatProgressLabel/Detail for active, reading-area-ready, complete, and error
     const active = computeTranslationStatus({
       pageState: 'dual',
       pieces: [

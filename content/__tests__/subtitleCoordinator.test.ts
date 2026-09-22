@@ -962,24 +962,31 @@ describe('subtitleCoordinator – Coursera direct full-track lifecycle', () => {
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['HLS', 'https://cdn.example.com/subtitles/en.m3u8'],
-    ['DASH', 'https://cdn.example.com/subtitles/en.mpd'],
-  ])('keeps %s tracks on the manifest fetch path', async (_kind, url) => {
-    await discoverTrack(url);
+  it('keeps HLS and DASH tracks on the manifest fetch path', async () => {
+    const cases: Array<[string, string]> = [
+      ['HLS', 'https://cdn.example.com/subtitles/en.m3u8'],
+      ['DASH', 'https://cdn.example.com/subtitles/en.mpd'],
+    ];
+    for (const [_kind, url] of cases) {
+      // Each table case ran under a fresh beforeEach; reproduce that isolation.
+      coordinator.resetCoordinatorState();
+      runtimeSendMessage.mockClear();
+      fetchMock.mockClear();
+      await discoverTrack(url);
 
-    await coordinator.selectSubtitleTrack('en');
+      await coordinator.selectSubtitleTrack('en');
 
-    expect(runtimeSendMessage).toHaveBeenCalledWith({
-      action: 'FETCH_MANIFEST_SUBTITLES',
-      playlistUrl: url,
-      preferredLanguage: 'en',
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    const sentDirectTranslation = runtimeSendMessage.mock.calls.some(
-      ([message]) => (message as { action?: string }).action === 'translateSubtitle',
-    );
-    expect(sentDirectTranslation).toBe(false);
+      expect(runtimeSendMessage, url).toHaveBeenCalledWith({
+        action: 'FETCH_MANIFEST_SUBTITLES',
+        playlistUrl: url,
+        preferredLanguage: 'en',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      const sentDirectTranslation = runtimeSendMessage.mock.calls.some(
+        ([message]) => (message as { action?: string }).action === 'translateSubtitle',
+      );
+      expect(sentDirectTranslation, url).toBe(false);
+    }
   });
 });
 
@@ -1154,7 +1161,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     });
   });
 
-  it('responds immediately with the original JSON for LinkedIn detailedCourses and detects the transcript language', async () => {
+  it('responds with original content for LinkedIn detailedCourses and a stale queued YouTube intercept', async () => {
     mockGetHandlerByPlatform.mockReturnValue({ ...mockHandler, platform: 'linkedin' });
     mockHandler.transformResponse.mockReturnValue([
       { startTime: 0, endTime: 2.5, text: 'Este es un ejemplo del transcript en español.' },
@@ -1197,9 +1204,11 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
         cues: expect.any(Array),
       }),
     );
-  });
 
-  it('passes through a queued YouTube intercept from a different video', async () => {
+    // facet: a queued intercept for a different video passes through untouched.
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    mockInitializeControls.mockClear();
     Object.defineProperty(window, 'location', {
       value: {
         hostname: 'www.youtube.com',
@@ -1309,7 +1318,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     );
   });
 
-  it('refreshAttachedOverlayConfig re-applies resolved settings and no-ops when detached', async () => {
+  it('refreshAttachedOverlayConfig re-applies resolved settings, no-ops when detached, and never carries drag offsets', async () => {
     mockIsOverlayActive.mockReturnValue(true);
     const settings = {
       ...MOCK_SETTINGS,
@@ -1335,19 +1344,16 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     mockUpdateConfig.mockClear();
     mod.refreshAttachedOverlayConfig(settings);
     expect(mockUpdateConfig).not.toHaveBeenCalled();
-  });
 
-  it('refreshAttachedOverlayConfig never carries drag offsets (drag must not snap back)', async () => {
+    // facet: even when attached, the re-applied config never carries drag offsets.
     // The settings-change listener fires on the extension's OWN storage writes —
     // including every mousemove of a drag. Re-applying attach-time offsets here
     // reverted each drag to its starting position ~100ms after release.
     mockIsOverlayActive.mockReturnValue(true);
-    const settings = {
-      ...MOCK_SETTINGS,
-    } as unknown as Awaited<ReturnType<ConfigLoadSettings>>;
-    const mod = await import('@/content/subtitleCoordinator');
     mockUpdateConfig.mockClear();
-    mod.refreshAttachedOverlayConfig(settings);
+    mod.refreshAttachedOverlayConfig({
+      ...MOCK_SETTINGS,
+    } as unknown as Awaited<ReturnType<ConfigLoadSettings>>);
     expect(mockUpdateConfig).toHaveBeenCalled();
     for (const call of mockUpdateConfig.mock.calls) {
       const payload = call[0] as Record<string, unknown>;
@@ -1356,7 +1362,7 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
     }
   });
 
-  it('passes original content through (no background call) when subtitles disabled, cues empty, or no handler matches', async () => {
+  it('passes original content through when translation is skipped, and logs a warning on translation error', async () => {
     // Scenario 1: subtitles disabled
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
@@ -1426,9 +1432,17 @@ describe('subtitleCoordinator – handleIntercepted translation path', () => {
       requestId: 'req-007',
       vttContent: body,
     });
-  });
 
-  it('logs warning and does NOT call updateTranslatedCues on translation error', async () => {
+    // facet: a background rejection logs a warning and never updates cues; a later
+    // successful reply does update them.
+    vi.clearAllMocks();
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
+    mockGetHandlerByPlatform.mockReturnValue(mockHandler);
+    mockHandler.transformResponse.mockReturnValue(MOCK_CUES);
+    mockLoadSettings.mockResolvedValue(MOCK_SETTINGS);
+    mockUpdateCues.mockClear();
+
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('Background unavailable'),
@@ -1845,10 +1859,11 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
-  it('attaches the overlay renderer when the video mounts late and reattaches when the player replaces the element', async () => {
+  it('attaches/re-attaches the renderer to late or replaced videos, and restores native tracks on teardown', async () => {
     const { forceOverlayMode, resetCoordinatorState } = await import(
       '@/content/subtitleCoordinator'
     );
+    // facet: renderer attaches when the video mounts late, re-attaches on replacement.
     resetCoordinatorState();
     document.body.innerHTML = '';
     mockInitializeOverlay.mockReturnValue(false);
@@ -1881,12 +1896,9 @@ describe('subtitleCoordinator – activateOverlayMode translate path', () => {
       expect.any(Object),
       replacementVideo,
     );
-  });
 
-  it('hides showing native tracks only after attachment, restores them on reset, and restores them on failure teardown', async () => {
-    const { forceOverlayMode, resetCoordinatorState } = await import(
-      '@/content/subtitleCoordinator'
-    );
+    // facet: showing native tracks are hidden only after attachment, restored on
+    // reset, and restored on failure teardown.
     resetCoordinatorState();
     document.body.innerHTML = '';
     const video = document.createElement('video');
@@ -2006,7 +2018,7 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     vi.resetModules();
   });
 
-  it('rejects SUBTITLE_CHUNK_TRANSLATED with stale sessionId', async () => {
+  it('rejects stale-session chunks, accepts matching deltas, and accepts legacy sessionless chunks', async () => {
     // First, trigger an interception to establish session 42
     const payload = {
       url: 'https://youtube.com/timedtext?v=test123',
@@ -2093,9 +2105,13 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
     expect(mergedArg[0].text).toBe('Bonjour');
     // Original index-1 cue preserved (would be undefined before the fix)
     expect(mergedArg[1].text).toBe('Thế giới');
-  });
 
-  it('accepts chunks when no session has been established yet (backward compat)', async () => {
+    // facet: a chunk with no sessionId is accepted when no session was established
+    // (backward compat with a legacy background).
+    // Reset coordinator state so activeSubtitleSessionId is null, like a fresh test.
+    vi.clearAllMocks();
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
     // Establish overlay mode via interception, but mock the response WITHOUT sessionId
     // to simulate a legacy background that doesn't send sessionId yet
     (global.chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -2104,14 +2120,14 @@ describe('subtitleCoordinator – stale subtitle chunk rejection', () => {
       // no sessionId — simulates legacy background
     });
 
-    const payload = {
+    const compatPayload = {
       url: 'https://youtube.com/timedtext?v=test123',
       body: '<transcript>...</transcript>',
       contentType: 'application/json',
       platform: 'youtube',
       originalLanguage: 'en',
     };
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-compat-1');
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(compatPayload, 'req-compat-1');
 
     // Now overlay mode is active but activeSubtitleSessionId is null
     mockUpdateCues.mockClear();
@@ -2530,7 +2546,8 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
     return video;
   }
 
-  it('keeps the intercept-path session across an in-range seek and still cancels on an out-of-range seek', async () => {
+  it('keeps the intercept-path session across seeks and blanks Youku ASS natives', async () => {
+    // facet: an in-range seek keeps the session; an out-of-range seek still cancels it.
     // Establish the intercept-path session.
     const payload = {
       url: 'https://sub.ykimg.com/test.ass',
@@ -2604,9 +2621,14 @@ describe('subtitleCoordinator – seek does not invalidate intercept-path sessio
     } finally {
       vi.useRealTimers();
     }
-  });
 
-  it('Youku ASS intercept blanks native with empty ASS (hides original Dialogue)', async () => {
+    // facet: Youku ASS intercept blanks native with empty ASS (hides original Dialogue).
+    vi.clearAllMocks();
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
+    document.querySelectorAll('video').forEach((v) => v.remove());
+    document.body.innerHTML = '<video data-test-primary-video></video>';
+
     const assBody = `[Script Info]
 Title: Youku
 
@@ -2620,14 +2642,14 @@ Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hello`;
       captionWindowSelector: '#subtitle',
       captionHideMethod: 'visibility' as const,
     }));
-    const payload = {
+    const assPayload = {
       url: 'https://sub.ykimg.com/test.ass',
       body: assBody,
       contentType: 'text/plain',
       platform: 'youku',
       originalLanguage: 'en',
     };
-    if (capturedInterceptedHandler) await capturedInterceptedHandler(payload, 'req-youku-ass');
+    if (capturedInterceptedHandler) await capturedInterceptedHandler(assPayload, 'req-youku-ass');
 
     const sent = mockSendTranslatedSubtitle.mock.calls.find(
       (c) => (c[0] as { requestId?: string }).requestId === 'req-youku-ass',
@@ -3151,7 +3173,7 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('canonicalizes the proactive timedtext fetch to fmt=json3 (cache-key parity)', async () => {
+  it('canonicalizes the proactive timedtext fetch to fmt=json3 and requests native captions once on failure (cache-key parity)', async () => {
     // FR-9: the proactive playback path must fetch the same fmt=json3 body as
     // the Settings pre-align flow so units + contentHash (and thus the
     // ai:{videoId}:{lang}:{hash} cache key) are identical across flows.
@@ -3187,9 +3209,10 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
     expect(fetchedUrl).toContain('fmt=json3');
     expect(fetchedUrl).toContain('kind=asr');
     expect(fetchedUrl.startsWith(rawUrl)).toBe(true);
-  });
 
-  it('requests YouTube native captions once when direct timedtext fetch fails', async () => {
+    // facet: a failed direct fetch requests native captions once, restored on reset.
+    vi.clearAllMocks();
+    mod.resetCoordinatorState();
     const timedtextUrl =
       'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr';
 
@@ -3239,7 +3262,7 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
     );
   });
 
-  it('ignores a deferred YouTube fetch that resolves after coordinator reset', async () => {
+  it('ignores a deferred YouTube fetch that resolves or fails after coordinator reset', async () => {
     const timedtextUrl =
       'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr';
     await _capturedTracksHandler?.({
@@ -3290,53 +3313,54 @@ describe('subtitleCoordinator – YouTube ASR first-load pipeline', () => {
     ).toBe(false);
     expect(isInOverlayMode()).toBe(false);
     expect(mockInitializeControls).not.toHaveBeenCalled();
-  });
 
-  it('does not fall back after navigation invalidates a failed YouTube fetch', async () => {
-    const timedtextUrl =
-      'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr';
-    await _capturedTracksHandler?.({
-      tracks: [{
-        language: 'en',
-        label: 'English (auto-generated)',
-        url: timedtextUrl,
-        isAutoGenerated: true,
+    // facet: a fetch that fails after navigation must not trigger a caption fallback.
+    {
+      const timedtextUrl =
+        'https://www.youtube.com/api/timedtext?v=daXaTug8rL4&lang=en&kind=asr';
+      await _capturedTracksHandler?.({
+        tracks: [{
+          language: 'en',
+          label: 'English (auto-generated)',
+          url: timedtextUrl,
+          isAutoGenerated: true,
+          platform: 'youtube',
+          videoId: 'daXaTug8rL4',
+        }],
         platform: 'youtube',
         videoId: 'daXaTug8rL4',
-      }],
-      platform: 'youtube',
-      videoId: 'daXaTug8rL4',
-    });
-    await new Promise((resolve) => setTimeout(resolve, 160));
+      });
+      await new Promise((resolve) => setTimeout(resolve, 160));
 
-    let rejectFetch!: (error: Error) => void;
-    const deferredFetch = new Promise<Response>((_resolve, reject) => {
-      rejectFetch = reject;
-    });
-    const fetchMock = vi.fn(() => deferredFetch);
-    vi.stubGlobal('fetch', fetchMock);
+      let rejectFetch!: (error: Error) => void;
+      const deferredFetch = new Promise<Response>((_resolve, reject) => {
+        rejectFetch = reject;
+      });
+      const fetchMock = vi.fn(() => deferredFetch);
+      vi.stubGlobal('fetch', fetchMock);
 
-    const { resetCoordinatorState, selectSubtitleTrack } = await import(
-      '@/content/subtitleCoordinator'
-    );
-    const pipeline = selectSubtitleTrack('en');
-    await vi.waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(`${timedtextUrl}&fmt=json3`),
-    );
+      const { resetCoordinatorState, selectSubtitleTrack } = await import(
+        '@/content/subtitleCoordinator'
+      );
+      const pipeline = selectSubtitleTrack('en');
+      await vi.waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(`${timedtextUrl}&fmt=json3`),
+      );
 
-    resetCoordinatorState();
-    rejectFetch(new Error('Network failed after navigation'));
-    await pipeline;
+      resetCoordinatorState();
+      rejectFetch(new Error('Network failed after navigation'));
+      await pipeline;
 
-    expect(
-      (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.some(
-        ([message]) => (message as { action?: string }).action === 'FETCH_SUBTITLE',
-      ),
-    ).toBe(false);
-    expect(mockInjectSendMessage).not.toHaveBeenCalledWith(
-      'YOUTUBE_REQUEST_CAPTIONS',
-      expect.anything(),
-    );
+      expect(
+        (chrome.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.some(
+          ([message]) => (message as { action?: string }).action === 'FETCH_SUBTITLE',
+        ),
+      ).toBe(false);
+      expect(mockInjectSendMessage).not.toHaveBeenCalledWith(
+        'YOUTUBE_REQUEST_CAPTIONS',
+        expect.anything(),
+      );
+    }
   });
 
   it('does not let a previous navigation coalesce the next automatic YouTube attempt', async () => {
@@ -3411,20 +3435,23 @@ describe('subtitleCoordinator – watch page URL rules', () => {
     } as unknown as typeof chrome;
   });
 
-  it.each([
-    ['www.youtube.com', '/watch', true],
-    ['www.max.com', '/video/watch/123', true],
-    ['www.max.com', '/browse', false],
-    ['www.linkedin.com', '/learning/course', true],
-    ['www.linkedin.com', '/feed/', false],
-  ])('evaluates watch page for %s %s correctly', async (hostname, pathname, expected) => {
-    Object.defineProperty(window, 'location', {
-      value: { hostname, pathname, href: `https://${hostname}${pathname}` },
-      writable: true,
-      configurable: true,
-    });
+  it('evaluates watch page URL rules for every hostname/pathname case', async () => {
+    const cases: Array<[string, string, boolean]> = [
+      ['www.youtube.com', '/watch', true],
+      ['www.max.com', '/video/watch/123', true],
+      ['www.max.com', '/browse', false],
+      ['www.linkedin.com', '/learning/course', true],
+      ['www.linkedin.com', '/feed/', false],
+    ];
     const mod = await import('@/content/subtitleCoordinator');
-    expect(mod.isOnWatchPage()).toBe(expected);
+    for (const [hostname, pathname, expected] of cases) {
+      Object.defineProperty(window, 'location', {
+        value: { hostname, pathname, href: `https://${hostname}${pathname}` },
+        writable: true,
+        configurable: true,
+      });
+      expect(mod.isOnWatchPage(), `${hostname}${pathname}`).toBe(expected);
+    }
   });
 });
 
@@ -3449,79 +3476,83 @@ describe('subtitleCoordinator – DOM auto-activation and toast scoping', () => 
     document.body.innerHTML = '';
   });
 
-  it('does NOT trigger tryAutoActivateForDom or show toast when video plays on generic site', async () => {
-    const genericHandler = {
-      platform: 'generic',
-      detect: vi.fn(() => true),
-      isWatchPage: vi.fn(() => true),
-      getPatterns: vi.fn(() => []),
-      transformResponse: vi.fn(() => []),
-      getDomCueSource: vi.fn(() => ({
-        cueSelector: '.vjs-text-track-display',
-        captionWindowSelector: '.vjs-text-track-display',
-        observeRootSelector: 'body',
-        readActiveLanguage: () => '',
-        captionHideMethod: 'display' as const,
-      })),
-    };
-    mockDetectCurrentHandler.mockReturnValue(genericHandler);
-    mockGetHandlerByPlatform.mockReturnValue(genericHandler);
-    mockLoadSettings.mockResolvedValue({
-      ...MOCK_SETTINGS,
-      subtitleSettings: {
-        ...MOCK_SETTINGS.subtitleSettings,
-        enabled: true,
-        autoActivateSubtitles: true,
-      },
-    });
+  it('does not auto-activate DOM subtitles or toast on a generic site', async () => {
+    // facet: a video play on a generic site must not start DOM auto-activation.
+    {
+      const genericHandler = {
+        platform: 'generic',
+        detect: vi.fn(() => true),
+        isWatchPage: vi.fn(() => true),
+        getPatterns: vi.fn(() => []),
+        transformResponse: vi.fn(() => []),
+        getDomCueSource: vi.fn(() => ({
+          cueSelector: '.vjs-text-track-display',
+          captionWindowSelector: '.vjs-text-track-display',
+          observeRootSelector: 'body',
+          readActiveLanguage: () => '',
+          captionHideMethod: 'display' as const,
+        })),
+      };
+      mockDetectCurrentHandler.mockReturnValue(genericHandler);
+      mockGetHandlerByPlatform.mockReturnValue(genericHandler);
+      mockLoadSettings.mockResolvedValue({
+        ...MOCK_SETTINGS,
+        subtitleSettings: {
+          ...MOCK_SETTINGS.subtitleSettings,
+          enabled: true,
+          autoActivateSubtitles: true,
+        },
+      });
 
-    const video = document.createElement('video');
-    document.body.appendChild(video);
+      const video = document.createElement('video');
+      document.body.appendChild(video);
 
-    const mod = await import('@/content/subtitleCoordinator');
-    cleanupCoordinator = mod.startCoordinator();
+      const mod = await import('@/content/subtitleCoordinator');
+      cleanupCoordinator = mod.startCoordinator();
 
-    // Trigger video play
-    video.dispatchEvent(new Event('play'));
+      // Trigger video play
+      video.dispatchEvent(new Event('play'));
 
-    // Wait for the 200ms macrotask delay in startVideoPlaybackWatcher
-    const { promise, resolve } = Promise.withResolvers<undefined>();
-    setTimeout(resolve, 350);
-    await promise;
-    expect(mockShowSubtitleToast).not.toHaveBeenCalled();
-  });
+      // Wait for the 200ms macrotask delay in startVideoPlaybackWatcher
+      const { promise, resolve } = Promise.withResolvers<undefined>();
+      setTimeout(resolve, 350);
+      await promise;
+      expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+    }
 
-  it('tryAutoActivateForDom returns early without toast on generic site when automatic', async () => {
-    const genericHandler = {
-      platform: 'generic',
-      detect: vi.fn(() => true),
-      isWatchPage: vi.fn(() => true),
-      getPatterns: vi.fn(() => []),
-      transformResponse: vi.fn(() => []),
-      getDomCueSource: vi.fn(() => ({
-        cueSelector: '.vjs-text-track-display',
-        captionWindowSelector: '.vjs-text-track-display',
-        observeRootSelector: 'body',
-        readActiveLanguage: () => '',
-        captionHideMethod: 'display' as const,
-      })),
-    };
-    mockDetectCurrentHandler.mockReturnValue(genericHandler);
-    mockLoadSettings.mockResolvedValue({
-      ...MOCK_SETTINGS,
-      subtitleSettings: {
-        ...MOCK_SETTINGS.subtitleSettings,
-        enabled: true,
-        autoActivateSubtitles: true,
-      },
-    });
+    // facet: tryAutoActivateForDom() returns early without a toast when automatic.
+    {
+      const genericHandler = {
+        platform: 'generic',
+        detect: vi.fn(() => true),
+        isWatchPage: vi.fn(() => true),
+        getPatterns: vi.fn(() => []),
+        transformResponse: vi.fn(() => []),
+        getDomCueSource: vi.fn(() => ({
+          cueSelector: '.vjs-text-track-display',
+          captionWindowSelector: '.vjs-text-track-display',
+          observeRootSelector: 'body',
+          readActiveLanguage: () => '',
+          captionHideMethod: 'display' as const,
+        })),
+      };
+      mockDetectCurrentHandler.mockReturnValue(genericHandler);
+      mockLoadSettings.mockResolvedValue({
+        ...MOCK_SETTINGS,
+        subtitleSettings: {
+          ...MOCK_SETTINGS.subtitleSettings,
+          enabled: true,
+          autoActivateSubtitles: true,
+        },
+      });
 
-    const mod = await import('@/content/subtitleCoordinator');
-    const result = await mod.tryAutoActivateForDom();
+      const mod = await import('@/content/subtitleCoordinator');
+      const result = await mod.tryAutoActivateForDom();
 
-    expect(result.activated).toBe(false);
-    expect(result.reason).toContain('generic');
-    expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+      expect(result.activated).toBe(false);
+      expect(result.reason).toContain('generic');
+      expect(mockShowSubtitleToast).not.toHaveBeenCalled();
+    }
   });
 
   it('tryAutoActivateForDom manual: toasts when overlay is missing, succeeds when visible', async () => {
@@ -3719,11 +3750,12 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
     });
   });
 
-  it('merges a sequenced append instead of replacing the buffer', async () => {
+  it('merges sequenced appends, caps the buffer, keeps the playhead in-window, and replaces on a sequence gap', async () => {
     if (!_capturedManifestCuesHandler) {
       throw new Error('manifest cue handler was not registered');
     }
 
+    // facet: a sequenced append merges into the buffer instead of replacing it.
     await _capturedManifestCuesHandler({
       cues: [{ startTime: 1, endTime: 2, text: 'a' }],
       platform: 'hbomax',
@@ -3745,12 +3777,11 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
         expect.objectContaining({ originalText: 'b' }),
       ]),
     );
-  });
 
-  it('caps the manifest cue buffer at MAX_MANIFEST_CUES without dropping the opening cues', async () => {
-    if (!_capturedManifestCuesHandler) {
-      throw new Error('manifest cue handler was not registered');
-    }
+    // facet: a full track is capped at MAX_MANIFEST_CUES without dropping the
+    // opening cues. Reset the body so the playhead is back at the start.
+    mockUpdateCues.mockClear();
+    document.body.innerHTML = '<video data-test-primary-video></video>';
     const total = MAX_MANIFEST_CUES + 25;
 
     await _capturedManifestCuesHandler({
@@ -3766,16 +3797,14 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
     // A full-track activation arrives while the playhead is still at the start:
     // the window must keep the head, not the tail, or the title opens with no
     // subtitles at all (the platform's own captions are already hidden).
-    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
-    expect(last).toHaveLength(MAX_MANIFEST_CUES);
-    expect(last[0]?.originalText).toBe('line 0');
-    expect(last.at(-1)?.originalText).toBe(`line ${MAX_MANIFEST_CUES - 1}`);
-  });
+    const capped = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(capped).toHaveLength(MAX_MANIFEST_CUES);
+    expect(capped[0]?.originalText).toBe('line 0');
+    expect(capped.at(-1)?.originalText).toBe(`line ${MAX_MANIFEST_CUES - 1}`);
 
-  it('keeps the playhead inside the window when a long track is delivered', async () => {
-    if (!_capturedManifestCuesHandler) {
-      throw new Error('manifest cue handler was not registered');
-    }
+    // facet: a long track delivered mid-playback keeps the playhead in the window.
+    mockUpdateCues.mockClear();
+    document.body.innerHTML = '<video data-test-primary-video></video>';
     const video = document.querySelector('video');
     if (!video) throw new Error('no primary video');
     video.currentTime = 1_500;
@@ -3790,15 +3819,13 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
       language: 'en',
     });
 
-    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
-    expect(last).toHaveLength(MAX_MANIFEST_CUES);
-    expect(last.map((cue) => cue.originalText)).toContain('line 1500');
-  });
+    const windowed = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(windowed).toHaveLength(MAX_MANIFEST_CUES);
+    expect(windowed.map((cue) => cue.originalText)).toContain('line 1500');
 
-  it('treats a sequence gap as a full replace', async () => {
-    if (!_capturedManifestCuesHandler) {
-      throw new Error('manifest cue handler was not registered');
-    }
+    // facet: a sequence gap is treated as a full replace, not an append.
+    mockUpdateCues.mockClear();
+    document.body.innerHTML = '<video data-test-primary-video></video>';
 
     await _capturedManifestCuesHandler({
       cues: [{ startTime: 1, endTime: 2, text: 'a' }],
@@ -3815,8 +3842,8 @@ describe('subtitleCoordinator – Max manifest stall demotion', () => {
       seq: 7,
     });
 
-    const last = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
-    expect(last.map((cue) => cue.originalText)).toEqual(['c']);
+    const replaced = mockUpdateCues.mock.calls.at(-1)?.[0] as Array<{ originalText?: string }>;
+    expect(replaced.map((cue) => cue.originalText)).toEqual(['c']);
   });
 });
 
@@ -3920,7 +3947,7 @@ describe('subtitleCoordinator – MSE SourceBuffer delta tier', () => {
     document.body.innerHTML = '';
   });
 
-  it('activates on the first payload, merges deltas, and dedupes re-appended segments', async () => {
+  it('activates on the first payload, merges deltas, dedupes re-appends, and ignores an abandoned delta reply', async () => {
     if (!_capturedMseCuesHandler) {
       throw new Error('MSE cue handler was not registered');
     }
@@ -3965,12 +3992,14 @@ describe('subtitleCoordinator – MSE SourceBuffer delta tier', () => {
     });
     expect(translateRequests()).toEqual([['a'], ['b']]);
     expect(mockUpdateCues).toHaveBeenCalledTimes(1);
-  });
 
-  it('does not adopt a delta response that lands after the session was abandoned', async () => {
-    if (!_capturedMseCuesHandler || !_capturedDomTrackChangedHandler) {
+    // facet: a delta reply landing after the session was abandoned is not adopted.
+    if (!_capturedDomTrackChangedHandler) {
       throw new Error('subtitle bridge handlers were not registered');
     }
+    vi.clearAllMocks();
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
 
     // The abandoned batch is held in flight; every other request answers with a
     // session id of its own so the adopter of the stale reply is observable in
@@ -4136,7 +4165,8 @@ describe('subtitleCoordinator – untranslated section notice', () => {
     });
   }
 
-  it('tells the user once when every retry of a manifest delta fails', async () => {
+  it('notifies once when a manifest delta stays untranslated, and stays silent when retries succeed', async () => {
+    // facet: every retry of a manifest delta fails → one notice, not repeated.
     await deliverManifestCues(1);
 
     expect(untranslatedNotices().length).toBeGreaterThan(0);
@@ -4150,9 +4180,10 @@ describe('subtitleCoordinator – untranslated section notice', () => {
     const afterFirst = untranslatedNotices().length;
     await deliverManifestCues(5);
     expect(untranslatedNotices()).toHaveLength(afterFirst);
-  });
 
-  it('stays silent when the one-by-one retry translated every line', async () => {
+    // facet: the one-by-one retry translated every line → no notice at all.
+    mockShowSubtitleToast.mockClear();
+    mockUpdateCues.mockClear();
     const runtimeSendMessage = chrome.runtime.sendMessage as unknown as Mock;
     runtimeSendMessage.mockImplementation(
       async (message: { action?: string; cues?: Array<{ text: string }> }) => {
@@ -4287,21 +4318,22 @@ describe('subtitleCoordinator – preferred-language skip toast (MAX-36)', () =>
     mockShowSubtitleToast.mockClear();
   }
 
-  it('toasts once per navigation when the track language is skipped', async () => {
+  it('toasts once per navigation when a track is skipped, and stays silent otherwise (MAX-36)', async () => {
+    // facet: a non-preferred track toasts once per navigation and never renders.
     await deliverSpanishCues(1);
     await deliverSpanishCues(2);
 
     expect(skipToasts()).toHaveLength(1);
     expect(mockUpdateCues).not.toHaveBeenCalled();
-  });
 
-  it('stays silent when the preference is auto or the track matches it', async () => {
+    // facet: preference auto → the track is used, no skip toast.
     await usePreferredLanguage('auto');
     await deliverSpanishCues(1);
 
     expect(skipToasts()).toHaveLength(0);
     expect(mockInitializeOverlay).toHaveBeenCalled();
 
+    // facet: preference matches the track language → no skip toast.
     mockInitializeOverlay.mockClear();
     await usePreferredLanguage('es');
     await deliverSpanishCues(1);
@@ -4378,7 +4410,8 @@ describe('subtitleCoordinator – SPA navigation capture reset (MAX-3)', () => {
     document.body.innerHTML = '';
   });
 
-  it('resets MAIN-world capture before tearing down the session on navigation', () => {
+  it('resets MAIN-world capture only for a real URL change on navigation (MAX-3)', () => {
+    // facet: a changed URL resets MAIN-world capture before tearing down the session.
     // Clear history first: unrelated poll-driven navigation events from other
     // suites must not satisfy the assertions below.
     mockInjectSendMessage.mockClear();
@@ -4403,9 +4436,8 @@ describe('subtitleCoordinator – SPA navigation capture reset (MAX-3)', () => {
     expect(mockInjectSendMessage.mock.invocationCallOrder[resetIndex]).toBeLessThan(
       runtimeSendMessage.mock.invocationCallOrder[cancelIndex],
     );
-  });
 
-  it('does not reset capture for a navigation event with an unchanged URL', () => {
+    // facet: a navigation event with an unchanged URL must not reset capture.
     mockInjectSendMessage.mockClear();
     window.dispatchEvent(new Event('popstate'));
     // Synchronous dispatch + assertion: no timer can interleave here.
@@ -4517,7 +4549,8 @@ describe('subtitleCoordinator – native TextTrack re-hide (MAX-30)', () => {
     await vi.waitFor(() => expect(track.mode).toBe('hidden'));
   }
 
-  it('re-hides a native track the player re-enables on loadedmetadata, play, and DOM track switch', async () => {
+  it('re-hides a player re-enabled native track only while the overlay is active (MAX-30)', async () => {
+    // facet: while the overlay is active, a player re-enabled native track is re-hidden.
     await activateOverlay();
 
     track.mode = 'showing';
@@ -4532,9 +4565,11 @@ describe('subtitleCoordinator – native TextTrack re-hide (MAX-30)', () => {
     track.mode = 'showing';
     await _capturedDomTrackChangedHandler({ platform: 'hbomax', language: 'en' });
     expect(track.mode).toBe('hidden');
-  });
 
-  it('leaves a native track alone while the translated overlay is inactive', async () => {
+    // facet: with no active overlay the user's native captions must stay visible.
+    const mod = await import('@/content/subtitleCoordinator');
+    vi.clearAllMocks();
+    mod.resetCoordinatorState();
     video.dispatchEvent(new Event('loadedmetadata'));
     video.dispatchEvent(new Event('play'));
 
@@ -4651,7 +4686,21 @@ describe('subtitleCoordinator – teardown on settings change (MAX-13/14)', () =
     storageListener?.();
   }
 
-  it('tears down the overlay and cancels the session when subtitles are switched off', async () => {
+  it('keeps the session alive for unrelated changes but tears down when subtitles are switched off (MAX-13/14)', async () => {
+    // facet: unrelated settings changes and a different platform disable keep the session.
+    applySettings({ fontSize: 22 });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+
+    applySettings({ disabledSubtitleSites: ['youtube'] });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockCleanupOverlay).not.toHaveBeenCalled();
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
+
+    // facet: switching subtitles off tears down the overlay and cancels the session.
     applySettings({ enabled: false });
 
     await vi.waitFor(() => expect(mockCleanupOverlay).toHaveBeenCalled());
@@ -4664,20 +4713,6 @@ describe('subtitleCoordinator – teardown on settings change (MAX-13/14)', () =
 
     await vi.waitFor(() => expect(mockCleanupOverlay).toHaveBeenCalled());
     expect(runtimeSendMessage).toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
-  });
-
-  it('keeps the session alive for unrelated settings changes and a different platform disable', async () => {
-    applySettings({ fontSize: 22 });
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(mockCleanupOverlay).not.toHaveBeenCalled();
-    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
-
-    applySettings({ disabledSubtitleSites: ['youtube'] });
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(mockCleanupOverlay).not.toHaveBeenCalled();
-    expect(runtimeSendMessage).not.toHaveBeenCalledWith({ action: 'CANCEL_SUBTITLE_SESSION' });
   });
 });
 
@@ -4786,7 +4821,7 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
     ).length;
   }
 
-  it('does not re-send a keep-as-is translation after a seek reset', async () => {
+  it('caches keep-as-is translations across a seek on both the manifest and DOM paths (MAX-15)', async () => {
     if (!_capturedManifestCuesHandler) throw new Error('manifest cue handler was not registered');
 
     await _capturedManifestCuesHandler({
@@ -4814,9 +4849,16 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(translationRequests()).toBe(1);
-  });
 
-  it('caches a keep-as-is DOM translation instead of leaving it pending', async () => {
+    // facet: a DOM keep-as-is translation is cached instead of left pending.
+    // Reproduce a fresh test's isolation (cleared caches + call history).
+    vi.clearAllMocks();
+    translateRequests.length = 0;
+    gateTranslations = false;
+    pendingTranslationReplies = [];
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
+
     if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
 
     video.dispatchEvent(new Event('play'));
@@ -4827,7 +4869,7 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
     });
     await vi.waitFor(() => expect(translationRequests()).toBe(1));
 
-    video.currentTime = 400;
+    video.currentTime = 800;
     video.dispatchEvent(new Event('seeked'));
     await vi.waitFor(
       () => expect(mockUpdateCues).toHaveBeenLastCalledWith([]),
@@ -4835,7 +4877,7 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
     );
 
     await _capturedDomCuesHandler({
-      cues: [{ startTime: 400, endTime: 402, text: 'Hola' }],
+      cues: [{ startTime: 800, endTime: 802, text: 'Hola' }],
       platform: 'hbomax',
       language: 'en',
     });
@@ -4937,14 +4979,20 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
 
       releaseTranslation();
       await run;
-    });
 
-    it('drops a response whose session was cancelled while it was in flight', async () => {
+      // facet: a response whose session was cancelled in flight is dropped.
+      vi.clearAllMocks();
+      translateRequests.length = 0;
+      gateTranslations = false;
+      pendingTranslationReplies = [];
+      const mod = await import('@/content/subtitleCoordinator');
+      mod.resetCoordinatorState();
+
       if (!_capturedDomCuesHandler) throw new Error('DOM cue handler was not registered');
 
       video.dispatchEvent(new Event('play'));
       gateTranslations = true;
-      const run = _capturedDomCuesHandler({
+      const run2 = _capturedDomCuesHandler({
         cues: [{ startTime: 1, endTime: 2, text: 'Hola' }],
         platform: 'hbomax',
         language: 'en',
@@ -4967,7 +5015,7 @@ describe('subtitleCoordinator – source-equal translations are cached (MAX-15/1
         sessionId: allocated ?? 1,
         cues: [{ startTime: 0, endTime: 1, text: 'Hello', originalText: 'Hola' }],
       });
-      await run;
+      await run2;
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       gateTranslations = false;
@@ -5091,7 +5139,7 @@ describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => 
     await _capturedTracksHandler({ platform: 'hbomax', videoId: 'abc', tracks });
   }
 
-  it('routes a leaf .vtt track carrying segmentUrls through the manifest fetch', async () => {
+  it('routes leaf .vtt segmentUrls through the manifest fetch and drops the toast on cancel (MAX-10/11)', async () => {
     const mod = await import('@/content/subtitleCoordinator');
     await discover([
       track({ url: SEG_1, segmentUrls: [SEG_1, SEG_2, SEG_3] }),
@@ -5103,10 +5151,11 @@ describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => 
     expect(manifestRequests[0]?.segmentUrls).toEqual([SEG_1, SEG_2, SEG_3]);
     expect(manifestRequests[0]?.language).toBe('en');
     expect(mockInitializeOverlay).toHaveBeenCalled();
-  });
 
-  it('stops the fetching toast without an error toast when the fetch is cancelled', async () => {
-    const mod = await import('@/content/subtitleCoordinator');
+    // facet: a cancelled manifest fetch drops the sticky toast without an error toast.
+    vi.clearAllMocks();
+    manifestRequests.length = 0;
+    mod.resetCoordinatorState();
     await discover([track({ url: SEG_1, segmentUrls: [SEG_1] })]);
     runtimeSendMessage.mockImplementation(async (message: Record<string, unknown>) => {
       if (message?.action === 'FETCH_MANIFEST_SUBTITLES') {
@@ -5138,7 +5187,7 @@ describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => 
     expect(manifestRequests[0]?.segmentUrls).toEqual([SEG_1, SEG_2, SEG_3]);
   });
 
-  it('prefers a segmentFetch template when the track has no concrete segment URLs', async () => {
+  it('prefers a segmentFetch template, else the manifest URL, when segment metadata is missing (MAX-10/11)', async () => {
     const mod = await import('@/content/subtitleCoordinator');
     const segmentFetch = {
       media: 'https://cf.asia.prd.media.max.com/a/t/t3/$Number$.vtt',
@@ -5154,10 +5203,11 @@ describe('subtitleCoordinator – multi-segment DASH tracks (MAX-10/11)', () => 
     expect(manifestRequests).toHaveLength(1);
     expect(manifestRequests[0]?.segmentFetch).toEqual(segmentFetch);
     expect(manifestRequests[0]?.segmentUrls).toBeUndefined();
-  });
 
-  it('still uses the manifest URL when a track has no segment metadata', async () => {
-    const mod = await import('@/content/subtitleCoordinator');
+    // facet: with no segment metadata the manifest URL itself is used.
+    vi.clearAllMocks();
+    manifestRequests.length = 0;
+    mod.resetCoordinatorState();
     await discover([track({ url: MPD_URL })]);
 
     await mod.selectSubtitleTrack('en');
@@ -5298,7 +5348,20 @@ describe('subtitleCoordinator – TextTrack tier defers to the manifest tier on 
     expect(activatedCues?.map((cue) => cue.text)).toEqual(['Xin chào', 'Thế giới']);
   });
 
-  it('holds TextTrack cues during the armed grace window even without an MPD status', async () => {
+  it('processes TextTrack cues immediately when idle, and holds them during the armed grace window (MAX-12)', async () => {
+    // facet: with no MPD capture pending, cues are processed immediately.
+    await dispatchTextTrackCues();
+
+    await vi.waitFor(() => expect(mockInitializeOverlay).toHaveBeenCalled());
+    expect(translateRequests).toHaveLength(1);
+
+    // facet: a discovery arms the grace window, so cues are held even without an
+    // MPD status. Reproduce a fresh test's isolation.
+    vi.clearAllMocks();
+    translateRequests.length = 0;
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
+
     await discover([track({})]);
 
     await dispatchTextTrackCues();
@@ -5306,14 +5369,7 @@ describe('subtitleCoordinator – TextTrack tier defers to the manifest tier on 
     expect(mockInitializeOverlay).not.toHaveBeenCalled();
   });
 
-  it('processes TextTrack cues immediately when no MPD capture is pending', async () => {
-    await dispatchTextTrackCues();
-
-    await vi.waitFor(() => expect(mockInitializeOverlay).toHaveBeenCalled());
-    expect(translateRequests).toHaveLength(1);
-  });
-
-  it('cannot extend the MPD grace window past three windows from the first arm', async () => {
+  it('clamps the MPD grace window from the first arm, and abandons the wait within the in-flight cap (MAX-12)', async () => {
     vi.useFakeTimers();
     if (!_capturedTracksHandler) throw new Error('tracks handler was not registered');
 
@@ -5340,10 +5396,13 @@ describe('subtitleCoordinator – TextTrack tier defers to the manifest tier on 
     await vi.advanceTimersByTimeAsync(0);
 
     expect(mockInitializeOverlay).toHaveBeenCalled();
-  });
 
-  it('abandons the MPD wait within the in-flight cap when processing never completes', async () => {
-    vi.useFakeTimers();
+    // facet: processing that never completes falls back within the in-flight cap.
+    vi.clearAllMocks();
+    translateRequests.length = 0;
+    vi.clearAllTimers();
+    const mod = await import('@/content/subtitleCoordinator');
+    mod.resetCoordinatorState();
     mockLoadSettings.mockResolvedValue({
       ...MOCK_SETTINGS,
       sourceLanguage: 'auto',
@@ -5415,8 +5474,9 @@ describe('subtitleCoordinator – manual activation feedback (MAX-35)', () => {
     document.body.innerHTML = '';
   });
 
-  it('tells the user when Alt+S is pressed outside a video watch page', async () => {
+  it('tells the user why Alt+S could not start translation (MAX-35)', async () => {
     const mod = await import('@/content/subtitleCoordinator');
+    // facet: pressed outside a video watch page → explain the video-page requirement.
     mockHandler.isWatchPage.mockReturnValue(false);
 
     await mod.manualActivateSubtitles();
@@ -5424,9 +5484,8 @@ describe('subtitleCoordinator – manual activation feedback (MAX-35)', () => {
     expect(mockShowSubtitleToast).toHaveBeenCalledWith(
       expect.stringContaining('video page'),
     );
-  });
 
-  it('tells the user when the page has no DOM cue source to translate', async () => {
+    // facet: on a watch page with no DOM cue source → explain the missing source.
     Object.defineProperty(window, 'location', {
       value: { hostname: 'www.youtube.com', pathname: '/watch', href: 'https://www.youtube.com/watch?v=abc' },
       writable: true,
@@ -5435,7 +5494,6 @@ describe('subtitleCoordinator – manual activation feedback (MAX-35)', () => {
     mockHandler.isWatchPage.mockReturnValue(true);
     mockHandler.getDomCueSource.mockReturnValue(null);
 
-    const mod = await import('@/content/subtitleCoordinator');
     await mod.manualActivateSubtitles();
 
     expect(mockShowSubtitleToast).toHaveBeenCalledWith(

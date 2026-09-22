@@ -120,8 +120,10 @@ describe('background — scientific PDF handlers', () => {
     vi.mocked(fetch).mockReset();
   });
 
-  describe('SCIENTIFIC_PDF_HEALTH', () => {
-    it('returns success when bridge reports ok, maps offline when fetch fails', async () => {
+  describe('SCIENTIFIC_PDF_HEALTH + SCIENTIFIC_PDF_DOWNLOAD', () => {
+    it('returns success when bridge reports ok, maps offline when fetch fails; returns base64 PDF for mono artifact', async () => {
+      // facet: SCIENTIFIC_PDF_HEALTH returns success when bridge reports ok,
+      // maps offline when fetch fails.
       // Scenario 1: bridge reports ok.
       vi.mocked(fetch).mockResolvedValueOnce(
         jsonResponse({ status: 'ok', version: '1.0.0', pdf2zh: 'available' }),
@@ -148,6 +150,28 @@ describe('background — scientific PDF handlers', () => {
       );
 
       expect(offlineResult).toMatchObject({ success: false, code: 'offline' });
+
+      // facet: SCIENTIFIC_PDF_DOWNLOAD returns base64 PDF for mono artifact.
+      const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(pdfBytes, {
+          status: 200,
+          headers: { 'Content-Type': 'application/pdf' },
+        }),
+      );
+
+      const downloadResult = await handleMessage(
+        {
+          action: 'SCIENTIFIC_PDF_DOWNLOAD',
+          jobId: 'job_1',
+          artifact: 'mono',
+        },
+        {} as chrome.runtime.MessageSender,
+      );
+
+      expect(downloadResult).toMatchObject({ success: true, artifact: 'mono' });
+      const typedDownload = downloadResult as { fileBase64?: string };
+      expect(typedDownload.fileBase64).toBe(btoa(String.fromCharCode(...pdfBytes)));
     });
   });
 
@@ -236,31 +260,6 @@ describe('background — scientific PDF handlers', () => {
 
       expect(missingFileResult).toMatchObject({ success: false, code: 'invalid_request' });
       expect(fetch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('SCIENTIFIC_PDF_DOWNLOAD', () => {
-    it('returns base64 PDF for mono artifact', async () => {
-      const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-      vi.mocked(fetch).mockResolvedValueOnce(
-        new Response(pdfBytes, {
-          status: 200,
-          headers: { 'Content-Type': 'application/pdf' },
-        }),
-      );
-
-      const result = await handleMessage(
-        {
-          action: 'SCIENTIFIC_PDF_DOWNLOAD',
-          jobId: 'job_1',
-          artifact: 'mono',
-        },
-        {} as chrome.runtime.MessageSender,
-      );
-
-      expect(result).toMatchObject({ success: true, artifact: 'mono' });
-      const typed = result as { fileBase64?: string };
-      expect(typed.fileBase64).toBe(btoa(String.fromCharCode(...pdfBytes)));
     });
   });
 });

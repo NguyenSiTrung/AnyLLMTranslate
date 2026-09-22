@@ -90,8 +90,9 @@ describe('SetupWizard', () => {
     expect(onboarding.completed).toBe(false);
   });
 
-  it('advances welcome → connect on Get started', async () => {
-    renderWizard();
+  it('advances welcome → connect on Get started, and finishes setup from verify when connected', async () => {
+    // facet: advances welcome → connect on Get started
+    const welcome = renderWizard();
     fireEvent.click(screen.getByRole('button', { name: /Get started/i }));
     await waitFor(() => {
       expect(
@@ -99,9 +100,9 @@ describe('SetupWizard', () => {
       ).toBeInTheDocument();
     });
     expect(useSettingsStore.getState().onboarding.lastStep).toBe('connect');
-  });
+    welcome.unmount();
 
-  it('finishes setup from verify when previously connected', async () => {
+    // facet: finishes setup from verify when previously connected
     useSettingsStore.setState({
       ...DEFAULT_SETTINGS,
       isLoaded: true,

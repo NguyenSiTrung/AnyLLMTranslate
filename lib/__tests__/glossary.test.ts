@@ -25,16 +25,14 @@ describe('normalizeSubtitleSiteHost / resolveActiveSubtitleListId', () => {
   });
 });
 
-describe('formatNamedListGlossary', () => {
-  it('formats personal dictionary block and empty list as empty string', () => {
+describe('formatNamedListGlossary / setSiteListSelection / prune', () => {
+  it('formats the personal dictionary block and sets/clears/prunes site selections', () => {
+    // facet: formatNamedListGlossary formats personal dictionary block and empty list as empty string
     expect(formatNamedListGlossary(list())).toContain('Personal dictionary "三体"');
     expect(formatNamedListGlossary(list())).toContain('"叶文洁" → "Ye Wenjie"');
     expect(formatNamedListGlossary(list({ entries: [] }))).toBe('');
-  });
-});
 
-describe('setSiteListSelection / prune', () => {
-  it('sets, clears None, and prunes deleted lists', () => {
+    // facet: setSiteListSelection / prune sets, clears None, and prunes deleted lists
     let map = setSiteListSelection({}, 'www.youku.com', 'L1');
     expect(map).toEqual({ 'youku.com': 'L1' });
     map = setSiteListSelection(map, 'youku.com', null);
@@ -43,8 +41,9 @@ describe('setSiteListSelection / prune', () => {
   });
 });
 
-describe('createNamedList / pushEntriesIntoList', () => {
-  it('creates, pushes, rejects dups and caps', () => {
+describe('createNamedList / pushEntriesIntoList / lock filters', () => {
+  it('creates/pushes with dedupe and caps, and drops locked proper nouns / covered global entries', () => {
+    // facet: createNamedList / pushEntriesIntoList creates, pushes, rejects dups and caps
     const created = createNamedList([], '  CS50  ');
     expect(created.ok).toBe(true);
     if (!created.ok) return;
@@ -68,11 +67,8 @@ describe('createNamedList / pushEntriesIntoList', () => {
     };
     const cap = pushEntriesIntoList(full, [{ source: 'new', target: 'x' }]);
     expect(cap).toEqual({ ok: false, error: 'cap' });
-  });
-});
 
-describe('lock filters', () => {
-  it('drops locked proper nouns and omits covered global entries', () => {
+    // facet: lock filters drops locked proper nouns and omits covered global entries
     const locked = new Set(['elsa']);
     expect(filterUnlockedProperNouns({ Elsa: '艾莎', Anna: '安娜' }, locked)).toEqual({
       Anna: '安娜',

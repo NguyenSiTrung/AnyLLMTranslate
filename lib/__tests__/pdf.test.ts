@@ -6,70 +6,48 @@ import {
 import { addPdfSiteException, normalizePdfSiteException } from '../pdfSiteExceptions';
 
 describe('parsePagesSpec — syntax-only expansion (background/bridge parity)', () => {
-  it('expands ranges and single pages to 1-based sorted unique numbers', () => {
+  it('expands ranges, dedupes/sorts overlaps, tolerates whitespace, and rejects malformed input', () => {
     expect(parsePagesSpec('1-3, 5, 8-10')).toEqual([1, 2, 3, 5, 8, 9, 10]);
-  });
-
-  it('dedupes and sorts overlapping input', () => {
     expect(parsePagesSpec('5, 1-3, 3')).toEqual([1, 2, 3, 5]);
-  });
-
-  it('tolerates whitespace inside tokens', () => {
     expect(parsePagesSpec(' 1 - 3 ,\t5 ')).toEqual([1, 2, 3, 5]);
-  });
 
-  it('returns null for malformed input', () => {
-    expect(parsePagesSpec('')).toBeNull();
-    expect(parsePagesSpec('   ')).toBeNull();
-    expect(parsePagesSpec('abc')).toBeNull();
-    expect(parsePagesSpec('1,,2')).toBeNull();
-    expect(parsePagesSpec('1-')).toBeNull();
-    expect(parsePagesSpec('-5')).toBeNull();
-    expect(parsePagesSpec('1;2')).toBeNull();
-    expect(parsePagesSpec('5-2')).toBeNull();
-    expect(parsePagesSpec('0')).toBeNull();
-    expect(parsePagesSpec('1.5')).toBeNull();
+    for (const malformed of [
+      '',
+      '   ',
+      'abc',
+      '1,,2',
+      '1-',
+      '-5',
+      '1;2',
+      '5-2',
+      '0',
+      '1.5',
+    ]) {
+      expect(parsePagesSpec(malformed), malformed).toBeNull();
+    }
   });
 });
 
 describe('parsePageSelection — UI validation with bounds', () => {
-  it('accepts a valid selection and returns the pages', () => {
+  it('accepts a valid selection and reports the exact error for each invalid shape', () => {
     expect(parsePageSelection('1-3, 5', 42)).toEqual({
       pages: [1, 2, 3, 5],
     });
-  });
 
-  it('rejects empty input', () => {
-    const result = parsePageSelection('', 42);
-    expect(result.pages).toEqual([]);
-    expect(result.error).toBe('Enter at least one page');
-  });
+    const cases: Array<[input: string, total: number, error: string]> = [
+      ['', 42, 'Enter at least one page'],
+      ['1, abc', 42, '"abc" is not a valid page or range'],
+      ['5-2', 42, '"5-2" is not a valid page or range'],
+      ['1, 99', 42, 'Page 99 is out of range (1-42)'],
+      ['0', 42, 'Page numbers start at 1'],
+    ];
+    for (const [input, total, error] of cases) {
+      const result = parsePageSelection(input, total);
+      expect(result.pages, input).toEqual([]);
+      expect(result.error, input).toBe(error);
+    }
 
-  it('rejects malformed tokens', () => {
-    const result = parsePageSelection('1, abc', 42);
-    expect(result.pages).toEqual([]);
-    expect(result.error).toBe('"abc" is not a valid page or range');
-  });
-
-  it('rejects reversed ranges', () => {
-    const result = parsePageSelection('5-2', 42);
-    expect(result.pages).toEqual([]);
-    expect(result.error).toBe('"5-2" is not a valid page or range');
-  });
-
-  it('rejects pages above the document total', () => {
-    const result = parsePageSelection('1, 99', 42);
-    expect(result.pages).toEqual([]);
-    expect(result.error).toBe('Page 99 is out of range (1-42)');
-  });
-
-  it('rejects page zero', () => {
-    const result = parsePageSelection('0', 42);
-    expect(result.pages).toEqual([]);
-    expect(result.error).toBe('Page numbers start at 1');
-  });
-
-  it('skips the upper-bound check when the total is unknown', () => {
+    // An unknown total (still loading) skips the upper-bound check.
     expect(parsePageSelection('99', 0)).toEqual({ pages: [99] });
   });
 });
@@ -80,20 +58,20 @@ describe('parsePageSelection — UI validation with bounds', () => {
  */
 
 describe('pdfSiteExceptions', () => {
-  it.each([
-    ['arxiv.org', 'arxiv.org'],
-    [' HTTPS://Example.COM/paper.pdf?x=1 ', 'example.com'],
-    ['localhost:3000/file.pdf', 'localhost'],
-  ])('normalizes %s to %s', (input, expected) => {
-    expect(normalizePdfSiteException(input)).toBe(expected);
-  });
+  it('normalizes HTTP(S) hosts and rejects non-host input', () => {
+    const accepted: Array<[input: string, expected: string]> = [
+      ['arxiv.org', 'arxiv.org'],
+      [' HTTPS://Example.COM/paper.pdf?x=1 ', 'example.com'],
+      ['localhost:3000/file.pdf', 'localhost'],
+    ];
+    for (const [input, expected] of accepted) {
+      expect(normalizePdfSiteException(input), input).toBe(expected);
+    }
 
-  it.each(['', 'not a host', 'file:///tmp/a.pdf', 'mailto:user@example.com'])(
-    'rejects %s',
-    (input) => {
-      expect(normalizePdfSiteException(input)).toBeNull();
-    },
-  );
+    for (const rejected of ['', 'not a host', 'file:///tmp/a.pdf', 'mailto:user@example.com']) {
+      expect(normalizePdfSiteException(rejected), rejected).toBeNull();
+    }
+  });
 
   it('deduplicates case-insensitively without mutating existing order', () => {
     expect(addPdfSiteException(['arxiv.org'], 'ARXIV.ORG/paper')).toEqual([

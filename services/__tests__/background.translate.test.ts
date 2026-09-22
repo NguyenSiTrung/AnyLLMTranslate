@@ -88,7 +88,7 @@ const buildMsg = (pieces: Array<{ id: string; text: string }>) => ({
 const fakeSender = {} as chrome.runtime.MessageSender;
 
 // ── Tests ────────────────────────────────────────────────────────────────────
-describe('handleTranslate — cache split/merge (FR-1)', () => {
+describe('handleTranslate — cache split/merge (FR-1) + FR-7 partial back-fills', () => {
   let getCachedTranslation: ReturnType<typeof vi.fn>;
   let cacheTranslation: ReturnType<typeof vi.fn>;
 
@@ -105,7 +105,7 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
     cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
   });
 
-  it('splits/merges cache hits across all-cached, none-cached, and mixed scenarios', async () => {
+  it('splits/merges cache hits across all-cached, none-cached, and mixed scenarios; does not cache back-filled pieces but still caches translated pieces in a partial chunk', async () => {
     // Scenario 1: all pieces cached → skip LLM entirely.
     getCachedTranslation.mockImplementation(async (text: string) => {
       const map: Record<string, string> = {
@@ -204,6 +204,57 @@ describe('handleTranslate — cache split/merge (FR-1)', () => {
         { id: 'p2', translatedText: 'Thế giới' },
       ]),
     );
+
+    // facet: FR-7 (fixes #9) does not cache back-filled pieces but still caches
+    // translated pieces in a partial chunk. When the LLM omits an ID, the
+    // service back-fills it with the source text and flags `partial`; caching
+    // source-as-translation would poison future lookups.
+    getCachedTranslation.mockResolvedValue(null); // cache miss for all pieces
+    cacheTranslation.mockClear();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+
+    // Phase 1: LLM returns ONLY p1's translation and omits p2. The service
+    // back-fills p2 with its own source text ("World") and sets partial=true.
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    const partialResult = (await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'Hello' },
+        { id: 'p2', text: 'World' },
+      ]),
+      fakeSender,
+    )) as { success: boolean; results?: Array<{ id: string; translatedText: string }> };
+
+    expect(partialResult.success).toBe(true);
+    // p1 was translated (cached), p2 was back-filled with source (NOT cached).
+    const cachedTexts = cacheTranslation.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(cachedTexts).toContain('Hello'); // p1 cached
+    expect(cachedTexts).not.toContain('World'); // p2 back-fill NOT cached
+
+    // p2's result still carries the back-filled source so nothing is lost.
+    const backfilledP2 = partialResult.results?.find((r) => r.id === 'p2');
+    expect(backfilledP2?.translatedText).toBe('World');
+
+    // Phase 2: same partial response — assert the TRANSLATED piece (p1) IS
+    // cached (exactly one cache write).
+    cacheTranslation.mockClear();
+    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
+
+    await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'Hello' },
+        { id: 'p2', text: 'World' },
+      ]),
+      fakeSender,
+    );
+
+    const cacheCalls = cacheTranslation.mock.calls;
+    // Exactly one cache write (p1 only — p2 back-fill skipped).
+    expect(cacheCalls.length).toBe(1);
+    expect((cacheCalls[0] as unknown[])[1]).toBe('Xin chào'); // translated text
   });
 });
 
@@ -341,67 +392,6 @@ describe('handleTranslate — empty-pool / all-open error surfacing', () => {
     } finally {
       OpenAICompatibleService.__set429DelaysForTest(false);
     }
-  });
-});
-
-// FR-7 (fixes #9): the page path must NOT cache a partial back-fill. When the
-// LLM omits an ID, the service back-fills it with the source text and flags
-// `partial`. Caching source-as-translation would poison future lookups.
-describe('handleTranslate — FR-7: do not cache partial back-fills', () => {
-  let cacheTranslation: ReturnType<typeof vi.fn>;
-
-  beforeEach(async () => {
-    delete mockStorage['anyllm-translate-settings'];
-    vi.clearAllMocks();
-    __resetTranslationServiceForTest();
-    const mod = await import('@/services/cacheManager');
-    const getCached = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
-    getCached.mockResolvedValue(null); // cache miss for all pieces
-    cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
-  });
-
-  it('does not cache back-filled pieces but still caches translated pieces in a partial chunk', async () => {
-    // Phase 1: LLM returns ONLY p1's translation and omits p2. The service
-    // back-fills p2 with its own source text ("World") and sets partial=true.
-    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
-
-    const result = (await handleMessage(
-      buildMsg([
-        { id: 'p1', text: 'Hello' },
-        { id: 'p2', text: 'World' },
-      ]),
-      fakeSender,
-    )) as { success: boolean; results?: Array<{ id: string; translatedText: string }> };
-
-    expect(result.success).toBe(true);
-    // p1 was translated (cached), p2 was back-filled with source (NOT cached).
-    const cachedTexts = cacheTranslation.mock.calls.map(
-      (c: unknown[]) => c[0] as string,
-    );
-    expect(cachedTexts).toContain('Hello'); // p1 cached
-    expect(cachedTexts).not.toContain('World'); // p2 back-fill NOT cached
-
-    // p2's result still carries the back-filled source so nothing is lost.
-    const p2 = result.results?.find((r) => r.id === 'p2');
-    expect(p2?.translatedText).toBe('World');
-
-    // Phase 2: same partial response — assert the TRANSLATED piece (p1) IS
-    // cached (exactly one cache write).
-    cacheTranslation.mockClear();
-    mockFetchTranslation({ translations: { p1: 'Xin chào' } });
-
-    await handleMessage(
-      buildMsg([
-        { id: 'p1', text: 'Hello' },
-        { id: 'p2', text: 'World' },
-      ]),
-      fakeSender,
-    );
-
-    const cacheCalls = cacheTranslation.mock.calls;
-    // Exactly one cache write (p1 only — p2 back-fill skipped).
-    expect(cacheCalls.length).toBe(1);
-    expect((cacheCalls[0] as unknown[])[1]).toBe('Xin chào'); // translated text
   });
 });
 
@@ -930,7 +920,7 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
     getCachedFailure.mockResolvedValue(null);
   });
 
-  it('marks every duplicate failed when the canonical sub-batch fails — no source echo', async () => {
+  it('marks every duplicate failed when the canonical sub-batch fails — no source echo; does not rehydrate a duplicate from a canonical partial source back-fill', async () => {
     seedSinglePieceBatchSettings();
     stubFetchById((ids) => {
       // p1's sub-batch fails outright: unparseable content is a content-level
@@ -962,9 +952,9 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
     );
     expect(cachedSources).not.toContain('Shared source');
     expect(cachedSources).toContain('Unique source');
-  });
 
-  it('does not rehydrate a duplicate from a canonical partial source back-fill', async () => {
+    // facet: does not rehydrate a duplicate from a canonical partial source
+    // back-fill.
     seedSinglePieceBatchSettings();
     stubFetchById((ids) => {
       // p1's sub-batch returns an empty map → the service back-fills p1 with
@@ -973,7 +963,7 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
       return JSON.stringify({ translations: { p2: 'T-Other' } });
     });
 
-    const result = (await handleMessage(dupMsg(), fakeSender)) as {
+    const partialDupResult = (await handleMessage(dupMsg(), fakeSender)) as {
       success: boolean;
       partial?: boolean;
       results?: Array<{
@@ -984,32 +974,32 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
       failed?: Array<{ id: string; error: string }>;
     };
 
-    expect(result.success).toBe(true);
-    expect(result.partial).toBe(true);
+    expect(partialDupResult.success).toBe(true);
+    expect(partialDupResult.partial).toBe(true);
     // The canonical keeps its source back-fill (documented partial behaviour)
     // AND is explicitly marked so content never guesses via text equality…
-    expect(result.results?.find((r) => r.id === 'p1')).toEqual({
+    expect(partialDupResult.results?.find((r) => r.id === 'p1')).toEqual({
       id: 'p1',
       translatedText: 'Shared source',
       backfilled: true,
     });
-    expect(result.results?.find((r) => r.id === 'p2')).toEqual({
+    expect(partialDupResult.results?.find((r) => r.id === 'p2')).toEqual({
       id: 'p2',
       translatedText: 'T-Other',
     });
     // …but the dup must NOT inherit it — no source echo as a result.
-    expect(result.results?.find((r) => r.id === 'p1dup')).toBeUndefined();
-    expect(result.failed).toEqual([
+    expect(partialDupResult.results?.find((r) => r.id === 'p1dup')).toBeUndefined();
+    expect(partialDupResult.failed).toEqual([
       { id: 'p1dup', error: 'Incomplete translation — click to retry' },
     ]);
     // The back-filled source is never written to the success cache.
-    const cachedSources = cacheTranslation.mock.calls.map(
+    const partialCachedSources = cacheTranslation.mock.calls.map(
       (c: unknown[]) => c[0] as string,
     );
-    expect(cachedSources).not.toContain('Shared source');
+    expect(partialCachedSources).not.toContain('Shared source');
   });
 
-  it('still rehydrates the duplicate when the canonical genuinely succeeds', async () => {
+  it('still rehydrates the duplicate when the canonical genuinely succeeds; keeps sibling successes when the canonical sub-batch THROWS — every dup becomes failed', async () => {
     mockFetchTranslation({ translations: { p1: 'T-Shared', p2: 'T-Other' } });
 
     const result = (await handleMessage(dupMsg(), fakeSender)) as {
@@ -1029,9 +1019,13 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
     // The dup adopts the canonical's genuine translation — no extra LLM piece.
     expect(byId.get('p1dup')).toBe('T-Shared');
     expect(byId.get('p2')).toBe('T-Other');
-  });
 
-  it('keeps sibling successes when the canonical sub-batch THROWS — every dup becomes failed', async () => {
+    // facet: keeps sibling successes when the canonical sub-batch THROWS —
+    // every dup becomes failed.
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    cacheTranslation.mockClear();
+    cacheFailure.mockClear();
     // Failure cache ON: thrown transport/pool errors must still NOT write
     // failure-cache entries (only content-level {success:false} failures may).
     seedSinglePieceBatchSettings({ enableFailureCache: true });
@@ -1054,7 +1048,7 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
       return okTranslationResponse({ p2: 'Unique source' });
     });
 
-    const result = (await handleMessage(
+    const throwResult = (await handleMessage(
       buildMsg([
         { id: 'p1', text: 'Shared source' },
         { id: 'p1dup', text: 'Shared source' }, // duplicate of p1
@@ -1073,25 +1067,25 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
       failed?: Array<{ id: string; error: string }>;
     };
 
-    expect(result.success).toBe(true);
-    expect(result.partial).toBe(true);
+    expect(throwResult.success).toBe(true);
+    expect(throwResult.partial).toBe(true);
     // The sibling result survives the throw — and the exact match proves a
     // genuine source-identical translation is NOT marked backfilled.
-    expect(result.results).toEqual([
+    expect(throwResult.results).toEqual([
       { id: 'p2', translatedText: 'Unique source' },
     ]);
     // Canonical + BOTH dups surface the thrown error — no source echo.
-    expect(result.failed).toEqual([
+    expect(throwResult.failed).toEqual([
       { id: 'p1', error: 'Model not found' },
       { id: 'p1dup', error: 'Model not found' },
       { id: 'p1dup2', error: 'Model not found' },
     ]);
     // Thrown transport/pool errors are never failure-cached or success-cached.
     expect(cacheFailure).not.toHaveBeenCalled();
-    const cachedSources = cacheTranslation.mock.calls.map(
+    const throwCachedSources = cacheTranslation.mock.calls.map(
       (c: unknown[]) => c[0] as string,
     );
-    expect(cachedSources).not.toContain('Shared source');
+    expect(throwCachedSources).not.toContain('Shared source');
   });
 
   it('preserves pool retryAfter on an all-failed aggregate', async () => {

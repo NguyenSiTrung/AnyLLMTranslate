@@ -194,8 +194,9 @@ describe('normalizeThinkingMode / normalizeThinkingEffort / provider dialect map
   });
 });
 
-describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
-  it('maps provider-dialect request fields: Gemini reasoning fields and DeepSeek thinking.type + reasoning_effort', () => {
+describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode / isThinkingKwargsRejected', () => {
+  it('maps provider-dialect request fields and detects known rejection phrases', () => {
+    // facet: Gemini reasoning fields and DeepSeek thinking.type + reasoning_effort
     expect(geminiSupportsThinkingNone('gemini-2.5-flash')).toBe(true);
     expect(geminiSupportsThinkingNone('gemini-2.5-flash-lite')).toBe(true);
     expect(geminiSupportsThinkingNone('models/gemini-2.5-flash')).toBe(true);
@@ -379,11 +380,8 @@ describe('geminiSupportsThinkingNone / geminiReasoningEffortForMode', () => {
     expect(otherOn.chat_template_kwargs).toEqual({ enable_thinking: true });
     expect(otherOn.thinking).toBeUndefined();
     expect(otherOn.reasoning_effort).toBeUndefined();
-  });
-});
 
-describe('isThinkingKwargsRejected', () => {
-  it('detects known rejection phrases for NIM, Gemini, and DeepSeek', () => {
+    // facet: detects known rejection phrases for NIM, Gemini, and DeepSeek
     expect(isThinkingKwargsRejected('Unknown field: chat_template_kwargs')).toBe(true);
     expect(isThinkingKwargsRejected('extra field enable_thinking not permitted')).toBe(true);
     expect(isThinkingKwargsRejected('Invalid enable thinking flag')).toBe(true);

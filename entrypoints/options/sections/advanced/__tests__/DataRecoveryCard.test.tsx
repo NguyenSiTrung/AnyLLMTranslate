@@ -4,7 +4,7 @@
  * AdvancedSection.backup.test.tsx during the card extraction.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { webcrypto } from 'node:crypto';
 import { DEFAULT_SETTINGS, type ExtensionSettings } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -250,16 +250,16 @@ describe('AdvancedSection Data Portability', () => {
     expect(screen.getByText('theme')).toBeInTheDocument();
     expect(screen.queryByText('siteRules')).not.toBeInTheDocument();
     unmount();
-  });
+    cleanup();
 
-  it('saves a pre-import snapshot before applying the import', async () => {
+    // facet: saves a pre-import snapshot before applying the import
     storeWith({ targetLanguage: 'ja' });
     renderAdvanced();
 
-    const file = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
+    const snapshotFile = new File([JSON.stringify({ targetLanguage: 'ko' })], 's.json', {
       type: 'application/json',
     });
-    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [file] } });
+    fireEvent.change(screen.getByTestId('import-settings-file'), { target: { files: [snapshotFile] } });
 
     await screen.findByRole('dialog', { name: 'Import settings' });
     fireEvent.click(screen.getByRole('button', { name: 'Merge & import' }));
@@ -317,9 +317,9 @@ describe('AdvancedSection Data Portability', () => {
       ).not.toBeInTheDocument(),
     );
     unmount();
-  });
+    cleanup();
 
-  it('recommends encrypted backup when API keys exist', async () => {
+    // facet: recommends encrypted backup when API keys exist
     storeWith({
       providers: [
         {

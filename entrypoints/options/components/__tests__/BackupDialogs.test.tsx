@@ -151,16 +151,18 @@ describe('BackupPasswordDialog', () => {
   });
 });
 
-describe('ImportSummaryDialog', () => {
+describe('ImportSummaryDialog / ExportFormatDialog', () => {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
+  const onSelect = vi.fn();
 
   beforeEach(() => {
     onConfirm.mockClear();
     onCancel.mockClear();
+    onSelect.mockClear();
   });
 
-  it('covers merge defaults, exact restore, counts, and overwrite/reset visibility', () => {
+  it('covers import merge/restore counts and export selection/cleartext/keyboard/dismissal', () => {
     const { unmount } = render(
       <ImportSummaryDialog
         source="plain"
@@ -233,19 +235,8 @@ describe('ImportSummaryDialog', () => {
     expect(screen.getByText(/theme/)).toBeInTheDocument();
     expect(screen.getByText(/glossary/)).toBeInTheDocument();
     cleanup();
-  });
-});
 
-describe('ExportFormatDialog', () => {
-  const onSelect = vi.fn();
-  const onCancel = vi.fn();
-
-  beforeEach(() => {
-    onSelect.mockClear();
-    onCancel.mockClear();
-  });
-
-  it('covers encrypted/plain selection, cleartext warnings, keyboard navigation, and dismissal', () => {
+    // facet: covers encrypted/plain selection, cleartext warnings, keyboard navigation, and dismissal
     {
       const { unmount } = render(
       <ExportFormatDialog hasApiKeys={false} onSelect={onSelect} onCancel={onCancel} />,

@@ -35,107 +35,115 @@ describe('shadowDomRoots — registry', () => {
     clearShadowDomRoots();
   });
 
-  it('discovers open roots under a scope, injects one style each, and skips closed roots', () => {
-    const { host, shadow } = makeHost('Open root content.');
-    const container = document.createElement('div');
-    container.appendChild(host);
+  it('discovers open roots under a scope, injects one style each, skips closed roots, and includes the supplied element own shadowRoot', () => {
+    // facet: discovers open roots under a scope, injects one style each, and skips closed roots
+    {
+      const { host, shadow } = makeHost('Open root content.');
+      const container = document.createElement('div');
+      container.appendChild(host);
 
-    // A nested open root inside the first root must also be discovered.
-    const innerHost = document.createElement('span');
-    const innerShadow = innerHost.attachShadow({ mode: 'open' });
-    const innerP = document.createElement('p');
-    innerP.textContent = 'Nested shadow text.';
-    innerShadow.appendChild(innerP);
-    shadow.appendChild(innerHost);
+      // A nested open root inside the first root must also be discovered.
+      const innerHost = document.createElement('span');
+      const innerShadow = innerHost.attachShadow({ mode: 'open' });
+      const innerP = document.createElement('p');
+      innerP.textContent = 'Nested shadow text.';
+      innerShadow.appendChild(innerP);
+      shadow.appendChild(innerHost);
 
-    // Closed roots stay unsupported — element.shadowRoot is null.
-    const closedHost = document.createElement('div');
-    closedHost.attachShadow({ mode: 'closed' });
-    container.appendChild(closedHost);
+      // Closed roots stay unsupported — element.shadowRoot is null.
+      const closedHost = document.createElement('div');
+      closedHost.attachShadow({ mode: 'closed' });
+      container.appendChild(closedHost);
 
-    document.body.appendChild(container);
+      document.body.appendChild(container);
 
-    const found = registerShadowRoots(document.body);
-    expect(found).toContain(shadow);
-    expect(found).toContain(innerShadow);
-    expect(getRegisteredShadowRoots()).toContain(shadow);
-    expect(getRegisteredShadowRoots()).toContain(innerShadow);
+      const found = registerShadowRoots(document.body);
+      expect(found).toContain(shadow);
+      expect(found).toContain(innerShadow);
+      expect(getRegisteredShadowRoots()).toContain(shadow);
+      expect(getRegisteredShadowRoots()).toContain(innerShadow);
 
-    // Exactly one scoped style element per registered root.
-    expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
-    expect(innerShadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
+      // Exactly one scoped style element per registered root.
+      expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
+      expect(innerShadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
 
-    // Re-registering is idempotent — still exactly one style, still returned.
-    const again = registerShadowRoots(document.body);
-    expect(again).toContain(shadow);
-    expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
-    expect(getRegisteredShadowRoots().filter((r) => r === shadow)).toHaveLength(1);
+      // Re-registering is idempotent — still exactly one style, still returned.
+      const again = registerShadowRoots(document.body);
+      expect(again).toContain(shadow);
+      expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
+      expect(getRegisteredShadowRoots().filter((r) => r === shadow)).toHaveLength(1);
+    }
+
+    // facet: includes the supplied element own shadowRoot and returns already-registered roots
+    {
+      const { host, shadow } = makeHost();
+      document.body.appendChild(host);
+
+      const found = registerShadowRoots(host);
+      expect(found).toContain(shadow);
+
+      // collectOpenShadowRoots returns every open root in scope — including
+      // roots registered earlier during extraction.
+      const collected = collectOpenShadowRoots(document.body);
+      expect(collected).toContain(shadow);
+      const collectedFromHost = collectOpenShadowRoots(host);
+      expect(collectedFromHost).toContain(shadow);
+    }
   });
 
-  it('includes the supplied element own shadowRoot and returns already-registered roots', () => {
-    const { host, shadow } = makeHost();
-    document.body.appendChild(host);
+  it('clearShadowDomRoots removes injected styles and mirrored host state, and syncShadowHostState propagates later changes', () => {
+    // facet: clearShadowDomRoots removes injected styles and empties the registry
+    {
+      const { host, shadow } = makeHost();
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
+      expect(shadow.querySelector('style[data-anyllm-shadow-style]')).not.toBeNull();
 
-    const found = registerShadowRoots(host);
-    expect(found).toContain(shadow);
+      clearShadowDomRoots();
 
-    // collectOpenShadowRoots returns every open root in scope — including
-    // roots registered earlier during extraction.
-    const collected = collectOpenShadowRoots(document.body);
-    expect(collected).toContain(shadow);
-    const collectedFromHost = collectOpenShadowRoots(host);
-    expect(collectedFromHost).toContain(shadow);
-  });
+      expect(getRegisteredShadowRoots()).toHaveLength(0);
+      expect(shadow.querySelector('style[data-anyllm-shadow-style]')).toBeNull();
 
-  it('clearShadowDomRoots removes injected styles and empties the registry', () => {
-    const { host, shadow } = makeHost();
-    document.body.appendChild(host);
-    registerShadowRoots(document.body);
-    expect(shadow.querySelector('style[data-anyllm-shadow-style]')).not.toBeNull();
+      // A new registration after clear re-injects the style.
+      registerShadowRoots(document.body);
+      expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
+    }
 
-    clearShadowDomRoots();
+    // facet: mirrors documentElement state onto each registered host, syncs later, and strips it on clear
+    {
+      document.documentElement.setAttribute('data-anyllm-theme', 'paper');
+      document.documentElement.setAttribute('data-anyllm-state', 'dual');
+      document.documentElement.setAttribute('data-anyllm-position', 'above');
+      document.documentElement.classList.add('anyllm-dark');
 
-    expect(getRegisteredShadowRoots()).toHaveLength(0);
-    expect(shadow.querySelector('style[data-anyllm-shadow-style]')).toBeNull();
+      const { host, shadow } = makeHost();
+      document.body.appendChild(host);
+      registerShadowRoots(document.body);
 
-    // A new registration after clear re-injects the style.
-    registerShadowRoots(document.body);
-    expect(shadow.querySelectorAll('style[data-anyllm-shadow-style]')).toHaveLength(1);
-  });
+      // Registration mirrors the current document state onto the host so
+      // :host(...) scoped rules apply inside the shadow root (Firefox-safe).
+      expect(host.getAttribute('data-anyllm-theme')).toBe('paper');
+      expect(host.getAttribute('data-anyllm-state')).toBe('dual');
+      expect(host.getAttribute('data-anyllm-position')).toBe('above');
+      expect(host.classList.contains('anyllm-dark')).toBe(true);
 
-  it('mirrors documentElement state onto each registered host, syncs later, and strips it on clear', () => {
-    document.documentElement.setAttribute('data-anyllm-theme', 'paper');
-    document.documentElement.setAttribute('data-anyllm-state', 'dual');
-    document.documentElement.setAttribute('data-anyllm-position', 'above');
-    document.documentElement.classList.add('anyllm-dark');
+      // syncShadowHostState propagates later document state changes.
+      document.documentElement.setAttribute('data-anyllm-theme', 'bubble');
+      document.documentElement.removeAttribute('data-anyllm-state');
+      document.documentElement.classList.remove('anyllm-dark');
+      syncShadowHostState();
+      expect(host.getAttribute('data-anyllm-theme')).toBe('bubble');
+      expect(host.hasAttribute('data-anyllm-state')).toBe(false);
+      expect(host.classList.contains('anyllm-dark')).toBe(false);
 
-    const { host, shadow } = makeHost();
-    document.body.appendChild(host);
-    registerShadowRoots(document.body);
-
-    // Registration mirrors the current document state onto the host so
-    // :host(...) scoped rules apply inside the shadow root (Firefox-safe).
-    expect(host.getAttribute('data-anyllm-theme')).toBe('paper');
-    expect(host.getAttribute('data-anyllm-state')).toBe('dual');
-    expect(host.getAttribute('data-anyllm-position')).toBe('above');
-    expect(host.classList.contains('anyllm-dark')).toBe(true);
-
-    // syncShadowHostState propagates later document state changes.
-    document.documentElement.setAttribute('data-anyllm-theme', 'bubble');
-    document.documentElement.removeAttribute('data-anyllm-state');
-    document.documentElement.classList.remove('anyllm-dark');
-    syncShadowHostState();
-    expect(host.getAttribute('data-anyllm-theme')).toBe('bubble');
-    expect(host.hasAttribute('data-anyllm-state')).toBe(false);
-    expect(host.classList.contains('anyllm-dark')).toBe(false);
-
-    // clearShadowDomRoots removes injected styles and mirrored host state.
-    clearShadowDomRoots();
-    expect(shadow.querySelector('style[data-anyllm-shadow-style]')).toBeNull();
-    expect(host.hasAttribute('data-anyllm-theme')).toBe(false);
-    expect(host.hasAttribute('data-anyllm-state')).toBe(false);
-    expect(host.hasAttribute('data-anyllm-position')).toBe(false);
-    expect(host.classList.contains('anyllm-dark')).toBe(false);
+      // clearShadowDomRoots removes injected styles and mirrored host state.
+      clearShadowDomRoots();
+      expect(shadow.querySelector('style[data-anyllm-shadow-style]')).toBeNull();
+      expect(host.hasAttribute('data-anyllm-theme')).toBe(false);
+      expect(host.hasAttribute('data-anyllm-state')).toBe(false);
+      expect(host.hasAttribute('data-anyllm-position')).toBe(false);
+      expect(host.classList.contains('anyllm-dark')).toBe(false);
+    }
   });
 
   it('skips extension-owned hosts — no registration, style, or host-state mirror', () => {
@@ -165,77 +173,87 @@ describe('shadowDomRoots — registry', () => {
 });
 
 describe('scopeCssForShadowRoot — document-root selector adapter', () => {
-  it('rewrites html/state/theme/dark document selectors to :host', () => {
-    const scoped = scopeCssForShadowRoot(
-      'html[data-anyllm-state="dual"] [data-anyllm-role="translation"] { display: block; }',
-    );
-    expect(scoped).toContain(
-      ':host([data-anyllm-state="dual"]) [data-anyllm-role="translation"]',
-    );
-    expect(scoped).not.toContain(':host-context');
+  it('rewrites html state/theme selectors, comma lists, and a leading [data-anyllm-theme] onto :host', () => {
+    // facet: rewrites html/state/theme/dark document selectors to :host
+    {
+      const scoped = scopeCssForShadowRoot(
+        'html[data-anyllm-state="dual"] [data-anyllm-role="translation"] { display: block; }',
+      );
+      expect(scoped).toContain(
+        ':host([data-anyllm-state="dual"]) [data-anyllm-role="translation"]',
+      );
+      expect(scoped).not.toContain(':host-context');
+    }
+
+    // facet: rewrites html:not([data-anyllm-state]) and comma lists member-wise
+    {
+      const scoped = scopeCssForShadowRoot(
+        'html[data-anyllm-state="off"] [data-anyllm-role="translation"],\n' +
+          'html:not([data-anyllm-state]) [data-anyllm-role="translation"] { display: none !important; }',
+      );
+      expect(scoped).toContain(':host([data-anyllm-state="off"]) [data-anyllm-role="translation"]');
+      expect(scoped).toContain(':host(:not([data-anyllm-state])) [data-anyllm-role="translation"]');
+    }
+
+    // facet: rewrites a leading [data-anyllm-theme="..."] onto the host
+    {
+      const scoped = scopeCssForShadowRoot(
+        '[data-anyllm-theme="blockquote"] .anyllm-translate-translation { color: #555; }',
+      );
+      expect(scoped).toContain(
+        ':host([data-anyllm-theme="blockquote"]) .anyllm-translate-translation',
+      );
+    }
+
+    // facet: rewrites html:not([data-anyllm-theme])
+    {
+      const scoped = scopeCssForShadowRoot(
+        'html:not([data-anyllm-theme]) .anyllm-translate-translation { color: #555; }',
+      );
+      expect(scoped).toContain(
+        ':host(:not([data-anyllm-theme])) .anyllm-translate-translation',
+      );
+    }
   });
 
-  it('rewrites html:not([data-anyllm-state]) and comma lists member-wise', () => {
-    const scoped = scopeCssForShadowRoot(
-      'html[data-anyllm-state="off"] [data-anyllm-role="translation"],\n' +
-        'html:not([data-anyllm-state]) [data-anyllm-role="translation"] { display: none !important; }',
-    );
-    expect(scoped).toContain(':host([data-anyllm-state="off"]) [data-anyllm-role="translation"]');
-    expect(scoped).toContain(':host(:not([data-anyllm-state])) [data-anyllm-role="translation"]');
-  });
+  it('rewrites html.anyllm-dark variants and never merges more than one type selector into :host', () => {
+    // facet: rewrites html.anyllm-dark and combined dark+theme selectors
+    {
+      const scoped = scopeCssForShadowRoot(
+        'html.anyllm-dark .anyllm-inline-bilingual { color: #7db4d8; }\n' +
+          'html.anyllm-dark [data-anyllm-theme="paper"] .anyllm-translate-translation { color: #aaa; }\n' +
+          'html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation { border-left-color: #60a5fa; }',
+      );
+      expect(scoped).toContain(':host(.anyllm-dark) .anyllm-inline-bilingual');
+      expect(scoped).toContain(
+        ':host(.anyllm-dark[data-anyllm-theme="paper"]) .anyllm-translate-translation',
+      );
+      expect(scoped).toContain(
+        ':host(.anyllm-dark:not([data-anyllm-theme])) .anyllm-translate-translation',
+      );
+    }
 
-  it('rewrites a leading [data-anyllm-theme="..."] onto the host', () => {
-    const scoped = scopeCssForShadowRoot(
-      '[data-anyllm-theme="blockquote"] .anyllm-translate-translation { color: #555; }',
-    );
-    expect(scoped).toContain(
-      ':host([data-anyllm-theme="blockquote"]) .anyllm-translate-translation',
-    );
-  });
+    // facet: never merges more than one type selector into the :host compound
+    {
+      // `div` is in-shadow scope — only the leading html compound may be scoped;
+      // the in-shadow descendant must stay untouched.
+      const inShadow = scopeCssForShadowRoot(
+        'html[data-anyllm-state="dual"] div[data-anyllm-theme="paper"] .x { color: red; }',
+      );
+      expect(inShadow).toContain(
+        ':host([data-anyllm-state="dual"]) div[data-anyllm-theme="paper"] .x',
+      );
 
-  it('rewrites html:not([data-anyllm-theme])', () => {
-    const scoped = scopeCssForShadowRoot(
-      'html:not([data-anyllm-theme]) .anyllm-translate-translation { color: #555; }',
-    );
-    expect(scoped).toContain(
-      ':host(:not([data-anyllm-theme])) .anyllm-translate-translation',
-    );
-  });
-
-  it('rewrites html.anyllm-dark and combined dark+theme selectors', () => {
-    const scoped = scopeCssForShadowRoot(
-      'html.anyllm-dark .anyllm-inline-bilingual { color: #7db4d8; }\n' +
-        'html.anyllm-dark [data-anyllm-theme="paper"] .anyllm-translate-translation { color: #aaa; }\n' +
-        'html.anyllm-dark:not([data-anyllm-theme]) .anyllm-translate-translation { border-left-color: #60a5fa; }',
-    );
-    expect(scoped).toContain(':host(.anyllm-dark) .anyllm-inline-bilingual');
-    expect(scoped).toContain(
-      ':host(.anyllm-dark[data-anyllm-theme="paper"]) .anyllm-translate-translation',
-    );
-    expect(scoped).toContain(
-      ':host(.anyllm-dark:not([data-anyllm-theme])) .anyllm-translate-translation',
-    );
-  });
-
-  it('never merges more than one type selector into the :host compound', () => {
-    // `div` is in-shadow scope — only the leading html compound may be scoped;
-    // the in-shadow descendant must stay untouched.
-    const inShadow = scopeCssForShadowRoot(
-      'html[data-anyllm-state="dual"] div[data-anyllm-theme="paper"] .x { color: red; }',
-    );
-    expect(inShadow).toContain(
-      ':host([data-anyllm-state="dual"]) div[data-anyllm-theme="paper"] .x',
-    );
-
-    // A second document-scope compound carrying `html` must not merge — the
-    // rule stays valid (dead inside shadow) rather than malformed.
-    const pathological = scopeCssForShadowRoot(
-      'html[data-anyllm-state="dual"] html[data-anyllm-theme="paper"] .x { color: red; }',
-    );
-    expect(pathological).toContain(
-      ':host([data-anyllm-state="dual"]) html[data-anyllm-theme="paper"] .x',
-    );
-    expect(pathological).not.toContain('html[data-anyllm-state="dual"]html');
+      // A second document-scope compound carrying `html` must not merge — the
+      // rule stays valid (dead inside shadow) rather than malformed.
+      const pathological = scopeCssForShadowRoot(
+        'html[data-anyllm-state="dual"] html[data-anyllm-theme="paper"] .x { color: red; }',
+      );
+      expect(pathological).toContain(
+        ':host([data-anyllm-state="dual"]) html[data-anyllm-theme="paper"] .x',
+      );
+      expect(pathological).not.toContain('html[data-anyllm-state="dual"]html');
+    }
   });
 
   it('preserves ordinary selectors, @media inner rules, and @keyframes verbatim', () => {

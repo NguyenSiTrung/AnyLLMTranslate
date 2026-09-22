@@ -139,98 +139,6 @@ function googleMulti(): PoolProvider {
   };
 }
 
-describe('resolveSlots multi-model', () => {
-  it('expands supported models, preserves default single slots, and filters healthy slot breakers', () => {
-    const slots = resolveSlots([googleMulti()]);
-    expect(slots.map((s) => s.slotId)).toEqual([
-      'k1::gemini-2.5-flash',
-      'k2::gemini-2.5-flash',
-      'k1::gemini-2.5-flash-lite',
-      'k2::gemini-2.5-flash-lite',
-    ]);
-    expect(slots.map((s) => s.providerConfig.model)).toEqual([
-      'gemini-2.5-flash',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash-lite',
-    ]);
-    expect(slots[0]!.keyId).toBe('k1');
-    expect(slots[0]!.model).toBe('gemini-2.5-flash');
-    expect(slots[0]!.multiModel).toBe(true);
-
-    const p = googleMulti();
-    delete p.models;
-    const single = resolveSlots([p]);
-    expect(single).toHaveLength(2);
-    expect(single.map((s) => s.slotId)).toEqual(['k1', 'k2']);
-    expect(single.every((s) => !s.multiModel)).toBe(true);
-
-    const orSlots = resolveSlots([
-      {
-        id: 'or',
-        displayName: 'OR',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        catalogId: 'openrouter',
-        model: 'openai/gpt-4o-mini',
-        models: ['a', 'b'],
-        requiresApiKey: true,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: true,
-        keys: [
-          {
-            id: 'k1',
-            apiKey: 'sk',
-            maxRpm: 0,
-            concurrencyLimit: 0,
-            interval: 0,
-            enabled: true,
-          },
-        ],
-      },
-    ]);
-    expect(orSlots).toHaveLength(1);
-    expect(orSlots[0]!.slotId).toBe('k1');
-    expect(orSlots[0]!.providerConfig.model).toBe('openai/gpt-4o-mini');
-    {
-    // Regression: multi-model resolveProviderModels used to return [] for
-    // model:'' → resolveSlots skipped the provider → empty pool.
-    const defaultSlots = resolveSlots([
-      {
-        id: 'p_default',
-        displayName: 'Custom',
-        baseUrl: '',
-        model: '',
-        requiresApiKey: false,
-        temperature: 0.3,
-        maxTokens: 4096,
-        enabled: true,
-        keys: [
-          {
-            id: 'k_default',
-            apiKey: '',
-            maxRpm: 20,
-            concurrencyLimit: 1,
-            interval: 500,
-            enabled: true,
-          },
-        ],
-      },
-    ]);
-    expect(defaultSlots).toHaveLength(1);
-    expect(defaultSlots[0]?.slotId).toBe('k_default');
-    expect(defaultSlots[0]?.providerConfig.model).toBe('');
-    }
-
-    const healthyTestSlots = resolveSlots([googleMulti()]);
-    const breaker = createCircuitBreaker({ clock: () => 0 });
-    breaker.recordFailure(healthyTestSlots[0]!.slotId, 'rateLimit', 0);
-    const healthy = healthySlots(healthyTestSlots, breaker, 0);
-    expect(healthy.map((s) => s.slotId)).not.toContain('k1::gemini-2.5-flash');
-    expect(healthy.map((s) => s.slotId)).toContain('k1::gemini-2.5-flash-lite');
-  });
-});
-
 const NOW = 5_000_000;
 
 function provider(overrides: Partial<PoolProvider> = {}): PoolProvider {
@@ -249,7 +157,8 @@ function provider(overrides: Partial<PoolProvider> = {}): PoolProvider {
 }
 
 describe('resolveSlots', () => {
-  it('flattens enabled provider×key pairs in insertion order and carries config', () => {
+  it('flattens enabled provider×key pairs, expands multi-model slots, and skips empty keys when required', () => {
+    // facet: flattens enabled provider×key pairs in insertion order and carries config
     expect(resolveSlots([])).toEqual([]);
 
     const providers = [
@@ -329,9 +238,97 @@ describe('resolveSlots', () => {
     ]);
     expect(budgetSlots[0]?.providerConfig.maxBatchChars).toBe(1500);
     expect(budgetSlots[0]?.providerConfig.maxTextGroupCount).toBe(2);
-  });
 
-  it('skips empty apiKey when requiresApiKey is true, keeps empty for keyless', () => {
+    // facet: expands supported models, preserves default single slots, and filters healthy slot breakers
+    const multiSlots = resolveSlots([googleMulti()]);
+    expect(multiSlots.map((s) => s.slotId)).toEqual([
+      'k1::gemini-2.5-flash',
+      'k2::gemini-2.5-flash',
+      'k1::gemini-2.5-flash-lite',
+      'k2::gemini-2.5-flash-lite',
+    ]);
+    expect(multiSlots.map((s) => s.providerConfig.model)).toEqual([
+      'gemini-2.5-flash',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash-lite',
+    ]);
+    expect(multiSlots[0]!.keyId).toBe('k1');
+    expect(multiSlots[0]!.model).toBe('gemini-2.5-flash');
+    expect(multiSlots[0]!.multiModel).toBe(true);
+
+    const p = googleMulti();
+    delete p.models;
+    const single = resolveSlots([p]);
+    expect(single).toHaveLength(2);
+    expect(single.map((s) => s.slotId)).toEqual(['k1', 'k2']);
+    expect(single.every((s) => !s.multiModel)).toBe(true);
+
+    const orSlots = resolveSlots([
+      {
+        id: 'or',
+        displayName: 'OR',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        catalogId: 'openrouter',
+        model: 'openai/gpt-4o-mini',
+        models: ['a', 'b'],
+        requiresApiKey: true,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        keys: [
+          {
+            id: 'k1',
+            apiKey: 'sk',
+            maxRpm: 0,
+            concurrencyLimit: 0,
+            interval: 0,
+            enabled: true,
+          },
+        ],
+      },
+    ]);
+    expect(orSlots).toHaveLength(1);
+    expect(orSlots[0]!.slotId).toBe('k1');
+    expect(orSlots[0]!.providerConfig.model).toBe('openai/gpt-4o-mini');
+    {
+    // Regression: multi-model resolveProviderModels used to return [] for
+    // model:'' → resolveSlots skipped the provider → empty pool.
+    const defaultSlots = resolveSlots([
+      {
+        id: 'p_default',
+        displayName: 'Custom',
+        baseUrl: '',
+        model: '',
+        requiresApiKey: false,
+        temperature: 0.3,
+        maxTokens: 4096,
+        enabled: true,
+        keys: [
+          {
+            id: 'k_default',
+            apiKey: '',
+            maxRpm: 20,
+            concurrencyLimit: 1,
+            interval: 500,
+            enabled: true,
+          },
+        ],
+      },
+    ]);
+    expect(defaultSlots).toHaveLength(1);
+    expect(defaultSlots[0]?.slotId).toBe('k_default');
+    expect(defaultSlots[0]?.providerConfig.model).toBe('');
+    }
+
+    const healthyTestSlots = resolveSlots([googleMulti()]);
+    const breaker = createCircuitBreaker({ clock: () => 0 });
+    breaker.recordFailure(healthyTestSlots[0]!.slotId, 'rateLimit', 0);
+    const healthy = healthySlots(healthyTestSlots, breaker, 0);
+    expect(healthy.map((s) => s.slotId)).not.toContain('k1::gemini-2.5-flash');
+    expect(healthy.map((s) => s.slotId)).toContain('k1::gemini-2.5-flash-lite');
+
+    // facet: skips empty apiKey when requiresApiKey is true, keeps empty for keyless
     const withEmpty = [
       provider({
         id: 'needs-key',

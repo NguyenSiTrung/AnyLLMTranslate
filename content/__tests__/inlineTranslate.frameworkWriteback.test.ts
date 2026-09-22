@@ -135,7 +135,8 @@ afterEach(() => {
 /* ── Quill API write-back ──────────────────────────────────────── */
 
 describe('framework API write-back (Quill)', () => {
-  it('writes through the Quill instance exposed on the container', async () => {
+  it('writes through the Quill instance exposed on the container, on both the async and sync paths', async () => {
+    // facet: async write path
     const { container, editor } = quillComposer('Hello   ');
     const quill = fakeQuill(editor);
     (container as unknown as { __quill: FakeQuill }).__quill = quill;
@@ -146,18 +147,17 @@ describe('framework API write-back (Quill)', () => {
     expect(res.success).toBe(true);
     expect(res.strategy).toBe('framework-api');
     expect(getElementText(editor)).toBe('Xin chào');
-  });
 
-  it('uses the Quill API on the sync write path too', () => {
-    const { container, editor } = quillComposer('Hello');
-    const quill = fakeQuill(editor);
-    (container as unknown as { __quill: FakeQuill }).__quill = quill;
+    // facet: sync write path
+    const { container: syncContainer, editor: syncEditor } = quillComposer('Hello');
+    const syncQuill = fakeQuill(syncEditor);
+    (syncContainer as unknown as { __quill: FakeQuill }).__quill = syncQuill;
 
-    const res = writeElementText(editor, 'Xin chào');
+    const syncRes = writeElementText(syncEditor, 'Xin chào');
 
-    expect(quill.setText).toHaveBeenCalledWith('Xin chào');
-    expect(res.success).toBe(true);
-    expect(res.strategy).toBe('framework-api');
+    expect(syncQuill.setText).toHaveBeenCalledWith('Xin chào');
+    expect(syncRes.success).toBe(true);
+    expect(syncRes.strategy).toBe('framework-api');
   });
 
   it('still refuses a framework composer with no exposed instance', async () => {
@@ -233,7 +233,8 @@ describe('framework API write-back (Quill)', () => {
 /* ── Redesigned copy panel ─────────────────────────────────────── */
 
 describe('copy panel', () => {
-  it('renders the translation in an editable field so it can be fixed before pasting', () => {
+  it('renders the translation in an editable field and never treats its own textarea as a translate target', () => {
+    // facet: the translation renders in an editable field so it can be fixed before pasting
     const ce = composer('<p>Hello</p>');
     showCopyPanel(ce, 'Xin chào');
 
@@ -242,9 +243,13 @@ describe('copy panel', () => {
 
     expect(textarea).not.toBeNull();
     expect(textarea!.value).toBe('Xin chào');
+
+    // facet: the panel's own textarea is not a translate target
+    expect(isEditableElement(textarea!)).toBe(false);
   });
 
-  it('primary action copies the translation and selects the draft for a real paste', async () => {
+  it('primary action copies the translation and selects the draft for a real paste, and copies edited text when tweaked', async () => {
+    // facet: primary action copies + focuses + selects the draft
     const ce = composer('<p>Hello</p>');
     const writeText = stubClipboard();
     showCopyPanel(ce, 'Xin chào');
@@ -259,23 +264,23 @@ describe('copy panel', () => {
     expect(writeText).toHaveBeenCalledWith('Xin chào');
     expect(document.activeElement).toBe(ce);
     expect(window.getSelection()?.toString()).toBe('Hello');
-  });
 
-  it('copies the edited text when the user tweaks the translation', async () => {
-    const ce = composer('<p>Hello</p>');
-    const writeText = stubClipboard();
-    showCopyPanel(ce, 'Xin chào');
+    // facet: the edited text is what gets copied
+    const editedCe = composer('<p>Hello</p>');
+    const writeEdited = stubClipboard();
+    showCopyPanel(editedCe, 'Xin chào');
 
-    const panel = getActiveCopyPanel()!;
-    const textarea = panel.querySelector('textarea')!;
-    textarea.value = 'Xin chào bạn';
-    panel.querySelector<HTMLButtonElement>('.anyllm-inline-copy-panel__copy')!.click();
+    const editedPanel = getActiveCopyPanel()!;
+    const editedTextarea = editedPanel.querySelector('textarea')!;
+    editedTextarea.value = 'Xin chào bạn';
+    editedPanel.querySelector<HTMLButtonElement>('.anyllm-inline-copy-panel__copy')!.click();
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(writeText).toHaveBeenCalledWith('Xin chào bạn');
+    expect(writeEdited).toHaveBeenCalledWith('Xin chào bạn');
   });
 
-  it('points at the paste shortcut after copying', async () => {
+  it('points at the paste shortcut after copying and dismisses when the composer receives input', async () => {
+    // facet: the panel points at the paste shortcut after copying
     const ce = composer('<p>Hello</p>');
     stubClipboard();
     showCopyPanel(ce, 'Xin chào');
@@ -286,18 +291,17 @@ describe('copy panel', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(getActiveCopyPanel()!.textContent).toMatch(/Ctrl\+V|⌘V/);
-  });
 
-  it('dismisses when the composer receives input (the paste landed)', async () => {
-    const ce = composer('<p>Hello</p>');
+    // facet: input on the composer means the paste landed → dismiss
+    const pastedCe = composer('<p>Hello</p>');
     stubClipboard();
-    showCopyPanel(ce, 'Xin chào');
+    showCopyPanel(pastedCe, 'Xin chào');
     getActiveCopyPanel()!
       .querySelector<HTMLButtonElement>('.anyllm-inline-copy-panel__copy')!
       .click();
     await vi.advanceTimersByTimeAsync(0);
 
-    ce.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }));
+    pastedCe.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }));
 
     expect(getActiveCopyPanel()).toBeNull();
   });
@@ -309,13 +313,5 @@ describe('copy panel', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
     expect(getActiveCopyPanel()).toBeNull();
-  });
-
-  it('never treats its own textarea as a translate target', () => {
-    const ce = composer('<p>Hello</p>');
-    showCopyPanel(ce, 'Xin chào');
-    const textarea = getActiveCopyPanel()!.querySelector('textarea')!;
-
-    expect(isEditableElement(textarea)).toBe(false);
   });
 });

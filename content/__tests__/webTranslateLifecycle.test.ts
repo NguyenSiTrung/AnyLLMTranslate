@@ -637,7 +637,7 @@ describe('webTranslateLifecycle', () => {
       )).toBe(false);
     });
 
-    it('FR-23: enableShadowDomWalk registers roots after extraction, flows into dynamic extraction + watcher, and teardown clears the registry after cleanup', async () => {
+    it('FR-23: enableShadowDomWalk registers roots, flows into dynamic extraction + watcher; a host and its open-shadow child in one flush yield one piece', async () => {
       const { extractPieces } = await import('@/content/domWalker');
       const display = await import('@/content/translationDisplay');
       const shadowRoots = await import('@/content/shadowDomRoots');
@@ -691,6 +691,68 @@ describe('webTranslateLifecycle', () => {
       await testHooks.stopTranslationAsync();
       expect(events.at(-2)).toBe('removeAllTranslations');
       expect(events.at(-1)).toBe('clearShadowDomRoots');
+
+      // facet: a host and an element inside its open shadow root in one flush produce one piece, not two
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const { MutationWatcher } = await import('@/content/mutationWatcher');
+        const { ViewportObserver } = await import('@/content/viewportObserver');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        vi.mocked(extractPieces).mockReturnValue([]);
+        loadSettingsCached.mockResolvedValue({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: false,
+          enableShadowDomWalk: true,
+        });
+        document.body.innerHTML = '<p>Hello</p>';
+
+        await testHooks.startTranslation();
+
+        const watcherArgs = vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[];
+        const onMutation = watcherArgs[0] as (added: Element[]) => void;
+        const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
+          observeAll: ReturnType<typeof vi.fn>;
+        };
+
+        // One flush delivers the page host AND an element inside its open
+        // shadow root — deduplicateAncestors cannot cross the boundary, so both
+        // reach the mutation callback.
+        const host = document.createElement('div');
+        const shadow = host.attachShadow({ mode: 'open' });
+        const shadowP = document.createElement('p');
+        shadowP.textContent = 'Shared parent text.';
+        shadow.appendChild(shadowP);
+        document.body.appendChild(host);
+
+        // Extraction via the host recursively finds the piece; extraction via
+        // the shadow child finds the same parent+text again under a fresh id.
+        // piecesByParentText is only populated by appendPieces, so both
+        // survive extractDynamicPieces' dedup inside one batch.
+        const makeDupPiece = (id: string) => ({
+          id,
+          text: 'Shared parent text.',
+          parentElement: shadowP,
+          textNodes: [],
+          isTranslated: false,
+          inArticleContext: false,
+        });
+        vi.mocked(extractPieces)
+          .mockReturnValueOnce([makeDupPiece('piece-host')] as never)
+          .mockReturnValueOnce([makeDupPiece('piece-shadow')] as never);
+
+        onMutation([host, shadowP]);
+
+        // Same parent+text may only be observed once — the first id wins.
+        const observed = (observer.observeAll.mock.calls as unknown[][]).flatMap(
+          (call) => call[0] as Array<{ id: string; parentElement: Element }>,
+        );
+        expect(observed.filter((piece) => piece.parentElement === shadowP)).toHaveLength(1);
+        expect(observed[0]!.id).toBe('piece-host');
+      }
     });
 
     it('FR-23: same-language skip removes placeholders inside registered shadow roots', async () => {
@@ -789,67 +851,6 @@ describe('webTranslateLifecycle', () => {
         'Content blocked by policy',
         expect.any(Function),
       );
-    });
-
-    it('FR-23: a host and an element inside its open shadow root in one flush produce one piece, not two', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      const { MutationWatcher } = await import('@/content/mutationWatcher');
-      const { ViewportObserver } = await import('@/content/viewportObserver');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      vi.mocked(extractPieces).mockReturnValue([]);
-      loadSettingsCached.mockResolvedValue({
-        ...DEFAULT_SETTINGS,
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-        siteRules: [],
-        enableWebResume: false,
-        enableShadowDomWalk: true,
-      });
-      document.body.innerHTML = '<p>Hello</p>';
-
-      await testHooks.startTranslation();
-
-      const watcherArgs = vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[];
-      const onMutation = watcherArgs[0] as (added: Element[]) => void;
-      const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
-        observeAll: ReturnType<typeof vi.fn>;
-      };
-
-      // One flush delivers the page host AND an element inside its open
-      // shadow root — deduplicateAncestors cannot cross the boundary, so both
-      // reach the mutation callback.
-      const host = document.createElement('div');
-      const shadow = host.attachShadow({ mode: 'open' });
-      const shadowP = document.createElement('p');
-      shadowP.textContent = 'Shared parent text.';
-      shadow.appendChild(shadowP);
-      document.body.appendChild(host);
-
-      // Extraction via the host recursively finds the piece; extraction via
-      // the shadow child finds the same parent+text again under a fresh id.
-      // piecesByParentText is only populated by appendPieces, so both
-      // survive extractDynamicPieces' dedup inside one batch.
-      const makeDupPiece = (id: string) => ({
-        id,
-        text: 'Shared parent text.',
-        parentElement: shadowP,
-        textNodes: [],
-        isTranslated: false,
-        inArticleContext: false,
-      });
-      vi.mocked(extractPieces)
-        .mockReturnValueOnce([makeDupPiece('piece-host')] as never)
-        .mockReturnValueOnce([makeDupPiece('piece-shadow')] as never);
-
-      onMutation([host, shadowP]);
-
-      // Same parent+text may only be observed once — the first id wins.
-      const observed = (observer.observeAll.mock.calls as unknown[][]).flatMap(
-        (call) => call[0] as Array<{ id: string; parentElement: Element }>,
-      );
-      expect(observed.filter((piece) => piece.parentElement === shadowP)).toHaveLength(1);
-      expect(observed[0]!.id).toBe('piece-host');
     });
 
     it('t9dd: dynamic top-level additions enforce the body-tag whitelist relative to document.body', async () => {
@@ -984,151 +985,157 @@ describe('webTranslateLifecycle', () => {
       );
     });
 
-    it('t9dd: include-scoped sessions bypass the dynamic body-whitelist gate, matching initial extraction', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      const siteRules = await import('@/lib/siteRules');
-      const { MutationWatcher } = await import('@/content/mutationWatcher');
-      const { ViewportObserver } = await import('@/content/viewportObserver');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      vi.mocked(extractPieces).mockReturnValue([]);
-      // Include rule selecting a NON-whitelisted top-level region: initial
-      // extractPieces short-circuits on includeSelectors before body-tag
-      // filtering, so 'nav' content is in scope even with the whitelist on.
-      const includeRule = {
-        id: 'nav-site',
-        hostname: 'example.test',
-        includeSelectors: ['nav'],
-        excludeSelectors: [],
-        alwaysTranslate: false,
-        neverTranslate: false,
-        builtIn: false,
-      };
-      vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
-      loadSettingsCached.mockResolvedValue({
-        ...DEFAULT_SETTINGS,
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-        siteRules: [includeRule],
-        enableWebResume: false,
-        enableBodyTagWhitelist: true,
-      });
-      document.body.innerHTML = '<nav><p>Included nav text.</p></nav>';
-      await testHooks.startTranslation();
+    it('t9dd: include-scoped sessions bypass the dynamic body-whitelist gate — dynamic additions and sm7n forced re-extraction', async () => {
+      // facet: include-scoped sessions bypass the dynamic body-whitelist gate, matching initial extraction
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const siteRules = await import('@/lib/siteRules');
+        const { MutationWatcher } = await import('@/content/mutationWatcher');
+        const { ViewportObserver } = await import('@/content/viewportObserver');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        vi.mocked(extractPieces).mockReturnValue([]);
+        // Include rule selecting a NON-whitelisted top-level region: initial
+        // extractPieces short-circuits on includeSelectors before body-tag
+        // filtering, so 'nav' content is in scope even with the whitelist on.
+        const includeRule = {
+          id: 'nav-site',
+          hostname: 'example.test',
+          includeSelectors: ['nav'],
+          excludeSelectors: [],
+          alwaysTranslate: false,
+          neverTranslate: false,
+          builtIn: false,
+        };
+        vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
+        loadSettingsCached.mockResolvedValue({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [includeRule],
+          enableWebResume: false,
+          enableBodyTagWhitelist: true,
+        });
+        document.body.innerHTML = '<nav><p>Included nav text.</p></nav>';
+        await testHooks.startTranslation();
 
-      // Sanity: initial extraction received the include scope — include
-      // scoping supersedes the body whitelist there.
-      const initialOptions = vi.mocked(extractPieces).mock.calls.at(-1)?.[1] as
-        | Record<string, unknown>
-        | undefined;
-      expect(initialOptions?.includeSelectors).toEqual(['nav']);
-      expect(initialOptions?.enableBodyTagWhitelist).toBe(true);
+        // Sanity: initial extraction received the include scope — include
+        // scoping supersedes the body whitelist there.
+        const initialOptions = vi.mocked(extractPieces).mock.calls.at(-1)?.[1] as
+          | Record<string, unknown>
+          | undefined;
+        expect(initialOptions?.includeSelectors).toEqual(['nav']);
+        expect(initialOptions?.enableBodyTagWhitelist).toBe(true);
 
-      const watcherArgs = vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[];
-      const onMutation = watcherArgs[0] as (added: Element[]) => void;
-      const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
-        observeAll: ReturnType<typeof vi.fn>;
-      };
-      observer.observeAll.mockClear();
-      vi.mocked(extractPieces).mockClear();
+        const watcherArgs = vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[];
+        const onMutation = watcherArgs[0] as (added: Element[]) => void;
+        const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
+          observeAll: ReturnType<typeof vi.fn>;
+        };
+        observer.observeAll.mockClear();
+        vi.mocked(extractPieces).mockClear();
 
-      // Dynamic addition under the direct-child NAV: its top-level ancestor
-      // is not whitelisted, but include scope must supersede the gate exactly
-      // as the initial extraction does.
-      const nav = document.querySelector('nav')!;
-      const added = document.createElement('div');
-      const addedP = document.createElement('p');
-      addedP.textContent = 'Dynamically added nav text.';
-      added.appendChild(addedP);
-      nav.appendChild(added);
-      const dynPiece = {
-        id: 'dyn-nav', text: 'Dynamically added nav text.',
-        sourceText: 'Dynamically added nav text.',
-        parentElement: addedP, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === added ? [dynPiece] : []) as never,
-      );
-      onMutation([added]);
-      expect(
-        vi.mocked(extractPieces).mock.calls.some((call) => call[0] === added),
-      ).toBe(true);
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toEqual([[dynPiece]]);
+        // Dynamic addition under the direct-child NAV: its top-level ancestor
+        // is not whitelisted, but include scope must supersede the gate exactly
+        // as the initial extraction does.
+        const nav = document.querySelector('nav')!;
+        const added = document.createElement('div');
+        const addedP = document.createElement('p');
+        addedP.textContent = 'Dynamically added nav text.';
+        added.appendChild(addedP);
+        nav.appendChild(added);
+        const dynPiece = {
+          id: 'dyn-nav', text: 'Dynamically added nav text.',
+          sourceText: 'Dynamically added nav text.',
+          parentElement: addedP, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === added ? [dynPiece] : []) as never,
+        );
+        onMutation([added]);
+        expect(
+          vi.mocked(extractPieces).mock.calls.some((call) => call[0] === added),
+        ).toBe(true);
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toEqual([[dynPiece]]);
 
-      vi.mocked(siteRules.findEffectiveRule).mockReturnValue(undefined);
-    });
+        vi.mocked(siteRules.findEffectiveRule).mockReturnValue(undefined);
+      }
 
-    it('t9dd: sm7n forced re-extraction under an included non-whitelisted top-level region is not dropped by the whitelist gate', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      const siteRules = await import('@/lib/siteRules');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      const includeRule = {
-        id: 'nav-site',
-        hostname: 'example.test',
-        includeSelectors: ['nav'],
-        excludeSelectors: [],
-        alwaysTranslate: false,
-        neverTranslate: false,
-        builtIn: false,
-      };
-      vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
-      loadSettingsCached.mockResolvedValue({
-        ...DEFAULT_SETTINGS,
-        sourceLanguage: 'en',
-        targetLanguage: 'vi',
-        siteRules: [includeRule],
-        enableWebResume: false,
-        enableStreamingTranslation: true,
-        enableBodyTagWhitelist: true,
-      });
+      // facet: sm7n forced re-extraction under an included non-whitelisted top-level region is not dropped by the whitelist gate
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const siteRules = await import('@/lib/siteRules');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        document.body.innerHTML = '';
+        vi.mocked(display.removePieceArtifacts).mockClear();
+        const includeRule = {
+          id: 'nav-site',
+          hostname: 'example.test',
+          includeSelectors: ['nav'],
+          excludeSelectors: [],
+          alwaysTranslate: false,
+          neverTranslate: false,
+          builtIn: false,
+        };
+        vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
+        loadSettingsCached.mockResolvedValue({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [includeRule],
+          enableWebResume: false,
+          enableStreamingTranslation: true,
+          enableBodyTagWhitelist: true,
+        });
 
-      const nav = document.createElement('nav');
-      const p = document.createElement('p');
-      const sourceText = document.createTextNode('Nav item source.');
-      p.appendChild(sourceText);
-      nav.appendChild(p);
-      document.body.appendChild(nav);
-      const oldPiece = {
-        id: 'nav-old', text: 'Nav item source.', sourceText: 'Nav item source.',
-        parentElement: p, textNodes: [sourceText], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        const nav = document.createElement('nav');
+        const p = document.createElement('p');
+        const sourceText = document.createTextNode('Nav item source.');
+        p.appendChild(sourceText);
+        nav.appendChild(p);
+        document.body.appendChild(nav);
+        const oldPiece = {
+          id: 'nav-old', text: 'Nav item source.', sourceText: 'Nav item source.',
+          parentElement: p, textNodes: [sourceText], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // Marked original + injected translation sibling — then the site edits.
-      p.setAttribute(DATA_ATTRS.ROLE, 'original');
-      p.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const translation = document.createElement('div');
-      translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      translation.setAttribute(DATA_ATTRS.PIECE_ID, 'nav-old');
-      p.after(translation);
-      sourceText.textContent = 'Nav item edited.';
+        // Marked original + injected translation sibling — then the site edits.
+        p.setAttribute(DATA_ATTRS.ROLE, 'original');
+        p.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const translation = document.createElement('div');
+        translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        translation.setAttribute(DATA_ATTRS.PIECE_ID, 'nav-old');
+        p.after(translation);
+        sourceText.textContent = 'Nav item edited.';
 
-      const newPiece = {
-        id: 'nav-new', text: 'Nav item edited.', sourceText: 'Nav item edited.',
-        parentElement: p, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === p ? [newPiece] : []) as never,
-      );
-      onMutation([p]);
+        const newPiece = {
+          id: 'nav-new', text: 'Nav item edited.', sourceText: 'Nav item edited.',
+          parentElement: p, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === p ? [newPiece] : []) as never,
+        );
+        onMutation([p]);
 
-      // The old piece was retired AND the forced root re-extracted — without
-      // the include-scope bypass the gate would retire the piece then drop
-      // its replacement permanently.
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('nav-old', p);
-      expect(translation.isConnected).toBe(false);
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toEqual([[newPiece]]);
+        // The old piece was retired AND the forced root re-extracted — without
+        // the include-scope bypass the gate would retire the piece then drop
+        // its replacement permanently.
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('nav-old', p);
+        expect(translation.isConnected).toBe(false);
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toEqual([[newPiece]]);
 
-      vi.mocked(siteRules.findEffectiveRule).mockReturnValue(undefined);
+        vi.mocked(siteRules.findEffectiveRule).mockReturnValue(undefined);
+      }
     });
 
     // sm7n helpers: wire the real mutation callback + observer instance and a
@@ -1171,130 +1178,139 @@ describe('webTranslateLifecycle', () => {
         enableStreamingTranslation: true,
       });
 
-    it('sm7n: source edit under a marked original removes stale output and queues exactly one replacement', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+    it('sm7n: source edits under a marked original invalidate once; unchanged reinsertion stays inert', async () => {
+      // facet: source edit under a marked original removes stale output and queues exactly one replacement
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
 
-      const p = document.createElement('p');
-      const sourceText = document.createTextNode('Original text.');
-      p.appendChild(sourceText);
-      document.body.appendChild(p);
-      const oldPiece = {
-        id: 'old-id', text: 'Original text.', sourceText: 'Original text.',
-        parentElement: p, textNodes: [sourceText], isTranslated: false,
-        inArticleContext: false,
-      };
-      const newPiece = {
-        id: 'new-id', text: 'Edited source text.', sourceText: 'Edited source text.',
-        parentElement: p, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
+        const p = document.createElement('p');
+        const sourceText = document.createTextNode('Original text.');
+        p.appendChild(sourceText);
+        document.body.appendChild(p);
+        const oldPiece = {
+          id: 'old-id', text: 'Original text.', sourceText: 'Original text.',
+          parentElement: p, textNodes: [sourceText], isTranslated: false,
+          inArticleContext: false,
+        };
+        const newPiece = {
+          id: 'new-id', text: 'Edited source text.', sourceText: 'Edited source text.',
+          parentElement: p, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
 
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // Marked original + injected translation sibling — then the site edits.
-      p.setAttribute(DATA_ATTRS.ROLE, 'original');
-      p.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const translation = document.createElement('div');
-      translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      translation.setAttribute(DATA_ATTRS.PIECE_ID, 'old-id');
-      p.after(translation);
-      p.textContent = 'Edited source text.';
+        // Marked original + injected translation sibling — then the site edits.
+        p.setAttribute(DATA_ATTRS.ROLE, 'original');
+        p.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const translation = document.createElement('div');
+        translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        translation.setAttribute(DATA_ATTRS.PIECE_ID, 'old-id');
+        p.after(translation);
+        p.textContent = 'Edited source text.';
 
-      vi.mocked(extractPieces).mockReturnValueOnce([newPiece] as never);
-      onMutation([p]);
+        vi.mocked(extractPieces).mockReturnValueOnce([newPiece] as never);
+        onMutation([p]);
 
-      // Stale output removed via the scoped helper; markers cleared.
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('old-id', p);
-      expect(p.hasAttribute(DATA_ATTRS.ROLE)).toBe(false);
-      expect(translation.isConnected).toBe(false);
-      expect(observer.release).toHaveBeenCalledWith('old-id');
+        // Stale output removed via the scoped helper; markers cleared.
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('old-id', p);
+        expect(p.hasAttribute(DATA_ATTRS.ROLE)).toBe(false);
+        expect(translation.isConnected).toBe(false);
+        expect(observer.release).toHaveBeenCalledWith('old-id');
 
-      // Exactly one replacement piece observed — the new source text.
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([newPiece]);
-      expect(newPiece.text).toBe('Edited source text.');
-    });
+        // Exactly one replacement piece observed — the new source text.
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toEqual([newPiece]);
+        expect(newPiece.text).toBe('Edited source text.');
+      }
 
-    it('sm7n: contained LI wrapper source change invalidates once', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+      // facet: contained LI wrapper source change invalidates once
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
+        document.body.innerHTML = '';
+        vi.mocked(display.removePieceArtifacts).mockClear();
 
-      const li = document.createElement('li');
-      const wrapper = document.createElement('span');
-      wrapper.setAttribute('data-anyllm-original-wrapper', '');
-      wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
-      wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const wtext = document.createTextNode('Item source.');
-      wrapper.appendChild(wtext);
-      li.appendChild(wrapper);
-      const translation = document.createElement('div');
-      translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      translation.setAttribute(DATA_ATTRS.PIECE_ID, 'li-old');
-      li.appendChild(translation);
-      document.body.appendChild(li);
+        const li = document.createElement('li');
+        const wrapper = document.createElement('span');
+        wrapper.setAttribute('data-anyllm-original-wrapper', '');
+        wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
+        wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const wtext = document.createTextNode('Item source.');
+        wrapper.appendChild(wtext);
+        li.appendChild(wrapper);
+        const translation = document.createElement('div');
+        translation.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        translation.setAttribute(DATA_ATTRS.PIECE_ID, 'li-old');
+        li.appendChild(translation);
+        document.body.appendChild(li);
 
-      const oldPiece = {
-        id: 'li-old', text: 'Item source.', sourceText: 'Item source.',
-        parentElement: li, textNodes: [wtext], isTranslated: false,
-        inArticleContext: false,
-      };
-      const newPiece = {
-        id: 'li-new', text: 'Item edited.', sourceText: 'Item edited.',
-        parentElement: li, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        const oldPiece = {
+          id: 'li-old', text: 'Item source.', sourceText: 'Item source.',
+          parentElement: li, textNodes: [wtext], isTranslated: false,
+          inArticleContext: false,
+        };
+        const newPiece = {
+          id: 'li-new', text: 'Item edited.', sourceText: 'Item edited.',
+          parentElement: li, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // The watcher delivers the marked wrapper (nearest original host); the
-      // tracked piece's parent is the LI containing it.
-      wtext.textContent = 'Item edited.';
-      vi.mocked(extractPieces).mockReturnValueOnce([newPiece] as never);
-      onMutation([wrapper]);
+        // The watcher delivers the marked wrapper (nearest original host); the
+        // tracked piece's parent is the LI containing it.
+        wtext.textContent = 'Item edited.';
+        vi.mocked(extractPieces).mockReturnValueOnce([newPiece] as never);
+        onMutation([wrapper]);
 
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-old', li);
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([newPiece]);
-    });
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-old', li);
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toEqual([newPiece]);
+      }
 
-    it('sm7n: unchanged reinsertion does not invalidate or queue duplicate work', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+      // facet: unchanged reinsertion does not invalidate or queue duplicate work
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
+        document.body.innerHTML = '';
+        vi.mocked(display.removePieceArtifacts).mockClear();
 
-      const p = document.createElement('p');
-      p.textContent = 'Unchanged text.';
-      document.body.appendChild(p);
-      const piece = {
-        id: 'keep-id', text: 'Unchanged text.', sourceText: 'Unchanged text.',
-        parentElement: p, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([piece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        const p = document.createElement('p');
+        p.textContent = 'Unchanged text.';
+        document.body.appendChild(p);
+        const piece = {
+          id: 'keep-id', text: 'Unchanged text.', sourceText: 'Unchanged text.',
+          parentElement: p, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([piece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // Move/reinsert the marked original without editing source text.
-      p.setAttribute(DATA_ATTRS.ROLE, 'original');
-      p.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      onMutation([p]);
+        // Move/reinsert the marked original without editing source text.
+        p.setAttribute(DATA_ATTRS.ROLE, 'original');
+        p.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        onMutation([p]);
 
-      expect(display.removePieceArtifacts).not.toHaveBeenCalled();
-      expect(observer.observeAll).not.toHaveBeenCalled();
+        expect(display.removePieceArtifacts).not.toHaveBeenCalled();
+        expect(observer.observeAll).not.toHaveBeenCalled();
+      }
     });
 
     it('sm7n: invalidated piece ids cannot apply late stream output or trigger fallback', async () => {
@@ -1395,169 +1411,175 @@ describe('webTranslateLifecycle', () => {
       );
     };
 
-    it('sm7n: nested translated block — outer invalidation re-extracts once and leaves the nested piece untouched', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+    it('sm7n: outer invalidation re-extracts only the edited source group — nested and per-piece groups stay untouched', async () => {
+      // facet: nested translated block — outer invalidation re-extracts once and leaves the nested piece untouched
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
 
-      // Outer parent: own text group + a nested marked/translated child block.
-      const outer = document.createElement('div');
-      const outerText = document.createTextNode('Outer source.');
-      outer.appendChild(outerText);
-      const nestedP = document.createElement('p');
-      const nestedText = document.createTextNode('Nested source.');
-      nestedP.appendChild(nestedText);
-      const nestedT = document.createElement('div');
-      nestedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      nestedT.setAttribute(DATA_ATTRS.PIECE_ID, 'nested-id');
-      nestedP.setAttribute(DATA_ATTRS.ROLE, 'original');
-      nestedP.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      outer.appendChild(nestedP);
-      outer.appendChild(nestedT);
-      document.body.appendChild(outer);
-      // Outer's own translation is a following sibling; outer is marked.
-      const outerT = document.createElement('div');
-      outerT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      outerT.setAttribute(DATA_ATTRS.PIECE_ID, 'outer-id');
-      outer.after(outerT);
-      outer.setAttribute(DATA_ATTRS.ROLE, 'original');
-      outer.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        // Outer parent: own text group + a nested marked/translated child block.
+        const outer = document.createElement('div');
+        const outerText = document.createTextNode('Outer source.');
+        outer.appendChild(outerText);
+        const nestedP = document.createElement('p');
+        const nestedText = document.createTextNode('Nested source.');
+        nestedP.appendChild(nestedText);
+        const nestedT = document.createElement('div');
+        nestedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        nestedT.setAttribute(DATA_ATTRS.PIECE_ID, 'nested-id');
+        nestedP.setAttribute(DATA_ATTRS.ROLE, 'original');
+        nestedP.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        outer.appendChild(nestedP);
+        outer.appendChild(nestedT);
+        document.body.appendChild(outer);
+        // Outer's own translation is a following sibling; outer is marked.
+        const outerT = document.createElement('div');
+        outerT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        outerT.setAttribute(DATA_ATTRS.PIECE_ID, 'outer-id');
+        outer.after(outerT);
+        outer.setAttribute(DATA_ATTRS.ROLE, 'original');
+        outer.setAttribute(DATA_ATTRS.TRANSLATED, '');
 
-      const outerPiece = {
-        id: 'outer-id', text: 'Outer source.', sourceText: 'Outer source.',
-        parentElement: outer, textNodes: [outerText], isTranslated: false,
-        inArticleContext: false,
-      };
-      const nestedPiece = {
-        id: 'nested-id', text: 'Nested source.', sourceText: 'Nested source.',
-        parentElement: nestedP, textNodes: [nestedText], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([outerPiece, nestedPiece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      installOwnerAwareCleanup(display);
-      observer.observeAll.mockClear();
+        const outerPiece = {
+          id: 'outer-id', text: 'Outer source.', sourceText: 'Outer source.',
+          parentElement: outer, textNodes: [outerText], isTranslated: false,
+          inArticleContext: false,
+        };
+        const nestedPiece = {
+          id: 'nested-id', text: 'Nested source.', sourceText: 'Nested source.',
+          parentElement: nestedP, textNodes: [nestedText], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([outerPiece, nestedPiece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        installOwnerAwareCleanup(display);
+        observer.observeAll.mockClear();
 
-      // Site edits only the outer source group.
-      outerText.textContent = 'Outer edited.';
-      const newOuter = {
-        id: 'outer-new', text: 'Outer edited.', sourceText: 'Outer edited.',
-        parentElement: outer, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === outer ? [newOuter] : []) as never,
-      );
-      onMutation([outer]);
+        // Site edits only the outer source group.
+        outerText.textContent = 'Outer edited.';
+        const newOuter = {
+          id: 'outer-new', text: 'Outer edited.', sourceText: 'Outer edited.',
+          parentElement: outer, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === outer ? [newOuter] : []) as never,
+        );
+        onMutation([outer]);
 
-      // Only the outer piece invalidated — nested piece/artifacts untouched.
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('outer-id', outer);
-      expect(display.removePieceArtifacts).not.toHaveBeenCalledWith(
-        'nested-id',
-        expect.anything(),
-      );
-      expect(outerT.isConnected).toBe(false);
-      expect(nestedP.getAttribute(DATA_ATTRS.ROLE)).toBe('original');
-      expect(nestedP.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(true);
-      expect(nestedT.isConnected).toBe(true);
+        // Only the outer piece invalidated — nested piece/artifacts untouched.
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('outer-id', outer);
+        expect(display.removePieceArtifacts).not.toHaveBeenCalledWith(
+          'nested-id',
+          expect.anything(),
+        );
+        expect(outerT.isConnected).toBe(false);
+        expect(nestedP.getAttribute(DATA_ATTRS.ROLE)).toBe('original');
+        expect(nestedP.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(true);
+        expect(nestedT.isConnected).toBe(true);
 
-      // Exactly one replacement observed for the re-extracted outer group.
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([newOuter]);
-    });
+        // Exactly one replacement observed for the re-extracted outer group.
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toEqual([newOuter]);
+      }
 
-    it('sm7n: per-piece source groups — a tail edit under a shared marked parent invalidates only the tail', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+      // facet: per-piece source groups — a tail edit under a shared marked parent invalidates only the tail
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
+        document.body.innerHTML = '';
+        vi.mocked(display.removePieceArtifacts).mockClear();
 
-      // One marked parent with TWO source groups around a nested translated
-      // block: lead text + nested <p> + tail text.
-      const outer = document.createElement('div');
-      const leadText = document.createTextNode('Lead source.');
-      const tailText = document.createTextNode('Tail source.');
-      const nestedP = document.createElement('p');
-      const nestedText = document.createTextNode('Nested source.');
-      nestedP.appendChild(nestedText);
-      nestedP.setAttribute(DATA_ATTRS.ROLE, 'original');
-      nestedP.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const nestedT = document.createElement('div');
-      nestedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      nestedT.setAttribute(DATA_ATTRS.PIECE_ID, 'nested-id');
-      outer.appendChild(leadText);
-      outer.appendChild(nestedP);
-      outer.appendChild(nestedT);
-      outer.appendChild(tailText);
-      document.body.appendChild(outer);
-      const leadT = document.createElement('div');
-      leadT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      leadT.setAttribute(DATA_ATTRS.PIECE_ID, 'lead-id');
-      const tailT = document.createElement('div');
-      tailT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      tailT.setAttribute(DATA_ATTRS.PIECE_ID, 'tail-id');
-      outer.after(leadT, tailT);
-      outer.setAttribute(DATA_ATTRS.ROLE, 'original');
-      outer.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        // One marked parent with TWO source groups around a nested translated
+        // block: lead text + nested <p> + tail text.
+        const outer = document.createElement('div');
+        const leadText = document.createTextNode('Lead source.');
+        const tailText = document.createTextNode('Tail source.');
+        const nestedP = document.createElement('p');
+        const nestedText = document.createTextNode('Nested source.');
+        nestedP.appendChild(nestedText);
+        nestedP.setAttribute(DATA_ATTRS.ROLE, 'original');
+        nestedP.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const nestedT = document.createElement('div');
+        nestedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        nestedT.setAttribute(DATA_ATTRS.PIECE_ID, 'nested-id');
+        outer.appendChild(leadText);
+        outer.appendChild(nestedP);
+        outer.appendChild(nestedT);
+        outer.appendChild(tailText);
+        document.body.appendChild(outer);
+        const leadT = document.createElement('div');
+        leadT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        leadT.setAttribute(DATA_ATTRS.PIECE_ID, 'lead-id');
+        const tailT = document.createElement('div');
+        tailT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        tailT.setAttribute(DATA_ATTRS.PIECE_ID, 'tail-id');
+        outer.after(leadT, tailT);
+        outer.setAttribute(DATA_ATTRS.ROLE, 'original');
+        outer.setAttribute(DATA_ATTRS.TRANSLATED, '');
 
-      const leadPiece = {
-        id: 'lead-id', text: 'Lead source.', sourceText: 'Lead source.',
-        parentElement: outer, textNodes: [leadText], isTranslated: false,
-        inArticleContext: false,
-      };
-      const tailPiece = {
-        id: 'tail-id', text: 'Tail source.', sourceText: 'Tail source.',
-        parentElement: outer, textNodes: [tailText], isTranslated: false,
-        inArticleContext: false,
-      };
-      const nestedPiece = {
-        id: 'nested-id', text: 'Nested source.', sourceText: 'Nested source.',
-        parentElement: nestedP, textNodes: [nestedText], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue(
-        [leadPiece, tailPiece, nestedPiece] as never,
-      );
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      installOwnerAwareCleanup(display);
-      observer.observeAll.mockClear();
+        const leadPiece = {
+          id: 'lead-id', text: 'Lead source.', sourceText: 'Lead source.',
+          parentElement: outer, textNodes: [leadText], isTranslated: false,
+          inArticleContext: false,
+        };
+        const tailPiece = {
+          id: 'tail-id', text: 'Tail source.', sourceText: 'Tail source.',
+          parentElement: outer, textNodes: [tailText], isTranslated: false,
+          inArticleContext: false,
+        };
+        const nestedPiece = {
+          id: 'nested-id', text: 'Nested source.', sourceText: 'Nested source.',
+          parentElement: nestedP, textNodes: [nestedText], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue(
+          [leadPiece, tailPiece, nestedPiece] as never,
+        );
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        installOwnerAwareCleanup(display);
+        observer.observeAll.mockClear();
 
-      // Site edits ONLY the tail group. The lead group and the nested piece
-      // are unchanged and must not be invalidated.
-      tailText.textContent = 'Tail edited.';
-      const leadDup = {
-        id: 'lead-dup', text: 'Lead source.', sourceText: 'Lead source.',
-        parentElement: outer, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      const newTail = {
-        id: 'tail-new', text: 'Tail edited.', sourceText: 'Tail edited.',
-        parentElement: outer, textNodes: [], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === outer ? [leadDup, newTail] : []) as never,
-      );
-      onMutation([outer]);
+        // Site edits ONLY the tail group. The lead group and the nested piece
+        // are unchanged and must not be invalidated.
+        tailText.textContent = 'Tail edited.';
+        const leadDup = {
+          id: 'lead-dup', text: 'Lead source.', sourceText: 'Lead source.',
+          parentElement: outer, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        const newTail = {
+          id: 'tail-new', text: 'Tail edited.', sourceText: 'Tail edited.',
+          parentElement: outer, textNodes: [], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === outer ? [leadDup, newTail] : []) as never,
+        );
+        onMutation([outer]);
 
-      // Only the tail piece invalidated.
-      expect(display.removePieceArtifacts).toHaveBeenCalledTimes(1);
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('tail-id', outer);
-      expect(tailT.isConnected).toBe(false);
-      // Lead translation + markers survive; the parent legitimately stays
-      // marked, so re-extraction had to force past isInsideTranslatedRegion.
-      expect(leadT.isConnected).toBe(true);
-      expect(outer.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(true);
+        // Only the tail piece invalidated.
+        expect(display.removePieceArtifacts).toHaveBeenCalledTimes(1);
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('tail-id', outer);
+        expect(tailT.isConnected).toBe(false);
+        // Lead translation + markers survive; the parent legitimately stays
+        // marked, so re-extraction had to force past isInsideTranslatedRegion.
+        expect(leadT.isConnected).toBe(true);
+        expect(outer.hasAttribute(DATA_ATTRS.TRANSLATED)).toBe(true);
 
-      // The still-marked parent was re-extracted anyway: the duplicate lead
-      // is filtered by piecesByParentText and only the replacement queues.
-      const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([newTail]);
+        // The still-marked parent was re-extracted anyway: the duplicate lead
+        // is filtered by piecesByParentText and only the replacement queues.
+        const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toEqual([newTail]);
+      }
     });
 
     it('sm7n: invalidation during the settings await suppresses placeholders and any request', async () => {
@@ -1612,174 +1634,180 @@ describe('webTranslateLifecycle', () => {
       expect(testHooks.getActiveRequests()).toBe(0);
     });
 
-    it('sm7n: an appended text node under a marked parent retires the subsumed old piece — no overlapping translations', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+    it('sm7n: appended text under a marked parent retires the subsumed piece — flat and contained LI wrapper cases', async () => {
+      // facet: an appended text node under a marked parent retires the subsumed old piece — no overlapping translations
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
 
-      const p = document.createElement('p');
-      const oldText = document.createTextNode('Original text.');
-      p.appendChild(oldText);
-      document.body.appendChild(p);
-      p.setAttribute(DATA_ATTRS.ROLE, 'original');
-      p.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const oldT = document.createElement('div');
-      oldT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      oldT.setAttribute(DATA_ATTRS.PIECE_ID, 'old-id');
-      p.after(oldT);
+        const p = document.createElement('p');
+        const oldText = document.createTextNode('Original text.');
+        p.appendChild(oldText);
+        document.body.appendChild(p);
+        p.setAttribute(DATA_ATTRS.ROLE, 'original');
+        p.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const oldT = document.createElement('div');
+        oldT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        oldT.setAttribute(DATA_ATTRS.PIECE_ID, 'old-id');
+        p.after(oldT);
 
-      const oldPiece = {
-        id: 'old-id', text: 'Original text.', sourceText: 'Original text.',
-        parentElement: p, textNodes: [oldText], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        const oldPiece = {
+          id: 'old-id', text: 'Original text.', sourceText: 'Original text.',
+          parentElement: p, textNodes: [oldText], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // Site appends a text node. The old piece's own text nodes are still
-      // connected and still join to its sourceText, so the group comparison
-      // alone does NOT invalidate it — but forced re-extraction yields a
-      // merged piece that shares the old text node.
-      const appended = document.createTextNode(' Appended.');
-      p.appendChild(appended);
-      const merged = {
-        id: 'merged-id',
-        text: 'Original text. Appended.', sourceText: 'Original text. Appended.',
-        parentElement: p, textNodes: [oldText, appended], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === p ? [merged] : []) as never,
-      );
-      onMutation([p]);
+        // Site appends a text node. The old piece's own text nodes are still
+        // connected and still join to its sourceText, so the group comparison
+        // alone does NOT invalidate it — but forced re-extraction yields a
+        // merged piece that shares the old text node.
+        const appended = document.createTextNode(' Appended.');
+        p.appendChild(appended);
+        const merged = {
+          id: 'merged-id',
+          text: 'Original text. Appended.', sourceText: 'Original text. Appended.',
+          parentElement: p, textNodes: [oldText, appended], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === p ? [merged] : []) as never,
+        );
+        onMutation([p]);
 
-      // The merged piece subsumes the old group — old artifacts removed.
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('old-id', p);
-      expect(oldT.isConnected).toBe(false);
-      const firstCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(firstCalls).toHaveLength(1);
-      expect(firstCalls[0]).toEqual([merged]);
+        // The merged piece subsumes the old group — old artifacts removed.
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('old-id', p);
+        expect(oldT.isConnected).toBe(false);
+        const firstCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(firstCalls).toHaveLength(1);
+        expect(firstCalls[0]).toEqual([merged]);
 
-      // Simulate the merged translation being applied — p re-marked.
-      p.setAttribute(DATA_ATTRS.ROLE, 'original');
-      p.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const mergedT = document.createElement('div');
-      mergedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      mergedT.setAttribute(DATA_ATTRS.PIECE_ID, 'merged-id');
-      p.after(mergedT);
+        // Simulate the merged translation being applied — p re-marked.
+        p.setAttribute(DATA_ATTRS.ROLE, 'original');
+        p.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const mergedT = document.createElement('div');
+        mergedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        mergedT.setAttribute(DATA_ATTRS.PIECE_ID, 'merged-id');
+        p.after(mergedT);
 
-      // A second append retires the previously merged piece instead of
-      // stacking another translation for the same text nodes.
-      const appended2 = document.createTextNode(' Again.');
-      p.appendChild(appended2);
-      const merged2 = {
-        id: 'merged2-id',
-        text: 'Original text. Appended. Again.',
-        sourceText: 'Original text. Appended. Again.',
-        parentElement: p,
-        textNodes: [oldText, appended, appended2],
-        isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === p ? [merged2] : []) as never,
-      );
-      onMutation([p]);
+        // A second append retires the previously merged piece instead of
+        // stacking another translation for the same text nodes.
+        const appended2 = document.createTextNode(' Again.');
+        p.appendChild(appended2);
+        const merged2 = {
+          id: 'merged2-id',
+          text: 'Original text. Appended. Again.',
+          sourceText: 'Original text. Appended. Again.',
+          parentElement: p,
+          textNodes: [oldText, appended, appended2],
+          isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === p ? [merged2] : []) as never,
+        );
+        onMutation([p]);
 
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('merged-id', p);
-      expect(mergedT.isConnected).toBe(false);
-      const allCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(allCalls).toHaveLength(2);
-      expect(allCalls[1]).toEqual([merged2]);
-    });
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('merged-id', p);
+        expect(mergedT.isConnected).toBe(false);
+        const allCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(allCalls).toHaveLength(2);
+        expect(allCalls[1]).toEqual([merged2]);
+      }
 
-    it('sm7n: appended text inside a contained LI original wrapper re-extracts the wrapper itself', async () => {
-      const { extractPieces } = await import('@/content/domWalker');
-      const display = await import('@/content/translationDisplay');
-      vi.mocked(display.getPageState).mockReturnValue('dual');
-      sm7nSettings();
+      // facet: appended text inside a contained LI original wrapper re-extracts the wrapper itself
+      {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        sm7nSettings();
+        document.body.innerHTML = '';
+        vi.mocked(display.removePieceArtifacts).mockClear();
 
-      // Contained case: the marked original is the wrapper INSIDE the <li>,
-      // with the piece anchored at the li. The translation artifact also
-      // lives inside the li.
-      const li = document.createElement('li');
-      const wrapper = document.createElement('span');
-      wrapper.setAttribute('data-anyllm-original-wrapper', '');
-      wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
-      wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
-      const liText = document.createTextNode('Item source.');
-      wrapper.appendChild(liText);
-      li.appendChild(wrapper);
-      const liT = document.createElement('div');
-      liT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      liT.setAttribute(DATA_ATTRS.PIECE_ID, 'li-old');
-      li.appendChild(liT);
-      document.body.appendChild(li);
+        // Contained case: the marked original is the wrapper INSIDE the <li>,
+        // with the piece anchored at the li. The translation artifact also
+        // lives inside the li.
+        const li = document.createElement('li');
+        const wrapper = document.createElement('span');
+        wrapper.setAttribute('data-anyllm-original-wrapper', '');
+        wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
+        wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
+        const liText = document.createTextNode('Item source.');
+        wrapper.appendChild(liText);
+        li.appendChild(wrapper);
+        const liT = document.createElement('div');
+        liT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        liT.setAttribute(DATA_ATTRS.PIECE_ID, 'li-old');
+        li.appendChild(liT);
+        document.body.appendChild(li);
 
-      const oldPiece = {
-        id: 'li-old', text: 'Item source.', sourceText: 'Item source.',
-        parentElement: li, textNodes: [liText], isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
-      await testHooks.startTranslation();
-      const { onMutation, observer } = await capturePipeline();
-      observer.observeAll.mockClear();
+        const oldPiece = {
+          id: 'li-old', text: 'Item source.', sourceText: 'Item source.',
+          parentElement: li, textNodes: [liText], isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValue([oldPiece] as never);
+        await testHooks.startTranslation();
+        const { onMutation, observer } = await capturePipeline();
+        observer.observeAll.mockClear();
 
-      // Site appends a text node INSIDE the marked wrapper — the watcher
-      // delivers the wrapper itself as the marked source host.
-      const appended = document.createTextNode(' Appended.');
-      wrapper.appendChild(appended);
-      const merged = {
-        id: 'li-merged',
-        text: 'Item source. Appended.', sourceText: 'Item source. Appended.',
-        parentElement: li, textNodes: [liText, appended], isTranslated: false,
-        inArticleContext: false,
-      };
-      // Faithful to real extractPieces: walking the LI rejects the marked
-      // wrapper subtree, so the merged piece only surfaces when the WRAPPER
-      // itself is extracted as a forced root.
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === wrapper ? [merged] : []) as never,
-      );
-      onMutation([wrapper]);
+        // Site appends a text node INSIDE the marked wrapper — the watcher
+        // delivers the wrapper itself as the marked source host.
+        const appended = document.createTextNode(' Appended.');
+        wrapper.appendChild(appended);
+        const merged = {
+          id: 'li-merged',
+          text: 'Item source. Appended.', sourceText: 'Item source. Appended.',
+          parentElement: li, textNodes: [liText, appended], isTranslated: false,
+          inArticleContext: false,
+        };
+        // Faithful to real extractPieces: walking the LI rejects the marked
+        // wrapper subtree, so the merged piece only surfaces when the WRAPPER
+        // itself is extracted as a forced root.
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === wrapper ? [merged] : []) as never,
+        );
+        onMutation([wrapper]);
 
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-old', li);
-      expect(liT.isConnected).toBe(false);
-      const firstCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(firstCalls).toHaveLength(1);
-      expect(firstCalls[0]).toEqual([merged]);
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-old', li);
+        expect(liT.isConnected).toBe(false);
+        const firstCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(firstCalls).toHaveLength(1);
+        expect(firstCalls[0]).toEqual([merged]);
 
-      // A second append retires the previously merged piece instead of
-      // stacking another translation for the same text nodes.
-      const mergedT = document.createElement('div');
-      mergedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
-      mergedT.setAttribute(DATA_ATTRS.PIECE_ID, 'li-merged');
-      li.appendChild(mergedT);
-      const appended2 = document.createTextNode(' Again.');
-      wrapper.appendChild(appended2);
-      const merged2 = {
-        id: 'li-merged2',
-        text: 'Item source. Appended. Again.',
-        sourceText: 'Item source. Appended. Again.',
-        parentElement: li,
-        textNodes: [liText, appended, appended2],
-        isTranslated: false,
-        inArticleContext: false,
-      };
-      vi.mocked(extractPieces).mockImplementation(
-        (el?: Element) => (el === wrapper ? [merged2] : []) as never,
-      );
-      onMutation([wrapper]);
+        // A second append retires the previously merged piece instead of
+        // stacking another translation for the same text nodes.
+        const mergedT = document.createElement('div');
+        mergedT.setAttribute(DATA_ATTRS.ROLE, 'translation');
+        mergedT.setAttribute(DATA_ATTRS.PIECE_ID, 'li-merged');
+        li.appendChild(mergedT);
+        const appended2 = document.createTextNode(' Again.');
+        wrapper.appendChild(appended2);
+        const merged2 = {
+          id: 'li-merged2',
+          text: 'Item source. Appended. Again.',
+          sourceText: 'Item source. Appended. Again.',
+          parentElement: li,
+          textNodes: [liText, appended, appended2],
+          isTranslated: false,
+          inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockImplementation(
+          (el?: Element) => (el === wrapper ? [merged2] : []) as never,
+        );
+        onMutation([wrapper]);
 
-      expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-merged', li);
-      expect(mergedT.isConnected).toBe(false);
-      const allCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
-      expect(allCalls).toHaveLength(2);
-      expect(allCalls[1]).toEqual([merged2]);
+        expect(display.removePieceArtifacts).toHaveBeenCalledWith('li-merged', li);
+        expect(mergedT.isConnected).toBe(false);
+        const allCalls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);
+        expect(allCalls).toHaveLength(2);
+        expect(allCalls[1]).toEqual([merged2]);
+      }
     });
   });
 });

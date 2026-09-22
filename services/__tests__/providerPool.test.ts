@@ -231,8 +231,10 @@ describe('ProviderPoolCoordinator', () => {
     });
   });
 
-  describe('round-robin distribution', () => {
-    it('alternates between the two keys across sequential translate calls', async () => {
+  describe('round-robin distribution + FR-3: cursor fairness when a slot is open', () => {
+    it('alternates between the two keys across sequential translate calls; even distribution across healthy slots and no re-select in failover chain', async () => {
+      // facet: round-robin alternates between the two keys across sequential
+      // translate calls.
       const coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
@@ -249,32 +251,30 @@ describe('ProviderPoolCoordinator', () => {
       expect(r3.translations.get('id1')).toBe('from-k1');
       expect(stubs.get('k1')?.callCount).toBe(2);
       expect(stubs.get('k2')?.callCount).toBe(1);
-    });
-  });
 
-  // FR-3 / AC2: cursor must index the HEALTHY pool's own space, not the full
-  // slots array. Before the fix, dispatchWithFailover used
-  // `healthy[cursor.next()]` where the cursor advanced in [0, slots.length) —
-  // when any slot was open, healthy was shorter, indices misaligned, and the
-  // `?? healthy[attempt % healthy.length]` fallback skewed distribution /
-  // re-selected the same failing slot within one failover chain.
-  describe('FR-3: cursor fairness when a slot is open', () => {
-    /** Tag the result with the key that produced it so we can see distribution. */
-    function keyOf(r: { translations: Map<string, string> }): string {
-      const v = r.translations.get('id1') ?? '';
-      return v.replace('from-', '');
-    }
+      // facet (FR-3 / AC2): even distribution across healthy slots and no
+      // re-select in failover chain. cursor must index the HEALTHY pool's own
+      // space, not the full slots array. Before the fix, dispatchWithFailover
+      // used `healthy[cursor.next()]` where the cursor advanced in
+      // [0, slots.length) — when any slot was open, healthy was shorter,
+      // indices misaligned, and the `?? healthy[attempt % healthy.length]`
+      // fallback skewed distribution / re-selected the same failing slot
+      // within one failover chain.
+      /** Tag the result with the key that produced it so we can see distribution. */
+      function keyOf(r: { translations: Map<string, string> }): string {
+        const v = r.translations.get('id1') ?? '';
+        return v.replace('from-', '');
+      }
 
-    it('even distribution across healthy slots and no re-select in failover chain', async () => {
-      const coord = new ProviderPoolCoordinator({
+      const frCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(threeKeySettings());
+      frCoord.rebuild(threeKeySettings());
 
       setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
-      await coord.translate(baseRequest()).catch(() => null);
-      expect(coord.getKeyStatus('k1').open).toBe(true);
+      await frCoord.translate(baseRequest()).catch(() => null);
+      expect(frCoord.getKeyStatus('k1').open).toBe(true);
 
       const resetStub = (keyId: string): void => {
         const s = stubs.get(keyId);
@@ -286,7 +286,7 @@ describe('ProviderPoolCoordinator', () => {
 
       const seen: string[] = [];
       for (let i = 0; i < 4; i++) {
-        const r = await coord.translate(baseRequest());
+        const r = await frCoord.translate(baseRequest());
         seen.push(keyOf(r));
       }
       expect(stubs.get('k1')?.callCount).toBe(0);
@@ -300,11 +300,11 @@ describe('ProviderPoolCoordinator', () => {
       // Fresh pool: never re-select failing slot within one chain.
       stubs.clear();
       factory.mockClear();
-      const coord2 = new ProviderPoolCoordinator({
+      const frCoord2 = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord2.rebuild(threeKeySettings());
+      frCoord2.rebuild(threeKeySettings());
       let k1Failed = false;
       const k1Stub = stubs.get('k1');
       if (!k1Stub) throw new Error('k1 stub missing');
@@ -316,9 +316,9 @@ describe('ProviderPoolCoordinator', () => {
         }
         return { success: true, translations: new Map([['id1', `from-k1`]]) };
       };
-      const r1 = await coord2.translate(baseRequest());
-      expect(r1.success).toBe(true);
-      expect(keyOf(r1)).not.toBe('k1');
+      const frR1 = await frCoord2.translate(baseRequest());
+      expect(frR1.success).toBe(true);
+      expect(keyOf(frR1)).not.toBe('k1');
       expect(stubs.get('k1')?.callCount).toBe(1);
     });
   });
@@ -705,7 +705,7 @@ describe('ProviderPoolCoordinator', () => {
     });
   });
 
-  describe('skip saturated keys (load-spread)', () => {
+  describe('skip saturated keys + fast 429 failover + Google AI Studio multi-model', () => {
     function twoKeyConcurrency(limit: number): ExtensionSettings {
       const providers: PoolProvider[] = [
         {
@@ -726,7 +726,7 @@ describe('ProviderPoolCoordinator', () => {
       return { ...DEFAULT_SETTINGS, providers };
     }
 
-    it('skips a busy key and uses a free sibling instead of queuing', async () => {
+    it('skips a busy key and uses a free sibling instead of queuing; sets 0 same-key 429 retries with healthy siblings, restores default when one healthy key remains; preferred uses primary model when healthy, fails over to lite on 429; round_robin spreads', async () => {
       // Scenario: k1 held by req1; req2 uses k2 and finishes; req3's RR lands on
       // busy k1 — must skip to free k2 rather than queue behind k1.
       const coord = new ProviderPoolCoordinator({
@@ -779,11 +779,9 @@ describe('ProviderPoolCoordinator', () => {
       releaseK1();
       await first;
       expect(k1.callCount).toBe(1); // never double-dispatched while capped
-    });
-  });
 
-  describe('fast 429 failover when siblings exist', () => {
-    it('sets 0 same-key 429 retries with healthy siblings, restores default when one healthy key remains', async () => {
+      // facet: sets 0 same-key 429 retries with healthy siblings, restores
+      // default when one healthy key remains.
       // Phase 1: 0 same-key 429 retries when other healthy keys exist.
       const max429Sets: Array<{ keyId: string; value: number | null | undefined }> = [];
       factory = vi.fn(
@@ -797,13 +795,13 @@ describe('ProviderPoolCoordinator', () => {
         },
       );
 
-      const coord = new ProviderPoolCoordinator({
+      const fastCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(twoKeySettings());
+      fastCoord.rebuild(twoKeySettings());
 
-      await coord.translate(baseRequest());
+      await fastCoord.translate(baseRequest());
       // First request: 2 healthy keys → prefer fast failover (0 retries)
       expect(max429Sets.some((e) => e.value === 0)).toBe(true);
 
@@ -821,15 +819,15 @@ describe('ProviderPoolCoordinator', () => {
       );
       stubs.clear();
 
-      const coord2 = new ProviderPoolCoordinator({
+      const fastCoord2 = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord2.rebuild(twoKeySettings());
+      fastCoord2.rebuild(twoKeySettings());
 
       // Open k1 so only k2 is healthy
       setOutcome('k1', { kind: 'fail', error: new ApiError('429', 429) });
-      await coord2.translate(baseRequest()).catch(() => null);
+      await fastCoord2.translate(baseRequest()).catch(() => null);
       max429Sets.length = 0;
 
       setOutcome('k1', {
@@ -841,15 +839,27 @@ describe('ProviderPoolCoordinator', () => {
         result: { success: true, translations: new Map([['id1', 'from-k2']]) },
       });
 
-      await coord2.translate(baseRequest());
+      await fastCoord2.translate(baseRequest());
       // Only one healthy → restore default retries (null/undefined)
       const last = max429Sets[max429Sets.length - 1];
       expect(last?.value === null || last?.value === undefined || last?.value === 3).toBe(true);
-    });
-  });
 
-  describe('Google AI Studio multi-model', () => {
-    function googleMultiSettings(
+      // facet: preferred uses primary model when healthy, fails over to lite on
+      // 429; round_robin spreads.
+      // Restore the default slot-id factory the fast-429 facet replaced.
+      factory = vi.fn(
+        (
+          config: ProviderConfig,
+          identity: { keyId: string; providerId: string; slotId?: string },
+        ) => {
+          const id = identity.slotId ?? identity.keyId;
+          const s = makeStub(id, config);
+          stubs.set(id, s);
+          return s;
+        },
+      );
+      stubs.clear();
+      function googleMultiSettings(
       strategy: 'preferred_failover' | 'round_robin' = 'preferred_failover',
     ): ExtensionSettings {
       const providers: PoolProvider[] = [
@@ -888,15 +898,14 @@ describe('ProviderPoolCoordinator', () => {
       return { ...DEFAULT_SETTINGS, providers };
     }
 
-    it('preferred uses primary model when healthy, fails over to lite on 429; round_robin spreads', async () => {
-      // preferred: always uses primary model when healthy (order A)
-      let coord = new ProviderPoolCoordinator({
+    // preferred: always uses primary model when healthy (order A)
+      let googleCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(googleMultiSettings('preferred_failover'));
+      googleCoord.rebuild(googleMultiSettings('preferred_failover'));
       for (let i = 0; i < 4; i++) {
-        await coord.translate(baseRequest());
+        await googleCoord.translate(baseRequest());
       }
       const flashCalls =
         (stubs.get('k1::gemini-2.5-flash')?.callCount ?? 0) +
@@ -908,11 +917,11 @@ describe('ProviderPoolCoordinator', () => {
       expect(liteCalls).toBe(0);
 
       // preferred: fails over to lite when flash slots 429
-      coord = new ProviderPoolCoordinator({
+      googleCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(googleMultiSettings('preferred_failover'));
+      googleCoord.rebuild(googleMultiSettings('preferred_failover'));
       setOutcome('k1::gemini-2.5-flash', {
         kind: 'fail',
         error: new ApiError('rl', 429),
@@ -921,31 +930,32 @@ describe('ProviderPoolCoordinator', () => {
         kind: 'fail',
         error: new ApiError('rl', 429),
       });
-      const result = await coord.translate(baseRequest());
-      expect(result.success).toBe(true);
+      const googleResult = await googleCoord.translate(baseRequest());
+      expect(googleResult.success).toBe(true);
       const liteUsed =
         (stubs.get('k1::gemini-2.5-flash-lite')?.callCount ?? 0) +
         (stubs.get('k2::gemini-2.5-flash-lite')?.callCount ?? 0);
       expect(liteUsed).toBeGreaterThan(0);
-      expect(coord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
-      expect(coord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
+      expect(googleCoord.getKeyStatus('k1::gemini-2.5-flash-lite').open).toBe(false);
+      expect(googleCoord.getKeyStatus('k1::gemini-2.5-flash').open).toBe(true);
 
       // round_robin: spreads across models
-      coord = new ProviderPoolCoordinator({
+      googleCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(googleMultiSettings('round_robin'));
+      googleCoord.rebuild(googleMultiSettings('round_robin'));
       for (let i = 0; i < 4; i++) {
-        await coord.translate(baseRequest());
+        await googleCoord.translate(baseRequest());
       }
       const modelsUsed = [...stubs.values()].filter((s) => s.callCount > 0).length;
       expect(modelsUsed).toBeGreaterThanOrEqual(2);
     });
   });
 
-  describe('FR-1: stream cancellation does not failover or trip breakers', () => {
-    it('rethrows cancelled immediately and does not try a second slot', async () => {
+  describe('FR-1/FR-1b: cancellation does not failover or trip breakers', () => {
+    it('rethrows cancelled immediately and does not try a second slot; does not call a provider or trip a breaker when cancelled during the throttle wait; translate with an already-aborted signal rejects cancelled and does not call any slot', async () => {
+      // facet: rethrows cancelled immediately and does not try a second slot.
       const coord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
@@ -974,9 +984,9 @@ describe('ProviderPoolCoordinator', () => {
       // No breaker should have opened for a user-initiated stop.
       expect(coord.getKeyStatus('k1').open).toBe(false);
       expect(coord.getKeyStatus('k2').open).toBe(false);
-    });
 
-    it('does not call a provider or trip a breaker when cancelled during the throttle wait', async () => {
+      // facet: does not call a provider or trip a breaker when cancelled
+      // during the throttle wait.
       const settings = twoKeySettings();
       const firstProvider = settings.providers[0];
       if (firstProvider) {
@@ -990,58 +1000,56 @@ describe('ProviderPoolCoordinator', () => {
       const throttleBlocked = new Promise<void>((resolve) => {
         release.resolve = resolve;
       });
-      const coord = new ProviderPoolCoordinator({
+      const throttleCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
         delay: async () => {
           await throttleBlocked;
         },
       });
-      coord.rebuild(settings);
+      throttleCoord.rebuild(settings);
 
       // Prime lastDispatchAt for both slots and rotate cursor so stream lands on k1.
-      await coord.translate(baseRequest());
-      await coord.translate(baseRequest());
+      await throttleCoord.translate(baseRequest());
+      await throttleCoord.translate(baseRequest());
       stubs.get('k1')!.callCount = 0;
       stubs.get('k2')!.callCount = 0;
 
-      const controller = new AbortController();
-      const request: TranslationRequest = {
+      const throttleController = new AbortController();
+      const throttleRequest: TranslationRequest = {
         ...baseRequest(),
-        signal: controller.signal,
+        signal: throttleController.signal,
       };
 
-      const callPromise = coord.translateStream(request, () => {});
+      const callPromise = throttleCoord.translateStream(throttleRequest, () => {});
 
       // Let dispatch reach the throttle wait, then cancel before it is released.
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
-      controller.abort();
+      throttleController.abort();
       release.resolve();
 
       await expect(callPromise).rejects.toThrow(/cancelled/i);
 
       expect(stubs.get('k1')?.callCount).toBe(0);
       expect(stubs.get('k2')?.callCount).toBe(0);
-      expect(coord.getKeyStatus('k1').open).toBe(false);
-      expect(coord.getKeyStatus('k2').open).toBe(false);
-    });
-  });
+      expect(throttleCoord.getKeyStatus('k1').open).toBe(false);
+      expect(throttleCoord.getKeyStatus('k2').open).toBe(false);
 
-  describe('FR-1b: non-stream cancellation does not call provider or trip breaker', () => {
-    it('translate with an already-aborted signal rejects cancelled and does not call any slot', async () => {
-      const coord = new ProviderPoolCoordinator({
+      // facet: translate with an already-aborted signal rejects cancelled and
+      // does not call any slot.
+      const nonStreamCoord = new ProviderPoolCoordinator({
         serviceFactory: factory,
         clock: () => clockNow,
       });
-      coord.rebuild(twoKeySettings());
+      nonStreamCoord.rebuild(twoKeySettings());
 
-      const controller = new AbortController();
-      controller.abort();
-      const request: TranslationRequest = {
+      const nonStreamController = new AbortController();
+      nonStreamController.abort();
+      const nonStreamRequest: TranslationRequest = {
         ...baseRequest(),
-        signal: controller.signal,
+        signal: nonStreamController.signal,
       };
 
       setOutcome('k1', { kind: 'fail', error: new Error('should not run') });
@@ -1050,12 +1058,12 @@ describe('ProviderPoolCoordinator', () => {
         result: { success: true, translations: new Map([['id1', 'from-k2']]) },
       });
 
-      await expect(coord.translate(request)).rejects.toThrow(/cancelled/i);
+      await expect(nonStreamCoord.translate(nonStreamRequest)).rejects.toThrow(/cancelled/i);
 
       expect(stubs.get('k1')?.callCount).toBe(0);
       expect(stubs.get('k2')?.callCount).toBe(0);
-      expect(coord.getKeyStatus('k1').open).toBe(false);
-      expect(coord.getKeyStatus('k2').open).toBe(false);
+      expect(nonStreamCoord.getKeyStatus('k1').open).toBe(false);
+      expect(nonStreamCoord.getKeyStatus('k2').open).toBe(false);
     });
   });
 });

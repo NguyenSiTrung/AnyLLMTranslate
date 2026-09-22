@@ -44,8 +44,9 @@ describe('useSettingsStore', () => {
     mockListeners.length = 0;
   });
 
-  describe('core CRUD', () => {
-    it('starts from defaults, loads/merges storage, updates, and resets', async () => {
+  describe('core CRUD & initStorageSync', () => {
+    it('starts from defaults, loads/merges storage, updates, resets, and syncs onChanged', async () => {
+      // facet: starts from defaults, loads/merges storage, updates, and resets
       const initial = useSettingsStore.getState();
       expect(initial.theme).toBe('blockquote');
       expect(initial.targetLanguage).toBe('vi');
@@ -92,11 +93,8 @@ describe('useSettingsStore', () => {
       expect(state.targetLanguage).toBe('vi');
       expect(state.maxRpm).toBe(DEFAULT_SETTINGS.maxRpm);
       expect(state.isLoaded).toBe(true);
-    });
-  });
 
-  describe('initStorageSync', () => {
-    it('registers listener, applies local changes, ignores non-local, and cleans up', () => {
+      // facet: registers listener, applies local changes, ignores non-local, and cleans up
       const cleanup = initStorageSync();
       expect(chrome.storage.onChanged.addListener).toHaveBeenCalled();
       const listener = mockListeners[0];
@@ -243,8 +241,9 @@ describe('useSettingsStore', () => {
     });
   });
 
-  describe('replaceSettings', () => {
-    it('resets to defaults then applies the partial (exact restore)', async () => {
+  describe('replaceSettings & restoreSettings', () => {
+    it('resets to defaults then applies the partial (exact restore), and persists a full restore', async () => {
+      // facet: replaceSettings resets to defaults then applies the partial (exact restore)
       // Simulate a machine with existing settings.
       mockStorageData['anyllm-translate-settings'] = {
         theme: 'bubble',
@@ -270,11 +269,8 @@ describe('useSettingsStore', () => {
       // Built-in site rules still seeded, like resetToDefaults.
       expect(state.siteRules.length).toBeGreaterThan(0);
       expect(state.isLoaded).toBe(true);
-    });
-  });
 
-  describe('restoreSettings', () => {
-    it('persists the full object and sets store state', async () => {
+      // facet: restoreSettings persists the full object and sets store state
       const restored: ExtensionSettings = {
         ...DEFAULT_SETTINGS,
         theme: 'bubble',
@@ -304,12 +300,12 @@ describe('useSettingsStore', () => {
         ],
       };
       await useSettingsStore.getState().restoreSettings(restored);
-      const state = useSettingsStore.getState();
-      expect(state.theme).toBe('bubble');
-      expect(state.targetLanguage).toBe('ko');
-      expect(state.safeKeyThrottleMigrated).toBe(true);
-      expect(state.providers[0]?.keys[0]?.apiKey).toBe('sk-restored');
-      expect(state.isLoaded).toBe(true);
+      const restoreState = useSettingsStore.getState();
+      expect(restoreState.theme).toBe('bubble');
+      expect(restoreState.targetLanguage).toBe('ko');
+      expect(restoreState.safeKeyThrottleMigrated).toBe(true);
+      expect(restoreState.providers[0]?.keys[0]?.apiKey).toBe('sk-restored');
+      expect(restoreState.isLoaded).toBe(true);
       const data = (chrome.storage.local.set as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as Record<string, unknown>;
       expect(data['anyllm-translate-settings']).toBeTruthy();
     });

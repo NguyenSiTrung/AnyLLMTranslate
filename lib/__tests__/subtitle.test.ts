@@ -168,7 +168,9 @@ describe('mergeProperNouns locks', () => {
 });
 
 describe('subtitleLanguagesMatch', () => {
-  it('matches exact, primary, script, and ISO 639-2 tags; rejects unrelated langs', () => {
+  it('matches exact, primary, script, and ISO 639-2 tags, with the zh script default', () => {
+    // Exact, primary-subtag, script, and ISO 639-2 equivalences match; unrelated
+    // languages do not.
     expect(subtitleLanguagesMatch('en-US', 'en-US')).toBe(true);
     expect(subtitleLanguagesMatch('en-US', 'en')).toBe(true);
     expect(subtitleLanguagesMatch('en', 'en-US')).toBe(true);
@@ -183,9 +185,7 @@ describe('subtitleLanguagesMatch', () => {
     expect(subtitleLanguagesMatch('en-US', 'zh-Hans')).toBe(false);
     expect(subtitleLanguagesMatch('es', 'fr')).toBe(false);
     expect(subtitleLanguagesMatch('eng', 'fra')).toBe(false);
-  });
 
-  it('normalizes bare zh to Simplified and zh-TW/HK/MO to Traditional (MAX-38)', () => {
     // The UI uses `zh` for Simplified while Max exposes zh-Hans and zh-Hant as
     // separate tracks: a "Simplified" preference must not pass the gate for a
     // Traditional track just because both primary subtags are `zh`.
@@ -198,9 +198,8 @@ describe('subtitleLanguagesMatch', () => {
     expect(subtitleLanguagesMatch('zh', 'zh-TW')).toBe(false);
     expect(subtitleLanguagesMatch('zh-Hans', 'zh-Hans-SG')).toBe(true);
     expect(subtitleLanguagesMatch('zh-CN', 'zh-Hans')).toBe(true);
-  });
 
-  it('keeps ISO 639-2 Chinese conversion working alongside the script default', () => {
+    // ISO 639-2 Chinese conversion still works alongside the script default.
     expect(subtitleLanguagesMatch('zho', 'zh-Hans')).toBe(true);
     expect(subtitleLanguagesMatch('zho', 'zh')).toBe(true);
     expect(subtitleLanguagesMatch('zho', 'zh-CN')).toBe(true);
@@ -370,26 +369,24 @@ describe('withRetry', () => {
 });
 
 describe('isRetryableTranslationError', () => {
-  it('fails fast on 4xx client errors (bad request, auth, missing model)', () => {
+  it('fails fast on 4xx, retries transient/statusless errors, and unwraps PoolExhaustedError.lastError', () => {
+    // 4xx client errors (bad request, auth, missing model) fail fast.
     for (const status of [400, 401, 403, 404, 422]) {
       expect(isRetryableTranslationError(new ApiError(`HTTP ${status}`, status))).toBe(false);
     }
-  });
 
-  it('retries rate limits, request timeouts, and server errors', () => {
+    // Rate limits, request timeouts, and server errors are retried.
     for (const status of [408, 429, 500, 502, 503, 504]) {
       expect(isRetryableTranslationError(new ApiError(`HTTP ${status}`, status))).toBe(true);
     }
-  });
 
-  it('retries errors with no visible status (network, content, pool)', () => {
+    // Errors with no visible status (network, content, pool) are retried.
     expect(isRetryableTranslationError(new Error('fetch failed'))).toBe(true);
     expect(isRetryableTranslationError(new Error('Empty response from LLM'))).toBe(true);
     expect(isRetryableTranslationError(undefined)).toBe(true);
     expect(isRetryableTranslationError('boom')).toBe(true);
-  });
 
-  it('unwraps PoolExhaustedError.lastError to classify the underlying failure', () => {
+    // PoolExhaustedError.lastError is unwrapped to classify the underlying failure.
     const authExhausted = new PoolExhaustedError(
       'All providers are cooling down',
       new ApiError('Unauthorized', 401),
@@ -444,7 +441,8 @@ describe('isRetryableTranslationError', () => {
 });
 
 describe('subtitleStylePresets — preset table', () => {
-  it('defines exactly the five approved presets with distinct signatures', () => {
+  it('defines exactly the five approved presets and defaults to classic with no overrides', () => {
+    // Exactly the five approved presets, with distinct signatures.
     const ids = Object.keys(SUBTITLE_STYLE_PRESETS).sort();
     expect(ids).toEqual(
       ['classic', 'netflix', 'white-on-black', 'yellow-on-black', 'black-on-white'].sort(),
@@ -463,9 +461,8 @@ describe('subtitleStylePresets — preset table', () => {
       backgroundStyle: 'white-box',
       shadowStrength: 0,
     });
-  });
 
-  it('DEFAULT_SUBTITLE_SETTINGS defaults to classic with no overrides', () => {
+    // DEFAULT_SUBTITLE_SETTINGS defaults to classic with no overrides.
     expect(DEFAULT_SUBTITLE_SETTINGS.stylePreset).toBe('classic');
     expect(DEFAULT_SUBTITLE_SETTINGS.styleOverrides).toEqual({});
   });
@@ -481,7 +478,8 @@ describe('withAlpha', () => {
 });
 
 describe('resolveSubtitleStyle', () => {
-  it('resolves each approved preset base look at the given opacity', () => {
+  it('resolves preset base looks, merges per-field overrides, and falls back to classic for unknown ids', () => {
+    // Each approved preset base look at the given opacity.
     expect(resolveSubtitleStyle('classic', undefined, 0.7)).toEqual({
       textColor: 'rgba(255,255,255,1)',
       originalTextColor: 'rgba(255,255,255,0.6)',
@@ -502,9 +500,8 @@ describe('resolveSubtitleStyle', () => {
       backgroundOpacity: 1,
       textShadow: 'none',
     });
-  });
 
-  it('merges per-field overrides and switches the box via backgroundStyle override', () => {
+    // Per-field overrides merge, and backgroundStyle switches the box.
     const result = resolveSubtitleStyle(
       'netflix',
       { textColor: '#f5c518', shadowStrength: 0.2 },
@@ -518,9 +515,8 @@ describe('resolveSubtitleStyle', () => {
     const boxed = resolveSubtitleStyle('netflix', { backgroundStyle: 'black-box' }, 0.5);
     expect(boxed.backgroundOpacity).toBe(0.5);
     expect(boxed.backgroundColor).toBe('0,0,0');
-  });
 
-  it('unknown preset id falls back to classic', () => {
+    // An unknown preset id falls back to classic.
     // @ts-expect-error unknown id
     expect(resolveSubtitleStyle('nope', undefined, 0.7).textColor).toBe('rgba(255,255,255,1)');
   });
@@ -555,75 +551,53 @@ function settings(overrides: Partial<SubtitleSettings> = {}): SubtitleSettings {
 }
 
 describe('shouldTeardownSubtitleSession', () => {
-  it('tears down when subtitles are switched off', () => {
-    expect(
-      shouldTeardownSubtitleSession(settings({ enabled: true }), settings({ enabled: false }), 'hbomax'),
-    ).toBe(true);
-  });
-
-  it('does not tear down when subtitles are switched on', () => {
-    expect(
-      shouldTeardownSubtitleSession(settings({ enabled: false }), settings({ enabled: true }), 'hbomax'),
-    ).toBe(false);
-  });
-
-  it('tears down when the active platform is added to the disabled list', () => {
-    expect(
-      shouldTeardownSubtitleSession(
+  it('tears down when subtitles are switched off or the active platform becomes disabled', () => {
+    const cases: Array<[string, SubtitleSettings, SubtitleSettings]> = [
+      ['subtitles switched off', settings({ enabled: true }), settings({ enabled: false })],
+      [
+        'active platform added to the disabled list',
         settings({ disabledSubtitleSites: [] }),
         settings({ disabledSubtitleSites: ['hbomax'] }),
-        'hbomax',
-      ),
-    ).toBe(true);
-  });
-
-  it('tears down when subtitles turn off and the platform is disabled at once', () => {
-    expect(
-      shouldTeardownSubtitleSession(
+      ],
+      [
+        'subtitles off and the platform disabled at once',
         settings({ enabled: true, disabledSubtitleSites: [] }),
         settings({ enabled: false, disabledSubtitleSites: ['hbomax'] }),
-        'hbomax',
-      ),
-    ).toBe(true);
-  });
-
-  it('does not tear down when the platform was already disabled before the change', () => {
-    expect(
-      shouldTeardownSubtitleSession(
-        settings({ disabledSubtitleSites: ['hbomax'] }),
-        settings({ disabledSubtitleSites: ['hbomax', 'youtube'] }),
-        'hbomax',
-      ),
-    ).toBe(false);
-  });
-
-  it('does not tear down when a different platform is disabled', () => {
-    expect(
-      shouldTeardownSubtitleSession(
-        settings({ disabledSubtitleSites: [] }),
-        settings({ disabledSubtitleSites: ['youtube'] }),
-        'hbomax',
-      ),
-    ).toBe(false);
-  });
-
-  it('does not tear down for unrelated settings changes', () => {
-    expect(
-      shouldTeardownSubtitleSession(
-        settings({ fontSize: 16 }),
-        settings({ fontSize: 24, displayMode: 'translation-only' }),
-        'hbomax',
-      ),
-    ).toBe(false);
-  });
-
-  it('treats a missing disabledSubtitleSites list as empty', () => {
-    expect(
-      shouldTeardownSubtitleSession(
+      ],
+      [
+        'missing disabledSubtitleSites list treated as empty',
         settings({ disabledSubtitleSites: undefined as unknown as string[] }),
         settings({ disabledSubtitleSites: ['hbomax'] }),
-        'hbomax',
-      ),
-    ).toBe(true);
+      ],
+    ];
+
+    for (const [label, prev, next] of cases) {
+      expect(shouldTeardownSubtitleSession(prev, next, 'hbomax'), label).toBe(true);
+    }
+  });
+
+  it('does not tear down when subtitles stay on or the active platform is unaffected', () => {
+    const cases: Array<[string, SubtitleSettings, SubtitleSettings]> = [
+      ['subtitles switched on', settings({ enabled: false }), settings({ enabled: true })],
+      [
+        'platform already disabled before the change',
+        settings({ disabledSubtitleSites: ['hbomax'] }),
+        settings({ disabledSubtitleSites: ['hbomax', 'youtube'] }),
+      ],
+      [
+        'a different platform is disabled',
+        settings({ disabledSubtitleSites: [] }),
+        settings({ disabledSubtitleSites: ['youtube'] }),
+      ],
+      [
+        'unrelated settings changes',
+        settings({ fontSize: 16 }),
+        settings({ fontSize: 24, displayMode: 'translation-only' }),
+      ],
+    ];
+
+    for (const [label, prev, next] of cases) {
+      expect(shouldTeardownSubtitleSession(prev, next, 'hbomax'), label).toBe(false);
+    }
   });
 });

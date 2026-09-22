@@ -341,7 +341,7 @@ describe('InlineTranslateSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders cards/preview, dual mode, toggle, blocklist badge, collapsed timing', async () => {
+  it('renders cards/preview, dual mode, toggle, blocklist badge, collapsed timing, disabled message, and local drafts', async () => {
     render(<InlineTranslateSection />);
     expect(
       screen.getByRole('switch', { name: /Enable Inline Translation/i }),
@@ -370,17 +370,17 @@ describe('InlineTranslateSection', () => {
     await waitFor(() => {
       expect(useSettingsStore.getState().inlineTranslate.enabled).toBe(false);
     });
-  });
+    cleanup();
 
-  it('shows enable-to-preview message when disabled', () => {
+    // facet: shows enable-to-preview message when disabled
     useSettingsStore.setState({
       inlineTranslate: { ...DEFAULT_INLINE_TRANSLATE_SETTINGS, enabled: false },
     });
     render(<InlineTranslateSection />);
     expect(screen.getByText(/Enable inline translation to preview/i)).toBeInTheDocument();
-  });
+    cleanup();
 
-  it('keeps blocklist and language-prefix drafts local until blur', async () => {
+    // facet: keeps blocklist and language-prefix drafts local until blur
     // blocklist: keeps draft while typing (newlines/spaces) and commits on blur
     useSettingsStore.setState({
       inlineTranslate: {
@@ -472,9 +472,9 @@ describe('ThemesSection', () => {
     fireEvent.click(screen.getByRole('tab', { name: /^Classic$/i }));
     expect(screen.getByRole('radio', { name: /Blockquote/i })).toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /Speech Bubble/i })).not.toBeInTheDocument();
-  });
+    cleanup();
 
-  it('custom editor, sample states, and navigate to General', () => {
+    // facet: custom editor, sample states, and navigate to General
     useSettingsStore.setState({ theme: 'custom' });
     const nav = vi.fn();
     render(<ThemesSection onNavigateToGeneral={nav} />);

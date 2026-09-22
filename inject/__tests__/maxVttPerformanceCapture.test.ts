@@ -59,24 +59,22 @@ function makeBridge() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('resolveTrackIdentity', () => {
-  it('prefers the t<digit> representation id', () => {
-    expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/t/caa516/t3/8.vtt?x=1')).toBe('t3');
-  });
-
-  it('falls back to the /t/<dir>/ component for directory-style tracks', () => {
-    expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/t/t6/1.vtt?x=1')).toBe('t6');
-  });
-
-  it('uses the /t/ component nearest the segment file when the path nests several', () => {
-    expect(resolveTrackIdentity('https://host.example/a/t/lead/t1/main/t3/8.vtt')).toBe('t3');
-  });
-
-  it('ignores a /t/ marker that only appears in the query string', () => {
-    expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/other/1.vtt?path=/t/t6/')).toBeNull();
-  });
-
-  it('returns null when there is no /t/ marker', () => {
-    expect(resolveTrackIdentity('https://cf.asia.prd.media.max.com/a/other/1.vtt')).toBeNull();
+  it('resolves the representation id from the /t/ component nearest the segment file', () => {
+    const cases: Array<[input: string, expected: string | null]> = [
+      // Prefers the t<digit> representation id.
+      ['https://cf.asia.prd.media.max.com/a/t/caa516/t3/8.vtt?x=1', 't3'],
+      // Falls back to the /t/<dir>/ component for directory-style tracks.
+      ['https://cf.asia.prd.media.max.com/a/t/t6/1.vtt?x=1', 't6'],
+      // Uses the /t/ component nearest the segment file when the path nests several.
+      ['https://host.example/a/t/lead/t1/main/t3/8.vtt', 't3'],
+      // Ignores a /t/ marker that only appears in the query string.
+      ['https://cf.asia.prd.media.max.com/a/other/1.vtt?path=/t/t6/', null],
+      // Returns null when there is no /t/ marker.
+      ['https://cf.asia.prd.media.max.com/a/other/1.vtt', null],
+    ];
+    for (const [input, expected] of cases) {
+      expect(resolveTrackIdentity(input), input).toBe(expected);
+    }
   });
 });
 
@@ -91,13 +89,13 @@ function vtt(...texts: string[]): string {
 }
 
 describe('Max CDN subtitle URL matching', () => {
-  it('accepts media.max.com, hbomax.com and max.com hosts with a /t/ marker', () => {
+  it('accepts Max/hbomax hosts with a subtitle extension and rejects unrelated hosts and extensionless URLs', () => {
+    // Accepts media.max.com, hbomax.com and max.com hosts with a /t/ marker.
     expect(isMaxCdnSubtitleUrl('https://cf.eu.prd.media.max.com/a/t/t3/1.vtt?x=1')).toBe(true);
     expect(isMaxCdnSubtitleUrl('https://beam-1.prd.api.hbomax.com/a/t/t1/1.ttml')).toBe(true);
     expect(isMaxCdnSubtitleUrl('https://media.max.com/a/t/t2/3.vtt')).toBe(true);
-  });
 
-  it('rejects unrelated hosts and extensionless URLs', () => {
+    // Rejects unrelated hosts and extensionless URLs.
     expect(isMaxCdnSubtitleUrl('https://example.com/a/t/t2/3.vtt')).toBe(false);
     expect(isMaxCdnSubtitleUrl('https://cf.asia.prd.media.max.com/a/t/t3/1.jpg')).toBe(false);
   });
@@ -169,7 +167,8 @@ describe('Max VTT capture — representation identity', () => {
     expect(out[1]!.cues.map((c) => c.text)).toEqual(['first', 'second']);
   });
 
-  it('switches representation once the previous one has gone quiet', async () => {
+  it('switches representation once the previous one has gone quiet, and drops a foreign representation segment inside the idle window', async () => {
+    // Switches representation once the previous one has gone quiet.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     fetchMock
@@ -189,18 +188,20 @@ describe('Max VTT capture — representation identity', () => {
     expect(out).toHaveLength(2);
     // The switched representation starts a fresh buffer — no lead-in cue.
     expect(out[1]!.cues.map((c) => c.text)).toEqual(['main']);
-  });
 
-  it('drops a foreign representation segment inside the idle window', async () => {
+    // Drops a foreign representation segment inside the idle window.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
+    fetchMock.mockReset();
     fetchMock
       .mockResolvedValueOnce(new Response(vtt('mine'), { status: 200 }))
       .mockResolvedValueOnce(new Response(vtt('theirs'), { status: 200 }));
 
     startMaxVttPerformanceCapture(bridge);
-    const observer = FakeObserver.instances.at(-1)!;
-    observer.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
+    const foreignObserver = FakeObserver.instances.at(-1)!;
+    foreignObserver.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
     await flush();
-    observer.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t9/1.vtt');
+    foreignObserver.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t9/1.vtt');
     await flush();
 
     expect(emissions()).toHaveLength(1);
@@ -262,8 +263,10 @@ describe('Max VTT capture — fetch resilience', () => {
     expect(captureEmissions()).toHaveLength(1);
   });
 
-  it('recovers a segment once its cooldown elapses instead of losing it permanently', async () => {
+  it('recovers a failed segment after its cooldown, skips a segment that already parsed, and forgets recovery state on a seek reset', async () => {
     vi.useFakeTimers();
+
+    // Recovers a segment once its cooldown elapses instead of losing it permanently.
     fetchMock
       .mockRejectedValueOnce(new Error('403'))
       .mockRejectedValueOnce(new Error('403')) // the immediate attempt pair
@@ -283,11 +286,11 @@ describe('Max VTT capture — fetch resilience', () => {
     expect(manifests).toHaveLength(1);
     expect(manifests[0]!.cues.map((c) => c.text)).toEqual(['recovered']);
     expect(warn).toHaveBeenCalled();
-    vi.useRealTimers();
-  });
 
-  it('does not refetch a segment that already parsed', async () => {
-    vi.useFakeTimers();
+    // Does not refetch a segment that already parsed.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
+    fetchMock.mockReset();
     fetchMock.mockResolvedValue(new Response(vtt('hello'), { status: 200 }));
 
     startMaxVttPerformanceCapture(bridge);
@@ -299,13 +302,12 @@ describe('Max VTT capture — fetch resilience', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(captureEmissions()).toHaveLength(1);
-    vi.useRealTimers();
-  });
 
-  it('forgets recovery state on a seek reset', async () => {
-    vi.useFakeTimers();
+    // Forgets recovery state on a seek reset.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
+    fetchMock.mockReset();
     fetchMock.mockRejectedValue(new Error('403'));
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     startMaxVttPerformanceCapture(bridge);
     FakeObserver.instances.at(-1)!.emit('https://cf.asia.prd.media.max.com/a/t/caa516/t3/1.vtt');
@@ -358,8 +360,10 @@ describe('Max VTT capture — stall watchdog', () => {
     Object.defineProperty(video, 'paused', { value: paused, configurable: true });
   };
 
-  it('emits a stalled lifecycle message when segments stop while the video plays', async () => {
+  it('emits a stalled lifecycle message when segments stop while the video plays, but not while it is paused', async () => {
     vi.useFakeTimers();
+
+    // Emits a stalled lifecycle message when segments stop while the video plays.
     mountVideo(false);
 
     startMaxVttPerformanceCapture(bridge);
@@ -369,10 +373,10 @@ describe('Max VTT capture — stall watchdog', () => {
 
     await vi.advanceTimersByTimeAsync(WATCHDOG_INTERVAL_MS + CAPTURE_STALL_MS + 1);
     expect(lifecycle('stalled')).toBe(true);
-  });
 
-  it('does not report a stall while the video is paused', async () => {
-    vi.useFakeTimers();
+    // Does not report a stall while the video is paused.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
     mountVideo(true);
 
     startMaxVttPerformanceCapture(bridge);
@@ -381,6 +385,8 @@ describe('Max VTT capture — stall watchdog', () => {
 
     await vi.advanceTimersByTimeAsync(WATCHDOG_INTERVAL_MS + CAPTURE_STALL_MS + 1);
     expect(lifecycle('stalled')).toBe(false);
+
+    vi.useRealTimers();
   });
 });
 
@@ -416,24 +422,28 @@ describe('Max VTT capture — deadline waits for playback', () => {
     Object.defineProperty(video, 'paused', { value: paused, configurable: true });
   };
 
-  it('keeps waiting while playback has not started', async () => {
+  it('keeps waiting while playback has not started, then signals failure after the deadline once the video is playing', async () => {
     vi.useFakeTimers();
+
+    // Keeps waiting while playback has not started.
     mountVideo(true);
 
     startMaxVttPerformanceCapture(bridge);
     await vi.advanceTimersByTimeAsync(MAX_VTT_CAPTURE_DEADLINE_MS * 2 + 1);
 
     expect(lifecycle('complete')).toBe(false);
-  });
 
-  it('signals failure after the deadline once the video is playing', async () => {
-    vi.useFakeTimers();
+    // Signals failure after the deadline once the video is playing.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
     mountVideo(false);
 
     startMaxVttPerformanceCapture(bridge);
     await vi.advanceTimersByTimeAsync(MAX_VTT_CAPTURE_DEADLINE_MS + 1);
 
     expect(lifecycle('complete')).toBe(true);
+
+    vi.useRealTimers();
   });
 });
 
@@ -470,7 +480,8 @@ describe('Max VTT capture — delta append protocol', () => {
     vi.restoreAllMocks();
   });
 
-  it('appends only the new cues and carries an increasing seq', async () => {
+  it('appends only the new cues with an increasing seq, and re-sends the full accumulated buffer every FULL_RESYNC_EVERY segments', async () => {
+    // Appends only the new cues and carries an increasing seq.
     fetchMock
       .mockResolvedValueOnce(new Response(vtt('first'), { status: 200 }))
       .mockResolvedValueOnce(new Response(vtt('second'), { status: 200 }));
@@ -488,9 +499,30 @@ describe('Max VTT capture — delta append protocol', () => {
     expect(out[1]!.cues.map((c) => c.text)).toEqual(['second']);
     expect(out[1]!.seq).toBe((out[0]!.seq ?? 0) + 1);
     expect(out[1]!.append).toBe(true);
+
+    // Re-sends the full accumulated buffer every FULL_RESYNC_EVERY segments.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
+    fetchMock.mockReset();
+    let line = 0;
+    fetchMock.mockImplementation(
+      async () => new Response(vtt(`line ${++line}`), { status: 200 }),
+    );
+
+    startMaxVttPerformanceCapture(bridge);
+    const resyncObserver = FakeObserver.instances.at(-1)!;
+    for (let i = 1; i <= FULL_RESYNC_EVERY + 1; i++) {
+      resyncObserver.emit(`https://cf.asia.prd.media.max.com/a/t/caa516/t3/${i}.vtt`);
+      await flush();
+    }
+
+    const last = payloads().at(-1)!;
+    expect(last.full).toBe(true);
+    expect(last.cues).toHaveLength(FULL_RESYNC_EVERY + 1);
   });
 
-  it('re-scans resource entries when the timing buffer overflows', async () => {
+  it('re-scans resource entries when the timing buffer overflows, and caps the rolling buffer at MAX_MANIFEST_CUES cues', async () => {
+    // Re-scans resource entries when the timing buffer overflows.
     const setSize = vi.fn();
     Object.defineProperty(performance, 'setResourceTimingBufferSize', {
       value: setSize,
@@ -515,27 +547,11 @@ describe('Max VTT capture — delta append protocol', () => {
     await flush();
 
     expect(payloads()).toHaveLength(1);
-  });
 
-  it('re-sends the full accumulated buffer every FULL_RESYNC_EVERY segments', async () => {
-    let line = 0;
-    fetchMock.mockImplementation(
-      async () => new Response(vtt(`line ${++line}`), { status: 200 }),
-    );
-
-    startMaxVttPerformanceCapture(bridge);
-    const observer = FakeObserver.instances.at(-1)!;
-    for (let i = 1; i <= FULL_RESYNC_EVERY + 1; i++) {
-      observer.emit(`https://cf.asia.prd.media.max.com/a/t/caa516/t3/${i}.vtt`);
-      await flush();
-    }
-
-    const last = payloads().at(-1)!;
-    expect(last.full).toBe(true);
-    expect(last.cues).toHaveLength(FULL_RESYNC_EVERY + 1);
-  });
-
-  it('caps the rolling buffer at the most recent MAX_MANIFEST_CUES cues', async () => {
+    // Caps the rolling buffer at the most recent MAX_MANIFEST_CUES cues.
+    resetMaxVttPerformanceCapture();
+    sent.length = 0;
+    fetchMock.mockReset();
     const total = MAX_MANIFEST_CUES + 25;
     const body =
       'WEBVTT\n\n' +

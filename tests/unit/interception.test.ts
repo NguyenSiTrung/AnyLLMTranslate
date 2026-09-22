@@ -42,7 +42,7 @@ describe('Network Interception & Registry System', () => {
     window.fetch = realFetch;
   });
 
-  it('matches URL patterns, content-types, and registers JSON hooks', () => {
+  it('matches URL patterns/content-types, registers JSON hooks, and intercepts fetch calls with lifecycle/error fallbacks', async () => {
     expect(registry.matchUrl('https://cdna.udemycdn.com/subs/course.vtt')).toEqual({
       platform: 'udemy',
       pattern: expect.any(RegExp),
@@ -69,9 +69,8 @@ describe('Network Interception & Registry System', () => {
       'SUBTITLE_TRACKS_DISCOVERED',
       expect.objectContaining({ platform: 'netflix' }),
     );
-  });
 
-  it('intercepts fetch calls and manages lifecycle & error fallbacks', async () => {
+    // facet: intercepts fetch calls and manages lifecycle & error fallbacks
     fetchInterceptor.enable();
     mockFetch.mockResolvedValue(new Response('Not Found', { status: 404 }));
     const result = await window.fetch('https://cdna.udemycdn.com/subs/course.vtt');
@@ -317,7 +316,7 @@ describe('interceptor hardening (MAX-25/26/27)', () => {
     expect((xhr as { responseText: string }).responseText).toBe(TRANSLATED_VTT);
   });
 
-  it('drops body-describing headers from a translated partial response', async () => {
+  it('drops body-describing headers from a translated partial response and resolves a null-body status instead of hanging', async () => {
     fetchInterceptor.enable();
     mockFetch.mockResolvedValue(new Response('WEBVTT\n\npartial', {
       status: 206,
@@ -342,15 +341,15 @@ describe('interceptor hardening (MAX-25/26/27)', () => {
     expect(translated.headers.get('content-length')).toBeNull();
     expect(translated.headers.get('content-encoding')).toBeNull();
     await expect(translated.text()).resolves.toBe(TRANSLATED_VTT);
-  });
+    bridge.send.mockClear();
 
-  it('resolves a null-body status with the original response instead of hanging', async () => {
+    // facet: resolves a null-body status with the original response instead of hanging
     fetchInterceptor.enable();
     mockFetch.mockResolvedValue(new Response(null, { status: 204, statusText: 'No Content' }));
 
-    const fetchPromise = window.fetch(SUB_URL);
+    const nullBodyPromise = window.fetch(SUB_URL);
     let status: number | 'pending' = 'pending';
-    void fetchPromise.then((response) => { status = response.status; });
+    void nullBodyPromise.then((response) => { status = response.status; });
 
     await settle();
 

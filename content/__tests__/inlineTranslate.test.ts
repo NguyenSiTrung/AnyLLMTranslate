@@ -227,7 +227,8 @@ describe('gesture detection', () => {
     );
   }
 
-  it('triple-space within window triggers translation request; keys outside window do not', async () => {
+  it('handles the triple-space gesture end to end: window timing, editable guards, dedup, and ProseMirror composers', async () => {
+    // facet: triple-space within the window triggers; keys outside it do not; a custom key/count routes the cleaned text
     const input = createFocusedInput('xin chào   ');
     mockSendMessage.mockResolvedValueOnce({
       success: true,
@@ -276,9 +277,14 @@ describe('gesture detection', () => {
         text: 'hello',
       }),
     );
-  });
 
-  it('ignores non-editable, password, code-editor, empty, and disabled fields; dedups window+document keydown; and never counts taps on empty fields', async () => {
+    // facet: non-editable, password, code-editor, empty, and disabled fields are ignored;
+    // window+document keydown is deduped; empty fields never count taps.
+    // (Reset the config/mocks the previous facet mutated, mirroring a fresh beforeEach.)
+    updateInlineTranslateConfig({ triggerKey: ' ', tapCount: 3, timeWindowMs: 500 });
+    mockSendMessage.mockClear();
+    removeToast();
+
     const div = document.createElement('div');
     document.body.appendChild(div);
     div.focus();
@@ -372,9 +378,13 @@ describe('gesture detection', () => {
     fireKeydown(disabledInput, ' ');
     await vi.advanceTimersByTimeAsync(10);
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
 
-  it('triple-space works in ProseMirror chat composers, including nested-child keydown targets', async () => {
+    // facet: triple-space works in ProseMirror chat composers, including nested-child keydown targets
+    // (Re-enable the feature the previous facet disabled.)
+    setInlineTranslateEnabled(true);
+    mockSendMessage.mockClear();
+    removeToast();
+
     // Scenario 1: keydowns target the ProseMirror host directly (not treated as code editor)
     const prose = document.createElement('div');
     prose.className = 'ProseMirror';

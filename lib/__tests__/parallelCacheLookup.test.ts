@@ -15,7 +15,8 @@ function makeDeps(overrides?: Partial<ParallelCacheLookupDeps>): ParallelCacheLo
 }
 
 describe('parallelCacheLookup', () => {
-  it('classifies cached, failed, and uncached pieces', async () => {
+  it('classifies cached/failed/uncached pieces and runs lookups concurrently with capped concurrency', async () => {
+    // facet: classifies cached, failed, and uncached pieces
     const deps = makeDeps({
       getCachedTranslation: vi.fn(async (text: string) =>
         text === 'hit' ? 'đã dịch' : null,
@@ -52,12 +53,11 @@ describe('parallelCacheLookup', () => {
     expect(partitioned.failedResults).toEqual([{ id: '2', error: 'rate limited' }]);
     expect(partitioned.uncachedPieces).toEqual([{ id: '3', text: 'miss' }]);
     expect(partitioned.cacheCharacters).toBe(3);
-  });
 
-  it('runs lookups concurrently and caps concurrency under large piece lists (FR-11)', async () => {
+    // facet: runs lookups concurrently and caps concurrency under large piece lists (FR-11)
     let concurrent = 0;
     let maxConcurrent = 0;
-    const deps = makeDeps({
+    const concDeps = makeDeps({
       getCachedTranslation: vi.fn(async () => {
         concurrent++;
         maxConcurrent = Math.max(maxConcurrent, concurrent);
@@ -80,7 +80,7 @@ describe('parallelCacheLookup', () => {
         failureCacheTtlMinutes: 120,
         enableFailureCache: false,
       },
-      deps,
+      concDeps,
     );
 
     expect(maxConcurrent).toBeGreaterThanOrEqual(2);
@@ -88,7 +88,7 @@ describe('parallelCacheLookup', () => {
     // FR-11: concurrency is capped under large piece lists
     let concurrent2 = 0;
     let maxConcurrent2 = 0;
-    const deps2 = makeDeps({
+    const concDeps2 = makeDeps({
       getCachedTranslation: vi.fn(async () => {
         concurrent2++;
         maxConcurrent2 = Math.max(maxConcurrent2, concurrent2);
@@ -112,7 +112,7 @@ describe('parallelCacheLookup', () => {
         enableFailureCache: false,
         concurrency: 4,
       },
-      deps2,
+      concDeps2,
     );
     expect(maxConcurrent2).toBeLessThanOrEqual(4);
     expect(maxConcurrent2).toBeGreaterThanOrEqual(2);

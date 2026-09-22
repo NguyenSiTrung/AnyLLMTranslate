@@ -18,7 +18,7 @@ import {
 } from '@/types/config';
 
 describe('config defaults', () => {
-  it('ships language/display defaults, feature flags OFF, and nested subtitle/PDF baselines', () => {
+  it('ships defaults/flags/baselines and merges partial scientificPdf without inventing credentials', () => {
     expect(DEFAULT_SETTINGS.sourceLanguage).toBe('auto');
     expect(DEFAULT_SETTINGS.targetLanguage).toBe('vi');
     expect(DEFAULT_SETTINGS.displayMode).toBe('bilingual-below');
@@ -54,9 +54,8 @@ describe('config defaults', () => {
     expect(DEFAULT_SUBTITLE_SETTINGS.youtubeAsrResegment).toEqual(
       DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS,
     );
-  });
 
-  it('merges partial scientificPdf onto defaults without inventing credentials', () => {
+    // facet: merges partial scientificPdf onto defaults without inventing credentials
     // Simulates loadSettings deepMerge of a partial stored object
     const partial = { enabled: true, serverUrl: 'http://127.0.0.1:9999' };
     const merged = { ...DEFAULT_SCIENTIFIC_PDF_SETTINGS, ...partial };

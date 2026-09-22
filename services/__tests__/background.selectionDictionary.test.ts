@@ -151,7 +151,7 @@ describe('handleTranslateSelection — dictionary mode', () => {
     __resetSettingsCacheForTest();
   });
 
-  it('resolves dictionaryMode (JSON payload, fail-open to sentence) and falls back to sentence when omitted or disabled', async () => {
+  it('resolves dictionaryMode (JSON payload, fail-open to sentence) and falls back to sentence when omitted or disabled; dictionary and plain cache keys do not collide', async () => {
     // Scenario 1: dictionaryMode true + valid JSON → dictionary payload.
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
     const dictJson = JSON.stringify({
@@ -260,9 +260,13 @@ describe('handleTranslateSelection — dictionary mode', () => {
     expect(disabled.success).toBe(true);
     expect(disabled.mode).toBe('sentence');
     expect(disabled.dictionary).toBeUndefined();
-  });
 
-  it('dictionary and plain cache keys do not collide', async () => {
+    // facet: dictionary and plain cache keys do not collide.
+    // Fresh caches so keys written above cannot shadow the collision assertions.
+    clearAllIdb();
+    __resetSettingsCacheForTest();
+    __resetTranslationServiceForTest();
+
     mockStorage['anyllm-translate-settings'] = baseProviderSettings();
 
     // First: plain sentence cache write
@@ -278,12 +282,12 @@ describe('handleTranslateSelection — dictionary mode', () => {
     );
 
     // Second: dictionary mode should call LLM (not hit plain cache)
-    const dictJson = JSON.stringify({
+    const collideDictJson = JSON.stringify({
       phonetic: '/həˈloʊ/',
       translation: 'dict-vi',
       definitions: [{ pos: 'n.', meaning: 'lời chào' }],
     });
-    mockFetch(dictJson);
+    mockFetch(collideDictJson);
     const dictResult = (await handleMessage(
       {
         action: 'translateSelection',

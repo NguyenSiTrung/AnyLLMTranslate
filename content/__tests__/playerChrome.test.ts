@@ -65,50 +65,54 @@ describe('isPlausibleControlBar', () => {
     document.body.innerHTML = '';
   });
 
-  it('accepts a node in the video bottom band and rejects player-spanning or top-anchored nodes', () => {
-    const video = document.createElement('video');
-    mockRect(video, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
-    document.body.appendChild(video);
+  it('accepts a bottom-band node and rejects player-spanning, top-anchored, disconnected, and zero-size nodes; trusts selectors while video geometry is unknown', () => {
+    // facet: accepts a node in the video bottom band and rejects player-spanning or top-anchored nodes
+    {
+      const video = document.createElement('video');
+      mockRect(video, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
+      document.body.appendChild(video);
 
-    const bar = document.createElement('div');
-    mockRect(bar, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
-    document.body.appendChild(bar);
-    expect(isPlausibleControlBar(bar, video)).toBe(true);
+      const bar = document.createElement('div');
+      mockRect(bar, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
+      document.body.appendChild(bar);
+      expect(isPlausibleControlBar(bar, video)).toBe(true);
 
-    // Player root spans the whole video — must NOT be treated as a control bar.
-    const playerRoot = document.createElement('div');
-    mockRect(playerRoot, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
-    document.body.appendChild(playerRoot);
-    expect(isPlausibleControlBar(playerRoot, video)).toBe(false);
+      // Player root spans the whole video — must NOT be treated as a control bar.
+      const playerRoot = document.createElement('div');
+      mockRect(playerRoot, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
+      document.body.appendChild(playerRoot);
+      expect(isPlausibleControlBar(playerRoot, video)).toBe(false);
 
-    // A top-anchored lookalike (top bar) must not qualify either.
-    const topBar = document.createElement('div');
-    mockRect(topBar, { top: 100, bottom: 160, right: 740, width: 640, height: 60 });
-    document.body.appendChild(topBar);
-    expect(isPlausibleControlBar(topBar, video)).toBe(false);
-  });
+      // A top-anchored lookalike (top bar) must not qualify either.
+      const topBar = document.createElement('div');
+      mockRect(topBar, { top: 100, bottom: 160, right: 740, width: 640, height: 60 });
+      document.body.appendChild(topBar);
+      expect(isPlausibleControlBar(topBar, video)).toBe(false);
+    }
 
-  it('rejects disconnected and zero-size nodes, and trusts selectors while video geometry is unknown', () => {
-    const video = document.createElement('video');
-    mockRect(video, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
-    document.body.appendChild(video);
+    // facet: rejects disconnected and zero-size nodes, and trusts selectors while video geometry is unknown
+    {
+      const video = document.createElement('video');
+      mockRect(video, { top: 100, bottom: 460, right: 740, width: 640, height: 360 });
+      document.body.appendChild(video);
 
-    const detached = document.createElement('div');
-    mockRect(detached, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
-    expect(isPlausibleControlBar(detached, video)).toBe(false);
+      const detached = document.createElement('div');
+      mockRect(detached, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
+      expect(isPlausibleControlBar(detached, video)).toBe(false);
 
-    const hidden = document.createElement('div');
-    mockRect(hidden, { top: 400, bottom: 460, right: 740, width: 0, height: 0 });
-    document.body.appendChild(hidden);
-    expect(isPlausibleControlBar(hidden, video)).toBe(false);
+      const hidden = document.createElement('div');
+      mockRect(hidden, { top: 400, bottom: 460, right: 740, width: 0, height: 0 });
+      document.body.appendChild(hidden);
+      expect(isPlausibleControlBar(hidden, video)).toBe(false);
 
-    // Player not laid out yet — can't judge geometry, keep the selector's verdict.
-    const unknownVideo = document.createElement('video');
-    mockRect(unknownVideo, { top: 0, bottom: 0, right: 0, width: 0, height: 0 });
-    const bar = document.createElement('div');
-    mockRect(bar, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
-    document.body.appendChild(bar);
-    expect(isPlausibleControlBar(bar, unknownVideo)).toBe(true);
+      // Player not laid out yet — can't judge geometry, keep the selector's verdict.
+      const unknownVideo = document.createElement('video');
+      mockRect(unknownVideo, { top: 0, bottom: 0, right: 0, width: 0, height: 0 });
+      const bar = document.createElement('div');
+      mockRect(bar, { top: 400, bottom: 460, right: 740, width: 640, height: 60 });
+      document.body.appendChild(bar);
+      expect(isPlausibleControlBar(bar, unknownVideo)).toBe(true);
+    }
   });
 });
 
@@ -121,45 +125,49 @@ describe('learning site adapters', () => {
     document.body.innerHTML = '';
   });
 
-  it('deeplearning.ai matches and mounts onto the VDS control bar, null mount when missing (floating fallback)', () => {
-    expect(deepLearningAiPlayerChromeAdapter.match('learn.deeplearning.ai')).toBe(true);
-    expect(deepLearningAiPlayerChromeAdapter.match('youtube.com')).toBe(false);
+  it('deeplearning.ai, udemy, and coursera match and mount when fixtures present, and return null mount when controls are missing (floating fallback)', () => {
+    // facet: deeplearning.ai matches and mounts onto the VDS control bar, null mount when missing (floating fallback)
+    {
+      expect(deepLearningAiPlayerChromeAdapter.match('learn.deeplearning.ai')).toBe(true);
+      expect(deepLearningAiPlayerChromeAdapter.match('youtube.com')).toBe(false);
 
-    document.body.innerHTML = `
+      document.body.innerHTML = `
       <div class="vds-video-layout">
         <video></video>
         <div class="vds-controls" role="group"></div>
       </div>`;
-    expect(
-      deepLearningAiPlayerChromeAdapter.findNativeMount?.(document)?.classList.contains('vds-controls'),
-    ).toBe(true);
-    expect(
-      deepLearningAiPlayerChromeAdapter.findPlayerRoot?.(document)?.classList.contains('vds-video-layout'),
-    ).toBe(true);
+      expect(
+        deepLearningAiPlayerChromeAdapter.findNativeMount?.(document)?.classList.contains('vds-controls'),
+      ).toBe(true);
+      expect(
+        deepLearningAiPlayerChromeAdapter.findPlayerRoot?.(document)?.classList.contains('vds-video-layout'),
+      ).toBe(true);
 
-    document.body.innerHTML = '';
-    expect(deepLearningAiPlayerChromeAdapter.findNativeMount?.(document)).toBeNull();
-    expect(deepLearningAiPlayerChromeAdapter.findPlayerRoot?.(document)).toBeNull();
-  });
+      document.body.innerHTML = '';
+      expect(deepLearningAiPlayerChromeAdapter.findNativeMount?.(document)).toBeNull();
+      expect(deepLearningAiPlayerChromeAdapter.findPlayerRoot?.(document)).toBeNull();
+    }
 
-  it('udemy and coursera match and mount when fixtures present, and return null mount when controls are missing (floating fallback)', () => {
-    expect(udemyPlayerChromeAdapter.match('www.udemy.com')).toBe(true);
-    document.body.innerHTML = `<div data-purpose="video-controls"></div>`;
-    expect(udemyPlayerChromeAdapter.findNativeMount(document)?.getAttribute('data-purpose')).toBe(
-      'video-controls',
-    );
+    // facet: udemy and coursera match and mount when fixtures present, and return null mount when controls are missing (floating fallback)
+    {
+      expect(udemyPlayerChromeAdapter.match('www.udemy.com')).toBe(true);
+      document.body.innerHTML = `<div data-purpose="video-controls"></div>`;
+      expect(udemyPlayerChromeAdapter.findNativeMount(document)?.getAttribute('data-purpose')).toBe(
+        'video-controls',
+      );
 
-    expect(courseraPlayerChromeAdapter.match('www.coursera.org')).toBe(true);
-    document.body.innerHTML = `<div class="rc-VideoControlsContainer"></div>`;
-    expect(
-      courseraPlayerChromeAdapter.findNativeMount(document)?.classList.contains(
-        'rc-VideoControlsContainer',
-      ),
-    ).toBe(true);
+      expect(courseraPlayerChromeAdapter.match('www.coursera.org')).toBe(true);
+      document.body.innerHTML = `<div class="rc-VideoControlsContainer"></div>`;
+      expect(
+        courseraPlayerChromeAdapter.findNativeMount(document)?.classList.contains(
+          'rc-VideoControlsContainer',
+        ),
+      ).toBe(true);
 
-    document.body.innerHTML = '';
-    expect(udemyPlayerChromeAdapter.findNativeMount(document)).toBeNull();
-    expect(courseraPlayerChromeAdapter.findNativeMount(document)).toBeNull();
+      document.body.innerHTML = '';
+      expect(udemyPlayerChromeAdapter.findNativeMount(document)).toBeNull();
+      expect(courseraPlayerChromeAdapter.findNativeMount(document)).toBeNull();
+    }
   });
 });
 
@@ -445,71 +453,74 @@ describe('reduceVisibility', () => {
  * @vitest-environment jsdom
  */
 
-describe('buildToggle', () => {
-  it('creates a checkbox with data-action inside a toggle root', () => {
-    const w = buildToggle({ id: 't1', action: 'enable' });
-    expect(w.root.className).toBe('toggle');
-    expect(w.input.type).toBe('checkbox');
-    expect(w.input.id).toBe('t1');
-    expect(w.input.dataset.action).toBe('enable');
-    expect(w.root.contains(w.input)).toBe(true);
-    expect(w.root.querySelector('.track')).toBeTruthy();
-    expect(w.root.querySelector('.thumb')).toBeTruthy();
+describe('buildToggle / buildSegmented', () => {
+  it('creates a checkbox with data-action inside a toggle root, and radio options with matching/fallback selection', () => {
+    // facet: creates a checkbox with data-action inside a toggle root
+    {
+      const w = buildToggle({ id: 't1', action: 'enable' });
+      expect(w.root.className).toBe('toggle');
+      expect(w.input.type).toBe('checkbox');
+      expect(w.input.id).toBe('t1');
+      expect(w.input.dataset.action).toBe('enable');
+      expect(w.root.contains(w.input)).toBe(true);
+      expect(w.root.querySelector('.track')).toBeTruthy();
+      expect(w.root.querySelector('.thumb')).toBeTruthy();
+    }
+
+    // facet: creates radio options and preserves matching and fallback selection
+    {
+      const opts = [
+        { value: 'bilingual', label: 'Bilingual' },
+        { value: 'translation-only', label: 'Translation only' },
+      ];
+      const w = buildSegmented({ name: 'display', action: 'displayMode', options: opts });
+      expect(w.root.getAttribute('role')).toBe('radiogroup');
+      expect(w.inputs).toHaveLength(2);
+      expect(w.inputs[0].type).toBe('radio');
+      expect(w.inputs[0].name).toBe('display');
+      expect(w.inputs[0].dataset.action).toBe('displayMode');
+      expect(w.root.textContent).toContain('Bilingual');
+      expect(w.root.textContent).toContain('Translation only');
+      w.setValue('translation-only');
+      expect(w.inputs[1].checked).toBe(true);
+      expect(w.value()).toBe('translation-only');
+      w.setValue('nope');
+      expect(w.inputs[0].checked).toBe(true);
+      expect(w.value()).toBe('bilingual');
+    }
   });
 });
 
-describe('buildSegmented', () => {
-  const opts = [
-    { value: 'bilingual', label: 'Bilingual' },
-    { value: 'translation-only', label: 'Translation only' },
-  ];
+describe('buildSlider / buildSelect', () => {
+  it('creates a range input with synced fill updates, and wraps a select with optional knob metadata', () => {
+    // facet: creates a range input and keeps programmatic and event fill updates in sync
+    {
+      const w = buildSlider({ id: 's1', action: 'fontSize', min: 12, max: 36, step: 1 });
+      expect(w.input.type).toBe('range');
+      expect(w.input.min).toBe('12');
+      expect(w.input.max).toBe('36');
+      expect(w.input.step).toBe('1');
+      expect(w.input.dataset.action).toBe('fontSize');
+      expect(w.input.className).toBe('glass-range');
+      w.setValue(24);
+      expect(w.input.value).toBe('24');
+      expect(w.input.style.getPropertyValue('--fill')).toBe('50%');
+      const opacity = buildSlider({ id: 's2', action: 'opacity', min: 0, max: 100, step: 5 });
+      opacity.input.value = '25';
+      opacity.input.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(opacity.input.style.getPropertyValue('--fill')).toBe('25%');
+    }
 
-  it('creates radio options and preserves matching and fallback selection', () => {
-    const w = buildSegmented({ name: 'display', action: 'displayMode', options: opts });
-    expect(w.root.getAttribute('role')).toBe('radiogroup');
-    expect(w.inputs).toHaveLength(2);
-    expect(w.inputs[0].type).toBe('radio');
-    expect(w.inputs[0].name).toBe('display');
-    expect(w.inputs[0].dataset.action).toBe('displayMode');
-    expect(w.root.textContent).toContain('Bilingual');
-    expect(w.root.textContent).toContain('Translation only');
-    w.setValue('translation-only');
-    expect(w.inputs[1].checked).toBe(true);
-    expect(w.value()).toBe('translation-only');
-    w.setValue('nope');
-    expect(w.inputs[0].checked).toBe(true);
-    expect(w.value()).toBe('bilingual');
-  });
-});
-
-describe('buildSlider', () => {
-  it('creates a range input and keeps programmatic and event fill updates in sync', () => {
-    const w = buildSlider({ id: 's1', action: 'fontSize', min: 12, max: 36, step: 1 });
-    expect(w.input.type).toBe('range');
-    expect(w.input.min).toBe('12');
-    expect(w.input.max).toBe('36');
-    expect(w.input.step).toBe('1');
-    expect(w.input.dataset.action).toBe('fontSize');
-    expect(w.input.className).toBe('glass-range');
-    w.setValue(24);
-    expect(w.input.value).toBe('24');
-    expect(w.input.style.getPropertyValue('--fill')).toBe('50%');
-    const opacity = buildSlider({ id: 's2', action: 'opacity', min: 0, max: 100, step: 5 });
-    opacity.input.value = '25';
-    opacity.input.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(opacity.input.style.getPropertyValue('--fill')).toBe('25%');
-  });
-});
-
-describe('buildSelect', () => {
-  it('wraps a select and preserves optional knob metadata', () => {
-    const w = buildSelect({ id: 'g1', action: 'glossary' });
-    expect(w.root.className).toBe('select-wrap');
-    expect(w.select.id).toBe('g1');
-    expect(w.select.dataset.action).toBe('glossary');
-    expect(w.root.contains(w.select)).toBe(true);
-    const knob = buildSelect({ id: 'k1', action: 'knob', knob: 'brevity' });
-    expect(knob.select.dataset.knob).toBe('brevity');
+    // facet: wraps a select and preserves optional knob metadata
+    {
+      const w = buildSelect({ id: 'g1', action: 'glossary' });
+      expect(w.root.className).toBe('select-wrap');
+      expect(w.select.id).toBe('g1');
+      expect(w.select.dataset.action).toBe('glossary');
+      expect(w.root.contains(w.select)).toBe(true);
+      const knob = buildSelect({ id: 'k1', action: 'knob', knob: 'brevity' });
+      expect(knob.select.dataset.knob).toBe('brevity');
+    }
   });
 });
 

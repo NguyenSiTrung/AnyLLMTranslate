@@ -19,17 +19,16 @@ import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit
  */
 
 describe('settingsTabs', () => {
-  it('places Speech and PDF in Media after Subtitles', () => {
+  it('orders Media tabs, deep-links ?section=pdf, and resolves every known section', () => {
+    // facet: places Speech and PDF in Media after Subtitles
     expect(
       TAB_GROUPS.find((group) => group.label === 'MEDIA')?.tabs.map((tab) => tab.id),
     ).toEqual(['subtitles', 'speech', 'pdf']);
-  });
 
-  it('deep-links ?section=pdf to the PDF tab', () => {
+    // facet: deep-links ?section=pdf to the PDF tab
     expect(resolveRequestedSettingsTab('pdf')).toBe('pdf');
-  });
 
-  it('resolves every known section and rejects invalid values', () => {
+    // facet: resolves every known section and rejects invalid values
     for (const id of ALL_TAB_IDS) {
       expect(resolveRequestedSettingsTab(id)).toBe(id);
     }

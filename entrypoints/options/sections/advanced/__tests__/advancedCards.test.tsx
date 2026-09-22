@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { DEFAULT_SETTINGS, type ExtensionSettings } from '@/types/config';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { DiagnosticsCard } from '../DiagnosticsCard';
@@ -52,7 +52,8 @@ function renderCompatibility(overrides: Partial<ExtensionSettings> = {}) {
 }
 
 describe('WebsiteCompatibilityCard', () => {
-  it('marks Balanced as recommended', () => {
+  it('marks Balanced as recommended and detects Custom when toggles diverge', () => {
+    // facet: marks Balanced as recommended
     renderCompatibility();
     expect(screen.getByLabelText(/page coverage preset/i)).toHaveValue(
       'balanced',
@@ -60,9 +61,9 @@ describe('WebsiteCompatibilityCard', () => {
     // Header badge is exactly "Recommended"; the preset description begins
     // "Recommended: …" — exact text isolates the badge.
     expect(screen.getByText('Recommended')).toBeInTheDocument();
-  });
+    cleanup();
 
-  it('detects Custom when toggles diverge from a named preset', () => {
+    // facet: detects Custom when toggles diverge from a named preset
     renderCompatibility({
       enableAsideCaps: false,
       enableBodyTagWhitelist: true,
@@ -132,7 +133,8 @@ describe('TranslationEngineCard', () => {
     });
   });
 
-  it('summarizes the default prompt and keeps its editor collapsed', () => {
+  it('summarizes the default prompt collapsed, and shows Customized with an auto-expanded editor', () => {
+    // facet: summarizes the default prompt and keeps its editor collapsed
     renderCard();
     expect(screen.getByText('Using default')).toBeInTheDocument();
     expect(
@@ -141,9 +143,9 @@ describe('TranslationEngineCard', () => {
     expect(
       screen.queryByLabelText(/custom prompt template/i),
     ).not.toBeInTheDocument();
-  });
+    cleanup();
 
-  it('shows Customized and auto-expands the prompt editor', () => {
+    // facet: shows Customized and auto-expands the prompt editor
     renderCard({ customSystemPrompt: 'Translate to {{targetLanguage}}.' });
     expect(screen.getByText('Customized')).toBeInTheDocument();
     expect(

@@ -75,8 +75,14 @@ describe('Drawer', () => {
  */
 
 
-describe('Input suffix', () => {
-  it('renders unit outside input and hides number spinners', () => {
+const OPTIONS = [
+  { value: 'a', label: 'Alpha' },
+  { value: 'b', label: 'Beta' },
+] as const;
+
+describe('Input suffix / SegmentedControl', () => {
+  it('renders the Input unit outside the field and applies SegmentedControl accents/onChange/layouts', () => {
+    // facet: Input suffix renders unit outside input and hides number spinners
     const { container, rerender } = render(
       <Input type="number" value={20} onChange={() => {}} suffix="req/min" />,
     );
@@ -94,22 +100,14 @@ describe('Input suffix', () => {
     rerender(<Input type="number" value={1} onChange={() => {}} suffix="at once" />);
     const spinnerInput = screen.getByDisplayValue('1');
     expect(spinnerInput.className).toMatch(/appearance:textfield|appearance-none/);
-  });
-});
 
-const OPTIONS = [
-  { value: 'a', label: 'Alpha' },
-  { value: 'b', label: 'Beta' },
-] as const;
-
-describe('SegmentedControl', () => {
-  it('applies accent styles, fires onChange, and supports row/grid layouts', () => {
-    const { rerender } = render(
+    // facet: SegmentedControl applies accent styles, fires onChange, and supports row/grid layouts
+    const { rerender: segRerender } = render(
       <SegmentedControl label="Test" options={[...OPTIONS]} value="a" onChange={() => {}} />,
     );
     expect(screen.getByRole('radio', { name: 'Alpha' }).className).toMatch(/bg-blue-600/);
 
-    rerender(
+    segRerender(
       <SegmentedControl
         label="Test"
         options={[...OPTIONS]}
@@ -123,7 +121,7 @@ describe('SegmentedControl', () => {
     expect(active.className).not.toMatch(/bg-blue-600/);
 
     const onChange = vi.fn();
-    rerender(
+    segRerender(
       <SegmentedControl label="Test" options={[...OPTIONS]} value="a" onChange={onChange} />,
     );
     fireEvent.click(screen.getByRole('radio', { name: 'Beta' }));
@@ -135,7 +133,7 @@ describe('SegmentedControl', () => {
       { value: '90d', label: '90d' },
       { value: 'all', label: 'All' },
     ] as const;
-    rerender(
+    segRerender(
       <SegmentedControl label="Range" options={[...four]} value="30d" onChange={() => {}} />,
     );
     expect(screen.getByRole('radiogroup', { name: 'Range' }).className).toMatch(/inline-flex/);
@@ -147,7 +145,7 @@ describe('SegmentedControl', () => {
       { value: 'neutral', label: 'Neutral' },
       { value: 'casual', label: 'Casual' },
     ] as const;
-    rerender(
+    segRerender(
       <SegmentedControl
         label="Register"
         options={[...register]}

@@ -31,7 +31,8 @@ describe('scientificPdfClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('maps bridge codes, HTTP statuses, and network errors', () => {
+  it('maps bridge codes/statuses/network errors, and health covers success/normalize/offline/timeout/signal', async () => {
+    // facet: maps bridge codes, HTTP statuses, and network errors
     expect(mapBridgeErrorCode('llm_auth', 401)).toBe('llm_auth');
     expect(mapBridgeErrorCode('llm_error', 502)).toBe('llm_error');
     expect(mapBridgeErrorCode(undefined, 404)).toBe('not_found');
@@ -40,9 +41,8 @@ describe('scientificPdfClient', () => {
     expect(mapBridgeErrorCode(undefined, 418)).toBe('unknown');
     expect(mapNetworkError(new TypeError('Failed to fetch')).code).toBe('offline');
     expect(mapNetworkError(new DOMException('Aborted', 'AbortError')).code).toBe('timeout');
-  });
 
-  it('health: success, URL normalize, offline, timeout, AbortSignal', async () => {
+    // facet: health success, URL normalize, offline, timeout, AbortSignal
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ status: 'ok', version: '1.0.0', pdf2zh: 'available' }),

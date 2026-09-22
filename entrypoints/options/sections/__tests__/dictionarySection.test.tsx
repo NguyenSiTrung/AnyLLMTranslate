@@ -100,8 +100,8 @@ describe('DictionarySection named lists', () => {
     vi.clearAllMocks();
   });
 
-  it('creates and opens a named list', async () => {
-    renderNamedListsSection();
+  it('creates/opens a named list, then adds, rejects duplicate, edits, and imports entries', async () => {
+    const firstList = renderNamedListsSection();
     expect(screen.getByRole('heading', { name: 'Named lists' })).toBeInTheDocument();
     expect(screen.getByText(/Names you lock here win over auto subtitle glossary/)).toBeInTheDocument();
 
@@ -116,9 +116,9 @@ describe('DictionarySection named lists', () => {
     // Custom terms command bar + named list detail each show a format hint
     expect(screen.getAllByRole('button', { name: /See format/i }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/Supports/i).length).toBeGreaterThanOrEqual(2);
-  });
+    firstList.unmount();
 
-  it('adds, rejects duplicate, edits, and imports entries in list detail', async () => {
+    // facet: adds, rejects duplicate, edits, and imports entries in list detail
     useSettingsStore.setState({
       namedGlossaryLists: [{ id: 'list-1', name: 'Names', entries: [], updatedAt: 1 }],
     });

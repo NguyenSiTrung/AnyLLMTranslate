@@ -15,6 +15,7 @@ import {
   isHostCoveredByDeclaredPermissions,
   SUBTITLE_FETCH_TIMEOUT_MS,
 } from '../background';
+import { OpenAICompatibleService } from '@/services/openaiCompatible';
 import type * as __Mod0 from '@/services/providerPool';
 import type * as __Mod1 from '@/lib/subtitleRetry';
 
@@ -82,9 +83,14 @@ vi.mock('@/services/cacheManager', async (importOriginal) => {
 });
 
 // The pool's per-key throttle (interval, default 500ms after the 0/0/0 → safe
-// upgrade) and the chunk-level retry backoff (baseDelayMs 500) are wall-clock
-// sleeps. Tests assert retry/failover *behavior*, not timing, so substitute an
-// instant delay: dispatch order, breaker state, and retry counts are unchanged.
+// upgrade), the chunk-level retry backoff (baseDelayMs 500), and the
+// OpenAI-compatible service's 5xx/network backoff (RETRY_BASE_DELAY_MS) are
+// wall-clock sleeps. Tests assert retry/failover *behavior*, not timing, so
+// substitute an instant delay: dispatch order, breaker state, and retry counts
+// are unchanged. Zeroing the service backoff (below, in beforeEach) is what
+// keeps a "fails all retries" test from needing real wall-clock headroom — it
+// used to burn a 30s timeout under full-suite CPU contention, and because it
+// held fake timers, the timeout leaked them into every later test in the file.
 vi.mock('@/services/providerPool', async (importOriginal) => {
   const actual = await importOriginal<typeof __Mod0>();
   class TestCoordinator extends actual.ProviderPoolCoordinator {
@@ -197,6 +203,9 @@ describe('services/background', () => {
   beforeEach(async () => {
     // Reset stored settings before each test
     delete mockStorage['anyllm-translate-settings'];
+    // Zero the provider service's 5xx/network retry backoff so retry-exhaustion
+    // tests settle on real timers instead of sleeping through 500/1000/2000ms.
+    OpenAICompatibleService.__setRetryBackoffForTest(true);
     // Drain leftover progressive subtitle chunk queues first so prior tests'
     // background loops stop scheduling more work, then wait until in-flight
     // chunk translates finish (session count hits 0). A short fixed sleep was
@@ -217,6 +226,14 @@ describe('services/background', () => {
     __resetTranslationServiceForTest();
     // FR-6: reset the decrypted-settings/signature cache too.
     __resetSettingsCacheForTest();
+  });
+
+  afterEach(() => {
+    OpenAICompatibleService.__setRetryBackoffForTest(false);
+    // A test that times out while holding fake timers would otherwise leak them
+    // into every later test in this file (their `setTimeout` never resolves, so
+    // each one burns its own timeout). Always hand real timers back.
+    vi.useRealTimers();
   });
 
   describe('handleMessage — translate', () => {
@@ -1210,50 +1227,27 @@ describe('services/background', () => {
     });
 
     it('emits SUBTITLE_CHUNK_FAILED to the tab when a background chunk fails all retries', async () => {
-      vi.useFakeTimers();
-      try {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-          ok: false, status: 500, statusText: 'Server Error',
-          json: () => Promise.resolve({}), text: () => Promise.resolve(''),
-        }));
+      // Every attempt 500s, so the chunk exhausts its retry budget. The service
+      // backoff is zeroed file-wide (see the mock comment above), so this needs
+      // no fake timers and no wall-clock headroom.
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false, status: 500, statusText: 'Server Error',
+        json: () => Promise.resolve({}), text: () => Promise.resolve(''),
+      }));
 
-        let settled = false;
-        const handlePromise = handleMessage(
-          {
-            action: 'translateSubtitle',
-            cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
-            sourceLanguage: 'en',
-            targetLanguage: 'vi',
-          },
-          { tab: { id: 1 } } as chrome.runtime.MessageSender,
-        );
-        expect(handlePromise).toBeDefined();
-        if (!handlePromise) {
-          throw new Error('handlePromise is undefined');
-        }
-        const promise = handlePromise.finally(() => {
-          settled = true;
-        });
+      const result = await handleMessage(
+        {
+          action: 'translateSubtitle',
+          cues: [{ startTime: 0, endTime: 2, text: 'Hello' }],
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+        },
+        { tab: { id: 1 } } as chrome.runtime.MessageSender,
+      );
 
-        // Loop and advance timers until handleMessage settles (with a safety cap of 30 steps)
-        let steps = 0;
-        while (!settled && steps < 30) {
-          steps++;
-          await vi.advanceTimersByTimeAsync(500);
-          await new Promise((resolve) => process.nextTick(resolve));
-        }
-
-        const result = await promise;
-
-        // First chunk fails all retries -> overall failure.
-        expect(result).toMatchObject({ success: false });
-      } finally {
-        vi.useRealTimers();
-      }
-      // The pool's retry backoff runs on real timers captured before
-      // useFakeTimers(), so this test needs wall-clock headroom under
-      // full-suite CPU contention.
-    }, 30000);
+      // First chunk fails all retries -> overall failure.
+      expect(result).toMatchObject({ success: false });
+    }, 10000);
 
     it('does not cache a partial (source-back-filled) translation', async () => {
       // The LLM returns a translation where the cue text is back-filled with
@@ -1388,16 +1382,16 @@ describe('services/background — subtitle host permission pre-flight (MAX-39)',
     vi.unstubAllGlobals();
   });
 
-  it('derives the minimal match pattern for a subtitle URL host', () => {
+  it('derives the minimal match pattern and resolves declared wildcard coverage', () => {
     expect(subtitleFetchPermissionOrigin(MAX_SEGMENT_URL))
       .toBe('*://cf.asia.prd.media.max.com/*');
     expect(subtitleFetchPermissionOrigin('https://www.hbomax.com/thing?x=1'))
       .toBe('*://www.hbomax.com/*');
     expect(subtitleFetchPermissionOrigin('not a url')).toBeNull();
     expect(subtitleFetchPermissionOrigin('')).toBeNull();
-  });
 
-  it('treats a declared wildcard pattern as covering the apex and deeper subdomains', () => {
+    // `*.example.com` grants the apex and every subdomain, but never a
+    // look-alike suffix or an unrelated host.
     const declared = ['*://*.media.max.com/*', '*://*.hbomax.com/*'];
     expect(isHostCoveredByDeclaredPermissions('cf.asia.prd.media.max.com', declared)).toBe(true);
     expect(isHostCoveredByDeclaredPermissions('media.max.com', declared)).toBe(true);
@@ -1420,32 +1414,32 @@ describe('services/background — subtitle host permission pre-flight (MAX-39)',
     runtime.getManifest = previous;
   });
 
-  it('warns once per origin when an allow-listed host has no host permission', async () => {
+  it('warns once per origin without a grant, and stays silent when granted', async () => {
     warnIfSubtitleHostPermissionMissing(MAX_SEGMENT_URL);
+    // Fire-and-forget: flush the permission-check microtask chain.
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
 
-    await vi.waitFor(() => {
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('host_permissions'),
-        expect.objectContaining({ origin: '*://cf.asia.prd.media.max.com/*' }),
-      );
-    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('host_permissions'),
+      expect.objectContaining({ origin: '*://cf.asia.prd.media.max.com/*' }),
+    );
     expect(containsMock).toHaveBeenCalledWith({
       origins: ['*://cf.asia.prd.media.max.com/*'],
     });
 
     // A second segment on the same host must not warn (or re-query) again.
     warnIfSubtitleHostPermissionMissing('https://cf.asia.prd.media.max.com/a/t/t3/2.vtt');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(containsMock).toHaveBeenCalledTimes(1);
-  });
 
-  it('stays silent when the host permission is granted', async () => {
+    // A granted host is silent, and the once-per-origin cache still records it.
+    __resetSubtitlePermissionWarningsForTest();
+    warnSpy.mockClear();
     containsMock.mockResolvedValue(true);
-
     warnIfSubtitleHostPermissionMissing(MAX_SEGMENT_URL);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
 
     expect(warnSpy).not.toHaveBeenCalled();
   });
@@ -1457,7 +1451,8 @@ describe('services/background — subtitle host permission pre-flight (MAX-39)',
     );
 
     expect(result).toMatchObject({ success: true });
-    await vi.waitFor(() => expect(warnSpy).toHaveBeenCalledTimes(1));
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(containsMock).toHaveBeenCalledWith({
       origins: ['*://cf.asia.prd.media.max.com/*'],
     });

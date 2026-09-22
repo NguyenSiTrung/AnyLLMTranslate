@@ -100,7 +100,7 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(sentMessages.find((m) => m.type === 'SUBTITLE_DOM_CUES')).toBeUndefined();
   });
 
-  it('keeps the open cue alive across pause, reseeds after a backward seek, and re-samples on the seek-reset bridge message', async () => {
+  it('keeps the open cue alive across pause, reseeds after a backward seek, re-samples on the seek-reset bridge message, clears the buffer on SUBTITLE_CAPTURE_RESET, and starts a fresh timeline on media swap', async () => {
     // Scenario 1: pause must NOT cap the open cue; a backward seek emits a fresh cue.
     const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
 
@@ -168,6 +168,73 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     });
 
     cleanup2();
+
+    // Facet: SUBTITLE_CAPTURE_RESET clears the rolling buffer and re-samples at
+    // the new position (a new title's identical-looking caption is a fresh cue).
+    sentMessages.length = 0;
+    cueEl.textContent = '';
+    const cleanup3 = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
+    cueEl.textContent = 'Previous title caption';
+    await flushObservers();
+    expect(
+      (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues,
+    ).toHaveLength(1);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 9 });
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      data: {
+        channel: 'anyllm-translate',
+        type: 'SUBTITLE_CAPTURE_RESET',
+        requestId: 'capture-reset-1',
+        payload: { platform: 'hbomax' },
+      },
+    }));
+    await flushObservers();
+
+    const captureResetCues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    // The new title's identical-looking caption is a fresh cue at the new time.
+    expect(captureResetCues).toHaveLength(1);
+    expect(captureResetCues?.[0]).toMatchObject({
+      startTime: 9,
+      endTime: OPEN_CUE_END_SENTINEL,
+      text: 'Previous title caption',
+    });
+
+    cleanup3();
+
+    // Facet: emptied/loadstart (player swaps media) starts a fresh timeline.
+    sentMessages.length = 0;
+    cueEl.textContent = '';
+    const cleanup4 = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 300 });
+    cueEl.textContent = 'Season 1 finale line';
+    await flushObservers();
+
+    // Next episode loads into the same <video> element.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 4 });
+    video.dispatchEvent(new Event('emptied'));
+    await flushObservers();
+
+    let swapCues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(swapCues).toHaveLength(1);
+    expect(swapCues?.[0]).toMatchObject({ startTime: 4, endTime: OPEN_CUE_END_SENTINEL });
+
+    // `loadstart` (media load begins) resets as well.
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 12 });
+    cueEl.textContent = 'Episode 2 line';
+    await flushObservers();
+    video.dispatchEvent(new Event('loadstart'));
+    await flushObservers();
+
+    swapCues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(swapCues).toHaveLength(1);
+    expect(swapCues?.[0]).toMatchObject({ startTime: 12, text: 'Episode 2 line' });
+
+    cleanup4();
   });
 
   it('late video attach; no-op without getDomCueSource', async () => {
@@ -200,7 +267,7 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     cleanup();
   });
 
-  it('track switch resets buffer; non-track controls and missing selector do not', async () => {
+  it('track switch resets buffer; non-track controls and missing selector do not; joins multi-row cue nodes in DOM order', async () => {
     const btn = document.createElement('button');
     btn.setAttribute('data-testid', 'player-ux-text-track-button');
     btn.setAttribute('aria-label', 'Thai');
@@ -306,6 +373,26 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     expect(cues?.length).toBeGreaterThanOrEqual(2);
 
     cleanup3();
+
+    // Facet: multi-row cue nodes are joined in DOM order.
+    sentMessages.length = 0;
+    cueEl.textContent = '';
+    const secondRow = document.createElement('div');
+    secondRow.setAttribute('data-testid', 'cueBoxRowTextCue');
+    captionOverlay.appendChild(secondRow);
+
+    const cleanup4 = startDomCueSource(makeHandler(makeDomSource()), bridge);
+
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 7 });
+    cueEl.textContent = 'First row';
+    secondRow.textContent = 'Second row';
+    await flushObservers();
+
+    const rowCues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
+    expect(rowCues).toHaveLength(1);
+    expect(rowCues?.[0].text).toBe('First row\nSecond row');
+
+    cleanup4();
   });
 
   it('re-attaches when the caption root is remounted and keeps observing the new root', async () => {
@@ -367,88 +454,6 @@ describe('startDomCueSource (real MutationObserver in jsdom)', () => {
     const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
     expect(cues?.map((c) => c.text)).toEqual(['Opening line', 'After swap']);
     expect(cues?.[1]).toMatchObject({ startTime: 42, endTime: OPEN_CUE_END_SENTINEL });
-
-    cleanup();
-  });
-
-  it('clears the rolling buffer and re-samples on SUBTITLE_CAPTURE_RESET', async () => {
-    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
-
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 1 });
-    cueEl.textContent = 'Previous title caption';
-    await flushObservers();
-    expect(
-      (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues,
-    ).toHaveLength(1);
-
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 9 });
-    window.dispatchEvent(new MessageEvent('message', {
-      origin: window.location.origin,
-      data: {
-        channel: 'anyllm-translate',
-        type: 'SUBTITLE_CAPTURE_RESET',
-        requestId: 'capture-reset-1',
-        payload: { platform: 'hbomax' },
-      },
-    }));
-    await flushObservers();
-
-    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
-    // The new title's identical-looking caption is a fresh cue at the new time.
-    expect(cues).toHaveLength(1);
-    expect(cues?.[0]).toMatchObject({
-      startTime: 9,
-      endTime: OPEN_CUE_END_SENTINEL,
-      text: 'Previous title caption',
-    });
-
-    cleanup();
-  });
-
-  it('starts a fresh timeline when the player swaps media (emptied/loadstart)', async () => {
-    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
-
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 300 });
-    cueEl.textContent = 'Season 1 finale line';
-    await flushObservers();
-
-    // Next episode loads into the same <video> element.
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 4 });
-    video.dispatchEvent(new Event('emptied'));
-    await flushObservers();
-
-    let cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
-    expect(cues).toHaveLength(1);
-    expect(cues?.[0]).toMatchObject({ startTime: 4, endTime: OPEN_CUE_END_SENTINEL });
-
-    // `loadstart` (media load begins) resets as well.
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 12 });
-    cueEl.textContent = 'Episode 2 line';
-    await flushObservers();
-    video.dispatchEvent(new Event('loadstart'));
-    await flushObservers();
-
-    cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
-    expect(cues).toHaveLength(1);
-    expect(cues?.[0]).toMatchObject({ startTime: 12, text: 'Episode 2 line' });
-
-    cleanup();
-  });
-
-  it('joins multi-row cue nodes in DOM order', async () => {    const secondRow = document.createElement('div');
-    secondRow.setAttribute('data-testid', 'cueBoxRowTextCue');
-    captionOverlay.appendChild(secondRow);
-
-    const cleanup = startDomCueSource(makeHandler(makeDomSource()), bridge);
-
-    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => 7 });
-    cueEl.textContent = 'First row';
-    secondRow.textContent = 'Second row';
-    await flushObservers();
-
-    const cues = (sentMessages.filter((m) => m.type === 'SUBTITLE_DOM_CUES').pop() as { payload: { cues: SubtitleCue[] } })?.payload.cues;
-    expect(cues).toHaveLength(1);
-    expect(cues?.[0].text).toBe('First row\nSecond row');
 
     cleanup();
   });

@@ -30,7 +30,8 @@ import {
 import { DEFAULT_SETTINGS } from '@/types/config';
 
 describe('languages', () => {
-  it('catalog, lookups, source/target split, and code validation', () => {
+  it('catalog, lookups, source/target split, code validation, and Max track languages (MAX-36/MPD-11)', () => {
+    // facet: catalog, lookups, source/target split, and code validation
     expect(LANGUAGES[0]!.code).toBe('auto');
     const codes = LANGUAGES.map((l) => l.code);
     expect(new Set(codes).size).toBe(codes.length);
@@ -47,14 +48,13 @@ describe('languages', () => {
 
     expect(isValidLanguageCode('vi')).toBe(true);
     expect(isValidLanguageCode('english')).toBe(false);
-  });
 
-  it('covers the Max track languages that were missing, with one auto entry (MAX-36/MPD-11)', () => {
-    const codes = LANGUAGES.map((l) => l.code);
+    // facet: covers the Max track languages that were missing, with one auto entry (MAX-36/MPD-11)
+    const maxCodes = LANGUAGES.map((l) => l.code);
     // Max exposes these tracks; without a picker entry the user could not
     // prefer them (the preference UI only offers catalog languages).
     for (const code of ['nb', 'sl', 'et', 'lv', 'lt', 'ca']) {
-      expect(codes).toContain(code);
+      expect(maxCodes).toContain(code);
       expect(isValidLanguageCode(code)).toBe(true);
     }
 
@@ -71,8 +71,8 @@ describe('languages', () => {
     expect(getLanguageName('ca')).toBe('Catalan');
     expect(getLanguageNativeName('ca')).toBe('Català');
 
-    expect(codes.filter((code) => code === 'auto')).toHaveLength(1);
-    expect(new Set(codes).size).toBe(codes.length);
+    expect(maxCodes.filter((code) => code === 'auto')).toHaveLength(1);
+    expect(new Set(maxCodes).size).toBe(maxCodes.length);
   });
 });
 

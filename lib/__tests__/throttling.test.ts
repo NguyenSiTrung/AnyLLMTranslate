@@ -20,8 +20,9 @@ import {
   DEFAULT_KEY_INTERVAL_MS,
 } from '@/types/config';
 
-describe('adaptiveBatching', () => {
-  it('records latency EMA and adapts budgets up/down with clamps', () => {
+describe('adaptiveBatching / lookaheadPrefetch', () => {
+  it('records latency EMA and adapts budgets, and gates/picks lookahead candidates', () => {
+    // facet: records latency EMA and adapts budgets up/down with clamps
     const first = recordBatchLatency(createAdaptiveBatchState(), 1000);
     expect(first).toEqual({ avgLatencyMs: 1000, samples: 1 });
     const ema = recordBatchLatency(first, 2000, 0.5);
@@ -49,11 +50,8 @@ describe('adaptiveBatching', () => {
     const huge = computeAdaptiveBudgets(base, { avgLatencyMs: 10, samples: 3 }, 2500);
     expect(huge.maxTextGroupLengthPerRequest).toBeLessThanOrEqual(12);
     expect(huge.maxTextLengthPerRequest).toBeLessThanOrEqual(6000);
-  });
-});
 
-describe('lookaheadPrefetch', () => {
-  it('shouldRunLookahead gating and selectLookaheadCandidates below-fold picking', () => {
+    // facet: shouldRunLookahead gating and selectLookaheadCandidates below-fold picking
     expect(
       shouldRunLookahead({ systemicPause: true, pageOff: false, activeRequests: 0 }),
     ).toBe(false);
@@ -260,7 +258,7 @@ describe('createRateLimiter', () => {
 
 const NOW = 1_000_000;
 
-describe('createCircuitBreaker', () => {
+describe('createCircuitBreaker / keyRateLimits', () => {
   let now: number;
   const clock = () => now;
 
@@ -268,7 +266,7 @@ describe('createCircuitBreaker', () => {
     now = NOW;
   });
 
-  it('health, rateLimit escalation, auth, clientError, isolation, and classify', () => {
+  it('covers breaker health/escalation/isolation/classify and key rate-limit summaries/presets', () => {
     const breaker = createCircuitBreaker({ clock });
     expect(breaker.isHealthy('k1', now)).toBe(true);
     expect(breaker.getState('k1').consecutiveFailures).toBe(0);
@@ -323,16 +321,8 @@ describe('createCircuitBreaker', () => {
     expect(iso.getState('k1').open).toBe(false);
     iso.openLong('k1', now + 999_999);
     expect(iso.isHealthy('k1', now)).toBe(false);
-  });
-});
 
-/**
- * Unit tests for per-key rate limit summary + preset matching.
- */
-
-
-describe('keyRateLimits', () => {
-  it('formats summaries, matches presets, detects custom, and defines four preset values', () => {
+    // facet: formats summaries, matches presets, detects custom, and defines four preset values
     expect(
       formatKeyRateLimitSummary({ maxRpm: 20, concurrencyLimit: 1, interval: 500 }),
     ).toBe('20/min · 1 at once · 500 ms gap');

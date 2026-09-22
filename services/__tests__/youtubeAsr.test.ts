@@ -63,7 +63,7 @@ describe('youtubeAsrRealignStore', () => {
     vi.clearAllMocks();
   });
 
-  it('saves, gets, lists summaries without cues, touches, deletes, clears, stats', async () => {
+  it('saves, gets, lists summaries without cues, touches, deletes, clears, stats; coalesces inflight factories per key', async () => {
     await saveAsrRealignEntry(makeEntry());
     const got = await getAsrRealignEntry('ai:vid:en:hash1');
     expect(got?.cues[0]?.text).toBe('hello');
@@ -89,9 +89,8 @@ describe('youtubeAsrRealignStore', () => {
     await saveAsrRealignEntry(makeEntry());
     await clearAsrRealignCache();
     expect(await getAsrRealignCacheStats()).toEqual({ entryCount: 0, totalBytes: 0 });
-  });
 
-  it('coalesces inflight factories per key', async () => {
+    // facet: coalesces inflight factories per key.
     let calls = 0;
     const p1 = getOrCreateAsrRealignInflight('k', async () => {
       calls++;
@@ -439,31 +438,33 @@ describe('runYoutubeLinkPrealign', () => {
     expect(second).toMatchObject({ success: true, outcome: 'already-saved' });
     expect(resegment).toHaveBeenCalledTimes(1);
     expect(broadcastCacheUpdated).toHaveBeenCalledTimes(1);
-  });
 
-  it('dedupes concurrent runs through the single-flight inflight map', async () => {
+    // facet: dedupes concurrent runs through the single-flight inflight map.
+    // A distinct video URL avoids the entry saved by the happy path above so
+    // these concurrent runs actually exercise the single-flight factory.
+    const sfUrl = 'https://www.youtube.com/watch?v=sf1';
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => {
       release = r;
     });
-    const { deps, resegment } = makeDeps({
+    const { deps: sfDeps, resegment: sfResegment } = makeDeps({
       resegmentImpl: async () => {
         await gate;
         return { success: true, cues: REALIGNED_CUES };
       },
     });
 
-    const p1 = runYoutubeLinkPrealign(WATCH_URL, deps);
-    const p2 = runYoutubeLinkPrealign(WATCH_URL, deps);
+    const p1 = runYoutubeLinkPrealign(sfUrl, sfDeps);
+    const p2 = runYoutubeLinkPrealign(sfUrl, sfDeps);
     await new Promise((r) => setTimeout(r, 20));
     release();
     const [r1, r2] = await Promise.all([p1, p2]);
     expect(r1).toMatchObject({ success: true, outcome: 'realigned' });
     expect(r2).toMatchObject({ success: true, outcome: 'realigned' });
-    expect(resegment).toHaveBeenCalledTimes(1);
+    expect(sfResegment).toHaveBeenCalledTimes(1);
   });
 
-  it('hash parity: Settings-flow units + contentHash match the playback pipeline', async () => {
+  it('hash parity: Settings-flow units + contentHash match the playback pipeline; rejects a timedtext baseUrl outside youtube.com (youtube-only guard)', async () => {
     // FR-9 / AC-2: for the same caption body, the Settings pre-align flow and
     // the proactive playback path must derive identical units and contentHash,
     // so both compute the same ai:{videoId}:{lang}:{hash} cache key.
@@ -493,10 +494,9 @@ describe('runYoutubeLinkPrealign', () => {
 
     expect(playbackUnits).toEqual(settingsUnits);
     expect(playbackKey).toBe(settingsKey);
-  });
 
-  it('rejects a timedtext baseUrl outside youtube.com (youtube-only guard)', async () => {
-    const { deps, fetchFn } = makeDeps({
+    // facet: rejects a timedtext baseUrl outside youtube.com (youtube-only guard).
+    const { deps: guardDeps, fetchFn } = makeDeps({
       watchBody: watchHtml(
         playerResponse({
           captions: {
@@ -514,8 +514,8 @@ describe('runYoutubeLinkPrealign', () => {
         }),
       ),
     });
-    const result = await runYoutubeLinkPrealign(WATCH_URL, deps);
-    expect(result).toMatchObject({ success: false, errorCode: 'fetch-blocked' });
+    const guardResult = await runYoutubeLinkPrealign(WATCH_URL, guardDeps);
+    expect(guardResult).toMatchObject({ success: false, errorCode: 'fetch-blocked' });
     // Only the watch HTML fetch may have happened.
     expect(fetchFn.mock.calls.every((c) => String(c[0]).includes('youtube.com'))).toBe(true);
   });

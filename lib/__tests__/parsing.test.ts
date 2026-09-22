@@ -92,8 +92,9 @@ describe('sseStreamParser', () => {
 
 // ─── HLS Multivariant Manifest ──────────────────────────────────────────────
 
-describe('parseHlsManifest', () => {
-  it('parses subtitle media entries, URI variants, defaults, and media filtering', () => {
+describe('parseHlsManifest / parseHlsSubtitlePlaylist', () => {
+  it('parses HLS multivariant media entries and EXTINF subtitle-playlist segments', () => {
+    // facet: parses subtitle media entries, URI variants, defaults, and media filtering
     const body = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
@@ -160,14 +161,9 @@ describe('parseHlsManifest', () => {
     expect(mixedResult[0]!.language).toBe('en');
     expect(mixedResult[0]!.url).toBe('https://cdn.example.com/subs/en.m3u8');
     expect(mixedResult[1]!.language).toBe('vi');
-  });
-});
 
-// ─── HLS Subtitle Media Playlist ────────────────────────────────────────────
-
-describe('parseHlsSubtitlePlaylist', () => {
-  it('extracts VTT segment URLs from EXTINF entries', () => {
-    const body = [
+    // facet: extracts VTT segment URLs from EXTINF entries
+    const subBody = [
       '#EXTM3U',
       '#EXT-X-VERSION:6',
       '#EXT-X-TARGETDURATION:10',
@@ -180,12 +176,12 @@ describe('parseHlsSubtitlePlaylist', () => {
       '#EXT-X-ENDLIST',
     ].join('\n');
 
-    const result = parseHlsSubtitlePlaylist(body, 'https://cdn.example.com/subs/en.m3u8');
+    const subResult = parseHlsSubtitlePlaylist(subBody, 'https://cdn.example.com/subs/en.m3u8');
 
-    expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({ url: 'https://cdn.example.com/subs/segment1.vtt', duration: 10.0 });
-    expect(result[1]).toEqual({ url: 'https://cdn.example.com/subs/segment2.vtt', duration: 10.0 });
-    expect(result[2]).toEqual({ url: 'https://cdn.example.com/subs/segment3.vtt', duration: 5.0 });
+    expect(subResult).toHaveLength(3);
+    expect(subResult[0]).toEqual({ url: 'https://cdn.example.com/subs/segment1.vtt', duration: 10.0 });
+    expect(subResult[1]).toEqual({ url: 'https://cdn.example.com/subs/segment2.vtt', duration: 10.0 });
+    expect(subResult[2]).toEqual({ url: 'https://cdn.example.com/subs/segment3.vtt', duration: 5.0 });
 
     // Resolves relative segment URLs against the baseUrl directory
     const deepBody = [
@@ -241,7 +237,8 @@ describe('parseHlsSubtitlePlaylist', () => {
 // ─── DASH Manifest Parser ───────────────────────────────────────────────────
 
 describe('parseDashManifest', () => {
-  it('extracts subtitle adaptation sets and segment-template metadata', () => {
+  it('extracts subtitle adaptation sets with segment templates, resolves BaseURLs, and filters non-subtitle/invalid manifests', () => {
+    // facet: extracts subtitle adaptation sets and segment-template metadata
     const ttmlXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -370,9 +367,8 @@ describe('parseDashManifest', () => {
         startNumber: 8,
       }),
     );
-  });
 
-  it('resolves BaseURLs and filters non-subtitle or invalid manifests', () => {
+    // facet: resolves BaseURLs and filters non-subtitle or invalid manifests
     const relXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
@@ -415,7 +411,7 @@ describe('parseDashManifest', () => {
     expect(noLangResult).toHaveLength(1);
     expect(noLangResult[0].language).toBe('');
 
-    const xml = `<?xml version="1.0"?>
+    const mixedXml = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011">
   <Period>
     <AdaptationSet mimeType="video/mp4" lang="en">
@@ -436,10 +432,10 @@ describe('parseDashManifest', () => {
   </Period>
 </MPD>`;
 
-    const result = parseDashManifest(xml, 'https://cdn.example.com/manifest.mpd');
+    const mixedResult = parseDashManifest(mixedXml, 'https://cdn.example.com/manifest.mpd');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].language).toBe('vi');
+    expect(mixedResult).toHaveLength(1);
+    expect(mixedResult[0].language).toBe('vi');
 
     // Invalid XML, empty body, or XML with no subtitle tracks
     expect(parseDashManifest('not xml', 'https://cdn.example.com/manifest.mpd')).toEqual([]);

@@ -155,8 +155,9 @@ describe('validatePromptTemplate / validateProviderConfig', () => {
   });
 });
 
-describe('buildUserPrompt', () => {
-  it('formats entries as JSON and optionally includes source language', () => {
+describe('buildUserPrompt + parseTranslationResponse', () => {
+  it('formats entries as JSON and optionally includes source language; parses standard/wrapped JSON and rejects invalid or malformed values', () => {
+    // facet: buildUserPrompt formats entries as JSON and optionally includes source language.
     const texts = new Map([
       ['id1', 'Hello'],
       ['id2', 'World'],
@@ -168,11 +169,9 @@ describe('buildUserPrompt', () => {
     expect(buildUserPrompt(new Map([['id1', 'Hello']]), 'en')).toContain(
       'source language is English (en)',
     );
-  });
-});
 
-describe('parseTranslationResponse', () => {
-  it('parses standard/wrapped JSON and rejects invalid or malformed values', () => {
+    // facet: parseTranslationResponse parses standard/wrapped JSON and rejects
+    // invalid or malformed values.
     expect(
       parseTranslationResponse(
         '{"translations": {"id1": "Xin chào", "id2": "Thế giới"}}',

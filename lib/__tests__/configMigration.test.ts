@@ -109,7 +109,8 @@ describe('loadSettings migration & critical global excludes', () => {
     vi.clearAllMocks();
   });
 
-  it('merges CRITICAL_GLOBAL_EXCLUDES and handles corrupted encrypted API keys', async () => {
+  it('merges critical excludes, blanks corrupted keys, synthesizes providers, and upgrades unlimited throttles', async () => {
+    // facet: merges CRITICAL_GLOBAL_EXCLUDES and handles corrupted encrypted API keys
     mockGet.mockResolvedValue({
       [STORAGE_KEYS.SETTINGS]: {
         globalExcludeSelectors: ['.my-custom-rule', 'pre', 'code', 'kbd', '.mathjax', '.katex'],
@@ -147,9 +148,8 @@ describe('loadSettings migration & critical global excludes', () => {
     });
     const corruptedSettings = await loadSettings();
     expect(corruptedSettings.provider.apiKey).toBe('');
-  });
 
-  it('synthesizes providers[] from legacy provider when providers is empty', async () => {
+    // facet: synthesizes providers[] from legacy provider when providers is empty
     const legacy = baseSettings({
       providers: [],
       provider: {
@@ -170,16 +170,15 @@ describe('loadSettings migration & critical global excludes', () => {
 
     mockGet.mockResolvedValue({ [STORAGE_KEYS.SETTINGS]: legacy });
 
-    const settings = await loadSettings();
+    const synthSettings = await loadSettings();
 
-    expect(settings.providers).toHaveLength(1);
-    const provider = settings.providers[0];
+    expect(synthSettings.providers).toHaveLength(1);
+    const provider = synthSettings.providers[0];
     expect(provider?.baseUrl).toBe('https://api.openai.com/v1');
     expect(provider.model).toBe('gpt-4o-mini');
     expect(provider.keys[0]?.apiKey).toBe('sk-legacy');
-  });
 
-  it('upgrades unlimited 0/0/0 key throttle to safe defaults once', async () => {
+    // facet: upgrades unlimited 0/0/0 key throttle to safe defaults once
     const existing: PoolProvider = {
       id: 'p1',
       displayName: 'Existing',
@@ -201,7 +200,7 @@ describe('loadSettings migration & critical global excludes', () => {
       ],
     };
     mockGet.mockResolvedValue({ [STORAGE_KEYS.SETTINGS]: baseSettings({ providers: [existing] }) });
-    const settings = await loadSettings();
-    expect(settings.providers[0].keys[0].concurrencyLimit).toBeGreaterThan(0);
+    const migratedSettings = await loadSettings();
+    expect(migratedSettings.providers[0].keys[0].concurrencyLimit).toBeGreaterThan(0);
   });
 });

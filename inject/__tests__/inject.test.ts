@@ -149,11 +149,12 @@ describe('messageBridge early coordinator queue', () => {
     ]);
   });
 
-  it('queues Max manifest lifecycle and cue messages until COORDINATOR_READY', async () => {
+  it('queues Max manifest lifecycle and cue messages until COORDINATOR_READY, and delivers SUBTITLE_CAPTURE_RESET immediately even before ready', async () => {
     const bridge = await import('@/inject/messageBridge');
     bridge.__resetMessageBridgeForTests();
     posted.length = 0;
 
+    // Max manifest lifecycle and cue messages queue until COORDINATOR_READY.
     bridge.sendMessage('SUBTITLE_MPD_PROCESSING', { status: 'started', platform: 'hbomax' });
     bridge.sendMessage('SUBTITLE_MANIFEST_CUES', {
       cues: [{ startTime: 1, endTime: 2, text: 'hello' }],
@@ -179,16 +180,12 @@ describe('messageBridge early coordinator queue', () => {
       'SUBTITLE_MPD_PROCESSING',
       'SUBTITLE_MANIFEST_CUES',
     ]);
-  });
-
-  it('delivers SUBTITLE_CAPTURE_RESET immediately, even before COORDINATOR_READY', async () => {
-    const bridge = await import('@/inject/messageBridge');
-    bridge.__resetMessageBridgeForTests();
-    posted.length = 0;
 
     // ISOLATED → MAIN: the MAIN world drops capture state for the old title.
     // It must never sit in the early queue (the queue only exists to protect
     // MAIN → ISOLATED first-load captures).
+    bridge.__resetMessageBridgeForTests();
+    posted.length = 0;
     bridge.sendMessage('SUBTITLE_CAPTURE_RESET', { platform: 'hbomax' });
 
     expect(posted.map((message) => (message as { type: string }).type)).toEqual([
@@ -241,34 +238,34 @@ describe('YouTubeHandler watch-page detection', () => {
 });
 
 describe('YouTubeHandler timedtext parsing', () => {
-  it('parses real srv3 <p t d> bodies into cues and word events', () => {
+  it('parses srv3 <p t d> bodies (cues and word events) and srv1 <text start dur> bodies', () => {
     const handler = new YouTubeHandler();
+
+    // Parses real srv3 <p t d> bodies into cues and word events.
     const srv3 =
       '<?xml version="1.0"?><timedtext format="3"><body>' +
       '<p t="1230" d="4560"><s t="0">Hello</s><s t="500">world</s></p>' +
       '</body></timedtext>';
 
-    const cues = handler.transformResponse(
+    const srv3Cues = handler.transformResponse(
       srv3,
       'text/xml',
       'https://www.youtube.com/api/timedtext?v=x&lang=en&kind=asr&fmt=srv3',
     );
-    expect(cues).toHaveLength(1);
-    expect(cues[0]).toMatchObject({ startTime: 1.23, endTime: 5.79, text: 'Hello world' });
+    expect(srv3Cues).toHaveLength(1);
+    expect(srv3Cues[0]).toMatchObject({ startTime: 1.23, endTime: 5.79, text: 'Hello world' });
 
     expect(handler.parseWordEvents(srv3).map((w) => w.text)).toEqual(['Hello', 'world']);
-  });
 
-  it('still parses srv1 <text start dur> bodies', () => {
-    const handler = new YouTubeHandler();
+    // Still parses srv1 <text start dur> bodies.
     const srv1 = '<transcript><text start="1" dur="2">Hi there</text></transcript>';
-    const cues = handler.transformResponse(
+    const srv1Cues = handler.transformResponse(
       srv1,
       'text/xml',
       'https://www.youtube.com/api/timedtext?v=x&lang=en&fmt=srv1',
     );
-    expect(cues).toHaveLength(1);
-    expect(cues[0]).toMatchObject({ startTime: 1, endTime: 3, text: 'Hi there' });
+    expect(srv1Cues).toHaveLength(1);
+    expect(srv1Cues[0]).toMatchObject({ startTime: 1, endTime: 3, text: 'Hi there' });
   });
 });
 

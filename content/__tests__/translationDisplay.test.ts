@@ -252,7 +252,8 @@ describe('translationDisplay', () => {
   });
 
   describe('removeTranslation', () => {
-    it('P0 regression: does NOT un-mark original markers for OTHER translations', () => {
+    it('P0 regression / sm7n: removeTranslation un-marks only the removed piece, leaving other and nested originals marked', () => {
+      // facet: P0 regression: does NOT un-mark original markers for OTHER translations
       // Two separate paragraphs, each with its own translation.
       const p1 = document.createElement('p');
       const p2 = document.createElement('p');
@@ -275,9 +276,9 @@ describe('translationDisplay', () => {
       // wiped ALL [data-anyllm-translated] markers on the page.
       expect(p2.hasAttribute('data-anyllm-translated')).toBe(true);
       expect(document.querySelector('[data-anyllm-piece-id="piece-b"]')).not.toBeNull();
-    });
 
-    it('sm7n: a translation owned by a nested marked original does not keep the outer original marked', () => {
+      // facet: sm7n: a translation owned by a nested marked original does not keep the outer original marked
+      document.body.innerHTML = '';
       // Outer marked original whose own translation is a following sibling,
       // plus a nested marked original with its own translation inside outer.
       const outer = document.createElement('div');
@@ -325,7 +326,8 @@ describe('translationDisplay', () => {
       expect(p.hasAttribute('data-anyllm-translated')).toBe(false);
     });
 
-    it('clears outer markers on invalidation while a nested marked original keeps its artifacts', () => {
+    it('clears outer markers on invalidation while a nested original or sibling piece keeps its artifacts', () => {
+      // facet: clears outer markers on invalidation while a nested marked original keeps its artifacts
       const outer = document.createElement('div');
       outer.appendChild(document.createTextNode('Outer source.'));
       const nested = document.createElement('p');
@@ -353,9 +355,9 @@ describe('translationDisplay', () => {
       expect(nested.getAttribute('data-anyllm-role')).toBe('original');
       expect(nested.hasAttribute('data-anyllm-translated')).toBe(true);
       expect(nestedT.isConnected).toBe(true);
-    });
 
-    it('keeps the parent marked while another piece still owns artifacts on it', () => {
+      // facet: keeps the parent marked while another piece still owns artifacts on it
+      document.body.innerHTML = '';
       const parent = document.createElement('div');
       parent.textContent = 'Lead. Tail.';
       parent.setAttribute('data-anyllm-role', 'original');
@@ -420,7 +422,8 @@ describe('translationDisplay', () => {
       return { host, shadow, p };
     }
 
-    it('applies and finds translation elements inside a registered open root', () => {
+    it('applies and finds translations inside a registered open root, and applyTheme syncs mask tabindex there', () => {
+      // facet: applies and finds translation elements inside a registered open root
       const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
       registerShadowRoots(document.body);
 
@@ -438,9 +441,27 @@ describe('translationDisplay', () => {
       manual.setAttribute('data-anyllm-piece-id', 'shadow-manual');
       shadow.appendChild(manual);
       expect(findPieceElement('shadow-manual')).toBe(manual);
+
+      // facet: applyTheme syncs mask tabindex inside registered roots
+      document.body.innerHTML = '';
+      clearShadowDomRoots();
+      const { shadow: themeShadow, p: themeP } = makeShadowParagraph('Shadow paragraph text.');
+      registerShadowRoots(document.body);
+      applyTranslation(themeP, 'shadow-piece-3', 'Bản dịch');
+
+      applyTheme('mask');
+      expect(
+        themeShadow.querySelector('.anyllm-translate-translation')?.getAttribute('tabindex'),
+      ).toBe('0');
+
+      applyTheme('bubble');
+      expect(
+        themeShadow.querySelector('.anyllm-translate-translation')?.hasAttribute('tabindex'),
+      ).toBe(false);
     });
 
-    it('removeAllTranslations cleans markers/elements inside registered roots but keeps the registry', () => {
+    it('removeAllTranslations cleans registered roots but keeps the registry, and unwraps original wrappers there', () => {
+      // facet: removeAllTranslations cleans markers/elements inside registered roots but keeps the registry
       const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
       registerShadowRoots(document.body);
 
@@ -463,15 +484,16 @@ describe('translationDisplay', () => {
       // Idempotent — a second pass is a no-op.
       removeAllTranslations();
       expect(shadow.querySelector('.anyllm-translate-translation')).toBeNull();
-    });
 
-    it('unwraps original wrappers inside registered roots', () => {
-      const host = document.createElement('div');
-      const shadow = host.attachShadow({ mode: 'open' });
+      // facet: unwraps original wrappers inside registered roots
+      document.body.innerHTML = '';
+      clearShadowDomRoots();
+      const wrapHost = document.createElement('div');
+      const wrapShadow = wrapHost.attachShadow({ mode: 'open' });
       const li = document.createElement('li');
       li.textContent = 'List item in shadow.';
-      shadow.appendChild(li);
-      document.body.appendChild(host);
+      wrapShadow.appendChild(li);
+      document.body.appendChild(wrapHost);
       registerShadowRoots(document.body);
 
       // LI parents take the contained path: children move into an original wrapper.
@@ -484,23 +506,8 @@ describe('translationDisplay', () => {
       expect(li.textContent).toBe('List item in shadow.');
     });
 
-    it('applyTheme syncs mask tabindex inside registered roots', () => {
-      const { shadow, p } = makeShadowParagraph('Shadow paragraph text.');
-      registerShadowRoots(document.body);
-      applyTranslation(p, 'shadow-piece-3', 'Bản dịch');
-
-      applyTheme('mask');
-      expect(
-        shadow.querySelector('.anyllm-translate-translation')?.getAttribute('tabindex'),
-      ).toBe('0');
-
-      applyTheme('bubble');
-      expect(
-        shadow.querySelector('.anyllm-translate-translation')?.hasAttribute('tabindex'),
-      ).toBe(false);
-    });
-
-    it('creates translation-only sibling clones inside registered roots', () => {
+    it('creates translation-only sibling clones inside registered roots, and page-state mutations mirror onto shadow hosts', () => {
+      // facet: creates translation-only sibling clones inside registered roots
       const { shadow, p } = makeShadowParagraph('Short shadow text.');
       registerShadowRoots(document.body);
 
@@ -513,9 +520,10 @@ describe('translationDisplay', () => {
 
       removeAllTranslations();
       expect(shadow.querySelector('.anyllm-inline-bilingual')).toBeNull();
-    });
 
-    it('page-state mutations mirror onto registered shadow hosts', () => {
+      // facet: page-state mutations mirror onto registered shadow hosts
+      document.body.innerHTML = '';
+      clearShadowDomRoots();
       const { host } = makeShadowParagraph('Shadow paragraph text.');
       registerShadowRoots(document.body);
 

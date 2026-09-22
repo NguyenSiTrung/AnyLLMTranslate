@@ -428,7 +428,8 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     expect(r.targetLang).toBe('en');
     expect(r.body).toBe('hello');
   });
-  it('updates React controlled inputs with valueTracker and triggers onChange listeners', () => {
+  it('updates React controlled inputs with valueTracker, replaces contentEditable drafts, and refuses framework-owned composers', () => {
+    // facet: React controlled input — valueTracker + onChange listener observe the write
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);
 
@@ -455,9 +456,8 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     expect(textarea.value).toBe('translated content');
     // Verify React state updated so sending upon Enter sends translated content
     expect(reactState).toBe('translated content');
-  });
 
-  it('replaces content in contentEditable chat composers without selecting entire document', () => {
+    // facet: contentEditable chat composer — replaced without selecting the whole document
     const composer = document.createElement('div');
     composer.contentEditable = 'true';
     composer.tabIndex = 0;
@@ -474,22 +474,22 @@ describe('write-back, dual mode, blocklist, prefix', () => {
       capturedMessageOnSend = target.textContent ?? '';
     });
 
-    const writeResult = writeElementText(composer, 'translated chat message');
-    expect(writeResult.success).toBe(true);
+    const composerResult = writeElementText(composer, 'translated chat message');
+    expect(composerResult.success).toBe(true);
     expect(composer.textContent).toBe('translated chat message');
     expect(capturedMessageOnSend).toBe('translated chat message');
-  });
-  it('refuses framework-owned composers instead of corrupting the draft', () => {
-    const composer = document.createElement('div');
-    composer.contentEditable = 'true';
-    composer.tabIndex = 0;
-    composer.setAttribute('role', 'textbox');
-    composer.setAttribute('data-slate-editor', 'true');
+
+    // facet: framework-owned composer — refuse instead of corrupting the draft
+    const slate = document.createElement('div');
+    slate.contentEditable = 'true';
+    slate.tabIndex = 0;
+    slate.setAttribute('role', 'textbox');
+    slate.setAttribute('data-slate-editor', 'true');
     const block = document.createElement('div');
     block.textContent = 'original chat message';
-    composer.appendChild(block);
-    document.body.appendChild(composer);
-    composer.focus();
+    slate.appendChild(block);
+    document.body.appendChild(slate);
+    slate.focus();
 
     const previousExecCommand = (document as Document & {
       execCommand?: (command: string, showUi?: boolean, value?: string) => boolean;
@@ -504,14 +504,14 @@ describe('write-back, dual mode, blocklist, prefix', () => {
     });
 
     try {
-      const result = writeElementText(composer, 'translated chat message');
+      const result = writeElementText(slate, 'translated chat message');
 
       // Measured: DOM writes into Slate/ProseMirror/Lexical are reverted or
       // duplicated, so the draft must be left exactly as typed.
       expect(result).toEqual({ success: false, reason: 'framework-editor' });
       expect(execCommandCalls).toBe(0);
-      expect(composer.textContent).toBe('original chat message');
-      expect(document.activeElement).toBe(composer);
+      expect(slate.textContent).toBe('original chat message');
+      expect(document.activeElement).toBe(slate);
     } finally {
       Object.defineProperty(document, 'execCommand', {
         configurable: true,
