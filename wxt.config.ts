@@ -10,7 +10,10 @@ export default defineConfig({
   manifest: {
     name: 'AnyLLMTranslate',
     description: 'Bilingual web page translation powered by any OpenAI-compatible LLM',
-    permissions: ['storage', 'activeTab', 'contextMenus', 'alarms', 'tabs'],
+    // `activeTab` is deliberately NOT declared: it has no call sites, the
+    // content scripts already match <all_urls>, and the CWS minimum-permission
+    // policy forbids declaring permissions the extension does not need.
+    permissions: ['storage', 'contextMenus', 'alarms', 'tabs'],
     host_permissions: [
       '*://*.prd.media.max.com/*',
       '*://*.media.max.com/*',
@@ -35,13 +38,16 @@ export default defineConfig({
       'http://localhost/*',
       'https://inference-api.nousresearch.com/*',
     ],
-    // PDF.js worker + standard fonts/cmaps are bundled under assets/ via Vite ?url imports.
-    // Declare them as web-accessible so the pdf-viewer page can fetch them at runtime.
+    // Only `icon/128.png` is ever loaded from page context (the selection
+    // translate chip, content/selectionBubble/chip.ts). Everything under
+    // `assets/` — the PDF.js worker, fonts, cmaps and the CSS bundles — is
+    // consumed by extension pages only (pdf-viewer.html, options.html,
+    // popup.html), which are same-origin and need no web-accessible grant.
+    // Exposing `assets/*` to <all_urls> would let any site fingerprint the
+    // installed extension by fetching its worker and stylesheets.
     web_accessible_resources: [
       {
-        // icon/* — selection translate chip on web pages loads brand PNG via getURL.
-        // assets/* covers the hashed pdf.worker.min-*.mjs emitted by the Vite ?url import.
-        resources: ['assets/*', 'icon/*'],
+        resources: ['icon/128.png'],
         matches: ['<all_urls>'],
       },
     ],
