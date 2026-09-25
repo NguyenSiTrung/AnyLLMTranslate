@@ -16,6 +16,7 @@ export type CatalogFilterId = 'all' | 'cloud' | 'local' | 'custom';
 
 export const WIZARD_STEPS: readonly WizardStep[] = [
   'welcome',
+  'consent',
   'connect',
   'verify',
   'ready',
@@ -23,6 +24,7 @@ export const WIZARD_STEPS: readonly WizardStep[] = [
 
 export const WIZARD_STEP_LABELS: Record<WizardStep, string> = {
   welcome: 'Welcome',
+  consent: 'Privacy',
   connect: 'Connect',
   verify: 'Verify',
   ready: 'Ready',
@@ -49,10 +51,19 @@ export function normalizeWizardStep(input: WizardStepInput): WizardStep | null {
 
 /**
  * Resolve which wizard step to show when the dialog opens.
+ * - Missing consent always wins: the data disclosure must be accepted before
+ *   any other step, including on a re-open after the user skipped the wizard.
  * - Completed setup reopens at connect (re-configure), not the success screen.
  * - Skipped / in-progress resumes lastStep (never stuck on "ready" without complete).
  */
-export function resolveWizardEntryStep(onboarding: OnboardingState): WizardStep {
+export function resolveWizardEntryStep(
+  onboarding: OnboardingState,
+  consentAccepted: boolean,
+): WizardStep {
+  if (!consentAccepted) {
+    return 'consent';
+  }
+
   if (onboarding.completed) {
     return 'connect';
   }
@@ -61,6 +72,10 @@ export function resolveWizardEntryStep(onboarding: OnboardingState): WizardStep 
   const last = normalizeWizardStep(onboarding.lastStep as WizardStepInput) ?? 'welcome';
   if (last === 'ready') {
     return onboarding.skipped ? 'welcome' : 'verify';
+  }
+  // Consent is already recorded, so resume at the step that follows it.
+  if (last === 'consent') {
+    return 'connect';
   }
   return last;
 }

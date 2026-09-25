@@ -55,6 +55,7 @@ import {
   showSystemicPauseBanner,
   hideSystemicPauseBanner,
 } from '@/content/autoTranslateNotification';
+import { hasValidConsent } from '@/lib/privacyConsent';
 import { updateMiniProgress, hideMiniProgress } from '@/content/miniProgress';
 import { detectPdfAndNotify } from '@/content/pdfDetect';
 import { findMatchingRule, findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
@@ -332,6 +333,41 @@ function enterSystemicPause(error: string): void {
       // translatePieces short-circuits until the user explicitly retries.
     },
     onOpenSettings: openProvidersSettings,
+  });
+}
+
+function openPrivacySettings(): void {
+  try {
+    const url = chrome.runtime.getURL('options.html?section=statistics');
+    chrome.runtime.sendMessage({ action: 'OPEN_OPTIONS', url }).catch(() => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Block translation until the user accepts the in-product data disclosure.
+ *
+ * Chrome Web Store User Data FAQ §10 requires consent inside the product UI
+ * before any user data is handled, so this is a hard stop rather than a
+ * per-piece error. The sticky banner (not the ephemeral toast) is used because
+ * the block is not transient, and Retry re-runs the same gate.
+ */
+function enterConsentPause(): void {
+  systemicPause = true;
+  viewportObserver?.setPaused(true);
+  showSystemicPauseBanner({
+    message: 'Accept the data disclosure in Settings before translating.',
+    onRetry: () => {
+      void startTranslation();
+    },
+    onDismiss: () => {
+      // Banner already removed by the button handler; keep the pause so the
+      // next scroll batch cannot translate before consent is recorded.
+    },
+    onOpenSettings: openPrivacySettings,
   });
 }
 
@@ -1319,6 +1355,14 @@ async function startTranslationUnlocked(): Promise<void> {
 
   // FR-3: session may have advanced while we awaited settings (concurrent stop).
   if (!sessionRegistry.isCurrent(translationSession)) {
+    return;
+  }
+
+  // Chrome Web Store user data policy: no page text may be read or sent before
+  // the in-product disclosure is accepted. Stop the whole session and point the
+  // user at the disclosure instead of failing piece by piece.
+  if (!hasValidConsent(settings.privacyConsent)) {
+    enterConsentPause();
     return;
   }
 

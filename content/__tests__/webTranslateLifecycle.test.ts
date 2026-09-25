@@ -5,6 +5,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacyConsent';
 vi.mock('wxt/sandbox', () => ({ defineContentScript: vi.fn() }));
 import {
   TranslationSessionRegistry,
@@ -19,6 +20,19 @@ import { DATA_ATTRS } from '@/lib/constants';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { deriveContentHash, type ResumePiece, type WebResumeSnapshot } from '@/lib/webResume';
 import { matchResumeTranslations, parentPathFromElement } from '@/lib/resumeIdentity';
+
+/**
+ * The content script refuses to translate until the in-product data disclosure
+ * is accepted. These lifecycle cases cover the post-consent path, so every
+ * mocked settings object carries an accepted record; the gate itself is covered
+ * by the first case in the FR-1b describe below.
+ */
+function settingsWithConsent<T extends Record<string, unknown>>(settings: T): T {
+  return {
+    ...settings,
+    privacyConsent: { accepted: true, acceptedAt: 1, version: PRIVACY_POLICY_VERSION },
+  };
+}
 
 describe('webTranslateLifecycle', () => {
   beforeEach(() => {
@@ -381,6 +395,8 @@ describe('webTranslateLifecycle', () => {
       enableSourceLanguageDetection: false,
       enableContextAwareTranslation: false,
       siteRules: [],
+      // Consent gate: these cases cover the post-disclosure path.
+      privacyConsent: { accepted: true, acceptedAt: 1, version: PRIVACY_POLICY_VERSION },
     });
 
     const makePiece = (id: string, text: string) => ({
@@ -391,6 +407,32 @@ describe('webTranslateLifecycle', () => {
       isTranslated: false as boolean,
       translatedText: undefined as string | undefined,
       inArticleContext: false,
+    });
+
+    it('blocks translation and shows the consent banner while no consent is recorded', async () => {
+      // Dynamic imports are required here: the vi.doMock registrations in
+      // beforeEach must be in place before these modules are first evaluated.
+      const { extractPieces } = await import('@/content/domWalker');
+      const notify = await import('@/content/autoTranslateNotification');
+
+      loadSettingsCached.mockResolvedValue({
+        ...DEFAULT_SETTINGS,
+        sourceLanguage: 'en',
+        targetLanguage: 'vi',
+        siteRules: [],
+        enableWebResume: false,
+        privacyConsent: { accepted: false, acceptedAt: null, version: PRIVACY_POLICY_VERSION },
+      });
+      document.body.innerHTML = '<p>Hello</p>';
+
+      await testHooks.startTranslation();
+
+      // No page text may be read or sent before the disclosure is accepted.
+      expect(vi.mocked(extractPieces)).not.toHaveBeenCalled();
+      expect(vi.mocked(notify.showSystemicPauseBanner)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(notify.showSystemicPauseBanner).mock.calls[0][0].message).toMatch(
+        /accept the data disclosure/i,
+      );
     });
 
     it('stale settings-load must not touch the DOM or send a translate message', async () => {
@@ -414,7 +456,7 @@ describe('webTranslateLifecycle', () => {
     });
 
     it('stale stream disconnect must not fall back to translate and must clear state', async () => {
-      loadSettingsCached.mockResolvedValue(defaultSettings());
+      loadSettingsCached.mockResolvedValue(settingsWithConsent(defaultSettings()));
       const piece = makePiece('p2', 'World');
       const tp = testHooks.translatePieces([piece]);
 
@@ -466,7 +508,7 @@ describe('webTranslateLifecycle', () => {
           inArticleContext: false,
         }];
       });
-      loadSettingsCached.mockResolvedValue({ ...DEFAULT_SETTINGS, sourceLanguage: 'en', targetLanguage: 'vi', siteRules: [], enableWebResume: false });
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({ ...DEFAULT_SETTINGS, sourceLanguage: 'en', targetLanguage: 'vi', siteRules: [], enableWebResume: false }));
       document.body.innerHTML = '<p>Hello</p>';
       await testHooks.startTranslation();
       const original = document.querySelector('p')!;
@@ -521,13 +563,13 @@ describe('webTranslateLifecycle', () => {
         isTranslated: false,
         inArticleContext: false,
       }] as never);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: true,
-      });
+      }));
 
       const saveCalls = () =>
         chrome.runtime.sendMessage.mock.calls.filter(
@@ -611,13 +653,13 @@ describe('webTranslateLifecycle', () => {
         isTranslated: false,
         inArticleContext: false,
       }] as never);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: true,
-      });
+      }));
 
       await testHooks.startTranslation();
       const pagehide = addSpy.mock.calls.find((call) => call[0] === 'pagehide')![1];
@@ -651,14 +693,14 @@ describe('webTranslateLifecycle', () => {
       });
       vi.mocked(display.getPageState).mockReturnValue('dual');
       vi.mocked(extractPieces).mockReturnValue([]);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: false,
         enableShadowDomWalk: true,
-      });
+      }));
       document.body.innerHTML = '<p>Hello</p>';
 
       await testHooks.startTranslation();
@@ -700,14 +742,14 @@ describe('webTranslateLifecycle', () => {
         const { ViewportObserver } = await import('@/content/viewportObserver');
         vi.mocked(display.getPageState).mockReturnValue('dual');
         vi.mocked(extractPieces).mockReturnValue([]);
-        loadSettingsCached.mockResolvedValue({
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
           ...DEFAULT_SETTINGS,
           sourceLanguage: 'en',
           targetLanguage: 'vi',
           siteRules: [],
           enableWebResume: false,
           enableShadowDomWalk: true,
-        });
+        }));
         document.body.innerHTML = '<p>Hello</p>';
 
         await testHooks.startTranslation();
@@ -760,7 +802,7 @@ describe('webTranslateLifecycle', () => {
       const langDetect = await import('@/lib/langDetect');
       vi.mocked(langDetect.detectLanguage).mockReturnValue({ lang: 'vi', confidence: 0.99 });
       vi.mocked(langDetect.isSameLanguage).mockReturnValue(true);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'auto',
         targetLanguage: 'vi',
@@ -768,7 +810,7 @@ describe('webTranslateLifecycle', () => {
         siteRules: [],
         enableWebResume: false,
         enableStreamingTranslation: true,
-      });
+      }));
 
       // The loading placeholder lives inside a registered open shadow root —
       // a document-only querySelector would miss it and leave a stale spinner.
@@ -803,10 +845,10 @@ describe('webTranslateLifecycle', () => {
       // mislabels a genuine source-identical translation whenever an unrelated
       // sibling fails (partial now covers unresolved ids too).
       const display = await import('@/content/translationDisplay');
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...defaultSettings(),
         enableStreamingTranslation: false,
-      });
+      }));
       const chrome = (globalThis as any).chrome;
       chrome.runtime.sendMessage.mockImplementation(async (msg: any) => {
         if (msg?.action === 'translate') {
@@ -860,14 +902,14 @@ describe('webTranslateLifecycle', () => {
       const { ViewportObserver } = await import('@/content/viewportObserver');
       vi.mocked(display.getPageState).mockReturnValue('dual');
       vi.mocked(extractPieces).mockReturnValue([]);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: false,
         enableBodyTagWhitelist: true,
-      });
+      }));
       document.body.innerHTML = '<main><p>Initial content.</p></main>';
       await testHooks.startTranslation();
 
@@ -945,14 +987,14 @@ describe('webTranslateLifecycle', () => {
       const { MutationWatcher } = await import('@/content/mutationWatcher');
       vi.mocked(display.getPageState).mockReturnValue('dual');
       vi.mocked(extractPieces).mockReturnValue([]);
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: false,
         enableAsideCaps: true,
-      });
+      }));
       document.body.innerHTML = '<main><p>Initial content.</p></main>';
       await testHooks.startTranslation();
 
@@ -1008,14 +1050,14 @@ describe('webTranslateLifecycle', () => {
           builtIn: false,
         };
         vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
-        loadSettingsCached.mockResolvedValue({
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
           ...DEFAULT_SETTINGS,
           sourceLanguage: 'en',
           targetLanguage: 'vi',
           siteRules: [includeRule],
           enableWebResume: false,
           enableBodyTagWhitelist: true,
-        });
+        }));
         document.body.innerHTML = '<nav><p>Included nav text.</p></nav>';
         await testHooks.startTranslation();
 
@@ -1081,7 +1123,7 @@ describe('webTranslateLifecycle', () => {
           builtIn: false,
         };
         vi.mocked(siteRules.findEffectiveRule).mockReturnValue(includeRule);
-        loadSettingsCached.mockResolvedValue({
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
           ...DEFAULT_SETTINGS,
           sourceLanguage: 'en',
           targetLanguage: 'vi',
@@ -1089,7 +1131,7 @@ describe('webTranslateLifecycle', () => {
           enableWebResume: false,
           enableStreamingTranslation: true,
           enableBodyTagWhitelist: true,
-        });
+        }));
 
         const nav = document.createElement('nav');
         const p = document.createElement('p');
@@ -1169,14 +1211,14 @@ describe('webTranslateLifecycle', () => {
     };
 
     const sm7nSettings = () =>
-      loadSettingsCached.mockResolvedValue({
+      loadSettingsCached.mockResolvedValue(settingsWithConsent({
         ...DEFAULT_SETTINGS,
         sourceLanguage: 'en',
         targetLanguage: 'vi',
         siteRules: [],
         enableWebResume: false,
         enableStreamingTranslation: true,
-      });
+      }));
 
     it('sm7n: source edits under a marked original invalidate once; unchanged reinsertion stays inert', async () => {
       // facet: source edit under a marked original removes stale output and queues exactly one replacement

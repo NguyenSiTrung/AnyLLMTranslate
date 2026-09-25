@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacyConsent';
 import type * as CacheManagerModule from '@/services/cacheManager';
 import { getCachedTranslationByKey, cacheTranslationByKey } from '@/services/cacheManager';
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
@@ -21,12 +22,27 @@ import type * as __Mod1 from '@/lib/subtitleRetry';
 
 // Mock chrome APIs
 const mockStorage: Record<string, unknown> = {};
+
+/** Consent-gate baseline: `handleMessage` refuses user-data actions until the
+ *  in-product disclosure is accepted, and these suites cover post-consent
+ *  behaviour, so the settings read reports an accepted record. Tests that need
+ *  the unconsented state assert it explicitly (see background.consent.test.ts). */
+const ACCEPTED_CONSENT = { accepted: true, acceptedAt: 1, version: PRIVACY_POLICY_VERSION };
+const SETTINGS_STORAGE_KEY = 'anyllm-translate-settings';
+
+function withConsentBaseline(key: string): Record<string, unknown> {
+  const value = mockStorage[key];
+  if (key !== SETTINGS_STORAGE_KEY) return { [key]: value };
+  // Consent is forced last: some suites seed a full DEFAULT_SETTINGS object,
+  // whose unaccepted record would otherwise shadow the baseline.
+  return {
+    [key]: { ...(value as Record<string, unknown> | undefined), privacyConsent: ACCEPTED_CONSENT },
+  };
+}
 vi.stubGlobal('chrome', {
   storage: {
     local: {
-      get: vi.fn(async (key: string) => {
-        return { [key]: mockStorage[key] };
-      }),
+      get: vi.fn(async (key: string) => withConsentBaseline(key)),
       set: vi.fn(async (items: Record<string, unknown>) => {
         Object.assign(mockStorage, items);
       }),

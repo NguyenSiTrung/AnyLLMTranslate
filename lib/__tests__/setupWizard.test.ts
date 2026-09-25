@@ -16,18 +16,21 @@ import { getProviderReadiness } from '@/lib/providerReadiness';
 
 describe('setupWizard steps', () => {
   it('exposes the ordered steps, normalizes legacy/new ids, and resolves the entry step', () => {
-    // facet: exposes four steps in order; wizardStepIndex is 1-based
-    expect(WIZARD_STEPS).toEqual(['welcome', 'connect', 'verify', 'ready']);
+    // facet: exposes five steps in order, the disclosure second; wizardStepIndex is 1-based
+    expect(WIZARD_STEPS).toEqual(['welcome', 'consent', 'connect', 'verify', 'ready']);
     expect(WIZARD_STEP_LABELS.welcome).toBe('Welcome');
+    expect(WIZARD_STEP_LABELS.consent).toBe('Privacy');
     expect(WIZARD_STEP_LABELS.connect).toBe('Connect');
     expect(WIZARD_STEP_LABELS.verify).toBe('Verify');
     expect(WIZARD_STEP_LABELS.ready).toBe('Ready');
 
     expect(wizardStepIndex('welcome')).toBe(1);
-    expect(wizardStepIndex('ready')).toBe(4);
+    expect(wizardStepIndex('consent')).toBe(2);
+    expect(wizardStepIndex('ready')).toBe(5);
 
     // facet: normalizeWizardStep maps legacy and new ids
     expect(normalizeWizardStep('welcome')).toBe('welcome');
+    expect(normalizeWizardStep('consent')).toBe('consent');
     expect(normalizeWizardStep('connect')).toBe('connect');
     expect(normalizeWizardStep('verify')).toBe('verify');
     expect(normalizeWizardStep('ready')).toBe('ready');
@@ -38,55 +41,96 @@ describe('setupWizard steps', () => {
     expect(normalizeWizardStep('nope')).toBeNull();
     expect(normalizeWizardStep(undefined)).toBeNull();
 
-    // facet: resolveWizardEntryStep: first run, completed reopen, resume lastStep,
-    // legacy ids, and ready-without-complete
-    expect(resolveWizardEntryStep({ completed: false, skipped: false })).toBe('welcome');
+    // facet: resolveWizardEntryStep: missing consent gates every entry point,
+    // then first run, completed reopen, resume lastStep, legacy ids, and
+    // ready-without-complete
+    // Consent missing always wins — including over a completed setup and a skip.
+    expect(resolveWizardEntryStep({ completed: false, skipped: false }, false)).toBe('consent');
+    expect(
+      resolveWizardEntryStep({ completed: true, skipped: false, lastStep: 'ready' }, false),
+    ).toBe('consent');
+    expect(
+      resolveWizardEntryStep({ completed: false, skipped: true, lastStep: 'verify' }, false),
+    ).toBe('consent');
+
+    // Consent recorded → the normal resume rules.
+    expect(resolveWizardEntryStep({ completed: false, skipped: false }, true)).toBe('welcome');
 
     expect(
-      resolveWizardEntryStep({
-        completed: true,
-        skipped: false,
-        lastStep: 'ready',
-      }),
+      resolveWizardEntryStep(
+        {
+          completed: true,
+          skipped: false,
+          lastStep: 'ready',
+        },
+        true,
+      ),
     ).toBe('connect');
 
     expect(
-      resolveWizardEntryStep({
-        completed: false,
-        skipped: false,
-        lastStep: 'connect',
-      }),
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: false,
+          lastStep: 'connect',
+        },
+        true,
+      ),
     ).toBe('connect');
     expect(
-      resolveWizardEntryStep({
-        completed: false,
-        skipped: false,
-        lastStep: 'verify',
-      }),
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: false,
+          lastStep: 'verify',
+        },
+        true,
+      ),
     ).toBe('verify');
 
+    // Consent accepted but the wizard closed on the disclosure step → advance.
     expect(
-      resolveWizardEntryStep({
-        completed: false,
-        skipped: false,
-        // Storage may still hold legacy ids
-        lastStep: 'provider',
-      } as unknown as Parameters<typeof resolveWizardEntryStep>[0]),
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: false,
+          lastStep: 'consent',
+        },
+        true,
+      ),
     ).toBe('connect');
 
     expect(
-      resolveWizardEntryStep({
-        completed: false,
-        skipped: true,
-        lastStep: 'ready',
-      }),
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: false,
+          // Storage may still hold legacy ids
+          lastStep: 'provider',
+        } as unknown as Parameters<typeof resolveWizardEntryStep>[0],
+        true,
+      ),
+    ).toBe('connect');
+
+    expect(
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: true,
+          lastStep: 'ready',
+        },
+        true,
+      ),
     ).toBe('welcome');
     expect(
-      resolveWizardEntryStep({
-        completed: false,
-        skipped: false,
-        lastStep: 'ready',
-      }),
+      resolveWizardEntryStep(
+        {
+          completed: false,
+          skipped: false,
+          lastStep: 'ready',
+        },
+        true,
+      ),
     ).toBe('verify');
   });
 });

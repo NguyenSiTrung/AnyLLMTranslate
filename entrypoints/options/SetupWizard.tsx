@@ -35,9 +35,11 @@ import { Button } from '@/ui/Button';
 import { useToast } from '@/ui/ToastProvider';
 import { WizardShell } from './components/wizard/WizardShell';
 import { WelcomeStep } from './components/wizard/steps/WelcomeStep';
+import { ConsentStep } from './components/wizard/steps/ConsentStep';
 import { ConnectStep, type ConnectPhase } from './components/wizard/steps/ConnectStep';
 import { VerifyStep } from './components/wizard/steps/VerifyStep';
 import { ReadyStep } from './components/wizard/steps/ReadyStep';
+import { PRIVACY_POLICY_VERSION, hasValidConsent } from '@/lib/privacyConsent';
 
 interface SetupWizardProps {
   open: boolean;
@@ -75,6 +77,7 @@ export function SetupWizard({
   const [testProgress, setTestProgress] = useState<ConnectionTestStep[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
 
   const clearTestState = useCallback(() => {
     setTestResult(null);
@@ -111,9 +114,15 @@ export function SetupWizard({
     if (!open) return;
 
     const forced = forceEntryRef.current;
-    const entry =
-      (forced && normalizeWizardStep(forced)) ||
-      resolveWizardEntryStep(onboardingRef.current);
+    const consented = hasValidConsent(useSettingsStore.getState().privacyConsent);
+    setConsentAccepted(consented);
+
+    // An unaccepted disclosure always wins, including over a deep link: the
+    // Chrome Web Store user data policy requires consent before any handling.
+    const entry: WizardStep = consented
+      ? (forced ? normalizeWizardStep(forced) : null) ??
+        resolveWizardEntryStep(onboardingRef.current, true)
+      : 'consent';
     setStep(entry);
     setSelectedLanguage(targetLanguageRef.current);
     setShowSkipConfirm(false);
@@ -276,6 +285,17 @@ export function SetupWizard({
     }
   };
 
+  const handleAcceptConsent = async () => {
+    await updateSettings({
+      privacyConsent: {
+        accepted: true,
+        acceptedAt: Date.now(),
+        version: PRIVACY_POLICY_VERSION,
+      },
+    });
+    await setWizardStep('connect');
+  };
+
   const handleFinish = async () => {
     await updateSettings({
       targetLanguage: selectedLanguage,
@@ -334,10 +354,26 @@ export function SetupWizard({
           Skip for now
         </Button>
         <Button
-          onClick={() => setWizardStep('connect')}
+          onClick={() => setWizardStep(consentAccepted ? 'connect' : 'consent')}
           className="bg-cyan-600 hover:bg-cyan-500 text-white disabled:bg-zinc-700 disabled:text-zinc-500"
         >
           Get started
+        </Button>
+      </>
+    );
+  } else if (step === 'consent') {
+    footer = (
+      <>
+        <Button variant="ghost" onClick={() => void setWizardStep('welcome')}>
+          Back
+        </Button>
+        <Button
+          disabled={!consentAccepted}
+          onClick={handleAcceptConsent}
+          title={consentAccepted ? undefined : 'Tick the box to accept the disclosure'}
+          className="bg-cyan-600 hover:bg-cyan-500 text-white disabled:bg-zinc-700 disabled:text-zinc-500"
+        >
+          Accept and continue
         </Button>
       </>
     );
@@ -449,6 +485,9 @@ export function SetupWizard({
       dialogRef={dialogRef}
     >
       {step === 'welcome' && <WelcomeStep />}
+      {step === 'consent' && (
+        <ConsentStep accepted={consentAccepted} onAcceptedChange={setConsentAccepted} />
+      )}
       {step === 'connect' && (
         <ConnectStep
           phase={connectPhase}

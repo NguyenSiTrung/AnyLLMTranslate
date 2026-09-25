@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
+import { PrivacyConsentCard } from './PrivacyConsentCard';
 import {
   getStatsV2,
   resetStats,
@@ -688,6 +689,8 @@ function DataControls({
       accent="cyan"
     >
       <div className="space-y-5" data-testid="stats-data-controls">
+        <PrivacyConsentCard />
+
         <Toggle
           id="stats-host-tracking"
           checked={preferences.hostTrackingEnabled}

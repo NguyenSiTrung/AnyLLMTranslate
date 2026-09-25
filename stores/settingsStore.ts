@@ -187,6 +187,7 @@ export function extractSettings(state: SettingsState | ExtensionSettings): Exten
   return {
     provider: state.provider,
     onboarding: state.onboarding,
+    privacyConsent: state.privacyConsent,
     sourceLanguage: state.sourceLanguage,
     targetLanguage: state.targetLanguage,
     displayMode: state.displayMode,

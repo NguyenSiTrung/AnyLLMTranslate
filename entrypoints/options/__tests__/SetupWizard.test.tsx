@@ -46,6 +46,14 @@ vi.mock('@/services/providerTester', () => ({
 
 import { useSettingsStore } from '@/stores/settingsStore';
 import { SetupWizard } from '../SetupWizard';
+import { PRIVACY_POLICY_VERSION } from '@/lib/privacyConsent';
+
+/** Consent already recorded — these cases exercise the post-disclosure flow. */
+const ACCEPTED_CONSENT = {
+  accepted: true,
+  acceptedAt: 1,
+  version: PRIVACY_POLICY_VERSION,
+};
 
 function renderWizard(
   props: Partial<React.ComponentProps<typeof SetupWizard>> = {},
@@ -63,6 +71,7 @@ describe('SetupWizard', () => {
       ...DEFAULT_SETTINGS,
       isLoaded: true,
       onboarding: { completed: false, skipped: false, lastStep: 'welcome' },
+      privacyConsent: { ...ACCEPTED_CONSENT },
       targetLanguage: 'en',
       providers: [],
     });
@@ -90,23 +99,77 @@ describe('SetupWizard', () => {
     expect(onboarding.completed).toBe(false);
   });
 
+  it('opens on the disclosure and records consent before any setup when none is recorded', async () => {
+    // Start with no consent recorded, which is the state a first-run user is in.
+    useSettingsStore.setState({
+      ...DEFAULT_SETTINGS,
+      isLoaded: true,
+      onboarding: { completed: false, skipped: false, lastStep: 'welcome' },
+      privacyConsent: { ...DEFAULT_SETTINGS.privacyConsent },
+    });
+
+    renderWizard();
+
+    // The wizard lands on the disclosure rather than the welcome screen.
+    await waitFor(() => {
+      expect(screen.getByText(/What leaves your browser/i)).toBeInTheDocument();
+    });
+
+    // The accept action is gated on the checkbox.
+    expect(screen.getByRole('button', { name: /Accept and continue/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/I understand and agree/i));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Accept and continue/i })).toBeEnabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Accept and continue/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Choose where translations run/i)).toBeInTheDocument();
+    });
+    expect(useSettingsStore.getState().onboarding.lastStep).toBe('connect');
+    expect(useSettingsStore.getState().privacyConsent.accepted).toBe(true);
+  });
+
   it('advances welcome → connect on Get started, and finishes setup from verify when connected', async () => {
-    // facet: advances welcome → connect on Get started
+    // facet: advances welcome → connect on Get started once consent is recorded
     const welcome = renderWizard();
     fireEvent.click(screen.getByRole('button', { name: /Get started/i }));
     await waitFor(() => {
-      expect(
-        screen.getByText(/Choose where translations run/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Choose where translations run/i)).toBeInTheDocument();
     });
     expect(useSettingsStore.getState().onboarding.lastStep).toBe('connect');
     welcome.unmount();
+
+    // facet: an unaccepted disclosure outranks a deep-linked step
+    useSettingsStore.setState({
+      ...DEFAULT_SETTINGS,
+      isLoaded: true,
+      onboarding: { completed: false, skipped: false, lastStep: 'verify' },
+      privacyConsent: { ...DEFAULT_SETTINGS.privacyConsent },
+      provider: {
+        ...DEFAULT_SETTINGS.provider,
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'test-model',
+        apiKey: 'sk-test',
+        requiresApiKey: true,
+        connectionStatus: 'success',
+      },
+    });
+
+    const deepLink = renderWizard({ forceEntryStep: 'verify' });
+    await waitFor(() => {
+      expect(screen.getByText(/What leaves your browser/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Prove the connection/i)).not.toBeInTheDocument();
+    deepLink.unmount();
 
     // facet: finishes setup from verify when previously connected
     useSettingsStore.setState({
       ...DEFAULT_SETTINGS,
       isLoaded: true,
       onboarding: { completed: false, skipped: false, lastStep: 'verify' },
+      privacyConsent: { ...ACCEPTED_CONSENT },
       targetLanguage: 'vi',
       provider: {
         ...DEFAULT_SETTINGS.provider,

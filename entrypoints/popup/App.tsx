@@ -30,7 +30,9 @@ import { ActionZone } from './components/ActionZone';
 import { ThisPageSection } from './components/ThisPageSection';
 import { QuickSettings } from './components/QuickSettings';
 import { NamedGlossarySuggestionsModal } from './components/NamedGlossarySuggestionsModal';
+import { ConsentRequiredPanel } from './components/ConsentRequiredPanel';
 import { PopupFooter } from './components/PopupFooter';
+import { PRIVACY_POLICY_VERSION, hasValidConsent } from '@/lib/privacyConsent';
 
 export default function App() {
   const {
@@ -192,6 +194,22 @@ export default function App() {
     setSuggestionRows(null);
     setSuggestionNotice('Suggestions added to the active list.');
   };
+
+  const handleAcceptConsent = () =>
+    void updateSetting({
+      privacyConsent: {
+        accepted: true,
+        acceptedAt: Date.now(),
+        version: PRIVACY_POLICY_VERSION,
+      },
+    });
+
+  // Consent gate: the disclosure and the acceptance action must happen in the
+  // product UI before any user data is handled, so the popup replaces its whole
+  // surface until the user accepts.
+  if (!settingsLoading && !hasValidConsent(settings.privacyConsent)) {
+    return <ConsentRequiredPanel onAccept={handleAcceptConsent} />;
+  }
 
   return (
     <div className="w-[340px] bg-zinc-950 text-zinc-100 font-sans selection:bg-blue-500/30 relative shadow-2xl flex flex-col min-h-0">

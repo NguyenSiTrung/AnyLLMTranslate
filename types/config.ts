@@ -4,6 +4,7 @@
  */
 
 import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import { DEFAULT_PRIVACY_CONSENT, type PrivacyConsentState } from '@/lib/privacyConsent';
 
 /** Provider preset identifiers */
 export type ProviderPreset = 'custom';
@@ -239,7 +240,7 @@ export interface OnboardingState {
   /** User skipped the automatic first-run wizard */
   skipped: boolean;
   /** Last wizard step visited, used to resume setup (new ids; legacy normalized on read) */
-  lastStep?: 'welcome' | 'connect' | 'verify' | 'ready';
+  lastStep?: 'welcome' | 'consent' | 'connect' | 'verify' | 'ready';
 }
 
 /** Translation display mode */
@@ -626,6 +627,12 @@ export interface ExtensionSettings {
   provider: ProviderConfig;
   /** First-run setup wizard state */
   onboarding: OnboardingState;
+  /**
+   * Record of the user's acceptance of the in-product data disclosure.
+   * Required by the Chrome Web Store User Data FAQ §10 before any user data is
+   * handled; a version mismatch counts as no consent.
+   */
+  privacyConsent: PrivacyConsentState;
   /** Source language (ISO 639-1 code, or 'auto' for auto-detect) */
   sourceLanguage: string;
   /** Target language (ISO 639-1 code) */
@@ -924,6 +931,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
     thinkingEffort: DEFAULT_THINKING_EFFORT,
   },
   onboarding: { ...DEFAULT_ONBOARDING_STATE },
+  // Consent starts unaccepted; the first-run wizard's disclosure step records it.
+  privacyConsent: { ...DEFAULT_PRIVACY_CONSENT },
   sourceLanguage: 'auto',
   targetLanguage: 'vi',
   displayMode: 'bilingual-below',

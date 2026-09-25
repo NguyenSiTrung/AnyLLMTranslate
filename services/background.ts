@@ -84,6 +84,7 @@ import {
 import { SUBTITLE_CHUNK_SIZE } from '@/lib/constants';
 import { subtitleLanguagesMatch } from '@/lib/subtitleLanguageMatch';
 import { loadSettings, onSettingsChange, computePoolSignature } from '@/lib/config';
+import { CONSENT_REQUIRED_ERROR, hasValidConsent } from '@/lib/privacyConsent';
 import { setCategoryOverride as storeCategoryOverride, getCategoryOverride as fetchCategoryOverride, initTabCleanup as initCategoryTabCleanup } from '@/services/categoryStore';
 import { ProviderPoolCoordinator, PoolExhaustedError } from '@/services/providerPool';
 import { queryPoolKeyStatuses } from '@/services/poolStatusQuery';
@@ -414,6 +415,10 @@ export function initPdfStreamPortListener(): void {
 
     port.onMessage.addListener(async (msg: PdfStreamPortMessage) => {
       if (msg.type !== 'request') return;
+      if (!(await isConsentRecorded())) {
+        port.postMessage({ type: 'error', error: CONSENT_REQUIRED_ERROR } satisfies PdfStreamError);
+        return;
+      }
       try {
         const service = await initService();
         if (!service.translateStream) {
@@ -510,6 +515,10 @@ export function initWebStreamPortListener(): void {
     port.onMessage.addListener(async (msg: PdfStreamPortMessage) => {
       if (msg.type !== 'request') return;
       if (disconnected) return;
+      if (!(await isConsentRecorded())) {
+        safePost({ type: 'error', error: CONSENT_REQUIRED_ERROR } satisfies PdfStreamError);
+        return;
+      }
       try {
         const onPiece = (id: string, text: string): void => {
           safePost({ type: 'piece', id, text } satisfies PdfStreamPiece);
@@ -2881,7 +2890,56 @@ async function handlePdfDetected(
   return { opened: true };
 }
 
+/**
+ * Messages that handle user data, and therefore require a recorded acceptance
+ * of the in-product disclosure (Chrome Web Store User Data FAQ §10 — consent
+ * must be obtained inside the product before any user data is handled).
+ *
+ * Everything not listed here is settings, state, or read-only traffic and stays
+ * ungated, so the consent prompt itself can always be reached.
+ */
+const CONSENT_REQUIRED_ACTIONS: Readonly<Record<string, true>> = {
+  translate: true,
+  testConnection: true,
+  translateSubtitle: true,
+  FETCH_SUBTITLE: true,
+  FETCH_MANIFEST_SUBTITLES: true,
+  translateSelection: true,
+  SUGGEST_SITE_RULE: true,
+  DETECT_PAGE_CATEGORY_LLM: true,
+  CLASSIFY_PDF_PARAGRAPHS: true,
+  EXTRACT_PDF_TERMS: true,
+  RESEGMENT_YOUTUBE_ASR: true,
+  REALIGN_YOUTUBE_URL: true,
+  SCIENTIFIC_PDF_CREATE_JOB: true,
+  SYNTHESIZE_SPEECH: true,
+};
+
+/**
+ * Read the consent flag through the same memoized settings cache `initService`
+ * uses, so the gate costs no extra storage read on the hot path.
+ */
+async function isConsentRecorded(): Promise<boolean> {
+  const settings = cachedDecryptedSettings ?? (await loadSettings());
+  cachedDecryptedSettings = settings;
+  return hasValidConsent(settings.privacyConsent);
+}
+
 export function handleMessage(
+  message: ExtensionMessage,
+  _sender: chrome.runtime.MessageSender,
+): Promise<unknown> | undefined {
+  if (CONSENT_REQUIRED_ACTIONS[message.action] === true) {
+    return isConsentRecorded().then((granted) =>
+      granted
+        ? dispatchMessage(message, _sender)
+        : { success: false, error: CONSENT_REQUIRED_ERROR },
+    );
+  }
+  return dispatchMessage(message, _sender);
+}
+
+function dispatchMessage(
   message: ExtensionMessage,
   _sender: chrome.runtime.MessageSender,
 ): Promise<unknown> | undefined {
