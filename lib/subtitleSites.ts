@@ -67,7 +67,7 @@ export const SUPPORTED_SUBTITLE_SITES: readonly SubtitleSiteInfo[] = [
     methodHint: 'VTT intercept + MPD/DOM fallback',
     monogram: 'Max',
     accent: 'purple',
-    summary: 'Movie and show subtitles translated via DRM-safe scraping.',
+    summary: 'Movie and show subtitles translated from the captions your player already loads.',
   },
   {
     platform: 'youku',
