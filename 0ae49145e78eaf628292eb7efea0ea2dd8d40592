@@ -1,0 +1,8 @@
+Task: AnyLLMTranslate-9l5m (CWS blocker - no in-product prominent disclosure and consent).
+Files: lib/privacyConsent.ts (new), lib/__tests__/privacyConsent.test.ts (new), services/background.ts,
+services/__tests__/background.consent.test.ts (new), entrypoints/content.ts, entrypoints/popup/App.tsx,
+entrypoints/popup/components/ConsentRequiredPanel.tsx (new), entrypoints/options/SetupWizard.tsx,
+entrypoints/options/components/wizard/steps/ConsentStep.tsx (new), entrypoints/options/sections/PrivacyConsentCard.tsx (new),
+entrypoints/options/sections/StatisticsSection.tsx, lib/setupWizard.ts, stores/settingsStore.ts, types/config.ts,
+plus the seven suites that needed consent seeded at their storage boundary.
+Validation: pnpm test 952/952, pnpm compile clean, live Chromium check of both gate directions.
