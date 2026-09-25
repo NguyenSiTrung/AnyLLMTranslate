@@ -1,3 +1,0 @@
-Task: AnyLLMTranslate-bvp3 + AnyLLMTranslate-2e8w (P1 minimum permissions).
-File: wxt.config.ts. Validation: built manifest inspected - permissions ['storage','contextMenus','alarms','tabs'],
-web_accessible_resources [{"resources":["icon/128.png"],"matches":["<all_urls>"]}].
